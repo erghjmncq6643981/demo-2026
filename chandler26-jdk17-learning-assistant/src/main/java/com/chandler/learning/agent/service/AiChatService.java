@@ -1,0 +1,211 @@
+package com.chandler.learning.agent.service;
+
+import com.chandler.learning.agent.config.AiModelProperties;
+import com.chandler.learning.agent.config.AiModelProperties.ProviderConfig;
+import com.chandler.learning.agent.domain.dto.AgentChatRequest;
+import com.chandler.learning.agent.domain.dto.AgentChatResponse;
+import com.chandler.learning.agent.domain.dto.ChatMessageParam;
+import com.chandler.learning.agent.domain.dto.ModelChatRequest;
+import com.chandler.learning.agent.domain.dto.ModelChatResponse;
+import com.chandler.learning.agent.domain.entity.AiAgent;
+import com.chandler.learning.agent.domain.entity.AiChatMessage;
+import com.chandler.learning.agent.domain.entity.AiChatSession;
+import com.chandler.learning.agent.domain.entity.AiModelCallRecord;
+import com.chandler.learning.agent.mapper.AiModelCallRecordMapper;
+import com.chandler.learning.agent.support.AiModelClient;
+import com.chandler.learning.agent.support.PromptRenderer;
+import com.fasterxml.jackson.core.type.TypeReference;
+import com.fasterxml.jackson.databind.ObjectMapper;
+import lombok.RequiredArgsConstructor;
+import org.springframework.stereotype.Service;
+import org.springframework.util.StringUtils;
+
+import java.time.LocalDateTime;
+import java.util.ArrayList;
+import java.util.HashMap;
+import java.util.List;
+import java.util.Map;
+
+/**
+ * AI Agent 对话服务。
+ */
+@Service
+@RequiredArgsConstructor
+public class AiChatService {
+
+    private final AiAgentService agentService;
+    private final AiPromptTemplateService promptTemplateService;
+    private final AiChatSessionService chatSessionService;
+    private final AiModelClient aiModelClient;
+    private final AiModelProperties modelProperties;
+    private final PromptRenderer promptRenderer;
+    private final AiModelCallRecordMapper callRecordMapper;
+    private final ObjectMapper objectMapper;
+
+    public AgentChatResponse chat(AgentChatRequest request) {
+        long startTime = System.currentTimeMillis();
+        AiAgent agent = getEnabledAgent(request.getAgentCode());
+        AiChatSession session = resolveSession(agent, request, startTime);
+
+        List<ChatMessageParam> messages = buildMessages(agent, request, session);
+        chatSessionService.addUserMessage(session.getId(), buildUserMessage(request));
+
+        String provider = resolveProvider(agent);
+        String modelName = resolveModelName(agent, provider);
+        ModelChatRequest modelRequest = new ModelChatRequest();
+        modelRequest.setProvider(provider);
+        modelRequest.setModel(modelName);
+        modelRequest.setTemperature(agent.getTemperature());
+        modelRequest.setMaxTokens(agent.getMaxTokens());
+        modelRequest.setMessages(messages);
+
+        AiModelCallRecord record = buildCallRecord(session.getId(), agent, modelRequest);
+        try {
+            ModelChatResponse modelResponse = aiModelClient.chat(modelRequest);
+            long costTime = System.currentTimeMillis() - startTime;
+            chatSessionService.addAssistantMessage(session.getId(), modelResponse.getContent(),
+                    modelResponse.getTotalTokens(), costTime, provider, modelName);
+            saveSuccessRecord(record, modelResponse, costTime);
+
+            AgentChatResponse response = new AgentChatResponse();
+            response.setSessionId(session.getId());
+            response.setAgentCode(agent.getCode());
+            response.setModelProvider(provider);
+            response.setModelName(modelName);
+            response.setContent(modelResponse.getContent());
+            response.setTokenUsage(modelResponse.getTotalTokens());
+            response.setCostTime(costTime);
+            return response;
+        } catch (RuntimeException ex) {
+            long costTime = System.currentTimeMillis() - startTime;
+            saveFailedRecord(record, ex, costTime);
+            throw ex;
+        }
+    }
+
+    private AiAgent getEnabledAgent(String agentCode) {
+        AiAgent agent = agentService.getByCode(agentCode);
+        if (agent == null) {
+            throw new IllegalArgumentException("Agent 不存在: " + agentCode);
+        }
+        if (!Boolean.TRUE.equals(agent.getEnabled())) {
+            throw new IllegalArgumentException("Agent 已停用: " + agentCode);
+        }
+        return agent;
+    }
+
+    private AiChatSession resolveSession(AiAgent agent, AgentChatRequest request, long startTime) {
+        if (request.getSessionId() != null) {
+            AiChatSession session = chatSessionService.getSession(request.getSessionId());
+            if (session == null) {
+                throw new IllegalArgumentException("会话不存在: " + request.getSessionId());
+            }
+            return session;
+        }
+
+        String title = StringUtils.hasText(request.getTitle())
+                ? request.getTitle()
+                : agent.getName() + "-" + startTime;
+        return chatSessionService.createSession(agent.getCode(), title, request.getBusinessType(),
+                request.getBusinessId(), request.getVariables());
+    }
+
+    private List<ChatMessageParam> buildMessages(AiAgent agent, AgentChatRequest request, AiChatSession session) {
+        List<ChatMessageParam> messages = new ArrayList<>();
+        Map<String, Object> variables = readSessionVariables(session);
+        if (request.getVariables() != null) {
+            variables.putAll(request.getVariables());
+        }
+        variables.put("USER_QUERY", request.getMessage());
+
+        List<AiChatMessage> history = chatSessionService.getHistory(session.getId());
+        boolean firstRound = history.isEmpty();
+        String systemPrompt = firstRound || !StringUtils.hasText(agent.getConcisePrompt())
+                ? agent.getSystemPrompt()
+                : agent.getConcisePrompt();
+        if (StringUtils.hasText(systemPrompt)) {
+            messages.add(new ChatMessageParam("system", promptRenderer.render(systemPrompt, variables)));
+        }
+
+        for (AiChatMessage message : history) {
+            if ("user".equals(message.getRole()) || "assistant".equals(message.getRole())) {
+                messages.add(new ChatMessageParam(message.getRole(), message.getContent()));
+            }
+        }
+
+        messages.add(new ChatMessageParam("user", buildUserMessage(request)));
+        return messages;
+    }
+
+    private String buildUserMessage(AgentChatRequest request) {
+        StringBuilder userMessage = new StringBuilder();
+        if (StringUtils.hasText(request.getTemplateCode())) {
+            userMessage.append(promptTemplateService.render(request.getTemplateCode(), request.getVariables()))
+                    .append("\n\n");
+        }
+        userMessage.append(request.getMessage());
+        return userMessage.toString();
+    }
+
+    private String resolveProvider(AiAgent agent) {
+        return StringUtils.hasText(agent.getModelProvider())
+                ? agent.getModelProvider()
+                : modelProperties.getDefaultProvider();
+    }
+
+    private String resolveModelName(AiAgent agent, String provider) {
+        if (StringUtils.hasText(agent.getModelName())) {
+            return agent.getModelName();
+        }
+        ProviderConfig providerConfig = modelProperties.getProvider(provider);
+        return providerConfig == null ? null : providerConfig.getDefaultModel();
+    }
+
+    private AiModelCallRecord buildCallRecord(Long sessionId, AiAgent agent, ModelChatRequest request) {
+        AiModelCallRecord record = new AiModelCallRecord();
+        record.setSessionId(sessionId);
+        record.setAgentCode(agent.getCode());
+        record.setProvider(request.getProvider());
+        record.setModelName(request.getModel());
+        record.setRequestJson(toJson(request));
+        record.setCreateTime(LocalDateTime.now());
+        return record;
+    }
+
+    private void saveSuccessRecord(AiModelCallRecord record, ModelChatResponse response, long costTime) {
+        record.setResponseJson(response.getResponseJson());
+        record.setSuccess(true);
+        record.setPromptTokens(response.getPromptTokens());
+        record.setCompletionTokens(response.getCompletionTokens());
+        record.setTotalTokens(response.getTotalTokens());
+        record.setLatencyMs(costTime);
+        callRecordMapper.insert(record);
+    }
+
+    private void saveFailedRecord(AiModelCallRecord record, RuntimeException ex, long costTime) {
+        record.setSuccess(false);
+        record.setErrorMessage(ex.getMessage());
+        record.setLatencyMs(costTime);
+        callRecordMapper.insert(record);
+    }
+
+    private String toJson(Object value) {
+        try {
+            return objectMapper.writeValueAsString(value);
+        } catch (Exception ex) {
+            throw new IllegalArgumentException("模型请求序列化失败", ex);
+        }
+    }
+
+    private Map<String, Object> readSessionVariables(AiChatSession session) {
+        if (session == null || !StringUtils.hasText(session.getVariablesJson())) {
+            return new HashMap<>();
+        }
+        try {
+            return objectMapper.readValue(session.getVariablesJson(), new TypeReference<>() {
+            });
+        } catch (Exception ex) {
+            return new HashMap<>();
+        }
+    }
+}
