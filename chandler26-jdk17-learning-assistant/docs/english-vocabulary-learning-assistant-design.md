@@ -252,6 +252,7 @@ learning:
 结构约束：
 
 - `definitions` 每条包含 `part_of_speech`、`meaning`、`english`。
+- `examples` 每条包含 `sentence`、`translation`，其中 `sentence` 是英文例句，`translation` 是对应中文翻译。
 - `collocations` 使用对象数组，每条包含 `phrase`、`meaning`，用于展示搭配含义。
 - `synonyms`、`antonyms`、`word_family` 使用对象数组，每条包含 `word`、`part_of_speech`、`meaning`，用于展示相关词核心词性和核心含义。
 - 如果用户输入疑似拼写错误，AI 可在 `term` 中输出判断后的标准单词；系统也提供缓存层面的最匹配词查询。
@@ -264,6 +265,7 @@ learning:
 - `part_of_speech` / `pos`
 - 字符串数组或对象数组形式的 `collocations`
 - 字符串数组或对象数组形式的 `synonyms`、`antonyms`、`word_family`
+- 例句中文翻译字段兼容 `translation_cn`、`translation`、`zh`、`chinese_translation`、`sentence_cn`、`example_translation` 等常见变体。
 
 ## 6. 后端模块
 
@@ -342,6 +344,7 @@ GET  /api/v1/english/vocabularies/{term}
 - `english_vocabulary_study_record` 是公共 AI 学习卡缓存，同一归一化词条优先复用，减少重复调用模型。
 - `forceRefresh=true` 会重新调用 AI 并更新公共缓存，供后续学习查询使用。
 - 用户把词条加入词书时，系统会把当前公共缓存中的原始回复、解析 JSON、标签、关联词、模型供应商、模型名称和会话 ID 复制到 `learning_wordbook_entry` 的快照字段。
+- 如果词条已经存在于该词书，用户再次从学习页保存到词书时，系统会比较公共缓存与个人快照；当公共缓存来自更晚的 AI 生成结果时，刷新该词条的个人学习卡快照，但保留笔记、熟练度、复习阶段和下次复习时间。
 - 单词本详情、复习详情优先读取词书词条个人快照；历史词条若没有快照，才回退读取公共缓存。
 - 因此其他用户重新生成同一个词条的公共 AI 结果，不会覆盖已经加入个人词书的学习卡详情。
 
@@ -471,6 +474,7 @@ src/main/resources/db/learning_vocabulary_relation_enrichment_mysql.sql
 ```text
 src/main/resources/db/learning_notes_model_wordbook_enhancement_mysql.sql
 src/main/resources/db/security_jwt_system_log_api_key_encryption_mysql.sql
+src/main/resources/db/learning_vocab_example_translation_prompt_mysql.sql
 ```
 
 本次新增迁移包含：
@@ -488,6 +492,14 @@ src/main/resources/db/learning_wordbook_entry_snapshot_mysql.sql
 ```
 
 该迁移会为 `learning_wordbook_entry` 增加个人学习卡快照字段，并把已有词条按当前公共缓存回填一份快照。
+
+本次例句中文翻译模板增强迁移：
+
+```text
+src/main/resources/db/learning_vocab_example_translation_prompt_mysql.sql
+```
+
+该迁移会更新 `english_vocab_card_json` 模板，使后续 AI 返回的 `examples` 明确包含英文 `sentence` 和中文 `translation`。
 
 如果已经执行过旧版 `learning_user_wordbook_review_mysql.sql`，且还没有执行过关系增强迁移，还需要额外执行：
 
@@ -727,7 +739,8 @@ src/main/resources/db/learning_vocabulary_relation_enrichment_mysql.sql
   -> 生成标签和关联词
   -> 前端展示学习卡片
   -> 用户加入当前词书
-  -> 创建 learning_wordbook_entry
+  -> 若词书中不存在该词条，创建 learning_wordbook_entry
+  -> 若词书中已存在该词条，保留学习状态并刷新个人学习卡快照
   -> 复制当前公共学习卡为个人快照
 ```
 

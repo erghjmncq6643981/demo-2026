@@ -239,11 +239,11 @@ public class WordbookService {
                 .eq(LearningWordbookEntry::getNormalizedTerm, normalizedTerm)
                 .last(LearningConstants.SQL_LIMIT_ONE));
         if (existing != null) {
+            LocalDateTime now = LocalDateTime.now();
+            EnglishVocabularyStudyRecord vocabulary = findVocabulary(normalizedTerm);
             if (Boolean.TRUE.equals(existing.getDeleted())) {
-                EnglishVocabularyStudyRecord vocabulary = findVocabulary(normalizedTerm);
                 existing.setDeleted(false);
                 existing.setNote(trimToNull(request.getNote()));
-                LocalDateTime now = LocalDateTime.now();
                 if (vocabulary != null) {
                     applyVocabularySnapshot(existing, vocabulary, now);
                 }
@@ -251,6 +251,13 @@ public class WordbookService {
                 entryMapper.updateById(existing);
                 systemLogService.record(userId, "wordbook", "恢复词条", existing.getNormalizedTerm());
                 log.info("用户「{}」把单词「{}」重新加入到词书「{}」中",
+                        userDisplayNameService.userName(userId),
+                        existing.getNormalizedTerm(),
+                        wordbook.getName());
+            } else if (refreshSnapshotIfVocabularyChanged(existing, vocabulary, now)) {
+                entryMapper.updateById(existing);
+                systemLogService.record(userId, "wordbook", "刷新词条学习卡", existing.getNormalizedTerm());
+                log.info("用户「{}」把单词「{}」在词书「{}」中的学习卡更新为最新 AI 结果",
                         userDisplayNameService.userName(userId),
                         existing.getNormalizedTerm(),
                         wordbook.getName());
@@ -510,6 +517,26 @@ public class WordbookService {
         entry.setSnapshotModelName(vocabulary.getModelName());
         entry.setSnapshotSessionId(vocabulary.getSessionId());
         entry.setSnapshotTime(now);
+    }
+
+    private boolean refreshSnapshotIfVocabularyChanged(LearningWordbookEntry entry,
+                                                       EnglishVocabularyStudyRecord vocabulary,
+                                                       LocalDateTime now) {
+        if (vocabulary == null) {
+            return false;
+        }
+        boolean snapshotMissing = !StringUtils.hasText(entry.getSnapshotParsedJson());
+        boolean sessionChanged = vocabulary.getSessionId() != null && !vocabulary.getSessionId().equals(entry.getSnapshotSessionId());
+        boolean vocabularyNewer = vocabulary.getUpdateTime() != null
+                && (entry.getSnapshotTime() == null || vocabulary.getUpdateTime().isAfter(entry.getSnapshotTime()));
+        if (!snapshotMissing && !sessionChanged && !vocabularyNewer) {
+            return false;
+        }
+        applyVocabularySnapshot(entry, vocabulary, now);
+        entry.setTerm(vocabulary.getTerm());
+        entry.setVocabularyId(vocabulary.getId());
+        entry.setUpdateTime(now);
+        return true;
     }
 
     private Object readEntryParsed(LearningWordbookEntry entry) {

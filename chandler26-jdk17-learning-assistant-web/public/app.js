@@ -2088,7 +2088,7 @@ async function addWordToWordbook(term, wordbookId) {
     renderNotes(entry)
     closeAddWordbookModal()
     logEvent('wordbook', '加入单词本', `${term} -> ${currentWordbookName(wordbookId)}`)
-    toast('已加入词书，并生成复习计划')
+    toast('已保存到词书，若已存在则已更新学习卡')
   } catch (error) {
     logEvent('error', '加入词书失败', error.message)
     toast(`加入词书失败：${error.message}`)
@@ -3039,13 +3039,33 @@ function normalizeDefinitions(parsed) {
 }
 
 function normalizeExamples(parsed) {
-  const examples = normalizeArray(parsed?.examples || parsed?.sentences || parsed?.example_sentences)
+  const examples = normalizeArray(parsed?.examples || parsed?.sentences || parsed?.example_sentences || parsed?.exampleSentences)
   return examples
     .map((item) => {
       if (typeof item === 'string') return { sentence: item, translation: '' }
       return {
-        sentence: readText(item, ['sentence', 'example', 'text', 'en', 'english']),
-        translation: readText(item, ['translation_cn', 'translationCn', 'translation', 'cn', 'chinese', 'meaning']),
+        sentence: readText(item, ['sentence', 'example', 'text', 'en', 'english', 'sentence_en', 'sentenceEn', 'example_en', 'exampleEn']),
+        translation: readText(item, [
+          'translation_cn',
+          'translationCn',
+          'translation',
+          'cn',
+          'zh',
+          'zh_cn',
+          'zhCn',
+          'chinese',
+          'chinese_translation',
+          'chineseTranslation',
+          'sentence_cn',
+          'sentenceCn',
+          'example_cn',
+          'exampleCn',
+          'example_translation',
+          'exampleTranslation',
+          'meaning',
+          'meaning_cn',
+          'meaningCn',
+        ]),
       }
     })
     .filter((item) => item.sentence || item.translation)
