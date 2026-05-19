@@ -264,9 +264,11 @@ textarea:focus {
 .primary-button,
 .secondary-button,
 .icon-button {
+  max-width: 100%;
   border-radius: 10px;
   cursor: pointer;
   font-weight: 800;
+  line-height: 1.2;
   transition:
     transform 140ms ease,
     opacity 140ms ease,
@@ -334,6 +336,24 @@ textarea:focus {
   height: 48px;
   color: var(--yellow);
   font-size: 18px;
+}
+
+.icon-button.compact-icon {
+  width: 32px;
+  height: 32px;
+  border-radius: 9px;
+  color: var(--yellow);
+  font-size: 14px;
+}
+
+.compact-icon svg {
+  width: 17px;
+  height: 17px;
+  fill: none;
+  stroke: currentColor;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+  stroke-width: 2;
 }
 
 .product-shell {
@@ -1284,8 +1304,35 @@ textarea:focus {
   padding: 10px 12px;
 }
 
-.collocation-item {
-  grid-template-columns: minmax(0, 1fr);
+.relation-item:focus-visible,
+.collocation-item:focus-visible {
+  outline: 2px solid rgba(129, 140, 248, 0.85);
+  outline-offset: 2px;
+}
+
+.relation-title-line {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 6px 10px;
+}
+
+.relation-title-line span {
+  color: var(--muted);
+  font-size: 12px;
+}
+
+.relation-side-actions {
+  display: inline-flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 8px;
+}
+
+.inline-audio-button {
+  min-width: 34px;
+  width: 34px;
+  padding: 0;
 }
 
 .relation-item strong,
@@ -1614,6 +1661,15 @@ textarea:focus {
   gap: 10px;
 }
 
+.note-editor .inline-actions {
+  position: sticky;
+  bottom: 0;
+  z-index: 2;
+  justify-content: flex-end;
+  padding-top: 10px;
+  background: linear-gradient(180deg, rgba(31, 41, 55, 0), rgba(31, 41, 55, 0.96) 42%);
+}
+
 .mini-definition-list {
   display: grid;
   gap: 8px;
@@ -1903,10 +1959,12 @@ textarea:focus {
   }
 
   #wordbookView.view.active {
+    grid-template-rows: auto auto;
     overflow: auto;
   }
 
   #reviewView.view.active {
+    grid-template-rows: auto auto;
     overflow: auto;
   }
 
@@ -1916,19 +1974,32 @@ textarea:focus {
 
   .wordbook-layout,
   .review-layout {
+    min-height: auto;
     overflow: visible;
   }
 
   .wordbook-layout > .panel,
   .review-layout > .panel {
     max-height: none;
+    overflow: visible;
   }
 
   #wordbookEntryList,
   #wordbookFocus,
   #reviewFocus,
   #reviewNote {
-    max-height: min(62vh, 620px);
+    overflow: visible;
+    max-height: none;
+  }
+
+  #wordbookEntryList {
+    max-height: 42vh;
+    overflow: auto;
+  }
+
+  #reviewFocus,
+  #reviewNote {
+    max-height: none;
   }
 }
 
@@ -1936,7 +2007,11 @@ textarea:focus {
   .login-screen,
   .content {
     width: auto;
-    padding: 16px;
+    padding: 14px;
+  }
+
+  .content {
+    gap: 14px;
   }
 
   .login-screen {
@@ -1956,6 +2031,7 @@ textarea:focus {
   .content-topbar,
   .topbar-actions,
   .review-start-controls,
+  .wordbook-tools,
   .word-main,
   .review-header {
     align-items: stretch;
@@ -1977,13 +2053,13 @@ textarea:focus {
   .form-grid,
   .template-meta-grid,
   .model-form-grid,
+  .model-toggle-row,
   .metric-row,
   .sidebar-footer,
   .nav-menu {
     grid-template-columns: 1fr;
   }
 
-  .entry-row,
   .model-item,
   .wordbook-card,
   .focus-subgrid,
@@ -1992,8 +2068,182 @@ textarea:focus {
     grid-template-columns: 1fr;
   }
 
+  .panel {
+    padding: 14px;
+  }
+
+  .panel-heading {
+    gap: 10px;
+  }
+
+  .panel-heading,
+  .wordbook-focus-head,
+  .review-card-topline,
+  .review-card-actions,
+  .forgotten-word-head {
+    align-items: stretch;
+    flex-direction: column;
+  }
+
+  .inline-actions,
+  .row-actions {
+    gap: 6px;
+  }
+
+  .modal-actions {
+    flex-direction: column-reverse;
+  }
+
+  .modal-actions button {
+    width: 100%;
+  }
+
+  .primary-button,
+  .secondary-button,
+  .compact-primary {
+    min-width: 0;
+    padding-right: 12px;
+    padding-left: 12px;
+    font-size: 13px;
+  }
+
+  .secondary-button.compact,
+  .ghost-button,
+  .danger-button {
+    min-width: 0;
+    padding-right: 10px;
+    padding-left: 10px;
+    font-size: 12px;
+  }
+
+  .icon-button,
+  .icon-action-button,
+  .danger-icon-button {
+    width: 32px;
+    height: 32px;
+    border-radius: 9px;
+    font-size: 14px;
+  }
+
+  .entry-row {
+    grid-template-columns: minmax(0, 1fr) 34px;
+    min-height: 54px;
+    max-height: 64px;
+    gap: 8px;
+    padding: 8px 9px;
+  }
+
+  .entry-row > button {
+    gap: 2px;
+  }
+
+  .entry-row > button span {
+    font-size: 14px;
+  }
+
+  .entry-row > button small {
+    font-size: 11px;
+  }
+
+  .entry-row .row-actions {
+    justify-content: flex-end;
+  }
+
+  .wordbook-focus-head .inline-actions {
+    max-width: none;
+    align-items: stretch;
+  }
+
+  .next-review-pill {
+    white-space: normal;
+  }
+
+  .search-card {
+    gap: 10px;
+    padding: 14px;
+  }
+
+  .term-input {
+    height: 54px;
+    font-size: 24px;
+  }
+
+  .search-card .primary-button,
+  .search-card .regenerate-button {
+    height: 44px;
+  }
+
+  .meaning-item {
+    grid-template-columns: 1fr;
+    gap: 6px;
+  }
+
+  .relation-item {
+    grid-template-columns: minmax(0, 1fr);
+    gap: 8px;
+  }
+
+  .relation-side-actions {
+    justify-content: space-between;
+  }
+
+  .collocation-item {
+    grid-template-columns: minmax(0, 1fr) 34px;
+  }
+
+  .review-layout {
+    gap: 14px;
+  }
+
+  .review-focus-card h4,
+  .wordbook-focus-card h4 {
+    font-size: clamp(36px, 15vw, 58px);
+  }
+
+  .typing-board {
+    padding: 12px;
+  }
+
+  .typing-letters {
+    gap: 5px;
+  }
+
+  .typing-letters span {
+    min-width: 28px;
+    height: 36px;
+    border-radius: 8px;
+    font-size: 18px;
+  }
+
+  .review-actions,
+  .modal-review-actions {
+    grid-template-columns: 1fr;
+  }
+
+  .review-actions button,
+  .status-choice {
+    min-height: 40px;
+    font-size: 12px;
+  }
+
+  .note-editor textarea {
+    min-height: 180px;
+    max-height: 48vh;
+  }
+
+  .modal-backdrop {
+    align-items: end;
+    padding: 12px;
+  }
+
+  .review-modal,
+  .config-modal {
+    max-height: calc(100dvh - 24px);
+    padding: 16px;
+  }
+
   .word-main h2 {
-    font-size: 54px;
+    font-size: clamp(44px, 16vw, 54px);
   }
 
   .voice-actions {

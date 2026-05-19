@@ -254,7 +254,7 @@ learning:
 - `definitions` 每条包含 `part_of_speech`、`meaning`、`english`。
 - `examples` 每条包含 `sentence`、`translation`，其中 `sentence` 是英文例句，`translation` 是对应中文翻译。
 - `collocations` 使用对象数组，每条包含 `phrase`、`meaning`，用于展示搭配含义。
-- `synonyms`、`antonyms`、`word_family` 使用对象数组，每条包含 `word`、`part_of_speech`、`meaning`，用于展示相关词核心词性和核心含义。
+- `synonyms`、`antonyms`、`word_family` 使用对象数组，每条包含 `word`、`part_of_speech`、`meaning`、`phonetic.uk`、`phonetic.us`，用于展示相关词核心词性、核心含义和英音/美音音标。
 - 如果用户输入疑似拼写错误，AI 可在 `term` 中输出判断后的标准单词；系统也提供缓存层面的最匹配词查询。
 
 前端和后端都兼容常见字段变体，例如：
@@ -405,6 +405,7 @@ PUT  /api/v1/learning/wordbook-entries/{entryId}
 DELETE /api/v1/learning/wordbook-entries/{entryId}
 GET  /api/v1/learning/activity?days=180
 GET  /api/v1/learning/reviews/due
+GET  /api/v1/learning/reviews/restart?wordbookId={id}&limit=10
 POST /api/v1/learning/reviews/{entryId}
 ```
 
@@ -448,7 +449,13 @@ DELETE /api/v1/learning/system-logs
 
 - `remembered`：阶段 +1，掌握度 +15。
 - `vague`：阶段至少保持 1，掌握度 +5，次日复习。
-- `forgotten`：阶段归 0，掌握度 -20，4 小时后复习。
+- `forgotten`：阶段归 0，掌握度 -20，4 个清醒小时后复习。
+
+睡眠时间保护：
+
+- `00:00` 到 `06:00` 视为睡眠时间，不生成复习任务。
+- 如果按间隔计算出的复习时间落入睡眠时间，自动顺延到当天 `06:00`。
+- 如果用户在睡眠时间提交复习，本次排期从当天 `06:00` 作为起算点，避免“4 小时后”落在凌晨。
 
 复习间隔：
 
@@ -475,6 +482,7 @@ src/main/resources/db/learning_vocabulary_relation_enrichment_mysql.sql
 src/main/resources/db/learning_notes_model_wordbook_enhancement_mysql.sql
 src/main/resources/db/security_jwt_system_log_api_key_encryption_mysql.sql
 src/main/resources/db/learning_vocab_example_translation_prompt_mysql.sql
+src/main/resources/db/learning_vocab_related_phonetic_prompt_mysql.sql
 ```
 
 本次新增迁移包含：
@@ -501,6 +509,14 @@ src/main/resources/db/learning_vocab_example_translation_prompt_mysql.sql
 
 该迁移会更新 `english_vocab_card_json` 模板，使后续 AI 返回的 `examples` 明确包含英文 `sentence` 和中文 `translation`。
 
+相关词音标模板增强迁移：
+
+```text
+src/main/resources/db/learning_vocab_related_phonetic_prompt_mysql.sql
+```
+
+该迁移会更新 `english_vocab_card_json` 模板，使后续 AI 返回的 `synonyms`、`antonyms`、`word_family` 每条包含 `phonetic.uk/us`。不新增表字段。
+
 如果已经执行过旧版 `learning_user_wordbook_review_mysql.sql`，且还没有执行过关系增强迁移，还需要额外执行：
 
 ```text
@@ -508,6 +524,8 @@ src/main/resources/db/learning_vocabulary_relation_enrichment_mysql.sql
 ```
 
 该迁移会补充 `learning_vocabulary_relation` 的增强字段，并更新 `english_vocab_card_json` 模板，使后续 AI 输出包含搭配含义和相关词核心词性/含义。
+
+相关词音标不新增表字段；接口返回时优先读取源 AI JSON 中关联词对象的 `phonetic.uk/us`，旧数据或缺失数据再从已有 `english_vocabulary_study_record.parsed_json` 的相关词缓存中兜底填充，未缓存的相关词显示“暂无音标”但仍可播放单词文本。
 
 ### 7.2 AI Agent 表
 
@@ -751,6 +769,9 @@ src/main/resources/db/learning_vocabulary_relation_enrichment_mysql.sql
   -> 选择词书
   -> 查询 /api/v1/learning/reviews/due
   -> 展示待复习词条
+  -> 如果没有到期词条，用户点击“开始复习”时弹窗二次确认
+  -> 用户确认后调用 /api/v1/learning/reviews/restart 重新生成本轮复习任务
+  -> 重新生成任务只返回本轮队列，不立即修改 next_review_time
   -> 用户选择 忘记 / 模糊 / 记住
   -> 写入 learning_review_record
   -> 更新 learning_wordbook_entry 的 stage、mastery、next_review_time
@@ -782,7 +803,7 @@ src/main/resources/db/learning_vocabulary_relation_enrichment_mysql.sql
 - `个人信息 / Agent 管理`：模型配置采用列表和新增/编辑弹窗，列表操作只提供图标编辑和单个删除；默认和状态只在弹窗中修改，不提供清空按钮。
 - `单词本`：按词表查看单词、筛选状态、在详情中通过弹窗修改状态、红色删除图标删除词条、查看学习卡片式详情、跳转当前单词复习卡片和编辑笔记。
 - `学习`：查词、AI 学习卡片、音标发音、加入词书、例句、记忆提示、搭配、相关词、标签、继续追问。
-- `复习`：在今日复习中选择词书和复习数量，直接进入复习卡片；卡片支持字母跟敲、错误抖动提示音、上一个/下一个切换、完成弹窗、例句发音和复习结果提交；忘记时展示学习卡核心详情，记住时自动进入下一个单词。
+- `复习`：在今日复习中选择词书和复习数量，直接进入复习卡片；如果已经完成今日任务，再次点击开始复习会二次确认并重新生成一组本轮复习任务；卡片支持字母跟敲、错误抖动提示音、上一个/下一个切换、完成弹窗、例句发音和复习结果提交；忘记时展示学习卡核心详情，记住时自动进入下一个单词。
 
 导航栏支持显示/隐藏：
 
@@ -825,6 +846,8 @@ src/main/resources/db/learning_vocabulary_relation_enrichment_mysql.sql
 
 - 单词主按钮使用个人信息中配置的默认发音。
 - UK / US 音标后分别提供发音按钮。
+- 搭配词组提供发音按钮；点击词组去学习前需要二次确认。
+- 相关单词展示核心词性、核心含义、可推导音标和发音按钮；点击相关单词去学习前需要二次确认。
 - 复习完成弹窗中的例句播放使用个人信息中配置的默认发音。
 - 优先调用有道词典音频地址，失败后回退浏览器 SpeechSynthesis。
 

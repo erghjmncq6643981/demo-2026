@@ -136,6 +136,9 @@ public final class LearningConstants {
         public static final String TAG_TYPE_PART_OF_SPEECH = "part_of_speech";
         public static final String TAG_TYPE_MEANING_TOPIC = "meaning_topic";
         public static final String TAG_TYPE_DIFFICULTY = "difficulty";
+        public static final String RELATION_TYPE_SYNONYM = "synonym";
+        public static final String RELATION_TYPE_ANTONYM = "antonym";
+        public static final String RELATION_TYPE_WORD_FAMILY = "word_family";
         public static final String RELATION_TYPE_TAG_OVERLAP = "tag_overlap";
         public static final String RELATION_TYPE_COLLOCATION = "collocation";
         public static final String MATCH_TYPE_PARSED_TEXT = "parsed_text";
@@ -164,6 +167,13 @@ public final class LearningConstants {
         public static final int FORGOTTEN_MASTERY_DELTA = 20;
         public static final int VAGUE_REVIEW_DELAY_DAYS = 1;
         public static final int FORGOTTEN_REVIEW_DELAY_HOURS = 4;
+        public static final int SLEEP_START_HOUR = 0;
+        public static final int SLEEP_END_HOUR = 6;
+        public static final int DAY_END_HOUR = 24;
+        public static final int RESTART_DEFAULT_LIMIT = 10;
+        public static final String RESTART_DEFAULT_LIMIT_PARAM = "10";
+        public static final int RESTART_MIN_LIMIT = 1;
+        public static final int RESTART_MAX_LIMIT = 100;
         public static final int[] INTERVAL_DAYS = {0, 1, 2, 4, 7, 15, 30, 60};
 
         private Review() {

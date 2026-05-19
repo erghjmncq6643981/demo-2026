@@ -33,6 +33,7 @@ import org.springframework.util.StringUtils;
 
 import java.time.LocalDateTime;
 import java.time.LocalDate;
+import java.time.temporal.ChronoUnit;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Locale;
@@ -348,6 +349,39 @@ public class WordbookService {
         return entries.stream().map(this::toEntryResponse).toList();
     }
 
+    /**
+     * 在没有到期任务时，为用户从当前词书中重新挑选一组词条作为本轮复习队列。
+     * <p>
+     * 该动作只返回任务列表，不修改正式复习排期；只有提交复习结果时才更新下一次复习时间。
+     */
+    public List<WordbookEntryResponse> listRestartReviewEntries(Long userId, Long wordbookId, Integer limit) {
+        LearningWordbook wordbook = wordbookId == null ? ensureDefaultWordbook(userId) : requireWordbook(userId, wordbookId);
+        int resolvedLimit = Math.max(LearningConstants.Review.RESTART_MIN_LIMIT,
+                Math.min(limit == null ? LearningConstants.Review.RESTART_DEFAULT_LIMIT : limit,
+                        LearningConstants.Review.RESTART_MAX_LIMIT));
+        List<LearningWordbookEntry> entries = entryMapper.selectList(new LambdaQueryWrapper<LearningWordbookEntry>()
+                .eq(LearningWordbookEntry::getUserId, userId)
+                .eq(LearningWordbookEntry::getWordbookId, wordbook.getId())
+                .eq(LearningWordbookEntry::getDeleted, false)
+                .orderByAsc(LearningWordbookEntry::getLastReviewTime)
+                .orderByAsc(LearningWordbookEntry::getMasteryScore)
+                .orderByAsc(LearningWordbookEntry::getNextReviewTime)
+                .orderByDesc(LearningWordbookEntry::getCreateTime)
+                .last("LIMIT " + resolvedLimit));
+        systemLogService.record(userId, "review", "重新生成复习任务",
+                wordbook.getName() + "，共 " + entries.size() + " 个单词");
+        log.info("用户「{}」重新生成了词书「{}」的复习任务，共 {} 个单词",
+                userDisplayNameService.userName(userId),
+                wordbook.getName(),
+                entries.size());
+        log.debug("复习任务已重新生成 userId={} wordbookId={} limit={} count={}",
+                userId,
+                wordbook.getId(),
+                resolvedLimit,
+                entries.size());
+        return entries.stream().map(this::toEntryResponse).toList();
+    }
+
     public WordbookEntryResponse updateEntry(Long userId, Long entryId, WordbookEntryUpdateRequest request) {
         LearningWordbookEntry entry = requireEntry(userId, entryId);
         if (request.getNote() != null) {
@@ -565,7 +599,7 @@ public class WordbookService {
             List<VocabularyRelationResponse> relations = readJsonList(entry.getSnapshotRelationsJson(), VocabularyRelationResponse.class,
                     "词书词条关联词快照读取失败", entry);
             if (relations != null) {
-                return relations;
+                return vocabularyInsightService.enrichRelationPhonetics(entry.getVocabularyId(), relations);
             }
         }
         return vocabularyInsightService.listRelations(entry.getNormalizedTerm());
@@ -661,15 +695,42 @@ public class WordbookService {
     }
 
     private LocalDateTime nextReviewTime(LocalDateTime now, int stage, boolean remembered, boolean vague) {
+        LocalDateTime baseTime = avoidSleepWindow(now);
         if (vague) {
-            return now.plusDays(LearningConstants.Review.VAGUE_REVIEW_DELAY_DAYS);
+            return avoidSleepWindow(baseTime.plusDays(LearningConstants.Review.VAGUE_REVIEW_DELAY_DAYS));
         }
         if (!remembered) {
-            return now.plusHours(LearningConstants.Review.FORGOTTEN_REVIEW_DELAY_HOURS);
+            return addAwakeHours(baseTime, LearningConstants.Review.FORGOTTEN_REVIEW_DELAY_HOURS);
         }
-        return now.plusDays(LearningConstants.Review.INTERVAL_DAYS[
+        return avoidSleepWindow(baseTime.plusDays(LearningConstants.Review.INTERVAL_DAYS[
                 Math.max(LearningConstants.Review.INITIAL_STAGE,
-                        Math.min(stage, LearningConstants.Review.INTERVAL_DAYS.length - LearningConstants.SEQUENCE_STEP))]);
+                        Math.min(stage, LearningConstants.Review.INTERVAL_DAYS.length - LearningConstants.SEQUENCE_STEP))]));
+    }
+
+    LocalDateTime avoidSleepWindow(LocalDateTime reviewTime) {
+        int hour = reviewTime.getHour();
+        if (hour >= LearningConstants.Review.SLEEP_START_HOUR && hour < LearningConstants.Review.SLEEP_END_HOUR) {
+            return reviewTime.toLocalDate().atTime(LearningConstants.Review.SLEEP_END_HOUR, LearningConstants.ZERO);
+        }
+        return reviewTime;
+    }
+
+    LocalDateTime addAwakeHours(LocalDateTime startTime, long hours) {
+        LocalDateTime current = avoidSleepWindow(startTime);
+        long remainingMinutes = hours * ChronoUnit.HOURS.getDuration().toMinutes();
+        while (remainingMinutes > LearningConstants.ZERO) {
+            LocalDateTime sleepStart = current.toLocalDate().atTime(
+                    LearningConstants.Review.DAY_END_HOUR - LearningConstants.SEQUENCE_STEP,
+                    LearningConstants.ZERO).plusHours(LearningConstants.SEQUENCE_STEP);
+            long awakeMinutesToday = ChronoUnit.MINUTES.between(current, sleepStart);
+            if (remainingMinutes <= awakeMinutesToday) {
+                return avoidSleepWindow(current.plusMinutes(remainingMinutes));
+            }
+            remainingMinutes -= Math.max(awakeMinutesToday, LearningConstants.ZERO);
+            current = current.toLocalDate().plusDays(LearningConstants.SEQUENCE_STEP)
+                    .atTime(LearningConstants.Review.SLEEP_END_HOUR, LearningConstants.ZERO);
+        }
+        return avoidSleepWindow(current);
     }
 
     private String normalizeResult(String result) {

@@ -19,6 +19,10 @@ public class VocabularyRelationResponse {
 
     private String relatedMeaning;
 
+    private String relatedPhoneticUk;
+
+    private String relatedPhoneticUs;
+
     private String matchType;
 
     private Integer matchScore;

@@ -1,5 +1,5 @@
 const state = {
-  build: '20260519-20',
+  build: '20260519-22',
   apiBase: localStorage.getItem('learning.apiBase') || 'http://localhost:16681',
   token: localStorage.getItem('learning.token') || '',
   user: readJsonStorage('learning.user'),
@@ -540,7 +540,7 @@ function loadPreviewData() {
       code: 'english_vocab_card_json',
       type: 'user',
       tags: '英语,词汇,JSON',
-      content: '请为英语词汇「{{term}}」生成学习卡片。只输出合法 JSON，不要输出 Markdown。JSON 字段包括：term、definitions、examples、collocations、synonyms、antonyms、word_family、memory_tips。',
+      content: '请为英语词汇「{{term}}」生成学习卡片。只输出合法 JSON，不要输出 Markdown。JSON 字段包括：term、is_valid、language、phonetic.uk、phonetic.us、definitions、examples、collocations、synonyms、antonyms、word_family、memory_tips。definitions 生成 1 到 4 条，每条包含 part_of_speech、meaning、english。examples 生成 3 条对象数组，每条必须包含 sentence 和 translation，其中 sentence 是英文例句，translation 是对应中文翻译。collocations 生成 3 到 6 条对象数组，每条包含 phrase 和 meaning。synonyms、antonyms、word_family 生成对象数组，每条包含 word、part_of_speech、meaning、phonetic.uk、phonetic.us，其中 phonetic 是该相关词的英音/美音音标。中文解释要简洁准确。如果输入拼写疑似错误，请在 term 中输出你判断的最匹配标准单词，并保持 is_valid=true。',
       variables: JSON.stringify([{ name: 'term', label: '英语单词或短语', required: true }]),
       description: '生成可解析入库的英语词汇学习卡片',
       exampleInput: '{"term":"abandon"}',
@@ -1566,15 +1566,7 @@ function renderWordbookFocus(entry) {
             relations.length
               ? relations
                   .map(
-                    (item) => `
-                      <button class="relation-item" type="button" data-focus-related="${escapeHtml(item.relatedTerm || '')}">
-                        <div>
-                          <strong>${escapeHtml(item.relatedTerm || '')}</strong>
-                          <p>${escapeHtml(relationMeaningLine(item))}</p>
-                        </div>
-                        <small>${escapeHtml(relationMetaLine(item))}</small>
-                      </button>
-                    `,
+                    (item) => renderRelationItem(item, 'focus-related'),
                   )
                   .join('')
               : '暂无关联词'
@@ -1590,8 +1582,11 @@ function renderWordbookFocus(entry) {
       <div class="note-view">${renderMarkdown(entry.note || '') || '<span class="empty">暂无笔记</span>'}</div>
     </div>
     <div class="focus-section">
-      <button class="ghost-button compact" type="button" data-toggle-tags>查看标签</button>
-      <div class="chips focus-tags hidden">
+      <div class="panel-heading compact-heading">
+        <h3>标签</h3>
+        <button class="icon-button compact-icon" type="button" data-toggle-tags title="隐藏标签" aria-label="隐藏标签" aria-pressed="true">${visibilityIcon(false)}</button>
+      </div>
+      <div class="chips focus-tags">
         ${tags.length ? tags.map((tag) => `<span class="chip tag-chip">${escapeHtml(tagLabel(tag))}</span>`).join('') : '<span class="empty">暂无标签</span>'}
       </div>
     </div>
@@ -1603,7 +1598,7 @@ function renderWordbookFocus(entry) {
     editCurrentNote()
   })
   elements.wordbookFocus.querySelector('[data-toggle-tags]')?.addEventListener('click', () => {
-    elements.wordbookFocus.querySelector('.focus-tags')?.classList.toggle('hidden')
+    toggleFocusTags()
   })
   elements.wordbookFocus.querySelectorAll('[data-focus-sentence]').forEach((button) => {
     button.addEventListener('click', () => speak(examples[Number(button.getAttribute('data-focus-sentence'))]?.sentence, elements.voiceSelect.value))
@@ -1611,31 +1606,45 @@ function renderWordbookFocus(entry) {
   elements.wordbookFocus.querySelectorAll('[data-focus-word-voice]').forEach((button) => {
     button.addEventListener('click', () => speak(entry.term || entry.normalizedTerm, button.getAttribute('data-focus-word-voice')))
   })
-  elements.wordbookFocus.querySelectorAll('[data-focus-related]').forEach((button) => {
-    button.addEventListener('click', () => {
-      const term = button.getAttribute('data-focus-related') || ''
-      elements.termInput.value = term
-      setView('studyView')
-      study(term)
-    })
-  })
-  elements.wordbookFocus.querySelectorAll('[data-collocation-term]').forEach((button) => {
-    button.addEventListener('click', () => {
-      const term = button.getAttribute('data-collocation-term') || ''
-      elements.termInput.value = term
-      setView('studyView')
-      study(term)
-    })
-  })
+  bindStudyTermCards(elements.wordbookFocus, '[data-focus-related]', '单词')
+  bindStudyTermCards(elements.wordbookFocus, '[data-collocation-term]', '词组')
+  bindInlineAudio(elements.wordbookFocus)
 }
 
 function renderCollocationMini(item) {
+  const render = (phrase, meaning) => `
+    <div class="collocation-item" role="button" tabindex="0" data-collocation-term="${escapeHtml(phrase || '')}">
+      <div>
+        <strong>${escapeHtml(phrase || '搭配')}</strong>
+        <p>${escapeHtml(meaning || '暂无含义')}</p>
+      </div>
+      <button class="mini-audio-button inline-audio-button" type="button" data-speak-text="${escapeHtml(phrase || '')}" title="播放词组发音">▶</button>
+    </div>
+  `
   if (typeof item === 'string') {
-    return `<button class="collocation-item" type="button" data-collocation-term="${escapeHtml(item)}"><strong>${escapeHtml(item)}</strong><p>暂无含义</p></button>`
+    return render(item, '暂无含义')
   }
   const phrase = readText(item, ['phrase', 'collocation', 'text', 'word', 'expression'])
   const meaning = readText(item, ['meaning_cn', 'meaningCn', 'meaning', 'translation', 'translation_cn', 'cn'])
-  return `<button class="collocation-item" type="button" data-collocation-term="${escapeHtml(phrase)}"><strong>${escapeHtml(phrase || '搭配')}</strong><p>${escapeHtml(meaning || '暂无含义')}</p></button>`
+  return render(phrase, meaning)
+}
+
+function toggleFocusTags() {
+  const tags = elements.wordbookFocus.querySelector('.focus-tags')
+  const button = elements.wordbookFocus.querySelector('[data-toggle-tags]')
+  if (!tags || !button) return
+  const hidden = tags.classList.toggle('hidden')
+  button.innerHTML = visibilityIcon(hidden)
+  button.title = hidden ? '显示标签' : '隐藏标签'
+  button.setAttribute('aria-label', hidden ? '显示标签' : '隐藏标签')
+  button.setAttribute('aria-pressed', String(!hidden))
+}
+
+function visibilityIcon(hidden) {
+  if (hidden) {
+    return '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M3 3l18 18"/><path d="M10.6 10.6a2 2 0 0 0 2.8 2.8"/><path d="M9.9 4.3A9.8 9.8 0 0 1 12 4c5.2 0 8.8 4.1 10 8a12.1 12.1 0 0 1-2.3 4.2"/><path d="M6.1 6.1A12.3 12.3 0 0 0 2 12c1.2 3.9 4.8 8 10 8a9.8 9.8 0 0 0 4.1-.9"/></svg>'
+  }
+  return '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M2 12s3.6-8 10-8 10 8 10 8-3.6 8-10 8S2 12 2 12Z"/><circle cx="12" cy="12" r="3"/></svg>'
 }
 
 function openEntryStatusModal(entryId) {
@@ -1900,25 +1909,72 @@ function renderRelations(relations) {
   }
   elements.relationList.className = 'relation-list'
   elements.relationList.innerHTML = list
-    .map(
-      (item) => `
-        <button class="relation-item" type="button" data-related-term="${escapeHtml(item.relatedTerm || '')}">
-          <div>
-            <strong>${escapeHtml(item.relatedTerm || '')}</strong>
-            <p>${escapeHtml(relationMeaningLine(item))}</p>
-          </div>
-          <small>${escapeHtml(relationMetaLine(item))}</small>
-        </button>
-      `,
-    )
+    .map((item) => renderRelationItem(item, 'related-term'))
     .join('')
-  elements.relationList.querySelectorAll('[data-related-term]').forEach((button) => {
-    button.addEventListener('click', () => {
-      const term = button.getAttribute('data-related-term') || ''
-      elements.termInput.value = term
-      study(term)
+  bindStudyTermCards(elements.relationList, '[data-related-term]', '单词')
+  bindInlineAudio(elements.relationList)
+}
+
+function renderRelationItem(item, dataAttribute) {
+  const term = item?.relatedTerm || ''
+  const phonetic = relationPhoneticLine(item)
+  return `
+    <div class="relation-item" role="button" tabindex="0" data-${dataAttribute}="${escapeHtml(term)}">
+      <div>
+        <div class="relation-title-line">
+          <strong>${escapeHtml(term || '相关词')}</strong>
+          <span>${escapeHtml(phonetic || '暂无音标')}</span>
+        </div>
+        <p>${escapeHtml(relationMeaningLine(item))}</p>
+      </div>
+      <div class="relation-side-actions">
+        <small>${escapeHtml(relationMetaLine(item))}</small>
+        <button class="mini-audio-button inline-audio-button" type="button" data-speak-text="${escapeHtml(term)}" title="播放相关单词发音">▶</button>
+      </div>
+    </div>
+  `
+}
+
+function bindInlineAudio(container) {
+  container?.querySelectorAll('[data-speak-text]').forEach((button) => {
+    button.addEventListener('click', (event) => {
+      event.preventDefault()
+      event.stopPropagation()
+      speak(button.getAttribute('data-speak-text') || '', elements.voiceSelect.value)
     })
   })
+}
+
+function bindStudyTermCards(container, selector, label) {
+  const attributeName = selector.match(/^\[([^\]]+)]$/)?.[1]
+  if (!attributeName) return
+  container?.querySelectorAll(selector).forEach((item) => {
+    const open = (event) => {
+      if (event?.target?.closest?.('[data-speak-text]')) return
+      confirmStudyTerm(item.getAttribute(attributeName) || '', label)
+    }
+    item.addEventListener('click', open)
+    item.addEventListener('keydown', (event) => {
+      if (event.target?.closest?.('[data-speak-text]')) return
+      if (event.key !== 'Enter' && event.key !== ' ') return
+      event.preventDefault()
+      open(event)
+    })
+  })
+}
+
+async function confirmStudyTerm(term, label = '单词') {
+  const cleanTerm = String(term || '').trim()
+  if (!cleanTerm) return
+  const confirmed = await confirmAction({
+    title: `学习${label}`,
+    message: `是否去学习「${cleanTerm}」？当前学习卡会切换到这个${label}。`,
+    acceptText: '去学习',
+  })
+  if (!confirmed) return
+  elements.termInput.value = cleanTerm
+  setView('studyView')
+  study(cleanTerm)
 }
 
 function renderExamples(parsed) {
@@ -1953,33 +2009,9 @@ function renderCollocations(parsed) {
     return
   }
   elements.collocations.className = 'collocation-list'
-  elements.collocations.innerHTML = collocations
-    .map((item) => {
-      if (typeof item === 'string') {
-        return `
-          <button class="collocation-item" type="button" data-collocation-term="${escapeHtml(item)}">
-            <strong>${escapeHtml(item)}</strong>
-            <p>暂无含义</p>
-          </button>
-        `
-      }
-      const phrase = readText(item, ['phrase', 'collocation', 'text', 'word', 'expression'])
-      const meaning = readText(item, ['meaning_cn', 'meaningCn', 'meaning', 'translation', 'translation_cn', 'cn'])
-      return `
-        <button class="collocation-item" type="button" data-collocation-term="${escapeHtml(phrase)}">
-          <strong>${escapeHtml(phrase || '搭配')}</strong>
-          <p>${escapeHtml(meaning || '暂无含义')}</p>
-        </button>
-      `
-    })
-    .join('')
-  elements.collocations.querySelectorAll('[data-collocation-term]').forEach((button) => {
-    button.addEventListener('click', () => {
-      const term = button.getAttribute('data-collocation-term') || ''
-      elements.termInput.value = term
-      study(term)
-    })
-  })
+  elements.collocations.innerHTML = collocations.map(renderCollocationMini).join('')
+  bindStudyTermCards(elements.collocations, '[data-collocation-term]', '词组')
+  bindInlineAudio(elements.collocations)
 }
 
 function renderMemoryTips(parsed) {
@@ -2137,23 +2169,35 @@ async function chat() {
   }
 }
 
+function getReviewLimit() {
+  const rawLimit = Number(elements.reviewLimitInput?.value || 10)
+  const normalizedLimit = Number.isFinite(rawLimit) ? Math.floor(rawLimit) : 10
+  return Math.max(1, Math.min(100, normalizedLimit))
+}
+
+function applyReviewWordbookSelection(selectedWordbookId) {
+  state.currentWordbookId = selectedWordbookId || state.currentWordbookId
+  if (state.currentWordbookId) {
+    localStorage.setItem('learning.wordbookId', String(state.currentWordbookId))
+  }
+}
+
 async function loadDueReviews() {
   const selectedWordbookId = elements.reviewWordbookSelect?.value || state.currentWordbookId || ''
-  const limit = Math.max(1, Number(elements.reviewLimitInput?.value || 10))
+  const limit = getReviewLimit()
   if (state.preview) {
-    state.currentWordbookId = selectedWordbookId || state.currentWordbookId
+    applyReviewWordbookSelection(selectedWordbookId)
     localStorage.setItem('learning.wordbookId', String(state.currentWordbookId || ''))
     const entries = (state.previewReviewEntries.length ? state.previewReviewEntries : state.reviewEntries).slice(0, limit)
     renderReviewQueue(entries)
-    return
+    return entries
   }
   if (!state.token) {
     renderReviewQueue([])
-    return
+    return null
   }
   try {
-    state.currentWordbookId = selectedWordbookId || state.currentWordbookId
-    if (state.currentWordbookId) localStorage.setItem('learning.wordbookId', String(state.currentWordbookId))
+    applyReviewWordbookSelection(selectedWordbookId)
     const params = new URLSearchParams()
     if (selectedWordbookId) params.set('wordbookId', selectedWordbookId)
     const query = params.toString() ? `?${params.toString()}` : ''
@@ -2161,10 +2205,59 @@ async function loadDueReviews() {
     state.reviewEntries = (Array.isArray(entries) ? entries : []).slice(0, limit)
     renderReviewQueue(state.reviewEntries)
     renderProfileMetrics()
+    return state.reviewEntries
   } catch (error) {
     logEvent('error', '复习队列加载失败', error.message)
     toast(`复习队列加载失败：${error.message}`)
+    return null
   }
+}
+
+async function restartReviewTasks() {
+  const selectedWordbookId = elements.reviewWordbookSelect?.value || state.currentWordbookId || ''
+  const limit = getReviewLimit()
+  applyReviewWordbookSelection(selectedWordbookId)
+  if (state.preview) {
+    localStorage.setItem('learning.wordbookId', String(state.currentWordbookId || ''))
+    const sourceEntries = state.wordbookEntries.filter((entry) => !selectedWordbookId || sameId(entry.wordbookId, selectedWordbookId))
+    const entries = sourceEntries.slice(0, limit)
+    state.previewReviewEntries = entries.slice()
+    renderReviewQueue(entries)
+    toast(entries.length ? `已重新生成 ${entries.length} 个复习任务` : '当前词书还没有可复习的单词')
+    return entries
+  }
+  if (!state.token) {
+    renderReviewQueue([])
+    return null
+  }
+  try {
+    const params = new URLSearchParams()
+    params.set('limit', String(limit))
+    if (selectedWordbookId) params.set('wordbookId', selectedWordbookId)
+    const entries = await request(`/api/v1/learning/reviews/restart?${params.toString()}`)
+    state.reviewEntries = Array.isArray(entries) ? entries : []
+    renderReviewQueue(state.reviewEntries)
+    renderProfileMetrics()
+    logEvent('review', '重新生成复习任务', `共 ${state.reviewEntries.length} 个单词`)
+    toast(state.reviewEntries.length ? `已重新生成 ${state.reviewEntries.length} 个复习任务` : '当前词书还没有可复习的单词')
+    return state.reviewEntries
+  } catch (error) {
+    logEvent('error', '重新生成复习任务失败', error.message)
+    toast(`重新生成复习任务失败：${error.message}`)
+    return null
+  }
+}
+
+async function startReview() {
+  const dueEntries = await loadDueReviews()
+  if (dueEntries === null || dueEntries.length > 0) return
+  const confirmed = await confirmAction({
+    title: '重新生成复习任务',
+    message: '当前词书已经没有到期复习任务。是否从这个词书中重新生成一组复习任务，重新进行学习？',
+    acceptText: '重新生成',
+  })
+  if (!confirmed) return
+  await restartReviewTasks()
 }
 
 function openEntryInReview(entry) {
@@ -2469,6 +2562,8 @@ function openForgottenDetailModal(entry) {
   elements.forgottenDetailContent.querySelectorAll('[data-forgotten-sentence]').forEach((button) => {
     button.addEventListener('click', () => speak(examples[Number(button.getAttribute('data-forgotten-sentence'))]?.sentence, elements.voiceSelect.value))
   })
+  bindStudyTermCards(elements.forgottenDetailContent, '[data-collocation-term]', '词组')
+  bindInlineAudio(elements.forgottenDetailContent)
   elements.forgottenDetailModal.classList.remove('hidden')
 }
 
@@ -2561,13 +2656,17 @@ async function submitReview(entryId, result) {
     state.reviewWrongCount = 0
     closeReviewModal({ skipRender: true })
     if (result === 'remembered') {
-      await loadDueReviews()
+      state.reviewEntries = state.reviewEntries.filter((entry) => !sameId(entry.id, entryId))
       if (state.reviewEntries.length) {
         state.currentReviewIndex = Math.min(currentIndexBeforeSubmit, state.reviewEntries.length - 1)
         selectReviewEntry(state.reviewEntries[state.currentReviewIndex])
+        renderReviewQueue(state.reviewEntries)
+      } else {
+        renderReviewQueue([])
       }
     } else {
       const updatedEntry = state.wordbookEntries.find((item) => sameId(item.id, entryId)) || { ...currentEntryBeforeSubmit, status: reviewResultToStatus(result) }
+      state.reviewEntries = state.reviewEntries.map((entry) => (sameId(entry.id, entryId) ? { ...entry, ...updatedEntry } : entry))
       state.currentReviewEntry = updatedEntry
       renderReviewFocus(updatedEntry)
       renderNotes(updatedEntry)
@@ -2877,9 +2976,9 @@ function previewRecord(term = 'abandon') {
       { tagType: 'collocation', displayName: 'abandon a plan' },
     ],
     relations: [
-      { relatedTerm: 'desert', relationType: 'synonym', relatedPartOfSpeech: 'verb', relatedMeaning: '遗弃，离弃', matchType: 'parsed_object', matchScore: 92 },
-      { relatedTerm: 'retain', relationType: 'antonym', relatedPartOfSpeech: 'verb', relatedMeaning: '保留，保持', matchType: 'parsed_object', matchScore: 82 },
-      { relatedTerm: 'abandonment', relationType: 'word_family', relatedPartOfSpeech: 'noun', relatedMeaning: '遗弃，放弃', matchType: 'parsed_object', matchScore: 78 },
+      { relatedTerm: 'desert', relationType: 'synonym', relatedPartOfSpeech: 'verb', relatedMeaning: '遗弃，离弃', relatedPhoneticUk: '/dɪˈzɜːt/', relatedPhoneticUs: '/dɪˈzɜːrt/', matchType: 'parsed_object', matchScore: 92 },
+      { relatedTerm: 'retain', relationType: 'antonym', relatedPartOfSpeech: 'verb', relatedMeaning: '保留，保持', relatedPhoneticUk: '/rɪˈteɪn/', relatedPhoneticUs: '/rɪˈteɪn/', matchType: 'parsed_object', matchScore: 82 },
+      { relatedTerm: 'abandonment', relationType: 'word_family', relatedPartOfSpeech: 'noun', relatedMeaning: '遗弃，放弃', relatedPhoneticUk: '/əˈbændənmənt/', relatedPhoneticUs: '/əˈbændənmənt/', matchType: 'parsed_object', matchScore: 78 },
     ],
   }
 }
@@ -2955,6 +3054,13 @@ function relationTypeLabel(type) {
 function relationMeaningLine(item) {
   const pieces = [item.relatedPartOfSpeech, item.relatedMeaning || item.relationValue].filter(Boolean)
   return pieces.length ? pieces.join(' · ') : '暂无核心含义'
+}
+
+function relationPhoneticLine(item) {
+  const pieces = []
+  if (item?.relatedPhoneticUk) pieces.push(`UK ${item.relatedPhoneticUk}`)
+  if (item?.relatedPhoneticUs) pieces.push(`US ${item.relatedPhoneticUs}`)
+  return pieces.join('  ')
 }
 
 function relationMetaLine(item) {
@@ -3281,7 +3387,7 @@ elements.speakSentenceBtn.addEventListener('click', () => speak(firstExample(sta
 elements.editStudyNoteBtn.addEventListener('click', editCurrentNote)
 elements.editReviewNoteBtn.addEventListener('click', editCurrentNote)
 elements.chatBtn.addEventListener('click', chat)
-elements.reloadReviewBtn.addEventListener('click', loadDueReviews)
+elements.reloadReviewBtn.addEventListener('click', startReview)
 elements.reviewWordbookSelect.addEventListener('change', () => {
   state.currentWordbookId = elements.reviewWordbookSelect.value
   if (state.currentWordbookId) localStorage.setItem('learning.wordbookId', state.currentWordbookId)

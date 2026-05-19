@@ -11,6 +11,7 @@ import com.chandler.learning.agent.domain.dto.learning.WordbookSaveRequest;
 import com.chandler.learning.agent.domain.entity.learning.LearningUser;
 import com.chandler.learning.agent.service.learning.AuthService;
 import com.chandler.learning.agent.service.learning.WordbookService;
+import com.chandler.learning.agent.support.LearningConstants;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.Valid;
@@ -129,6 +130,16 @@ public class WordbookController {
             @RequestParam(required = false) Long wordbookId) {
         LearningUser user = authService.requireUser(authorization);
         return wordbookService.listDueEntries(user.getId(), wordbookId);
+    }
+
+    @GetMapping("/reviews/restart")
+    @Operation(summary = "重新生成本轮复习任务")
+    public List<WordbookEntryResponse> restartReviews(
+            @RequestHeader(value = "Authorization", required = false) String authorization,
+            @RequestParam(required = false) Long wordbookId,
+            @RequestParam(defaultValue = LearningConstants.Review.RESTART_DEFAULT_LIMIT_PARAM) Integer limit) {
+        LearningUser user = authService.requireUser(authorization);
+        return wordbookService.listRestartReviewEntries(user.getId(), wordbookId, limit);
     }
 
     @PostMapping("/reviews/{entryId}")

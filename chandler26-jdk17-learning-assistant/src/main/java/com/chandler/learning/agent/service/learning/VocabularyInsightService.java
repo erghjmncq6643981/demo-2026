@@ -80,13 +80,36 @@ public class VocabularyInsightService {
         if (!StringUtils.hasText(normalizedTerm)) {
             return List.of();
         }
-        return relationMapper.selectList(new LambdaQueryWrapper<LearningVocabularyRelation>()
+        List<LearningVocabularyRelation> relations = relationMapper.selectList(new LambdaQueryWrapper<LearningVocabularyRelation>()
                         .eq(LearningVocabularyRelation::getNormalizedTerm, normalizedTerm)
                         .orderByDesc(LearningVocabularyRelation::getScore)
-                        .last("LIMIT " + LearningConstants.VocabularyInsight.VISIBLE_RELATION_LIMIT))
-                .stream()
-                .map(this::toRelationResponse)
+                        .last("LIMIT " + LearningConstants.VocabularyInsight.VISIBLE_RELATION_LIMIT));
+        Map<Long, EnglishVocabularyStudyRecord> sourceRecords = new LinkedHashMap<>();
+        return relations.stream()
+                .map(relation -> toRelationResponse(relation, sourceRecord(relation, sourceRecords)))
                 .toList();
+    }
+
+    public List<VocabularyRelationResponse> enrichRelationPhonetics(List<VocabularyRelationResponse> relations) {
+        return enrichRelationPhonetics(null, relations);
+    }
+
+    public List<VocabularyRelationResponse> enrichRelationPhonetics(Long vocabularyId, List<VocabularyRelationResponse> relations) {
+        if (relations == null || relations.isEmpty()) {
+            return relations;
+        }
+        EnglishVocabularyStudyRecord sourceRecord = vocabularyId == null ? null : recordMapper.selectById(vocabularyId);
+        for (VocabularyRelationResponse relation : relations) {
+            if (StringUtils.hasText(relation.getRelatedPhoneticUk()) || StringUtils.hasText(relation.getRelatedPhoneticUs())) {
+                continue;
+            }
+            Phonetic phonetic = firstPhonetic(
+                    extractRelationPhonetic(sourceRecord, relation.getRelationType(), relation.getRelatedTerm()),
+                    findRelatedPhonetic(relation.getRelatedVocabularyId(), relation.getRelatedTerm()));
+            relation.setRelatedPhoneticUk(phonetic.uk());
+            relation.setRelatedPhoneticUs(phonetic.us());
+        }
+        return relations;
     }
 
     private void collectPartOfSpeechTags(JsonNode root, EnglishVocabularyStudyRecord record,
@@ -142,10 +165,10 @@ public class VocabularyInsightService {
                                                               Iterable<LearningVocabularyTag> tags,
                                                               LocalDateTime now) {
         Map<String, LearningVocabularyRelation> relations = new LinkedHashMap<>();
-        collectArrayRelations(root, record, relations, now, "synonyms", "synonym", LearningConstants.VocabularyInsight.RELATION_SCORE_SYNONYM);
-        collectArrayRelations(root, record, relations, now, "antonyms", "antonym", LearningConstants.VocabularyInsight.RELATION_SCORE_ANTONYM);
-        collectArrayRelations(root, record, relations, now, "word_family", "word_family", LearningConstants.VocabularyInsight.RELATION_SCORE_WORD_FAMILY);
-        collectArrayRelations(root, record, relations, now, "wordFamily", "word_family", LearningConstants.VocabularyInsight.RELATION_SCORE_WORD_FAMILY);
+        collectArrayRelations(root, record, relations, now, "synonyms", LearningConstants.VocabularyInsight.RELATION_TYPE_SYNONYM, LearningConstants.VocabularyInsight.RELATION_SCORE_SYNONYM);
+        collectArrayRelations(root, record, relations, now, "antonyms", LearningConstants.VocabularyInsight.RELATION_TYPE_ANTONYM, LearningConstants.VocabularyInsight.RELATION_SCORE_ANTONYM);
+        collectArrayRelations(root, record, relations, now, "word_family", LearningConstants.VocabularyInsight.RELATION_TYPE_WORD_FAMILY, LearningConstants.VocabularyInsight.RELATION_SCORE_WORD_FAMILY);
+        collectArrayRelations(root, record, relations, now, "wordFamily", LearningConstants.VocabularyInsight.RELATION_TYPE_WORD_FAMILY, LearningConstants.VocabularyInsight.RELATION_SCORE_WORD_FAMILY);
         collectArrayRelations(root, record, relations, now, "collocations", LearningConstants.VocabularyInsight.RELATION_TYPE_COLLOCATION, LearningConstants.VocabularyInsight.RELATION_SCORE_COLLOCATION);
 
         for (LearningVocabularyTag tag : tags) {
@@ -465,7 +488,7 @@ public class VocabularyInsightService {
         return response;
     }
 
-    private VocabularyRelationResponse toRelationResponse(LearningVocabularyRelation relation) {
+    private VocabularyRelationResponse toRelationResponse(LearningVocabularyRelation relation, EnglishVocabularyStudyRecord sourceRecord) {
         VocabularyRelationResponse response = new VocabularyRelationResponse();
         response.setId(relation.getId());
         response.setRelatedVocabularyId(relation.getRelatedVocabularyId());
@@ -474,15 +497,117 @@ public class VocabularyInsightService {
         response.setRelationValue(relation.getRelationValue());
         response.setRelatedPartOfSpeech(relation.getRelatedPartOfSpeech());
         response.setRelatedMeaning(relation.getRelatedMeaning());
+        Phonetic phonetic = firstPhonetic(
+                extractRelationPhonetic(sourceRecord, relation.getRelationType(), relation.getRelatedTerm()),
+                findRelatedPhonetic(relation.getRelatedVocabularyId(), relation.getRelatedTerm()));
+        response.setRelatedPhoneticUk(phonetic.uk());
+        response.setRelatedPhoneticUs(phonetic.us());
         response.setMatchType(relation.getMatchType());
         response.setMatchScore(relation.getMatchScore());
         response.setScore(relation.getScore());
         return response;
     }
 
+    private EnglishVocabularyStudyRecord sourceRecord(LearningVocabularyRelation relation,
+                                                       Map<Long, EnglishVocabularyStudyRecord> sourceRecords) {
+        Long vocabularyId = relation.getVocabularyId();
+        if (vocabularyId == null) {
+            return null;
+        }
+        return sourceRecords.computeIfAbsent(vocabularyId, recordMapper::selectById);
+    }
+
+    private Phonetic findRelatedPhonetic(Long relatedVocabularyId, String relatedTerm) {
+        EnglishVocabularyStudyRecord relatedRecord = relatedVocabularyId == null
+                ? findVocabulary(relatedTerm)
+                : recordMapper.selectById(relatedVocabularyId);
+        return extractPhonetic(relatedRecord);
+    }
+
+    private Phonetic extractRelationPhonetic(EnglishVocabularyStudyRecord sourceRecord, String relationType, String relatedTerm) {
+        if (sourceRecord == null || !StringUtils.hasText(sourceRecord.getParsedJson()) || !StringUtils.hasText(relatedTerm)) {
+            return Phonetic.empty();
+        }
+        try {
+            JsonNode root = objectMapper.readTree(sourceRecord.getParsedJson());
+            String normalizedRelated = normalizeTerm(cleanRelationText(relatedTerm));
+            for (String field : relationFields(relationType)) {
+                JsonNode node = root.get(field);
+                if (node == null) {
+                    continue;
+                }
+                for (JsonNode item : iterable(node)) {
+                    String candidate = normalizeTerm(cleanRelationText(readableText(item)));
+                    if (normalizedRelated.equals(candidate)) {
+                        return extractPhonetic(item);
+                    }
+                }
+            }
+        } catch (Exception ignored) {
+            return Phonetic.empty();
+        }
+        return Phonetic.empty();
+    }
+
+    private List<String> relationFields(String relationType) {
+        if (LearningConstants.VocabularyInsight.RELATION_TYPE_SYNONYM.equals(relationType)) {
+            return List.of("synonyms");
+        }
+        if (LearningConstants.VocabularyInsight.RELATION_TYPE_ANTONYM.equals(relationType)) {
+            return List.of("antonyms");
+        }
+        if (LearningConstants.VocabularyInsight.RELATION_TYPE_WORD_FAMILY.equals(relationType)) {
+            return List.of("word_family", "wordFamily");
+        }
+        if (LearningConstants.VocabularyInsight.RELATION_TYPE_COLLOCATION.equals(relationType)) {
+            return List.of("collocations");
+        }
+        return List.of("synonyms", "antonyms", "word_family", "wordFamily", "collocations");
+    }
+
+    private Phonetic firstPhonetic(Phonetic preferred, Phonetic fallback) {
+        if (preferred != null && (StringUtils.hasText(preferred.uk()) || StringUtils.hasText(preferred.us()))) {
+            return preferred;
+        }
+        return fallback == null ? Phonetic.empty() : fallback;
+    }
+
+    private Phonetic extractPhonetic(JsonNode root) {
+        if (root == null || root.isNull()) {
+            return Phonetic.empty();
+        }
+        JsonNode phonetic = firstExisting(root, "phonetic", "phonetics", "pronunciation");
+        String uk = firstText(phonetic, "uk", "uk_phonetic", "ukPhonetic", "british", "br");
+        String us = firstText(phonetic, "us", "us_phonetic", "usPhonetic", "american", "am");
+        if (!StringUtils.hasText(uk)) {
+            uk = firstText(root, "phonetic_uk", "phoneticUk", "uk_phonetic", "ukPhonetic", "uk");
+        }
+        if (!StringUtils.hasText(us)) {
+            us = firstText(root, "phonetic_us", "phoneticUs", "us_phonetic", "usPhonetic", "us");
+        }
+        return new Phonetic(uk, us);
+    }
+
+    public Phonetic extractPhonetic(EnglishVocabularyStudyRecord record) {
+        if (record == null || !StringUtils.hasText(record.getParsedJson())) {
+            return Phonetic.empty();
+        }
+        try {
+            return extractPhonetic(objectMapper.readTree(record.getParsedJson()));
+        } catch (Exception ignored) {
+            return Phonetic.empty();
+        }
+    }
+
     public record CoreMeaning(String partOfSpeech, String meaning) {
         static CoreMeaning empty() {
             return new CoreMeaning("", "");
+        }
+    }
+
+    public record Phonetic(String uk, String us) {
+        static Phonetic empty() {
+            return new Phonetic("", "");
         }
     }
 }
