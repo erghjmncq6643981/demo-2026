@@ -18,6 +18,9 @@ public class VocabularyStudyRequest {
 
     private String templateCode = "english_vocab_card_json";
 
+    @Schema(description = "指定 AI 模型配置 ID")
+    private Long modelConfigId;
+
     @Schema(description = "是否强制重新调用 AI")
     private Boolean forceRefresh = false;
 }

@@ -420,6 +420,12 @@ textarea:focus {
   gap: 18px;
 }
 
+.wordbook-layout {
+  display: grid;
+  grid-template-columns: minmax(340px, 0.9fr) minmax(0, 1.1fr);
+  gap: 18px;
+}
+
 .dashboard-grid {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
@@ -484,6 +490,40 @@ textarea:focus {
   gap: 8px;
 }
 
+.form-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 10px;
+}
+
+.form-grid .inline-actions {
+  grid-column: 1 / -1;
+}
+
+.inline-actions,
+.row-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.ghost-button {
+  min-height: 34px;
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  background: transparent;
+  color: var(--muted);
+  cursor: pointer;
+  font-weight: 800;
+  padding: 0 12px;
+}
+
+.compact-switch {
+  min-height: 42px;
+  align-content: center;
+  margin: 0;
+}
+
 .panel-subtitle {
   margin: 16px 0 10px;
   color: var(--muted);
@@ -495,6 +535,7 @@ textarea:focus {
 .wordbook-cards,
 .entry-list,
 .log-list,
+.model-list,
 .relation-list,
 .collocation-list,
 .review-list,
@@ -505,6 +546,7 @@ textarea:focus {
 
 .wordbook-card,
 .entry-row,
+.model-item,
 .relation-item,
 .collocation-item,
 .review-word {
@@ -523,6 +565,13 @@ textarea:focus {
   padding: 12px;
 }
 
+.wordbook-card em {
+  color: var(--yellow);
+  font-size: 12px;
+  font-style: normal;
+  font-weight: 850;
+}
+
 .wordbook-card.active {
   border-color: rgba(129, 140, 248, 0.6);
   background: var(--accent-soft);
@@ -536,8 +585,46 @@ textarea:focus {
 
 .entry-row {
   display: grid;
-  gap: 4px;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 10px;
+  align-items: center;
   padding: 10px 12px;
+}
+
+.entry-row.active {
+  border-color: rgba(129, 140, 248, 0.58);
+  background: var(--accent-soft);
+}
+
+.entry-row > button {
+  display: grid;
+  gap: 4px;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  color: var(--text);
+  cursor: pointer;
+  text-align: left;
+}
+
+.model-item {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 12px;
+  align-items: center;
+  padding: 12px;
+}
+
+.model-item.disabled {
+  opacity: 0.55;
+}
+
+.model-item p,
+.model-item small {
+  margin: 4px 0 0;
+  color: var(--muted);
+  font-size: 12px;
+  overflow-wrap: anywhere;
 }
 
 .log-panel {
@@ -597,7 +684,7 @@ textarea:focus {
 
 .search-card {
   display: grid;
-  grid-template-columns: minmax(0, 1fr) 132px;
+  grid-template-columns: minmax(0, 1fr) 132px 240px;
   gap: 12px;
   align-items: end;
   padding: 18px;
@@ -608,6 +695,10 @@ textarea:focus {
 
 .search-card label {
   margin: 0;
+}
+
+.study-model-field {
+  min-width: 0;
 }
 
 .term-input {
@@ -856,10 +947,50 @@ textarea:focus {
   font-weight: 800;
 }
 
-.review-focus-card h4 {
+.wordbook-tools {
+  display: flex;
+  align-items: end;
+  gap: 10px;
+}
+
+.review-focus-card h4,
+.wordbook-focus-card h4 {
   margin: 6px 0;
   font-size: clamp(44px, 6vw, 86px);
   line-height: 1;
+}
+
+.wordbook-focus-card .secondary-button {
+  margin-top: 12px;
+}
+
+.note-view {
+  min-height: 80px;
+  color: var(--text);
+  line-height: 1.65;
+}
+
+.note-view h3,
+.note-view h4,
+.note-view p,
+.note-view ul {
+  margin: 0 0 10px;
+}
+
+.note-view ul {
+  padding-left: 20px;
+}
+
+.note-view code {
+  padding: 2px 5px;
+  border-radius: 6px;
+  background: rgba(255, 255, 255, 0.08);
+  color: var(--yellow);
+}
+
+.note-editor {
+  display: grid;
+  gap: 10px;
 }
 
 .mini-definition-list {
@@ -918,6 +1049,7 @@ textarea:focus {
   .dashboard-grid,
   .content-grid,
   .review-layout,
+  .wordbook-layout,
   .login-screen {
     grid-template-columns: 1fr;
   }
@@ -929,7 +1061,7 @@ textarea:focus {
   }
 
   .nav-menu {
-    grid-template-columns: repeat(3, 1fr);
+    grid-template-columns: repeat(4, 1fr);
   }
 
   .sidebar-footer {
@@ -960,9 +1092,16 @@ textarea:focus {
 
   .search-card,
   .inline-form,
+  .form-grid,
   .metric-row,
   .sidebar-footer,
   .nav-menu {
+    grid-template-columns: 1fr;
+  }
+
+  .entry-row,
+  .model-item,
+  .search-card {
     grid-template-columns: 1fr;
   }
 

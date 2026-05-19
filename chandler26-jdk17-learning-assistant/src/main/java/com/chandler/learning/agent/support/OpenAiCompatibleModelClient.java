@@ -5,6 +5,8 @@ import com.chandler.learning.agent.config.AiModelProperties.ProviderConfig;
 import com.chandler.learning.agent.domain.dto.ChatMessageParam;
 import com.chandler.learning.agent.domain.dto.ModelChatRequest;
 import com.chandler.learning.agent.domain.dto.ModelChatResponse;
+import com.chandler.learning.agent.domain.entity.AiModelConfig;
+import com.chandler.learning.agent.service.AiModelConfigService;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import lombok.RequiredArgsConstructor;
@@ -28,6 +30,7 @@ public class OpenAiCompatibleModelClient implements AiModelClient {
 
     private final RestTemplate restTemplate;
     private final AiModelProperties properties;
+    private final AiModelConfigService modelConfigService;
     private final ObjectMapper objectMapper;
 
     @Override
@@ -35,7 +38,7 @@ public class OpenAiCompatibleModelClient implements AiModelClient {
         String provider = StringUtils.hasText(request.getProvider())
                 ? request.getProvider()
                 : properties.getDefaultProvider();
-        ProviderConfig providerConfig = properties.getProvider(provider);
+        ProviderConfig providerConfig = resolveProviderConfig(request, provider);
         if (providerConfig == null) {
             throw new IllegalArgumentException("未配置 AI 供应商: " + provider);
         }
@@ -73,6 +76,23 @@ public class OpenAiCompatibleModelClient implements AiModelClient {
         String url = buildUrl(providerConfig);
         String responseBody = restTemplate.postForObject(url, new HttpEntity<>(payload, headers), String.class);
         return parseResponse(responseBody);
+    }
+
+    private ProviderConfig resolveProviderConfig(ModelChatRequest request, String provider) {
+        if (request.getModelConfigId() != null) {
+            AiModelConfig modelConfig = modelConfigService.getById(request.getModelConfigId());
+            if (modelConfig == null) {
+                throw new IllegalArgumentException("模型配置不存在: " + request.getModelConfigId());
+            }
+            ProviderConfig providerConfig = new ProviderConfig();
+            providerConfig.setEnabled(modelConfig.getEnabled());
+            providerConfig.setApiKey(modelConfig.getApiKey());
+            providerConfig.setBaseUrl(modelConfig.getBaseUrl());
+            providerConfig.setChatPath(modelConfig.getChatPath());
+            providerConfig.setDefaultModel(modelConfig.getModelName());
+            return providerConfig;
+        }
+        return modelConfigService.resolveProviderConfig(provider);
     }
 
     private List<Map<String, String>> toMessagePayload(List<ChatMessageParam> messages) {

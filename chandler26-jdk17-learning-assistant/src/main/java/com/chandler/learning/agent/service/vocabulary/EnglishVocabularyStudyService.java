@@ -114,6 +114,7 @@ public class EnglishVocabularyStudyService {
         AgentChatRequest chatRequest = new AgentChatRequest();
         chatRequest.setAgentCode(resolveAgentCode(request));
         chatRequest.setTemplateCode(resolveTemplateCode(request));
+        chatRequest.setModelConfigId(request.getModelConfigId());
         chatRequest.setTitle("Vocabulary - " + normalizedTerm);
         chatRequest.setBusinessType("vocabulary");
         chatRequest.setBusinessId(normalizedTerm);

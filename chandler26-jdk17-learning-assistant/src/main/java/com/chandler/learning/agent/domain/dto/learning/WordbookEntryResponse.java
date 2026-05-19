@@ -20,6 +20,8 @@ public class WordbookEntryResponse {
 
     private String note;
 
+    private String status;
+
     private Integer reviewStage;
 
     private Integer masteryScore;

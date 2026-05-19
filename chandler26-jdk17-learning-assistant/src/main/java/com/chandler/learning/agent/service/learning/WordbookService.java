@@ -5,6 +5,7 @@ import com.chandler.learning.agent.domain.dto.learning.AddWordbookEntryRequest;
 import com.chandler.learning.agent.domain.dto.learning.ReviewSubmitRequest;
 import com.chandler.learning.agent.domain.dto.learning.ReviewSubmitResponse;
 import com.chandler.learning.agent.domain.dto.learning.WordbookEntryResponse;
+import com.chandler.learning.agent.domain.dto.learning.WordbookEntryUpdateRequest;
 import com.chandler.learning.agent.domain.dto.learning.WordbookResponse;
 import com.chandler.learning.agent.domain.dto.learning.WordbookSaveRequest;
 import com.chandler.learning.agent.domain.dto.vocabulary.VocabularyStudyRequest;
@@ -93,6 +94,19 @@ public class WordbookService {
         return toWordbookResponse(wordbook);
     }
 
+    public WordbookResponse updateWordbook(Long userId, Long wordbookId, WordbookSaveRequest request) {
+        LearningWordbook wordbook = requireWordbook(userId, wordbookId);
+        if (Boolean.TRUE.equals(request.getIsDefault())) {
+            clearDefault(userId);
+        }
+        wordbook.setName(request.getName().trim());
+        wordbook.setDescription(trimToNull(request.getDescription()));
+        wordbook.setIsDefault(Boolean.TRUE.equals(request.getIsDefault()));
+        wordbook.setUpdateTime(LocalDateTime.now());
+        wordbookMapper.updateById(wordbook);
+        return toWordbookResponse(wordbook);
+    }
+
     public WordbookEntryResponse addEntry(Long userId, Long wordbookId, AddWordbookEntryRequest request) {
         LearningWordbook wordbook = requireWordbook(userId, wordbookId);
         String normalizedTerm = normalize(request.getTerm());
@@ -133,6 +147,7 @@ public class WordbookService {
         entry.setTerm(vocabulary.getTerm());
         entry.setNormalizedTerm(vocabulary.getNormalizedTerm());
         entry.setNote(trimToNull(request.getNote()));
+        entry.setStatus("vague");
         entry.setReviewStage(0);
         entry.setMasteryScore(0);
         entry.setNextReviewTime(now);
@@ -148,11 +163,16 @@ public class WordbookService {
     }
 
     public List<WordbookEntryResponse> listEntries(Long userId, Long wordbookId, boolean dueOnly) {
+        return listEntries(userId, wordbookId, dueOnly, null);
+    }
+
+    public List<WordbookEntryResponse> listEntries(Long userId, Long wordbookId, boolean dueOnly, String status) {
         requireWordbook(userId, wordbookId);
         LambdaQueryWrapper<LearningWordbookEntry> wrapper = new LambdaQueryWrapper<LearningWordbookEntry>()
                 .eq(LearningWordbookEntry::getUserId, userId)
                 .eq(LearningWordbookEntry::getWordbookId, wordbookId)
                 .eq(LearningWordbookEntry::getDeleted, false)
+                .eq(StringUtils.hasText(status), LearningWordbookEntry::getStatus, normalizeStatus(status))
                 .le(dueOnly, LearningWordbookEntry::getNextReviewTime, LocalDateTime.now())
                 .orderByAsc(LearningWordbookEntry::getNextReviewTime)
                 .orderByDesc(LearningWordbookEntry::getCreateTime);
@@ -178,6 +198,26 @@ public class WordbookService {
         return entries.stream().map(this::toEntryResponse).toList();
     }
 
+    public WordbookEntryResponse updateEntry(Long userId, Long entryId, WordbookEntryUpdateRequest request) {
+        LearningWordbookEntry entry = requireEntry(userId, entryId);
+        if (request.getNote() != null) {
+            entry.setNote(trimToNull(request.getNote()));
+        }
+        if (request.getStatus() != null) {
+            entry.setStatus(normalizeStatus(request.getStatus()));
+        }
+        entry.setUpdateTime(LocalDateTime.now());
+        entryMapper.updateById(entry);
+        return toEntryResponse(entry);
+    }
+
+    public void deleteEntry(Long userId, Long entryId) {
+        LearningWordbookEntry entry = requireEntry(userId, entryId);
+        entry.setDeleted(true);
+        entry.setUpdateTime(LocalDateTime.now());
+        entryMapper.updateById(entry);
+    }
+
     public ReviewSubmitResponse submitReview(Long userId, Long entryId, ReviewSubmitRequest request) {
         LearningWordbookEntry entry = entryMapper.selectById(entryId);
         if (entry == null || Boolean.TRUE.equals(entry.getDeleted()) || !entry.getUserId().equals(userId)) {
@@ -196,13 +236,16 @@ public class WordbookService {
             stageAfter = Math.min(stageBefore + 1, REVIEW_INTERVAL_DAYS.length - 1);
             masteryAfter = Math.min(100, masteryBefore + 15);
             entry.setCorrectCount(nullToZero(entry.getCorrectCount()) + 1);
+            entry.setStatus("familiar");
         } else if (vague) {
             stageAfter = Math.max(1, stageBefore);
             masteryAfter = Math.max(0, Math.min(100, masteryBefore + 5));
+            entry.setStatus("vague");
         } else {
             stageAfter = 0;
             masteryAfter = Math.max(0, masteryBefore - 20);
             entry.setWrongCount(nullToZero(entry.getWrongCount()) + 1);
+            entry.setStatus("forgotten");
         }
 
         LocalDateTime nextReviewTime = nextReviewTime(now, stageAfter, remembered, vague);
@@ -268,6 +311,7 @@ public class WordbookService {
         response.setTerm(entry.getTerm());
         response.setNormalizedTerm(entry.getNormalizedTerm());
         response.setNote(entry.getNote());
+        response.setStatus(StringUtils.hasText(entry.getStatus()) ? entry.getStatus() : inferStatus(entry));
         response.setReviewStage(entry.getReviewStage());
         response.setMasteryScore(entry.getMasteryScore());
         response.setLastReviewTime(entry.getLastReviewTime());
@@ -299,6 +343,14 @@ public class WordbookService {
             throw new IllegalArgumentException("词书不存在: " + wordbookId);
         }
         return wordbook;
+    }
+
+    private LearningWordbookEntry requireEntry(Long userId, Long entryId) {
+        LearningWordbookEntry entry = entryMapper.selectById(entryId);
+        if (entry == null || Boolean.TRUE.equals(entry.getDeleted()) || !entry.getUserId().equals(userId)) {
+            throw new IllegalArgumentException("词书词条不存在: " + entryId);
+        }
+        return entry;
     }
 
     private EnglishVocabularyStudyRecord findVocabulary(String normalizedTerm) {
@@ -335,6 +387,25 @@ public class WordbookService {
             return normalized;
         }
         return "forgotten";
+    }
+
+    private String normalizeStatus(String status) {
+        String normalized = status == null ? "" : status.trim().toLowerCase(Locale.ROOT);
+        if (List.of("familiar", "forgotten", "vague").contains(normalized)) {
+            return normalized;
+        }
+        return "vague";
+    }
+
+    private String inferStatus(LearningWordbookEntry entry) {
+        int mastery = nullToZero(entry.getMasteryScore());
+        if (mastery >= 70) {
+            return "familiar";
+        }
+        if (nullToZero(entry.getWrongCount()) > nullToZero(entry.getCorrectCount())) {
+            return "forgotten";
+        }
+        return "vague";
     }
 
     private String normalize(String term) {

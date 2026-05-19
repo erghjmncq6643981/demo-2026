@@ -1,5 +1,5 @@
 const state = {
-  build: '20260519-2',
+  build: '20260519-3',
   apiBase: localStorage.getItem('learning.apiBase') || 'http://localhost:16681',
   token: localStorage.getItem('learning.token') || '',
   user: readJsonStorage('learning.user'),
@@ -8,7 +8,12 @@ const state = {
   wordbooks: [],
   wordbookEntries: [],
   reviewEntries: [],
+  modelConfigs: [],
   currentWordbookId: Number(localStorage.getItem('learning.wordbookId')) || null,
+  currentWordbookEditId: null,
+  currentModelEditId: null,
+  selectedEntry: null,
+  currentNoteEntry: null,
   currentRecord: null,
   currentSessionId: null,
   systemLogs: readJsonStorage('learning.systemLogs') || [],
@@ -44,9 +49,28 @@ const elements = {
   reloadWordbooksBtn: $('reloadWordbooksBtn'),
   reloadWordbookEntriesBtn: $('reloadWordbookEntriesBtn'),
   newWordbookInput: $('newWordbookInput'),
+  wordbookDescriptionInput: $('wordbookDescriptionInput'),
+  wordbookDefaultInput: $('wordbookDefaultInput'),
   createWordbookBtn: $('createWordbookBtn'),
+  resetWordbookFormBtn: $('resetWordbookFormBtn'),
   wordbookCards: $('wordbookCards'),
   wordbookEntryList: $('wordbookEntryList'),
+  wordStatusFilter: $('wordStatusFilter'),
+  reloadWordbookViewBtn: $('reloadWordbookViewBtn'),
+  wordbookFocus: $('wordbookFocus'),
+  reloadModelsBtn: $('reloadModelsBtn'),
+  modelNameInput: $('modelNameInput'),
+  modelProviderInput: $('modelProviderInput'),
+  modelModelNameInput: $('modelModelNameInput'),
+  modelBaseUrlInput: $('modelBaseUrlInput'),
+  modelChatPathInput: $('modelChatPathInput'),
+  modelApiKeyInput: $('modelApiKeyInput'),
+  modelSequenceInput: $('modelSequenceInput'),
+  modelDefaultInput: $('modelDefaultInput'),
+  modelEnabledInput: $('modelEnabledInput'),
+  saveModelBtn: $('saveModelBtn'),
+  resetModelFormBtn: $('resetModelFormBtn'),
+  modelConfigList: $('modelConfigList'),
   systemLogList: $('systemLogList'),
   clearLogBtn: $('clearLogBtn'),
   rawJson: $('rawJson'),
@@ -54,6 +78,7 @@ const elements = {
   studyForm: $('studyForm'),
   termInput: $('termInput'),
   studyBtn: $('studyBtn'),
+  studyModelSelect: $('studyModelSelect'),
   cacheState: $('cacheState'),
   wordTitle: $('wordTitle'),
   phoneticLine: $('phoneticLine'),
@@ -66,6 +91,8 @@ const elements = {
   examples: $('examples'),
   collocations: $('collocations'),
   memoryTips: $('memoryTips'),
+  editStudyNoteBtn: $('editStudyNoteBtn'),
+  studyNote: $('studyNote'),
   agentSelect: $('agentSelect'),
   templateSelect: $('templateSelect'),
   voiceSelect: $('voiceSelect'),
@@ -75,11 +102,14 @@ const elements = {
   reloadReviewBtn: $('reloadReviewBtn'),
   reviewQueue: $('reviewQueue'),
   reviewFocus: $('reviewFocus'),
+  editReviewNoteBtn: $('editReviewNoteBtn'),
+  reviewNote: $('reviewNote'),
   toast: $('toast'),
 }
 
 const viewMeta = {
   profileView: ['Profile', '个人信息'],
+  wordbookView: ['Wordbook', '单词本'],
   studyView: ['Study', '英语学习'],
   reviewView: ['Review', '复习计划'],
 }
@@ -111,7 +141,15 @@ async function request(path, options = {}) {
 }
 
 function setLoading(isLoading) {
-  for (const element of [elements.loginBtn, elements.registerBtn, elements.studyBtn, elements.chatBtn, elements.addToWordbookBtn]) {
+  for (const element of [
+    elements.loginBtn,
+    elements.registerBtn,
+    elements.studyBtn,
+    elements.chatBtn,
+    elements.addToWordbookBtn,
+    elements.createWordbookBtn,
+    elements.saveModelBtn,
+  ]) {
     if (element) element.disabled = isLoading
   }
 }
@@ -180,7 +218,7 @@ function setView(viewId, options = {}) {
     logEvent('navigation', `进入${title}`)
   }
   if (viewId === 'reviewView') loadDueReviews()
-  if (viewId === 'profileView') loadWordbookEntries()
+  if (viewId === 'wordbookView') loadWordbookEntries()
 }
 
 async function loginOrRegister(mode) {
@@ -227,15 +265,22 @@ async function logout() {
   state.wordbooks = []
   state.wordbookEntries = []
   state.reviewEntries = []
+  state.modelConfigs = []
   state.currentWordbookId = null
+  state.currentWordbookEditId = null
+  state.currentModelEditId = null
+  state.selectedEntry = null
+  state.currentNoteEntry = null
   state.currentRecord = null
   localStorage.removeItem('learning.token')
   localStorage.removeItem('learning.user')
   localStorage.removeItem('learning.wordbookId')
   renderWordbooks()
   renderWordbookEntries()
+  renderModelConfigs()
   renderReviewQueue([])
   renderReviewFocus(null)
+  renderNotes(null)
   updateAuthView()
   logEvent('auth', '退出登录')
   toast('已退出登录')
@@ -246,7 +291,7 @@ async function loadInitialData() {
     loadPreviewData()
     return
   }
-  await Promise.allSettled([loadAgents(), loadWordbooks()])
+  await Promise.allSettled([loadAgents(), loadWordbooks(), loadModelConfigs()])
   await Promise.allSettled([loadDueReviews(), loadWordbookEntries()])
 }
 
@@ -257,17 +302,44 @@ function loadPreviewData() {
     { id: 1, name: '默认词书', description: '日常学习沉淀', isDefault: true, entryCount: 18, dueCount: 3 },
     { id: 2, name: 'CET-4 高频词', description: '考试核心词', isDefault: false, entryCount: 64, dueCount: 9 },
   ]
+  state.modelConfigs = [
+    {
+      id: 101,
+      name: 'DeepSeek 默认',
+      provider: 'deepseek',
+      modelName: 'deepseek-chat',
+      baseUrl: 'https://api.deepseek.com',
+      chatPath: '/chat/completions',
+      apiKeyMasked: 'sk-****2101',
+      enabled: true,
+      isDefault: true,
+      sequence: 0,
+    },
+    {
+      id: 102,
+      name: 'Kimi 备用',
+      provider: 'kimi',
+      modelName: 'moonshot-v1-8k',
+      baseUrl: 'https://api.moonshot.cn',
+      chatPath: '/v1/chat/completions',
+      apiKeyMasked: 'sk-****wdBD',
+      enabled: false,
+      isDefault: false,
+      sequence: 10,
+    },
+  ]
   state.currentWordbookId = state.currentWordbookId || 1
   state.wordbookEntries = [
-    { id: 11, term: 'abandon', normalizedTerm: 'abandon', reviewStage: 2, masteryScore: 45, nextReviewTime: new Date().toISOString() },
-    { id: 12, term: 'maintain', normalizedTerm: 'maintain', reviewStage: 4, masteryScore: 72, nextReviewTime: new Date(Date.now() + 86400000).toISOString() },
-    { id: 13, term: 'contrast', normalizedTerm: 'contrast', reviewStage: 1, masteryScore: 30, nextReviewTime: new Date().toISOString() },
+    { id: 11, term: 'abandon', normalizedTerm: 'abandon', status: 'vague', note: '## 记忆\n- abandon a plan\n- with abandon', reviewStage: 2, masteryScore: 45, nextReviewTime: new Date().toISOString(), parsed: previewParsed('abandon') },
+    { id: 12, term: 'maintain', normalizedTerm: 'maintain', status: 'familiar', note: '常和 **relationship/status** 搭配。', reviewStage: 4, masteryScore: 72, nextReviewTime: new Date(Date.now() + 86400000).toISOString(), parsed: previewParsed('maintain') },
+    { id: 13, term: 'contrast', normalizedTerm: 'contrast', status: 'forgotten', note: '', reviewStage: 1, masteryScore: 30, nextReviewTime: new Date().toISOString(), parsed: previewParsed('contrast') },
   ]
   state.reviewEntries = state.wordbookEntries.slice(0, 2).map((entry) => ({
     ...entry,
     parsed: previewParsed(entry.term),
   }))
   updateAuthView()
+  renderModelConfigs()
   renderWordbooks()
   renderWordbookEntries()
   renderReviewQueue(state.reviewEntries)
@@ -300,6 +372,181 @@ async function loadAgents() {
     elements.agentSelect.innerHTML = '<option value="english_vocabulary">English Vocabulary</option>'
     logEvent('error', 'Agent 加载失败', error.message)
   }
+}
+
+async function loadModelConfigs() {
+  if (state.preview) {
+    renderModelConfigs()
+    renderStudyModelOptions()
+    return
+  }
+  try {
+    const configs = await request('/api/v1/ai/model-configs')
+    state.modelConfigs = Array.isArray(configs) ? configs : []
+    renderModelConfigs()
+    renderStudyModelOptions()
+  } catch (error) {
+    logEvent('error', '模型配置加载失败', error.message)
+    renderStudyModelOptions()
+  }
+}
+
+function renderStudyModelOptions() {
+  if (!elements.studyModelSelect) return
+  elements.studyModelSelect.innerHTML = ''
+  const enabled = state.modelConfigs.filter((item) => item.enabled)
+  if (!enabled.length) {
+    elements.studyModelSelect.innerHTML = '<option value="">默认模型</option>'
+    return
+  }
+  for (const item of enabled) {
+    const option = document.createElement('option')
+    option.value = item.id
+    option.textContent = `${item.name} · ${item.modelName}${item.isDefault ? ' · 默认' : ''}`
+    elements.studyModelSelect.appendChild(option)
+  }
+  const preferred = enabled.find((item) => item.isDefault) || enabled[0]
+  elements.studyModelSelect.value = String(preferred.id)
+}
+
+function renderModelConfigs() {
+  renderStudyModelOptions()
+  if (!elements.modelConfigList) return
+  const list = state.modelConfigs
+  if (!list.length) {
+    elements.modelConfigList.className = 'model-list empty'
+    elements.modelConfigList.textContent = '暂无模型配置'
+    return
+  }
+  elements.modelConfigList.className = 'model-list'
+  elements.modelConfigList.innerHTML = list
+    .map(
+      (item) => `
+        <div class="model-item ${item.enabled ? '' : 'disabled'}">
+          <div>
+            <strong>${escapeHtml(item.name)}</strong>
+            <p>${escapeHtml(item.provider)} · ${escapeHtml(item.modelName)} · ${escapeHtml(item.baseUrl || '')}</p>
+            <small>${item.isDefault ? '默认 · ' : ''}优先级 ${item.sequence ?? 0} · ${escapeHtml(item.apiKeyMasked || '')}</small>
+          </div>
+          <div class="row-actions">
+            <button type="button" data-model-edit="${item.id}">编辑</button>
+            <button type="button" data-model-toggle="${item.id}">${item.enabled ? '禁用' : '启用'}</button>
+            <button type="button" data-model-default="${item.id}">默认</button>
+          </div>
+        </div>
+      `,
+    )
+    .join('')
+  elements.modelConfigList.querySelectorAll('[data-model-edit]').forEach((button) => {
+    button.addEventListener('click', () => editModelConfig(Number(button.getAttribute('data-model-edit'))))
+  })
+  elements.modelConfigList.querySelectorAll('[data-model-toggle]').forEach((button) => {
+    button.addEventListener('click', () => toggleModelConfig(Number(button.getAttribute('data-model-toggle'))))
+  })
+  elements.modelConfigList.querySelectorAll('[data-model-default]').forEach((button) => {
+    button.addEventListener('click', () => setDefaultModelConfig(Number(button.getAttribute('data-model-default'))))
+  })
+}
+
+function editModelConfig(id) {
+  const item = state.modelConfigs.find((model) => Number(model.id) === Number(id))
+  if (!item) return
+  state.currentModelEditId = item.id
+  elements.modelNameInput.value = item.name || ''
+  elements.modelProviderInput.value = item.provider || ''
+  elements.modelModelNameInput.value = item.modelName || ''
+  elements.modelBaseUrlInput.value = item.baseUrl || ''
+  elements.modelChatPathInput.value = item.chatPath || '/chat/completions'
+  elements.modelApiKeyInput.value = ''
+  elements.modelApiKeyInput.placeholder = item.apiKeyMasked || 'API KEY'
+  elements.modelSequenceInput.value = item.sequence ?? 0
+  elements.modelDefaultInput.checked = Boolean(item.isDefault)
+  elements.modelEnabledInput.checked = Boolean(item.enabled)
+}
+
+function resetModelForm() {
+  state.currentModelEditId = null
+  elements.modelNameInput.value = ''
+  elements.modelProviderInput.value = ''
+  elements.modelModelNameInput.value = ''
+  elements.modelBaseUrlInput.value = ''
+  elements.modelChatPathInput.value = '/chat/completions'
+  elements.modelApiKeyInput.value = ''
+  elements.modelApiKeyInput.placeholder = 'API KEY'
+  elements.modelSequenceInput.value = '0'
+  elements.modelDefaultInput.checked = false
+  elements.modelEnabledInput.checked = true
+}
+
+async function saveModelConfig() {
+  const payload = {
+    name: elements.modelNameInput.value.trim(),
+    provider: elements.modelProviderInput.value.trim(),
+    modelName: elements.modelModelNameInput.value.trim(),
+    baseUrl: elements.modelBaseUrlInput.value.trim(),
+    chatPath: elements.modelChatPathInput.value.trim() || '/chat/completions',
+    apiKey: elements.modelApiKeyInput.value.trim(),
+    sequence: Number(elements.modelSequenceInput.value || 0),
+    isDefault: elements.modelDefaultInput.checked,
+    enabled: elements.modelEnabledInput.checked,
+  }
+  if (!payload.name || !payload.provider || !payload.modelName || !payload.baseUrl || (!payload.apiKey && !state.currentModelEditId)) {
+    toast('请补全模型配置')
+    return
+  }
+  setLoading(true)
+  try {
+    if (state.preview) {
+      const id = state.currentModelEditId || Date.now()
+      const existingIndex = state.modelConfigs.findIndex((item) => Number(item.id) === Number(id))
+      const next = { ...payload, id, apiKeyMasked: payload.apiKey ? `${payload.apiKey.slice(0, 6)}****` : 'sk-****' }
+      if (next.isDefault) state.modelConfigs.forEach((item) => (item.isDefault = false))
+      if (existingIndex >= 0) state.modelConfigs.splice(existingIndex, 1, next)
+      else state.modelConfigs.push(next)
+      renderModelConfigs()
+      resetModelForm()
+      toast('设计预览：模型配置已保存')
+      return
+    }
+    const path = state.currentModelEditId ? `/api/v1/ai/model-configs/${state.currentModelEditId}` : '/api/v1/ai/model-configs'
+    const method = state.currentModelEditId ? 'PUT' : 'POST'
+    await request(path, { method, body: JSON.stringify(payload) })
+    await loadModelConfigs()
+    resetModelForm()
+    toast('模型配置已保存')
+  } catch (error) {
+    logEvent('error', '模型配置保存失败', error.message)
+    toast(`模型配置保存失败：${error.message}`)
+  } finally {
+    setLoading(false)
+  }
+}
+
+async function toggleModelConfig(id) {
+  const item = state.modelConfigs.find((model) => Number(model.id) === Number(id))
+  if (!item) return
+  if (state.preview) {
+    item.enabled = !item.enabled
+    renderModelConfigs()
+    return
+  }
+  await request(`/api/v1/ai/model-configs/${id}/${item.enabled ? 'disable' : 'enable'}`, { method: 'POST' })
+  await loadModelConfigs()
+}
+
+async function setDefaultModelConfig(id) {
+  const item = state.modelConfigs.find((model) => Number(model.id) === Number(id))
+  if (!item) return
+  if (state.preview) {
+    state.modelConfigs.forEach((model) => (model.isDefault = Number(model.id) === Number(id)))
+    renderModelConfigs()
+    return
+  }
+  await request(`/api/v1/ai/model-configs/${id}/priority`, {
+    method: 'POST',
+    body: JSON.stringify({ sequence: item.sequence ?? 0, isDefault: true }),
+  })
+  await loadModelConfigs()
 }
 
 async function loadWordbooks() {
@@ -355,12 +602,19 @@ function renderWordbooks() {
           <strong>${escapeHtml(item.name)}</strong>
           <span>${escapeHtml(item.description || (item.isDefault ? '默认词书' : '自定义词书'))}</span>
           <small>${item.entryCount || 0} 个单词 · ${item.dueCount || 0} 个待复习</small>
+          <em data-wordbook-edit="${item.id}">编辑</em>
         </button>
       `,
     )
     .join('')
   elements.wordbookCards.querySelectorAll('[data-wordbook-id]').forEach((button) => {
     button.addEventListener('click', () => changeWordbook(Number(button.getAttribute('data-wordbook-id'))))
+  })
+  elements.wordbookCards.querySelectorAll('[data-wordbook-edit]').forEach((button) => {
+    button.addEventListener('click', (event) => {
+      event.stopPropagation()
+      editWordbook(Number(button.getAttribute('data-wordbook-edit')))
+    })
   })
   renderProfileMetrics()
 }
@@ -386,21 +640,54 @@ async function createWordbook() {
   }
   setLoading(true)
   try {
-    const wordbook = await request('/api/v1/learning/wordbooks', {
-      method: 'POST',
-      body: JSON.stringify({ name }),
-    })
-    elements.newWordbookInput.value = ''
+    const payload = {
+      name,
+      description: elements.wordbookDescriptionInput.value.trim(),
+      isDefault: elements.wordbookDefaultInput.checked,
+    }
+    if (state.preview) {
+      const id = state.currentWordbookEditId || Date.now()
+      if (payload.isDefault) state.wordbooks.forEach((item) => (item.isDefault = false))
+      const index = state.wordbooks.findIndex((item) => Number(item.id) === Number(id))
+      const next = { id, ...payload, entryCount: 0, dueCount: 0 }
+      if (index >= 0) state.wordbooks.splice(index, 1, { ...state.wordbooks[index], ...next })
+      else state.wordbooks.push(next)
+      state.currentWordbookId = id
+      resetWordbookForm()
+      renderWordbooks()
+      toast('设计预览：词表已保存')
+      return
+    }
+    const path = state.currentWordbookEditId ? `/api/v1/learning/wordbooks/${state.currentWordbookEditId}` : '/api/v1/learning/wordbooks'
+    const method = state.currentWordbookEditId ? 'PUT' : 'POST'
+    const wordbook = await request(path, { method, body: JSON.stringify(payload) })
+    resetWordbookForm()
     state.currentWordbookId = wordbook.id
     await loadWordbooks()
-    logEvent('wordbook', '创建词书', name)
-    toast('词书已创建')
+    logEvent('wordbook', method === 'PUT' ? '更新词表' : '创建词表', name)
+    toast('词表已保存')
   } catch (error) {
-    logEvent('error', '创建词书失败', error.message)
-    toast(`创建词书失败：${error.message}`)
+    logEvent('error', '保存词表失败', error.message)
+    toast(`保存词表失败：${error.message}`)
   } finally {
     setLoading(false)
   }
+}
+
+function editWordbook(id) {
+  const wordbook = state.wordbooks.find((item) => Number(item.id) === Number(id))
+  if (!wordbook) return
+  state.currentWordbookEditId = wordbook.id
+  elements.newWordbookInput.value = wordbook.name || ''
+  elements.wordbookDescriptionInput.value = wordbook.description || ''
+  elements.wordbookDefaultInput.checked = Boolean(wordbook.isDefault)
+}
+
+function resetWordbookForm() {
+  state.currentWordbookEditId = null
+  elements.newWordbookInput.value = ''
+  elements.wordbookDescriptionInput.value = ''
+  elements.wordbookDefaultInput.checked = false
 }
 
 async function loadWordbookEntries() {
@@ -415,7 +702,9 @@ async function loadWordbookEntries() {
     return
   }
   try {
-    const entries = await request(`/api/v1/learning/wordbooks/${state.currentWordbookId}/entries`)
+    const status = elements.wordStatusFilter?.value || ''
+    const query = status ? `?status=${encodeURIComponent(status)}` : ''
+    const entries = await request(`/api/v1/learning/wordbooks/${state.currentWordbookId}/entries${query}`)
     state.wordbookEntries = Array.isArray(entries) ? entries : []
     renderWordbookEntries()
     renderProfileMetrics()
@@ -425,31 +714,114 @@ async function loadWordbookEntries() {
 }
 
 function renderWordbookEntries() {
-  const entries = state.wordbookEntries
+  const filter = elements.wordStatusFilter?.value || ''
+  const entries = filter && state.preview ? state.wordbookEntries.filter((entry) => (entry.status || 'vague') === filter) : state.wordbookEntries
   if (!entries.length) {
     elements.wordbookEntryList.className = 'entry-list empty'
     elements.wordbookEntryList.textContent = state.token ? '当前词书还没有单词' : '登录后查看单词本'
+    state.selectedEntry = null
+    renderWordbookFocus(null)
+    renderNotes(null)
     return
   }
+  const selectedEntry = state.selectedEntry && entries.some((entry) => Number(entry.id) === Number(state.selectedEntry.id)) ? state.selectedEntry : entries[0]
+  state.selectedEntry = selectedEntry
   elements.wordbookEntryList.className = 'entry-list'
   elements.wordbookEntryList.innerHTML = entries
     .map(
       (entry) => `
-        <button class="entry-row" type="button" data-entry-term="${escapeHtml(entry.normalizedTerm)}">
-          <span>${escapeHtml(entry.term || entry.normalizedTerm)}</span>
-          <small>阶段 ${entry.reviewStage ?? 0} · 掌握 ${entry.masteryScore ?? 0} · 下次 ${escapeHtml(formatDateTime(entry.nextReviewTime))}</small>
-        </button>
+        <div class="entry-row ${Number(selectedEntry.id) === Number(entry.id) ? 'active' : ''}">
+          <button type="button" data-entry-id="${entry.id}">
+            <span>${escapeHtml(entry.term || entry.normalizedTerm)}</span>
+            <small>${escapeHtml(statusLabel(entry.status))} · 阶段 ${entry.reviewStage ?? 0} · 掌握 ${entry.masteryScore ?? 0} · 下次 ${escapeHtml(formatDateTime(entry.nextReviewTime))}</small>
+          </button>
+          <div class="row-actions">
+            <button type="button" data-entry-status="familiar" data-entry-update="${entry.id}">熟悉</button>
+            <button type="button" data-entry-status="vague" data-entry-update="${entry.id}">模糊</button>
+            <button type="button" data-entry-status="forgotten" data-entry-update="${entry.id}">遗忘</button>
+            <button type="button" data-entry-delete="${entry.id}">删除</button>
+          </div>
+        </div>
       `,
     )
     .join('')
-  elements.wordbookEntryList.querySelectorAll('[data-entry-term]').forEach((button) => {
+  elements.wordbookEntryList.querySelectorAll('[data-entry-id]').forEach((button) => {
     button.addEventListener('click', () => {
-      const term = button.getAttribute('data-entry-term')
-      elements.termInput.value = term
-      setView('studyView')
-      study(term)
+      const entry = state.wordbookEntries.find((item) => Number(item.id) === Number(button.getAttribute('data-entry-id')))
+      selectWordbookEntry(entry)
     })
   })
+  elements.wordbookEntryList.querySelectorAll('[data-entry-update]').forEach((button) => {
+    button.addEventListener('click', () => updateEntryStatus(Number(button.getAttribute('data-entry-update')), button.getAttribute('data-entry-status')))
+  })
+  elements.wordbookEntryList.querySelectorAll('[data-entry-delete]').forEach((button) => {
+    button.addEventListener('click', () => deleteWordbookEntry(Number(button.getAttribute('data-entry-delete'))))
+  })
+  renderWordbookFocus(selectedEntry)
+  renderNotes(selectedEntry)
+}
+
+function selectWordbookEntry(entry, options = {}) {
+  if (!entry) {
+    renderWordbookFocus(null)
+    return
+  }
+  state.selectedEntry = entry
+  renderWordbookFocus(entry)
+  renderNotes(entry)
+  if (!options.silent) renderWordbookEntries()
+}
+
+function renderWordbookFocus(entry) {
+  if (!entry) {
+    elements.wordbookFocus.className = 'empty'
+    elements.wordbookFocus.textContent = '选择单词后查看详情和笔记'
+    return
+  }
+  const definitions = normalizeDefinitions(entry.parsed).slice(0, 2)
+  elements.wordbookFocus.className = 'wordbook-focus-card'
+  elements.wordbookFocus.innerHTML = `
+    <p class="eyebrow">${escapeHtml(statusLabel(entry.status))}</p>
+    <h4>${escapeHtml(entry.term || entry.normalizedTerm)}</h4>
+    <div class="mini-definition-list">
+      ${
+        definitions.length
+          ? definitions.map((item) => `<div><span>${escapeHtml(item.pos || 'meaning')}</span><p>${escapeHtml(item.cn || item.en || '')}</p></div>`).join('')
+          : '<div class="empty">暂无释义</div>'
+      }
+    </div>
+    <div class="note-view">${renderMarkdown(entry.note || '') || '<span class="empty">暂无笔记</span>'}</div>
+    <button class="secondary-button compact" type="button" data-open-study="${escapeHtml(entry.normalizedTerm)}">去学习</button>
+  `
+  elements.wordbookFocus.querySelector('[data-open-study]')?.addEventListener('click', () => {
+    elements.termInput.value = entry.normalizedTerm
+    setView('studyView')
+    study(entry.normalizedTerm)
+  })
+}
+
+async function updateEntryStatus(entryId, status) {
+  await saveEntry(entryId, { status })
+}
+
+async function deleteWordbookEntry(entryId) {
+  if (state.preview) {
+    state.wordbookEntries = state.wordbookEntries.filter((entry) => Number(entry.id) !== Number(entryId))
+    state.reviewEntries = state.reviewEntries.filter((entry) => Number(entry.id) !== Number(entryId))
+    state.selectedEntry = null
+    renderWordbookEntries()
+    renderReviewQueue(state.reviewEntries)
+    toast('设计预览：已从词表删除')
+    return
+  }
+  try {
+    await request(`/api/v1/learning/wordbook-entries/${entryId}`, { method: 'DELETE' })
+    await Promise.allSettled([loadWordbooks(), loadWordbookEntries(), loadDueReviews()])
+    toast('已从词表删除')
+  } catch (error) {
+    logEvent('error', '删除词条失败', error.message)
+    toast(`删除词条失败：${error.message}`)
+  }
 }
 
 function renderProfileMetrics() {
@@ -482,6 +854,7 @@ async function study(term) {
         term: value,
         agentCode: elements.agentSelect.value,
         templateCode: elements.templateSelect.value,
+        modelConfigId: elements.studyModelSelect.value ? Number(elements.studyModelSelect.value) : null,
         forceRefresh: elements.forceRefreshInput.checked,
       }),
     })
@@ -522,6 +895,7 @@ function renderRecord(record) {
   renderMemoryTips(parsed)
   renderRawJson(record)
   renderReviewFocus(record)
+  renderNotes(findEntryForRecord(record))
 }
 
 function renderPhonetics(term, uk, us) {
@@ -708,15 +1082,35 @@ async function addCurrentWordToWordbook() {
   setLoading(true)
   try {
     if (state.preview) {
-      logEvent('wordbook', '预览加入词书', `${term} -> ${currentWordbookName()}`)
+      const existing = state.wordbookEntries.find((entry) => entry.normalizedTerm === term)
+      if (!existing) {
+        const entry = {
+          id: Date.now(),
+          term,
+          normalizedTerm: term,
+          status: 'vague',
+          note: '',
+          reviewStage: 0,
+          masteryScore: 0,
+          nextReviewTime: new Date().toISOString(),
+          parsed: state.currentRecord?.parsed,
+        }
+        state.wordbookEntries.unshift(entry)
+        state.reviewEntries.unshift(entry)
+        renderWordbookEntries()
+        renderNotes(entry)
+      }
+      logEvent('wordbook', '预览加入词表', `${term} -> ${currentWordbookName()}`)
       toast('设计预览：已模拟加入词书')
       return
     }
-    await request(`/api/v1/learning/wordbooks/${state.currentWordbookId}/entries`, {
+    const entry = await request(`/api/v1/learning/wordbooks/${state.currentWordbookId}/entries`, {
       method: 'POST',
       body: JSON.stringify({ term }),
     })
     await Promise.allSettled([loadWordbooks(), loadDueReviews()])
+    await loadWordbookEntries()
+    renderNotes(entry)
     logEvent('wordbook', '加入单词本', `${term} -> ${currentWordbookName()}`)
     toast('已加入词书，并生成复习计划')
   } catch (error) {
@@ -743,6 +1137,7 @@ async function chat() {
       method: 'POST',
       body: JSON.stringify({
         agentCode: elements.agentSelect.value,
+        modelConfigId: elements.studyModelSelect.value ? Number(elements.studyModelSelect.value) : null,
         sessionId: state.currentSessionId,
         message,
         variables: {
@@ -789,12 +1184,14 @@ function renderReviewQueue(entries) {
     elements.reviewQueue.className = 'review-list empty'
     elements.reviewQueue.textContent = '登录后查看复习任务'
     renderReviewFocus(null)
+    renderNotes(null)
     return
   }
   if (!entries.length) {
     elements.reviewQueue.className = 'review-list empty'
     elements.reviewQueue.textContent = '当前没有到期复习'
     renderReviewFocus(null)
+    renderNotes(null)
     return
   }
   elements.reviewQueue.className = 'review-list'
@@ -822,6 +1219,7 @@ function renderReviewQueue(entries) {
       const term = button.getAttribute('data-review-term')
       const entry = state.reviewEntries.find((item) => item.normalizedTerm === term)
       renderReviewFocus(entry)
+      renderNotes(entry)
       elements.termInput.value = term
       study(term)
     })
@@ -830,6 +1228,7 @@ function renderReviewQueue(entries) {
     button.addEventListener('click', () => submitReview(button.getAttribute('data-entry-id'), button.getAttribute('data-review-result')))
   })
   renderReviewFocus(entries[0])
+  renderNotes(entries[0])
 }
 
 function renderReviewFocus(entryOrRecord) {
@@ -860,6 +1259,14 @@ async function submitReview(entryId, result) {
   setLoading(true)
   try {
     if (state.preview) {
+      const entry = state.reviewEntries.find((item) => Number(item.id) === Number(entryId))
+      if (entry) {
+        entry.status = reviewResultToStatus(result)
+        const source = state.wordbookEntries.find((item) => Number(item.id) === Number(entryId))
+        if (source) source.status = entry.status
+      }
+      renderReviewQueue(state.reviewEntries)
+      renderWordbookEntries()
       logEvent('review', '预览提交复习结果', `${entryId} -> ${result}`)
       toast('设计预览：已模拟提交复习结果')
       return
@@ -876,6 +1283,84 @@ async function submitReview(entryId, result) {
     toast(`提交复习失败：${error.message}`)
   } finally {
     setLoading(false)
+  }
+}
+
+function findEntryForRecord(record) {
+  const term = record?.normalizedTerm || record?.term || record?.parsed?.term
+  if (!term) return null
+  return state.wordbookEntries.find((entry) => entry.normalizedTerm === term || entry.term === term) || null
+}
+
+function renderNotes(entry) {
+  state.currentNoteEntry = entry || null
+  const html = entry?.note ? renderMarkdown(entry.note) : ''
+  const fallback = entry ? '<span class="empty">暂无笔记，点击编辑记录 Markdown</span>' : '<span class="empty">加入或选择单词后可以记录 Markdown 笔记</span>'
+  elements.studyNote.className = `note-view${html ? '' : ' empty'}`
+  elements.reviewNote.className = `note-view${html ? '' : ' empty'}`
+  elements.studyNote.innerHTML = html || fallback
+  elements.reviewNote.innerHTML = html || (entry ? '<span class="empty">暂无笔记，复习时也可以编辑同一份笔记</span>' : '<span class="empty">选择复习单词后查看同一份 Markdown 笔记</span>')
+}
+
+function editCurrentNote() {
+  const entry = state.currentNoteEntry || findEntryForRecord(state.currentRecord)
+  if (!entry) {
+    toast('请先把单词加入当前词表')
+    return
+  }
+  state.currentNoteEntry = entry
+  const textarea = `
+    <div class="note-editor">
+      <textarea rows="8" placeholder="支持 Markdown，例如：## 记忆点">${escapeHtml(entry.note || '')}</textarea>
+      <div class="inline-actions">
+        <button class="secondary-button compact" type="button" data-save-note>保存笔记</button>
+        <button class="ghost-button compact" type="button" data-cancel-note>取消</button>
+      </div>
+    </div>
+  `
+  elements.studyNote.innerHTML = textarea
+  elements.reviewNote.innerHTML = textarea
+  document.querySelectorAll('[data-save-note]').forEach((button) => button.addEventListener('click', () => saveCurrentNote(button)))
+  document.querySelectorAll('[data-cancel-note]').forEach((button) => button.addEventListener('click', () => renderNotes(entry)))
+}
+
+async function saveCurrentNote(button) {
+  const entry = state.currentNoteEntry
+  if (!entry) return
+  const input = button.closest('.note-editor')?.querySelector('textarea')
+  const note = input?.value || ''
+  await saveEntry(entry.id, { note })
+}
+
+async function saveEntry(entryId, payload) {
+  if (state.preview) {
+    for (const list of [state.wordbookEntries, state.reviewEntries]) {
+      const entry = list.find((item) => Number(item.id) === Number(entryId))
+      if (entry) Object.assign(entry, payload)
+    }
+    const updated = state.wordbookEntries.find((item) => Number(item.id) === Number(entryId)) || state.reviewEntries.find((item) => Number(item.id) === Number(entryId))
+    renderWordbookEntries()
+    renderReviewQueue(state.reviewEntries)
+    renderNotes(updated)
+    toast('设计预览：词条已更新')
+    return updated
+  }
+  try {
+    const updated = await request(`/api/v1/learning/wordbook-entries/${entryId}`, {
+      method: 'PUT',
+      body: JSON.stringify(payload),
+    })
+    state.wordbookEntries = state.wordbookEntries.map((entry) => (Number(entry.id) === Number(entryId) ? { ...entry, ...updated } : entry))
+    state.reviewEntries = state.reviewEntries.map((entry) => (Number(entry.id) === Number(entryId) ? { ...entry, ...updated } : entry))
+    renderWordbookEntries()
+    renderReviewQueue(state.reviewEntries)
+    renderNotes(updated)
+    toast('词条已更新')
+    return updated
+  } catch (error) {
+    logEvent('error', '词条更新失败', error.message)
+    toast(`词条更新失败：${error.message}`)
+    return null
   }
 }
 
@@ -1097,6 +1582,26 @@ function relationMetaLine(item) {
   return pieces.join(' · ')
 }
 
+function statusLabel(status) {
+  return (
+    {
+      familiar: '熟悉',
+      forgotten: '遗忘',
+      vague: '模糊',
+    }[status] || '模糊'
+  )
+}
+
+function reviewResultToStatus(result) {
+  return (
+    {
+      remembered: 'familiar',
+      forgotten: 'forgotten',
+      vague: 'vague',
+    }[result] || 'vague'
+  )
+}
+
 function logTypeLabel(type) {
   return (
     {
@@ -1207,6 +1712,57 @@ function fallbackObjectText(source, usedKeys) {
     .join('；')
 }
 
+function renderMarkdown(markdown) {
+  const source = String(markdown || '').trim()
+  if (!source) return ''
+  const lines = source.split(/\r?\n/)
+  const html = []
+  let listOpen = false
+  for (const line of lines) {
+    const text = line.trim()
+    if (!text) {
+      if (listOpen) {
+        html.push('</ul>')
+        listOpen = false
+      }
+      continue
+    }
+    if (text.startsWith('## ')) {
+      if (listOpen) {
+        html.push('</ul>')
+        listOpen = false
+      }
+      html.push(`<h4>${inlineMarkdown(text.slice(3))}</h4>`)
+    } else if (text.startsWith('# ')) {
+      if (listOpen) {
+        html.push('</ul>')
+        listOpen = false
+      }
+      html.push(`<h3>${inlineMarkdown(text.slice(2))}</h3>`)
+    } else if (text.startsWith('- ')) {
+      if (!listOpen) {
+        html.push('<ul>')
+        listOpen = true
+      }
+      html.push(`<li>${inlineMarkdown(text.slice(2))}</li>`)
+    } else {
+      if (listOpen) {
+        html.push('</ul>')
+        listOpen = false
+      }
+      html.push(`<p>${inlineMarkdown(text)}</p>`)
+    }
+  }
+  if (listOpen) html.push('</ul>')
+  return html.join('')
+}
+
+function inlineMarkdown(text) {
+  return escapeHtml(text)
+    .replace(/\*\*([^*]+)\*\*/g, '<strong>$1</strong>')
+    .replace(/`([^`]+)`/g, '<code>$1</code>')
+}
+
 function formatDateTime(value) {
   if (!value) return '待定'
   const date = new Date(value)
@@ -1248,12 +1804,19 @@ elements.apiBaseInput.addEventListener('change', () => {
   state.apiBase = elements.apiBaseInput.value.trim() || 'http://localhost:16681'
   localStorage.setItem('learning.apiBase', state.apiBase)
   loadAgents()
+  loadModelConfigs()
 })
 elements.reloadAgentsBtn.addEventListener('click', loadAgents)
+elements.reloadModelsBtn.addEventListener('click', loadModelConfigs)
 elements.reloadWordbooksBtn.addEventListener('click', loadWordbooks)
 elements.reloadWordbookEntriesBtn.addEventListener('click', loadWordbookEntries)
+elements.reloadWordbookViewBtn.addEventListener('click', loadWordbookEntries)
 elements.createWordbookBtn.addEventListener('click', createWordbook)
+elements.resetWordbookFormBtn.addEventListener('click', resetWordbookForm)
+elements.saveModelBtn.addEventListener('click', saveModelConfig)
+elements.resetModelFormBtn.addEventListener('click', resetModelForm)
 elements.wordbookSelect.addEventListener('change', () => changeWordbook(Number(elements.wordbookSelect.value)))
+elements.wordStatusFilter.addEventListener('change', loadWordbookEntries)
 elements.clearLogBtn.addEventListener('click', clearLogs)
 elements.studyForm.addEventListener('submit', (event) => {
   event.preventDefault()
@@ -1262,6 +1825,8 @@ elements.studyForm.addEventListener('submit', (event) => {
 elements.addToWordbookBtn.addEventListener('click', addCurrentWordToWordbook)
 elements.speakWordBtn.addEventListener('click', () => speak(state.currentRecord?.normalizedTerm || elements.termInput.value))
 elements.speakSentenceBtn.addEventListener('click', () => speak(firstExample(state.currentRecord?.parsed)))
+elements.editStudyNoteBtn.addEventListener('click', editCurrentNote)
+elements.editReviewNoteBtn.addEventListener('click', editCurrentNote)
 elements.chatBtn.addEventListener('click', chat)
 elements.reloadReviewBtn.addEventListener('click', loadDueReviews)
 document.querySelectorAll('.nav-item').forEach((button) => {
@@ -1275,6 +1840,7 @@ updateAuthView()
 renderSystemLogs()
 renderRawJson(null)
 loadAgents()
+loadModelConfigs()
 if (state.token || state.preview) {
   loadInitialData()
 }

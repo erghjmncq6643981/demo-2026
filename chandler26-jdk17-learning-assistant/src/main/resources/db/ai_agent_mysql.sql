@@ -105,6 +105,25 @@ CREATE TABLE IF NOT EXISTS ai_model_call_record (
     KEY idx_ai_model_call_create_time (create_time)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci COMMENT='AI 模型调用记录';
 
+CREATE TABLE IF NOT EXISTS ai_model_config (
+    id BIGINT NOT NULL COMMENT '主键',
+    name VARCHAR(100) NOT NULL COMMENT '配置名称',
+    provider VARCHAR(50) NOT NULL COMMENT '供应商编码，例如 deepseek、kimi',
+    model_name VARCHAR(100) NOT NULL COMMENT '模型名称',
+    base_url VARCHAR(255) NOT NULL COMMENT 'Base URL',
+    chat_path VARCHAR(120) NOT NULL DEFAULT '/chat/completions' COMMENT 'Chat Completions 路径',
+    api_key VARCHAR(255) NOT NULL COMMENT 'API Key',
+    enabled TINYINT(1) NOT NULL DEFAULT 1 COMMENT '是否启用',
+    is_default TINYINT(1) NOT NULL DEFAULT 0 COMMENT '是否默认',
+    sequence INT NOT NULL DEFAULT 0 COMMENT '优先级，数字越小越优先',
+    deleted TINYINT(1) NOT NULL DEFAULT 0 COMMENT '是否删除',
+    create_time DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP COMMENT '创建时间',
+    update_time DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP COMMENT '更新时间',
+    PRIMARY KEY (id),
+    KEY idx_ai_model_config_provider (provider, enabled, deleted),
+    KEY idx_ai_model_config_priority (enabled, deleted, is_default, sequence)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci COMMENT='AI 模型配置';
+
 INSERT INTO ai_agent (
     id, name, code, type, icon, description, system_prompt, concise_prompt, welcome_message,
     model_provider, model_name, temperature, max_tokens, preset_commands, enabled, sequence

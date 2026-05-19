@@ -28,6 +28,9 @@ public class AgentChatRequest {
     @Schema(description = "业务 ID，例如单词 ID")
     private String businessId;
 
+    @Schema(description = "指定模型配置 ID，可选")
+    private Long modelConfigId;
+
     @NotBlank(message = "消息内容不能为空")
     private String message;
 

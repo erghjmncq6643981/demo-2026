@@ -14,6 +14,8 @@ public class ModelChatRequest {
 
     private String model;
 
+    private Long modelConfigId;
+
     private Double temperature;
 
     private Integer maxTokens;

@@ -11,6 +11,7 @@ import com.chandler.learning.agent.domain.entity.AiAgent;
 import com.chandler.learning.agent.domain.entity.AiChatMessage;
 import com.chandler.learning.agent.domain.entity.AiChatSession;
 import com.chandler.learning.agent.domain.entity.AiModelCallRecord;
+import com.chandler.learning.agent.domain.entity.AiModelConfig;
 import com.chandler.learning.agent.mapper.AiModelCallRecordMapper;
 import com.chandler.learning.agent.support.AiModelClient;
 import com.chandler.learning.agent.support.PromptRenderer;
@@ -36,6 +37,7 @@ public class AiChatService {
     private final AiAgentService agentService;
     private final AiPromptTemplateService promptTemplateService;
     private final AiChatSessionService chatSessionService;
+    private final AiModelConfigService modelConfigService;
     private final AiModelClient aiModelClient;
     private final AiModelProperties modelProperties;
     private final PromptRenderer promptRenderer;
@@ -50,11 +52,13 @@ public class AiChatService {
         List<ChatMessageParam> messages = buildMessages(agent, request, session);
         chatSessionService.addUserMessage(session.getId(), buildUserMessage(request));
 
-        String provider = resolveProvider(agent);
-        String modelName = resolveModelName(agent, provider);
+        AiModelConfig selectedModelConfig = request.getModelConfigId() == null ? null : modelConfigService.getById(request.getModelConfigId());
+        String provider = resolveProvider(agent, selectedModelConfig);
+        String modelName = resolveModelName(agent, provider, selectedModelConfig);
         ModelChatRequest modelRequest = new ModelChatRequest();
         modelRequest.setProvider(provider);
         modelRequest.setModel(modelName);
+        modelRequest.setModelConfigId(selectedModelConfig == null ? null : selectedModelConfig.getId());
         modelRequest.setTemperature(agent.getTemperature());
         modelRequest.setMaxTokens(agent.getMaxTokens());
         modelRequest.setMessages(messages);
@@ -147,16 +151,32 @@ public class AiChatService {
         return userMessage.toString();
     }
 
-    private String resolveProvider(AiAgent agent) {
-        return StringUtils.hasText(agent.getModelProvider())
-                ? agent.getModelProvider()
+    private String resolveProvider(AiAgent agent, AiModelConfig selectedModelConfig) {
+        if (selectedModelConfig != null) {
+            return selectedModelConfig.getProvider();
+        }
+        if (StringUtils.hasText(agent.getModelProvider())) {
+            return agent.getModelProvider();
+        }
+        return StringUtils.hasText(modelConfigService.resolveDefaultProvider())
+                ? modelConfigService.resolveDefaultProvider()
                 : modelProperties.getDefaultProvider();
     }
 
-    private String resolveModelName(AiAgent agent, String provider) {
+    private String resolveModelName(AiAgent agent, String provider, AiModelConfig selectedModelConfig) {
+        if (selectedModelConfig != null) {
+            return selectedModelConfig.getModelName();
+        }
         if (StringUtils.hasText(agent.getModelName())) {
             return agent.getModelName();
         }
+        String configuredModel = modelConfigService.resolveDefaultModel(provider);
+        return StringUtils.hasText(configuredModel)
+                ? configuredModel
+                : fallbackModelName(provider);
+    }
+
+    private String fallbackModelName(String provider) {
         ProviderConfig providerConfig = modelProperties.getProvider(provider);
         return providerConfig == null ? null : providerConfig.getDefaultModel();
     }

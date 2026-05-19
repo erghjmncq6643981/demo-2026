@@ -50,7 +50,8 @@ CREATE TABLE IF NOT EXISTS learning_wordbook_entry (
     vocabulary_id BIGINT NOT NULL COMMENT '词汇缓存 ID',
     term VARCHAR(128) NOT NULL COMMENT '展示单词或短语',
     normalized_term VARCHAR(128) NOT NULL COMMENT '归一化单词或短语',
-    note VARCHAR(500) DEFAULT NULL COMMENT '用户备注',
+    note TEXT DEFAULT NULL COMMENT 'Markdown 笔记',
+    status VARCHAR(20) NOT NULL DEFAULT 'vague' COMMENT '单词状态：familiar、forgotten、vague',
     review_stage INT NOT NULL DEFAULT 0 COMMENT '艾宾浩斯复习阶段',
     mastery_score INT NOT NULL DEFAULT 0 COMMENT '掌握度 0-100',
     first_review_time DATETIME DEFAULT NULL COMMENT '首次复习时间',
@@ -66,7 +67,8 @@ CREATE TABLE IF NOT EXISTS learning_wordbook_entry (
     PRIMARY KEY (id),
     UNIQUE KEY uk_learning_wordbook_entry_term (wordbook_id, normalized_term),
     KEY idx_learning_wordbook_entry_user_due (user_id, deleted, next_review_time),
-    KEY idx_learning_wordbook_entry_vocabulary (vocabulary_id)
+    KEY idx_learning_wordbook_entry_vocabulary (vocabulary_id),
+    KEY idx_learning_wordbook_entry_status (wordbook_id, status, deleted)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci COMMENT='词书词条与复习状态';
 
 CREATE TABLE IF NOT EXISTS learning_vocabulary_tag (

@@ -26,6 +26,8 @@ public class LearningWordbookEntry {
 
     private String note;
 
+    private String status;
+
     private Integer reviewStage;
 
     private Integer masteryScore;
