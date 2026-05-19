@@ -26,6 +26,25 @@ public class LearningWordbookEntry {
 
     private String note;
 
+    /**
+     * 加入词书时冻结的个人学习卡快照，避免公共 AI 结果刷新影响已有词条详情。
+     */
+    private String snapshotRawContent;
+
+    private String snapshotParsedJson;
+
+    private String snapshotTagsJson;
+
+    private String snapshotRelationsJson;
+
+    private String snapshotProvider;
+
+    private String snapshotModelName;
+
+    private Long snapshotSessionId;
+
+    private LocalDateTime snapshotTime;
+
     private String status;
 
     private Integer reviewStage;

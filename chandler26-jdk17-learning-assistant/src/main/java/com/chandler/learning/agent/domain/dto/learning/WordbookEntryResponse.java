@@ -40,6 +40,14 @@ public class WordbookEntryResponse {
 
     private Object parsed;
 
+    private String snapshotProvider;
+
+    private String snapshotModelName;
+
+    private Long snapshotSessionId;
+
+    private LocalDateTime snapshotTime;
+
     private List<VocabularyTagResponse> tags;
 
     private List<VocabularyRelationResponse> relations;

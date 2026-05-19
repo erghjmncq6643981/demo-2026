@@ -7,6 +7,8 @@ import com.chandler.learning.agent.domain.dto.learning.LearningActivityDayRespon
 import com.chandler.learning.agent.domain.dto.learning.LearningActivityResponse;
 import com.chandler.learning.agent.domain.dto.learning.ReviewSubmitRequest;
 import com.chandler.learning.agent.domain.dto.learning.ReviewSubmitResponse;
+import com.chandler.learning.agent.domain.dto.learning.VocabularyRelationResponse;
+import com.chandler.learning.agent.domain.dto.learning.VocabularyTagResponse;
 import com.chandler.learning.agent.domain.dto.learning.WordbookEntryResponse;
 import com.chandler.learning.agent.domain.dto.learning.WordbookEntryUpdateRequest;
 import com.chandler.learning.agent.domain.dto.learning.WordbookResponse;
@@ -238,9 +240,14 @@ public class WordbookService {
                 .last(LearningConstants.SQL_LIMIT_ONE));
         if (existing != null) {
             if (Boolean.TRUE.equals(existing.getDeleted())) {
+                EnglishVocabularyStudyRecord vocabulary = findVocabulary(normalizedTerm);
                 existing.setDeleted(false);
                 existing.setNote(trimToNull(request.getNote()));
-                existing.setUpdateTime(LocalDateTime.now());
+                LocalDateTime now = LocalDateTime.now();
+                if (vocabulary != null) {
+                    applyVocabularySnapshot(existing, vocabulary, now);
+                }
+                existing.setUpdateTime(now);
                 entryMapper.updateById(existing);
                 systemLogService.record(userId, "wordbook", "恢复词条", existing.getNormalizedTerm());
                 log.info("用户「{}」把单词「{}」重新加入到词书「{}」中",
@@ -273,6 +280,7 @@ public class WordbookService {
         entry.setTerm(vocabulary.getTerm());
         entry.setNormalizedTerm(vocabulary.getNormalizedTerm());
         entry.setNote(trimToNull(request.getNote()));
+        applyVocabularySnapshot(entry, vocabulary, now);
         entry.setStatus(LearningConstants.Review.STATUS_VAGUE);
         entry.setReviewStage(LearningConstants.Review.INITIAL_STAGE);
         entry.setMasteryScore(LearningConstants.Review.INITIAL_MASTERY);
@@ -481,10 +489,94 @@ public class WordbookService {
         response.setCorrectCount(entry.getCorrectCount());
         response.setWrongCount(entry.getWrongCount());
         response.setCreateTime(entry.getCreateTime());
-        response.setParsed(readParsed(entry.getVocabularyId()));
-        response.setTags(vocabularyInsightService.listTags(entry.getVocabularyId()));
-        response.setRelations(vocabularyInsightService.listRelations(entry.getNormalizedTerm()));
+        response.setParsed(readEntryParsed(entry));
+        response.setSnapshotProvider(entry.getSnapshotProvider());
+        response.setSnapshotModelName(entry.getSnapshotModelName());
+        response.setSnapshotSessionId(entry.getSnapshotSessionId());
+        response.setSnapshotTime(entry.getSnapshotTime());
+        response.setTags(readEntryTags(entry));
+        response.setRelations(readEntryRelations(entry));
         return response;
+    }
+
+    private void applyVocabularySnapshot(LearningWordbookEntry entry, EnglishVocabularyStudyRecord vocabulary, LocalDateTime now) {
+        entry.setSnapshotRawContent(vocabulary.getRawContent());
+        entry.setSnapshotParsedJson(vocabulary.getParsedJson());
+        entry.setSnapshotTagsJson(writeJson(vocabularyInsightService.listTags(vocabulary.getId()),
+                "词书词条标签快照序列化失败"));
+        entry.setSnapshotRelationsJson(writeJson(vocabularyInsightService.listRelations(vocabulary.getNormalizedTerm()),
+                "词书词条关联词快照序列化失败"));
+        entry.setSnapshotProvider(vocabulary.getProvider());
+        entry.setSnapshotModelName(vocabulary.getModelName());
+        entry.setSnapshotSessionId(vocabulary.getSessionId());
+        entry.setSnapshotTime(now);
+    }
+
+    private Object readEntryParsed(LearningWordbookEntry entry) {
+        if (StringUtils.hasText(entry.getSnapshotParsedJson())) {
+            Object parsed = readJson(entry.getSnapshotParsedJson(), Object.class, "词书词条个人结构化 JSON 快照读取失败", entry);
+            if (parsed != null) {
+                return parsed;
+            }
+        }
+        return readParsed(entry.getVocabularyId());
+    }
+
+    private List<VocabularyTagResponse> readEntryTags(LearningWordbookEntry entry) {
+        if (StringUtils.hasText(entry.getSnapshotTagsJson())) {
+            List<VocabularyTagResponse> tags = readJsonList(entry.getSnapshotTagsJson(), VocabularyTagResponse.class,
+                    "词书词条标签快照读取失败", entry);
+            if (tags != null) {
+                return tags;
+            }
+        }
+        return vocabularyInsightService.listTags(entry.getVocabularyId());
+    }
+
+    private List<VocabularyRelationResponse> readEntryRelations(LearningWordbookEntry entry) {
+        if (StringUtils.hasText(entry.getSnapshotRelationsJson())) {
+            List<VocabularyRelationResponse> relations = readJsonList(entry.getSnapshotRelationsJson(), VocabularyRelationResponse.class,
+                    "词书词条关联词快照读取失败", entry);
+            if (relations != null) {
+                return relations;
+            }
+        }
+        return vocabularyInsightService.listRelations(entry.getNormalizedTerm());
+    }
+
+    private String writeJson(Object value, String errorMessage) {
+        try {
+            return objectMapper.writeValueAsString(value);
+        } catch (Exception ex) {
+            log.warn("{} error={}", errorMessage, ex.getMessage());
+            return null;
+        }
+    }
+
+    private <T> T readJson(String json, Class<T> valueType, String errorMessage, LearningWordbookEntry entry) {
+        try {
+            return objectMapper.readValue(json, valueType);
+        } catch (Exception ex) {
+            log.warn("{} entryId={} term={} error={}",
+                    errorMessage,
+                    entry.getId(),
+                    entry.getNormalizedTerm(),
+                    ex.getMessage());
+            return null;
+        }
+    }
+
+    private <T> List<T> readJsonList(String json, Class<T> elementType, String errorMessage, LearningWordbookEntry entry) {
+        try {
+            return objectMapper.readValue(json, objectMapper.getTypeFactory().constructCollectionType(List.class, elementType));
+        } catch (Exception ex) {
+            log.warn("{} entryId={} term={} error={}",
+                    errorMessage,
+                    entry.getId(),
+                    entry.getNormalizedTerm(),
+                    ex.getMessage());
+            return null;
+        }
     }
 
     private Object readParsed(Long vocabularyId) {

@@ -22,6 +22,7 @@
 - 英语词汇学习缓存接口。
 - 用户注册、登录、退出登录、Spring Security + JWT 鉴权。
 - 词书创建、词书列表、词条加入词书、词条列表。
+- 词书词条个人学习卡快照：学习页复用公共 AI 缓存，加入词书时复制个人详情，避免其他用户重新生成公共缓存后覆盖已有词条详情。
 - 单词本独立菜单：按词表查看单词，按熟悉、模糊、遗忘筛选，支持修改状态和从词表删除。
 - 学习/复习共享 Markdown 笔记：同一词书词条的笔记在学习页和复习页实时一致。
 - 模型配置管理：个人信息页可新增、编辑、启用/禁用模型配置，并设置默认和优先级。
@@ -336,6 +337,14 @@ GET  /api/v1/english/vocabularies/{term}
   -> 返回学习卡片、标签、关联词
 ```
 
+缓存边界：
+
+- `english_vocabulary_study_record` 是公共 AI 学习卡缓存，同一归一化词条优先复用，减少重复调用模型。
+- `forceRefresh=true` 会重新调用 AI 并更新公共缓存，供后续学习查询使用。
+- 用户把词条加入词书时，系统会把当前公共缓存中的原始回复、解析 JSON、标签、关联词、模型供应商、模型名称和会话 ID 复制到 `learning_wordbook_entry` 的快照字段。
+- 单词本详情、复习详情优先读取词书词条个人快照；历史词条若没有快照，才回退读取公共缓存。
+- 因此其他用户重新生成同一个词条的公共 AI 结果，不会覆盖已经加入个人词书的学习卡详情。
+
 拼写容错：
 
 - `/best-match` 在缓存词库中按编辑距离、前缀、包含关系计算匹配分。
@@ -472,6 +481,14 @@ src/main/resources/db/security_jwt_system_log_api_key_encryption_mysql.sql
 - 创建 `learning_system_log`，用于服务端系统日志。
 - 将 `ai_model_config.api_key` 调整为 `TEXT`，存储 AES-GCM 密文，兼容历史明文读取。
 
+本次个人快照新增迁移：
+
+```text
+src/main/resources/db/learning_wordbook_entry_snapshot_mysql.sql
+```
+
+该迁移会为 `learning_wordbook_entry` 增加个人学习卡快照字段，并把已有词条按当前公共缓存回填一份快照。
+
 如果已经执行过旧版 `learning_user_wordbook_review_mysql.sql`，且还没有执行过关系增强迁移，还需要额外执行：
 
 ```text
@@ -598,6 +615,14 @@ src/main/resources/db/learning_vocabulary_relation_enrichment_mysql.sql
 | `term` | 展示词条 |
 | `normalized_term` | 归一化词条 |
 | `note` | Markdown 笔记 |
+| `snapshot_raw_content` | 加入词书时的 AI 原始回复快照 |
+| `snapshot_parsed_json` | 加入词书时解析出的 JSON 快照 |
+| `snapshot_tags_json` | 加入词书时的标签快照 |
+| `snapshot_relations_json` | 加入词书时的关联词快照 |
+| `snapshot_provider` | 快照使用的模型供应商 |
+| `snapshot_model_name` | 快照使用的模型名称 |
+| `snapshot_session_id` | 快照关联的 AI 会话 ID |
+| `snapshot_time` | 快照生成时间 |
 | `status` | 单词状态：`familiar`、`vague`、`forgotten` |
 | `review_stage` | 复习阶段 |
 | `mastery_score` | 掌握度 |
@@ -703,6 +728,7 @@ src/main/resources/db/learning_vocabulary_relation_enrichment_mysql.sql
   -> 前端展示学习卡片
   -> 用户加入当前词书
   -> 创建 learning_wordbook_entry
+  -> 复制当前公共学习卡为个人快照
 ```
 
 ### 8.2 复习流程
