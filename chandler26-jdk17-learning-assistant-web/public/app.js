@@ -1,5 +1,5 @@
 const state = {
-  build: '20260519-18',
+  build: '20260519-20',
   apiBase: localStorage.getItem('learning.apiBase') || 'http://localhost:16681',
   token: localStorage.getItem('learning.token') || '',
   user: readJsonStorage('learning.user'),
@@ -25,6 +25,7 @@ const state = {
   reviewTyped: '',
   reviewWrongCount: 0,
   pendingReviewEntryId: null,
+  pendingDeleteConfirm: null,
   promptTemplates: [],
   currentTemplate: null,
   activity: null,
@@ -183,7 +184,6 @@ const elements = {
   templateValidationMessage: $('templateValidationMessage'),
   saveTemplateBtn: $('saveTemplateBtn'),
   voiceSelect: $('voiceSelect'),
-  forceRefreshInput: $('forceRefreshInput'),
   chatInput: $('chatInput'),
   chatBtn: $('chatBtn'),
   reloadReviewBtn: $('reloadReviewBtn'),
@@ -203,6 +203,12 @@ const elements = {
   forgottenDetailContent: $('forgottenDetailContent'),
   closeForgottenDetailModalBtn: $('closeForgottenDetailModalBtn'),
   forgottenBackToReviewBtn: $('forgottenBackToReviewBtn'),
+  deleteConfirmModal: $('deleteConfirmModal'),
+  deleteConfirmTitle: $('deleteConfirmTitle'),
+  deleteConfirmMessage: $('deleteConfirmMessage'),
+  deleteConfirmCloseBtn: $('deleteConfirmCloseBtn'),
+  deleteConfirmCancelBtn: $('deleteConfirmCancelBtn'),
+  deleteConfirmAcceptBtn: $('deleteConfirmAcceptBtn'),
   toast: $('toast'),
 }
 
@@ -261,6 +267,34 @@ function toast(message) {
   elements.toast.classList.add('show')
   window.clearTimeout(toast.timer)
   toast.timer = window.setTimeout(() => elements.toast.classList.remove('show'), 2600)
+}
+
+function confirmAction({ title = '确认操作', message = '请确认是否继续。', acceptText = '确认', danger = false } = {}) {
+  return new Promise((resolve) => {
+    if (!elements.deleteConfirmModal) {
+      resolve(window.confirm(message))
+      return
+    }
+    state.pendingDeleteConfirm = resolve
+    elements.deleteConfirmTitle.textContent = title
+    elements.deleteConfirmMessage.textContent = message
+    elements.deleteConfirmAcceptBtn.textContent = acceptText
+    elements.deleteConfirmAcceptBtn.classList.toggle('danger-button', danger)
+    elements.deleteConfirmAcceptBtn.classList.toggle('primary-button', !danger)
+    elements.deleteConfirmModal.classList.remove('hidden')
+    elements.deleteConfirmAcceptBtn.focus()
+  })
+}
+
+function confirmDelete(options = {}) {
+  return confirmAction({ acceptText: '确认删除', danger: true, ...options })
+}
+
+function closeDeleteConfirm(confirmed = false) {
+  elements.deleteConfirmModal?.classList.add('hidden')
+  const resolve = state.pendingDeleteConfirm
+  state.pendingDeleteConfirm = null
+  if (resolve) resolve(confirmed)
 }
 
 function logEvent(type, title, detail = '') {
@@ -555,6 +589,7 @@ function loadPreviewData() {
 async function loadAgents() {
   if (state.preview) {
     elements.agentSelect.innerHTML = '<option value="english_vocabulary">English Vocabulary (english_vocabulary)</option>'
+    state.lastAgentCode = elements.agentSelect.value || 'english_vocabulary'
     setConnection(true)
     return
   }
@@ -571,10 +606,12 @@ async function loadAgents() {
     if ([...elements.agentSelect.options].some((item) => item.value === 'english_vocabulary')) {
       elements.agentSelect.value = 'english_vocabulary'
     }
+    state.lastAgentCode = elements.agentSelect.value || ''
     setConnection(true)
   } catch (error) {
     setConnection(false)
     elements.agentSelect.innerHTML = '<option value="english_vocabulary">English Vocabulary</option>'
+    state.lastAgentCode = elements.agentSelect.value || 'english_vocabulary'
     logEvent('error', 'Agent 加载失败', error.message)
   }
 }
@@ -634,6 +671,18 @@ function renderTemplateOptions() {
 async function renderSelectedTemplate() {
   const code = elements.templateSelect?.value
   if (!code) return
+  const previousCode = state.lastTemplateCode
+  if (previousCode && previousCode !== code) {
+    const confirmed = await confirmAction({
+      title: '切换学习 Agent 模板',
+      message: `确认从模板「${previousCode}」切换到「${code}」？未保存的模板编辑内容不会自动保存。`,
+      acceptText: '确认切换',
+    })
+    if (!confirmed) {
+      elements.templateSelect.value = previousCode
+      return
+    }
+  }
   let template = state.promptTemplates.find((item) => item.code === code)
   if (!template && !state.preview) {
     try {
@@ -649,8 +698,27 @@ async function renderSelectedTemplate() {
   fillTemplateForm(template)
 }
 
+async function changeLearningAgent() {
+  const nextCode = elements.agentSelect?.value || ''
+  const previousCode = state.lastAgentCode || ''
+  if (previousCode && previousCode !== nextCode) {
+    const confirmed = await confirmAction({
+      title: '修改学习 Agent',
+      message: `确认将学习 Agent 从「${previousCode}」切换为「${nextCode}」？后续学习请求会使用新的 Agent。`,
+      acceptText: '确认修改',
+    })
+    if (!confirmed) {
+      elements.agentSelect.value = previousCode
+      return
+    }
+  }
+  state.lastAgentCode = nextCode
+  logEvent('ai', '修改学习 Agent', nextCode)
+}
+
 function fillTemplateForm(template) {
   if (!elements.templateNameInput) return
+  state.lastTemplateCode = template?.code || elements.templateSelect?.value || ''
   elements.templateNameInput.value = template?.name || ''
   elements.templateCodeInput.value = template?.code || ''
   elements.templateTypeInput.value = template?.type || 'user'
@@ -739,6 +807,12 @@ async function savePromptTemplate() {
     toast('请补全模板名称、编码和内容')
     return
   }
+  const confirmed = await confirmAction({
+    title: '保存学习 Agent 模板',
+    message: `确认保存学习 Agent 模板「${payload.name}」？保存后后续学习卡片生成会使用新的模板内容。`,
+    acceptText: '确认保存',
+  })
+  if (!confirmed) return
   setLoading(true)
   try {
     if (state.preview) {
@@ -919,6 +993,7 @@ function renderModelConfigs() {
             <small>优先级 ${item.sequence ?? 0} · ${escapeHtml(item.apiKeyMasked || '')}</small>
           </div>
           <div class="row-actions">
+            <button class="icon-action-button" type="button" data-model-toggle="${escapeHtml(item.id)}" title="${item.enabled ? '停用模型' : '启用模型'}" aria-label="${item.enabled ? '停用模型' : '启用模型'}">${item.enabled ? '⏸' : '▶'}</button>
             <button class="icon-action-button" type="button" data-model-edit="${escapeHtml(item.id)}" title="编辑模型" aria-label="编辑模型">✎</button>
             <button class="danger-icon-button" type="button" data-model-delete="${escapeHtml(item.id)}" title="删除模型">×</button>
           </div>
@@ -928,6 +1003,9 @@ function renderModelConfigs() {
     .join('')
   elements.modelConfigList.querySelectorAll('[data-model-edit]').forEach((button) => {
     button.addEventListener('click', () => openModelModal(button.getAttribute('data-model-edit')))
+  })
+  elements.modelConfigList.querySelectorAll('[data-model-toggle]').forEach((button) => {
+    button.addEventListener('click', () => toggleModelConfig(button.getAttribute('data-model-toggle')))
   })
   elements.modelConfigList.querySelectorAll('[data-model-delete]').forEach((button) => {
     button.addEventListener('click', () => deleteModelConfig(button.getAttribute('data-model-delete')))
@@ -1009,6 +1087,14 @@ async function saveModelConfig() {
     toast('请补全模型配置')
     return
   }
+  if (state.currentModelEditId) {
+    const confirmed = await confirmAction({
+      title: '修改模型配置',
+      message: `确认修改模型「${payload.name}」？保存后学习页将使用新的模型配置。`,
+      acceptText: '确认修改',
+    })
+    if (!confirmed) return
+  }
   setLoading(true)
   try {
     if (state.preview) {
@@ -1040,8 +1126,15 @@ async function saveModelConfig() {
 async function toggleModelConfig(id) {
   const item = state.modelConfigs.find((model) => sameId(model.id, id))
   if (!item) return
+  const targetEnabled = !item.enabled
+  const confirmed = await confirmAction({
+    title: targetEnabled ? '启用模型' : '停用模型',
+    message: `确认${targetEnabled ? '启用' : '停用'}模型「${item.name}」？${targetEnabled ? '启用后学习页可以选择该模型。' : '停用后学习页将不能选择该模型。'}`,
+    acceptText: targetEnabled ? '确认启用' : '确认停用',
+  })
+  if (!confirmed) return
   if (state.preview) {
-    item.enabled = !item.enabled
+    item.enabled = targetEnabled
     renderModelConfigs()
     return
   }
@@ -1067,7 +1160,11 @@ async function setDefaultModelConfig(id) {
 async function deleteModelConfig(id) {
   const item = state.modelConfigs.find((model) => sameId(model.id, id))
   if (!item) return
-  if (!window.confirm(`删除模型配置「${item.name}」？`)) return
+  const confirmed = await confirmDelete({
+    title: '删除模型配置',
+    message: `确认删除模型配置「${item.name}」？删除后学习页将不能再选择这个模型。`,
+  })
+  if (!confirmed) return
   if (state.preview) {
     state.modelConfigs = state.modelConfigs.filter((model) => !sameId(model.id, id))
     renderModelConfigs()
@@ -1258,7 +1355,11 @@ function resetWordbookForm(options = {}) {
 async function deleteWordbook(id) {
   const wordbook = state.wordbooks.find((item) => sameId(item.id, id))
   if (!wordbook) return
-  if (!window.confirm(`删除词书「${wordbook.name}」？词书中的单词也会从该词书移除。`)) return
+  const confirmed = await confirmDelete({
+    title: '删除词书',
+    message: `确认删除词书「${wordbook.name}」？词书中的单词也会从该词书移除。`,
+  })
+  if (!confirmed) return
   if (state.preview) {
     state.wordbooks = state.wordbooks.filter((item) => !sameId(item.id, id))
     if (!state.wordbooks.length) {
@@ -1376,14 +1477,32 @@ function renderWordbookFocus(entry) {
   const memoryTips = normalizeArray(parsed?.memory_tips || parsed?.memoryTips || parsed?.tips || parsed?.memory).slice(0, 3)
   const tags = Array.isArray(entry.tags) ? entry.tags.slice(0, 6) : []
   const relations = Array.isArray(entry.relations) ? entry.relations.slice(0, 6) : []
-  const phonetics = [parsed?.phonetic?.uk && `UK ${parsed.phonetic.uk}`, parsed?.phonetic?.us && `US ${parsed.phonetic.us}`].filter(Boolean).join('    ')
+  const phoneticItems = [
+    parsed?.phonetic?.uk && { type: 'uk', label: 'UK', text: parsed.phonetic.uk },
+    parsed?.phonetic?.us && { type: 'us', label: 'US', text: parsed.phonetic.us },
+  ].filter(Boolean)
   elements.wordbookFocus.className = 'wordbook-focus-card'
   elements.wordbookFocus.innerHTML = `
     <div class="wordbook-focus-head">
       <div>
         <p class="eyebrow">${escapeHtml(statusLabel(entry.status))} · 阶段 ${entry.reviewStage ?? 0}</p>
         <h4>${escapeHtml(entry.term || entry.normalizedTerm)}</h4>
-        <p class="phonetic">${escapeHtml(phonetics || '暂无音标')}</p>
+        <div class="phonetic phonetic-actions">
+          ${
+            phoneticItems.length
+              ? phoneticItems
+                  .map(
+                    (item) => `
+                      <span class="phonetic-item">
+                        <span>${escapeHtml(item.label)} ${escapeHtml(item.text)}</span>
+                        <button class="mini-audio-button" type="button" data-focus-word-voice="${item.type}" title="播放${item.label}发音">${item.label} ▶</button>
+                      </span>
+                    `,
+                  )
+                  .join('')
+              : '<span>暂无音标</span>'
+          }
+        </div>
       </div>
       <div class="inline-actions">
         <span class="mini-pill next-review-pill">下次 ${escapeHtml(formatDateTime(entry.nextReviewTime))}</span>
@@ -1489,6 +1608,9 @@ function renderWordbookFocus(entry) {
   elements.wordbookFocus.querySelectorAll('[data-focus-sentence]').forEach((button) => {
     button.addEventListener('click', () => speak(examples[Number(button.getAttribute('data-focus-sentence'))]?.sentence, elements.voiceSelect.value))
   })
+  elements.wordbookFocus.querySelectorAll('[data-focus-word-voice]').forEach((button) => {
+    button.addEventListener('click', () => speak(entry.term || entry.normalizedTerm, button.getAttribute('data-focus-word-voice')))
+  })
   elements.wordbookFocus.querySelectorAll('[data-focus-related]').forEach((button) => {
     button.addEventListener('click', () => {
       const term = button.getAttribute('data-focus-related') || ''
@@ -1541,6 +1663,13 @@ async function updateEntryStatus(entryId, status) {
 }
 
 async function deleteWordbookEntry(entryId) {
+  const entry = state.wordbookEntries.find((item) => sameId(item.id, entryId)) || state.reviewEntries.find((item) => sameId(item.id, entryId))
+  const term = entry?.term || entry?.normalizedTerm || '当前单词'
+  const confirmed = await confirmDelete({
+    title: '删除单词',
+    message: `确认从词书中删除「${term}」？删除后这个单词的笔记和复习计划会从当前词书移除。`,
+  })
+  if (!confirmed) return
   if (state.preview) {
     state.wordbookEntries = state.wordbookEntries.filter((entry) => !sameId(entry.id, entryId))
     state.reviewEntries = state.reviewEntries.filter((entry) => !sameId(entry.id, entryId))
@@ -1627,7 +1756,7 @@ async function study(term, options = {}) {
     toast('先输入一个英语单词')
     return
   }
-  const forceRefresh = Boolean(options.forceRefresh) || Boolean(elements.forceRefreshInput?.checked)
+  const forceRefresh = Boolean(options.forceRefresh)
   const modelConfigId = options.modelConfigId !== undefined ? options.modelConfigId : elements.studyModelSelect?.value || null
   setLoading(true)
   try {
@@ -2600,6 +2729,12 @@ async function loadSystemLogs() {
 }
 
 async function clearLogs() {
+  const confirmed = await confirmDelete({
+    title: '清空系统日志',
+    message: '确认清空系统日志？清空后当前列表中的日志记录将被移除。',
+    acceptText: '确认清空',
+  })
+  if (!confirmed) return
   state.systemLogs = []
   try {
     if (state.preview || !state.token) {
@@ -3096,6 +3231,7 @@ elements.saveModelBtn.addEventListener('click', saveModelConfig)
 if (elements.resetModelFormBtn) {
   elements.resetModelFormBtn.addEventListener('click', () => resetModelForm({ keepModalOpen: true }))
 }
+elements.agentSelect.addEventListener('change', changeLearningAgent)
 elements.templateSelect.addEventListener('change', renderSelectedTemplate)
 elements.templateContentInput.addEventListener('input', () => validateTemplatePlaceholders({ quiet: true }))
 elements.saveTemplateBtn.addEventListener('click', savePromptTemplate)
@@ -3145,6 +3281,12 @@ elements.closeForgottenDetailModalBtn.addEventListener('click', closeForgottenDe
 elements.forgottenBackToReviewBtn.addEventListener('click', closeForgottenDetailModal)
 elements.forgottenDetailModal.addEventListener('click', (event) => {
   if (event.target === elements.forgottenDetailModal) closeForgottenDetailModal()
+})
+elements.deleteConfirmCloseBtn?.addEventListener('click', () => closeDeleteConfirm(false))
+elements.deleteConfirmCancelBtn?.addEventListener('click', () => closeDeleteConfirm(false))
+elements.deleteConfirmAcceptBtn?.addEventListener('click', () => closeDeleteConfirm(true))
+elements.deleteConfirmModal?.addEventListener('click', (event) => {
+  if (event.target === elements.deleteConfirmModal) closeDeleteConfirm(false)
 })
 document.querySelectorAll('.nav-item').forEach((button) => {
   button.addEventListener('click', () => setView(button.dataset.view))

@@ -4,7 +4,7 @@
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>English Learning Agent</title>
-    <link rel="stylesheet" href="/styles.css?v=20260519-18" />
+    <link rel="stylesheet" href="/styles.css?v=20260519-20" />
   </head>
   <body>
     <main class="app">
@@ -218,10 +218,6 @@
                         <option value="us">美音</option>
                         <option value="uk">英音</option>
                       </select>
-                    </label>
-                    <label class="switch-line">
-                      <input id="forceRefreshInput" type="checkbox" />
-                      <span>强制重新调用 AI</span>
                     </label>
                   </section>
 
@@ -595,6 +591,22 @@
         </div>
       </div>
     </section>
-    <script type="module" src="/app.js?v=20260519-18"></script>
+    <section class="modal-backdrop hidden" id="deleteConfirmModal" aria-modal="true" role="dialog">
+      <div class="review-modal confirm-modal">
+        <div class="panel-heading">
+          <div>
+            <p class="eyebrow">Confirm</p>
+            <h3 id="deleteConfirmTitle">确认删除</h3>
+          </div>
+          <button class="icon-button" id="deleteConfirmCloseBtn" type="button" title="关闭">×</button>
+        </div>
+        <p class="confirm-message" id="deleteConfirmMessage">删除后不可恢复，请确认是否继续。</p>
+        <div class="modal-actions">
+          <button class="secondary-button compact" id="deleteConfirmCancelBtn" type="button">取消</button>
+          <button class="danger-button compact" id="deleteConfirmAcceptBtn" type="button">确认删除</button>
+        </div>
+      </div>
+    </section>
+    <script type="module" src="/app.js?v=20260519-20"></script>
   </body>
 </html>

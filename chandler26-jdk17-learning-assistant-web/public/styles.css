@@ -1052,6 +1052,23 @@ textarea:focus {
   font-weight: 950;
 }
 
+.danger-button {
+  min-height: 38px;
+  padding: 0 16px;
+  border: 1px solid rgba(251, 113, 133, 0.55);
+  border-radius: 10px;
+  background: rgba(251, 113, 133, 0.16);
+  color: var(--danger);
+  cursor: pointer;
+  font-weight: 900;
+}
+
+.danger-button:hover,
+.danger-icon-button:hover {
+  border-color: rgba(251, 113, 133, 0.82);
+  background: rgba(251, 113, 133, 0.22);
+}
+
 .icon-action-button {
   display: inline-grid;
   width: 34px;
@@ -1677,6 +1694,16 @@ textarea:focus {
 
 .small-modal {
   width: min(560px, 100%);
+}
+
+.confirm-modal {
+  width: min(480px, 100%);
+}
+
+.confirm-message {
+  margin: 0;
+  color: var(--muted);
+  line-height: 1.7;
 }
 
 .modal-actions {
