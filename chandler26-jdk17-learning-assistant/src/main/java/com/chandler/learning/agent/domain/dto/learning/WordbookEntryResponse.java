@@ -36,6 +36,8 @@ public class WordbookEntryResponse {
 
     private Integer wrongCount;
 
+    private LocalDateTime createTime;
+
     private Object parsed;
 
     private List<VocabularyTagResponse> tags;

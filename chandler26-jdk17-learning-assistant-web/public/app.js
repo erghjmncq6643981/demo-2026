@@ -1,40 +1,81 @@
 const state = {
-  build: '20260519-4',
+  build: '20260519-11',
   apiBase: localStorage.getItem('learning.apiBase') || 'http://localhost:16681',
   token: localStorage.getItem('learning.token') || '',
   user: readJsonStorage('learning.user'),
   preview: new URLSearchParams(window.location.search).get('preview') === '1',
   activeView: localStorage.getItem('learning.activeView') || 'profileView',
+  sidebarCollapsed: initialSidebarCollapsed(),
   wordbooks: [],
   wordbookEntries: [],
   reviewEntries: [],
+  previewReviewEntries: [],
   modelConfigs: [],
-  currentWordbookId: Number(localStorage.getItem('learning.wordbookId')) || null,
+  currentWordbookId: localStorage.getItem('learning.wordbookId') || null,
   currentWordbookEditId: null,
   currentModelEditId: null,
+  currentStatusEntryId: null,
   selectedEntry: null,
   currentNoteEntry: null,
   currentRecord: null,
   currentSessionId: null,
   activeProfileTab: localStorage.getItem('learning.profileTab') || 'accountPanel',
   currentReviewEntry: null,
+  currentReviewIndex: 0,
   reviewTyped: '',
   reviewWrongCount: 0,
   pendingReviewEntryId: null,
+  promptTemplates: [],
+  currentTemplate: null,
+  activity: null,
   systemLogs: readJsonStorage('learning.systemLogs') || [],
+}
+
+const providerCatalog = {
+  deepseek: {
+    label: 'DeepSeek',
+    baseUrl: 'https://api.deepseek.com',
+    chatPath: '/chat/completions',
+    models: ['deepseek-chat', 'deepseek-reasoner'],
+  },
+  kimi: {
+    label: 'Kimi',
+    baseUrl: 'https://api.moonshot.cn',
+    chatPath: '/v1/chat/completions',
+    models: ['moonshot-v1-8k', 'moonshot-v1-32k', 'moonshot-v1-128k'],
+  },
+  doubao: {
+    label: '豆包',
+    baseUrl: 'https://ark.cn-beijing.volces.com',
+    chatPath: '/api/v3/chat/completions',
+    models: ['doubao-pro-32k', 'doubao-lite-32k'],
+  },
+  yuanbao: {
+    label: '元宝',
+    baseUrl: '',
+    chatPath: '/chat/completions',
+    models: ['hunyuan-turbos-latest', 'hunyuan-lite'],
+  },
 }
 
 const $ = (id) => document.getElementById(id)
 
+function initialSidebarCollapsed() {
+  const saved = localStorage.getItem('learning.sidebarCollapsed')
+  if (saved !== null) return saved === '1'
+  return window.matchMedia('(max-width: 1100px)').matches
+}
+
 const elements = {
   loginScreen: $('loginScreen'),
   productShell: $('productShell'),
-  loginConnectionStatus: $('loginConnectionStatus'),
   connectionStatus: $('connectionStatus'),
   apiBaseInput: $('apiBaseInput'),
   usernameInput: $('usernameInput'),
   passwordInput: $('passwordInput'),
   nicknameInput: $('nicknameInput'),
+  toggleSidebarBtn: $('toggleSidebarBtn'),
+  sidebarBackdrop: $('sidebarBackdrop'),
   loginBtn: $('loginBtn'),
   registerBtn: $('registerBtn'),
   logoutBtn: $('logoutBtn'),
@@ -48,22 +89,41 @@ const elements = {
   wordbookCount: $('wordbookCount'),
   wordCount: $('wordCount'),
   dueCount: $('dueCount'),
+  openAccountModalBtn: $('openAccountModalBtn'),
+  accountModal: $('accountModal'),
+  closeAccountModalBtn: $('closeAccountModalBtn'),
+  accountNicknameInput: $('accountNicknameInput'),
+  accountCurrentPasswordInput: $('accountCurrentPasswordInput'),
+  accountNewPasswordInput: $('accountNewPasswordInput'),
+  accountConfirmPasswordInput: $('accountConfirmPasswordInput'),
+  saveAccountBtn: $('saveAccountBtn'),
+  activityHeatmap: $('activityHeatmap'),
+  activitySummary: $('activitySummary'),
   viewEyebrow: $('viewEyebrow'),
   viewTitle: $('viewTitle'),
   wordbookSelect: $('wordbookSelect'),
-  reloadWordbooksBtn: $('reloadWordbooksBtn'),
   reloadWordbookEntriesBtn: $('reloadWordbookEntriesBtn'),
+  openWordbookModalBtn: $('openWordbookModalBtn'),
+  wordbookModal: $('wordbookModal'),
+  wordbookModalTitle: $('wordbookModalTitle'),
+  closeWordbookModalBtn: $('closeWordbookModalBtn'),
   newWordbookInput: $('newWordbookInput'),
   wordbookDescriptionInput: $('wordbookDescriptionInput'),
   wordbookDefaultInput: $('wordbookDefaultInput'),
   createWordbookBtn: $('createWordbookBtn'),
-  resetWordbookFormBtn: $('resetWordbookFormBtn'),
   wordbookCards: $('wordbookCards'),
   wordbookEntryList: $('wordbookEntryList'),
   wordStatusFilter: $('wordStatusFilter'),
   reloadWordbookViewBtn: $('reloadWordbookViewBtn'),
   wordbookFocus: $('wordbookFocus'),
+  entryStatusModal: $('entryStatusModal'),
+  entryStatusTerm: $('entryStatusTerm'),
+  closeEntryStatusModalBtn: $('closeEntryStatusModalBtn'),
   reloadModelsBtn: $('reloadModelsBtn'),
+  openModelModalBtn: $('openModelModalBtn'),
+  modelConfigModal: $('modelConfigModal'),
+  closeModelModalBtn: $('closeModelModalBtn'),
+  modelModalTitle: $('modelModalTitle'),
   modelNameInput: $('modelNameInput'),
   modelProviderInput: $('modelProviderInput'),
   modelModelNameInput: $('modelModelNameInput'),
@@ -89,6 +149,10 @@ const elements = {
   wordTitle: $('wordTitle'),
   phoneticLine: $('phoneticLine'),
   addToWordbookBtn: $('addToWordbookBtn'),
+  addWordbookModal: $('addWordbookModal'),
+  closeAddWordbookModalBtn: $('closeAddWordbookModalBtn'),
+  addWordbookTerm: $('addWordbookTerm'),
+  addWordbookList: $('addWordbookList'),
   speakWordBtn: $('speakWordBtn'),
   speakSentenceBtn: $('speakSentenceBtn'),
   meaningList: $('meaningList'),
@@ -101,12 +165,27 @@ const elements = {
   studyNote: $('studyNote'),
   agentSelect: $('agentSelect'),
   templateSelect: $('templateSelect'),
+  templateSummary: $('templateSummary'),
+  templateNameInput: $('templateNameInput'),
+  templateCodeInput: $('templateCodeInput'),
+  templateTypeInput: $('templateTypeInput'),
+  templateSequenceInput: $('templateSequenceInput'),
+  templateTagsInput: $('templateTagsInput'),
+  templateDescriptionInput: $('templateDescriptionInput'),
+  templateExampleInput: $('templateExampleInput'),
+  templateExampleOutput: $('templateExampleOutput'),
+  templatePlaceholderList: $('templatePlaceholderList'),
+  templateContentInput: $('templateContentInput'),
+  templateValidationMessage: $('templateValidationMessage'),
+  saveTemplateBtn: $('saveTemplateBtn'),
   voiceSelect: $('voiceSelect'),
   forceRefreshInput: $('forceRefreshInput'),
   chatInput: $('chatInput'),
   chatBtn: $('chatBtn'),
   reloadReviewBtn: $('reloadReviewBtn'),
-  reviewQueue: $('reviewQueue'),
+  reviewWordbookSelect: $('reviewWordbookSelect'),
+  reviewLimitInput: $('reviewLimitInput'),
+  reviewProgressBadge: $('reviewProgressBadge'),
   reviewFocus: $('reviewFocus'),
   editReviewNoteBtn: $('editReviewNoteBtn'),
   reviewNote: $('reviewNote'),
@@ -115,6 +194,11 @@ const elements = {
   modalWordTitle: $('modalWordTitle'),
   modalExamples: $('modalExamples'),
   closeReviewModalBtn: $('closeReviewModalBtn'),
+  forgottenDetailModal: $('forgottenDetailModal'),
+  forgottenDetailTitle: $('forgottenDetailTitle'),
+  forgottenDetailContent: $('forgottenDetailContent'),
+  closeForgottenDetailModalBtn: $('closeForgottenDetailModalBtn'),
+  forgottenBackToReviewBtn: $('forgottenBackToReviewBtn'),
   toast: $('toast'),
 }
 
@@ -125,8 +209,8 @@ const viewMeta = {
   reviewView: ['Review', '复习计划'],
 }
 
-elements.apiBaseInput.value = state.apiBase
-elements.buildVersion.textContent = `build ${state.build}`
+if (elements.apiBaseInput) elements.apiBaseInput.value = state.apiBase
+if (elements.buildVersion) elements.buildVersion.textContent = `build ${state.build}`
 
 function apiUrl(path) {
   return `${state.apiBase.replace(/\/$/, '')}${path}`
@@ -160,6 +244,8 @@ function setLoading(isLoading) {
     elements.addToWordbookBtn,
     elements.createWordbookBtn,
     elements.saveModelBtn,
+    elements.saveTemplateBtn,
+    elements.saveAccountBtn,
   ]) {
     if (element) element.disabled = isLoading
   }
@@ -207,13 +293,39 @@ function updateAuthView() {
   if (user?.username) elements.usernameInput.value = user.username
   updateShellVisibility()
   renderProfileMetrics()
+  renderActivityHeatmap()
 }
 
 function setConnection(ok) {
-  for (const item of [elements.connectionStatus, elements.loginConnectionStatus]) {
+  for (const item of [elements.connectionStatus]) {
+    if (!item) continue
     item.classList.toggle('ok', ok)
     item.classList.toggle('bad', !ok)
     item.textContent = ok ? '后端已连接' : '后端未连接'
+  }
+}
+
+function syncSidebarState() {
+  const collapsed = state.sidebarCollapsed
+  elements.productShell.classList.toggle('sidebar-collapsed', collapsed)
+  elements.toggleSidebarBtn.setAttribute('aria-expanded', String(!collapsed))
+  elements.toggleSidebarBtn.title = collapsed ? '显示导航' : '隐藏导航'
+  elements.toggleSidebarBtn.setAttribute('aria-label', collapsed ? '显示导航' : '隐藏导航')
+}
+
+function setSidebarCollapsed(collapsed) {
+  state.sidebarCollapsed = collapsed
+  localStorage.setItem('learning.sidebarCollapsed', collapsed ? '1' : '0')
+  syncSidebarState()
+}
+
+function toggleSidebar() {
+  setSidebarCollapsed(!state.sidebarCollapsed)
+}
+
+function handleViewportChange(event) {
+  if (event.matches) {
+    setSidebarCollapsed(true)
   }
 }
 
@@ -230,6 +342,9 @@ function setView(viewId, options = {}) {
   }
   if (viewId === 'reviewView') loadDueReviews()
   if (viewId === 'wordbookView') loadWordbookEntries()
+  if (window.matchMedia('(max-width: 1100px)').matches) {
+    setSidebarCollapsed(true)
+  }
 }
 
 function setProfileTab(tabId) {
@@ -243,7 +358,7 @@ function setProfileTab(tabId) {
 async function loginOrRegister(mode) {
   const username = elements.usernameInput.value.trim()
   const password = elements.passwordInput.value
-  const nickname = elements.nicknameInput.value.trim()
+  const nickname = elements.nicknameInput?.value.trim() || ''
   if (!username || !password) {
     toast('请输入用户名和密码')
     return
@@ -284,27 +399,38 @@ async function logout() {
   state.wordbooks = []
   state.wordbookEntries = []
   state.reviewEntries = []
+  state.previewReviewEntries = []
   state.modelConfigs = []
+  state.promptTemplates = []
+  state.currentTemplate = null
   state.currentWordbookId = null
   state.currentWordbookEditId = null
   state.currentModelEditId = null
+  state.currentStatusEntryId = null
   state.selectedEntry = null
   state.currentNoteEntry = null
   state.currentRecord = null
   state.currentReviewEntry = null
+  state.currentReviewIndex = 0
   state.reviewTyped = ''
   state.reviewWrongCount = 0
   state.pendingReviewEntryId = null
+  state.activity = null
   localStorage.removeItem('learning.token')
   localStorage.removeItem('learning.user')
   localStorage.removeItem('learning.wordbookId')
   renderWordbooks()
   renderWordbookEntries()
   renderModelConfigs()
+  renderTemplateOptions()
   renderReviewQueue([])
   renderReviewFocus(null)
   closeReviewModal()
+  closeWordbookModal()
+  closeAccountModal()
+  closeEntryStatusModal()
   renderNotes(null)
+  renderActivityHeatmap()
   updateAuthView()
   logEvent('auth', '退出登录')
   toast('已退出登录')
@@ -315,7 +441,7 @@ async function loadInitialData() {
     loadPreviewData()
     return
   }
-  await Promise.allSettled([loadAgents(), loadWordbooks(), loadModelConfigs()])
+  await Promise.allSettled([loadAgents(), loadWordbooks(), loadModelConfigs(), loadPromptTemplates(), loadActivity()])
   await Promise.allSettled([loadDueReviews(), loadWordbookEntries()])
 }
 
@@ -352,22 +478,56 @@ function loadPreviewData() {
       sequence: 10,
     },
   ]
-  state.currentWordbookId = state.currentWordbookId || 1
+  state.promptTemplates = [
+    {
+      id: 1001,
+      name: '英语词汇卡片 JSON',
+      code: 'english_vocab_card_json',
+      type: 'user',
+      tags: '英语,词汇,JSON',
+      content: '请为英语词汇「{{term}}」生成学习卡片。只输出合法 JSON，不要输出 Markdown。JSON 字段包括：term、definitions、examples、collocations、synonyms、antonyms、word_family、memory_tips。',
+      variables: JSON.stringify([{ name: 'term', label: '英语单词或短语', required: true }]),
+      description: '生成可解析入库的英语词汇学习卡片',
+      exampleInput: '{"term":"abandon"}',
+      exampleOutput: '{"term":"abandon","is_valid":true}',
+      publicTemplate: true,
+      sequence: 1,
+    },
+    {
+      id: 1002,
+      name: '英语词汇练习题 JSON',
+      code: 'english_vocab_quiz_json',
+      type: 'user',
+      tags: '英语,词汇,练习题,JSON',
+      content: '请基于英语词汇「{{term}}」生成 5 道词汇练习题。只输出合法 JSON。',
+      variables: JSON.stringify([{ name: 'term', label: '英语单词或短语', required: true }]),
+      description: '生成可解析入库的英语词汇练习题',
+      exampleInput: '{"term":"abandon"}',
+      exampleOutput: '{"term":"abandon","questions":[]}',
+      publicTemplate: true,
+      sequence: 2,
+    },
+  ]
+  state.currentWordbookId = state.currentWordbookId || '1'
   state.wordbookEntries = [
-    { id: 11, term: 'abandon', normalizedTerm: 'abandon', status: 'vague', note: '## 记忆\n- abandon a plan\n- with abandon', reviewStage: 2, masteryScore: 45, nextReviewTime: new Date().toISOString(), parsed: previewParsed('abandon') },
-    { id: 12, term: 'maintain', normalizedTerm: 'maintain', status: 'familiar', note: '常和 **relationship/status** 搭配。', reviewStage: 4, masteryScore: 72, nextReviewTime: new Date(Date.now() + 86400000).toISOString(), parsed: previewParsed('maintain') },
-    { id: 13, term: 'contrast', normalizedTerm: 'contrast', status: 'forgotten', note: '', reviewStage: 1, masteryScore: 30, nextReviewTime: new Date().toISOString(), parsed: previewParsed('contrast') },
+    { id: 11, term: 'abandon', normalizedTerm: 'abandon', status: 'vague', note: '## 记忆\n- abandon a plan\n- with abandon', reviewStage: 2, masteryScore: 45, createTime: daysAgoIso(2), nextReviewTime: new Date().toISOString(), parsed: previewParsed('abandon'), tags: previewRecord('abandon').tags, relations: previewRecord('abandon').relations },
+    { id: 12, term: 'maintain', normalizedTerm: 'maintain', status: 'familiar', note: '常和 **relationship/status** 搭配。', reviewStage: 4, masteryScore: 72, createTime: daysAgoIso(7), nextReviewTime: new Date(Date.now() + 86400000).toISOString(), parsed: previewParsed('maintain'), tags: previewRecord('maintain').tags, relations: previewRecord('maintain').relations },
+    { id: 13, term: 'contrast', normalizedTerm: 'contrast', status: 'forgotten', note: '', reviewStage: 1, masteryScore: 30, createTime: daysAgoIso(12), nextReviewTime: new Date().toISOString(), parsed: previewParsed('contrast'), tags: previewRecord('contrast').tags, relations: previewRecord('contrast').relations },
   ]
   state.reviewEntries = state.wordbookEntries.slice(0, 2).map((entry) => ({
     ...entry,
     parsed: previewParsed(entry.term),
   }))
+  state.previewReviewEntries = state.reviewEntries.slice()
+  state.activity = createPreviewActivity()
   updateAuthView()
   renderModelConfigs()
+  renderTemplateOptions()
   renderWordbooks()
   renderWordbookEntries()
   renderReviewQueue(state.reviewEntries)
   renderRecord(previewRecord())
+  renderActivityHeatmap()
   logEvent('system', '设计预览模式', '使用 ?preview=1 查看无后端登录后的产品界面')
 }
 
@@ -415,6 +575,172 @@ async function loadModelConfigs() {
   }
 }
 
+async function loadPromptTemplates() {
+  if (state.preview) {
+    renderTemplateOptions()
+    return
+  }
+  try {
+    const templates = await request('/api/v1/ai/prompt-templates?type=user')
+    state.promptTemplates = Array.isArray(templates) ? templates : []
+    renderTemplateOptions()
+  } catch (error) {
+    logEvent('error', '模板加载失败', error.message)
+    renderTemplateOptions()
+  }
+}
+
+function renderTemplateOptions() {
+  if (!elements.templateSelect) return
+  const previous = elements.templateSelect.value || 'english_vocab_card_json'
+  const templates = state.promptTemplates.length
+    ? state.promptTemplates
+    : [
+        { code: 'english_vocab_card_json', name: '词汇卡片 JSON' },
+        { code: 'english_vocab_quiz_json', name: '练习题 JSON' },
+      ]
+  elements.templateSelect.innerHTML = ''
+  for (const template of templates) {
+    const option = document.createElement('option')
+    option.value = template.code
+    option.textContent = `${template.name || template.code} (${template.code})`
+    elements.templateSelect.appendChild(option)
+  }
+  elements.templateSelect.value = templates.some((item) => item.code === previous) ? previous : templates[0]?.code || ''
+  renderSelectedTemplate()
+}
+
+async function renderSelectedTemplate() {
+  const code = elements.templateSelect?.value
+  if (!code) return
+  let template = state.promptTemplates.find((item) => item.code === code)
+  if (!template && !state.preview) {
+    try {
+      template = await request(`/api/v1/ai/prompt-templates/code/${encodeURIComponent(code)}`)
+      if (template) {
+        state.promptTemplates = [template, ...state.promptTemplates.filter((item) => item.code !== code)]
+      }
+    } catch (error) {
+      logEvent('error', '模板详情加载失败', error.message)
+    }
+  }
+  state.currentTemplate = template || null
+  fillTemplateForm(template)
+}
+
+function fillTemplateForm(template) {
+  if (!elements.templateNameInput) return
+  elements.templateNameInput.value = template?.name || ''
+  elements.templateCodeInput.value = template?.code || ''
+  elements.templateTypeInput.value = template?.type || 'user'
+  elements.templateSequenceInput.value = template?.sequence ?? 0
+  elements.templateTagsInput.value = template?.tags || ''
+  elements.templateDescriptionInput.value = template?.description || ''
+  elements.templateExampleInput.value = template?.exampleInput || ''
+  elements.templateExampleOutput.value = template?.exampleOutput || ''
+  elements.templateContentInput.value = template?.content || ''
+  const placeholders = templatePlaceholders(template)
+  renderTemplatePlaceholders(placeholders)
+  elements.templateSummary.textContent = template
+    ? `${template.description || '暂无描述'} · ${placeholders.length ? `占位符 ${placeholders.join(', ')}` : '暂无占位符'}`
+    : '选择模板后查看完整信息。'
+  validateTemplatePlaceholders({ quiet: true })
+}
+
+function templatePlaceholders(template = state.currentTemplate) {
+  const declared = parseTemplateVariables(template?.variables)
+  const fromContent = extractPlaceholders(template?.content || '')
+  return [...new Set([...declared, ...fromContent])]
+}
+
+function parseTemplateVariables(variables) {
+  if (!variables) return []
+  try {
+    const parsed = typeof variables === 'string' ? JSON.parse(variables) : variables
+    const list = Array.isArray(parsed) ? parsed : Object.values(parsed)
+    return list
+      .map((item) => (typeof item === 'string' ? item : item?.name))
+      .filter(Boolean)
+  } catch {
+    return extractPlaceholders(String(variables))
+  }
+}
+
+function extractPlaceholders(content) {
+  return [...String(content || '').matchAll(/\{\{\s*([a-zA-Z0-9_.-]+)\s*\}\}/g)].map((match) => match[1])
+}
+
+function renderTemplatePlaceholders(placeholders) {
+  if (!placeholders.length) {
+    elements.templatePlaceholderList.className = 'chips empty'
+    elements.templatePlaceholderList.textContent = '暂无占位符'
+    return
+  }
+  elements.templatePlaceholderList.className = 'chips'
+  elements.templatePlaceholderList.innerHTML = placeholders.map((item) => `<span class="chip">${escapeHtml(`{{${item}}}`)}</span>`).join('')
+}
+
+function validateTemplatePlaceholders(options = {}) {
+  const content = elements.templateContentInput?.value || ''
+  const required = parseTemplateVariables(state.currentTemplate?.variables)
+  const missing = required.filter((name) => !new RegExp(`\\{\\{\\s*${escapeRegExp(name)}\\s*\\}\\}`).test(content))
+  if (!required.length && !extractPlaceholders(content).includes('term')) {
+    missing.push('term')
+  }
+  const ok = missing.length === 0
+  elements.templateValidationMessage.className = `validation-message ${ok ? 'ok' : 'bad'}`
+  elements.templateValidationMessage.textContent = ok ? '占位符校验通过' : `缺少占位符：${missing.map((name) => `{{${name}}}`).join('、')}`
+  if (!ok && !options.quiet) toast(elements.templateValidationMessage.textContent)
+  return ok
+}
+
+async function savePromptTemplate() {
+  const template = state.currentTemplate
+  if (!template?.id) {
+    toast('请先选择模板')
+    return
+  }
+  if (!validateTemplatePlaceholders()) return
+  const payload = {
+    name: elements.templateNameInput.value.trim(),
+    code: elements.templateCodeInput.value.trim(),
+    type: elements.templateTypeInput.value.trim() || 'user',
+    tags: elements.templateTagsInput.value.trim(),
+    content: elements.templateContentInput.value.trim(),
+    variables: template.variables || JSON.stringify(extractPlaceholders(elements.templateContentInput.value).map((name) => ({ name, required: true }))),
+    description: elements.templateDescriptionInput.value.trim(),
+    exampleInput: elements.templateExampleInput.value.trim(),
+    exampleOutput: elements.templateExampleOutput.value.trim(),
+    publicTemplate: Boolean(template.publicTemplate),
+    sequence: Number(elements.templateSequenceInput.value || 0),
+  }
+  if (!payload.name || !payload.code || !payload.content) {
+    toast('请补全模板名称、编码和内容')
+    return
+  }
+  setLoading(true)
+  try {
+    if (state.preview) {
+      Object.assign(template, payload)
+      renderTemplateOptions()
+      elements.templateSelect.value = payload.code
+      fillTemplateForm(template)
+      toast('设计预览：模板已保存')
+      return
+    }
+    await request(`/api/v1/ai/prompt-templates/${template.id}`, { method: 'PUT', body: JSON.stringify(payload) })
+    await loadPromptTemplates()
+    elements.templateSelect.value = payload.code
+    await renderSelectedTemplate()
+    toast('模板已保存')
+  } catch (error) {
+    logEvent('error', '模板保存失败', error.message)
+    toast(`模板保存失败：${error.message}`)
+  } finally {
+    setLoading(false)
+  }
+}
+
 function renderStudyModelOptions() {
   if (!elements.studyModelSelect) return
   elements.studyModelSelect.innerHTML = ''
@@ -425,12 +751,127 @@ function renderStudyModelOptions() {
   }
   for (const item of enabled) {
     const option = document.createElement('option')
-    option.value = item.id
+    option.value = String(item.id)
     option.textContent = `${item.name} · ${item.modelName}${item.isDefault ? ' · 默认' : ''}`
     elements.studyModelSelect.appendChild(option)
   }
   const preferred = enabled.find((item) => item.isDefault) || enabled[0]
   elements.studyModelSelect.value = String(preferred.id)
+}
+
+function renderProviderOptions(selectedProvider = '') {
+  if (!elements.modelProviderInput) return
+  const provider = selectedProvider || elements.modelProviderInput.value || 'deepseek'
+  let html = Object.entries(providerCatalog)
+    .map(([value, item]) => `<option value="${escapeHtml(value)}">${escapeHtml(item.label)} (${escapeHtml(value)})</option>`)
+    .join('')
+  if (provider && !providerCatalog[provider]) {
+    html += `<option value="${escapeHtml(provider)}">${escapeHtml(provider)} (自定义)</option>`
+  }
+  elements.modelProviderInput.innerHTML = html
+  elements.modelProviderInput.value = provider
+}
+
+function syncModelProviderDefaults(options = {}) {
+  const provider = elements.modelProviderInput.value || 'deepseek'
+  const config = providerCatalog[provider] || { baseUrl: '', chatPath: '/chat/completions', models: [] }
+  const currentModel = options.modelName || elements.modelModelNameInput.value
+  const models = [...config.models]
+  if (options.keepUnknownModel && currentModel && !models.includes(currentModel)) {
+    models.unshift(currentModel)
+  }
+  elements.modelModelNameInput.innerHTML = models
+    .map((model) => `<option value="${escapeHtml(model)}">${escapeHtml(model)}</option>`)
+    .join('')
+  elements.modelModelNameInput.value = models.includes(currentModel) ? currentModel : models[0] || ''
+  if (!options.keepValues) {
+    elements.modelBaseUrlInput.value = config.baseUrl || ''
+    elements.modelChatPathInput.value = config.chatPath || '/chat/completions'
+  }
+}
+
+function openModelModal(id = null) {
+  renderProviderOptions()
+  if (id) {
+    editModelConfig(id, { openModal: false })
+    elements.modelModalTitle.textContent = '编辑模型'
+  } else {
+    resetModelForm({ keepModalOpen: true })
+    elements.modelModalTitle.textContent = '新增模型'
+  }
+  elements.modelConfigModal.classList.remove('hidden')
+}
+
+function closeModelModal() {
+  elements.modelConfigModal.classList.add('hidden')
+}
+
+function openAccountModal() {
+  elements.accountNicknameInput.value = state.user?.nickname || state.user?.username || ''
+  elements.accountCurrentPasswordInput.value = ''
+  elements.accountNewPasswordInput.value = ''
+  elements.accountConfirmPasswordInput.value = ''
+  elements.accountModal.classList.remove('hidden')
+}
+
+function closeAccountModal() {
+  elements.accountModal?.classList.add('hidden')
+}
+
+async function saveAccountProfile() {
+  const nickname = elements.accountNicknameInput.value.trim()
+  const currentPassword = elements.accountCurrentPasswordInput.value
+  const newPassword = elements.accountNewPasswordInput.value
+  const confirmPassword = elements.accountConfirmPasswordInput.value
+  if (!nickname) {
+    toast('请输入昵称')
+    return
+  }
+  if (newPassword || confirmPassword || currentPassword) {
+    if (newPassword.length < 6) {
+      toast('新密码至少 6 位')
+      return
+    }
+    if (newPassword !== confirmPassword) {
+      toast('两次输入的新密码不一致')
+      return
+    }
+    if (!currentPassword) {
+      toast('修改密码需要输入当前密码')
+      return
+    }
+  }
+  setLoading(true)
+  try {
+    const payload = { nickname }
+    if (newPassword) {
+      payload.currentPassword = currentPassword
+      payload.newPassword = newPassword
+    }
+    if (state.preview) {
+      state.user = { ...(state.user || {}), nickname }
+      localStorage.setItem('learning.user', JSON.stringify(state.user))
+      updateAuthView()
+      closeAccountModal()
+      toast('设计预览：账户信息已更新')
+      return
+    }
+    const user = await request('/api/v1/learning/auth/me', {
+      method: 'PUT',
+      body: JSON.stringify(payload),
+    })
+    state.user = user
+    localStorage.setItem('learning.user', JSON.stringify(state.user))
+    updateAuthView()
+    closeAccountModal()
+    logEvent('auth', '更新账户信息', nickname)
+    toast('账户信息已更新')
+  } catch (error) {
+    logEvent('error', '账户更新失败', error.message)
+    toast(`账户更新失败：${error.message}`)
+  } finally {
+    setLoading(false)
+  }
 }
 
 function renderModelConfigs() {
@@ -453,31 +894,40 @@ function renderModelConfigs() {
             <small>${item.isDefault ? '默认 · ' : ''}优先级 ${item.sequence ?? 0} · ${escapeHtml(item.apiKeyMasked || '')}</small>
           </div>
           <div class="row-actions">
-            <button type="button" data-model-edit="${item.id}">编辑</button>
-            <button type="button" data-model-toggle="${item.id}">${item.enabled ? '禁用' : '启用'}</button>
-            <button type="button" data-model-default="${item.id}">默认</button>
+            <button type="button" data-model-edit="${escapeHtml(item.id)}">编辑</button>
+            <button type="button" data-model-toggle="${escapeHtml(item.id)}">${item.enabled ? '禁用' : '启用'}</button>
+            <button type="button" data-model-default="${escapeHtml(item.id)}">默认</button>
+            <button class="danger-icon-button" type="button" data-model-delete="${escapeHtml(item.id)}" title="删除模型">×</button>
           </div>
         </div>
       `,
     )
     .join('')
   elements.modelConfigList.querySelectorAll('[data-model-edit]').forEach((button) => {
-    button.addEventListener('click', () => editModelConfig(Number(button.getAttribute('data-model-edit'))))
+    button.addEventListener('click', () => openModelModal(button.getAttribute('data-model-edit')))
   })
   elements.modelConfigList.querySelectorAll('[data-model-toggle]').forEach((button) => {
-    button.addEventListener('click', () => toggleModelConfig(Number(button.getAttribute('data-model-toggle'))))
+    button.addEventListener('click', () => toggleModelConfig(button.getAttribute('data-model-toggle')))
   })
   elements.modelConfigList.querySelectorAll('[data-model-default]').forEach((button) => {
-    button.addEventListener('click', () => setDefaultModelConfig(Number(button.getAttribute('data-model-default'))))
+    button.addEventListener('click', () => setDefaultModelConfig(button.getAttribute('data-model-default')))
+  })
+  elements.modelConfigList.querySelectorAll('[data-model-delete]').forEach((button) => {
+    button.addEventListener('click', () => deleteModelConfig(button.getAttribute('data-model-delete')))
   })
 }
 
 function editModelConfig(id) {
-  const item = state.modelConfigs.find((model) => Number(model.id) === Number(id))
+  const item = state.modelConfigs.find((model) => sameId(model.id, id))
   if (!item) return
+  renderProviderOptions(item.provider || 'deepseek')
   state.currentModelEditId = item.id
   elements.modelNameInput.value = item.name || ''
   elements.modelProviderInput.value = item.provider || ''
+  if (!providerCatalog[elements.modelProviderInput.value]) {
+    renderProviderOptions(elements.modelProviderInput.value || 'deepseek')
+  }
+  syncModelProviderDefaults({ keepValues: true, keepUnknownModel: true, modelName: item.modelName || '' })
   elements.modelModelNameInput.value = item.modelName || ''
   elements.modelBaseUrlInput.value = item.baseUrl || ''
   elements.modelChatPathInput.value = item.chatPath || '/chat/completions'
@@ -488,18 +938,20 @@ function editModelConfig(id) {
   elements.modelEnabledInput.checked = Boolean(item.enabled)
 }
 
-function resetModelForm() {
+function resetModelForm(options = {}) {
   state.currentModelEditId = null
+  renderProviderOptions('deepseek')
   elements.modelNameInput.value = ''
-  elements.modelProviderInput.value = ''
-  elements.modelModelNameInput.value = ''
-  elements.modelBaseUrlInput.value = ''
-  elements.modelChatPathInput.value = '/chat/completions'
+  elements.modelProviderInput.value = 'deepseek'
+  syncModelProviderDefaults()
   elements.modelApiKeyInput.value = ''
   elements.modelApiKeyInput.placeholder = 'API KEY'
   elements.modelSequenceInput.value = '0'
   elements.modelDefaultInput.checked = false
   elements.modelEnabledInput.checked = true
+  if (!options.keepModalOpen) {
+    closeModelModal()
+  }
 }
 
 async function saveModelConfig() {
@@ -521,8 +973,8 @@ async function saveModelConfig() {
   setLoading(true)
   try {
     if (state.preview) {
-      const id = state.currentModelEditId || Date.now()
-      const existingIndex = state.modelConfigs.findIndex((item) => Number(item.id) === Number(id))
+      const id = state.currentModelEditId || String(Date.now())
+      const existingIndex = state.modelConfigs.findIndex((item) => sameId(item.id, id))
       const next = { ...payload, id, apiKeyMasked: payload.apiKey ? `${payload.apiKey.slice(0, 6)}****` : 'sk-****' }
       if (next.isDefault) state.modelConfigs.forEach((item) => (item.isDefault = false))
       if (existingIndex >= 0) state.modelConfigs.splice(existingIndex, 1, next)
@@ -532,7 +984,7 @@ async function saveModelConfig() {
       toast('设计预览：模型配置已保存')
       return
     }
-    const path = state.currentModelEditId ? `/api/v1/ai/model-configs/${state.currentModelEditId}` : '/api/v1/ai/model-configs'
+    const path = state.currentModelEditId ? `/api/v1/ai/model-configs/${encodeURIComponent(state.currentModelEditId)}` : '/api/v1/ai/model-configs'
     const method = state.currentModelEditId ? 'PUT' : 'POST'
     await request(path, { method, body: JSON.stringify(payload) })
     await loadModelConfigs()
@@ -547,30 +999,50 @@ async function saveModelConfig() {
 }
 
 async function toggleModelConfig(id) {
-  const item = state.modelConfigs.find((model) => Number(model.id) === Number(id))
+  const item = state.modelConfigs.find((model) => sameId(model.id, id))
   if (!item) return
   if (state.preview) {
     item.enabled = !item.enabled
     renderModelConfigs()
     return
   }
-  await request(`/api/v1/ai/model-configs/${id}/${item.enabled ? 'disable' : 'enable'}`, { method: 'POST' })
+  await request(`/api/v1/ai/model-configs/${encodeURIComponent(id)}/${item.enabled ? 'disable' : 'enable'}`, { method: 'POST' })
   await loadModelConfigs()
 }
 
 async function setDefaultModelConfig(id) {
-  const item = state.modelConfigs.find((model) => Number(model.id) === Number(id))
+  const item = state.modelConfigs.find((model) => sameId(model.id, id))
   if (!item) return
   if (state.preview) {
-    state.modelConfigs.forEach((model) => (model.isDefault = Number(model.id) === Number(id)))
+    state.modelConfigs.forEach((model) => (model.isDefault = sameId(model.id, id)))
     renderModelConfigs()
     return
   }
-  await request(`/api/v1/ai/model-configs/${id}/priority`, {
+  await request(`/api/v1/ai/model-configs/${encodeURIComponent(id)}/priority`, {
     method: 'POST',
     body: JSON.stringify({ sequence: item.sequence ?? 0, isDefault: true }),
   })
   await loadModelConfigs()
+}
+
+async function deleteModelConfig(id) {
+  const item = state.modelConfigs.find((model) => sameId(model.id, id))
+  if (!item) return
+  if (!window.confirm(`删除模型配置「${item.name}」？`)) return
+  if (state.preview) {
+    state.modelConfigs = state.modelConfigs.filter((model) => !sameId(model.id, id))
+    renderModelConfigs()
+    toast('设计预览：模型配置已删除')
+    return
+  }
+  try {
+    await request(`/api/v1/ai/model-configs/${encodeURIComponent(id)}`, { method: 'DELETE' })
+    await loadModelConfigs()
+    toast('模型配置已删除')
+  } catch (error) {
+    logEvent('error', '删除模型配置失败', error.message)
+    toast(`删除模型配置失败：${error.message}`)
+  }
 }
 
 async function loadWordbooks() {
@@ -597,59 +1069,83 @@ async function loadWordbooks() {
 
 function renderWordbooks() {
   elements.wordbookSelect.innerHTML = ''
+  elements.reviewWordbookSelect.innerHTML = ''
   if (!state.wordbooks.length) {
     elements.wordbookSelect.innerHTML = '<option value="">暂无词书</option>'
+    elements.reviewWordbookSelect.innerHTML = '<option value="">暂无词书</option>'
     elements.wordbookCards.className = 'wordbook-cards empty'
     elements.wordbookCards.textContent = state.token ? '暂无词书' : '登录后查看词书'
     renderProfileMetrics()
     return
   }
 
-  const hasSelected = state.wordbooks.some((item) => Number(item.id) === Number(state.currentWordbookId))
+  const hasSelected = state.wordbooks.some((item) => sameId(item.id, state.currentWordbookId))
   const fallback = state.wordbooks.find((item) => item.isDefault) || state.wordbooks[0]
-  state.currentWordbookId = hasSelected ? state.currentWordbookId : fallback.id
+  state.currentWordbookId = hasSelected ? String(state.currentWordbookId) : String(fallback.id)
   localStorage.setItem('learning.wordbookId', String(state.currentWordbookId))
 
   for (const wordbook of state.wordbooks) {
     const option = document.createElement('option')
-    option.value = wordbook.id
+    option.value = String(wordbook.id)
     option.textContent = `${wordbook.name} · ${wordbook.entryCount || 0}词 · ${wordbook.dueCount || 0}待复习`
     elements.wordbookSelect.appendChild(option)
+    elements.reviewWordbookSelect.appendChild(option.cloneNode(true))
   }
   elements.wordbookSelect.value = String(state.currentWordbookId)
+  elements.reviewWordbookSelect.value = String(state.currentWordbookId)
 
   elements.wordbookCards.className = 'wordbook-cards'
   elements.wordbookCards.innerHTML = state.wordbooks
     .map(
       (item) => `
-        <button class="wordbook-card ${Number(item.id) === Number(state.currentWordbookId) ? 'active' : ''}" type="button" data-wordbook-id="${item.id}">
-          <strong>${escapeHtml(item.name)}</strong>
-          <span>${escapeHtml(item.description || (item.isDefault ? '默认词书' : '自定义词书'))}</span>
-          <small>${item.entryCount || 0} 个单词 · ${item.dueCount || 0} 个待复习</small>
-          <em data-wordbook-edit="${item.id}">编辑</em>
-        </button>
+        <div class="wordbook-card ${sameId(item.id, state.currentWordbookId) ? 'active' : ''}">
+          <button class="wordbook-main" type="button" data-wordbook-id="${escapeHtml(item.id)}">
+            <strong>${escapeHtml(item.name)}</strong>
+            <span>${escapeHtml(item.description || (item.isDefault ? '默认词书' : '自定义词书'))}</span>
+            <small>${item.isDefault ? '默认 · ' : ''}${item.entryCount || 0} 个单词 · ${item.dueCount || 0} 个待复习</small>
+          </button>
+          <div class="row-actions">
+            <button type="button" data-wordbook-edit="${escapeHtml(item.id)}">编辑</button>
+            <button class="danger-icon-button" type="button" data-wordbook-delete="${escapeHtml(item.id)}" title="删除词书">×</button>
+          </div>
+        </div>
       `,
     )
     .join('')
   elements.wordbookCards.querySelectorAll('[data-wordbook-id]').forEach((button) => {
-    button.addEventListener('click', () => changeWordbook(Number(button.getAttribute('data-wordbook-id'))))
+    button.addEventListener('click', () => changeWordbook(button.getAttribute('data-wordbook-id')))
   })
   elements.wordbookCards.querySelectorAll('[data-wordbook-edit]').forEach((button) => {
-    button.addEventListener('click', (event) => {
-      event.stopPropagation()
-      editWordbook(Number(button.getAttribute('data-wordbook-edit')))
-    })
+    button.addEventListener('click', () => openWordbookModal(button.getAttribute('data-wordbook-edit')))
+  })
+  elements.wordbookCards.querySelectorAll('[data-wordbook-delete]').forEach((button) => {
+    button.addEventListener('click', () => deleteWordbook(button.getAttribute('data-wordbook-delete')))
   })
   renderProfileMetrics()
 }
 
 async function changeWordbook(wordbookId) {
-  state.currentWordbookId = wordbookId
+  state.currentWordbookId = String(wordbookId || '')
   elements.wordbookSelect.value = String(wordbookId)
   localStorage.setItem('learning.wordbookId', String(wordbookId))
   renderWordbooks()
   await Promise.allSettled([loadWordbookEntries(), loadDueReviews()])
   logEvent('wordbook', '切换词书', currentWordbookName())
+}
+
+function openWordbookModal(id = null) {
+  if (id) {
+    fillWordbookForm(id)
+    elements.wordbookModalTitle.textContent = '编辑词书'
+  } else {
+    resetWordbookForm({ keepModalOpen: true })
+    elements.wordbookModalTitle.textContent = '新增词书'
+  }
+  elements.wordbookModal.classList.remove('hidden')
+}
+
+function closeWordbookModal() {
+  elements.wordbookModal?.classList.add('hidden')
 }
 
 async function createWordbook() {
@@ -670,14 +1166,16 @@ async function createWordbook() {
       isDefault: elements.wordbookDefaultInput.checked,
     }
     if (state.preview) {
-      const id = state.currentWordbookEditId || Date.now()
+      const id = state.currentWordbookEditId || String(Date.now())
       if (payload.isDefault) state.wordbooks.forEach((item) => (item.isDefault = false))
-      const index = state.wordbooks.findIndex((item) => Number(item.id) === Number(id))
-      const next = { id, ...payload, entryCount: 0, dueCount: 0 }
+      const index = state.wordbooks.findIndex((item) => sameId(item.id, id))
+      const existing = index >= 0 ? state.wordbooks[index] : {}
+      const next = { ...existing, id, ...payload, entryCount: existing.entryCount ?? 0, dueCount: existing.dueCount ?? 0 }
       if (index >= 0) state.wordbooks.splice(index, 1, { ...state.wordbooks[index], ...next })
       else state.wordbooks.push(next)
-      state.currentWordbookId = id
+      state.currentWordbookId = String(id)
       resetWordbookForm()
+      closeWordbookModal()
       renderWordbooks()
       toast('设计预览：词表已保存')
       return
@@ -686,7 +1184,8 @@ async function createWordbook() {
     const method = state.currentWordbookEditId ? 'PUT' : 'POST'
     const wordbook = await request(path, { method, body: JSON.stringify(payload) })
     resetWordbookForm()
-    state.currentWordbookId = wordbook.id
+    closeWordbookModal()
+    state.currentWordbookId = String(wordbook.id)
     await loadWordbooks()
     logEvent('wordbook', method === 'PUT' ? '更新词表' : '创建词表', name)
     toast('词表已保存')
@@ -698,8 +1197,8 @@ async function createWordbook() {
   }
 }
 
-function editWordbook(id) {
-  const wordbook = state.wordbooks.find((item) => Number(item.id) === Number(id))
+function fillWordbookForm(id) {
+  const wordbook = state.wordbooks.find((item) => sameId(item.id, id))
   if (!wordbook) return
   state.currentWordbookEditId = wordbook.id
   elements.newWordbookInput.value = wordbook.name || ''
@@ -707,11 +1206,46 @@ function editWordbook(id) {
   elements.wordbookDefaultInput.checked = Boolean(wordbook.isDefault)
 }
 
-function resetWordbookForm() {
+function resetWordbookForm(options = {}) {
   state.currentWordbookEditId = null
   elements.newWordbookInput.value = ''
   elements.wordbookDescriptionInput.value = ''
   elements.wordbookDefaultInput.checked = false
+  if (!options.keepModalOpen) {
+    closeWordbookModal()
+  }
+}
+
+async function deleteWordbook(id) {
+  const wordbook = state.wordbooks.find((item) => sameId(item.id, id))
+  if (!wordbook) return
+  if (!window.confirm(`删除词书「${wordbook.name}」？词书中的单词也会从该词书移除。`)) return
+  if (state.preview) {
+    state.wordbooks = state.wordbooks.filter((item) => !sameId(item.id, id))
+    if (!state.wordbooks.length) {
+      state.wordbooks = [{ id: 1, name: '默认词书', description: '日常学习沉淀', isDefault: true, entryCount: 0, dueCount: 0 }]
+    }
+    const fallback = state.wordbooks.find((item) => item.isDefault) || state.wordbooks[0]
+    fallback.isDefault = true
+    state.currentWordbookId = String(fallback.id)
+    renderWordbooks()
+    renderWordbookEntries()
+    renderActivityHeatmap()
+    toast('设计预览：词书已删除')
+    return
+  }
+  try {
+    await request(`/api/v1/learning/wordbooks/${encodeURIComponent(id)}`, { method: 'DELETE' })
+    if (sameId(state.currentWordbookId, id)) {
+      localStorage.removeItem('learning.wordbookId')
+      state.currentWordbookId = null
+    }
+    await Promise.allSettled([loadWordbooks(), loadDueReviews(), loadActivity()])
+    toast('词书已删除')
+  } catch (error) {
+    logEvent('error', '删除词书失败', error.message)
+    toast(`删除词书失败：${error.message}`)
+  }
 }
 
 async function loadWordbookEntries() {
@@ -728,7 +1262,7 @@ async function loadWordbookEntries() {
   try {
     const status = elements.wordStatusFilter?.value || ''
     const query = status ? `?status=${encodeURIComponent(status)}` : ''
-    const entries = await request(`/api/v1/learning/wordbooks/${state.currentWordbookId}/entries${query}`)
+    const entries = await request(`/api/v1/learning/wordbooks/${encodeURIComponent(state.currentWordbookId)}/entries${query}`)
     state.wordbookEntries = Array.isArray(entries) ? entries : []
     renderWordbookEntries()
     renderProfileMetrics()
@@ -748,22 +1282,20 @@ function renderWordbookEntries() {
     renderNotes(null)
     return
   }
-  const selectedEntry = state.selectedEntry && entries.some((entry) => Number(entry.id) === Number(state.selectedEntry.id)) ? state.selectedEntry : entries[0]
+  const selectedEntry = state.selectedEntry && entries.some((entry) => sameId(entry.id, state.selectedEntry.id)) ? state.selectedEntry : entries[0]
   state.selectedEntry = selectedEntry
   elements.wordbookEntryList.className = 'entry-list'
   elements.wordbookEntryList.innerHTML = entries
     .map(
       (entry) => `
-        <div class="entry-row ${Number(selectedEntry.id) === Number(entry.id) ? 'active' : ''}">
-          <button type="button" data-entry-id="${entry.id}">
+        <div class="entry-row ${sameId(selectedEntry.id, entry.id) ? 'active' : ''}">
+          <button type="button" data-entry-id="${escapeHtml(entry.id)}">
             <span>${escapeHtml(entry.term || entry.normalizedTerm)}</span>
-            <small>${escapeHtml(statusLabel(entry.status))} · 阶段 ${entry.reviewStage ?? 0} · 掌握 ${entry.masteryScore ?? 0} · 下次 ${escapeHtml(formatDateTime(entry.nextReviewTime))}</small>
+            <small>${escapeHtml(statusLabel(entry.status))} · 掌握 ${entry.masteryScore ?? 0} · 下次 ${escapeHtml(formatDateTime(entry.nextReviewTime))}</small>
           </button>
           <div class="row-actions">
-            <button type="button" data-entry-status="familiar" data-entry-update="${entry.id}">熟悉</button>
-            <button type="button" data-entry-status="vague" data-entry-update="${entry.id}">模糊</button>
-            <button type="button" data-entry-status="forgotten" data-entry-update="${entry.id}">遗忘</button>
-            <button type="button" data-entry-delete="${entry.id}">删除</button>
+            <button type="button" data-entry-status-open="${escapeHtml(entry.id)}">熟练程度</button>
+            <button class="danger-icon-button" type="button" data-entry-delete="${escapeHtml(entry.id)}" title="删除单词">×</button>
           </div>
         </div>
       `,
@@ -771,15 +1303,15 @@ function renderWordbookEntries() {
     .join('')
   elements.wordbookEntryList.querySelectorAll('[data-entry-id]').forEach((button) => {
     button.addEventListener('click', () => {
-      const entry = state.wordbookEntries.find((item) => Number(item.id) === Number(button.getAttribute('data-entry-id')))
+      const entry = state.wordbookEntries.find((item) => sameId(item.id, button.getAttribute('data-entry-id')))
       selectWordbookEntry(entry)
     })
   })
-  elements.wordbookEntryList.querySelectorAll('[data-entry-update]').forEach((button) => {
-    button.addEventListener('click', () => updateEntryStatus(Number(button.getAttribute('data-entry-update')), button.getAttribute('data-entry-status')))
+  elements.wordbookEntryList.querySelectorAll('[data-entry-status-open]').forEach((button) => {
+    button.addEventListener('click', () => openEntryStatusModal(button.getAttribute('data-entry-status-open')))
   })
   elements.wordbookEntryList.querySelectorAll('[data-entry-delete]').forEach((button) => {
-    button.addEventListener('click', () => deleteWordbookEntry(Number(button.getAttribute('data-entry-delete'))))
+    button.addEventListener('click', () => deleteWordbookEntry(button.getAttribute('data-entry-delete')))
   })
   renderWordbookFocus(selectedEntry)
   renderNotes(selectedEntry)
@@ -802,26 +1334,174 @@ function renderWordbookFocus(entry) {
     elements.wordbookFocus.textContent = '选择单词后查看详情和笔记'
     return
   }
-  const definitions = normalizeDefinitions(entry.parsed).slice(0, 2)
+  const parsed = entry.parsed || {}
+  const definitions = normalizeDefinitions(parsed)
+  const examples = normalizeExamples(parsed).slice(0, 3)
+  const collocations = normalizeArray(parsed?.collocations || parsed?.phrases || parsed?.common_phrases).slice(0, 6)
+  const memoryTips = normalizeArray(parsed?.memory_tips || parsed?.memoryTips || parsed?.tips || parsed?.memory).slice(0, 3)
+  const tags = Array.isArray(entry.tags) ? entry.tags.slice(0, 6) : []
+  const relations = Array.isArray(entry.relations) ? entry.relations.slice(0, 6) : []
+  const phonetics = [parsed?.phonetic?.uk && `UK ${parsed.phonetic.uk}`, parsed?.phonetic?.us && `US ${parsed.phonetic.us}`].filter(Boolean).join('    ')
   elements.wordbookFocus.className = 'wordbook-focus-card'
   elements.wordbookFocus.innerHTML = `
-    <p class="eyebrow">${escapeHtml(statusLabel(entry.status))}</p>
-    <h4>${escapeHtml(entry.term || entry.normalizedTerm)}</h4>
-    <div class="mini-definition-list">
+    <div class="wordbook-focus-head">
+      <div>
+        <p class="eyebrow">${escapeHtml(statusLabel(entry.status))} · 阶段 ${entry.reviewStage ?? 0}</p>
+        <h4>${escapeHtml(entry.term || entry.normalizedTerm)}</h4>
+        <p class="phonetic">${escapeHtml(phonetics || '暂无音标')}</p>
+      </div>
+      <div class="inline-actions">
+        <button class="secondary-button compact" type="button" data-status-open="${escapeHtml(entry.id)}">熟练程度</button>
+        <button class="secondary-button compact" type="button" data-open-study="${escapeHtml(entry.normalizedTerm)}">去学习</button>
+      </div>
+    </div>
+    <div class="mini-definition-list focus-section">
       ${
         definitions.length
           ? definitions.map((item) => `<div><span>${escapeHtml(item.pos || 'meaning')}</span><p>${escapeHtml(item.cn || item.en || '')}</p></div>`).join('')
           : '<div class="empty">暂无释义</div>'
       }
     </div>
-    <div class="note-view">${renderMarkdown(entry.note || '') || '<span class="empty">暂无笔记</span>'}</div>
-    <button class="secondary-button compact" type="button" data-open-study="${escapeHtml(entry.normalizedTerm)}">去学习</button>
+    <div class="focus-section">
+      <div class="panel-heading compact-heading">
+        <h3>例句</h3>
+        <span class="mini-pill">${examples.length}</span>
+      </div>
+      <div class="stack ${examples.length ? '' : 'empty'}">
+        ${
+          examples.length
+            ? examples
+                .map(
+                  (item, index) => `
+                    <div class="example-item">
+                      <button class="icon-button" type="button" data-focus-sentence="${index}" title="播放例句">▶</button>
+                      <p class="sentence">${escapeHtml(item.sentence || '')}</p>
+                      <p class="translation">${escapeHtml(item.translation || '')}</p>
+                    </div>
+                  `,
+                )
+                .join('')
+            : '暂无例句'
+        }
+      </div>
+    </div>
+    <div class="focus-section">
+      <div class="panel-heading compact-heading">
+        <h3>记忆提示</h3>
+      </div>
+      <div class="stack ${memoryTips.length ? '' : 'empty'}">
+        ${
+          memoryTips.length
+            ? memoryTips.map((item) => `<div class="tip-item">${escapeHtml(readText(item, ['content', 'tip', 'text', 'meaning']) || stringifyValue(item))}</div>`).join('')
+            : '暂无记忆提示'
+        }
+      </div>
+    </div>
+    <div class="focus-subgrid">
+      <div>
+        <div class="panel-heading compact-heading"><h3>搭配</h3></div>
+        <div class="collocation-list ${collocations.length ? '' : 'empty'}">
+          ${collocations.length ? collocations.map(renderCollocationMini).join('') : '暂无搭配'}
+        </div>
+      </div>
+      <div>
+        <div class="panel-heading compact-heading"><h3>相关单词</h3></div>
+        <div class="relation-list ${relations.length ? '' : 'empty'}">
+          ${
+            relations.length
+              ? relations
+                  .map(
+                    (item) => `
+                      <button class="relation-item" type="button" data-focus-related="${escapeHtml(item.relatedTerm || '')}">
+                        <div>
+                          <strong>${escapeHtml(item.relatedTerm || '')}</strong>
+                          <p>${escapeHtml(relationMeaningLine(item))}</p>
+                        </div>
+                        <small>${escapeHtml(relationMetaLine(item))}</small>
+                      </button>
+                    `,
+                  )
+                  .join('')
+              : '暂无关联词'
+          }
+        </div>
+      </div>
+    </div>
+    <div class="focus-section">
+      <div class="panel-heading compact-heading">
+        <h3>笔记</h3>
+        <button class="secondary-button compact" type="button" data-edit-focus-note>编辑笔记</button>
+      </div>
+      <div class="note-view">${renderMarkdown(entry.note || '') || '<span class="empty">暂无笔记</span>'}</div>
+    </div>
+    <div class="focus-section">
+      <button class="ghost-button compact" type="button" data-toggle-tags>查看标签</button>
+      <div class="chips focus-tags hidden">
+        ${tags.length ? tags.map((tag) => `<span class="chip tag-chip">${escapeHtml(tagLabel(tag))}</span>`).join('') : '<span class="empty">暂无标签</span>'}
+      </div>
+    </div>
   `
   elements.wordbookFocus.querySelector('[data-open-study]')?.addEventListener('click', () => {
     elements.termInput.value = entry.normalizedTerm
     setView('studyView')
     study(entry.normalizedTerm)
   })
+  elements.wordbookFocus.querySelector('[data-status-open]')?.addEventListener('click', () => openEntryStatusModal(entry.id))
+  elements.wordbookFocus.querySelector('[data-edit-focus-note]')?.addEventListener('click', () => {
+    state.currentNoteEntry = entry
+    editCurrentNote()
+  })
+  elements.wordbookFocus.querySelector('[data-toggle-tags]')?.addEventListener('click', () => {
+    elements.wordbookFocus.querySelector('.focus-tags')?.classList.toggle('hidden')
+  })
+  elements.wordbookFocus.querySelectorAll('[data-focus-sentence]').forEach((button) => {
+    button.addEventListener('click', () => speak(examples[Number(button.getAttribute('data-focus-sentence'))]?.sentence, elements.voiceSelect.value))
+  })
+  elements.wordbookFocus.querySelectorAll('[data-focus-related]').forEach((button) => {
+    button.addEventListener('click', () => {
+      const term = button.getAttribute('data-focus-related') || ''
+      elements.termInput.value = term
+      setView('studyView')
+      study(term)
+    })
+  })
+  elements.wordbookFocus.querySelectorAll('[data-collocation-term]').forEach((button) => {
+    button.addEventListener('click', () => {
+      const term = button.getAttribute('data-collocation-term') || ''
+      elements.termInput.value = term
+      setView('studyView')
+      study(term)
+    })
+  })
+}
+
+function renderCollocationMini(item) {
+  if (typeof item === 'string') {
+    return `<button class="collocation-item" type="button" data-collocation-term="${escapeHtml(item)}"><strong>${escapeHtml(item)}</strong><p>暂无含义</p></button>`
+  }
+  const phrase = readText(item, ['phrase', 'collocation', 'text', 'word', 'expression'])
+  const meaning = readText(item, ['meaning_cn', 'meaningCn', 'meaning', 'translation', 'translation_cn', 'cn'])
+  return `<button class="collocation-item" type="button" data-collocation-term="${escapeHtml(phrase)}"><strong>${escapeHtml(phrase || '搭配')}</strong><p>${escapeHtml(meaning || '暂无含义')}</p></button>`
+}
+
+function openEntryStatusModal(entryId) {
+  const entry = state.wordbookEntries.find((item) => sameId(item.id, entryId)) || state.reviewEntries.find((item) => sameId(item.id, entryId))
+  if (!entry) return
+  state.currentStatusEntryId = entry.id
+  elements.entryStatusTerm.textContent = entry.term || entry.normalizedTerm || '当前单词'
+  elements.entryStatusModal.classList.remove('hidden')
+}
+
+function closeEntryStatusModal() {
+  elements.entryStatusModal?.classList.add('hidden')
+  state.currentStatusEntryId = null
+}
+
+async function chooseEntryStatus(status) {
+  const entryId = state.currentStatusEntryId
+  if (!entryId) return
+  await updateEntryStatus(entryId, status)
+  closeEntryStatusModal()
 }
 
 async function updateEntryStatus(entryId, status) {
@@ -830,8 +1510,8 @@ async function updateEntryStatus(entryId, status) {
 
 async function deleteWordbookEntry(entryId) {
   if (state.preview) {
-    state.wordbookEntries = state.wordbookEntries.filter((entry) => Number(entry.id) !== Number(entryId))
-    state.reviewEntries = state.reviewEntries.filter((entry) => Number(entry.id) !== Number(entryId))
+    state.wordbookEntries = state.wordbookEntries.filter((entry) => !sameId(entry.id, entryId))
+    state.reviewEntries = state.reviewEntries.filter((entry) => !sameId(entry.id, entryId))
     state.selectedEntry = null
     renderWordbookEntries()
     renderReviewQueue(state.reviewEntries)
@@ -839,8 +1519,9 @@ async function deleteWordbookEntry(entryId) {
     return
   }
   try {
-    await request(`/api/v1/learning/wordbook-entries/${entryId}`, { method: 'DELETE' })
+    await request(`/api/v1/learning/wordbook-entries/${encodeURIComponent(entryId)}`, { method: 'DELETE' })
     await Promise.allSettled([loadWordbooks(), loadWordbookEntries(), loadDueReviews()])
+    await loadActivity()
     toast('已从词表删除')
   } catch (error) {
     logEvent('error', '删除词条失败', error.message)
@@ -855,6 +1536,57 @@ function renderProfileMetrics() {
   elements.wordbookCount.textContent = String(wordbookCount)
   elements.wordCount.textContent = String(wordCount)
   elements.dueCount.textContent = String(dueCount)
+}
+
+async function loadActivity() {
+  if (state.preview) {
+    state.activity = state.activity || createPreviewActivity()
+    renderActivityHeatmap()
+    return
+  }
+  if (!state.token) {
+    state.activity = null
+    renderActivityHeatmap()
+    return
+  }
+  try {
+    state.activity = await request('/api/v1/learning/activity?days=180')
+    renderActivityHeatmap()
+  } catch (error) {
+    logEvent('error', '学习活跃图加载失败', error.message)
+    renderActivityHeatmap()
+  }
+}
+
+function renderActivityHeatmap() {
+  if (!elements.activityHeatmap) return
+  const items = Array.isArray(state.activity?.items) ? state.activity.items : []
+  const learnedTotal = state.activity?.learnedTotal ?? items.reduce((sum, item) => sum + Number(item.learnedCount || 0), 0)
+  const reviewTotal = state.activity?.reviewTotal ?? items.reduce((sum, item) => sum + Number(item.reviewCount || 0), 0)
+  elements.activitySummary.textContent = `${learnedTotal} 学习 / ${reviewTotal} 复习`
+  if (!items.length) {
+    elements.activityHeatmap.className = 'activity-heatmap empty'
+    elements.activityHeatmap.textContent = state.token || state.preview ? '暂无学习活跃数据' : '登录后查看学习活跃图'
+    return
+  }
+  const maxTotal = Math.max(1, ...items.map((item) => Number(item.totalCount || 0)))
+  elements.activityHeatmap.className = 'activity-heatmap'
+  elements.activityHeatmap.innerHTML = items
+    .map((item) => {
+      const total = Number(item.totalCount || 0)
+      const level = activityLevel(total, maxTotal)
+      const title = `${item.date}: 学习 ${item.learnedCount || 0}，复习 ${item.reviewCount || 0}`
+      return `<span data-level="${level}" title="${escapeHtml(title)}" aria-label="${escapeHtml(title)}"></span>`
+    })
+    .join('')
+}
+
+function activityLevel(total, maxTotal) {
+  if (!total) return 0
+  if (total >= maxTotal * 0.75) return 4
+  if (total >= maxTotal * 0.45) return 3
+  if (total >= maxTotal * 0.2) return 2
+  return 1
 }
 
 async function study(term) {
@@ -878,7 +1610,7 @@ async function study(term) {
         term: value,
         agentCode: elements.agentSelect.value,
         templateCode: elements.templateSelect.value,
-        modelConfigId: elements.studyModelSelect.value ? Number(elements.studyModelSelect.value) : null,
+        modelConfigId: elements.studyModelSelect.value || null,
         forceRefresh: elements.forceRefreshInput.checked,
       }),
     })
@@ -1100,12 +1832,49 @@ async function addCurrentWordToWordbook() {
     toast('请先登录')
     return
   }
-  if (!state.currentWordbookId) {
-    toast('请选择词书')
-    return
-  }
   if (!term) {
     toast('先学习一个单词')
+    return
+  }
+  openAddWordbookModal(term)
+}
+
+function openAddWordbookModal(term) {
+  elements.addWordbookTerm.textContent = term
+  renderAddWordbookList(term)
+  elements.addWordbookModal.classList.remove('hidden')
+}
+
+function closeAddWordbookModal() {
+  elements.addWordbookModal.classList.add('hidden')
+}
+
+function renderAddWordbookList(term) {
+  if (!state.wordbooks.length) {
+    elements.addWordbookList.className = 'wordbook-picker-list empty'
+    elements.addWordbookList.textContent = '暂无词书，请先在个人信息中创建词书'
+    return
+  }
+  elements.addWordbookList.className = 'wordbook-picker-list'
+  elements.addWordbookList.innerHTML = state.wordbooks
+    .map(
+      (wordbook) => `
+        <button class="wordbook-picker-item ${sameId(wordbook.id, state.currentWordbookId) ? 'active' : ''}" type="button" data-add-wordbook-id="${escapeHtml(wordbook.id)}">
+          <strong>${escapeHtml(wordbook.name)}</strong>
+          <span>${escapeHtml(wordbook.description || (wordbook.isDefault ? '默认词书' : '自定义词书'))}</span>
+          <small>${wordbook.entryCount || 0} 个单词 · ${wordbook.dueCount || 0} 个待复习</small>
+        </button>
+      `,
+    )
+    .join('')
+  elements.addWordbookList.querySelectorAll('[data-add-wordbook-id]').forEach((button) => {
+    button.addEventListener('click', () => addWordToWordbook(term, button.getAttribute('data-add-wordbook-id')))
+  })
+}
+
+async function addWordToWordbook(term, wordbookId) {
+  if (!wordbookId) {
+    toast('请选择词书')
     return
   }
   setLoading(true)
@@ -1114,7 +1883,7 @@ async function addCurrentWordToWordbook() {
       const existing = state.wordbookEntries.find((entry) => entry.normalizedTerm === term)
       if (!existing) {
         const entry = {
-          id: Date.now(),
+          id: String(Date.now()),
           term,
           normalizedTerm: term,
           status: 'vague',
@@ -1124,23 +1893,32 @@ async function addCurrentWordToWordbook() {
           nextReviewTime: new Date().toISOString(),
           parsed: state.currentRecord?.parsed,
         }
-        state.wordbookEntries.unshift(entry)
-        state.reviewEntries.unshift(entry)
-        renderWordbookEntries()
-        renderNotes(entry)
+      state.wordbookEntries.unshift(entry)
+      state.reviewEntries.unshift(entry)
+      state.activity = createPreviewActivity()
+      renderWordbookEntries()
+      renderNotes(entry)
       }
-      logEvent('wordbook', '预览加入词表', `${term} -> ${currentWordbookName()}`)
+      state.currentWordbookId = String(wordbookId)
+      localStorage.setItem('learning.wordbookId', state.currentWordbookId)
+      closeAddWordbookModal()
+      renderWordbooks()
+      logEvent('wordbook', '预览加入词表', `${term} -> ${currentWordbookName(wordbookId)}`)
       toast('设计预览：已模拟加入词书')
       return
     }
-    const entry = await request(`/api/v1/learning/wordbooks/${state.currentWordbookId}/entries`, {
+    state.currentWordbookId = String(wordbookId)
+    localStorage.setItem('learning.wordbookId', state.currentWordbookId)
+    const entry = await request(`/api/v1/learning/wordbooks/${encodeURIComponent(wordbookId)}/entries`, {
       method: 'POST',
       body: JSON.stringify({ term }),
     })
     await Promise.allSettled([loadWordbooks(), loadDueReviews()])
     await loadWordbookEntries()
+    await loadActivity()
     renderNotes(entry)
-    logEvent('wordbook', '加入单词本', `${term} -> ${currentWordbookName()}`)
+    closeAddWordbookModal()
+    logEvent('wordbook', '加入单词本', `${term} -> ${currentWordbookName(wordbookId)}`)
     toast('已加入词书，并生成复习计划')
   } catch (error) {
     logEvent('error', '加入词书失败', error.message)
@@ -1166,7 +1944,7 @@ async function chat() {
       method: 'POST',
       body: JSON.stringify({
         agentCode: elements.agentSelect.value,
-        modelConfigId: elements.studyModelSelect.value ? Number(elements.studyModelSelect.value) : null,
+        modelConfigId: elements.studyModelSelect.value || null,
         sessionId: state.currentSessionId,
         message,
         variables: {
@@ -1191,8 +1969,13 @@ async function chat() {
 }
 
 async function loadDueReviews() {
+  const selectedWordbookId = elements.reviewWordbookSelect?.value || state.currentWordbookId || ''
+  const limit = Math.max(1, Number(elements.reviewLimitInput?.value || 10))
   if (state.preview) {
-    renderReviewQueue(state.reviewEntries)
+    state.currentWordbookId = selectedWordbookId || state.currentWordbookId
+    localStorage.setItem('learning.wordbookId', String(state.currentWordbookId || ''))
+    const entries = (state.previewReviewEntries.length ? state.previewReviewEntries : state.reviewEntries).slice(0, limit)
+    renderReviewQueue(entries)
     return
   }
   if (!state.token) {
@@ -1200,9 +1983,13 @@ async function loadDueReviews() {
     return
   }
   try {
-    const wordbookParam = state.currentWordbookId ? `?wordbookId=${state.currentWordbookId}` : ''
-    const entries = await request(`/api/v1/learning/reviews/due${wordbookParam}`)
-    state.reviewEntries = Array.isArray(entries) ? entries : []
+    state.currentWordbookId = selectedWordbookId || state.currentWordbookId
+    if (state.currentWordbookId) localStorage.setItem('learning.wordbookId', String(state.currentWordbookId))
+    const params = new URLSearchParams()
+    if (selectedWordbookId) params.set('wordbookId', selectedWordbookId)
+    const query = params.toString() ? `?${params.toString()}` : ''
+    const entries = await request(`/api/v1/learning/reviews/due${query}`)
+    state.reviewEntries = (Array.isArray(entries) ? entries : []).slice(0, limit)
     renderReviewQueue(state.reviewEntries)
     renderProfileMetrics()
   } catch (error) {
@@ -1213,58 +2000,31 @@ async function loadDueReviews() {
 
 function renderReviewQueue(entries) {
   if (!state.token) {
-    elements.reviewQueue.className = 'review-list empty'
-    elements.reviewQueue.textContent = '登录后查看复习任务'
+    state.reviewEntries = []
+    state.currentReviewIndex = 0
     state.currentReviewEntry = null
     renderReviewFocus(null)
     renderNotes(null)
+    updateReviewProgressBadge()
     return
   }
   if (!entries.length) {
-    elements.reviewQueue.className = 'review-list empty'
-    elements.reviewQueue.textContent = '当前没有到期复习'
+    state.reviewEntries = []
+    state.currentReviewIndex = 0
     state.currentReviewEntry = null
     renderReviewFocus(null)
     renderNotes(null)
+    updateReviewProgressBadge()
     return
   }
-  const selectedEntry = state.currentReviewEntry && entries.some((entry) => Number(entry.id) === Number(state.currentReviewEntry.id)) ? state.currentReviewEntry : entries[0]
+  state.reviewEntries = entries
+  const existingIndex = state.currentReviewEntry ? entries.findIndex((entry) => sameId(entry.id, state.currentReviewEntry.id)) : -1
+  state.currentReviewIndex = existingIndex >= 0 ? existingIndex : Math.min(state.currentReviewIndex, entries.length - 1)
+  const selectedEntry = entries[state.currentReviewIndex] || entries[0]
   state.currentReviewEntry = selectedEntry
-  elements.reviewQueue.className = 'review-list'
-  elements.reviewQueue.innerHTML = entries
-    .map(
-      (entry) => `
-        <div class="review-item ${Number(selectedEntry.id) === Number(entry.id) ? 'active' : ''}">
-          <button class="review-word" type="button" data-review-term="${escapeHtml(entry.normalizedTerm)}">
-            ${escapeHtml(entry.term || entry.normalizedTerm)}
-          </button>
-          <div class="review-meta">
-            阶段 ${entry.reviewStage ?? 0} · 掌握 ${entry.masteryScore ?? 0} · 下次 ${escapeHtml(formatDateTime(entry.nextReviewTime))}
-          </div>
-          <div class="review-actions">
-            <button type="button" data-review-result="forgotten" data-entry-id="${entry.id}">忘记</button>
-            <button type="button" data-review-result="vague" data-entry-id="${entry.id}">模糊</button>
-            <button type="button" data-review-result="remembered" data-entry-id="${entry.id}">记住</button>
-          </div>
-        </div>
-      `,
-    )
-    .join('')
-  elements.reviewQueue.querySelectorAll('[data-review-term]').forEach((button) => {
-    button.addEventListener('click', () => {
-      const term = button.getAttribute('data-review-term')
-      const entry = state.reviewEntries.find((item) => item.normalizedTerm === term)
-      selectReviewEntry(entry)
-      renderNotes(entry)
-      elements.termInput.value = term
-      study(term)
-    })
-  })
-  elements.reviewQueue.querySelectorAll('[data-review-result]').forEach((button) => {
-    button.addEventListener('click', () => submitReview(button.getAttribute('data-entry-id'), button.getAttribute('data-review-result')))
-  })
   renderReviewFocus(selectedEntry)
   renderNotes(selectedEntry)
+  updateReviewProgressBadge()
 }
 
 function selectReviewEntry(entry) {
@@ -1273,20 +2033,23 @@ function selectReviewEntry(entry) {
     state.reviewTyped = ''
     state.reviewWrongCount = 0
     renderReviewFocus(null)
+    updateReviewProgressBadge()
     return
   }
+  const index = state.reviewEntries.findIndex((item) => sameId(item.id, entry.id))
+  state.currentReviewIndex = index >= 0 ? index : state.currentReviewIndex
   state.currentReviewEntry = entry
   state.reviewTyped = ''
   state.reviewWrongCount = 0
   renderReviewFocus(entry)
   renderNotes(entry)
-  renderReviewQueue(state.reviewEntries)
+  updateReviewProgressBadge()
 }
 
 function renderReviewFocus(entryOrRecord) {
   if (!entryOrRecord) {
     elements.reviewFocus.className = 'empty'
-    elements.reviewFocus.textContent = '点击待复习单词后开始跟敲'
+    elements.reviewFocus.textContent = '选择词书和数量后开始复习'
     return
   }
   const parsed = entryOrRecord.parsed || state.currentRecord?.parsed || null
@@ -1294,9 +2057,15 @@ function renderReviewFocus(entryOrRecord) {
   const definitions = normalizeDefinitions(parsed).slice(0, 3)
   const letters = renderTypingLetters(term, state.reviewTyped)
   const progress = term ? Math.round((state.reviewTyped.length / term.length) * 100) : 0
+  const total = state.reviewEntries.length
+  const canPrev = total > 1 && state.currentReviewIndex > 0
+  const canNext = total > 1 && state.currentReviewIndex < total - 1
   elements.reviewFocus.className = 'review-focus-card'
   elements.reviewFocus.innerHTML = `
-    <p class="eyebrow">Typing Review</p>
+    <div class="review-card-topline">
+      <p class="eyebrow">Typing Review</p>
+      <span>${total ? `${state.currentReviewIndex + 1} / ${total}` : '0 / 0'}</span>
+    </div>
     <h4>${escapeHtml(term)}</h4>
     <p class="phonetic">${escapeHtml([parsed?.phonetic?.uk, parsed?.phonetic?.us].filter(Boolean).join('    ') || '暂无音标')}</p>
     <div class="typing-board" tabindex="0" aria-label="跟敲单词 ${escapeHtml(term)}">
@@ -1311,7 +2080,29 @@ function renderReviewFocus(entryOrRecord) {
           : '<div class="empty">暂无释义</div>'
       }
     </div>
+    <div class="review-card-actions">
+      <button class="secondary-button compact" type="button" data-review-prev ${canPrev ? '' : 'disabled'}>上一个</button>
+      <button class="secondary-button compact" type="button" data-review-next ${canNext ? '' : 'disabled'}>下一个</button>
+    </div>
   `
+  elements.reviewFocus.querySelector('[data-review-prev]')?.addEventListener('click', () => goToReviewOffset(-1))
+  elements.reviewFocus.querySelector('[data-review-next]')?.addEventListener('click', () => goToReviewOffset(1))
+  updateReviewProgressBadge()
+}
+
+function updateReviewProgressBadge() {
+  if (!elements.reviewProgressBadge) return
+  const total = state.reviewEntries.length
+  elements.reviewProgressBadge.textContent = total ? `${state.currentReviewIndex + 1} / ${total}` : '0 / 0'
+}
+
+function goToReviewOffset(offset) {
+  const total = state.reviewEntries.length
+  if (!total) return
+  const nextIndex = Math.max(0, Math.min(total - 1, state.currentReviewIndex + offset))
+  if (nextIndex === state.currentReviewIndex && state.currentReviewEntry) return
+  state.currentReviewIndex = nextIndex
+  selectReviewEntry(state.reviewEntries[nextIndex])
 }
 
 function renderTypingLetters(term, typed) {
@@ -1405,15 +2196,91 @@ function renderReviewCompleteModal(entry) {
   elements.reviewCompleteModal.classList.remove('hidden')
 }
 
-function closeReviewModal() {
+function closeReviewModal(options = {}) {
   if (!elements.reviewCompleteModal) return
   elements.reviewCompleteModal.classList.add('hidden')
   state.pendingReviewEntryId = null
-  state.reviewTyped = ''
-  state.reviewWrongCount = 0
-  if (state.activeView === 'reviewView' && state.currentReviewEntry) {
+  if (!options.keepTyped) {
+    state.reviewTyped = ''
+    state.reviewWrongCount = 0
+  }
+  if (!options.skipRender && state.activeView === 'reviewView' && state.currentReviewEntry) {
     renderReviewFocus(state.currentReviewEntry)
   }
+}
+
+function openForgottenDetailModal(entry) {
+  if (!entry) return
+  const parsed = entry.parsed || {}
+  const definitions = normalizeDefinitions(parsed).slice(0, 4)
+  const examples = normalizeExamples(parsed).slice(0, 3)
+  const memoryTips = normalizeArray(parsed?.memory_tips || parsed?.memoryTips || parsed?.tips || parsed?.memory).slice(0, 2)
+  const collocations = normalizeArray(parsed?.collocations || parsed?.phrases || parsed?.common_phrases).slice(0, 4)
+  elements.forgottenDetailTitle.textContent = entry.term || entry.normalizedTerm || '单词详情'
+  elements.forgottenDetailContent.className = 'forgotten-detail-content'
+  elements.forgottenDetailContent.innerHTML = `
+    <div class="forgotten-word-head">
+      <div>
+        <p class="eyebrow">${escapeHtml(statusLabel(entry.status))}</p>
+        <h4>${escapeHtml(entry.term || entry.normalizedTerm || '')}</h4>
+        <p class="phonetic">${escapeHtml([parsed?.phonetic?.uk, parsed?.phonetic?.us].filter(Boolean).join('    ') || '暂无音标')}</p>
+      </div>
+      <button class="mini-audio-button" type="button" data-forgotten-word-audio>播放</button>
+    </div>
+    <div class="mini-definition-list">
+      ${
+        definitions.length
+          ? definitions.map((item) => `<div><span>${escapeHtml(item.pos || 'meaning')}</span><p>${escapeHtml(item.cn || item.en || '')}</p><p class="meaning-en">${escapeHtml(item.en || item.extra || '')}</p></div>`).join('')
+          : '<div class="empty">暂无释义</div>'
+      }
+    </div>
+    <div class="focus-section">
+      <div class="panel-heading compact-heading"><h3>例句</h3></div>
+      <div class="stack ${examples.length ? '' : 'empty'}">
+        ${
+          examples.length
+            ? examples
+                .map(
+                  (item, index) => `
+                    <div class="example-item">
+                      <button class="icon-button" type="button" data-forgotten-sentence="${index}" title="播放例句">▶</button>
+                      <p class="sentence">${escapeHtml(item.sentence || '')}</p>
+                      <p class="translation">${escapeHtml(item.translation || '')}</p>
+                    </div>
+                  `,
+                )
+                .join('')
+            : '暂无例句'
+        }
+      </div>
+    </div>
+    <div class="focus-section">
+      <div class="panel-heading compact-heading"><h3>记忆提示</h3></div>
+      <div class="stack ${memoryTips.length ? '' : 'empty'}">
+        ${
+          memoryTips.length
+            ? memoryTips.map((item) => `<div class="tip-item">${escapeHtml(readText(item, ['content', 'tip', 'text', 'meaning']) || stringifyValue(item))}</div>`).join('')
+            : '暂无记忆提示'
+        }
+      </div>
+    </div>
+    <div class="focus-section">
+      <div class="panel-heading compact-heading"><h3>搭配</h3></div>
+      <div class="collocation-list ${collocations.length ? '' : 'empty'}">
+        ${collocations.length ? collocations.map(renderCollocationMini).join('') : '暂无搭配'}
+      </div>
+    </div>
+  `
+  elements.forgottenDetailContent.querySelector('[data-forgotten-word-audio]')?.addEventListener('click', () => speak(entry.term || entry.normalizedTerm, elements.voiceSelect.value))
+  elements.forgottenDetailContent.querySelectorAll('[data-forgotten-sentence]').forEach((button) => {
+    button.addEventListener('click', () => speak(examples[Number(button.getAttribute('data-forgotten-sentence'))]?.sentence, elements.voiceSelect.value))
+  })
+  elements.forgottenDetailModal.classList.remove('hidden')
+}
+
+function closeForgottenDetailModal() {
+  if (!elements.forgottenDetailModal) return
+  elements.forgottenDetailModal.classList.add('hidden')
 }
 
 function showCelebration() {
@@ -1464,29 +2331,57 @@ async function submitReview(entryId, result) {
   setLoading(true)
   try {
     if (state.preview) {
-      const entry = state.reviewEntries.find((item) => Number(item.id) === Number(entryId))
+      const entry = state.reviewEntries.find((item) => sameId(item.id, entryId))
+      const completedIndex = state.reviewEntries.findIndex((item) => sameId(item.id, entryId))
       if (entry) {
         entry.status = reviewResultToStatus(result)
-        const source = state.wordbookEntries.find((item) => Number(item.id) === Number(entryId))
+        const source = state.wordbookEntries.find((item) => sameId(item.id, entryId))
         if (source) source.status = entry.status
+        const previewSource = state.previewReviewEntries.find((item) => sameId(item.id, entryId))
+        if (previewSource) previewSource.status = entry.status
       }
       state.reviewTyped = ''
       state.reviewWrongCount = 0
-      closeReviewModal()
+      closeReviewModal({ skipRender: true })
+      if (result === 'remembered' && completedIndex >= 0 && state.reviewEntries.length > 1) {
+        state.currentReviewIndex = Math.min(completedIndex + 1, state.reviewEntries.length - 1)
+      }
       renderReviewQueue(state.reviewEntries)
       renderWordbookEntries()
       logEvent('review', '预览提交复习结果', `${entryId} -> ${result}`)
+      if (result === 'forgotten') {
+        openForgottenDetailModal(entry || state.currentReviewEntry)
+      }
       toast('设计预览：已模拟提交复习结果')
       return
     }
-    const response = await request(`/api/v1/learning/reviews/${entryId}`, {
+    const currentEntryBeforeSubmit = state.currentReviewEntry
+    const currentIndexBeforeSubmit = state.currentReviewIndex
+    const response = await request(`/api/v1/learning/reviews/${encodeURIComponent(entryId)}`, {
       method: 'POST',
       body: JSON.stringify({ result }),
     })
-    await Promise.allSettled([loadWordbooks(), loadDueReviews(), loadWordbookEntries()])
+    await Promise.allSettled([loadWordbooks(), loadWordbookEntries()])
+    await loadActivity()
     state.reviewTyped = ''
     state.reviewWrongCount = 0
-    closeReviewModal()
+    closeReviewModal({ skipRender: true })
+    if (result === 'remembered') {
+      await loadDueReviews()
+      if (state.reviewEntries.length) {
+        state.currentReviewIndex = Math.min(currentIndexBeforeSubmit, state.reviewEntries.length - 1)
+        selectReviewEntry(state.reviewEntries[state.currentReviewIndex])
+      }
+    } else {
+      const updatedEntry = state.wordbookEntries.find((item) => sameId(item.id, entryId)) || { ...currentEntryBeforeSubmit, status: reviewResultToStatus(result) }
+      state.currentReviewEntry = updatedEntry
+      renderReviewFocus(updatedEntry)
+      renderNotes(updatedEntry)
+      updateReviewProgressBadge()
+      if (result === 'forgotten') {
+        openForgottenDetailModal(updatedEntry)
+      }
+    }
     logEvent('review', '提交复习结果', `${response.normalizedTerm} -> ${result}`)
     toast(`已记录复习，下次：${formatDateTime(response.nextReviewTime)}`)
   } catch (error) {
@@ -1520,6 +2415,7 @@ function editCurrentNote() {
     return
   }
   state.currentNoteEntry = entry
+  const focusTarget = state.selectedEntry && sameId(state.selectedEntry.id, entry.id) ? elements.wordbookFocus.querySelector('.note-view') : null
   const textarea = `
     <div class="note-editor">
       <textarea rows="8" placeholder="支持 Markdown，例如：## 记忆点">${escapeHtml(entry.note || '')}</textarea>
@@ -1531,8 +2427,14 @@ function editCurrentNote() {
   `
   elements.studyNote.innerHTML = textarea
   elements.reviewNote.innerHTML = textarea
+  if (focusTarget) focusTarget.innerHTML = textarea
   document.querySelectorAll('[data-save-note]').forEach((button) => button.addEventListener('click', () => saveCurrentNote(button)))
-  document.querySelectorAll('[data-cancel-note]').forEach((button) => button.addEventListener('click', () => renderNotes(entry)))
+  document.querySelectorAll('[data-cancel-note]').forEach((button) =>
+    button.addEventListener('click', () => {
+      renderNotes(entry)
+      if (state.selectedEntry && sameId(state.selectedEntry.id, entry.id)) renderWordbookFocus(entry)
+    }),
+  )
 }
 
 async function saveCurrentNote(button) {
@@ -1546,10 +2448,16 @@ async function saveCurrentNote(button) {
 async function saveEntry(entryId, payload) {
   if (state.preview) {
     for (const list of [state.wordbookEntries, state.reviewEntries]) {
-      const entry = list.find((item) => Number(item.id) === Number(entryId))
+      const entry = list.find((item) => sameId(item.id, entryId))
       if (entry) Object.assign(entry, payload)
     }
-    const updated = state.wordbookEntries.find((item) => Number(item.id) === Number(entryId)) || state.reviewEntries.find((item) => Number(item.id) === Number(entryId))
+    const updated = state.wordbookEntries.find((item) => sameId(item.id, entryId)) || state.reviewEntries.find((item) => sameId(item.id, entryId))
+    if (state.selectedEntry && sameId(state.selectedEntry.id, entryId)) {
+      state.selectedEntry = { ...state.selectedEntry, ...updated }
+    }
+    if (state.currentReviewEntry && sameId(state.currentReviewEntry.id, entryId)) {
+      state.currentReviewEntry = { ...state.currentReviewEntry, ...updated }
+    }
     renderWordbookEntries()
     renderReviewQueue(state.reviewEntries)
     renderNotes(updated)
@@ -1557,12 +2465,18 @@ async function saveEntry(entryId, payload) {
     return updated
   }
   try {
-    const updated = await request(`/api/v1/learning/wordbook-entries/${entryId}`, {
+    const updated = await request(`/api/v1/learning/wordbook-entries/${encodeURIComponent(entryId)}`, {
       method: 'PUT',
       body: JSON.stringify(payload),
     })
-    state.wordbookEntries = state.wordbookEntries.map((entry) => (Number(entry.id) === Number(entryId) ? { ...entry, ...updated } : entry))
-    state.reviewEntries = state.reviewEntries.map((entry) => (Number(entry.id) === Number(entryId) ? { ...entry, ...updated } : entry))
+    state.wordbookEntries = state.wordbookEntries.map((entry) => (sameId(entry.id, entryId) ? { ...entry, ...updated } : entry))
+    state.reviewEntries = state.reviewEntries.map((entry) => (sameId(entry.id, entryId) ? { ...entry, ...updated } : entry))
+    if (state.selectedEntry && sameId(state.selectedEntry.id, entryId)) {
+      state.selectedEntry = { ...state.selectedEntry, ...updated }
+    }
+    if (state.currentReviewEntry && sameId(state.currentReviewEntry.id, entryId)) {
+      state.currentReviewEntry = { ...state.currentReviewEntry, ...updated }
+    }
     renderWordbookEntries()
     renderReviewQueue(state.reviewEntries)
     renderNotes(updated)
@@ -1657,8 +2571,8 @@ function firstExample(parsed) {
   return Array.isArray(parsed?.examples) && parsed.examples.length > 0 ? parsed.examples[0].sentence : ''
 }
 
-function currentWordbookName() {
-  return state.wordbooks.find((item) => Number(item.id) === Number(state.currentWordbookId))?.name || '当前词书'
+function currentWordbookName(wordbookId = state.currentWordbookId) {
+  return state.wordbooks.find((item) => sameId(item.id, wordbookId))?.name || '所选词书'
 }
 
 function previewParsed(term = 'abandon') {
@@ -1738,6 +2652,35 @@ function previewRecord(term = 'abandon') {
       { relatedTerm: 'abandonment', relationType: 'word_family', relatedPartOfSpeech: 'noun', relatedMeaning: '遗弃，放弃', matchType: 'parsed_object', matchScore: 78 },
     ],
   }
+}
+
+function createPreviewActivity() {
+  const days = 180
+  const items = Array.from({ length: days }, (_, index) => {
+    const date = new Date()
+    date.setDate(date.getDate() - (days - index - 1))
+    const pulse = index % 9 === 0 ? 3 : index % 5 === 0 ? 2 : index % 3 === 0 ? 1 : 0
+    const learnedCount = index % 11 === 0 ? 2 : pulse > 1 ? 1 : 0
+    const reviewCount = pulse
+    return {
+      date: date.toISOString().slice(0, 10),
+      learnedCount,
+      reviewCount,
+      totalCount: learnedCount + reviewCount,
+    }
+  })
+  return {
+    days,
+    learnedTotal: items.reduce((sum, item) => sum + item.learnedCount, 0),
+    reviewTotal: items.reduce((sum, item) => sum + item.reviewCount, 0),
+    items,
+  }
+}
+
+function daysAgoIso(days) {
+  const date = new Date()
+  date.setDate(date.getDate() - days)
+  return date.toISOString()
 }
 
 async function showBestMatch(term) {
@@ -2007,25 +2950,59 @@ function escapeHtml(value) {
     .replaceAll("'", '&#039;')
 }
 
+function escapeRegExp(value) {
+  return String(value).replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
+}
+
+function sameId(left, right) {
+  return String(left ?? '') === String(right ?? '')
+}
+
 elements.loginBtn.addEventListener('click', () => loginOrRegister('login'))
 elements.registerBtn.addEventListener('click', () => loginOrRegister('register'))
 elements.logoutBtn.addEventListener('click', logout)
-elements.apiBaseInput.addEventListener('change', () => {
-  state.apiBase = elements.apiBaseInput.value.trim() || 'http://localhost:16681'
-  localStorage.setItem('learning.apiBase', state.apiBase)
-  loadAgents()
-  loadModelConfigs()
-})
+if (elements.apiBaseInput) {
+  elements.apiBaseInput.addEventListener('change', () => {
+    state.apiBase = elements.apiBaseInput.value.trim() || 'http://localhost:16681'
+    localStorage.setItem('learning.apiBase', state.apiBase)
+    loadAgents()
+    loadModelConfigs()
+    loadPromptTemplates()
+  })
+}
+elements.toggleSidebarBtn.addEventListener('click', toggleSidebar)
+elements.sidebarBackdrop.addEventListener('click', () => setSidebarCollapsed(true))
+window.matchMedia('(max-width: 1100px)').addEventListener('change', handleViewportChange)
 elements.reloadAgentsBtn.addEventListener('click', loadAgents)
 elements.reloadModelsBtn.addEventListener('click', loadModelConfigs)
-elements.reloadWordbooksBtn.addEventListener('click', loadWordbooks)
+elements.openModelModalBtn.addEventListener('click', () => openModelModal())
+elements.closeModelModalBtn.addEventListener('click', closeModelModal)
+elements.modelConfigModal.addEventListener('click', (event) => {
+  if (event.target === elements.modelConfigModal) closeModelModal()
+})
+elements.modelProviderInput.addEventListener('change', () => syncModelProviderDefaults())
+elements.openAccountModalBtn.addEventListener('click', openAccountModal)
+elements.closeAccountModalBtn.addEventListener('click', closeAccountModal)
+elements.accountModal.addEventListener('click', (event) => {
+  if (event.target === elements.accountModal) closeAccountModal()
+})
+elements.saveAccountBtn.addEventListener('click', saveAccountProfile)
 elements.reloadWordbookEntriesBtn.addEventListener('click', loadWordbookEntries)
 elements.reloadWordbookViewBtn.addEventListener('click', loadWordbookEntries)
+elements.openWordbookModalBtn.addEventListener('click', () => openWordbookModal())
+elements.closeWordbookModalBtn.addEventListener('click', closeWordbookModal)
+elements.wordbookModal.addEventListener('click', (event) => {
+  if (event.target === elements.wordbookModal) closeWordbookModal()
+})
 elements.createWordbookBtn.addEventListener('click', createWordbook)
-elements.resetWordbookFormBtn.addEventListener('click', resetWordbookForm)
 elements.saveModelBtn.addEventListener('click', saveModelConfig)
-elements.resetModelFormBtn.addEventListener('click', resetModelForm)
-elements.wordbookSelect.addEventListener('change', () => changeWordbook(Number(elements.wordbookSelect.value)))
+if (elements.resetModelFormBtn) {
+  elements.resetModelFormBtn.addEventListener('click', () => resetModelForm({ keepModalOpen: true }))
+}
+elements.templateSelect.addEventListener('change', renderSelectedTemplate)
+elements.templateContentInput.addEventListener('input', () => validateTemplatePlaceholders({ quiet: true }))
+elements.saveTemplateBtn.addEventListener('click', savePromptTemplate)
+elements.wordbookSelect.addEventListener('change', () => changeWordbook(elements.wordbookSelect.value))
 elements.wordStatusFilter.addEventListener('change', loadWordbookEntries)
 elements.clearLogBtn.addEventListener('click', clearLogs)
 elements.studyForm.addEventListener('submit', (event) => {
@@ -2033,12 +3010,27 @@ elements.studyForm.addEventListener('submit', (event) => {
   study(elements.termInput.value)
 })
 elements.addToWordbookBtn.addEventListener('click', addCurrentWordToWordbook)
+elements.closeAddWordbookModalBtn.addEventListener('click', closeAddWordbookModal)
+elements.addWordbookModal.addEventListener('click', (event) => {
+  if (event.target === elements.addWordbookModal) closeAddWordbookModal()
+})
+elements.closeEntryStatusModalBtn.addEventListener('click', closeEntryStatusModal)
+elements.entryStatusModal.addEventListener('click', (event) => {
+  if (event.target === elements.entryStatusModal) closeEntryStatusModal()
+})
+elements.entryStatusModal.querySelectorAll('[data-status-choice]').forEach((button) => {
+  button.addEventListener('click', () => chooseEntryStatus(button.getAttribute('data-status-choice')))
+})
 elements.speakWordBtn.addEventListener('click', () => speak(state.currentRecord?.normalizedTerm || elements.termInput.value))
 elements.speakSentenceBtn.addEventListener('click', () => speak(firstExample(state.currentRecord?.parsed)))
 elements.editStudyNoteBtn.addEventListener('click', editCurrentNote)
 elements.editReviewNoteBtn.addEventListener('click', editCurrentNote)
 elements.chatBtn.addEventListener('click', chat)
 elements.reloadReviewBtn.addEventListener('click', loadDueReviews)
+elements.reviewWordbookSelect.addEventListener('change', () => {
+  state.currentWordbookId = elements.reviewWordbookSelect.value
+  if (state.currentWordbookId) localStorage.setItem('learning.wordbookId', state.currentWordbookId)
+})
 elements.closeReviewModalBtn.addEventListener('click', closeReviewModal)
 elements.reviewCompleteModal.addEventListener('click', (event) => {
   if (event.target === elements.reviewCompleteModal) closeReviewModal()
@@ -2050,6 +3042,11 @@ elements.reviewCompleteModal.querySelectorAll('[data-modal-result]').forEach((bu
     submitReview(entryId, button.getAttribute('data-modal-result'))
   })
 })
+elements.closeForgottenDetailModalBtn.addEventListener('click', closeForgottenDetailModal)
+elements.forgottenBackToReviewBtn.addEventListener('click', closeForgottenDetailModal)
+elements.forgottenDetailModal.addEventListener('click', (event) => {
+  if (event.target === elements.forgottenDetailModal) closeForgottenDetailModal()
+})
 document.querySelectorAll('.nav-item').forEach((button) => {
   button.addEventListener('click', () => setView(button.dataset.view))
 })
@@ -2059,14 +3056,18 @@ document.querySelectorAll('.profile-tab').forEach((button) => {
 document.addEventListener('keydown', handleReviewKeydown)
 
 window.renderRecord = renderRecord
-window.learningAssistant = { renderRecord, speak, setView, setProfileTab }
+window.learningAssistant = { renderRecord, renderReviewCompleteModal, speak, setView, setProfileTab, state }
 
 updateAuthView()
+syncSidebarState()
 setProfileTab(state.activeProfileTab)
 renderSystemLogs()
 renderRawJson(null)
+renderProviderOptions()
+syncModelProviderDefaults()
 loadAgents()
 loadModelConfigs()
+loadPromptTemplates()
 if (state.token || state.preview) {
   loadInitialData()
 }

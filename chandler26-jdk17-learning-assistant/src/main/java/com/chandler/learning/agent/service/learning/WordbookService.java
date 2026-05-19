@@ -1,7 +1,10 @@
 package com.chandler.learning.agent.service.learning;
 
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
+import com.baomidou.mybatisplus.core.conditions.update.LambdaUpdateWrapper;
 import com.chandler.learning.agent.domain.dto.learning.AddWordbookEntryRequest;
+import com.chandler.learning.agent.domain.dto.learning.LearningActivityDayResponse;
+import com.chandler.learning.agent.domain.dto.learning.LearningActivityResponse;
 import com.chandler.learning.agent.domain.dto.learning.ReviewSubmitRequest;
 import com.chandler.learning.agent.domain.dto.learning.ReviewSubmitResponse;
 import com.chandler.learning.agent.domain.dto.learning.WordbookEntryResponse;
@@ -24,8 +27,11 @@ import org.springframework.stereotype.Service;
 import org.springframework.util.StringUtils;
 
 import java.time.LocalDateTime;
+import java.time.LocalDate;
+import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Locale;
+import java.util.Map;
 
 @Service
 @RequiredArgsConstructor
@@ -105,6 +111,91 @@ public class WordbookService {
         wordbook.setUpdateTime(LocalDateTime.now());
         wordbookMapper.updateById(wordbook);
         return toWordbookResponse(wordbook);
+    }
+
+    public void deleteWordbook(Long userId, Long wordbookId) {
+        LearningWordbook wordbook = requireWordbook(userId, wordbookId);
+        LocalDateTime now = LocalDateTime.now();
+        wordbook.setDeleted(true);
+        wordbook.setIsDefault(false);
+        wordbook.setUpdateTime(now);
+        wordbookMapper.updateById(wordbook);
+
+        LearningWordbookEntry updateEntry = new LearningWordbookEntry();
+        updateEntry.setDeleted(true);
+        updateEntry.setUpdateTime(now);
+        entryMapper.update(updateEntry, new LambdaUpdateWrapper<LearningWordbookEntry>()
+                .eq(LearningWordbookEntry::getUserId, userId)
+                .eq(LearningWordbookEntry::getWordbookId, wordbookId)
+                .eq(LearningWordbookEntry::getDeleted, false));
+
+        LearningWordbook nextDefault = wordbookMapper.selectOne(new LambdaQueryWrapper<LearningWordbook>()
+                .eq(LearningWordbook::getUserId, userId)
+                .eq(LearningWordbook::getDeleted, false)
+                .orderByAsc(LearningWordbook::getCreateTime)
+                .last("LIMIT 1"));
+        if (nextDefault != null) {
+            nextDefault.setIsDefault(true);
+            nextDefault.setUpdateTime(now);
+            wordbookMapper.updateById(nextDefault);
+        }
+    }
+
+    public LearningActivityResponse activity(Long userId, int days) {
+        int resolvedDays = Math.max(7, Math.min(days, 366));
+        LocalDate endDate = LocalDate.now();
+        LocalDate startDate = endDate.minusDays(resolvedDays - 1L);
+        LocalDateTime startTime = startDate.atStartOfDay();
+
+        Map<LocalDate, LearningActivityDayResponse> dayMap = new LinkedHashMap<>();
+        for (int index = 0; index < resolvedDays; index++) {
+            LocalDate date = startDate.plusDays(index);
+            LearningActivityDayResponse item = new LearningActivityDayResponse();
+            item.setDate(date.toString());
+            item.setLearnedCount(0);
+            item.setReviewCount(0);
+            item.setTotalCount(0);
+            dayMap.put(date, item);
+        }
+
+        List<LearningWordbookEntry> learned = entryMapper.selectList(new LambdaQueryWrapper<LearningWordbookEntry>()
+                .eq(LearningWordbookEntry::getUserId, userId)
+                .ge(LearningWordbookEntry::getCreateTime, startTime));
+        for (LearningWordbookEntry entry : learned) {
+            LocalDate date = entry.getCreateTime() == null ? null : entry.getCreateTime().toLocalDate();
+            LearningActivityDayResponse item = dayMap.get(date);
+            if (item != null) {
+                item.setLearnedCount(nullToZero(item.getLearnedCount()) + 1);
+            }
+        }
+
+        List<LearningReviewRecord> reviews = reviewRecordMapper.selectList(new LambdaQueryWrapper<LearningReviewRecord>()
+                .eq(LearningReviewRecord::getUserId, userId)
+                .ge(LearningReviewRecord::getCreateTime, startTime));
+        for (LearningReviewRecord review : reviews) {
+            LocalDate date = review.getCreateTime() == null ? null : review.getCreateTime().toLocalDate();
+            LearningActivityDayResponse item = dayMap.get(date);
+            if (item != null) {
+                item.setReviewCount(nullToZero(item.getReviewCount()) + 1);
+            }
+        }
+
+        int learnedTotal = 0;
+        int reviewTotal = 0;
+        for (LearningActivityDayResponse item : dayMap.values()) {
+            int learnedCount = nullToZero(item.getLearnedCount());
+            int reviewCount = nullToZero(item.getReviewCount());
+            item.setTotalCount(learnedCount + reviewCount);
+            learnedTotal += learnedCount;
+            reviewTotal += reviewCount;
+        }
+
+        LearningActivityResponse response = new LearningActivityResponse();
+        response.setDays(resolvedDays);
+        response.setLearnedTotal(learnedTotal);
+        response.setReviewTotal(reviewTotal);
+        response.setItems(List.copyOf(dayMap.values()));
+        return response;
     }
 
     public WordbookEntryResponse addEntry(Long userId, Long wordbookId, AddWordbookEntryRequest request) {
@@ -319,6 +410,7 @@ public class WordbookService {
         response.setReviewCount(entry.getReviewCount());
         response.setCorrectCount(entry.getCorrectCount());
         response.setWrongCount(entry.getWrongCount());
+        response.setCreateTime(entry.getCreateTime());
         response.setParsed(readParsed(entry.getVocabularyId()));
         response.setTags(vocabularyInsightService.listTags(entry.getVocabularyId()));
         response.setRelations(vocabularyInsightService.listRelations(entry.getNormalizedTerm()));

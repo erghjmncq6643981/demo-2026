@@ -1,6 +1,7 @@
 package com.chandler.learning.agent.controller.learning;
 
 import com.chandler.learning.agent.domain.dto.learning.AddWordbookEntryRequest;
+import com.chandler.learning.agent.domain.dto.learning.LearningActivityResponse;
 import com.chandler.learning.agent.domain.dto.learning.ReviewSubmitRequest;
 import com.chandler.learning.agent.domain.dto.learning.ReviewSubmitResponse;
 import com.chandler.learning.agent.domain.dto.learning.WordbookEntryResponse;
@@ -61,6 +62,24 @@ public class WordbookController {
             @Valid @RequestBody WordbookSaveRequest request) {
         LearningUser user = authService.requireUser(authorization);
         return wordbookService.updateWordbook(user.getId(), wordbookId, request);
+    }
+
+    @DeleteMapping("/wordbooks/{wordbookId}")
+    @Operation(summary = "删除词书")
+    public void deleteWordbook(
+            @RequestHeader(value = "Authorization", required = false) String authorization,
+            @PathVariable Long wordbookId) {
+        LearningUser user = authService.requireUser(authorization);
+        wordbookService.deleteWordbook(user.getId(), wordbookId);
+    }
+
+    @GetMapping("/activity")
+    @Operation(summary = "学习活跃图")
+    public LearningActivityResponse activity(
+            @RequestHeader(value = "Authorization", required = false) String authorization,
+            @RequestParam(defaultValue = "180") Integer days) {
+        LearningUser user = authService.requireUser(authorization);
+        return wordbookService.activity(user.getId(), days == null ? 180 : days);
     }
 
     @GetMapping("/wordbooks/{wordbookId}/entries")

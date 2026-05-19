@@ -3,6 +3,7 @@ package com.chandler.learning.agent.controller.learning;
 import com.chandler.learning.agent.domain.dto.learning.AuthRequest;
 import com.chandler.learning.agent.domain.dto.learning.AuthResponse;
 import com.chandler.learning.agent.domain.dto.learning.UserProfileResponse;
+import com.chandler.learning.agent.domain.dto.learning.UserProfileUpdateRequest;
 import com.chandler.learning.agent.service.learning.AuthService;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
@@ -10,6 +11,7 @@ import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PostMapping;
+import org.springframework.web.bind.annotation.PutMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestHeader;
 import org.springframework.web.bind.annotation.RequestMapping;
@@ -39,6 +41,14 @@ public class AuthController {
     @Operation(summary = "当前登录用户")
     public UserProfileResponse me(@RequestHeader(value = "Authorization", required = false) String authorization) {
         return authService.me(authorization);
+    }
+
+    @PutMapping("/me")
+    @Operation(summary = "更新当前登录用户")
+    public UserProfileResponse updateProfile(
+            @RequestHeader(value = "Authorization", required = false) String authorization,
+            @RequestBody UserProfileUpdateRequest request) {
+        return authService.updateProfile(authorization, request);
     }
 
     @PostMapping("/logout")

@@ -4,6 +4,7 @@ import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import com.chandler.learning.agent.domain.dto.learning.AuthRequest;
 import com.chandler.learning.agent.domain.dto.learning.AuthResponse;
 import com.chandler.learning.agent.domain.dto.learning.UserProfileResponse;
+import com.chandler.learning.agent.domain.dto.learning.UserProfileUpdateRequest;
 import com.chandler.learning.agent.domain.entity.learning.LearningUser;
 import com.chandler.learning.agent.domain.entity.learning.LearningUserToken;
 import com.chandler.learning.agent.mapper.learning.LearningUserMapper;
@@ -66,6 +67,36 @@ public class AuthService {
 
     public UserProfileResponse me(String authorization) {
         return toProfile(requireUser(authorization));
+    }
+
+    public UserProfileResponse updateProfile(String authorization, UserProfileUpdateRequest request) {
+        LearningUser user = requireUser(authorization);
+        UserProfileUpdateRequest resolvedRequest = request == null ? new UserProfileUpdateRequest() : request;
+        boolean changed = false;
+
+        if (resolvedRequest.getNickname() != null) {
+            String nickname = resolvedRequest.getNickname().trim();
+            user.setNickname(StringUtils.hasText(nickname) ? nickname : user.getUsername());
+            changed = true;
+        }
+
+        if (StringUtils.hasText(resolvedRequest.getNewPassword())) {
+            String newPassword = resolvedRequest.getNewPassword().trim();
+            if (newPassword.length() < 6) {
+                throw new IllegalArgumentException("新密码至少 6 位");
+            }
+            if (!verifyPassword(resolvedRequest.getCurrentPassword(), user.getPasswordHash())) {
+                throw new IllegalArgumentException("当前密码不正确");
+            }
+            user.setPasswordHash(hashPassword(newPassword));
+            changed = true;
+        }
+
+        if (changed) {
+            user.setUpdateTime(LocalDateTime.now());
+            userMapper.updateById(user);
+        }
+        return toProfile(user);
     }
 
     public void logout(String authorization) {
