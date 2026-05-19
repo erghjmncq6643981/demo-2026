@@ -107,8 +107,16 @@
           </header>
 
           <section class="view active" id="profileView">
-            <div class="dashboard-grid">
-              <section class="panel account-panel">
+            <nav class="profile-tabs" aria-label="个人信息子导航">
+              <button class="profile-tab active" type="button" data-profile-tab="accountPanel">账户</button>
+              <button class="profile-tab" type="button" data-profile-tab="profileWordbookPanel">单词本</button>
+              <button class="profile-tab" type="button" data-profile-tab="agentManagePanel">Agent 管理</button>
+              <button class="profile-tab" type="button" data-profile-tab="systemLogPanel">系统日志</button>
+              <button class="profile-tab" type="button" data-profile-tab="aiSessionPanel">AI 会话</button>
+            </nav>
+
+            <div class="profile-sections">
+              <section class="panel account-panel profile-section active" id="accountPanel">
                 <div class="panel-heading">
                   <div>
                     <p class="eyebrow">Me</p>
@@ -139,7 +147,7 @@
                 </div>
               </section>
 
-              <section class="panel">
+              <section class="panel profile-section" id="profileWordbookPanel">
                 <div class="panel-heading">
                   <div>
                     <p class="eyebrow">Wordbook</p>
@@ -162,7 +170,7 @@
                 <div id="wordbookCards" class="wordbook-cards empty">暂无词书</div>
               </section>
 
-              <section class="panel model-panel">
+              <section class="panel model-panel profile-section" id="agentManagePanel">
                 <div class="panel-heading">
                   <div>
                     <p class="eyebrow">Models</p>
@@ -192,46 +200,54 @@
                   </div>
                 </div>
                 <div id="modelConfigList" class="model-list empty">暂无模型配置</div>
-              </section>
 
-              <section class="panel agent-panel">
-                <div class="panel-heading">
-                  <div>
-                    <p class="eyebrow">Agent</p>
-                    <h3>Agent 管理</h3>
-                  </div>
-                  <span class="mini-pill">学习配置</span>
+                <div class="agent-config-grid">
+                  <section class="sub-panel">
+                    <div class="panel-heading">
+                      <div>
+                        <p class="eyebrow">Agent</p>
+                        <h3>学习 Agent</h3>
+                      </div>
+                      <span class="mini-pill">学习配置</span>
+                    </div>
+                    <label>
+                      Agent
+                      <select id="agentSelect"></select>
+                    </label>
+                    <label>
+                      模板
+                      <select id="templateSelect">
+                        <option value="english_vocab_card_json">词汇卡片 JSON</option>
+                        <option value="english_vocab_quiz_json">练习题 JSON</option>
+                      </select>
+                    </label>
+                    <label>
+                      默认发音
+                      <select id="voiceSelect">
+                        <option value="us">美音</option>
+                        <option value="uk">英音</option>
+                      </select>
+                    </label>
+                    <label class="switch-line">
+                      <input id="forceRefreshInput" type="checkbox" />
+                      <span>强制重新调用 AI</span>
+                    </label>
+                  </section>
+
+                  <section class="sub-panel">
+                    <div class="panel-heading">
+                      <div>
+                        <p class="eyebrow">Chat</p>
+                        <h3>继续追问</h3>
+                      </div>
+                    </div>
+                    <textarea id="chatInput" rows="5" placeholder="例如：给我三个容易混淆的近义词"></textarea>
+                    <button class="secondary-button" id="chatBtn" type="button">发送追问</button>
+                  </section>
                 </div>
-                <label>
-                  Agent
-                  <select id="agentSelect"></select>
-                </label>
-                <label>
-                  模板
-                  <select id="templateSelect">
-                    <option value="english_vocab_card_json">词汇卡片 JSON</option>
-                    <option value="english_vocab_quiz_json">练习题 JSON</option>
-                  </select>
-                </label>
-                <label>
-                  默认发音
-                  <select id="voiceSelect">
-                    <option value="us">美音</option>
-                    <option value="uk">英音</option>
-                  </select>
-                </label>
-                <label class="switch-line">
-                  <input id="forceRefreshInput" type="checkbox" />
-                  <span>强制重新调用 AI</span>
-                </label>
-
-                <div class="panel-subtitle">继续追问</div>
-                <textarea id="chatInput" rows="5" placeholder="例如：给我三个容易混淆的近义词"></textarea>
-                <button class="secondary-button" id="chatBtn" type="button">发送追问</button>
               </section>
-            </div>
 
-            <section class="panel log-panel">
+              <section class="panel log-panel profile-section" id="systemLogPanel">
               <div class="panel-heading">
                 <div>
                   <p class="eyebrow">System</p>
@@ -240,8 +256,20 @@
                 <button class="secondary-button compact" id="clearLogBtn" type="button">清空</button>
               </div>
               <div id="systemLogList" class="log-list"></div>
-              <pre id="rawJson" class="raw-box">{}</pre>
-            </section>
+              </section>
+
+              <section class="panel log-panel profile-section" id="aiSessionPanel">
+                <div class="panel-heading">
+                  <div>
+                    <p class="eyebrow">AI Session</p>
+                    <h3>AI 会话</h3>
+                  </div>
+                  <span class="mini-pill" id="sessionIdBadge">Session -</span>
+                </div>
+                <p class="panel-description">这里展示最近一次 AI 模型返回的原始数据，方便排查模板、解析和缓存行为。</p>
+                <pre id="rawJson" class="raw-box">{}</pre>
+              </section>
+            </div>
           </section>
 
           <section class="view" id="wordbookView">
@@ -360,13 +388,13 @@
             </section>
 
             <div class="review-layout">
-              <section class="panel">
-                <div class="panel-heading"><h3>待复习任务</h3></div>
-                <div id="reviewQueue" class="review-list empty">暂无待复习任务</div>
-              </section>
               <section class="panel review-focus">
                 <div class="panel-heading"><h3>复习卡片</h3></div>
                 <div id="reviewFocus" class="empty">点击待复习单词后查看学习卡片</div>
+              </section>
+              <section class="panel">
+                <div class="panel-heading"><h3>待复习任务</h3></div>
+                <div id="reviewQueue" class="review-list empty">暂无待复习任务</div>
               </section>
               <section class="panel note-panel">
                 <div class="panel-heading">
@@ -385,6 +413,24 @@
     </main>
 
     <div class="toast" id="toast"></div>
-    <script type="module" src="/app.js?v=20260519-3"></script>
+    <div class="celebration-layer" id="celebrationLayer" aria-hidden="true"></div>
+    <section class="modal-backdrop hidden" id="reviewCompleteModal" aria-modal="true" role="dialog">
+      <div class="review-modal">
+        <div class="panel-heading">
+          <div>
+            <p class="eyebrow">Typed</p>
+            <h3 id="modalWordTitle">完成跟敲</h3>
+          </div>
+          <button class="icon-button" id="closeReviewModalBtn" type="button" title="关闭">×</button>
+        </div>
+        <div id="modalExamples" class="modal-examples empty">暂无例句</div>
+        <div class="review-actions modal-review-actions">
+          <button type="button" data-modal-result="forgotten">忘记</button>
+          <button type="button" data-modal-result="vague">模糊</button>
+          <button type="button" data-modal-result="remembered">记住</button>
+        </div>
+      </div>
+    </section>
+    <script type="module" src="/app.js?v=20260519-4"></script>
   </body>
 </html>

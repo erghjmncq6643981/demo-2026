@@ -1,5 +1,5 @@
 const state = {
-  build: '20260519-3',
+  build: '20260519-4',
   apiBase: localStorage.getItem('learning.apiBase') || 'http://localhost:16681',
   token: localStorage.getItem('learning.token') || '',
   user: readJsonStorage('learning.user'),
@@ -16,6 +16,11 @@ const state = {
   currentNoteEntry: null,
   currentRecord: null,
   currentSessionId: null,
+  activeProfileTab: localStorage.getItem('learning.profileTab') || 'accountPanel',
+  currentReviewEntry: null,
+  reviewTyped: '',
+  reviewWrongCount: 0,
+  pendingReviewEntryId: null,
   systemLogs: readJsonStorage('learning.systemLogs') || [],
 }
 
@@ -74,6 +79,7 @@ const elements = {
   systemLogList: $('systemLogList'),
   clearLogBtn: $('clearLogBtn'),
   rawJson: $('rawJson'),
+  sessionIdBadge: $('sessionIdBadge'),
   reloadAgentsBtn: $('reloadAgentsBtn'),
   studyForm: $('studyForm'),
   termInput: $('termInput'),
@@ -104,6 +110,11 @@ const elements = {
   reviewFocus: $('reviewFocus'),
   editReviewNoteBtn: $('editReviewNoteBtn'),
   reviewNote: $('reviewNote'),
+  celebrationLayer: $('celebrationLayer'),
+  reviewCompleteModal: $('reviewCompleteModal'),
+  modalWordTitle: $('modalWordTitle'),
+  modalExamples: $('modalExamples'),
+  closeReviewModalBtn: $('closeReviewModalBtn'),
   toast: $('toast'),
 }
 
@@ -221,6 +232,14 @@ function setView(viewId, options = {}) {
   if (viewId === 'wordbookView') loadWordbookEntries()
 }
 
+function setProfileTab(tabId) {
+  const fallback = document.getElementById(tabId) ? tabId : 'accountPanel'
+  state.activeProfileTab = fallback
+  localStorage.setItem('learning.profileTab', fallback)
+  document.querySelectorAll('.profile-tab').forEach((button) => button.classList.toggle('active', button.dataset.profileTab === fallback))
+  document.querySelectorAll('.profile-section').forEach((section) => section.classList.toggle('active', section.id === fallback))
+}
+
 async function loginOrRegister(mode) {
   const username = elements.usernameInput.value.trim()
   const password = elements.passwordInput.value
@@ -272,6 +291,10 @@ async function logout() {
   state.selectedEntry = null
   state.currentNoteEntry = null
   state.currentRecord = null
+  state.currentReviewEntry = null
+  state.reviewTyped = ''
+  state.reviewWrongCount = 0
+  state.pendingReviewEntryId = null
   localStorage.removeItem('learning.token')
   localStorage.removeItem('learning.user')
   localStorage.removeItem('learning.wordbookId')
@@ -280,6 +303,7 @@ async function logout() {
   renderModelConfigs()
   renderReviewQueue([])
   renderReviewFocus(null)
+  closeReviewModal()
   renderNotes(null)
   updateAuthView()
   logEvent('auth', '退出登录')
@@ -927,6 +951,11 @@ function renderPhonetics(term, uk, us) {
 function renderRawJson(record) {
   const parsed = record?.parsed || null
   elements.rawJson.textContent = parsed ? JSON.stringify(parsed, null, 2) : record?.rawContent || '{}'
+  if (elements.sessionIdBadge) {
+    const provider = record?.provider || 'AI'
+    const model = record?.modelName || 'raw'
+    elements.sessionIdBadge.textContent = record?.sessionId ? `${provider} · ${model} · #${record.sessionId}` : `${provider} · ${model}`
+  }
 }
 
 function renderDefinitions(parsed) {
@@ -1148,8 +1177,11 @@ async function chat() {
     state.currentSessionId = response.sessionId
     elements.chatInput.value = ''
     elements.rawJson.textContent = response.content
+    if (elements.sessionIdBadge) {
+      elements.sessionIdBadge.textContent = `${response.modelProvider || 'AI'} · ${response.modelName || 'chat'} · #${response.sessionId || '-'}`
+    }
     logEvent('chat', 'AI 追问回复', message)
-    toast('AI 已回复，完整内容进入个人信息的系统日志')
+    toast('AI 已回复，完整内容进入个人信息的 AI 会话')
   } catch (error) {
     logEvent('error', '追问失败', error.message)
     toast(`追问失败：${error.message}`)
@@ -1183,6 +1215,7 @@ function renderReviewQueue(entries) {
   if (!state.token) {
     elements.reviewQueue.className = 'review-list empty'
     elements.reviewQueue.textContent = '登录后查看复习任务'
+    state.currentReviewEntry = null
     renderReviewFocus(null)
     renderNotes(null)
     return
@@ -1190,15 +1223,18 @@ function renderReviewQueue(entries) {
   if (!entries.length) {
     elements.reviewQueue.className = 'review-list empty'
     elements.reviewQueue.textContent = '当前没有到期复习'
+    state.currentReviewEntry = null
     renderReviewFocus(null)
     renderNotes(null)
     return
   }
+  const selectedEntry = state.currentReviewEntry && entries.some((entry) => Number(entry.id) === Number(state.currentReviewEntry.id)) ? state.currentReviewEntry : entries[0]
+  state.currentReviewEntry = selectedEntry
   elements.reviewQueue.className = 'review-list'
   elements.reviewQueue.innerHTML = entries
     .map(
       (entry) => `
-        <div class="review-item">
+        <div class="review-item ${Number(selectedEntry.id) === Number(entry.id) ? 'active' : ''}">
           <button class="review-word" type="button" data-review-term="${escapeHtml(entry.normalizedTerm)}">
             ${escapeHtml(entry.term || entry.normalizedTerm)}
           </button>
@@ -1218,7 +1254,7 @@ function renderReviewQueue(entries) {
     button.addEventListener('click', () => {
       const term = button.getAttribute('data-review-term')
       const entry = state.reviewEntries.find((item) => item.normalizedTerm === term)
-      renderReviewFocus(entry)
+      selectReviewEntry(entry)
       renderNotes(entry)
       elements.termInput.value = term
       study(term)
@@ -1227,24 +1263,47 @@ function renderReviewQueue(entries) {
   elements.reviewQueue.querySelectorAll('[data-review-result]').forEach((button) => {
     button.addEventListener('click', () => submitReview(button.getAttribute('data-entry-id'), button.getAttribute('data-review-result')))
   })
-  renderReviewFocus(entries[0])
-  renderNotes(entries[0])
+  renderReviewFocus(selectedEntry)
+  renderNotes(selectedEntry)
+}
+
+function selectReviewEntry(entry) {
+  if (!entry) {
+    state.currentReviewEntry = null
+    state.reviewTyped = ''
+    state.reviewWrongCount = 0
+    renderReviewFocus(null)
+    return
+  }
+  state.currentReviewEntry = entry
+  state.reviewTyped = ''
+  state.reviewWrongCount = 0
+  renderReviewFocus(entry)
+  renderNotes(entry)
+  renderReviewQueue(state.reviewEntries)
 }
 
 function renderReviewFocus(entryOrRecord) {
   if (!entryOrRecord) {
     elements.reviewFocus.className = 'empty'
-    elements.reviewFocus.textContent = '点击待复习单词后查看学习卡片'
+    elements.reviewFocus.textContent = '点击待复习单词后开始跟敲'
     return
   }
   const parsed = entryOrRecord.parsed || state.currentRecord?.parsed || null
   const term = parsed?.term || entryOrRecord.term || entryOrRecord.normalizedTerm || state.currentRecord?.normalizedTerm || 'Ready'
   const definitions = normalizeDefinitions(parsed).slice(0, 3)
+  const letters = renderTypingLetters(term, state.reviewTyped)
+  const progress = term ? Math.round((state.reviewTyped.length / term.length) * 100) : 0
   elements.reviewFocus.className = 'review-focus-card'
   elements.reviewFocus.innerHTML = `
-    <p class="eyebrow">Focus</p>
+    <p class="eyebrow">Typing Review</p>
     <h4>${escapeHtml(term)}</h4>
     <p class="phonetic">${escapeHtml([parsed?.phonetic?.uk, parsed?.phonetic?.us].filter(Boolean).join('    ') || '暂无音标')}</p>
+    <div class="typing-board" tabindex="0" aria-label="跟敲单词 ${escapeHtml(term)}">
+      <div class="typing-letters">${letters}</div>
+      <div class="typing-progress"><span style="width: ${progress}%"></span></div>
+      <p class="typing-hint">按键盘逐字输入，错误会提示；完成后查看例句并提交复习结果。</p>
+    </div>
     <div class="mini-definition-list">
       ${
         definitions.length
@@ -1253,6 +1312,152 @@ function renderReviewFocus(entryOrRecord) {
       }
     </div>
   `
+}
+
+function renderTypingLetters(term, typed) {
+  return [...String(term || '')]
+    .map((letter, index) => {
+      const className = index < typed.length ? 'typed' : index === typed.length ? 'current' : ''
+      const label = letter === ' ' ? 'Space' : letter
+      return `<span class="${className}">${escapeHtml(label)}</span>`
+    })
+    .join('')
+}
+
+function handleReviewKeydown(event) {
+  if (state.activeView !== 'reviewView' || !state.currentReviewEntry || !state.token) return
+  const activeTag = document.activeElement?.tagName?.toLowerCase()
+  if (['input', 'textarea', 'select'].includes(activeTag) || elements.reviewCompleteModal?.classList.contains('hidden') === false) return
+  if (event.altKey || event.ctrlKey || event.metaKey) return
+  if (event.key === 'Backspace') {
+    event.preventDefault()
+    state.reviewTyped = state.reviewTyped.slice(0, -1)
+    renderReviewFocus(state.currentReviewEntry)
+    return
+  }
+  if (event.key === 'Escape') {
+    state.reviewTyped = ''
+    state.reviewWrongCount = 0
+    renderReviewFocus(state.currentReviewEntry)
+    return
+  }
+  if (event.key.length !== 1) return
+  const term = reviewTargetTerm(state.currentReviewEntry)
+  const expected = term[state.reviewTyped.length]
+  if (!expected) return
+  event.preventDefault()
+  if (event.key.toLowerCase() === expected.toLowerCase()) {
+    state.reviewTyped += expected
+    playUiTone('correct')
+    renderReviewFocus(state.currentReviewEntry)
+    if (state.reviewTyped.length === term.length) {
+      window.setTimeout(() => completeReviewTyping(), 120)
+    }
+    return
+  }
+  state.reviewWrongCount += 1
+  playUiTone('wrong')
+  shakeTypingBoard()
+}
+
+function reviewTargetTerm(entry) {
+  return String(entry?.term || entry?.normalizedTerm || '').trim()
+}
+
+function shakeTypingBoard() {
+  const board = elements.reviewFocus.querySelector('.typing-board')
+  if (!board) return
+  board.classList.remove('shake')
+  void board.offsetWidth
+  board.classList.add('shake')
+}
+
+function completeReviewTyping() {
+  const entry = state.currentReviewEntry
+  if (!entry) return
+  state.pendingReviewEntryId = entry.id
+  playUiTone('success')
+  renderReviewCompleteModal(entry)
+  showCelebration()
+}
+
+function renderReviewCompleteModal(entry) {
+  const parsed = entry?.parsed || {}
+  const examples = normalizeExamples(parsed).slice(0, 3)
+  elements.modalWordTitle.textContent = reviewTargetTerm(entry)
+  elements.modalExamples.className = examples.length ? 'modal-examples' : 'modal-examples empty'
+  elements.modalExamples.innerHTML = examples.length
+    ? examples
+        .map(
+          (item, index) => `
+            <div class="modal-example-item">
+              <button class="mini-audio-button" type="button" data-modal-sentence="${index}" title="播放例句">▶</button>
+              <p class="sentence">${escapeHtml(item.sentence || '')}</p>
+              <p class="translation">${escapeHtml(item.translation || '')}</p>
+            </div>
+          `,
+        )
+        .join('')
+    : '暂无例句'
+  elements.modalExamples.querySelectorAll('[data-modal-sentence]').forEach((button) => {
+    button.addEventListener('click', () => speak(examples[Number(button.getAttribute('data-modal-sentence'))]?.sentence, elements.voiceSelect.value))
+  })
+  elements.reviewCompleteModal.classList.remove('hidden')
+}
+
+function closeReviewModal() {
+  if (!elements.reviewCompleteModal) return
+  elements.reviewCompleteModal.classList.add('hidden')
+  state.pendingReviewEntryId = null
+  state.reviewTyped = ''
+  state.reviewWrongCount = 0
+  if (state.activeView === 'reviewView' && state.currentReviewEntry) {
+    renderReviewFocus(state.currentReviewEntry)
+  }
+}
+
+function showCelebration() {
+  const layer = elements.celebrationLayer
+  if (!layer) return
+  layer.innerHTML = Array.from({ length: 34 }, (_, index) => {
+    const left = Math.round(Math.random() * 100)
+    const delay = Math.round(Math.random() * 260)
+    const color = ['#818cf8', '#60a5fa', '#7dd3a8', '#facc6b', '#fb7185'][index % 5]
+    return `<span style="left:${left}%; animation-delay:${delay}ms; background:${color}"></span>`
+  }).join('')
+  layer.classList.add('show')
+  window.clearTimeout(showCelebration.timer)
+  showCelebration.timer = window.setTimeout(() => {
+    layer.classList.remove('show')
+    layer.innerHTML = ''
+  }, 1500)
+}
+
+function playUiTone(type) {
+  try {
+    const AudioContextClass = window.AudioContext || window.webkitAudioContext
+    if (!AudioContextClass) return
+    const context = playUiTone.context || new AudioContextClass()
+    playUiTone.context = context
+    const oscillator = context.createOscillator()
+    const gain = context.createGain()
+    const now = context.currentTime
+    const config = {
+      correct: { frequency: 520, duration: 0.045, gain: 0.025, type: 'sine' },
+      wrong: { frequency: 150, duration: 0.12, gain: 0.05, type: 'square' },
+      success: { frequency: 720, duration: 0.16, gain: 0.045, type: 'triangle' },
+    }[type] || { frequency: 360, duration: 0.08, gain: 0.03, type: 'sine' }
+    oscillator.type = config.type
+    oscillator.frequency.setValueAtTime(config.frequency, now)
+    gain.gain.setValueAtTime(config.gain, now)
+    gain.gain.exponentialRampToValueAtTime(0.0001, now + config.duration)
+    oscillator.connect(gain)
+    gain.connect(context.destination)
+    oscillator.start(now)
+    oscillator.stop(now + config.duration)
+  } catch {
+    // 音效是锦上添花，浏览器限制时不影响跟敲。
+  }
 }
 
 async function submitReview(entryId, result) {
@@ -1265,6 +1470,9 @@ async function submitReview(entryId, result) {
         const source = state.wordbookEntries.find((item) => Number(item.id) === Number(entryId))
         if (source) source.status = entry.status
       }
+      state.reviewTyped = ''
+      state.reviewWrongCount = 0
+      closeReviewModal()
       renderReviewQueue(state.reviewEntries)
       renderWordbookEntries()
       logEvent('review', '预览提交复习结果', `${entryId} -> ${result}`)
@@ -1276,6 +1484,9 @@ async function submitReview(entryId, result) {
       body: JSON.stringify({ result }),
     })
     await Promise.allSettled([loadWordbooks(), loadDueReviews(), loadWordbookEntries()])
+    state.reviewTyped = ''
+    state.reviewWrongCount = 0
+    closeReviewModal()
     logEvent('review', '提交复习结果', `${response.normalizedTerm} -> ${result}`)
     toast(`已记录复习，下次：${formatDateTime(response.nextReviewTime)}`)
   } catch (error) {
@@ -1391,7 +1602,6 @@ function clearLogs() {
   state.systemLogs = []
   localStorage.removeItem('learning.systemLogs')
   renderSystemLogs()
-  elements.rawJson.textContent = '{}'
   toast('系统日志已清空')
 }
 
@@ -1829,14 +2039,30 @@ elements.editStudyNoteBtn.addEventListener('click', editCurrentNote)
 elements.editReviewNoteBtn.addEventListener('click', editCurrentNote)
 elements.chatBtn.addEventListener('click', chat)
 elements.reloadReviewBtn.addEventListener('click', loadDueReviews)
+elements.closeReviewModalBtn.addEventListener('click', closeReviewModal)
+elements.reviewCompleteModal.addEventListener('click', (event) => {
+  if (event.target === elements.reviewCompleteModal) closeReviewModal()
+})
+elements.reviewCompleteModal.querySelectorAll('[data-modal-result]').forEach((button) => {
+  button.addEventListener('click', () => {
+    const entryId = state.pendingReviewEntryId || state.currentReviewEntry?.id
+    if (!entryId) return
+    submitReview(entryId, button.getAttribute('data-modal-result'))
+  })
+})
 document.querySelectorAll('.nav-item').forEach((button) => {
   button.addEventListener('click', () => setView(button.dataset.view))
 })
+document.querySelectorAll('.profile-tab').forEach((button) => {
+  button.addEventListener('click', () => setProfileTab(button.dataset.profileTab))
+})
+document.addEventListener('keydown', handleReviewKeydown)
 
 window.renderRecord = renderRecord
-window.learningAssistant = { renderRecord, speak, setView }
+window.learningAssistant = { renderRecord, speak, setView, setProfileTab }
 
 updateAuthView()
+setProfileTab(state.activeProfileTab)
 renderSystemLogs()
 renderRawJson(null)
 loadAgents()
