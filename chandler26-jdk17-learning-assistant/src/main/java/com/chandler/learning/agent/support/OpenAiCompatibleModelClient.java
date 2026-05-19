@@ -5,7 +5,6 @@ import com.chandler.learning.agent.config.AiModelProperties.ProviderConfig;
 import com.chandler.learning.agent.domain.dto.ChatMessageParam;
 import com.chandler.learning.agent.domain.dto.ModelChatRequest;
 import com.chandler.learning.agent.domain.dto.ModelChatResponse;
-import com.chandler.learning.agent.domain.entity.AiModelConfig;
 import com.chandler.learning.agent.service.AiModelConfigService;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
@@ -80,17 +79,7 @@ public class OpenAiCompatibleModelClient implements AiModelClient {
 
     private ProviderConfig resolveProviderConfig(ModelChatRequest request, String provider) {
         if (request.getModelConfigId() != null) {
-            AiModelConfig modelConfig = modelConfigService.getById(request.getModelConfigId());
-            if (modelConfig == null) {
-                throw new IllegalArgumentException("模型配置不存在: " + request.getModelConfigId());
-            }
-            ProviderConfig providerConfig = new ProviderConfig();
-            providerConfig.setEnabled(modelConfig.getEnabled());
-            providerConfig.setApiKey(modelConfig.getApiKey());
-            providerConfig.setBaseUrl(modelConfig.getBaseUrl());
-            providerConfig.setChatPath(modelConfig.getChatPath());
-            providerConfig.setDefaultModel(modelConfig.getModelName());
-            return providerConfig;
+            return modelConfigService.resolveProviderConfig(request.getModelConfigId());
         }
         return modelConfigService.resolveProviderConfig(provider);
     }

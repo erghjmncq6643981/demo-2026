@@ -45,6 +45,7 @@ public class WordbookService {
     private final EnglishVocabularyStudyRecordMapper vocabularyMapper;
     private final EnglishVocabularyStudyService vocabularyStudyService;
     private final VocabularyInsightService vocabularyInsightService;
+    private final SystemLogService systemLogService;
     private final ObjectMapper objectMapper;
 
     public LearningWordbook ensureDefaultWordbook(Long userId) {
@@ -67,6 +68,7 @@ public class WordbookService {
         wordbook.setCreateTime(now);
         wordbook.setUpdateTime(now);
         wordbookMapper.insert(wordbook);
+        systemLogService.record(userId, "wordbook", "创建默认词书", wordbook.getName());
         return wordbook;
     }
 
@@ -97,6 +99,7 @@ public class WordbookService {
         wordbook.setCreateTime(now);
         wordbook.setUpdateTime(now);
         wordbookMapper.insert(wordbook);
+        systemLogService.record(userId, "wordbook", "创建词书", wordbook.getName());
         return toWordbookResponse(wordbook);
     }
 
@@ -110,6 +113,7 @@ public class WordbookService {
         wordbook.setIsDefault(Boolean.TRUE.equals(request.getIsDefault()));
         wordbook.setUpdateTime(LocalDateTime.now());
         wordbookMapper.updateById(wordbook);
+        systemLogService.record(userId, "wordbook", "更新词书", wordbook.getName());
         return toWordbookResponse(wordbook);
     }
 
@@ -139,6 +143,7 @@ public class WordbookService {
             nextDefault.setUpdateTime(now);
             wordbookMapper.updateById(nextDefault);
         }
+        systemLogService.record(userId, "wordbook", "删除词书", wordbook.getName());
     }
 
     public LearningActivityResponse activity(Long userId, int days) {
@@ -250,6 +255,7 @@ public class WordbookService {
         entry.setCreateTime(now);
         entry.setUpdateTime(now);
         entryMapper.insert(entry);
+        systemLogService.record(userId, "wordbook", "加入单词本", entry.getNormalizedTerm());
         return toEntryResponse(entry);
     }
 
@@ -299,6 +305,7 @@ public class WordbookService {
         }
         entry.setUpdateTime(LocalDateTime.now());
         entryMapper.updateById(entry);
+        systemLogService.record(userId, "wordbook", "更新词条", entry.getNormalizedTerm());
         return toEntryResponse(entry);
     }
 
@@ -307,6 +314,7 @@ public class WordbookService {
         entry.setDeleted(true);
         entry.setUpdateTime(LocalDateTime.now());
         entryMapper.updateById(entry);
+        systemLogService.record(userId, "wordbook", "删除词条", entry.getNormalizedTerm());
     }
 
     public ReviewSubmitResponse submitReview(Long userId, Long entryId, ReviewSubmitRequest request) {
@@ -374,6 +382,7 @@ public class WordbookService {
         response.setReviewStage(stageAfter);
         response.setMasteryScore(masteryAfter);
         response.setNextReviewTime(nextReviewTime);
+        systemLogService.record(userId, "review", "提交复习结果", entry.getNormalizedTerm() + " -> " + result);
         return response;
     }
 

@@ -6,10 +6,13 @@ import com.chandler.learning.agent.domain.dto.learning.AuthResponse;
 import com.chandler.learning.agent.domain.dto.learning.UserProfileResponse;
 import com.chandler.learning.agent.domain.dto.learning.UserProfileUpdateRequest;
 import com.chandler.learning.agent.domain.entity.learning.LearningUser;
-import com.chandler.learning.agent.domain.entity.learning.LearningUserToken;
 import com.chandler.learning.agent.mapper.learning.LearningUserMapper;
-import com.chandler.learning.agent.mapper.learning.LearningUserTokenMapper;
+import com.chandler.learning.agent.security.JwtClaims;
+import com.chandler.learning.agent.security.JwtTokenService;
+import com.chandler.learning.agent.security.LearningUserPrincipal;
 import lombok.RequiredArgsConstructor;
+import org.springframework.security.core.Authentication;
+import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.stereotype.Service;
 import org.springframework.util.StringUtils;
 
@@ -18,18 +21,17 @@ import java.security.MessageDigest;
 import java.security.SecureRandom;
 import java.time.LocalDateTime;
 import java.util.HexFormat;
-import java.util.UUID;
 
 @Service
 @RequiredArgsConstructor
 public class AuthService {
 
-    private static final int TOKEN_DAYS = 30;
     private static final String PASSWORD_PREFIX = "sha256$";
 
     private final LearningUserMapper userMapper;
-    private final LearningUserTokenMapper tokenMapper;
     private final WordbookService wordbookService;
+    private final JwtTokenService jwtTokenService;
+    private final SystemLogService systemLogService;
     private final SecureRandom secureRandom = new SecureRandom();
 
     public AuthResponse register(AuthRequest request) {
@@ -49,6 +51,7 @@ public class AuthService {
         user.setUpdateTime(now);
         userMapper.insert(user);
         wordbookService.ensureDefaultWordbook(user.getId());
+        systemLogService.record(user.getId(), "auth", "注册成功", username);
         return createLoginResponse(user);
     }
 
@@ -62,6 +65,7 @@ public class AuthService {
             throw new IllegalArgumentException("用户名或密码错误");
         }
         wordbookService.ensureDefaultWordbook(user.getId());
+        systemLogService.record(user.getId(), "auth", "登录成功", username);
         return createLoginResponse(user);
     }
 
@@ -95,41 +99,31 @@ public class AuthService {
         if (changed) {
             user.setUpdateTime(LocalDateTime.now());
             userMapper.updateById(user);
+            systemLogService.record(user.getId(), "auth", "更新账户信息", user.getUsername());
         }
         return toProfile(user);
     }
 
     public void logout(String authorization) {
-        String token = resolveToken(authorization);
-        if (!StringUtils.hasText(token)) {
-            return;
-        }
-        LearningUserToken userToken = tokenMapper.selectOne(new LambdaQueryWrapper<LearningUserToken>()
-                .eq(LearningUserToken::getTokenHash, sha256(token))
-                .eq(LearningUserToken::getRevoked, false)
-                .last("LIMIT 1"));
-        if (userToken == null) {
-            return;
-        }
-        userToken.setRevoked(true);
-        userToken.setUpdateTime(LocalDateTime.now());
-        tokenMapper.updateById(userToken);
+        SecurityContextHolder.clearContext();
     }
 
     public LearningUser requireUser(String authorization) {
+        LearningUser contextUser = currentSecurityUser();
+        if (contextUser != null) {
+            return contextUser;
+        }
         String token = resolveToken(authorization);
         if (!StringUtils.hasText(token)) {
             throw new IllegalArgumentException("请先登录");
         }
-        LearningUserToken userToken = tokenMapper.selectOne(new LambdaQueryWrapper<LearningUserToken>()
-                .eq(LearningUserToken::getTokenHash, sha256(token))
-                .eq(LearningUserToken::getRevoked, false)
-                .gt(LearningUserToken::getExpiredTime, LocalDateTime.now())
-                .last("LIMIT 1"));
-        if (userToken == null) {
+        JwtClaims claims;
+        try {
+            claims = jwtTokenService.parse(token);
+        } catch (RuntimeException ex) {
             throw new IllegalArgumentException("登录已过期，请重新登录");
         }
-        LearningUser user = userMapper.selectById(userToken.getUserId());
+        LearningUser user = userMapper.selectById(claims.userId());
         if (user == null || !Boolean.TRUE.equals(user.getEnabled())) {
             throw new IllegalArgumentException("用户不可用");
         }
@@ -137,18 +131,9 @@ public class AuthService {
     }
 
     private AuthResponse createLoginResponse(LearningUser user) {
-        String rawToken = UUID.randomUUID() + "." + randomHex(24);
+        String rawToken = jwtTokenService.createToken(user.getId(), user.getUsername());
+        JwtClaims claims = jwtTokenService.parse(rawToken);
         LocalDateTime now = LocalDateTime.now();
-        LocalDateTime expiredTime = now.plusDays(TOKEN_DAYS);
-
-        LearningUserToken token = new LearningUserToken();
-        token.setUserId(user.getId());
-        token.setTokenHash(sha256(rawToken));
-        token.setExpiredTime(expiredTime);
-        token.setRevoked(false);
-        token.setCreateTime(now);
-        token.setUpdateTime(now);
-        tokenMapper.insert(token);
 
         LearningUser update = new LearningUser();
         update.setId(user.getId());
@@ -158,9 +143,21 @@ public class AuthService {
 
         AuthResponse response = new AuthResponse();
         response.setToken(rawToken);
-        response.setExpiredTime(expiredTime);
+        response.setExpiredTime(claims.expiredTime());
         response.setUser(toProfile(user));
         return response;
+    }
+
+    private LearningUser currentSecurityUser() {
+        Authentication authentication = SecurityContextHolder.getContext().getAuthentication();
+        if (authentication == null || !authentication.isAuthenticated()) {
+            return null;
+        }
+        Object principal = authentication.getPrincipal();
+        if (principal instanceof LearningUserPrincipal userPrincipal) {
+            return userPrincipal.user();
+        }
+        return null;
     }
 
     private LearningUser findByUsername(String username) {
@@ -182,6 +179,12 @@ public class AuthService {
         return PASSWORD_PREFIX + salt + "$" + sha256(salt + ":" + password);
     }
 
+    private String randomHex(int byteLength) {
+        byte[] bytes = new byte[byteLength];
+        secureRandom.nextBytes(bytes);
+        return HexFormat.of().formatHex(bytes);
+    }
+
     private boolean verifyPassword(String password, String passwordHash) {
         if (!StringUtils.hasText(passwordHash) || !passwordHash.startsWith(PASSWORD_PREFIX)) {
             return false;
@@ -192,12 +195,6 @@ public class AuthService {
         }
         return MessageDigest.isEqual(parts[2].getBytes(StandardCharsets.UTF_8),
                 sha256(parts[1] + ":" + password).getBytes(StandardCharsets.UTF_8));
-    }
-
-    private String randomHex(int byteLength) {
-        byte[] bytes = new byte[byteLength];
-        secureRandom.nextBytes(bytes);
-        return HexFormat.of().formatHex(bytes);
     }
 
     private String sha256(String value) {

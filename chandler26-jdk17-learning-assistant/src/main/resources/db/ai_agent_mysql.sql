@@ -112,7 +112,7 @@ CREATE TABLE IF NOT EXISTS ai_model_config (
     model_name VARCHAR(100) NOT NULL COMMENT '模型名称',
     base_url VARCHAR(255) NOT NULL COMMENT 'Base URL',
     chat_path VARCHAR(120) NOT NULL DEFAULT '/chat/completions' COMMENT 'Chat Completions 路径',
-    api_key VARCHAR(255) NOT NULL COMMENT 'API Key',
+    api_key TEXT NOT NULL COMMENT 'API Key ciphertext, format enc:v1:<iv>.<ciphertext>; legacy plaintext is still readable',
     enabled TINYINT(1) NOT NULL DEFAULT 1 COMMENT '是否启用',
     is_default TINYINT(1) NOT NULL DEFAULT 0 COMMENT '是否默认',
     sequence INT NOT NULL DEFAULT 0 COMMENT '优先级，数字越小越优先',

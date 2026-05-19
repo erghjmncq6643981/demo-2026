@@ -7,6 +7,8 @@ import com.chandler.learning.agent.domain.dto.AiModelConfigResponse;
 import com.chandler.learning.agent.domain.dto.AiModelConfigSaveRequest;
 import com.chandler.learning.agent.domain.entity.AiModelConfig;
 import com.chandler.learning.agent.mapper.AiModelConfigMapper;
+import com.chandler.learning.agent.security.ApiKeyCryptoService;
+import com.chandler.learning.agent.service.learning.SystemLogService;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 import org.springframework.util.StringUtils;
@@ -23,6 +25,8 @@ public class AiModelConfigService {
 
     private final AiModelConfigMapper modelConfigMapper;
     private final AiModelProperties modelProperties;
+    private final ApiKeyCryptoService apiKeyCryptoService;
+    private final SystemLogService systemLogService;
 
     public List<AiModelConfigResponse> list(boolean enabledOnly) {
         return modelConfigMapper.selectList(new LambdaQueryWrapper<AiModelConfig>()
@@ -74,6 +78,7 @@ public class AiModelConfigService {
             clearDefault(null);
         }
         modelConfigMapper.insert(config);
+        systemLogService.record(null, "ai_model", "创建模型配置", config.getName());
         return toResponse(config);
     }
 
@@ -88,6 +93,7 @@ public class AiModelConfigService {
             clearDefault(id);
         }
         modelConfigMapper.updateById(config);
+        systemLogService.record(null, "ai_model", "更新模型配置", config.getName());
         return toResponse(config);
     }
 
@@ -99,6 +105,7 @@ public class AiModelConfigService {
         config.setEnabled(enabled);
         config.setUpdateTime(LocalDateTime.now());
         modelConfigMapper.updateById(config);
+        systemLogService.record(null, "ai_model", enabled ? "启用模型配置" : "停用模型配置", config.getName());
     }
 
     public void updatePriority(Long id, Integer sequence, Boolean isDefault) {
@@ -113,6 +120,7 @@ public class AiModelConfigService {
             clearDefault(id);
         }
         modelConfigMapper.updateById(config);
+        systemLogService.record(null, "ai_model", "更新模型优先级", config.getName());
     }
 
     public void delete(Long id) {
@@ -123,6 +131,7 @@ public class AiModelConfigService {
         config.setDeleted(true);
         config.setUpdateTime(LocalDateTime.now());
         modelConfigMapper.updateById(config);
+        systemLogService.record(null, "ai_model", "删除模型配置", config.getName());
     }
 
     public ProviderConfig resolveProviderConfig(String provider) {
@@ -131,6 +140,14 @@ public class AiModelConfigService {
             return toProviderConfig(config);
         }
         return modelProperties.getProvider(provider);
+    }
+
+    public ProviderConfig resolveProviderConfig(Long modelConfigId) {
+        AiModelConfig config = getById(modelConfigId);
+        if (config == null) {
+            throw new IllegalArgumentException("模型配置不存在: " + modelConfigId);
+        }
+        return toProviderConfig(config);
     }
 
     public String resolveDefaultProvider() {
@@ -161,9 +178,10 @@ public class AiModelConfigService {
     }
 
     private ProviderConfig toProviderConfig(AiModelConfig config) {
+        encryptLegacyApiKey(config);
         ProviderConfig providerConfig = new ProviderConfig();
         providerConfig.setEnabled(config.getEnabled());
-        providerConfig.setApiKey(config.getApiKey());
+        providerConfig.setApiKey(apiKeyCryptoService.decrypt(config.getApiKey()));
         providerConfig.setBaseUrl(config.getBaseUrl());
         providerConfig.setChatPath(config.getChatPath());
         providerConfig.setDefaultModel(config.getModelName());
@@ -177,7 +195,7 @@ public class AiModelConfigService {
         config.setBaseUrl(request.getBaseUrl().trim());
         config.setChatPath(StringUtils.hasText(request.getChatPath()) ? request.getChatPath().trim() : "/chat/completions");
         if (create || StringUtils.hasText(request.getApiKey())) {
-            config.setApiKey(request.getApiKey().trim());
+            config.setApiKey(apiKeyCryptoService.encrypt(request.getApiKey().trim()));
         }
         config.setEnabled(Boolean.TRUE.equals(request.getEnabled()));
         config.setIsDefault(Boolean.TRUE.equals(request.getIsDefault()));
@@ -199,6 +217,7 @@ public class AiModelConfigService {
     }
 
     private AiModelConfigResponse toResponse(AiModelConfig config) {
+        encryptLegacyApiKey(config);
         AiModelConfigResponse response = new AiModelConfigResponse();
         response.setId(config.getId());
         response.setName(config.getName());
@@ -206,7 +225,7 @@ public class AiModelConfigService {
         response.setModelName(config.getModelName());
         response.setBaseUrl(config.getBaseUrl());
         response.setChatPath(config.getChatPath());
-        response.setApiKeyMasked(mask(config.getApiKey()));
+        response.setApiKeyMasked(apiKeyCryptoService.mask(config.getApiKey()));
         response.setEnabled(config.getEnabled());
         response.setIsDefault(config.getIsDefault());
         response.setSequence(config.getSequence());
@@ -215,13 +234,16 @@ public class AiModelConfigService {
         return response;
     }
 
-    private String mask(String apiKey) {
-        if (!StringUtils.hasText(apiKey)) {
-            return "";
+    private void encryptLegacyApiKey(AiModelConfig config) {
+        if (config == null || !StringUtils.hasText(config.getApiKey()) || apiKeyCryptoService.isEncrypted(config.getApiKey())) {
+            return;
         }
-        if (apiKey.length() <= 10) {
-            return "****";
-        }
-        return apiKey.substring(0, 6) + "****" + apiKey.substring(apiKey.length() - 4);
+        config.setApiKey(apiKeyCryptoService.encrypt(config.getApiKey()));
+        AiModelConfig update = new AiModelConfig();
+        update.setId(config.getId());
+        update.setApiKey(config.getApiKey());
+        update.setUpdateTime(LocalDateTime.now());
+        modelConfigMapper.updateById(update);
     }
+
 }

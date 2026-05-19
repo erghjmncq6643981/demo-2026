@@ -9,6 +9,7 @@ import com.chandler.learning.agent.domain.dto.vocabulary.VocabularyStudyResponse
 import com.chandler.learning.agent.domain.entity.vocabulary.EnglishVocabularyStudyRecord;
 import com.chandler.learning.agent.mapper.vocabulary.EnglishVocabularyStudyRecordMapper;
 import com.chandler.learning.agent.service.AiChatService;
+import com.chandler.learning.agent.service.learning.SystemLogService;
 import com.chandler.learning.agent.service.learning.VocabularyInsightService;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
@@ -37,6 +38,7 @@ public class EnglishVocabularyStudyService {
     private final AiChatService aiChatService;
     private final ObjectMapper objectMapper;
     private final VocabularyInsightService vocabularyInsightService;
+    private final SystemLogService systemLogService;
 
     public VocabularyStudyResponse study(VocabularyStudyRequest request) {
         String normalizedTerm = normalize(request.getTerm());
@@ -49,6 +51,7 @@ public class EnglishVocabularyStudyService {
         if (existing != null && !forceRefresh) {
             touch(existing);
             vocabularyInsightService.syncInsights(existing);
+            systemLogService.record(null, "cache", "读取词汇缓存", normalizedTerm);
             return toResponse(existing, true);
         }
 
@@ -77,6 +80,7 @@ public class EnglishVocabularyStudyService {
         }
 
         vocabularyInsightService.syncInsights(record);
+        systemLogService.record(null, "ai", "AI 生成词汇卡片", normalizedTerm);
         return toResponse(record, false);
     }
 

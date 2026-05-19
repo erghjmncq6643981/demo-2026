@@ -1,5 +1,5 @@
 const state = {
-  build: '20260519-11',
+  build: '20260519-17',
   apiBase: localStorage.getItem('learning.apiBase') || 'http://localhost:16681',
   token: localStorage.getItem('learning.token') || '',
   user: readJsonStorage('learning.user'),
@@ -133,10 +133,13 @@ const elements = {
   modelSequenceInput: $('modelSequenceInput'),
   modelDefaultInput: $('modelDefaultInput'),
   modelEnabledInput: $('modelEnabledInput'),
+  modelDefaultToggleBtn: $('modelDefaultToggleBtn'),
+  modelEnabledToggleBtn: $('modelEnabledToggleBtn'),
   saveModelBtn: $('saveModelBtn'),
   resetModelFormBtn: $('resetModelFormBtn'),
   modelConfigList: $('modelConfigList'),
   systemLogList: $('systemLogList'),
+  reloadSystemLogsBtn: $('reloadSystemLogsBtn'),
   clearLogBtn: $('clearLogBtn'),
   rawJson: $('rawJson'),
   sessionIdBadge: $('sessionIdBadge'),
@@ -264,10 +267,26 @@ function logEvent(type, title, detail = '') {
     title,
     detail,
     time: new Date().toISOString(),
+    source: 'client',
   }
   state.systemLogs = [entry, ...state.systemLogs].slice(0, 60)
-  localStorage.setItem('learning.systemLogs', JSON.stringify(state.systemLogs))
+  if (state.preview || !state.token) {
+    localStorage.setItem('learning.systemLogs', JSON.stringify(state.systemLogs))
+  }
   renderSystemLogs()
+  persistSystemLog(entry)
+}
+
+async function persistSystemLog(entry) {
+  if (state.preview || !state.token) return
+  try {
+    await request('/api/v1/learning/system-logs', {
+      method: 'POST',
+      body: JSON.stringify(entry),
+    })
+  } catch {
+    // 日志写入失败不阻断主流程。
+  }
 }
 
 function updateShellVisibility() {
@@ -340,7 +359,7 @@ function setView(viewId, options = {}) {
   if (!options.silent) {
     logEvent('navigation', `进入${title}`)
   }
-  if (viewId === 'reviewView') loadDueReviews()
+  if (viewId === 'reviewView' && !options.skipReviewReload) loadDueReviews()
   if (viewId === 'wordbookView') loadWordbookEntries()
   if (window.matchMedia('(max-width: 1100px)').matches) {
     setSidebarCollapsed(true)
@@ -441,7 +460,7 @@ async function loadInitialData() {
     loadPreviewData()
     return
   }
-  await Promise.allSettled([loadAgents(), loadWordbooks(), loadModelConfigs(), loadPromptTemplates(), loadActivity()])
+  await Promise.allSettled([loadAgents(), loadWordbooks(), loadModelConfigs(), loadPromptTemplates(), loadActivity(), loadSystemLogs()])
   await Promise.allSettled([loadDueReviews(), loadWordbookEntries()])
 }
 
@@ -889,14 +908,16 @@ function renderModelConfigs() {
       (item) => `
         <div class="model-item ${item.enabled ? '' : 'disabled'}">
           <div>
-            <strong>${escapeHtml(item.name)}</strong>
+            <div class="model-title-line">
+              <strong>${escapeHtml(item.name)}</strong>
+              <span class="mini-pill ${item.enabled ? 'ok' : ''}">${item.enabled ? '启用' : '停用'}</span>
+              ${item.isDefault ? '<span class="mini-pill ok">默认</span>' : ''}
+            </div>
             <p>${escapeHtml(item.provider)} · ${escapeHtml(item.modelName)} · ${escapeHtml(item.baseUrl || '')}</p>
-            <small>${item.isDefault ? '默认 · ' : ''}优先级 ${item.sequence ?? 0} · ${escapeHtml(item.apiKeyMasked || '')}</small>
+            <small>优先级 ${item.sequence ?? 0} · ${escapeHtml(item.apiKeyMasked || '')}</small>
           </div>
           <div class="row-actions">
-            <button type="button" data-model-edit="${escapeHtml(item.id)}">编辑</button>
-            <button type="button" data-model-toggle="${escapeHtml(item.id)}">${item.enabled ? '禁用' : '启用'}</button>
-            <button type="button" data-model-default="${escapeHtml(item.id)}">默认</button>
+            <button class="icon-action-button" type="button" data-model-edit="${escapeHtml(item.id)}" title="编辑模型" aria-label="编辑模型">✎</button>
             <button class="danger-icon-button" type="button" data-model-delete="${escapeHtml(item.id)}" title="删除模型">×</button>
           </div>
         </div>
@@ -905,12 +926,6 @@ function renderModelConfigs() {
     .join('')
   elements.modelConfigList.querySelectorAll('[data-model-edit]').forEach((button) => {
     button.addEventListener('click', () => openModelModal(button.getAttribute('data-model-edit')))
-  })
-  elements.modelConfigList.querySelectorAll('[data-model-toggle]').forEach((button) => {
-    button.addEventListener('click', () => toggleModelConfig(button.getAttribute('data-model-toggle')))
-  })
-  elements.modelConfigList.querySelectorAll('[data-model-default]').forEach((button) => {
-    button.addEventListener('click', () => setDefaultModelConfig(button.getAttribute('data-model-default')))
   })
   elements.modelConfigList.querySelectorAll('[data-model-delete]').forEach((button) => {
     button.addEventListener('click', () => deleteModelConfig(button.getAttribute('data-model-delete')))
@@ -936,6 +951,7 @@ function editModelConfig(id) {
   elements.modelSequenceInput.value = item.sequence ?? 0
   elements.modelDefaultInput.checked = Boolean(item.isDefault)
   elements.modelEnabledInput.checked = Boolean(item.enabled)
+  syncModelToggleButtons()
 }
 
 function resetModelForm(options = {}) {
@@ -949,9 +965,30 @@ function resetModelForm(options = {}) {
   elements.modelSequenceInput.value = '0'
   elements.modelDefaultInput.checked = false
   elements.modelEnabledInput.checked = true
+  syncModelToggleButtons()
   if (!options.keepModalOpen) {
     closeModelModal()
   }
+}
+
+function syncModelToggleButtons() {
+  syncToggleButton(elements.modelDefaultToggleBtn, elements.modelDefaultInput, '已设默认', '默认模型')
+  syncToggleButton(elements.modelEnabledToggleBtn, elements.modelEnabledInput, '已启用', '已停用')
+}
+
+function syncToggleButton(button, input, activeLabel, inactiveLabel) {
+  if (!button || !input) return
+  const active = Boolean(input.checked)
+  button.classList.toggle('active', active)
+  button.setAttribute('aria-pressed', String(active))
+  const label = button.querySelector('span')
+  if (label) label.textContent = active ? activeLabel : inactiveLabel
+}
+
+function toggleModelFlag(input) {
+  if (!input) return
+  input.checked = !input.checked
+  syncModelToggleButtons()
 }
 
 async function saveModelConfig() {
@@ -1105,7 +1142,7 @@ function renderWordbooks() {
             <small>${item.isDefault ? '默认 · ' : ''}${item.entryCount || 0} 个单词 · ${item.dueCount || 0} 个待复习</small>
           </button>
           <div class="row-actions">
-            <button type="button" data-wordbook-edit="${escapeHtml(item.id)}">编辑</button>
+            <button class="icon-action-button" type="button" data-wordbook-edit="${escapeHtml(item.id)}" title="编辑词书" aria-label="编辑词书">✎</button>
             <button class="danger-icon-button" type="button" data-wordbook-delete="${escapeHtml(item.id)}" title="删除词书">×</button>
           </div>
         </div>
@@ -1291,10 +1328,9 @@ function renderWordbookEntries() {
         <div class="entry-row ${sameId(selectedEntry.id, entry.id) ? 'active' : ''}">
           <button type="button" data-entry-id="${escapeHtml(entry.id)}">
             <span>${escapeHtml(entry.term || entry.normalizedTerm)}</span>
-            <small>${escapeHtml(statusLabel(entry.status))} · 掌握 ${entry.masteryScore ?? 0} · 下次 ${escapeHtml(formatDateTime(entry.nextReviewTime))}</small>
+            <small>${escapeHtml(statusLabel(entry.status))} · 掌握 ${entry.masteryScore ?? 0}</small>
           </button>
           <div class="row-actions">
-            <button type="button" data-entry-status-open="${escapeHtml(entry.id)}">熟练程度</button>
             <button class="danger-icon-button" type="button" data-entry-delete="${escapeHtml(entry.id)}" title="删除单词">×</button>
           </div>
         </div>
@@ -1306,9 +1342,6 @@ function renderWordbookEntries() {
       const entry = state.wordbookEntries.find((item) => sameId(item.id, button.getAttribute('data-entry-id')))
       selectWordbookEntry(entry)
     })
-  })
-  elements.wordbookEntryList.querySelectorAll('[data-entry-status-open]').forEach((button) => {
-    button.addEventListener('click', () => openEntryStatusModal(button.getAttribute('data-entry-status-open')))
   })
   elements.wordbookEntryList.querySelectorAll('[data-entry-delete]').forEach((button) => {
     button.addEventListener('click', () => deleteWordbookEntry(button.getAttribute('data-entry-delete')))
@@ -1351,8 +1384,9 @@ function renderWordbookFocus(entry) {
         <p class="phonetic">${escapeHtml(phonetics || '暂无音标')}</p>
       </div>
       <div class="inline-actions">
+        <span class="mini-pill next-review-pill">下次 ${escapeHtml(formatDateTime(entry.nextReviewTime))}</span>
         <button class="secondary-button compact" type="button" data-status-open="${escapeHtml(entry.id)}">熟练程度</button>
-        <button class="secondary-button compact" type="button" data-open-study="${escapeHtml(entry.normalizedTerm)}">去学习</button>
+        <button class="secondary-button compact" type="button" data-open-review="${escapeHtml(entry.id)}">去复习</button>
       </div>
     </div>
     <div class="mini-definition-list focus-section">
@@ -1441,11 +1475,7 @@ function renderWordbookFocus(entry) {
       </div>
     </div>
   `
-  elements.wordbookFocus.querySelector('[data-open-study]')?.addEventListener('click', () => {
-    elements.termInput.value = entry.normalizedTerm
-    setView('studyView')
-    study(entry.normalizedTerm)
-  })
+  elements.wordbookFocus.querySelector('[data-open-review]')?.addEventListener('click', () => openEntryInReview(entry))
   elements.wordbookFocus.querySelector('[data-status-open]')?.addEventListener('click', () => openEntryStatusModal(entry.id))
   elements.wordbookFocus.querySelector('[data-edit-focus-note]')?.addEventListener('click', () => {
     state.currentNoteEntry = entry
@@ -1998,6 +2028,31 @@ async function loadDueReviews() {
   }
 }
 
+function openEntryInReview(entry) {
+  if (!entry) return
+  if (entry.wordbookId) {
+    state.currentWordbookId = String(entry.wordbookId)
+    localStorage.setItem('learning.wordbookId', state.currentWordbookId)
+    if (elements.reviewWordbookSelect) elements.reviewWordbookSelect.value = state.currentWordbookId
+    if (elements.wordbookSelect) elements.wordbookSelect.value = state.currentWordbookId
+  }
+  const existingIndex = state.reviewEntries.findIndex((item) => sameId(item.id, entry.id))
+  if (existingIndex >= 0) {
+    state.currentReviewIndex = existingIndex
+    state.currentReviewEntry = state.reviewEntries[existingIndex]
+  } else {
+    state.reviewEntries = [entry, ...state.reviewEntries.filter((item) => !sameId(item.id, entry.id))]
+    state.currentReviewIndex = 0
+    state.currentReviewEntry = entry
+  }
+  state.reviewTyped = ''
+  state.reviewWrongCount = 0
+  setView('reviewView', { skipReviewReload: true })
+  renderReviewQueue(state.reviewEntries)
+  renderNotes(entry)
+  toast(`已进入「${entry.term || entry.normalizedTerm}」复习`)
+}
+
 function renderReviewQueue(entries) {
   if (!state.token) {
     state.reviewEntries = []
@@ -2504,7 +2559,7 @@ function renderSystemLogs() {
           <div>
             <strong>${escapeHtml(item.title)}</strong>
             <p>${escapeHtml(item.detail || '')}</p>
-            <small>${escapeHtml(formatDateTime(item.time))}</small>
+            <small>${escapeHtml(formatDateTime(item.time || item.createTime))}${item.source ? ` · ${escapeHtml(item.source)}` : ''}</small>
           </div>
         </div>
       `,
@@ -2512,11 +2567,41 @@ function renderSystemLogs() {
     .join('')
 }
 
-function clearLogs() {
+async function loadSystemLogs() {
+  if (state.preview) {
+    renderSystemLogs()
+    return
+  }
+  if (!state.token) {
+    state.systemLogs = readJsonStorage('learning.systemLogs') || []
+    renderSystemLogs()
+    return
+  }
+  try {
+    const logs = await request('/api/v1/learning/system-logs?limit=80')
+    state.systemLogs = Array.isArray(logs) ? logs : []
+    localStorage.removeItem('learning.systemLogs')
+    renderSystemLogs()
+  } catch (error) {
+    state.systemLogs = readJsonStorage('learning.systemLogs') || state.systemLogs
+    renderSystemLogs()
+    toast(`系统日志加载失败：${error.message}`)
+  }
+}
+
+async function clearLogs() {
   state.systemLogs = []
-  localStorage.removeItem('learning.systemLogs')
-  renderSystemLogs()
-  toast('系统日志已清空')
+  try {
+    if (state.preview || !state.token) {
+      localStorage.removeItem('learning.systemLogs')
+    } else {
+      await request('/api/v1/learning/system-logs', { method: 'DELETE' })
+    }
+    renderSystemLogs()
+    toast('系统日志已清空')
+  } catch (error) {
+    toast(`系统日志清空失败：${error.message}`)
+  }
 }
 
 function pronunciationUrl(text, type = 'us') {
@@ -2981,6 +3066,8 @@ elements.modelConfigModal.addEventListener('click', (event) => {
   if (event.target === elements.modelConfigModal) closeModelModal()
 })
 elements.modelProviderInput.addEventListener('change', () => syncModelProviderDefaults())
+elements.modelDefaultToggleBtn?.addEventListener('click', () => toggleModelFlag(elements.modelDefaultInput))
+elements.modelEnabledToggleBtn?.addEventListener('click', () => toggleModelFlag(elements.modelEnabledInput))
 elements.openAccountModalBtn.addEventListener('click', openAccountModal)
 elements.closeAccountModalBtn.addEventListener('click', closeAccountModal)
 elements.accountModal.addEventListener('click', (event) => {
@@ -3004,6 +3091,7 @@ elements.templateContentInput.addEventListener('input', () => validateTemplatePl
 elements.saveTemplateBtn.addEventListener('click', savePromptTemplate)
 elements.wordbookSelect.addEventListener('change', () => changeWordbook(elements.wordbookSelect.value))
 elements.wordStatusFilter.addEventListener('change', loadWordbookEntries)
+elements.reloadSystemLogsBtn.addEventListener('click', loadSystemLogs)
 elements.clearLogBtn.addEventListener('click', clearLogs)
 elements.studyForm.addEventListener('submit', (event) => {
   event.preventDefault()

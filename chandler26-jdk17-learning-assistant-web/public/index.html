@@ -4,7 +4,7 @@
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>English Learning Agent</title>
-    <link rel="stylesheet" href="/styles.css" />
+    <link rel="stylesheet" href="/styles.css?v=20260519-17" />
   </head>
   <body>
     <main class="app">
@@ -261,7 +261,10 @@
                   <p class="eyebrow">System</p>
                   <h3>系统日志</h3>
                 </div>
-                <button class="secondary-button compact" id="clearLogBtn" type="button">清空</button>
+                <div class="inline-actions">
+                  <button class="secondary-button compact" id="reloadSystemLogsBtn" type="button">刷新</button>
+                  <button class="secondary-button compact" id="clearLogBtn" type="button">清空</button>
+                </div>
               </div>
               <div id="systemLogList" class="log-list"></div>
               </section>
@@ -468,14 +471,18 @@
           <label>Chat Path<input id="modelChatPathInput" placeholder="/chat/completions" /></label>
           <label>API KEY<input id="modelApiKeyInput" type="password" placeholder="API KEY" /></label>
           <label>顺序<input id="modelSequenceInput" type="number" min="0" value="0" /></label>
-          <label class="switch-line compact-switch">
-            <input id="modelDefaultInput" type="checkbox" />
-            <span>默认模型</span>
-          </label>
-          <label class="switch-line compact-switch">
-            <input id="modelEnabledInput" type="checkbox" checked />
-            <span>启用</span>
-          </label>
+          <div class="model-toggle-row">
+            <input id="modelDefaultInput" type="checkbox" hidden />
+            <input id="modelEnabledInput" type="checkbox" hidden checked />
+            <button class="toggle-box" id="modelDefaultToggleBtn" type="button" aria-pressed="false">
+              <span>默认模型</span>
+              <small>学习页优先使用</small>
+            </button>
+            <button class="toggle-box active" id="modelEnabledToggleBtn" type="button" aria-pressed="true">
+              <span>启用状态</span>
+              <small>允许学习时调用</small>
+            </button>
+          </div>
         </div>
         <div class="modal-actions">
           <button class="primary-button compact-primary" id="saveModelBtn" type="button">保存模型</button>
@@ -590,6 +597,6 @@
         </div>
       </div>
     </section>
-    <script type="module" src="/app.js?v=20260519-11"></script>
+    <script type="module" src="/app.js?v=20260519-17"></script>
   </body>
 </html>

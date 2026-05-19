@@ -52,6 +52,12 @@ button {
   min-height: 100vh;
 }
 
+.product-shell:not(.hidden) {
+  height: 100vh;
+  height: 100dvh;
+  overflow: hidden;
+}
+
 .login-screen {
   display: grid;
   width: min(980px, calc(100vw - 40px));
@@ -332,7 +338,7 @@ textarea:focus {
 
 .product-shell {
   display: grid;
-  min-height: 100vh;
+  min-height: 0;
   grid-template-columns: 280px minmax(0, 1fr);
   transition: grid-template-columns 180ms ease;
 }
@@ -343,7 +349,9 @@ textarea:focus {
 
 .sidebar {
   display: flex;
-  min-height: 100vh;
+  height: 100vh;
+  height: 100dvh;
+  min-height: 0;
   flex-direction: column;
   border-right: 1px solid var(--line);
   background: rgba(15, 23, 42, 0.66);
@@ -373,8 +381,14 @@ textarea:focus {
 
 .nav-menu {
   display: grid;
+  flex: 1 1 auto;
+  align-content: start;
   gap: 10px;
+  min-height: 0;
   margin-top: 32px;
+  overflow: auto;
+  overscroll-behavior: contain;
+  padding-right: 2px;
 }
 
 .nav-item {
@@ -407,6 +421,7 @@ textarea:focus {
 
 .sidebar-footer {
   display: grid;
+  flex: 0 0 auto;
   gap: 12px;
   margin-top: auto;
 }
@@ -455,8 +470,13 @@ textarea:focus {
 
 .content {
   display: grid;
+  height: 100vh;
+  height: 100dvh;
+  min-height: 0;
   align-content: start;
   gap: 18px;
+  grid-template-rows: auto minmax(0, 1fr);
+  overflow: hidden;
   padding: 28px;
 }
 
@@ -501,6 +521,25 @@ textarea:focus {
 .view.active {
   display: grid;
   gap: 18px;
+  min-height: 0;
+  overflow: auto;
+  overscroll-behavior: contain;
+  padding-right: 4px;
+}
+
+#wordbookView.view.active {
+  grid-template-rows: auto minmax(0, 1fr);
+  overflow: hidden;
+}
+
+#reviewView.view.active {
+  grid-template-rows: auto minmax(0, 1fr);
+  overflow: hidden;
+}
+
+#studyView.view.active,
+#profileView.view.active {
+  align-content: start;
 }
 
 .content-grid {
@@ -512,16 +551,51 @@ textarea:focus {
 .review-layout {
   display: grid;
   gap: 18px;
+  grid-template-rows: minmax(0, 1fr) minmax(140px, 0.38fr);
+  min-height: 0;
+  overflow: hidden;
 }
 
 .review-layout .review-focus {
   order: -1;
 }
 
+.review-layout > .panel {
+  display: grid;
+  min-height: 0;
+  grid-template-rows: auto minmax(0, 1fr);
+  overflow: hidden;
+}
+
+#reviewFocus,
+#reviewNote {
+  min-height: 0;
+  overflow: auto;
+  overscroll-behavior: contain;
+  padding-right: 4px;
+}
+
 .wordbook-layout {
   display: grid;
   grid-template-columns: minmax(220px, 20%) minmax(0, 80%);
   gap: 18px;
+  min-height: 0;
+  overflow: hidden;
+}
+
+.wordbook-layout > .panel {
+  display: grid;
+  min-height: 0;
+  grid-template-rows: auto minmax(0, 1fr);
+  overflow: hidden;
+}
+
+#wordbookEntryList,
+#wordbookFocus {
+  min-height: 0;
+  overflow: auto;
+  overscroll-behavior: contain;
+  padding-right: 4px;
 }
 
 .dashboard-grid,
@@ -743,6 +817,42 @@ textarea:focus {
   grid-column: 1 / -1;
 }
 
+.model-toggle-row {
+  display: grid;
+  grid-column: 1 / -1;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 10px;
+}
+
+.toggle-box {
+  display: grid;
+  min-height: 58px;
+  gap: 4px;
+  align-content: center;
+  padding: 10px 12px;
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  background: rgba(255, 255, 255, 0.035);
+  color: var(--muted);
+  cursor: pointer;
+  text-align: left;
+}
+
+.toggle-box span {
+  color: var(--text);
+  font-weight: 900;
+}
+
+.toggle-box small {
+  color: var(--muted);
+  font-size: 12px;
+}
+
+.toggle-box.active {
+  border-color: rgba(125, 211, 168, 0.56);
+  background: rgba(125, 211, 168, 0.11);
+}
+
 .inline-actions,
 .row-actions {
   display: flex;
@@ -786,6 +896,11 @@ textarea:focus {
 .stack {
   display: grid;
   gap: 10px;
+}
+
+.entry-list {
+  align-content: start;
+  grid-auto-rows: minmax(0, max-content);
 }
 
 .wordbook-card,
@@ -849,6 +964,8 @@ textarea:focus {
   grid-template-columns: minmax(0, 1fr) auto;
   gap: 10px;
   align-items: center;
+  min-height: 62px;
+  max-height: 78px;
   padding: 10px 12px;
 }
 
@@ -860,6 +977,7 @@ textarea:focus {
 .entry-row > button {
   display: grid;
   gap: 4px;
+  min-width: 0;
   padding: 0;
   border: 0;
   background: transparent;
@@ -868,12 +986,26 @@ textarea:focus {
   text-align: left;
 }
 
+.entry-row > button span,
+.entry-row > button small {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
 .model-item {
   display: grid;
   grid-template-columns: minmax(0, 1fr) auto;
   gap: 12px;
   align-items: center;
   padding: 12px;
+}
+
+.model-title-line {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  align-items: center;
 }
 
 .model-item.disabled {
@@ -899,6 +1031,20 @@ textarea:focus {
   color: var(--danger);
   cursor: pointer;
   font-size: 18px;
+  font-weight: 950;
+}
+
+.icon-action-button {
+  display: inline-grid;
+  width: 34px;
+  height: 34px;
+  place-items: center;
+  border: 1px solid rgba(129, 140, 248, 0.46);
+  border-radius: 10px;
+  background: rgba(129, 140, 248, 0.12);
+  color: var(--text);
+  cursor: pointer;
+  font-size: 16px;
   font-weight: 950;
 }
 
@@ -1381,6 +1527,17 @@ textarea:focus {
   gap: 14px;
 }
 
+.wordbook-focus-head .inline-actions {
+  flex-direction: column;
+  align-items: flex-end;
+  justify-content: flex-end;
+  max-width: min(340px, 42%);
+}
+
+.next-review-pill {
+  white-space: nowrap;
+}
+
 .focus-section {
   margin-top: 18px;
 }
@@ -1651,6 +1808,9 @@ textarea:focus {
   .product-shell,
   .product-shell.sidebar-collapsed {
     display: block;
+    height: 100vh;
+    height: 100dvh;
+    overflow: hidden;
   }
 
   .sidebar {
@@ -1658,6 +1818,8 @@ textarea:focus {
     inset: 0 auto 0 0;
     z-index: 45;
     width: min(320px, calc(100vw - 48px));
+    height: 100vh;
+    height: 100dvh;
     min-height: auto;
     border-right: 1px solid var(--line);
     border-bottom: 0;
@@ -1691,6 +1853,36 @@ textarea:focus {
   .nav-menu,
   .sidebar-footer {
     grid-template-columns: 1fr;
+  }
+
+  .content {
+    height: 100vh;
+    height: 100dvh;
+  }
+
+  #wordbookView.view.active {
+    overflow: auto;
+  }
+
+  #reviewView.view.active {
+    overflow: auto;
+  }
+
+  .wordbook-layout,
+  .review-layout {
+    overflow: visible;
+  }
+
+  .wordbook-layout > .panel,
+  .review-layout > .panel {
+    max-height: none;
+  }
+
+  #wordbookEntryList,
+  #wordbookFocus,
+  #reviewFocus,
+  #reviewNote {
+    max-height: min(62vh, 620px);
   }
 }
 
