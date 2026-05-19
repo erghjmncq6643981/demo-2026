@@ -2,764 +2,640 @@
 
 ## 1. 背景与目标
 
-本项目计划建设一个面向个人学习的学习助手软件。第一阶段聚焦英语词汇学习，通过接入 Kimi、元宝、DeepSeek、豆包等大模型 API，围绕单词、短语、例句、语境、测试题等学习问题生成结构化内容，并将这些内容沉淀到系统数据库中，支持后续复习、检索、测验和学习路径推荐。
+本项目建设一个面向个人学习的英语词汇学习助手。第一阶段聚焦“输入英语单词或短语 -> 调用 AI 生成结构化学习卡片 -> 数据库缓存 -> 加入词书 -> 按艾宾浩斯复习计划复习”的闭环。
 
-当前仓库是基于 JDK 17、Spring Boot 3、MyBatis Plus、MySQL、SpringDoc 的后端模板工程。第一阶段建议优先建设后端能力：词汇数据建模、AI 内容生成、模板管理、结构化解析、持久化与基础 API。前端可以在后续阶段接入 Web、移动端或小程序。
+系统已接入 OpenAI-compatible 风格的大模型调用方式，可配置 Kimi、DeepSeek、豆包、元宝等供应商。当前实现优先支持 DeepSeek/Kimi 这类兼容 `/chat/completions` 的模型接口。
 
-## 2. 产品定位
+核心目标：
 
-### 2.1 核心用户
+- 避免重复调用 AI：同一归一化词条优先读取数据库缓存。
+- 将 AI 返回内容结构化：保存原始文本、解析 JSON、标签和关联词。
+- 支持用户体系：登录后拥有自己的词书和复习计划。
+- 支持学习体验：前端拆分为登录、个人信息、学习、复习三个主区域。
+- 支持后续扩展：保留 Agent、Prompt 模板、多供应商、系统日志和复习记录。
 
-- 希望系统学习英语词汇的个人学习者。
-- 需要把零散单词整理成可复习知识库的学习者。
-- 希望借助 AI 获取解释、例句、词根词缀、搭配、同近反义词、测试题的学习者。
+## 2. 当前实现范围
 
-### 2.2 第一阶段范围
+已实现：
 
-第一阶段只做英语词汇学习，不做完整的英语听说读写训练。
+- AI Agent 配置、Prompt 模板、同步对话和模型调用记录。
+- 英语词汇学习缓存接口。
+- 用户注册、登录、退出登录、Token 鉴权。
+- 词书创建、词书列表、词条加入词书、词条列表。
+- 词汇标签：词性、含义主题、难度、搭配、词族。
+- 词汇关联：同义词、反义词、词族、搭配、共享标签相近词。
+- 艾宾浩斯复习计划：待复习队列、复习提交、下一次复习时间。
+- 前端产品化页面：独立登录页；登录后个人信息、学习、复习三功能区。
+- Raw JSON 移入个人信息页的系统日志区域。
 
-范围内：
+暂未实现：
 
-- 单词或短语的基础信息生成。
-- 词义、音标、词性、例句、常见搭配、同义词、反义词、词根词缀、记忆提示生成。
-- 与单词相关的选择题、填空题、翻译题生成。
-- AI 生成内容结构化解析和入库。
-- 生成记录、解析记录和错误记录留痕。
-- 支持多个 AI 供应商的配置、调用和切换。
+- 批量导入词表。
+- 完整测验题生成与错题本。
+- 更精细的间隔重复算法参数配置。
+- Spring Security/JWT 标准化认证。
+- Flyway/Liquibase 自动迁移。
 
-范围外：
-
-- 语音识别、口语评分。
-- 作文批改。
-- 视频课程。
-- 社交学习。
-- 完整的间隔重复算法优化。
-
-## 3. 总体架构
-
-系统采用分层架构，后端作为核心服务，AI 供应商作为外部依赖。
-
-```text
-客户端/管理端
-    |
-    v
-Spring Boot API 层
-    |
-    v
-业务服务层
-    |-- 词汇服务
-    |-- 学习内容服务
-    |-- 题目服务
-    |-- AI 生成任务服务
-    |-- 模板服务
-    |
-    v
-基础能力层
-    |-- AI Provider 适配器
-    |-- Prompt 模板渲染
-    |-- 结构化响应解析
-    |-- 内容校验与归一化
-    |-- 失败重试与日志
-    |
-    v
-MySQL 数据库
-```
-
-### 3.1 后端模块建议
-
-建议在现有包名下逐步从 `example` 模板迁移到真实业务包，例如：
+## 3. 系统架构
 
 ```text
-com.chandler.instance.client.learning
-    ├── ai                  AI 供应商适配、请求响应、解析
-    ├── vocabulary          词汇主数据
-    ├── content             释义、例句、搭配、记忆内容
-    ├── quiz                测验题目
-    ├── prompt              模板管理
-    ├── task                生成任务与异步处理
-    ├── common              通用返回、异常、枚举
-    └── config              配置
-```
-
-## 4. 核心业务流程
-
-### 4.1 单词内容生成流程
-
-```text
-用户输入单词/短语
+前端静态应用
+    |
+    | HTTP + Bearer Token
+    v
+Spring Boot API
+    |
+    |-- AI Agent / Prompt / Chat
+    |-- Vocabulary Study Cache
+    |-- Auth / User Token
+    |-- Wordbook / Review
+    |-- Vocabulary Tags / Relations
     |
     v
-检查本地词汇库是否存在
+MyBatis Plus Mapper
     |
-    |-- 已存在：返回已有内容，可选择重新生成
+    v
+MySQL
     |
-    |-- 不存在：
-          创建 AI 生成任务
-          选择供应商和 Prompt 模板
-          调用 AI API
-          获取原始文本响应
-          解析为标准 JSON 结构
-          校验字段完整性和内容质量
-          保存词汇、释义、例句、搭配、题目
-          返回结构化学习卡片
+    v
+AI Provider API
 ```
 
-### 4.2 AI 内容入库流程
+后端项目：
 
-AI 响应不应直接作为业务数据使用。建议保留三层数据：
-
-1. 原始响应：完整保存供应商返回内容，便于排查问题和重新解析。
-2. 解析结果：保存解析后的标准 JSON，便于对比和审计。
-3. 业务数据：拆分到词汇、释义、例句、题目等正式业务表。
-
-这样可以避免 AI 输出格式偶发偏移时直接污染主数据。
-
-## 5. AI 接入设计
-
-### 5.1 Provider 抽象
-
-不同供应商的鉴权、接口路径、模型名称、响应格式不同，但业务层只关心“给定 prompt 后得到文本结果”。建议定义统一接口：
-
-```java
-public interface AiProviderClient {
-    AiProvider provider();
-
-    AiTextResponse generate(AiTextRequest request);
-}
+```text
+/Users/chandler/Documents/repository/github/demo-2026/chandler26-jdk17-learning-assistant
 ```
 
-核心请求对象：
+前端项目：
 
-```java
-public class AiTextRequest {
-    private String model;
-    private String systemPrompt;
-    private String userPrompt;
-    private Double temperature;
-    private Integer maxTokens;
-    private Map<String, Object> metadata;
-}
+```text
+/Users/chandler/Documents/repository/github/demo-2026/chandler26-jdk17-learning-assistant-web
 ```
 
-核心响应对象：
+## 4. 前端产品设计
 
-```java
-public class AiTextResponse {
-    private AiProvider provider;
-    private String model;
-    private String content;
-    private String requestId;
-    private Integer promptTokens;
-    private Integer completionTokens;
-    private Long latencyMs;
-}
+### 4.1 信息架构
+
+未登录：
+
+- 独立登录界面。
+- 包含后端地址、用户名、密码、昵称、登录、注册。
+- 界面定位强调“把每一次查词变成可复习的知识资产”。
+
+登录后：
+
+- 左侧导航：个人信息、学习、复习。
+- 顶部区域：当前功能标题、当前词书选择、刷新词书、刷新 Agent。
+- 个人信息：
+  - 账户概览。
+  - 词书数量、单词数量、待复习数量。
+  - 单词本管理：新建词书、词书卡片、当前词书词条。
+  - 系统日志：AI 调用、缓存命中、追问、错误、复习提交等。
+  - Raw JSON：显示最近一次 AI 结构化结果或追问原文。
+- 学习：
+  - 单词/短语输入。
+  - 英语学习卡片：单词、音标、释义、例句、搭配、记忆提示。
+  - 标签和相关单词。
+  - 加入当前词书。
+  - 单词/例句发音。
+  - Agent、模板、发音、强制刷新、继续追问配置。
+- 复习：
+  - 当前词书的待复习队列。
+  - 复习卡片。
+  - 复习结果提交：忘记、模糊、记住。
+
+### 4.2 视觉风格
+
+前端风格参考 `qwerty-learner`：
+
+- 深色学习空间。
+- 学习任务居中，单词卡片是页面视觉焦点。
+- 克制的面板、轻量阴影、圆角控制在 12px 左右。
+- 使用清晰的学习状态标签，而不是复杂后台表格。
+- 导航简洁，主功能只保留个人信息、学习、复习。
+
+### 4.3 前端文件
+
+| 文件 | 说明 |
+| --- | --- |
+| `public/index.html` | 页面结构，包含登录页和三功能区应用壳 |
+| `public/app.js` | 状态管理、接口调用、学习/词书/复习交互 |
+| `public/styles.css` | 产品化样式，参考 qwerty-learner 的学习体验 |
+| `server.mjs` | 零依赖静态文件服务 |
+
+启动：
+
+```bash
+cd /Users/chandler/Documents/repository/github/demo-2026/chandler26-jdk17-learning-assistant-web
+/usr/local/bin/node server.mjs
 ```
 
-### 5.2 供应商枚举
+访问：
 
-```java
-public enum AiProvider {
-    KIMI,
-    YUANBAO,
-    DEEPSEEK,
-    DOUBAO
-}
+```text
+http://127.0.0.1:5173
 ```
 
-### 5.3 配置示例
+设计预览模式：
 
-建议通过 `application.yaml` 加环境变量配置，不把密钥提交到仓库。
+```text
+http://127.0.0.1:5173/?preview=1
+```
+
+说明：`preview=1` 只用于无后端或未登录时查看产品化界面，会在浏览器内注入模拟用户、词书、复习任务和词汇学习卡片，不影响真实登录和接口调用流程。
+
+## 5. AI Agent 设计
+
+### 5.1 模型供应商配置
+
+配置位置：
+
+```text
+src/main/resources/application.yaml
+config/application-local.yaml
+```
+
+密钥只允许放在环境变量或本地未提交配置中，不能写入仓库。
 
 ```yaml
 learning:
   ai:
-    default-provider: DEEPSEEK
+    default-provider: deepseek
     providers:
       deepseek:
         enabled: true
         base-url: https://api.deepseek.com
+        chat-path: /chat/completions
         api-key: ${DEEPSEEK_API_KEY:}
-        model: deepseek-chat
+        default-model: deepseek-chat
       kimi:
-        enabled: false
+        enabled: true
         base-url: https://api.moonshot.cn
+        chat-path: /v1/chat/completions
         api-key: ${KIMI_API_KEY:}
-        model: moonshot-v1-8k
-      doubao:
-        enabled: false
-        base-url: ${DOUBAO_BASE_URL:}
-        api-key: ${DOUBAO_API_KEY:}
-        model: ${DOUBAO_MODEL:}
-      yuanbao:
-        enabled: false
-        base-url: ${YUANBAO_BASE_URL:}
-        api-key: ${YUANBAO_API_KEY:}
-        model: ${YUANBAO_MODEL:}
+        default-model: moonshot-v1-8k
 ```
 
-供应商实际接口参数可能变化，接入时应以各自官方文档为准。业务设计上保持适配器隔离，避免供应商差异进入核心业务层。
+### 5.2 Prompt 模板
 
-## 6. Prompt 模板设计
+当前词汇学习卡片模板要求 AI 返回 JSON，核心字段包括：
 
-### 6.1 模板原则
+- `term`
+- `is_valid`
+- `language`
+- `phonetic.uk`
+- `phonetic.us`
+- `definitions`
+- `examples`
+- `collocations`
+- `synonyms`
+- `antonyms`
+- `word_family`
+- `memory_tips`
 
-- 要求 AI 返回严格 JSON，不返回 Markdown 包裹。
-- 模板中显式定义字段、类型、数量限制和语言要求。
-- 每个任务只生成一种明确结构，避免一个 prompt 里混合过多目标。
-- 保留模板版本，后续生成内容可以追溯到使用了哪个模板。
+结构约束：
 
-### 6.2 词汇学习卡片模板
+- `definitions` 每条包含 `part_of_speech`、`meaning`、`english`。
+- `collocations` 使用对象数组，每条包含 `phrase`、`meaning`，用于展示搭配含义。
+- `synonyms`、`antonyms`、`word_family` 使用对象数组，每条包含 `word`、`part_of_speech`、`meaning`，用于展示相关词核心词性和核心含义。
+- 如果用户输入疑似拼写错误，AI 可在 `term` 中输出判断后的标准单词；系统也提供缓存层面的最匹配词查询。
 
-系统提示词：
+前端和后端都兼容常见字段变体，例如：
+
+- `meaning` / `meaning_cn`
+- `english` / `meaning_en`
+- `translation` / `translation_cn`
+- `part_of_speech` / `pos`
+- 字符串数组或对象数组形式的 `collocations`
+- 字符串数组或对象数组形式的 `synonyms`、`antonyms`、`word_family`
+
+## 6. 后端模块
+
+### 6.1 AI Agent 模块
+
+主要文件：
+
+- `controller/AiAgentController.java`
+- `controller/AiPromptTemplateController.java`
+- `controller/AiChatSessionController.java`
+- `service/AiChatService.java`
+- `support/OpenAiCompatibleModelClient.java`
+
+能力：
+
+- Agent 管理。
+- Prompt 模板管理。
+- Agent Chat。
+- 会话和消息保存。
+- 模型调用记录。
+
+### 6.2 词汇学习缓存模块
+
+主要文件：
+
+- `controller/vocabulary/EnglishVocabularyStudyController.java`
+- `service/vocabulary/EnglishVocabularyStudyService.java`
+- `domain/entity/vocabulary/EnglishVocabularyStudyRecord.java`
+
+接口：
+
+```http
+POST /api/v1/english/vocabularies/study
+GET  /api/v1/english/vocabularies/{term}/best-match
+GET  /api/v1/english/vocabularies/{term}
+```
+
+流程：
 
 ```text
-你是一个严谨的英语词汇学习助手。你只输出合法 JSON，不要输出 Markdown、解释文字或代码块。
-如果输入不是有效英语单词或短语，也要返回 JSON，并在 is_valid 字段中标记 false。
+输入 term
+  -> normalizedTerm 归一化
+  -> 若缓存存在且未 forceRefresh，返回缓存
+  -> 若不存在或强制刷新，调用 Agent Chat
+  -> 提取 JSON
+  -> 保存 english_vocabulary_study_record
+  -> 同步生成标签和关联词
+  -> 返回学习卡片、标签、关联词
 ```
 
-用户提示词：
+拼写容错：
+
+- `/best-match` 在缓存词库中按编辑距离、前缀、包含关系计算匹配分。
+- 命中后返回 `matchedTerm`、`normalizedTerm`、核心词性、核心含义、匹配分和完整学习卡片。
+- 前端在学习请求失败时自动尝试展示最匹配单词，降低操作者输入错误带来的中断。
+
+### 6.3 认证模块
+
+主要文件：
+
+- `controller/learning/AuthController.java`
+- `service/learning/AuthService.java`
+- `domain/entity/learning/LearningUser.java`
+- `domain/entity/learning/LearningUserToken.java`
+
+接口：
+
+```http
+POST /api/v1/learning/auth/register
+POST /api/v1/learning/auth/login
+POST /api/v1/learning/auth/logout
+GET  /api/v1/learning/auth/me
+```
+
+说明：
+
+- 当前使用轻量 Token 认证。
+- 密码使用带盐 SHA-256 存储。
+- Token 只在创建时返回明文，数据库保存 SHA-256 哈希。
+- 注册或登录后自动确保默认词书存在。
+
+### 6.4 词书与复习模块
+
+主要文件：
+
+- `controller/learning/WordbookController.java`
+- `service/learning/WordbookService.java`
+- `service/learning/VocabularyInsightService.java`
+
+接口：
+
+```http
+GET  /api/v1/learning/wordbooks
+POST /api/v1/learning/wordbooks
+GET  /api/v1/learning/wordbooks/{wordbookId}/entries
+POST /api/v1/learning/wordbooks/{wordbookId}/entries
+GET  /api/v1/learning/reviews/due
+POST /api/v1/learning/reviews/{entryId}
+```
+
+复习结果：
+
+- `remembered`：阶段 +1，掌握度 +15。
+- `vague`：阶段至少保持 1，掌握度 +5，次日复习。
+- `forgotten`：阶段归 0，掌握度 -20，4 小时后复习。
+
+复习间隔：
 
 ```text
-请为英语词汇「{{term}}」生成学习卡片。
-
-输出 JSON 结构必须符合以下字段：
-{
-  "term": "string",
-  "is_valid": true,
-  "language": "en",
-  "phonetic": {
-    "uk": "string",
-    "us": "string"
-  },
-  "definitions": [
-    {
-      "part_of_speech": "noun|verb|adjective|adverb|phrase|other",
-      "meaning_cn": "中文释义",
-      "meaning_en": "simple English definition",
-      "frequency": 1
-    }
-  ],
-  "examples": [
-    {
-      "sentence": "English sentence",
-      "translation_cn": "中文翻译",
-      "difficulty": "A1|A2|B1|B2|C1|C2"
-    }
-  ],
-  "collocations": [
-    {
-      "phrase": "string",
-      "meaning_cn": "string"
-    }
-  ],
-  "synonyms": ["string"],
-  "antonyms": ["string"],
-  "word_family": [
-    {
-      "term": "string",
-      "part_of_speech": "string",
-      "meaning_cn": "string"
-    }
-  ],
-  "memory_tips": [
-    {
-      "type": "root|association|scenario|contrast",
-      "content": "string"
-    }
-  ]
-}
-
-要求：
-- definitions 生成 1 到 4 条，按常用程度排序。
-- examples 生成 3 条，难度从低到高。
-- collocations 生成 3 到 6 条。
-- 中文解释简洁准确。
-- 不要编造不存在的词形变化。
+0, 1, 2, 4, 7, 15, 30, 60 天
 ```
 
-### 6.3 测验题生成模板
+## 7. 数据库表
+
+### 7.1 SQL 文件
+
+已存在并可执行：
 
 ```text
-请基于英语词汇「{{term}}」生成 5 道词汇练习题。
-
-只输出合法 JSON：
-{
-  "term": "string",
-  "questions": [
-    {
-      "type": "choice|blank|translation",
-      "stem": "题干",
-      "options": ["A", "B", "C", "D"],
-      "answer": "正确答案",
-      "analysis": "中文解析",
-      "difficulty": "easy|medium|hard"
-    }
-  ]
-}
-
-要求：
-- 至少 3 道选择题。
-- 选项必须有迷惑性，但不能有多个正确答案。
-- blank 类型题目中用 ____ 表示空格。
-- translation 类型题目答案可以是一个短语或句子。
+src/main/resources/db/ai_agent_mysql.sql
+src/main/resources/db/english_vocabulary_study_record_mysql.sql
+src/main/resources/db/learning_user_wordbook_review_mysql.sql
+src/main/resources/db/learning_vocabulary_relation_enrichment_mysql.sql
 ```
 
-## 7. 结构化解析与校验
-
-### 7.1 解析策略
-
-AI 返回内容可能出现以下问题：
-
-- JSON 外包裹 Markdown 代码块。
-- 字段缺失。
-- 字段类型错误。
-- 中英文混杂不符合要求。
-- 返回了额外解释文本。
-- 数组数量不符合要求。
-
-建议解析流程：
+用户已说明 `ai_agent_mysql.sql` 已执行。新增表集中在：
 
 ```text
-原始文本
-    |
-    v
-清理 Markdown 包裹和前后噪声
-    |
-    v
-提取第一个完整 JSON 对象
-    |
-    v
-Jackson 反序列化为 DTO
-    |
-    v
-Bean Validation 校验必填字段
-    |
-    v
-业务校验：数量、枚举值、term 一致性
-    |
-    v
-归一化：trim、大小写、去重
+src/main/resources/db/learning_user_wordbook_review_mysql.sql
 ```
 
-### 7.2 失败处理
+如果已经执行过旧版 `learning_user_wordbook_review_mysql.sql`，需要额外执行：
 
-解析失败时不应直接丢弃。建议：
+```text
+src/main/resources/db/learning_vocabulary_relation_enrichment_mysql.sql
+```
 
-- 保存原始响应。
-- 记录失败原因和异常堆栈摘要。
-- 任务状态置为 `PARSE_FAILED`。
-- 支持手动重新解析。
-- 支持使用更严格的修复模板，让 AI 把原始响应转换成目标 JSON。
+该迁移会补充 `learning_vocabulary_relation` 的增强字段，并更新 `english_vocab_card_json` 模板，使后续 AI 输出包含搭配含义和相关词核心词性/含义。
 
-## 8. 数据模型设计
+### 7.2 AI Agent 表
 
-### 8.1 主要实体
-
-| 实体 | 说明 |
+| 表 | 说明 |
 | --- | --- |
-| `vocabulary_term` | 词汇主表 |
-| `vocabulary_definition` | 词义表 |
-| `vocabulary_example` | 例句表 |
-| `vocabulary_collocation` | 搭配表 |
-| `vocabulary_relation` | 同义词、反义词、派生词关系 |
-| `memory_tip` | 记忆提示 |
-| `quiz_question` | 练习题 |
-| `prompt_template` | Prompt 模板 |
-| `ai_generation_task` | AI 生成任务 |
-| `ai_generation_record` | AI 请求响应记录 |
+| `ai_agent` | Agent 配置 |
+| `ai_prompt_template` | Prompt 模板 |
+| `ai_chat_session` | Chat 会话 |
+| `ai_chat_message` | Chat 消息 |
+| `ai_model_call_record` | 模型调用记录 |
 
-### 8.2 表结构草案
+### 7.3 词汇缓存表
 
-#### vocabulary_term
+#### `english_vocabulary_study_record`
 
-| 字段 | 类型 | 说明 |
-| --- | --- | --- |
-| `id` | bigint | 主键 |
-| `term` | varchar(128) | 单词或短语 |
-| `normalized_term` | varchar(128) | 归一化词条，用于唯一索引 |
-| `language` | varchar(16) | 语言，第一阶段固定 en |
-| `uk_phonetic` | varchar(128) | 英式音标 |
-| `us_phonetic` | varchar(128) | 美式音标 |
-| `valid_status` | varchar(32) | VALID、INVALID、PENDING |
-| `source_type` | varchar(32) | AI、MANUAL、IMPORT |
-| `created_at` | datetime | 创建时间 |
-| `updated_at` | datetime | 更新时间 |
+| 字段 | 说明 |
+| --- | --- |
+| `id` | 主键 |
+| `term` | 用户输入词条 |
+| `normalized_term` | 归一化词条，唯一 |
+| `agent_code` | 使用的 Agent |
+| `template_code` | 使用的模板 |
+| `provider` | 模型供应商 |
+| `model_name` | 模型名称 |
+| `session_id` | AI 会话 ID |
+| `raw_content` | AI 原始回复 |
+| `parsed_json` | 解析后的 JSON |
+| `token_usage` | Token 用量 |
+| `cost_time` | 耗时毫秒 |
+| `lookup_count` | 查询次数 |
+| `last_lookup_time` | 最近查询时间 |
+| `create_time` | 创建时间 |
+| `update_time` | 更新时间 |
 
-建议索引：
+### 7.4 用户与词书表
 
-- `uk_normalized_term` 唯一索引：`normalized_term`
+#### `learning_user`
 
-#### vocabulary_definition
+| 字段 | 说明 |
+| --- | --- |
+| `id` | 主键 |
+| `username` | 登录用户名，唯一 |
+| `nickname` | 昵称 |
+| `password_hash` | 密码哈希 |
+| `enabled` | 是否启用 |
+| `last_login_time` | 最近登录时间 |
+| `create_time` | 创建时间 |
+| `update_time` | 更新时间 |
 
-| 字段 | 类型 | 说明 |
-| --- | --- | --- |
-| `id` | bigint | 主键 |
-| `term_id` | bigint | 词汇 ID |
-| `part_of_speech` | varchar(32) | 词性 |
-| `meaning_cn` | varchar(512) | 中文释义 |
-| `meaning_en` | varchar(1024) | 英文释义 |
-| `frequency_rank` | int | 常用程度排序 |
-| `created_at` | datetime | 创建时间 |
+#### `learning_user_token`
 
-#### vocabulary_example
+| 字段 | 说明 |
+| --- | --- |
+| `id` | 主键 |
+| `user_id` | 用户 ID |
+| `token_hash` | Token 哈希 |
+| `expired_time` | 过期时间 |
+| `revoked` | 是否撤销 |
+| `create_time` | 创建时间 |
+| `update_time` | 更新时间 |
 
-| 字段 | 类型 | 说明 |
-| --- | --- | --- |
-| `id` | bigint | 主键 |
-| `term_id` | bigint | 词汇 ID |
-| `definition_id` | bigint | 可选，关联具体释义 |
-| `sentence` | varchar(1024) | 英文例句 |
-| `translation_cn` | varchar(1024) | 中文翻译 |
-| `difficulty` | varchar(16) | CEFR 难度 |
-| `created_at` | datetime | 创建时间 |
+#### `learning_wordbook`
 
-#### vocabulary_collocation
+| 字段 | 说明 |
+| --- | --- |
+| `id` | 主键 |
+| `user_id` | 用户 ID |
+| `name` | 词书名称 |
+| `description` | 词书描述 |
+| `is_default` | 是否默认词书 |
+| `deleted` | 是否删除 |
+| `create_time` | 创建时间 |
+| `update_time` | 更新时间 |
 
-| 字段 | 类型 | 说明 |
-| --- | --- | --- |
-| `id` | bigint | 主键 |
-| `term_id` | bigint | 词汇 ID |
-| `phrase` | varchar(256) | 搭配短语 |
-| `meaning_cn` | varchar(512) | 中文释义 |
-| `created_at` | datetime | 创建时间 |
+#### `learning_wordbook_entry`
 
-#### vocabulary_relation
+| 字段 | 说明 |
+| --- | --- |
+| `id` | 主键 |
+| `user_id` | 用户 ID |
+| `wordbook_id` | 词书 ID |
+| `vocabulary_id` | 词汇缓存 ID |
+| `term` | 展示词条 |
+| `normalized_term` | 归一化词条 |
+| `note` | 用户备注 |
+| `review_stage` | 复习阶段 |
+| `mastery_score` | 掌握度 |
+| `first_review_time` | 首次复习时间 |
+| `last_review_time` | 最近复习时间 |
+| `next_review_time` | 下次复习时间 |
+| `due_count` | 进入复习队列次数 |
+| `review_count` | 复习次数 |
+| `correct_count` | 记住次数 |
+| `wrong_count` | 忘记次数 |
+| `deleted` | 是否删除 |
+| `create_time` | 创建时间 |
+| `update_time` | 更新时间 |
 
-| 字段 | 类型 | 说明 |
-| --- | --- | --- |
-| `id` | bigint | 主键 |
-| `term_id` | bigint | 词汇 ID |
-| `relation_type` | varchar(32) | SYNONYM、ANTONYM、WORD_FAMILY |
-| `related_term` | varchar(128) | 相关词 |
-| `part_of_speech` | varchar(32) | 可选词性 |
-| `meaning_cn` | varchar(512) | 可选中文释义 |
-| `created_at` | datetime | 创建时间 |
+### 7.5 标签与关联表
 
-#### memory_tip
+#### `learning_vocabulary_tag`
 
-| 字段 | 类型 | 说明 |
-| --- | --- | --- |
-| `id` | bigint | 主键 |
-| `term_id` | bigint | 词汇 ID |
-| `tip_type` | varchar(32) | root、association、scenario、contrast |
-| `content` | varchar(1024) | 记忆内容 |
-| `created_at` | datetime | 创建时间 |
+| 字段 | 说明 |
+| --- | --- |
+| `id` | 主键 |
+| `vocabulary_id` | 词汇缓存 ID |
+| `normalized_term` | 归一化词条 |
+| `tag_type` | 标签类型 |
+| `tag_value` | 标签值 |
+| `display_name` | 展示名称 |
+| `weight` | 标签权重 |
+| `source` | 来源 |
+| `create_time` | 创建时间 |
+| `update_time` | 更新时间 |
 
-#### quiz_question
+标签类型：
 
-| 字段 | 类型 | 说明 |
-| --- | --- | --- |
-| `id` | bigint | 主键 |
-| `term_id` | bigint | 词汇 ID |
-| `question_type` | varchar(32) | choice、blank、translation |
-| `stem` | varchar(1024) | 题干 |
-| `options_json` | json | 选项 |
-| `answer` | varchar(1024) | 答案 |
-| `analysis` | varchar(1024) | 解析 |
-| `difficulty` | varchar(32) | easy、medium、hard |
-| `created_at` | datetime | 创建时间 |
+- `part_of_speech`
+- `meaning_topic`
+- `difficulty`
+- `collocation`
+- `word_family`
 
-#### prompt_template
+#### `learning_vocabulary_relation`
 
-| 字段 | 类型 | 说明 |
-| --- | --- | --- |
-| `id` | bigint | 主键 |
-| `template_code` | varchar(64) | 模板编码 |
-| `template_name` | varchar(128) | 模板名称 |
-| `template_version` | int | 版本 |
-| `task_type` | varchar(64) | VOCABULARY_CARD、QUIZ_GENERATION |
-| `system_prompt` | text | 系统提示词 |
-| `user_prompt` | text | 用户提示词 |
-| `response_schema` | json | 期望响应结构 |
-| `enabled` | tinyint | 是否启用 |
-| `created_at` | datetime | 创建时间 |
-| `updated_at` | datetime | 更新时间 |
+| 字段 | 说明 |
+| --- | --- |
+| `id` | 主键 |
+| `vocabulary_id` | 当前词汇缓存 ID |
+| `related_vocabulary_id` | 已入库关联词汇 ID，可空 |
+| `normalized_term` | 当前词 |
+| `related_term` | 关联词、短语或搭配 |
+| `relation_type` | 关联类型 |
+| `relation_value` | 关联说明或共享标签 |
+| `related_part_of_speech` | 关联词核心词性 |
+| `related_meaning` | 关联词或搭配核心含义 |
+| `match_type` | 匹配来源：`parsed_object`、`parsed_text`、`cached_exact`、`fuzzy` |
+| `match_score` | 匹配分数 |
+| `score` | 相关度 |
+| `source` | 来源 |
+| `create_time` | 创建时间 |
+| `update_time` | 更新时间 |
 
-#### ai_generation_task
+关联类型：
 
-| 字段 | 类型 | 说明 |
-| --- | --- | --- |
-| `id` | bigint | 主键 |
-| `task_type` | varchar(64) | 任务类型 |
-| `business_key` | varchar(128) | 业务键，例如 term |
-| `provider` | varchar(32) | AI 供应商 |
-| `model` | varchar(128) | 模型 |
-| `template_id` | bigint | 模板 ID |
-| `status` | varchar(32) | PENDING、RUNNING、SUCCESS、API_FAILED、PARSE_FAILED |
-| `retry_count` | int | 重试次数 |
-| `error_message` | varchar(2048) | 错误摘要 |
-| `created_at` | datetime | 创建时间 |
-| `updated_at` | datetime | 更新时间 |
+- `synonym`
+- `antonym`
+- `word_family`
+- `collocation`
+- `tag_overlap`
 
-#### ai_generation_record
+### 7.6 复习记录表
 
-| 字段 | 类型 | 说明 |
-| --- | --- | --- |
-| `id` | bigint | 主键 |
-| `task_id` | bigint | 任务 ID |
-| `provider` | varchar(32) | AI 供应商 |
-| `model` | varchar(128) | 模型 |
-| `request_json` | json | 请求内容 |
-| `raw_response` | mediumtext | 原始响应 |
-| `parsed_json` | json | 解析后的 JSON |
-| `prompt_tokens` | int | 输入 token |
-| `completion_tokens` | int | 输出 token |
-| `latency_ms` | bigint | 耗时 |
-| `success` | tinyint | 是否成功 |
-| `error_message` | varchar(2048) | 错误摘要 |
-| `created_at` | datetime | 创建时间 |
+#### `learning_review_record`
 
-## 9. API 设计草案
+| 字段 | 说明 |
+| --- | --- |
+| `id` | 主键 |
+| `user_id` | 用户 ID |
+| `wordbook_id` | 词书 ID |
+| `entry_id` | 词书词条 ID |
+| `vocabulary_id` | 词汇缓存 ID |
+| `normalized_term` | 归一化词条 |
+| `result` | 复习结果 |
+| `score` | 自评分 |
+| `review_stage_before` | 复习前阶段 |
+| `review_stage_after` | 复习后阶段 |
+| `mastery_before` | 复习前掌握度 |
+| `mastery_after` | 复习后掌握度 |
+| `next_review_time` | 下次复习时间 |
+| `duration_seconds` | 本次耗时 |
+| `create_time` | 创建时间 |
 
-### 9.1 词汇接口
+## 8. 核心业务流程
 
-#### 查询词汇
-
-```http
-GET /api/v1/vocabularies/{term}
-```
-
-返回词汇学习卡片。如果本地不存在，可通过参数决定是否触发生成：
-
-```http
-GET /api/v1/vocabularies/abandon?generateIfAbsent=true
-```
-
-#### 创建生成任务
-
-```http
-POST /api/v1/vocabularies/generation-tasks
-Content-Type: application/json
-
-{
-  "term": "abandon",
-  "taskTypes": ["VOCABULARY_CARD", "QUIZ_GENERATION"],
-  "provider": "DEEPSEEK"
-}
-```
-
-#### 查询生成任务
-
-```http
-GET /api/v1/ai-generation-tasks/{taskId}
-```
-
-#### 重新生成词汇内容
-
-```http
-POST /api/v1/vocabularies/{term}/regenerate
-```
-
-### 9.2 模板接口
-
-```http
-GET /api/v1/prompt-templates
-POST /api/v1/prompt-templates
-POST /api/v1/prompt-templates/{id}/enable
-POST /api/v1/prompt-templates/{id}/disable
-```
-
-第一阶段可以先不做完整模板管理页面，模板可通过初始化 SQL 或后端配置写入。
-
-## 10. 应用层设计
-
-### 10.1 VocabularyService
-
-职责：
-
-- 查询词汇学习卡片。
-- 创建或更新词汇主数据。
-- 聚合返回释义、例句、搭配、关系、记忆提示、题目。
-- 控制重复生成策略。
-
-### 10.2 AiGenerationService
-
-职责：
-
-- 创建生成任务。
-- 执行任务。
-- 调用模板渲染。
-- 调用 AI Provider。
-- 保存请求、响应和解析结果。
-- 协调解析结果入库。
-
-### 10.3 PromptTemplateService
-
-职责：
-
-- 查询可用模板。
-- 按任务类型选择模板。
-- 渲染模板变量。
-- 管理模板版本。
-
-### 10.4 AiResponseParser
-
-职责：
-
-- 清理模型返回文本。
-- 提取 JSON。
-- 反序列化到目标 DTO。
-- 执行字段校验。
-- 返回标准解析结果。
-
-### 10.5 Provider Adapter
-
-职责：
-
-- 各供应商鉴权。
-- HTTP 请求封装。
-- 响应字段映射。
-- 错误码转换。
-
-建议先实现一个供应商，例如 DeepSeek，再扩展 Kimi、豆包、元宝。这样可以先跑通业务闭环。
-
-## 11. 任务执行模式
-
-第一阶段建议支持同步和异步两种模式：
-
-### 11.1 同步模式
-
-适合开发调试或低频调用：
+### 8.1 学习流程
 
 ```text
-请求进入 -> 调用 AI -> 解析 -> 入库 -> 返回结果
+登录
+  -> 进入学习页
+  -> 输入单词
+  -> 查 english_vocabulary_study_record
+  -> 命中缓存：直接返回
+  -> 未命中：调用 Agent + Prompt + AI Provider
+  -> 保存 raw_content 与 parsed_json
+  -> 生成标签和关联词
+  -> 前端展示学习卡片
+  -> 用户加入当前词书
+  -> 创建 learning_wordbook_entry
 ```
 
-优点是实现简单；缺点是接口耗时较长，供应商超时时用户体验差。
-
-### 11.2 异步模式
-
-适合正式使用：
+### 8.2 复习流程
 
 ```text
-请求进入 -> 创建任务 -> 立即返回 taskId
-后台线程执行 -> 前端轮询任务状态或后续接 WebSocket/SSE
+登录
+  -> 选择词书
+  -> 查询 /api/v1/learning/reviews/due
+  -> 展示待复习词条
+  -> 用户选择 忘记 / 模糊 / 记住
+  -> 写入 learning_review_record
+  -> 更新 learning_wordbook_entry 的 stage、mastery、next_review_time
 ```
 
-第一阶段可使用 Spring `@Async` 或简单线程池，后续任务量上来后再引入消息队列。
-
-## 12. 质量控制
-
-### 12.1 内容质量
-
-- 单词必须和请求词条一致，允许大小写归一化。
-- 词性必须在枚举范围内。
-- 例句必须包含目标词或其合理变形。
-- 选择题必须有且只有一个正确答案。
-- 同义词、反义词不直接入主词库，除非用户或任务明确生成该词。
-
-### 12.2 防重复策略
-
-- `normalized_term` 唯一。
-- 同一 `term_id` 下例句按 `sentence` 去重。
-- 搭配按 `phrase` 去重。
-- 关系按 `relation_type + related_term` 去重。
-
-### 12.3 可追溯性
-
-每条 AI 生成业务数据建议保留来源字段：
-
-- `source_type`
-- `source_task_id`
-- `source_record_id`
-
-若第一阶段想减少字段数量，至少保留任务和记录表，方便排查。
-
-## 13. 安全与成本控制
-
-### 13.1 API Key 管理
-
-- API Key 只通过环境变量或本地未提交配置提供。
-- 不在日志中打印完整请求头。
-- 请求记录中不要保存 Authorization。
-
-### 13.2 调用频率
-
-- 对同一个词条设置生成冷却时间。
-- 同一供应商设置超时和重试上限。
-- 支持手动切换供应商。
-- 后续可以增加每日 token 预算。
-
-### 13.3 输入安全
-
-- 限制 term 长度，例如 128 字符。
-- 只允许合理字符：英文字母、空格、连字符、撇号。
-- 对 Prompt 变量做转义，降低提示词注入影响。
-
-## 14. 开发里程碑
-
-### 阶段 1：后端基础闭环
-
-- 建立真实业务包结构。
-- 创建词汇、释义、例句、搭配、题目、AI 任务相关表。
-- 实现 Prompt 模板常量或模板表初始化。
-- 实现一个 AI Provider 适配器。
-- 实现词汇学习卡片生成、解析、入库。
-- 提供 Swagger 可调试 API。
-
-### 阶段 2：内容扩展
-
-- 增加测验题生成。
-- 增加多供应商适配。
-- 增加重新生成、重新解析能力。
-- 增加内容质量校验和去重。
-
-### 阶段 3：学习体验
-
-- 增加学习记录。
-- 增加收藏、掌握状态、复习计划。
-- 增加错题记录。
-- 增加简单前端页面。
-
-### 阶段 4：个性化与规模化
-
-- 根据用户水平调整解释和例句难度。
-- 引入间隔重复算法。
-- 支持批量导入词表。
-- 支持任务队列、限流、成本统计。
-
-## 15. 推荐第一版接口闭环
-
-第一版最小可用功能建议只做 4 个接口：
-
-```http
-POST /api/v1/vocabularies/generate
-GET  /api/v1/vocabularies/{term}
-POST /api/v1/vocabularies/{term}/regenerate
-GET  /api/v1/ai-generation-tasks/{taskId}
-```
-
-第一版最小表集合：
-
-- `vocabulary_term`
-- `vocabulary_definition`
-- `vocabulary_example`
-- `vocabulary_collocation`
-- `vocabulary_relation`
-- `memory_tip`
-- `quiz_question`
-- `prompt_template`
-- `ai_generation_task`
-- `ai_generation_record`
-
-第一版最小技术闭环：
+### 8.3 标签与相关词流程
 
 ```text
-Spring Boot Controller
-    -> VocabularyService
-    -> AiGenerationService
-    -> DeepSeekProviderClient
-    -> AiResponseParser
-    -> MyBatis Plus Mapper
-    -> MySQL
+词汇 parsed_json
+  -> definitions 抽取词性
+  -> definitions/memory_tips 推断含义主题
+  -> term 长度和释义数量推断难度
+  -> collocations / word_family 抽取标签
+  -> synonyms / antonyms / word_family / collocations 生成关联词
+  -> collocations 保存短语含义
+  -> related 保存核心词性、核心含义、匹配来源和匹配分
+  -> 已存在相同标签的词生成 tag_overlap 关系
 ```
 
-## 16. 后续待确认问题
+## 8.4 前端产品结构
 
-- 第一阶段是否只支持单用户，还是从一开始引入用户体系。
-- AI 供应商优先接入哪一个，建议先选接口兼容性较好的一个跑通闭环。
-- 是否需要前端页面，还是先用 Swagger/Postman 调试。
-- 数据库迁移工具是否引入 Flyway 或 Liquibase。
-- AI 生成任务是否第一版就异步化。
-- 是否需要支持批量导入 CET-4、CET-6、考研、雅思、托福词表。
+未登录时展示独立登录界面。登录后分为三个功能区：
 
+- `个人信息`：账户概览、词书、Agent 管理、系统日志和 Raw JSON。
+- `学习`：查词、AI 学习卡片、音标发音、加入词书、例句、记忆提示、搭配、相关词、标签。
+- `复习`：艾宾浩斯复习队列、复习卡片、复习结果提交。
+
+学习页展示优先级：
+
+```text
+单词与音标
+  -> 释义
+  -> Examples
+  -> Memory
+  -> Collocations
+  -> Related
+  -> Tags
+```
+
+发音能力：
+
+- 单词主按钮使用个人信息中配置的默认发音。
+- UK / US 音标后分别提供发音按钮。
+- 优先调用有道词典音频地址，失败后回退浏览器 SpeechSynthesis。
+
+## 9. 安全与成本控制
+
+- API Key 只通过环境变量或 `config/application-local.yaml` 注入。
+- 模型调用记录不保存 Authorization。
+- 词汇缓存按 `normalized_term` 唯一，避免重复调研 AI API。
+- Token 在数据库中只保存哈希，退出登录会撤销 Token。
+- 前端系统日志保存在浏览器本地，只用于用户排查最近操作。
+
+## 10. 验证结果
+
+已运行：
+
+```bash
+cd /Users/chandler/Documents/repository/github/demo-2026/chandler26-jdk17-learning-assistant
+/Users/chandler/.m2/wrapper/dists/apache-maven-3.9.12-bin/5nmfsn99br87k5d4ajlekdq10k/apache-maven-3.9.12/bin/mvn test -DskipTests
+```
+
+结果：`BUILD SUCCESS`。
+
+已运行：
+
+```bash
+cd /Users/chandler/Documents/repository/github/demo-2026/chandler26-jdk17-learning-assistant-web
+/usr/local/bin/node --check public/app.js
+```
+
+结果：通过，无语法错误。
+
+前端服务：
+
+```bash
+cd /Users/chandler/Documents/repository/github/demo-2026/chandler26-jdk17-learning-assistant-web
+/usr/local/bin/node server.mjs
+```
+
+访问：
+
+```text
+http://127.0.0.1:5173
+```
+
+## 11. 后续迭代
+
+- 将轻量 Token 认证升级为 Spring Security + JWT。
+- 增加词书词条删除、编辑备注、批量导入。
+- 增加测验题和错题本。
+- 增加复习算法配置，例如不同词书不同间隔策略。
+- 增加真实服务端系统日志表，而不是只放前端 localStorage。
+- 引入 Flyway 或 Liquibase 管理 SQL 迁移。

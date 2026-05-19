@@ -1,0 +1,10 @@
+{
+  "name": "chandler26-jdk17-learning-assistant-web",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "/usr/local/bin/node server.mjs",
+    "start": "/usr/local/bin/node server.mjs"
+  }
+}

@@ -1,0 +1,290 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>English Learning Agent</title>
+    <link rel="stylesheet" href="/styles.css" />
+  </head>
+  <body>
+    <main class="app">
+      <section class="login-screen" id="loginScreen">
+        <div class="login-copy">
+          <p class="eyebrow">Learning Assistant</p>
+          <h1>把每一次查词变成可复习的知识资产</h1>
+          <p class="login-subtitle">AI 生成学习卡片，系统沉淀标签、词书和复习计划。</p>
+          <div class="login-metrics">
+            <span>Agent Chat</span>
+            <span>Wordbook</span>
+            <span>Review Plan</span>
+          </div>
+        </div>
+
+        <section class="login-panel">
+          <div class="panel-heading">
+            <div>
+              <p class="eyebrow">Account</p>
+              <h2>登录学习助手</h2>
+            </div>
+            <span class="status-pill" id="loginConnectionStatus">后端未检测</span>
+          </div>
+          <label>
+            后端地址
+            <input id="apiBaseInput" value="http://localhost:16681" />
+          </label>
+          <label>
+            用户名
+            <input id="usernameInput" autocomplete="username" placeholder="chandler" />
+          </label>
+          <label>
+            密码
+            <input id="passwordInput" type="password" autocomplete="current-password" placeholder="输入密码" />
+          </label>
+          <label>
+            昵称
+            <input id="nicknameInput" placeholder="注册时可选" />
+          </label>
+          <div class="login-actions">
+            <button class="primary-button" id="loginBtn" type="button">登录</button>
+            <button class="secondary-button" id="registerBtn" type="button">注册</button>
+          </div>
+          <p class="build-version" id="buildVersion">loading</p>
+        </section>
+      </section>
+
+      <section class="product-shell hidden" id="productShell">
+        <aside class="sidebar">
+          <div class="brand-block">
+            <p class="eyebrow">English Agent</p>
+            <h1>学习助手</h1>
+          </div>
+
+          <nav class="nav-menu" aria-label="主功能">
+            <button class="nav-item active" type="button" data-view="profileView">
+              <span>个人信息</span>
+              <small>账户、词书、日志</small>
+            </button>
+            <button class="nav-item" type="button" data-view="studyView">
+              <span>学习</span>
+              <small>查词与 AI 卡片</small>
+            </button>
+            <button class="nav-item" type="button" data-view="reviewView">
+              <span>复习</span>
+              <small>艾宾浩斯计划</small>
+            </button>
+          </nav>
+
+          <div class="sidebar-footer">
+            <div class="user-card">
+              <span class="avatar" id="userAvatar">U</span>
+              <div>
+                <strong id="userBadge">未登录</strong>
+                <small id="connectionStatus">后端未检测</small>
+              </div>
+            </div>
+            <button class="secondary-button" id="logoutBtn" type="button">退出登录</button>
+          </div>
+        </aside>
+
+        <section class="content">
+          <header class="content-topbar">
+            <div>
+              <p class="eyebrow" id="viewEyebrow">Profile</p>
+              <h2 id="viewTitle">个人信息</h2>
+            </div>
+            <div class="topbar-actions">
+              <label class="compact-field">
+                当前词书
+                <select id="wordbookSelect"></select>
+              </label>
+              <button class="icon-button" id="reloadWordbooksBtn" type="button" title="刷新词书">↻</button>
+              <button class="icon-button" id="reloadAgentsBtn" type="button" title="刷新 Agent">↻</button>
+            </div>
+          </header>
+
+          <section class="view active" id="profileView">
+            <div class="dashboard-grid">
+              <section class="panel account-panel">
+                <div class="panel-heading">
+                  <div>
+                    <p class="eyebrow">Me</p>
+                    <h3>账户概览</h3>
+                  </div>
+                  <span class="mini-pill ok" id="profileStatus">在线</span>
+                </div>
+                <div class="profile-row">
+                  <span class="avatar large" id="profileAvatar">U</span>
+                  <div>
+                    <h4 id="profileName">未登录</h4>
+                    <p id="profileUsername">等待登录</p>
+                  </div>
+                </div>
+                <div class="metric-row">
+                  <div>
+                    <strong id="wordbookCount">0</strong>
+                    <span>词书</span>
+                  </div>
+                  <div>
+                    <strong id="wordCount">0</strong>
+                    <span>单词</span>
+                  </div>
+                  <div>
+                    <strong id="dueCount">0</strong>
+                    <span>待复习</span>
+                  </div>
+                </div>
+              </section>
+
+              <section class="panel">
+                <div class="panel-heading">
+                  <div>
+                    <p class="eyebrow">Wordbook</p>
+                    <h3>单词本</h3>
+                  </div>
+                  <button class="icon-button" id="reloadWordbookEntriesBtn" type="button" title="刷新单词本">↻</button>
+                </div>
+                <div class="inline-form">
+                  <input id="newWordbookInput" placeholder="新建词书，例如：四级高频词" />
+                  <button class="secondary-button" id="createWordbookBtn" type="button">新建</button>
+                </div>
+                <div id="wordbookCards" class="wordbook-cards empty">暂无词书</div>
+                <div class="panel-subtitle">当前词书单词</div>
+                <div id="wordbookEntryList" class="entry-list empty">暂无单词</div>
+              </section>
+
+              <section class="panel agent-panel">
+                <div class="panel-heading">
+                  <div>
+                    <p class="eyebrow">Agent</p>
+                    <h3>Agent 管理</h3>
+                  </div>
+                  <span class="mini-pill">学习配置</span>
+                </div>
+                <label>
+                  Agent
+                  <select id="agentSelect"></select>
+                </label>
+                <label>
+                  模板
+                  <select id="templateSelect">
+                    <option value="english_vocab_card_json">词汇卡片 JSON</option>
+                    <option value="english_vocab_quiz_json">练习题 JSON</option>
+                  </select>
+                </label>
+                <label>
+                  默认发音
+                  <select id="voiceSelect">
+                    <option value="us">美音</option>
+                    <option value="uk">英音</option>
+                  </select>
+                </label>
+                <label class="switch-line">
+                  <input id="forceRefreshInput" type="checkbox" />
+                  <span>强制重新调用 AI</span>
+                </label>
+
+                <div class="panel-subtitle">继续追问</div>
+                <textarea id="chatInput" rows="5" placeholder="例如：给我三个容易混淆的近义词"></textarea>
+                <button class="secondary-button" id="chatBtn" type="button">发送追问</button>
+              </section>
+            </div>
+
+            <section class="panel log-panel">
+              <div class="panel-heading">
+                <div>
+                  <p class="eyebrow">System</p>
+                  <h3>系统日志</h3>
+                </div>
+                <button class="secondary-button compact" id="clearLogBtn" type="button">清空</button>
+              </div>
+              <div id="systemLogList" class="log-list"></div>
+              <pre id="rawJson" class="raw-box">{}</pre>
+            </section>
+          </section>
+
+          <section class="view" id="studyView">
+            <section class="study-layout">
+              <div class="study-main">
+                <form class="search-card" id="studyForm">
+                  <label>
+                    输入英语单词或短语
+                    <input id="termInput" class="term-input" autocomplete="off" placeholder="abandon" />
+                  </label>
+                  <button class="primary-button" id="studyBtn" type="submit">学习</button>
+                </form>
+
+                <section class="word-hero panel">
+                  <div class="word-main">
+                    <div>
+                      <p class="eyebrow" id="cacheState">等待输入</p>
+                      <h2 id="wordTitle">Ready</h2>
+                      <div id="phoneticLine" class="phonetic phonetic-actions">输入单词后生成学习卡片</div>
+                    </div>
+                    <div class="voice-actions">
+                      <button class="icon-button large" id="addToWordbookBtn" type="button" title="加入当前词书">＋</button>
+                      <button class="icon-button large" id="speakWordBtn" type="button" title="播放单词">▶</button>
+                      <button class="icon-button large" id="speakSentenceBtn" type="button" title="播放例句">◉</button>
+                    </div>
+                  </div>
+                  <div id="meaningList" class="meaning-list"></div>
+                </section>
+
+                <section class="content-grid">
+                  <div class="panel">
+                    <div class="panel-heading"><h3>例句</h3></div>
+                    <div id="examples" class="stack empty">暂无例句</div>
+                  </div>
+                  <div class="panel">
+                    <div class="panel-heading"><h3>记忆提示</h3></div>
+                    <div id="memoryTips" class="stack empty">暂无记忆提示</div>
+                  </div>
+                </section>
+
+                <section class="content-grid">
+                  <div class="panel">
+                    <div class="panel-heading"><h3>搭配</h3></div>
+                    <div id="collocations" class="collocation-list empty">暂无搭配</div>
+                  </div>
+                  <div class="panel">
+                    <div class="panel-heading"><h3>相关单词</h3></div>
+                    <div id="relationList" class="relation-list empty">暂无关联词</div>
+                  </div>
+                </section>
+
+                <section class="panel">
+                  <div class="panel-heading"><h3>释义标签</h3></div>
+                  <div id="tagList" class="chips empty">暂无标签</div>
+                </section>
+              </div>
+            </section>
+          </section>
+
+          <section class="view" id="reviewView">
+            <section class="review-header panel">
+              <div>
+                <p class="eyebrow">Review Plan</p>
+                <h3>今日复习</h3>
+                <p>按照当前词书的复习计划推进，提交结果后自动计算下一次复习时间。</p>
+              </div>
+              <button class="primary-button compact-primary" id="reloadReviewBtn" type="button">刷新队列</button>
+            </section>
+
+            <div class="review-layout">
+              <section class="panel">
+                <div class="panel-heading"><h3>待复习任务</h3></div>
+                <div id="reviewQueue" class="review-list empty">暂无待复习任务</div>
+              </section>
+              <section class="panel review-focus">
+                <div class="panel-heading"><h3>复习卡片</h3></div>
+                <div id="reviewFocus" class="empty">点击待复习单词后查看学习卡片</div>
+              </section>
+            </div>
+          </section>
+        </section>
+      </section>
+    </main>
+
+    <div class="toast" id="toast"></div>
+    <script type="module" src="/app.js?v=20260519-2"></script>
+  </body>
+</html>

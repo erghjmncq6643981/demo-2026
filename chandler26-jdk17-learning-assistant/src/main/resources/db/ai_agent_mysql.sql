@@ -149,7 +149,7 @@ INSERT INTO ai_prompt_template (
     'english_vocab_card_json',
     'user',
     '英语,词汇,JSON',
-    '请为英语词汇「{{term}}」生成学习卡片。只输出合法 JSON，不要输出 Markdown。JSON 字段包括：term、is_valid、language、phonetic.uk、phonetic.us、definitions、examples、collocations、synonyms、antonyms、word_family、memory_tips。definitions 生成 1 到 4 条，examples 生成 3 条，collocations 生成 3 到 6 条。中文解释要简洁准确。',
+    '请为英语词汇「{{term}}」生成学习卡片。只输出合法 JSON，不要输出 Markdown。JSON 字段包括：term、is_valid、language、phonetic.uk、phonetic.us、definitions、examples、collocations、synonyms、antonyms、word_family、memory_tips。definitions 生成 1 到 4 条，每条包含 part_of_speech、meaning、english。examples 生成 3 条。collocations 生成 3 到 6 条对象数组，每条包含 phrase 和 meaning。synonyms、antonyms、word_family 生成对象数组，每条包含 word、part_of_speech、meaning。中文解释要简洁准确。如果输入拼写疑似错误，请在 term 中输出你判断的最匹配标准单词，并保持 is_valid=true。',
     JSON_ARRAY(JSON_OBJECT('name', 'term', 'label', '英语单词或短语', 'required', true)),
     '生成可解析入库的英语词汇学习卡片',
     '{"term":"abandon"}',

@@ -1,0 +1,33 @@
+server:
+  port: 17680
+spring:
+  application:
+    name: client-demo
+
+  datasource:
+    username: micro
+    password: 123456
+    url: jdbc:mysql://localhost:3306/study?useUnicode=true&characterEncoding=utf-8&autoReconnect=true&autoReconnectForPools=true
+    driver-class-name: com.mysql.cj.jdbc.Driver
+    type: com.alibaba.druid.pool.DruidDataSource
+
+
+mybatis:
+  mapper-locations: classpath:mapper/*.xml
+  type-aliases-packag: com.chandler.*.domain
+
+info:
+  app:
+    name: ${spring.application.name}
+    description: @project.description@
+    version: project.build.sourceEncoding@
+    java:
+      version: @java.version@
+
+springdoc:
+  api-docs:
+    path: /v3/api-docs
+    enabled: true
+  swagger-ui:
+    path: /swagger-ui.html
+    enabled: true
