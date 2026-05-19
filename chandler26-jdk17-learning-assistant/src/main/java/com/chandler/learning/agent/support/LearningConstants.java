@@ -1,0 +1,219 @@
+package com.chandler.learning.agent.support;
+
+/**
+ * 后端通用业务常量。
+ * <p>
+ * 只收纳跨类共享或业务含义明确的值，避免把普通循环下标也抽象成常量。
+ */
+public final class LearningConstants {
+
+    public static final int DEFAULT_SEQUENCE = 0;
+    public static final int FIRST_SEQUENCE = 1;
+    public static final int SEQUENCE_STEP = 1;
+    public static final int ZERO = 0;
+    public static final String SQL_LIMIT_ONE = "LIMIT 1";
+    public static final String DEFAULT_CHAT_PATH = "/chat/completions";
+    public static final String DEFAULT_AGENT_TYPE = "chat";
+    public static final String DEFAULT_TEMPLATE_TYPE = "user";
+    public static final String VOCABULARY_AGENT_CODE = "english_vocabulary";
+    public static final String VOCABULARY_TEMPLATE_CODE = "english_vocab_card_json";
+    public static final int DEFAULT_JWT_EXPIRE_DAYS = 30;
+
+    private LearningConstants() {
+    }
+
+    public static final class Auth {
+        public static final String BEARER_PREFIX = "Bearer ";
+        public static final int PASSWORD_MIN_LENGTH = 6;
+        public static final int PASSWORD_SALT_BYTES = 16;
+        public static final int PASSWORD_HASH_PART_COUNT = 3;
+        public static final int PASSWORD_SALT_PART_INDEX = 1;
+        public static final int PASSWORD_DIGEST_PART_INDEX = 2;
+        public static final String PASSWORD_HASH_SEPARATOR = ":";
+        public static final int BEARER_PREFIX_LENGTH = BEARER_PREFIX.length();
+
+        private Auth() {
+        }
+    }
+
+    public static final class Jwt {
+        public static final int TOKEN_PART_COUNT = 3;
+        public static final int SIGNATURE_PART_INDEX = 2;
+        public static final long SECONDS_PER_DAY = 86_400L;
+
+        private Jwt() {
+        }
+    }
+
+    public static final class Crypto {
+        public static final String API_KEY_PREFIX = "enc:v1:";
+        public static final String API_KEY_CIPHER = "AES/GCM/NoPadding";
+        public static final int API_KEY_IV_LENGTH = 12;
+        public static final int API_KEY_TAG_BITS = 128;
+        public static final int API_KEY_CIPHER_PART_COUNT = 2;
+        public static final int API_KEY_MASK_THRESHOLD = 10;
+        public static final int API_KEY_MASK_PREFIX_LENGTH = 6;
+        public static final int API_KEY_MASK_SUFFIX_LENGTH = 4;
+        public static final int API_KEY_FINGERPRINT_LENGTH = 16;
+
+        private Crypto() {
+        }
+    }
+
+    public static final class ModelClient {
+        public static final int EMPTY_SIZE = 0;
+        public static final int FIRST_CHOICE_INDEX = 0;
+
+        private ModelClient() {
+        }
+    }
+
+    public static final class ChatSession {
+        public static final int MAX_HISTORY_SIZE = 20;
+        public static final String ROLE_USER = "user";
+        public static final String ROLE_ASSISTANT = "assistant";
+
+        private ChatSession() {
+        }
+    }
+
+    public static final class SystemLog {
+        public static final int DEFAULT_LIMIT = 80;
+        public static final String DEFAULT_LIMIT_PARAM = "80";
+        public static final int MIN_LIMIT = 1;
+        public static final int MAX_LIMIT = 200;
+        public static final String DEFAULT_TYPE = "system";
+        public static final String DEFAULT_TITLE = "系统日志";
+        public static final String SOURCE_CLIENT = "client";
+        public static final String SOURCE_SERVER = "server";
+
+        private SystemLog() {
+        }
+    }
+
+    public static final class Vocabulary {
+        public static final int DEFAULT_LOOKUP_COUNT = 1;
+        public static final int EXACT_MATCH_SCORE = 100;
+        public static final int FUZZY_MATCH_CANDIDATE_LIMIT = 1_000;
+        public static final int FUZZY_MATCH_MIN_SCORE = 45;
+        public static final int FUZZY_MATCH_MAX_SCORE = 99;
+        public static final int MIN_MATCH_SCORE = 0;
+        public static final int PREFIX_SCORE_BOOST = 12;
+        public static final int SAME_INITIAL_SCORE_BOOST = 6;
+        public static final int COMMON_PREFIX_MIN_LENGTH = 2;
+        public static final int COMMON_PREFIX_SCORE_BOOST = 8;
+        public static final int CONTAINS_SCORE_BOOST = 8;
+        public static final int EDIT_DISTANCE_INSERT_DELETE_COST = 1;
+        public static final int EDIT_DISTANCE_SAME_COST = 0;
+        public static final int EDIT_DISTANCE_REPLACE_COST = 1;
+
+        private Vocabulary() {
+        }
+    }
+
+    public static final class VocabularyInsight {
+        public static final int MAX_RELATIONS = 80;
+        public static final int VISIBLE_RELATION_LIMIT = 24;
+        public static final int SAME_TAG_LIMIT = 12;
+        public static final int TAG_WEIGHT_PART_OF_SPEECH = 90;
+        public static final int TAG_WEIGHT_MEANING_TOPIC = 70;
+        public static final int TAG_WEIGHT_COLLOCATION = 58;
+        public static final int TAG_WEIGHT_WORD_FAMILY = 62;
+        public static final int TAG_WEIGHT_DIFFICULTY = 45;
+        public static final int RELATION_SCORE_SYNONYM = 92;
+        public static final int RELATION_SCORE_ANTONYM = 82;
+        public static final int RELATION_SCORE_WORD_FAMILY = 78;
+        public static final int RELATION_SCORE_COLLOCATION = 70;
+        public static final int RELATION_SCORE_TAG_OVERLAP = 60;
+        public static final int HARD_DEFINITION_COUNT = 5;
+        public static final int HARD_WORD_LENGTH = 12;
+        public static final int MEDIUM_DEFINITION_COUNT = 3;
+        public static final int MEDIUM_WORD_LENGTH = 8;
+        public static final int TAG_VALUE_MAX_LENGTH = 128;
+        public static final int PART_OF_SPEECH_MAX_LENGTH = 50;
+        public static final int MEANING_MAX_LENGTH = 512;
+        public static final int MATCH_TYPE_MAX_LENGTH = 50;
+        public static final String TAG_TYPE_PART_OF_SPEECH = "part_of_speech";
+        public static final String TAG_TYPE_MEANING_TOPIC = "meaning_topic";
+        public static final String TAG_TYPE_DIFFICULTY = "difficulty";
+        public static final String RELATION_TYPE_TAG_OVERLAP = "tag_overlap";
+        public static final String RELATION_TYPE_COLLOCATION = "collocation";
+        public static final String MATCH_TYPE_PARSED_TEXT = "parsed_text";
+        public static final String MATCH_TYPE_PARSED_OBJECT = "parsed_object";
+        public static final String MATCH_TYPE_CACHED_EXACT = "cached_exact";
+        public static final String SOURCE_PARSED_JSON = "parsed_json";
+
+        private VocabularyInsight() {
+        }
+    }
+
+    public static final class Review {
+        public static final String STATUS_FAMILIAR = "familiar";
+        public static final String STATUS_FORGOTTEN = "forgotten";
+        public static final String STATUS_VAGUE = "vague";
+        public static final String RESULT_REMEMBERED = "remembered";
+        public static final String RESULT_VAGUE = "vague";
+        public static final String RESULT_FORGOTTEN = "forgotten";
+        public static final int INITIAL_STAGE = 0;
+        public static final int INITIAL_MASTERY = 0;
+        public static final int MIN_MASTERY = 0;
+        public static final int MAX_MASTERY = 100;
+        public static final int FAMILIAR_MASTERY_THRESHOLD = 70;
+        public static final int REMEMBERED_MASTERY_DELTA = 15;
+        public static final int VAGUE_MASTERY_DELTA = 5;
+        public static final int FORGOTTEN_MASTERY_DELTA = 20;
+        public static final int VAGUE_REVIEW_DELAY_DAYS = 1;
+        public static final int FORGOTTEN_REVIEW_DELAY_HOURS = 4;
+        public static final int[] INTERVAL_DAYS = {0, 1, 2, 4, 7, 15, 30, 60};
+
+        private Review() {
+        }
+    }
+
+    public static final class Activity {
+        public static final int MIN_DAYS = 7;
+        public static final int MAX_DAYS = 366;
+
+        private Activity() {
+        }
+    }
+
+    public static final class ErrorCode {
+        public static final String AUTH_REQUIRED = "AUTH_REQUIRED";
+        public static final String AUTH_EXPIRED = "AUTH_EXPIRED";
+        public static final String AUTH_INVALID_CREDENTIALS = "AUTH_INVALID_CREDENTIALS";
+        public static final String USER_ALREADY_EXISTS = "USER_ALREADY_EXISTS";
+        public static final String USER_DISABLED = "USER_DISABLED";
+        public static final String PASSWORD_TOO_SHORT = "PASSWORD_TOO_SHORT";
+        public static final String PASSWORD_INCORRECT = "PASSWORD_INCORRECT";
+        public static final String JWT_INVALID = "JWT_INVALID";
+        public static final String JWT_SIGN_FAILED = "JWT_SIGN_FAILED";
+        public static final String JSON_SERIALIZE_FAILED = "JSON_SERIALIZE_FAILED";
+        public static final String JSON_PARSE_FAILED = "JSON_PARSE_FAILED";
+        public static final String API_KEY_REQUIRED = "API_KEY_REQUIRED";
+        public static final String API_KEY_CRYPTO_FAILED = "API_KEY_CRYPTO_FAILED";
+        public static final String API_KEY_CIPHER_INVALID = "API_KEY_CIPHER_INVALID";
+        public static final String MODEL_CONFIG_NOT_FOUND = "MODEL_CONFIG_NOT_FOUND";
+        public static final String AI_PROVIDER_MISSING = "AI_PROVIDER_MISSING";
+        public static final String AI_PROVIDER_DISABLED = "AI_PROVIDER_DISABLED";
+        public static final String AI_PROVIDER_API_KEY_MISSING = "AI_PROVIDER_API_KEY_MISSING";
+        public static final String AI_PROVIDER_BASE_URL_MISSING = "AI_PROVIDER_BASE_URL_MISSING";
+        public static final String AI_MODEL_NAME_MISSING = "AI_MODEL_NAME_MISSING";
+        public static final String AI_RESPONSE_PARSE_FAILED = "AI_RESPONSE_PARSE_FAILED";
+        public static final String AGENT_NOT_FOUND = "AGENT_NOT_FOUND";
+        public static final String AGENT_DISABLED = "AGENT_DISABLED";
+        public static final String AGENT_CODE_EXISTS = "AGENT_CODE_EXISTS";
+        public static final String CHAT_SESSION_NOT_FOUND = "CHAT_SESSION_NOT_FOUND";
+        public static final String PROMPT_TEMPLATE_NOT_FOUND = "PROMPT_TEMPLATE_NOT_FOUND";
+        public static final String PROMPT_TEMPLATE_DISABLED = "PROMPT_TEMPLATE_DISABLED";
+        public static final String PROMPT_TEMPLATE_CODE_EXISTS = "PROMPT_TEMPLATE_CODE_EXISTS";
+        public static final String VOCABULARY_EMPTY = "VOCABULARY_EMPTY";
+        public static final String VOCABULARY_RECORD_NOT_FOUND = "VOCABULARY_RECORD_NOT_FOUND";
+        public static final String WORDBOOK_NOT_FOUND = "WORDBOOK_NOT_FOUND";
+        public static final String ENTRY_NOT_FOUND = "ENTRY_NOT_FOUND";
+        public static final String HASH_FAILED = "HASH_FAILED";
+
+        private ErrorCode() {
+        }
+    }
+}

@@ -1,0 +1,102 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<configuration scan="true" scanPeriod="60 seconds" debug="false">
+    <include resource="org/springframework/boot/logging/logback/defaults.xml"/>
+
+    <springProperty scope="context" name="APP_NAME" source="spring.application.name" defaultValue="learning-assistant"/>
+    <property name="LOG_DIR" value="${LOG_PATH:-logs}/${APP_NAME}"/>
+
+    <property name="CONSOLE_LOG_PATTERN"
+              value="%clr(%d{yyyy-MM-dd HH:mm:ss.SSS}){faint} %clr(%-5level) %clr([ReqId:%X{x-request-id:-N/A}]){yellow} %clr([TraceId:%X{traceId:-},SpanId:%X{spanId:-}]){magenta} %clr(|){faint} %clr(%-15.15t){faint} %clr(|){faint} %clr(%-40.40logger{39}){cyan} %clr(:){faint} %m%n${LOG_EXCEPTION_CONVERSION_WORD:-%wEx}"/>
+    <property name="FILE_LOG_PATTERN"
+              value="%d{yyyy-MM-dd HH:mm:ss.SSS} | %-5level | [ReqId:%X{x-request-id:-}] | [TraceId:%X{traceId:-},SpanId:%X{spanId:-}] | ${PID:- } | %-15.15t | %-40.40logger{39} : %m%n${LOG_EXCEPTION_CONVERSION_WORD:-%wEx}"/>
+
+    <appender name="console" class="ch.qos.logback.core.ConsoleAppender">
+        <encoder>
+            <pattern>${CONSOLE_LOG_PATTERN}</pattern>
+            <charset>UTF-8</charset>
+        </encoder>
+    </appender>
+
+    <appender name="allFile" class="ch.qos.logback.core.rolling.RollingFileAppender">
+        <file>${LOG_DIR}/all.log</file>
+        <rollingPolicy class="ch.qos.logback.core.rolling.SizeAndTimeBasedRollingPolicy">
+            <fileNamePattern>${LOG_DIR}/all.%d{yyyy-MM-dd, Asia/Shanghai}.%i.log.gz</fileNamePattern>
+            <maxFileSize>30MB</maxFileSize>
+            <maxHistory>30</maxHistory>
+            <totalSizeCap>5GB</totalSizeCap>
+        </rollingPolicy>
+        <encoder>
+            <pattern>${FILE_LOG_PATTERN}</pattern>
+            <charset>UTF-8</charset>
+        </encoder>
+    </appender>
+
+    <appender name="warnFile" class="ch.qos.logback.core.rolling.RollingFileAppender">
+        <file>${LOG_DIR}/warn.log</file>
+        <rollingPolicy class="ch.qos.logback.core.rolling.SizeAndTimeBasedRollingPolicy">
+            <fileNamePattern>${LOG_DIR}/warn.%d{yyyy-MM-dd, Asia/Shanghai}.%i.log.gz</fileNamePattern>
+            <maxFileSize>30MB</maxFileSize>
+            <maxHistory>30</maxHistory>
+            <totalSizeCap>2GB</totalSizeCap>
+        </rollingPolicy>
+        <encoder>
+            <pattern>${FILE_LOG_PATTERN}</pattern>
+            <charset>UTF-8</charset>
+        </encoder>
+        <filter class="ch.qos.logback.classic.filter.ThresholdFilter">
+            <level>WARN</level>
+        </filter>
+    </appender>
+
+    <appender name="errorFile" class="ch.qos.logback.core.rolling.RollingFileAppender">
+        <file>${LOG_DIR}/error.log</file>
+        <rollingPolicy class="ch.qos.logback.core.rolling.SizeAndTimeBasedRollingPolicy">
+            <fileNamePattern>${LOG_DIR}/error.%d{yyyy-MM-dd, Asia/Shanghai}.%i.log.gz</fileNamePattern>
+            <maxFileSize>30MB</maxFileSize>
+            <maxHistory>30</maxHistory>
+            <totalSizeCap>2GB</totalSizeCap>
+        </rollingPolicy>
+        <encoder>
+            <pattern>${FILE_LOG_PATTERN}</pattern>
+            <charset>UTF-8</charset>
+        </encoder>
+        <filter class="ch.qos.logback.classic.filter.LevelFilter">
+            <level>ERROR</level>
+            <onMatch>ACCEPT</onMatch>
+            <onMismatch>DENY</onMismatch>
+        </filter>
+    </appender>
+
+    <logger name="org.springframework.security" level="INFO"/>
+    <logger name="org.springframework.web" level="INFO"/>
+    <logger name="com.alibaba.druid" level="WARN"/>
+
+    <springProfile name="default,local,dev">
+        <root level="INFO">
+            <appender-ref ref="console"/>
+            <appender-ref ref="allFile"/>
+            <appender-ref ref="warnFile"/>
+            <appender-ref ref="errorFile"/>
+        </root>
+        <logger name="com.chandler.learning.agent" level="DEBUG" additivity="false">
+            <appender-ref ref="console"/>
+            <appender-ref ref="allFile"/>
+            <appender-ref ref="warnFile"/>
+            <appender-ref ref="errorFile"/>
+        </logger>
+    </springProfile>
+
+    <springProfile name="prod,pre,test">
+        <root level="INFO">
+            <appender-ref ref="console"/>
+            <appender-ref ref="allFile"/>
+            <appender-ref ref="warnFile"/>
+            <appender-ref ref="errorFile"/>
+        </root>
+        <logger name="com.chandler.learning.agent" level="DEBUG" additivity="false">
+            <appender-ref ref="allFile"/>
+            <appender-ref ref="warnFile"/>
+            <appender-ref ref="errorFile"/>
+        </logger>
+    </springProfile>
+</configuration>
