@@ -15,6 +15,9 @@ import org.springframework.security.web.authentication.UsernamePasswordAuthentic
 
 import java.nio.charset.StandardCharsets;
 
+/**
+ * Spring Security 配置，使用无状态 JWT 保护业务接口。
+ */
 @Configuration
 @RequiredArgsConstructor
 public class SecurityConfig {

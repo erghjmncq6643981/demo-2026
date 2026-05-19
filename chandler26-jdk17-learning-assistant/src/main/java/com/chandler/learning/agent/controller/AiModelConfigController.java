@@ -3,6 +3,7 @@ package com.chandler.learning.agent.controller;
 import com.chandler.learning.agent.domain.dto.AiModelConfigResponse;
 import com.chandler.learning.agent.domain.dto.AiModelConfigSaveRequest;
 import com.chandler.learning.agent.service.AiModelConfigService;
+import com.chandler.learning.agent.support.LearningConstants;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.Valid;
@@ -56,7 +57,7 @@ public class AiModelConfigController {
     @PostMapping("/{id}/priority")
     @Operation(summary = "更新模型配置优先级")
     public void priority(@PathVariable Long id, @RequestBody Map<String, Object> body) {
-        Integer sequence = body.get("sequence") instanceof Number number ? number.intValue() : 0;
+        Integer sequence = body.get("sequence") instanceof Number number ? number.intValue() : LearningConstants.DEFAULT_SEQUENCE;
         Boolean isDefault = body.get("isDefault") instanceof Boolean value && value;
         modelConfigService.updatePriority(id, sequence, isDefault);
     }

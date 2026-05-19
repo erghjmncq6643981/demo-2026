@@ -6,10 +6,14 @@ import com.chandler.learning.agent.config.AiModelProperties.ProviderConfig;
 import com.chandler.learning.agent.domain.dto.AiModelConfigResponse;
 import com.chandler.learning.agent.domain.dto.AiModelConfigSaveRequest;
 import com.chandler.learning.agent.domain.entity.AiModelConfig;
+import com.chandler.learning.agent.exception.LearningAssistantException;
 import com.chandler.learning.agent.mapper.AiModelConfigMapper;
 import com.chandler.learning.agent.security.ApiKeyCryptoService;
 import com.chandler.learning.agent.service.learning.SystemLogService;
+import com.chandler.learning.agent.service.learning.UserDisplayNameService;
+import com.chandler.learning.agent.support.LearningConstants;
 import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
 import org.springframework.util.StringUtils;
 
@@ -18,7 +22,10 @@ import java.util.List;
 
 /**
  * AI 模型配置服务。
+ * <p>
+ * 统一处理模型配置的启停、优先级、默认模型和 API Key 加密存储。
  */
+@Slf4j
 @Service
 @RequiredArgsConstructor
 public class AiModelConfigService {
@@ -27,6 +34,7 @@ public class AiModelConfigService {
     private final AiModelProperties modelProperties;
     private final ApiKeyCryptoService apiKeyCryptoService;
     private final SystemLogService systemLogService;
+    private final UserDisplayNameService userDisplayNameService;
 
     public List<AiModelConfigResponse> list(boolean enabledOnly) {
         return modelConfigMapper.selectList(new LambdaQueryWrapper<AiModelConfig>()
@@ -44,7 +52,7 @@ public class AiModelConfigService {
         return modelConfigMapper.selectOne(new LambdaQueryWrapper<AiModelConfig>()
                 .eq(AiModelConfig::getId, id)
                 .eq(AiModelConfig::getDeleted, false)
-                .last("LIMIT 1"));
+                .last(LearningConstants.SQL_LIMIT_ONE));
     }
 
     public AiModelConfig getDefaultEnabled() {
@@ -53,7 +61,7 @@ public class AiModelConfigService {
                 .eq(AiModelConfig::getEnabled, true)
                 .eq(AiModelConfig::getIsDefault, true)
                 .orderByAsc(AiModelConfig::getSequence)
-                .last("LIMIT 1"));
+                .last(LearningConstants.SQL_LIMIT_ONE));
         if (config != null) {
             return config;
         }
@@ -62,12 +70,14 @@ public class AiModelConfigService {
                 .eq(AiModelConfig::getEnabled, true)
                 .orderByAsc(AiModelConfig::getSequence)
                 .orderByAsc(AiModelConfig::getCreateTime)
-                .last("LIMIT 1"));
+                .last(LearningConstants.SQL_LIMIT_ONE));
     }
 
     public AiModelConfigResponse create(AiModelConfigSaveRequest request) {
         if (!StringUtils.hasText(request.getApiKey())) {
-            throw new IllegalArgumentException("API Key 不能为空");
+            throw LearningAssistantException.badRequest(
+                    LearningConstants.ErrorCode.API_KEY_REQUIRED,
+                    "API Key 不能为空");
         }
         AiModelConfig config = new AiModelConfig();
         copy(request, config, true);
@@ -79,13 +89,22 @@ public class AiModelConfigService {
         }
         modelConfigMapper.insert(config);
         systemLogService.record(null, "ai_model", "创建模型配置", config.getName());
+        log.info("用户「{}」新增了 AI 模型「{}」，供应商「{}」，明细模型「{}」，状态为「{}」，优先级为 {}",
+                userDisplayNameService.currentUserName(),
+                config.getName(),
+                config.getProvider(),
+                config.getModelName(),
+                enabledLabel(config.getEnabled()),
+                config.getSequence());
         return toResponse(config);
     }
 
     public AiModelConfigResponse update(Long id, AiModelConfigSaveRequest request) {
         AiModelConfig config = getById(id);
         if (config == null) {
-            throw new IllegalArgumentException("模型配置不存在: " + id);
+            throw LearningAssistantException.notFound(
+                    LearningConstants.ErrorCode.MODEL_CONFIG_NOT_FOUND,
+                    "模型配置不存在: " + id);
         }
         copy(request, config, false);
         config.setUpdateTime(LocalDateTime.now());
@@ -94,26 +113,41 @@ public class AiModelConfigService {
         }
         modelConfigMapper.updateById(config);
         systemLogService.record(null, "ai_model", "更新模型配置", config.getName());
+        log.info("用户「{}」更新了 AI 模型「{}」，供应商「{}」，明细模型「{}」，状态为「{}」，优先级为 {}",
+                userDisplayNameService.currentUserName(),
+                config.getName(),
+                config.getProvider(),
+                config.getModelName(),
+                enabledLabel(config.getEnabled()),
+                config.getSequence());
         return toResponse(config);
     }
 
     public void updateEnabled(Long id, boolean enabled) {
         AiModelConfig config = getById(id);
         if (config == null) {
-            throw new IllegalArgumentException("模型配置不存在: " + id);
+            throw LearningAssistantException.notFound(
+                    LearningConstants.ErrorCode.MODEL_CONFIG_NOT_FOUND,
+                    "模型配置不存在: " + id);
         }
         config.setEnabled(enabled);
         config.setUpdateTime(LocalDateTime.now());
         modelConfigMapper.updateById(config);
         systemLogService.record(null, "ai_model", enabled ? "启用模型配置" : "停用模型配置", config.getName());
+        log.info("用户「{}」{}了 AI 模型「{}」",
+                userDisplayNameService.currentUserName(),
+                enabled ? "启用" : "停用",
+                config.getName());
     }
 
     public void updatePriority(Long id, Integer sequence, Boolean isDefault) {
         AiModelConfig config = getById(id);
         if (config == null) {
-            throw new IllegalArgumentException("模型配置不存在: " + id);
+            throw LearningAssistantException.notFound(
+                    LearningConstants.ErrorCode.MODEL_CONFIG_NOT_FOUND,
+                    "模型配置不存在: " + id);
         }
-        config.setSequence(sequence == null ? 0 : sequence);
+        config.setSequence(sequence == null ? LearningConstants.DEFAULT_SEQUENCE : sequence);
         config.setIsDefault(Boolean.TRUE.equals(isDefault));
         config.setUpdateTime(LocalDateTime.now());
         if (Boolean.TRUE.equals(config.getIsDefault())) {
@@ -121,6 +155,11 @@ public class AiModelConfigService {
         }
         modelConfigMapper.updateById(config);
         systemLogService.record(null, "ai_model", "更新模型优先级", config.getName());
+        log.info("用户「{}」把 AI 模型「{}」的优先级调整为 {}，是否默认模型：{}",
+                userDisplayNameService.currentUserName(),
+                config.getName(),
+                config.getSequence(),
+                config.getIsDefault());
     }
 
     public void delete(Long id) {
@@ -132,6 +171,11 @@ public class AiModelConfigService {
         config.setUpdateTime(LocalDateTime.now());
         modelConfigMapper.updateById(config);
         systemLogService.record(null, "ai_model", "删除模型配置", config.getName());
+        log.info("用户「{}」删除了 AI 模型「{}」，供应商「{}」，明细模型「{}」",
+                userDisplayNameService.currentUserName(),
+                config.getName(),
+                config.getProvider(),
+                config.getModelName());
     }
 
     public ProviderConfig resolveProviderConfig(String provider) {
@@ -145,7 +189,9 @@ public class AiModelConfigService {
     public ProviderConfig resolveProviderConfig(Long modelConfigId) {
         AiModelConfig config = getById(modelConfigId);
         if (config == null) {
-            throw new IllegalArgumentException("模型配置不存在: " + modelConfigId);
+            throw LearningAssistantException.notFound(
+                    LearningConstants.ErrorCode.MODEL_CONFIG_NOT_FOUND,
+                    "模型配置不存在: " + modelConfigId);
         }
         return toProviderConfig(config);
     }
@@ -174,7 +220,7 @@ public class AiModelConfigService {
                 .eq(AiModelConfig::getProvider, provider)
                 .orderByDesc(AiModelConfig::getIsDefault)
                 .orderByAsc(AiModelConfig::getSequence)
-                .last("LIMIT 1"));
+                .last(LearningConstants.SQL_LIMIT_ONE));
     }
 
     private ProviderConfig toProviderConfig(AiModelConfig config) {
@@ -193,13 +239,13 @@ public class AiModelConfigService {
         config.setProvider(request.getProvider().trim());
         config.setModelName(request.getModelName().trim());
         config.setBaseUrl(request.getBaseUrl().trim());
-        config.setChatPath(StringUtils.hasText(request.getChatPath()) ? request.getChatPath().trim() : "/chat/completions");
+        config.setChatPath(StringUtils.hasText(request.getChatPath()) ? request.getChatPath().trim() : LearningConstants.DEFAULT_CHAT_PATH);
         if (create || StringUtils.hasText(request.getApiKey())) {
             config.setApiKey(apiKeyCryptoService.encrypt(request.getApiKey().trim()));
         }
         config.setEnabled(Boolean.TRUE.equals(request.getEnabled()));
         config.setIsDefault(Boolean.TRUE.equals(request.getIsDefault()));
-        config.setSequence(request.getSequence() == null ? 0 : request.getSequence());
+        config.setSequence(request.getSequence() == null ? LearningConstants.DEFAULT_SEQUENCE : request.getSequence());
     }
 
     private void clearDefault(Long keepId) {
@@ -244,6 +290,13 @@ public class AiModelConfigService {
         update.setApiKey(config.getApiKey());
         update.setUpdateTime(LocalDateTime.now());
         modelConfigMapper.updateById(update);
+        log.debug("历史明文 API Key 已加密 modelConfigId={} fingerprint={}",
+                config.getId(),
+                apiKeyCryptoService.fingerprint(config.getApiKey()));
+    }
+
+    private String enabledLabel(Boolean enabled) {
+        return Boolean.TRUE.equals(enabled) ? "启用" : "停用";
     }
 
 }

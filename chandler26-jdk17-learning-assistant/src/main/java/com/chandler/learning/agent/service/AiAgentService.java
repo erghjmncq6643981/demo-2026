@@ -3,8 +3,12 @@ package com.chandler.learning.agent.service;
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import com.chandler.learning.agent.domain.dto.AgentSaveRequest;
 import com.chandler.learning.agent.domain.entity.AiAgent;
+import com.chandler.learning.agent.exception.LearningAssistantException;
 import com.chandler.learning.agent.mapper.AiAgentMapper;
+import com.chandler.learning.agent.service.learning.UserDisplayNameService;
+import com.chandler.learning.agent.support.LearningConstants;
 import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
 import org.springframework.util.StringUtils;
 
@@ -14,17 +18,19 @@ import java.util.List;
 /**
  * AI Agent 服务。
  */
+@Slf4j
 @Service
 @RequiredArgsConstructor
 public class AiAgentService {
 
     private final AiAgentMapper agentMapper;
+    private final UserDisplayNameService userDisplayNameService;
 
     public AiAgent getByCode(String code) {
         return agentMapper.selectOne(new LambdaQueryWrapper<AiAgent>()
                 .eq(AiAgent::getCode, code)
                 .eq(AiAgent::getDeleted, false)
-                .last("LIMIT 1"));
+                .last(LearningConstants.SQL_LIMIT_ONE));
     }
 
     public AiAgent getById(Long id) {
@@ -42,7 +48,9 @@ public class AiAgentService {
     public Long create(AgentSaveRequest request) {
         AiAgent existing = getByCode(request.getCode());
         if (existing != null) {
-            throw new IllegalArgumentException("Agent 编码已存在: " + request.getCode());
+            throw LearningAssistantException.badRequest(
+                    LearningConstants.ErrorCode.AGENT_CODE_EXISTS,
+                    "Agent 编码已存在: " + request.getCode());
         }
 
         AiAgent agent = new AiAgent();
@@ -52,22 +60,28 @@ public class AiAgentService {
         agent.setCreateTime(LocalDateTime.now());
         agent.setUpdateTime(LocalDateTime.now());
         agentMapper.insert(agent);
+        log.info("用户「{}」创建了 Agent「{}」", userDisplayNameService.currentUserName(), agent.getName());
         return agent.getId();
     }
 
     public void update(Long id, AgentSaveRequest request) {
         AiAgent agent = agentMapper.selectById(id);
         if (agent == null || Boolean.TRUE.equals(agent.getDeleted())) {
-            throw new IllegalArgumentException("Agent 不存在: " + id);
+            throw LearningAssistantException.notFound(
+                    LearningConstants.ErrorCode.AGENT_NOT_FOUND,
+                    "Agent 不存在: " + id);
         }
         AiAgent existing = getByCode(request.getCode());
         if (existing != null && !existing.getId().equals(id)) {
-            throw new IllegalArgumentException("Agent 编码已存在: " + request.getCode());
+            throw LearningAssistantException.badRequest(
+                    LearningConstants.ErrorCode.AGENT_CODE_EXISTS,
+                    "Agent 编码已存在: " + request.getCode());
         }
 
         copy(request, agent);
         agent.setUpdateTime(LocalDateTime.now());
         agentMapper.updateById(agent);
+        log.info("用户「{}」更新了 Agent「{}」", userDisplayNameService.currentUserName(), agent.getName());
     }
 
     public void updateEnabled(Long id, boolean enabled) {
@@ -76,6 +90,7 @@ public class AiAgentService {
         agent.setEnabled(enabled);
         agent.setUpdateTime(LocalDateTime.now());
         agentMapper.updateById(agent);
+        log.info("用户「{}」{}了 Agent#{}", userDisplayNameService.currentUserName(), enabled ? "启用" : "停用", id);
     }
 
     public void delete(Long id) {
@@ -84,12 +99,13 @@ public class AiAgentService {
         agent.setDeleted(true);
         agent.setUpdateTime(LocalDateTime.now());
         agentMapper.updateById(agent);
+        log.info("用户「{}」删除了 Agent#{}", userDisplayNameService.currentUserName(), id);
     }
 
     private void copy(AgentSaveRequest request, AiAgent agent) {
         agent.setName(request.getName());
         agent.setCode(request.getCode());
-        agent.setType(StringUtils.hasText(request.getType()) ? request.getType() : "chat");
+        agent.setType(StringUtils.hasText(request.getType()) ? request.getType() : LearningConstants.DEFAULT_AGENT_TYPE);
         agent.setIcon(request.getIcon());
         agent.setDescription(request.getDescription());
         agent.setSystemPrompt(request.getSystemPrompt());
@@ -100,6 +116,6 @@ public class AiAgentService {
         agent.setTemperature(request.getTemperature());
         agent.setMaxTokens(request.getMaxTokens());
         agent.setPresetCommands(request.getPresetCommands());
-        agent.setSequence(request.getSequence() == null ? 0 : request.getSequence());
+        agent.setSequence(request.getSequence() == null ? LearningConstants.DEFAULT_SEQUENCE : request.getSequence());
     }
 }

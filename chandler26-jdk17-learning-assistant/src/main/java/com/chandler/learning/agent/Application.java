@@ -6,11 +6,7 @@ import org.springframework.boot.SpringApplication;
 import org.springframework.boot.autoconfigure.SpringBootApplication;
 
 /**
- * 模板工程
- *
- * @version 1.0
- * @author 钱丁君-chandler 4/2/21 10:05 PM
- * @since 1.8
+ * 英语学习助手后端启动入口。
  */
 @MapperScan({"com.chandler.learning.agent.mapper"})
 @SpringBootApplication(scanBasePackages = "com.chandler")

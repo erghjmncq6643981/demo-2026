@@ -2,11 +2,13 @@ package com.chandler.learning.agent.security;
 
 import com.chandler.learning.agent.domain.entity.learning.LearningUser;
 import com.chandler.learning.agent.mapper.learning.LearningUserMapper;
+import com.chandler.learning.agent.support.LearningConstants;
 import jakarta.servlet.FilterChain;
 import jakarta.servlet.ServletException;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
 import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
 import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.stereotype.Component;
@@ -15,6 +17,10 @@ import org.springframework.web.filter.OncePerRequestFilter;
 
 import java.io.IOException;
 
+/**
+ * 从 Authorization Bearer 头中解析 JWT，并写入 Spring Security 上下文。
+ */
+@Slf4j
 @Component
 @RequiredArgsConstructor
 public class JwtAuthenticationFilter extends OncePerRequestFilter {
@@ -40,6 +46,7 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
                 }
             } catch (RuntimeException ignored) {
                 SecurityContextHolder.clearContext();
+                log.debug("JWT 认证失败 path={}", request.getRequestURI());
             }
         }
         filterChain.doFilter(request, response);
@@ -50,6 +57,9 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
             return "";
         }
         String value = authorization.trim();
-        return value.regionMatches(true, 0, "Bearer ", 0, 7) ? value.substring(7).trim() : value;
+        return value.regionMatches(true, LearningConstants.ZERO,
+                LearningConstants.Auth.BEARER_PREFIX, LearningConstants.ZERO, LearningConstants.Auth.BEARER_PREFIX_LENGTH)
+                ? value.substring(LearningConstants.Auth.BEARER_PREFIX_LENGTH).trim()
+                : value;
     }
 }

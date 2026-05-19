@@ -6,11 +6,14 @@ import com.chandler.learning.agent.domain.dto.learning.AuthResponse;
 import com.chandler.learning.agent.domain.dto.learning.UserProfileResponse;
 import com.chandler.learning.agent.domain.dto.learning.UserProfileUpdateRequest;
 import com.chandler.learning.agent.domain.entity.learning.LearningUser;
+import com.chandler.learning.agent.exception.LearningAssistantException;
 import com.chandler.learning.agent.mapper.learning.LearningUserMapper;
 import com.chandler.learning.agent.security.JwtClaims;
 import com.chandler.learning.agent.security.JwtTokenService;
 import com.chandler.learning.agent.security.LearningUserPrincipal;
+import com.chandler.learning.agent.support.LearningConstants;
 import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.security.core.Authentication;
 import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.stereotype.Service;
@@ -22,6 +25,10 @@ import java.security.SecureRandom;
 import java.time.LocalDateTime;
 import java.util.HexFormat;
 
+/**
+ * 学习助手账户服务，负责注册、登录、JWT 用户解析和个人资料维护。
+ */
+@Slf4j
 @Service
 @RequiredArgsConstructor
 public class AuthService {
@@ -32,13 +39,16 @@ public class AuthService {
     private final WordbookService wordbookService;
     private final JwtTokenService jwtTokenService;
     private final SystemLogService systemLogService;
+    private final UserDisplayNameService userDisplayNameService;
     private final SecureRandom secureRandom = new SecureRandom();
 
     public AuthResponse register(AuthRequest request) {
         String username = normalizeUsername(request.getUsername());
         LearningUser existing = findByUsername(username);
         if (existing != null) {
-            throw new IllegalArgumentException("用户名已存在: " + username);
+            throw LearningAssistantException.badRequest(
+                    LearningConstants.ErrorCode.USER_ALREADY_EXISTS,
+                    "用户名已存在: " + username);
         }
 
         LocalDateTime now = LocalDateTime.now();
@@ -52,6 +62,7 @@ public class AuthService {
         userMapper.insert(user);
         wordbookService.ensureDefaultWordbook(user.getId());
         systemLogService.record(user.getId(), "auth", "注册成功", username);
+        log.info("用户「{}」完成注册，账号为「{}」", userDisplayNameService.displayName(user), username);
         return createLoginResponse(user);
     }
 
@@ -59,13 +70,20 @@ public class AuthService {
         String username = normalizeUsername(request.getUsername());
         LearningUser user = findByUsername(username);
         if (user == null || !Boolean.TRUE.equals(user.getEnabled())) {
-            throw new IllegalArgumentException("用户名或密码错误");
+            log.debug("登录失败 username={} reason=user_not_found_or_disabled", username);
+            throw LearningAssistantException.badRequest(
+                    LearningConstants.ErrorCode.AUTH_INVALID_CREDENTIALS,
+                    "用户名或密码错误");
         }
         if (!verifyPassword(request.getPassword(), user.getPasswordHash())) {
-            throw new IllegalArgumentException("用户名或密码错误");
+            log.debug("登录失败 username={} reason=password_mismatch", username);
+            throw LearningAssistantException.badRequest(
+                    LearningConstants.ErrorCode.AUTH_INVALID_CREDENTIALS,
+                    "用户名或密码错误");
         }
         wordbookService.ensureDefaultWordbook(user.getId());
         systemLogService.record(user.getId(), "auth", "登录成功", username);
+        log.info("用户「{}」登录成功", userDisplayNameService.displayName(user));
         return createLoginResponse(user);
     }
 
@@ -86,11 +104,15 @@ public class AuthService {
 
         if (StringUtils.hasText(resolvedRequest.getNewPassword())) {
             String newPassword = resolvedRequest.getNewPassword().trim();
-            if (newPassword.length() < 6) {
-                throw new IllegalArgumentException("新密码至少 6 位");
+            if (newPassword.length() < LearningConstants.Auth.PASSWORD_MIN_LENGTH) {
+                throw LearningAssistantException.badRequest(
+                        LearningConstants.ErrorCode.PASSWORD_TOO_SHORT,
+                        "新密码至少 " + LearningConstants.Auth.PASSWORD_MIN_LENGTH + " 位");
             }
             if (!verifyPassword(resolvedRequest.getCurrentPassword(), user.getPasswordHash())) {
-                throw new IllegalArgumentException("当前密码不正确");
+                throw LearningAssistantException.badRequest(
+                        LearningConstants.ErrorCode.PASSWORD_INCORRECT,
+                        "当前密码不正确");
             }
             user.setPasswordHash(hashPassword(newPassword));
             changed = true;
@@ -100,12 +122,17 @@ public class AuthService {
             user.setUpdateTime(LocalDateTime.now());
             userMapper.updateById(user);
             systemLogService.record(user.getId(), "auth", "更新账户信息", user.getUsername());
+            log.info("用户「{}」更新了账户信息，是否修改密码：{}",
+                    userDisplayNameService.displayName(user),
+                    StringUtils.hasText(resolvedRequest.getNewPassword()));
         }
         return toProfile(user);
     }
 
     public void logout(String authorization) {
+        LearningUser user = currentSecurityUser();
         SecurityContextHolder.clearContext();
+        log.info("用户「{}」退出登录", userDisplayNameService.displayName(user));
     }
 
     public LearningUser requireUser(String authorization) {
@@ -115,17 +142,23 @@ public class AuthService {
         }
         String token = resolveToken(authorization);
         if (!StringUtils.hasText(token)) {
-            throw new IllegalArgumentException("请先登录");
+            throw LearningAssistantException.unauthorized(
+                    LearningConstants.ErrorCode.AUTH_REQUIRED,
+                    "请先登录");
         }
         JwtClaims claims;
         try {
             claims = jwtTokenService.parse(token);
         } catch (RuntimeException ex) {
-            throw new IllegalArgumentException("登录已过期，请重新登录");
+            throw LearningAssistantException.unauthorized(
+                    LearningConstants.ErrorCode.AUTH_EXPIRED,
+                    "登录已过期，请重新登录");
         }
         LearningUser user = userMapper.selectById(claims.userId());
         if (user == null || !Boolean.TRUE.equals(user.getEnabled())) {
-            throw new IllegalArgumentException("用户不可用");
+            throw LearningAssistantException.unauthorized(
+                    LearningConstants.ErrorCode.USER_DISABLED,
+                    "用户不可用");
         }
         return user;
     }
@@ -145,6 +178,10 @@ public class AuthService {
         response.setToken(rawToken);
         response.setExpiredTime(claims.expiredTime());
         response.setUser(toProfile(user));
+        log.debug("登录令牌已签发 userId={} username={} expiredTime={}",
+                user.getId(),
+                user.getUsername(),
+                claims.expiredTime());
         return response;
     }
 
@@ -163,7 +200,7 @@ public class AuthService {
     private LearningUser findByUsername(String username) {
         return userMapper.selectOne(new LambdaQueryWrapper<LearningUser>()
                 .eq(LearningUser::getUsername, username)
-                .last("LIMIT 1"));
+                .last(LearningConstants.SQL_LIMIT_ONE));
     }
 
     private UserProfileResponse toProfile(LearningUser user) {
@@ -175,8 +212,8 @@ public class AuthService {
     }
 
     private String hashPassword(String password) {
-        String salt = randomHex(16);
-        return PASSWORD_PREFIX + salt + "$" + sha256(salt + ":" + password);
+        String salt = randomHex(LearningConstants.Auth.PASSWORD_SALT_BYTES);
+        return PASSWORD_PREFIX + salt + "$" + sha256(salt + LearningConstants.Auth.PASSWORD_HASH_SEPARATOR + password);
     }
 
     private String randomHex(int byteLength) {
@@ -190,11 +227,12 @@ public class AuthService {
             return false;
         }
         String[] parts = passwordHash.split("\\$");
-        if (parts.length != 3) {
+        if (parts.length != LearningConstants.Auth.PASSWORD_HASH_PART_COUNT) {
             return false;
         }
-        return MessageDigest.isEqual(parts[2].getBytes(StandardCharsets.UTF_8),
-                sha256(parts[1] + ":" + password).getBytes(StandardCharsets.UTF_8));
+        return MessageDigest.isEqual(parts[LearningConstants.Auth.PASSWORD_DIGEST_PART_INDEX].getBytes(StandardCharsets.UTF_8),
+                sha256(parts[LearningConstants.Auth.PASSWORD_SALT_PART_INDEX] + LearningConstants.Auth.PASSWORD_HASH_SEPARATOR + password)
+                        .getBytes(StandardCharsets.UTF_8));
     }
 
     private String sha256(String value) {
@@ -202,7 +240,10 @@ public class AuthService {
             MessageDigest digest = MessageDigest.getInstance("SHA-256");
             return HexFormat.of().formatHex(digest.digest(value.getBytes(StandardCharsets.UTF_8)));
         } catch (Exception ex) {
-            throw new IllegalStateException("SHA-256 不可用", ex);
+            throw LearningAssistantException.system(
+                    LearningConstants.ErrorCode.HASH_FAILED,
+                    "密码哈希计算失败",
+                    ex);
         }
     }
 
@@ -215,6 +256,9 @@ public class AuthService {
             return "";
         }
         String value = authorization.trim();
-        return value.regionMatches(true, 0, "Bearer ", 0, 7) ? value.substring(7).trim() : value;
+        return value.regionMatches(true, LearningConstants.ZERO,
+                LearningConstants.Auth.BEARER_PREFIX, LearningConstants.ZERO, LearningConstants.Auth.BEARER_PREFIX_LENGTH)
+                ? value.substring(LearningConstants.Auth.BEARER_PREFIX_LENGTH).trim()
+                : value;
     }
 }

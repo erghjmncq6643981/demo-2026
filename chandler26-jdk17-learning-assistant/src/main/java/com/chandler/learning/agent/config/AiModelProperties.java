@@ -1,5 +1,6 @@
 package com.chandler.learning.agent.config;
 
+import com.chandler.learning.agent.support.LearningConstants;
 import lombok.Data;
 import org.springframework.boot.context.properties.ConfigurationProperties;
 import org.springframework.stereotype.Component;
@@ -28,7 +29,7 @@ public class AiModelProperties {
         private Boolean enabled = true;
         private String apiKey;
         private String baseUrl;
-        private String chatPath = "/chat/completions";
+        private String chatPath = LearningConstants.DEFAULT_CHAT_PATH;
         private String defaultModel;
         private Integer connectTimeoutMillis = 10000;
         private Integer readTimeoutMillis = 120000;

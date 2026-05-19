@@ -5,8 +5,10 @@ import com.chandler.learning.agent.domain.dto.ChatMessageResponse;
 import com.chandler.learning.agent.domain.dto.ChatSessionResponse;
 import com.chandler.learning.agent.domain.entity.AiChatMessage;
 import com.chandler.learning.agent.domain.entity.AiChatSession;
+import com.chandler.learning.agent.exception.LearningAssistantException;
 import com.chandler.learning.agent.mapper.AiChatMessageMapper;
 import com.chandler.learning.agent.mapper.AiChatSessionMapper;
+import com.chandler.learning.agent.support.LearningConstants;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
@@ -22,8 +24,6 @@ import java.util.Map;
 @Service
 @RequiredArgsConstructor
 public class AiChatSessionService {
-
-    private static final int MAX_HISTORY_SIZE = 20;
 
     private final AiChatSessionMapper sessionMapper;
     private final AiChatMessageMapper messageMapper;
@@ -51,26 +51,26 @@ public class AiChatSessionService {
         return sessionMapper.selectOne(new LambdaQueryWrapper<AiChatSession>()
                 .eq(AiChatSession::getId, sessionId)
                 .eq(AiChatSession::getDeleted, false)
-                .last("LIMIT 1"));
+                .last(LearningConstants.SQL_LIMIT_ONE));
     }
 
     public List<AiChatMessage> getHistory(Long sessionId) {
         return messageMapper.selectList(new LambdaQueryWrapper<AiChatMessage>()
                 .eq(AiChatMessage::getSessionId, sessionId)
                 .orderByDesc(AiChatMessage::getSequence)
-                .last("LIMIT " + MAX_HISTORY_SIZE))
+                .last("LIMIT " + LearningConstants.ChatSession.MAX_HISTORY_SIZE))
                 .stream()
                 .sorted((left, right) -> Integer.compare(left.getSequence(), right.getSequence()))
                 .toList();
     }
 
     public void addUserMessage(Long sessionId, String content) {
-        addMessage(sessionId, "user", content, null, null, null, null);
+        addMessage(sessionId, LearningConstants.ChatSession.ROLE_USER, content, null, null, null, null);
     }
 
     public void addAssistantMessage(Long sessionId, String content, Integer tokenCount,
                                     Long costTime, String modelProvider, String modelName) {
-        addMessage(sessionId, "assistant", content, tokenCount, costTime, modelProvider, modelName);
+        addMessage(sessionId, LearningConstants.ChatSession.ROLE_ASSISTANT, content, tokenCount, costTime, modelProvider, modelName);
     }
 
     public List<ChatSessionResponse> listSessions(String agentCode, String businessType, String businessId) {
@@ -143,8 +143,10 @@ public class AiChatSessionService {
         AiChatMessage last = messageMapper.selectOne(new LambdaQueryWrapper<AiChatMessage>()
                 .eq(AiChatMessage::getSessionId, sessionId)
                 .orderByDesc(AiChatMessage::getSequence)
-                .last("LIMIT 1"));
-        return last == null || last.getSequence() == null ? 1 : last.getSequence() + 1;
+                .last(LearningConstants.SQL_LIMIT_ONE));
+        return last == null || last.getSequence() == null
+                ? LearningConstants.FIRST_SEQUENCE
+                : last.getSequence() + LearningConstants.SEQUENCE_STEP;
     }
 
     private ChatSessionResponse toSessionResponse(AiChatSession session) {
@@ -180,7 +182,10 @@ public class AiChatSessionService {
         try {
             return objectMapper.writeValueAsString(variables);
         } catch (Exception ex) {
-            throw new IllegalArgumentException("会话变量序列化失败", ex);
+            throw LearningAssistantException.system(
+                    LearningConstants.ErrorCode.JSON_SERIALIZE_FAILED,
+                    "会话变量序列化失败",
+                    ex);
         }
     }
 }

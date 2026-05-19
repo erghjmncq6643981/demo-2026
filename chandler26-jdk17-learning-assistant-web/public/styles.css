@@ -537,9 +537,13 @@ textarea:focus {
   overflow: hidden;
 }
 
-#studyView.view.active,
 #profileView.view.active {
   align-content: start;
+}
+
+#studyView.view.active {
+  grid-template-rows: minmax(0, 1fr);
+  overflow: hidden;
 }
 
 .content-grid {
@@ -695,10 +699,24 @@ textarea:focus {
   line-height: 1.65;
 }
 
-.study-layout,
-.study-main {
+.study-layout {
   display: grid;
   gap: 18px;
+}
+
+.study-layout {
+  min-height: 0;
+  grid-template-rows: auto minmax(0, 1fr);
+  overflow: hidden;
+}
+
+.study-main {
+  display: grid;
+  min-height: 0;
+  gap: 18px;
+  overflow: auto;
+  overscroll-behavior: contain;
+  padding-right: 4px;
 }
 
 .profile-row {
@@ -1105,7 +1123,7 @@ textarea:focus {
 
 .search-card {
   display: grid;
-  grid-template-columns: minmax(0, 1fr) 132px 240px;
+  grid-template-columns: minmax(0, 1fr) 132px 132px;
   gap: 12px;
   align-items: end;
   padding: 18px;
@@ -1118,17 +1136,14 @@ textarea:focus {
   margin: 0;
 }
 
-.study-model-field {
-  min-width: 0;
-}
-
 .term-input {
   height: 62px;
   font-size: 30px;
   font-weight: 850;
 }
 
-.search-card .primary-button {
+.search-card .primary-button,
+.search-card .regenerate-button {
   height: 62px;
 }
 
@@ -1866,6 +1881,10 @@ textarea:focus {
 
   #reviewView.view.active {
     overflow: auto;
+  }
+
+  #studyView.view.active {
+    overflow: hidden;
   }
 
   .wordbook-layout,

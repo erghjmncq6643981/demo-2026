@@ -6,7 +6,9 @@ import com.chandler.learning.agent.domain.dto.learning.SystemLogResponse;
 import com.chandler.learning.agent.domain.entity.learning.LearningSystemLog;
 import com.chandler.learning.agent.mapper.learning.LearningSystemLogMapper;
 import com.chandler.learning.agent.security.LearningUserPrincipal;
+import com.chandler.learning.agent.support.LearningConstants;
 import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.security.core.Authentication;
 import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.stereotype.Service;
@@ -15,6 +17,12 @@ import org.springframework.util.StringUtils;
 import java.time.LocalDateTime;
 import java.util.List;
 
+/**
+ * 系统日志服务。
+ * <p>
+ * 这里保存的是可在产品界面查看的业务日志；运行时诊断日志仍由 SLF4J/Logback 写入控制台和文件。
+ */
+@Slf4j
 @Service
 @RequiredArgsConstructor
 public class SystemLogService {
@@ -26,7 +34,7 @@ public class SystemLogService {
         request.setType(type);
         request.setTitle(title);
         request.setDetail(detail);
-        request.setSource("server");
+        request.setSource(LearningConstants.SystemLog.SOURCE_SERVER);
         create(userId, request);
     }
 
@@ -35,21 +43,27 @@ public class SystemLogService {
         if (resolvedUserId == null) {
             return null;
         }
-        LearningSystemLog log = new LearningSystemLog();
-        log.setUserId(resolvedUserId);
-        log.setLogType(trimOrDefault(request.getType(), "system"));
-        log.setTitle(trimOrDefault(request.getTitle(), "系统日志"));
-        log.setDetail(trimToNull(request.getDetail()));
-        log.setSource(trimOrDefault(request.getSource(), "client"));
-        log.setBusinessType(trimToNull(request.getBusinessType()));
-        log.setBusinessId(trimToNull(request.getBusinessId()));
-        log.setCreateTime(LocalDateTime.now());
-        systemLogMapper.insert(log);
-        return toResponse(log);
+        LearningSystemLog entity = new LearningSystemLog();
+        entity.setUserId(resolvedUserId);
+        entity.setLogType(trimOrDefault(request.getType(), LearningConstants.SystemLog.DEFAULT_TYPE));
+        entity.setTitle(trimOrDefault(request.getTitle(), LearningConstants.SystemLog.DEFAULT_TITLE));
+        entity.setDetail(trimToNull(request.getDetail()));
+        entity.setSource(trimOrDefault(request.getSource(), LearningConstants.SystemLog.SOURCE_CLIENT));
+        entity.setBusinessType(trimToNull(request.getBusinessType()));
+        entity.setBusinessId(trimToNull(request.getBusinessId()));
+        entity.setCreateTime(LocalDateTime.now());
+        systemLogMapper.insert(entity);
+        log.debug("系统日志已入库 userId={} type={} title={} businessType={} businessId={}",
+                resolvedUserId,
+                entity.getLogType(),
+                entity.getTitle(),
+                entity.getBusinessType(),
+                entity.getBusinessId());
+        return toResponse(entity);
     }
 
     public List<SystemLogResponse> list(Long userId, int limit) {
-        int resolvedLimit = Math.max(1, Math.min(limit, 200));
+        int resolvedLimit = Math.max(LearningConstants.SystemLog.MIN_LIMIT, Math.min(limit, LearningConstants.SystemLog.MAX_LIMIT));
         return systemLogMapper.selectList(new LambdaQueryWrapper<LearningSystemLog>()
                         .eq(LearningSystemLog::getUserId, userId)
                         .orderByDesc(LearningSystemLog::getCreateTime)
@@ -62,6 +76,7 @@ public class SystemLogService {
     public void clear(Long userId) {
         systemLogMapper.delete(new LambdaQueryWrapper<LearningSystemLog>()
                 .eq(LearningSystemLog::getUserId, userId));
+        log.debug("用户系统日志已清理 userId={}", userId);
     }
 
     private SystemLogResponse toResponse(LearningSystemLog log) {

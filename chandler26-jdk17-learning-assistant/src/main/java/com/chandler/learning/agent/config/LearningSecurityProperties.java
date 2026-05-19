@@ -1,5 +1,6 @@
 package com.chandler.learning.agent.config;
 
+import com.chandler.learning.agent.support.LearningConstants;
 import lombok.Data;
 import org.springframework.boot.context.properties.ConfigurationProperties;
 import org.springframework.stereotype.Component;
@@ -13,7 +14,7 @@ public class LearningSecurityProperties {
 
     private String jwtIssuer = "learning-assistant";
 
-    private Integer jwtExpireDays = 30;
+    private Integer jwtExpireDays = LearningConstants.DEFAULT_JWT_EXPIRE_DAYS;
 
     private String apiKeySecret = "dev-learning-assistant-api-key-secret-change-me";
 }

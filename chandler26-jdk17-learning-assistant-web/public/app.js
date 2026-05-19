@@ -1,5 +1,5 @@
 const state = {
-  build: '20260519-17',
+  build: '20260519-18',
   apiBase: localStorage.getItem('learning.apiBase') || 'http://localhost:16681',
   token: localStorage.getItem('learning.token') || '',
   user: readJsonStorage('learning.user'),
@@ -147,6 +147,7 @@ const elements = {
   studyForm: $('studyForm'),
   termInput: $('termInput'),
   studyBtn: $('studyBtn'),
+  studyRegenerateBtn: $('studyRegenerateBtn'),
   studyModelSelect: $('studyModelSelect'),
   cacheState: $('cacheState'),
   wordTitle: $('wordTitle'),
@@ -243,6 +244,7 @@ function setLoading(isLoading) {
     elements.loginBtn,
     elements.registerBtn,
     elements.studyBtn,
+    elements.studyRegenerateBtn,
     elements.chatBtn,
     elements.addToWordbookBtn,
     elements.createWordbookBtn,
@@ -1619,19 +1621,22 @@ function activityLevel(total, maxTotal) {
   return 1
 }
 
-async function study(term) {
+async function study(term, options = {}) {
   const value = String(term || '').trim()
   if (!value) {
     toast('先输入一个英语单词')
     return
   }
+  const forceRefresh = Boolean(options.forceRefresh) || Boolean(elements.forceRefreshInput?.checked)
+  const modelConfigId = options.modelConfigId !== undefined ? options.modelConfigId : elements.studyModelSelect?.value || null
   setLoading(true)
   try {
     if (state.preview) {
       const record = previewRecord(value)
+      record.cacheHit = !forceRefresh
       renderRecord(record)
-      logEvent('cache', '预览词汇卡片', record.normalizedTerm)
-      toast('设计预览：已展示模拟学习卡片')
+      logEvent(forceRefresh ? 'ai' : 'cache', forceRefresh ? '预览重新生成词汇卡片' : '预览词汇卡片', record.normalizedTerm)
+      toast(forceRefresh ? '设计预览：已模拟重新生成' : '设计预览：已展示模拟学习卡片')
       return
     }
     const record = await request('/api/v1/english/vocabularies/study', {
@@ -1640,8 +1645,8 @@ async function study(term) {
         term: value,
         agentCode: elements.agentSelect.value,
         templateCode: elements.templateSelect.value,
-        modelConfigId: elements.studyModelSelect.value || null,
-        forceRefresh: elements.forceRefreshInput.checked,
+        modelConfigId,
+        forceRefresh,
       }),
     })
     renderRecord(record)
@@ -1661,6 +1666,11 @@ async function study(term) {
   } finally {
     setLoading(false)
   }
+}
+
+function regenerateStudyCard() {
+  const term = state.currentRecord?.normalizedTerm || elements.termInput.value
+  study(term, { forceRefresh: true })
 }
 
 function renderRecord(record) {
@@ -3097,6 +3107,7 @@ elements.studyForm.addEventListener('submit', (event) => {
   event.preventDefault()
   study(elements.termInput.value)
 })
+elements.studyRegenerateBtn?.addEventListener('click', regenerateStudyCard)
 elements.addToWordbookBtn.addEventListener('click', addCurrentWordToWordbook)
 elements.closeAddWordbookModalBtn.addEventListener('click', closeAddWordbookModal)
 elements.addWordbookModal.addEventListener('click', (event) => {

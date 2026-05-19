@@ -4,7 +4,7 @@
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>English Learning Agent</title>
-    <link rel="stylesheet" href="/styles.css?v=20260519-17" />
+    <link rel="stylesheet" href="/styles.css?v=20260519-18" />
   </head>
   <body>
     <main class="app">
@@ -322,19 +322,17 @@
 
           <section class="view" id="studyView">
             <section class="study-layout">
-              <div class="study-main">
-                <form class="search-card" id="studyForm">
-                  <label>
-                    输入英语单词或短语
-                    <input id="termInput" class="term-input" autocomplete="off" placeholder="abandon" />
-                  </label>
-                  <button class="primary-button" id="studyBtn" type="submit">学习</button>
-                  <label class="study-model-field">
-                    AI 模型
-                    <select id="studyModelSelect"></select>
-                  </label>
-                </form>
+              <form class="search-card study-input-bar" id="studyForm">
+                <label>
+                  输入英语单词或短语
+                  <input id="termInput" class="term-input" autocomplete="off" placeholder="abandon" />
+                </label>
+                <button class="primary-button" id="studyBtn" type="submit">学习</button>
+                <button class="secondary-button regenerate-button" id="studyRegenerateBtn" type="button">重新生成</button>
+                <select id="studyModelSelect" class="hidden" aria-label="AI 模型"></select>
+              </form>
 
+              <div class="study-main">
                 <section class="word-hero panel">
                   <div class="word-main">
                     <div>
@@ -597,6 +595,6 @@
         </div>
       </div>
     </section>
-    <script type="module" src="/app.js?v=20260519-17"></script>
+    <script type="module" src="/app.js?v=20260519-18"></script>
   </body>
 </html>

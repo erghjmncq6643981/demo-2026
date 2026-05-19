@@ -1,5 +1,6 @@
 package com.chandler.learning.agent.domain.dto;
 
+import com.chandler.learning.agent.support.LearningConstants;
 import io.swagger.v3.oas.annotations.media.Schema;
 import jakarta.validation.constraints.NotBlank;
 import lombok.Data;
@@ -17,7 +18,7 @@ public class AgentSaveRequest {
     @NotBlank(message = "Agent 编码不能为空")
     private String code;
 
-    private String type = "chat";
+    private String type = LearningConstants.DEFAULT_AGENT_TYPE;
 
     private String icon;
 
@@ -40,5 +41,5 @@ public class AgentSaveRequest {
     @Schema(description = "预设指令 JSON")
     private String presetCommands;
 
-    private Integer sequence = 0;
+    private Integer sequence = LearningConstants.DEFAULT_SEQUENCE;
 }

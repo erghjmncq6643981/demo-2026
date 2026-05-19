@@ -5,6 +5,7 @@ import com.chandler.learning.agent.domain.dto.learning.SystemLogResponse;
 import com.chandler.learning.agent.domain.entity.learning.LearningUser;
 import com.chandler.learning.agent.service.learning.AuthService;
 import com.chandler.learning.agent.service.learning.SystemLogService;
+import com.chandler.learning.agent.support.LearningConstants;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import lombok.RequiredArgsConstructor;
@@ -32,9 +33,9 @@ public class SystemLogController {
     @Operation(summary = "系统日志列表")
     public List<SystemLogResponse> list(
             @RequestHeader(value = "Authorization", required = false) String authorization,
-            @RequestParam(defaultValue = "80") Integer limit) {
+            @RequestParam(defaultValue = LearningConstants.SystemLog.DEFAULT_LIMIT_PARAM) Integer limit) {
         LearningUser user = authService.requireUser(authorization);
-        return systemLogService.list(user.getId(), limit == null ? 80 : limit);
+        return systemLogService.list(user.getId(), limit == null ? LearningConstants.SystemLog.DEFAULT_LIMIT : limit);
     }
 
     @PostMapping

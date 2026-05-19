@@ -1,5 +1,6 @@
 package com.chandler.learning.agent.domain.dto;
 
+import com.chandler.learning.agent.support.LearningConstants;
 import jakarta.validation.constraints.NotBlank;
 import lombok.Data;
 
@@ -21,7 +22,7 @@ public class AiModelConfigSaveRequest {
     @NotBlank(message = "Base URL 不能为空")
     private String baseUrl;
 
-    private String chatPath = "/chat/completions";
+    private String chatPath = LearningConstants.DEFAULT_CHAT_PATH;
 
     private String apiKey;
 
@@ -29,5 +30,5 @@ public class AiModelConfigSaveRequest {
 
     private Boolean isDefault = false;
 
-    private Integer sequence = 0;
+    private Integer sequence = LearningConstants.DEFAULT_SEQUENCE;
 }

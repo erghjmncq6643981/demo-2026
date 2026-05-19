@@ -1,5 +1,6 @@
 package com.chandler.learning.agent.domain.dto;
 
+import com.chandler.learning.agent.support.LearningConstants;
 import jakarta.validation.constraints.NotBlank;
 import lombok.Data;
 
@@ -15,7 +16,7 @@ public class PromptTemplateSaveRequest {
     @NotBlank(message = "模板编码不能为空")
     private String code;
 
-    private String type = "user";
+    private String type = LearningConstants.DEFAULT_TEMPLATE_TYPE;
 
     private String tags;
 
@@ -32,5 +33,5 @@ public class PromptTemplateSaveRequest {
 
     private Boolean publicTemplate = false;
 
-    private Integer sequence = 0;
+    private Integer sequence = LearningConstants.DEFAULT_SEQUENCE;
 }

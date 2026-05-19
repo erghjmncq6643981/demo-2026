@@ -12,12 +12,16 @@ import com.chandler.learning.agent.domain.entity.AiChatMessage;
 import com.chandler.learning.agent.domain.entity.AiChatSession;
 import com.chandler.learning.agent.domain.entity.AiModelCallRecord;
 import com.chandler.learning.agent.domain.entity.AiModelConfig;
+import com.chandler.learning.agent.exception.LearningAssistantException;
 import com.chandler.learning.agent.mapper.AiModelCallRecordMapper;
+import com.chandler.learning.agent.service.learning.UserDisplayNameService;
 import com.chandler.learning.agent.support.AiModelClient;
+import com.chandler.learning.agent.support.LearningConstants;
 import com.chandler.learning.agent.support.PromptRenderer;
 import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
 import org.springframework.util.StringUtils;
 
@@ -29,7 +33,10 @@ import java.util.Map;
 
 /**
  * AI Agent 对话服务。
+ * <p>
+ * 负责组装 Agent Prompt、选择模型、调用模型接口，并保存会话消息和模型调用记录。
  */
+@Slf4j
 @Service
 @RequiredArgsConstructor
 public class AiChatService {
@@ -43,6 +50,7 @@ public class AiChatService {
     private final PromptRenderer promptRenderer;
     private final AiModelCallRecordMapper callRecordMapper;
     private final ObjectMapper objectMapper;
+    private final UserDisplayNameService userDisplayNameService;
 
     public AgentChatResponse chat(AgentChatRequest request) {
         long startTime = System.currentTimeMillis();
@@ -64,12 +72,33 @@ public class AiChatService {
         modelRequest.setMessages(messages);
 
         AiModelCallRecord record = buildCallRecord(session.getId(), agent, modelRequest);
+        log.info("用户「{}」通过 Agent「{}」向模型「{} / {}」发起了一次 AI 会话，业务类型为「{}」",
+                userDisplayNameService.currentUserName(),
+                agent.getName(),
+                provider,
+                modelName,
+                request.getBusinessType());
+        log.debug("AI 会话开始 sessionId={} agent={} provider={} model={} messageCount={} businessType={} businessId={}",
+                session.getId(),
+                agent.getCode(),
+                provider,
+                modelName,
+                messages.size(),
+                request.getBusinessType(),
+                request.getBusinessId());
         try {
             ModelChatResponse modelResponse = aiModelClient.chat(modelRequest);
             long costTime = System.currentTimeMillis() - startTime;
             chatSessionService.addAssistantMessage(session.getId(), modelResponse.getContent(),
                     modelResponse.getTotalTokens(), costTime, provider, modelName);
             saveSuccessRecord(record, modelResponse, costTime);
+            log.debug("AI 会话成功 sessionId={} agent={} provider={} model={} tokens={} cost={}ms",
+                    session.getId(),
+                    agent.getCode(),
+                    provider,
+                    modelName,
+                    modelResponse.getTotalTokens(),
+                    costTime);
 
             AgentChatResponse response = new AgentChatResponse();
             response.setSessionId(session.getId());
@@ -83,6 +112,14 @@ public class AiChatService {
         } catch (RuntimeException ex) {
             long costTime = System.currentTimeMillis() - startTime;
             saveFailedRecord(record, ex, costTime);
+            log.error("AI 会话失败 sessionId={} agent={} provider={} model={} cost={}ms error={}",
+                    session.getId(),
+                    agent.getCode(),
+                    provider,
+                    modelName,
+                    costTime,
+                    ex.getMessage(),
+                    ex);
             throw ex;
         }
     }
@@ -90,10 +127,14 @@ public class AiChatService {
     private AiAgent getEnabledAgent(String agentCode) {
         AiAgent agent = agentService.getByCode(agentCode);
         if (agent == null) {
-            throw new IllegalArgumentException("Agent 不存在: " + agentCode);
+            throw LearningAssistantException.notFound(
+                    LearningConstants.ErrorCode.AGENT_NOT_FOUND,
+                    "Agent 不存在: " + agentCode);
         }
         if (!Boolean.TRUE.equals(agent.getEnabled())) {
-            throw new IllegalArgumentException("Agent 已停用: " + agentCode);
+            throw LearningAssistantException.badRequest(
+                    LearningConstants.ErrorCode.AGENT_DISABLED,
+                    "Agent 已停用: " + agentCode);
         }
         return agent;
     }
@@ -102,7 +143,9 @@ public class AiChatService {
         if (request.getSessionId() != null) {
             AiChatSession session = chatSessionService.getSession(request.getSessionId());
             if (session == null) {
-                throw new IllegalArgumentException("会话不存在: " + request.getSessionId());
+                throw LearningAssistantException.notFound(
+                        LearningConstants.ErrorCode.CHAT_SESSION_NOT_FOUND,
+                        "会话不存在: " + request.getSessionId());
             }
             return session;
         }
@@ -132,15 +175,19 @@ public class AiChatService {
         }
 
         for (AiChatMessage message : history) {
-            if ("user".equals(message.getRole()) || "assistant".equals(message.getRole())) {
+            if (LearningConstants.ChatSession.ROLE_USER.equals(message.getRole())
+                    || LearningConstants.ChatSession.ROLE_ASSISTANT.equals(message.getRole())) {
                 messages.add(new ChatMessageParam(message.getRole(), message.getContent()));
             }
         }
 
-        messages.add(new ChatMessageParam("user", buildUserMessage(request)));
+        messages.add(new ChatMessageParam(LearningConstants.ChatSession.ROLE_USER, buildUserMessage(request)));
         return messages;
     }
 
+    /**
+     * 用户消息由可选模板和真实提问组成，模板变量在保存消息前完成渲染。
+     */
     private String buildUserMessage(AgentChatRequest request) {
         StringBuilder userMessage = new StringBuilder();
         if (StringUtils.hasText(request.getTemplateCode())) {
@@ -213,7 +260,10 @@ public class AiChatService {
         try {
             return objectMapper.writeValueAsString(value);
         } catch (Exception ex) {
-            throw new IllegalArgumentException("模型请求序列化失败", ex);
+            throw LearningAssistantException.system(
+                    LearningConstants.ErrorCode.JSON_SERIALIZE_FAILED,
+                    "模型请求序列化失败",
+                    ex);
         }
     }
 
