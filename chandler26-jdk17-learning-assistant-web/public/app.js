@@ -2374,6 +2374,13 @@ function renderReviewFocus(entryOrRecord) {
   `
   elements.reviewFocus.querySelector('[data-review-prev]')?.addEventListener('click', () => goToReviewOffset(-1))
   elements.reviewFocus.querySelector('[data-review-next]')?.addEventListener('click', () => goToReviewOffset(1))
+  elements.reviewFocus.querySelector('.typing-board')?.addEventListener(
+    'wheel',
+    (event) => {
+      event.stopPropagation()
+    },
+    { passive: true },
+  )
   updateReviewProgressBadge()
 }
 
