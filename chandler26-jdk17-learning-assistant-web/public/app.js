@@ -1,5 +1,5 @@
 const state = {
-  build: '20260519-22',
+  build: '20260520-03',
   apiBase: localStorage.getItem('learning.apiBase') || 'http://localhost:16681',
   token: localStorage.getItem('learning.token') || '',
   user: readJsonStorage('learning.user'),
@@ -11,10 +11,14 @@ const state = {
   reviewEntries: [],
   previewReviewEntries: [],
   modelConfigs: [],
+  agentConfigs: [],
   currentWordbookId: localStorage.getItem('learning.wordbookId') || null,
   currentWordbookEditId: null,
   currentModelEditId: null,
+  currentAgentEditId: null,
+  currentTemplateEditId: null,
   currentStatusEntryId: null,
+  currentTransferEntryId: null,
   selectedEntry: null,
   currentNoteEntry: null,
   currentRecord: null,
@@ -28,8 +32,17 @@ const state = {
   pendingDeleteConfirm: null,
   promptTemplates: [],
   currentTemplate: null,
+  lastAgentCode: localStorage.getItem('learning.lastAgentCode') || 'english_vocabulary',
+  lastTemplateCode: localStorage.getItem('learning.lastTemplateCode') || 'english_vocab_card_json',
   activity: null,
   systemLogs: readJsonStorage('learning.systemLogs') || [],
+  speechSettings: {
+    voiceType: localStorage.getItem('learning.voiceType') || 'us',
+    sentenceVoiceName: localStorage.getItem('learning.sentenceVoiceName') || '',
+    sentenceRate: readNumberStorage('learning.sentenceRate', 0.78),
+    sentencePitch: readNumberStorage('learning.sentencePitch', 1),
+  },
+  speechSaveTimer: null,
 }
 
 const providerCatalog = {
@@ -125,6 +138,33 @@ const elements = {
   modelConfigModal: $('modelConfigModal'),
   closeModelModalBtn: $('closeModelModalBtn'),
   modelModalTitle: $('modelModalTitle'),
+  agentConfigList: $('agentConfigList'),
+  templateConfigList: $('templateConfigList'),
+  openAgentModalBtn: $('openAgentModalBtn'),
+  openTemplateModalBtn: $('openTemplateModalBtn'),
+  reloadTemplatesBtn: $('reloadTemplatesBtn'),
+  reloadAgentConfigsBtn: $('reloadAgentConfigsBtn'),
+  agentModal: $('agentModal'),
+  agentModalTitle: $('agentModalTitle'),
+  closeAgentModalBtn: $('closeAgentModalBtn'),
+  agentNameInput: $('agentNameInput'),
+  agentCodeInput: $('agentCodeInput'),
+  agentTypeInput: $('agentTypeInput'),
+  agentIconInput: $('agentIconInput'),
+  agentModelProviderInput: $('agentModelProviderInput'),
+  agentModelNameInput: $('agentModelNameInput'),
+  agentSequenceInput: $('agentSequenceInput'),
+  agentTemperatureInput: $('agentTemperatureInput'),
+  agentMaxTokensInput: $('agentMaxTokensInput'),
+  agentDescriptionInput: $('agentDescriptionInput'),
+  agentSystemPromptInput: $('agentSystemPromptInput'),
+  agentConcisePromptInput: $('agentConcisePromptInput'),
+  agentWelcomeMessageInput: $('agentWelcomeMessageInput'),
+  agentPresetCommandsInput: $('agentPresetCommandsInput'),
+  saveAgentBtn: $('saveAgentBtn'),
+  templateModal: $('templateModal'),
+  templateModalTitle: $('templateModalTitle'),
+  closeTemplateModalBtn: $('closeTemplateModalBtn'),
   modelNameInput: $('modelNameInput'),
   modelProviderInput: $('modelProviderInput'),
   modelModelNameInput: $('modelModelNameInput'),
@@ -158,6 +198,10 @@ const elements = {
   closeAddWordbookModalBtn: $('closeAddWordbookModalBtn'),
   addWordbookTerm: $('addWordbookTerm'),
   addWordbookList: $('addWordbookList'),
+  entryTransferModal: $('entryTransferModal'),
+  closeEntryTransferModalBtn: $('closeEntryTransferModalBtn'),
+  entryTransferTerm: $('entryTransferTerm'),
+  entryTransferList: $('entryTransferList'),
   speakWordBtn: $('speakWordBtn'),
   speakSentenceBtn: $('speakSentenceBtn'),
   meaningList: $('meaningList'),
@@ -183,7 +227,14 @@ const elements = {
   templateContentInput: $('templateContentInput'),
   templateValidationMessage: $('templateValidationMessage'),
   saveTemplateBtn: $('saveTemplateBtn'),
+  saveSpeechBtn: $('saveSpeechBtn'),
   voiceSelect: $('voiceSelect'),
+  sentenceVoiceSelect: $('sentenceVoiceSelect'),
+  sentenceRateInput: $('sentenceRateInput'),
+  sentenceRateValue: $('sentenceRateValue'),
+  sentencePitchInput: $('sentencePitchInput'),
+  sentencePitchValue: $('sentencePitchValue'),
+  testSentenceVoiceBtn: $('testSentenceVoiceBtn'),
   chatInput: $('chatInput'),
   chatBtn: $('chatBtn'),
   reloadReviewBtn: $('reloadReviewBtn'),
@@ -221,6 +272,7 @@ const viewMeta = {
 
 if (elements.apiBaseInput) elements.apiBaseInput.value = state.apiBase
 if (elements.buildVersion) elements.buildVersion.textContent = `build ${state.build}`
+initSpeechSettings()
 
 function apiUrl(path) {
   return `${state.apiBase.replace(/\/$/, '')}${path}`
@@ -254,6 +306,8 @@ function setLoading(isLoading) {
     elements.chatBtn,
     elements.addToWordbookBtn,
     elements.createWordbookBtn,
+    elements.saveAgentBtn,
+    elements.saveSpeechBtn,
     elements.saveModelBtn,
     elements.saveTemplateBtn,
     elements.saveAccountBtn,
@@ -496,7 +550,7 @@ async function loadInitialData() {
     loadPreviewData()
     return
   }
-  await Promise.allSettled([loadAgents(), loadWordbooks(), loadModelConfigs(), loadPromptTemplates(), loadActivity(), loadSystemLogs()])
+  await Promise.allSettled([loadAgents(), loadWordbooks(), loadModelConfigs(), loadPromptTemplates(), loadSpeechPreferences(), loadActivity(), loadSystemLogs()])
   await Promise.allSettled([loadDueReviews(), loadWordbookEntries()])
 }
 
@@ -531,6 +585,26 @@ function loadPreviewData() {
       enabled: false,
       isDefault: false,
       sequence: 10,
+    },
+  ]
+  state.agentConfigs = [
+    {
+      id: 201,
+      name: '英语词汇学习 Agent',
+      code: 'english_vocabulary',
+      type: 'chat',
+      icon: 'EV',
+      description: '生成英语词汇学习卡、追问解释和结构化 JSON。',
+      systemPrompt: '你是英语词汇学习助手，只输出适合结构化解析的学习内容。',
+      concisePrompt: '围绕当前词汇继续解释，保持简洁准确。',
+      welcomeMessage: '输入一个英语单词，我会生成学习卡片。',
+      modelProvider: 'deepseek',
+      modelName: 'deepseek-chat',
+      temperature: 0.2,
+      maxTokens: 1800,
+      presetCommands: '[{"label":"举例","prompt":"再给我 3 个真实语境例句"}]',
+      enabled: true,
+      sequence: 1,
     },
   ]
   state.promptTemplates = [
@@ -577,7 +651,10 @@ function loadPreviewData() {
   state.activity = createPreviewActivity()
   updateAuthView()
   renderModelConfigs()
+  renderAgentConfigs()
+  renderLearningAgentOptions()
   renderTemplateOptions()
+  renderTemplateConfigs()
   renderWordbooks()
   renderWordbookEntries()
   renderReviewQueue(state.reviewEntries)
@@ -588,30 +665,24 @@ function loadPreviewData() {
 
 async function loadAgents() {
   if (state.preview) {
-    elements.agentSelect.innerHTML = '<option value="english_vocabulary">English Vocabulary (english_vocabulary)</option>'
-    state.lastAgentCode = elements.agentSelect.value || 'english_vocabulary'
+    renderAgentConfigs()
     setConnection(true)
+    renderLearningAgentOptions()
     return
   }
   try {
-    const agents = await request('/api/v1/ai/agents')
-    elements.agentSelect.innerHTML = ''
-    const list = Array.isArray(agents) && agents.length ? agents : [{ code: 'english_vocabulary', name: 'English Vocabulary' }]
-    for (const agent of list) {
-      const option = document.createElement('option')
-      option.value = agent.code
-      option.textContent = `${agent.name || agent.code} (${agent.code})`
-      elements.agentSelect.appendChild(option)
+    const agents = await request('/api/v1/ai/agents?enabledOnly=false')
+    state.agentConfigs = Array.isArray(agents) ? agents : []
+    renderAgentConfigs()
+    renderLearningAgentOptions()
+    if (![...elements.agentSelect.options].some((item) => item.value === state.lastAgentCode)) {
+      state.lastAgentCode = elements.agentSelect.value || 'english_vocabulary'
     }
-    if ([...elements.agentSelect.options].some((item) => item.value === 'english_vocabulary')) {
-      elements.agentSelect.value = 'english_vocabulary'
-    }
-    state.lastAgentCode = elements.agentSelect.value || ''
     setConnection(true)
   } catch (error) {
     setConnection(false)
-    elements.agentSelect.innerHTML = '<option value="english_vocabulary">English Vocabulary</option>'
-    state.lastAgentCode = elements.agentSelect.value || 'english_vocabulary'
+    renderAgentConfigs()
+    renderLearningAgentOptions()
     logEvent('error', 'Agent 加载失败', error.message)
   }
 }
@@ -636,23 +707,26 @@ async function loadModelConfigs() {
 async function loadPromptTemplates() {
   if (state.preview) {
     renderTemplateOptions()
+    renderTemplateConfigs()
     return
   }
   try {
-    const templates = await request('/api/v1/ai/prompt-templates?type=user')
+    const templates = await request('/api/v1/ai/prompt-templates?type=user&enabledOnly=false')
     state.promptTemplates = Array.isArray(templates) ? templates : []
     renderTemplateOptions()
+    renderTemplateConfigs()
   } catch (error) {
     logEvent('error', '模板加载失败', error.message)
     renderTemplateOptions()
+    renderTemplateConfigs()
   }
 }
 
 function renderTemplateOptions() {
   if (!elements.templateSelect) return
   const previous = elements.templateSelect.value || 'english_vocab_card_json'
-  const templates = state.promptTemplates.length
-    ? state.promptTemplates
+  const templates = state.promptTemplates.filter((item) => item.enabled !== false && !item.deleted).length
+    ? state.promptTemplates.filter((item) => item.enabled !== false && !item.deleted)
     : [
         { code: 'english_vocab_card_json', name: '词汇卡片 JSON' },
         { code: 'english_vocab_quiz_json', name: '练习题 JSON' },
@@ -666,6 +740,415 @@ function renderTemplateOptions() {
   }
   elements.templateSelect.value = templates.some((item) => item.code === previous) ? previous : templates[0]?.code || ''
   renderSelectedTemplate()
+}
+
+function renderLearningAgentOptions() {
+  if (!elements.agentSelect) return
+  const previous = elements.agentSelect.value || state.lastAgentCode || 'english_vocabulary'
+  const agents = state.agentConfigs?.length
+    ? state.agentConfigs.filter((item) => item.enabled !== false && !item.deleted)
+    : [{ code: 'english_vocabulary', name: 'English Vocabulary', enabled: true }]
+  elements.agentSelect.innerHTML = ''
+  for (const agent of agents) {
+    const option = document.createElement('option')
+    option.value = agent.code
+    option.textContent = `${agent.name || agent.code} (${agent.code})`
+    if (agent.enabled === false) {
+      option.textContent += ' · 停用'
+    }
+    elements.agentSelect.appendChild(option)
+  }
+  elements.agentSelect.value = agents.some((item) => item.code === previous) ? previous : agents[0]?.code || 'english_vocabulary'
+  state.lastAgentCode = elements.agentSelect.value || previous
+}
+
+function renderAgentProviderOptions(selectedProvider = '') {
+  if (!elements.agentModelProviderInput) return
+  const provider = selectedProvider || elements.agentModelProviderInput.value || 'deepseek'
+  const options = Object.entries(providerCatalog)
+    .map(([value, item]) => `<option value="${escapeHtml(value)}">${escapeHtml(item.label)} (${escapeHtml(value)})</option>`)
+    .join('')
+  elements.agentModelProviderInput.innerHTML = `${options}${provider && !providerCatalog[provider] ? `<option value="${escapeHtml(provider)}">${escapeHtml(provider)} (自定义)</option>` : ''}`
+  elements.agentModelProviderInput.value = provider
+}
+
+function syncAgentModelProviderDefaults(options = {}) {
+  if (!elements.agentModelProviderInput || !elements.agentModelNameInput) return
+  const provider = elements.agentModelProviderInput.value || 'deepseek'
+  const config = providerCatalog[provider] || { models: [] }
+  const currentModel = options.modelName || elements.agentModelNameInput.value
+  const models = [...config.models]
+  if (options.keepUnknownModel && currentModel && !models.includes(currentModel)) {
+    models.unshift(currentModel)
+  }
+  elements.agentModelNameInput.innerHTML = models.map((model) => `<option value="${escapeHtml(model)}">${escapeHtml(model)}</option>`).join('')
+  elements.agentModelNameInput.value = models.includes(currentModel) ? currentModel : models[0] || ''
+}
+
+function renderAgentConfigs() {
+  if (!elements.agentConfigList) return
+  const list = state.agentConfigs.filter((item) => !item.deleted)
+  if (!list.length) {
+    elements.agentConfigList.className = 'model-list empty'
+    elements.agentConfigList.textContent = '暂无学习 Agent'
+    return
+  }
+  const aliveCount = list.length
+  elements.agentConfigList.className = 'model-list'
+  elements.agentConfigList.innerHTML = list
+    .map(
+      (item) => `
+        <div class="model-item agent-item ${item.enabled ? '' : 'disabled'}">
+          <div>
+            <div class="model-title-line">
+              <strong>${escapeHtml(item.name)}</strong>
+              <span class="mini-pill ${item.enabled ? 'ok' : ''}">${item.enabled ? '启用' : '停用'}</span>
+              <span class="mini-pill">${escapeHtml(item.code)}</span>
+            </div>
+            <p>${escapeHtml(item.modelProvider || '')} · ${escapeHtml(item.modelName || '')}</p>
+            <small>类型 ${escapeHtml(item.type || '')} · 排序 ${item.sequence ?? 0}</small>
+          </div>
+          <div class="row-actions">
+            <button class="icon-action-button" type="button" data-agent-edit="${escapeHtml(item.id)}" title="修改学习 Agent" aria-label="修改学习 Agent">✎</button>
+            <button class="icon-action-button" type="button" data-agent-toggle="${escapeHtml(item.id)}" title="${item.enabled ? '停用学习 Agent' : '启用学习 Agent'}" aria-label="${item.enabled ? '停用学习 Agent' : '启用学习 Agent'}">${item.enabled ? '⏸' : '▶'}</button>
+            <button class="icon-action-button" type="button" data-agent-clone="${escapeHtml(item.id)}" title="复制学习 Agent" aria-label="复制学习 Agent">⧉</button>
+            <button class="danger-icon-button" type="button" data-agent-delete="${escapeHtml(item.id)}" title="${aliveCount <= 1 ? '至少保留一个学习 Agent' : '删除学习 Agent'}" aria-label="${aliveCount <= 1 ? '至少保留一个学习 Agent' : '删除学习 Agent'}" ${aliveCount <= 1 ? 'disabled' : ''}>×</button>
+          </div>
+        </div>
+      `,
+    )
+    .join('')
+  elements.agentConfigList.querySelectorAll('[data-agent-edit]').forEach((button) => {
+    button.addEventListener('click', () => openAgentModal(button.getAttribute('data-agent-edit')))
+  })
+  elements.agentConfigList.querySelectorAll('[data-agent-delete]').forEach((button) => {
+    button.addEventListener('click', () => deleteAgentConfig(button.getAttribute('data-agent-delete')))
+  })
+  elements.agentConfigList.querySelectorAll('[data-agent-toggle]').forEach((button) => {
+    button.addEventListener('click', () => toggleAgentEnabled(button.getAttribute('data-agent-toggle')))
+  })
+  elements.agentConfigList.querySelectorAll('[data-agent-clone]').forEach((button) => {
+    button.addEventListener('click', () => cloneAgentConfig(button.getAttribute('data-agent-clone')))
+  })
+}
+
+function openAgentModal(id = null) {
+  renderAgentProviderOptions()
+  if (id) {
+    fillAgentForm(state.agentConfigs.find((item) => sameId(item.id, id)))
+    elements.agentModalTitle.textContent = '修改学习 Agent'
+  } else {
+    resetAgentForm({ keepModalOpen: true })
+    elements.agentModalTitle.textContent = '新增学习Agent'
+  }
+  elements.agentModal.classList.remove('hidden')
+}
+
+function closeAgentModal() {
+  elements.agentModal?.classList.add('hidden')
+}
+
+function fillAgentForm(agent) {
+  state.currentAgentEditId = agent?.id || null
+  elements.agentNameInput.value = agent?.name || ''
+  elements.agentCodeInput.value = agent?.code || ''
+  elements.agentTypeInput.value = agent?.type || 'chat'
+  elements.agentIconInput.value = agent?.icon || ''
+  renderAgentProviderOptions(agent?.modelProvider || 'deepseek')
+  syncAgentModelProviderDefaults({ keepUnknownModel: true, modelName: agent?.modelName || '' })
+  elements.agentModelProviderInput.value = agent?.modelProvider || 'deepseek'
+  syncAgentModelProviderDefaults({ keepUnknownModel: true, modelName: agent?.modelName || '' })
+  elements.agentModelNameInput.value = agent?.modelName || ''
+  elements.agentSequenceInput.value = agent?.sequence ?? 0
+  elements.agentTemperatureInput.value = agent?.temperature ?? ''
+  elements.agentMaxTokensInput.value = agent?.maxTokens ?? ''
+  elements.agentDescriptionInput.value = agent?.description || ''
+  elements.agentSystemPromptInput.value = agent?.systemPrompt || ''
+  elements.agentConcisePromptInput.value = agent?.concisePrompt || ''
+  elements.agentWelcomeMessageInput.value = agent?.welcomeMessage || ''
+  elements.agentPresetCommandsInput.value = agent?.presetCommands || ''
+}
+
+function resetAgentForm(options = {}) {
+  state.currentAgentEditId = null
+  renderAgentProviderOptions('deepseek')
+  syncAgentModelProviderDefaults()
+  elements.agentNameInput.value = ''
+  elements.agentCodeInput.value = ''
+  elements.agentTypeInput.value = 'chat'
+  elements.agentIconInput.value = ''
+  elements.agentModelProviderInput.value = 'deepseek'
+  syncAgentModelProviderDefaults()
+  elements.agentSequenceInput.value = '0'
+  elements.agentTemperatureInput.value = ''
+  elements.agentMaxTokensInput.value = ''
+  elements.agentDescriptionInput.value = ''
+  elements.agentSystemPromptInput.value = ''
+  elements.agentConcisePromptInput.value = ''
+  elements.agentWelcomeMessageInput.value = ''
+  elements.agentPresetCommandsInput.value = ''
+  if (!options.keepModalOpen) {
+    closeAgentModal()
+  }
+}
+
+async function saveAgentConfig() {
+  const payload = {
+    name: elements.agentNameInput.value.trim(),
+    code: elements.agentCodeInput.value.trim(),
+    type: elements.agentTypeInput.value.trim() || 'chat',
+    icon: elements.agentIconInput.value.trim(),
+    modelProvider: elements.agentModelProviderInput.value.trim(),
+    modelName: elements.agentModelNameInput.value.trim(),
+    sequence: Number(elements.agentSequenceInput.value || 0),
+    temperature: elements.agentTemperatureInput.value.trim() === '' ? null : Number(elements.agentTemperatureInput.value),
+    maxTokens: elements.agentMaxTokensInput.value.trim() === '' ? null : Number(elements.agentMaxTokensInput.value),
+    description: elements.agentDescriptionInput.value.trim(),
+    systemPrompt: elements.agentSystemPromptInput.value.trim(),
+    concisePrompt: elements.agentConcisePromptInput.value.trim(),
+    welcomeMessage: elements.agentWelcomeMessageInput.value.trim(),
+    presetCommands: elements.agentPresetCommandsInput.value.trim(),
+  }
+  if (!payload.name || !payload.code || !payload.modelProvider || !payload.modelName) {
+    toast('请补全学习 Agent 配置')
+    return
+  }
+  if (payload.presetCommands) {
+    try {
+      JSON.parse(payload.presetCommands)
+    } catch {
+      toast('预设指令 JSON 格式错误')
+      return
+    }
+  }
+  if (state.currentAgentEditId) {
+    const confirmed = await confirmAction({
+      title: '修改学习 Agent',
+      message: `确认修改学习 Agent「${payload.name}」？后续学习请求会使用新的配置。`,
+      acceptText: '确认修改',
+    })
+    if (!confirmed) return
+  }
+  setLoading(true)
+  try {
+    if (state.preview) {
+      const id = state.currentAgentEditId || String(Date.now())
+      const existingIndex = state.agentConfigs.findIndex((item) => sameId(item.id, id))
+      const next = { ...payload, id, enabled: existingIndex >= 0 ? state.agentConfigs[existingIndex].enabled !== false : true }
+      if (existingIndex >= 0) state.agentConfigs.splice(existingIndex, 1, next)
+      else state.agentConfigs.push(next)
+      renderAgentConfigs()
+      renderLearningAgentOptions()
+      closeAgentModal()
+      toast('设计预览：学习 Agent 已保存')
+      return
+    }
+    const path = state.currentAgentEditId ? `/api/v1/ai/agents/${encodeURIComponent(state.currentAgentEditId)}` : '/api/v1/ai/agents'
+    const method = state.currentAgentEditId ? 'PUT' : 'POST'
+    await request(path, { method, body: JSON.stringify(payload) })
+    await loadAgents()
+    closeAgentModal()
+    toast('学习 Agent 已保存')
+  } catch (error) {
+    logEvent('error', '学习 Agent 保存失败', error.message)
+    toast(`学习 Agent 保存失败：${error.message}`)
+  } finally {
+    setLoading(false)
+  }
+}
+
+async function toggleAgentEnabled(id) {
+  const agent = state.agentConfigs.find((item) => sameId(item.id, id))
+  if (!agent) return
+  const targetEnabled = !agent.enabled
+  const confirmed = await confirmAction({
+    title: targetEnabled ? '启用学习 Agent' : '停用学习 Agent',
+    message: `确认${targetEnabled ? '启用' : '停用'}学习 Agent「${agent.name}」？`,
+    acceptText: targetEnabled ? '确认启用' : '确认停用',
+  })
+  if (!confirmed) return
+  if (state.preview) {
+    agent.enabled = targetEnabled
+    renderAgentConfigs()
+    renderLearningAgentOptions()
+    return
+  }
+  await request(`/api/v1/ai/agents/${encodeURIComponent(id)}/${targetEnabled ? 'enable' : 'disable'}`, { method: 'POST' })
+  await loadAgents()
+}
+
+async function deleteAgentConfig(id) {
+  const item = state.agentConfigs.find((agent) => sameId(agent.id, id))
+  if (!item) return
+  const aliveCount = state.agentConfigs.filter((agent) => !agent.deleted).length
+  if (aliveCount <= 1) {
+    toast('至少保留一个学习 Agent')
+    return
+  }
+  const confirmed = await confirmDelete({
+    title: '删除学习 Agent',
+    message: `确认删除学习 Agent「${item.name}」？删除后无法在列表中继续使用。`,
+  })
+  if (!confirmed) return
+  if (state.preview) {
+    state.agentConfigs = state.agentConfigs.filter((agent) => !sameId(agent.id, id))
+    renderAgentConfigs()
+    renderLearningAgentOptions()
+    toast('设计预览：学习 Agent 已删除')
+    return
+  }
+  try {
+    await request(`/api/v1/ai/agents/${encodeURIComponent(id)}`, { method: 'DELETE' })
+    await loadAgents()
+    toast('学习 Agent 已删除')
+  } catch (error) {
+    logEvent('error', '删除学习 Agent 失败', error.message)
+    toast(`删除学习 Agent 失败：${error.message}`)
+  }
+}
+
+async function cloneAgentConfig(id) {
+  if (state.preview) {
+    const agent = state.agentConfigs.find((item) => sameId(item.id, id))
+    if (!agent) return
+    const clone = { ...agent, id: String(Date.now()), name: `${agent.name} 副本`, code: `${agent.code}-${Date.now()}` }
+    state.agentConfigs.push(clone)
+    renderAgentConfigs()
+    renderLearningAgentOptions()
+    toast('设计预览：学习 Agent 已复制')
+    return
+  }
+  await request(`/api/v1/ai/agents/${encodeURIComponent(id)}/clone`, { method: 'POST' })
+  await loadAgents()
+}
+
+function renderTemplateConfigs() {
+  if (!elements.templateConfigList) return
+  const list = state.promptTemplates.filter((item) => !item.deleted)
+  if (!list.length) {
+    elements.templateConfigList.className = 'model-list empty'
+    elements.templateConfigList.textContent = '暂无学习 Agent 模板'
+    return
+  }
+  const aliveCount = list.length
+  elements.templateConfigList.className = 'model-list'
+  elements.templateConfigList.innerHTML = list
+    .map(
+      (item) => `
+        <div class="model-item template-item ${item.enabled ? '' : 'disabled'}">
+          <div>
+            <div class="model-title-line">
+              <strong>${escapeHtml(item.name)}</strong>
+              <span class="mini-pill ${item.enabled ? 'ok' : ''}">${item.enabled ? '启用' : '停用'}</span>
+              <span class="mini-pill">${escapeHtml(item.code)}</span>
+            </div>
+            <p>${escapeHtml(item.type || '')} · ${escapeHtml(item.tags || '')}</p>
+            <small>排序 ${item.sequence ?? 0} · 占位符 ${templatePlaceholders(item).length}</small>
+          </div>
+          <div class="row-actions">
+            <button class="icon-action-button" type="button" data-template-edit="${escapeHtml(item.id)}" title="修改模板" aria-label="修改模板">✎</button>
+            <button class="icon-action-button" type="button" data-template-clone="${escapeHtml(item.id)}" title="复制模板" aria-label="复制模板">⧉</button>
+            <button class="danger-icon-button" type="button" data-template-delete="${escapeHtml(item.id)}" title="${aliveCount <= 1 ? '至少保留一个学习 Agent 模板' : '删除模板'}" aria-label="${aliveCount <= 1 ? '至少保留一个学习 Agent 模板' : '删除模板'}" ${aliveCount <= 1 ? 'disabled' : ''}>×</button>
+          </div>
+        </div>
+      `,
+    )
+    .join('')
+  elements.templateConfigList.querySelectorAll('[data-template-edit]').forEach((button) => {
+    button.addEventListener('click', () => openTemplateModal(button.getAttribute('data-template-edit')))
+  })
+  elements.templateConfigList.querySelectorAll('[data-template-delete]').forEach((button) => {
+    button.addEventListener('click', () => deletePromptTemplate(button.getAttribute('data-template-delete')))
+  })
+  elements.templateConfigList.querySelectorAll('[data-template-clone]').forEach((button) => {
+    button.addEventListener('click', () => clonePromptTemplate(button.getAttribute('data-template-clone')))
+  })
+}
+
+function openTemplateModal(id = null) {
+  if (id) {
+    fillTemplateForm(state.promptTemplates.find((item) => sameId(item.id, id)))
+    elements.templateModalTitle.textContent = '修改学习 Agent 模板'
+  } else {
+    resetTemplateForm({ keepModalOpen: true })
+    elements.templateModalTitle.textContent = '新增学习Agent模板'
+  }
+  elements.templateModal.classList.remove('hidden')
+}
+
+function closeTemplateModal() {
+  elements.templateModal?.classList.add('hidden')
+}
+
+function resetTemplateForm(options = {}) {
+  state.currentTemplateEditId = null
+  state.currentTemplate = null
+  elements.templateNameInput.value = ''
+  elements.templateCodeInput.value = ''
+  elements.templateTypeInput.value = 'user'
+  elements.templateSequenceInput.value = '0'
+  elements.templateTagsInput.value = ''
+  elements.templateDescriptionInput.value = ''
+  elements.templateExampleInput.value = ''
+  elements.templateExampleOutput.value = ''
+  elements.templateContentInput.value = ''
+  renderTemplatePlaceholders([])
+  elements.templateValidationMessage.textContent = '模板内容需要包含声明的占位符。'
+  if (!options.keepModalOpen) {
+    closeTemplateModal()
+  }
+}
+
+async function deletePromptTemplate(id) {
+  const item = state.promptTemplates.find((template) => sameId(template.id, id))
+  if (!item) return
+  const aliveCount = state.promptTemplates.filter((template) => !template.deleted).length
+  if (aliveCount <= 1) {
+    toast('至少保留一个学习 Agent 模板')
+    return
+  }
+  const confirmed = await confirmDelete({
+    title: '删除学习 Agent 模板',
+    message: `确认删除模板「${item.name}」？删除后无法继续用于学习卡生成。`,
+  })
+  if (!confirmed) return
+  if (state.preview) {
+    state.promptTemplates = state.promptTemplates.filter((template) => !sameId(template.id, id))
+    renderTemplateConfigs()
+    renderTemplateOptions()
+    toast('设计预览：学习 Agent 模板已删除')
+    return
+  }
+  try {
+    await request(`/api/v1/ai/prompt-templates/${encodeURIComponent(id)}`, { method: 'DELETE' })
+    await loadPromptTemplates()
+    toast('学习 Agent 模板已删除')
+  } catch (error) {
+    logEvent('error', '删除学习 Agent 模板失败', error.message)
+    toast(`删除学习 Agent 模板失败：${error.message}`)
+  }
+}
+
+async function clonePromptTemplate(id) {
+  const item = state.promptTemplates.find((template) => sameId(template.id, id))
+  if (!item) return
+  if (state.preview) {
+    const clone = { ...item, id: String(Date.now()), name: `${item.name} 副本`, code: `${item.code}-${Date.now()}` }
+    state.promptTemplates.push(clone)
+    renderTemplateConfigs()
+    renderTemplateOptions()
+    toast('设计预览：模板已复制')
+    return
+  }
+  const createdId = await request(`/api/v1/ai/prompt-templates/${encodeURIComponent(id)}/clone`, { method: 'POST' })
+  await loadPromptTemplates()
+  if (createdId) {
+    const clone = state.promptTemplates.find((template) => sameId(template.id, createdId))
+    if (clone) {
+      elements.templateSelect.value = clone.code || item.code
+      fillTemplateForm(clone)
+    }
+  }
 }
 
 async function renderSelectedTemplate() {
@@ -718,6 +1201,8 @@ async function changeLearningAgent() {
 
 function fillTemplateForm(template) {
   if (!elements.templateNameInput) return
+  state.currentTemplate = template || null
+  state.currentTemplateEditId = template?.id || null
   state.lastTemplateCode = template?.code || elements.templateSelect?.value || ''
   elements.templateNameInput.value = template?.name || ''
   elements.templateCodeInput.value = template?.code || ''
@@ -784,23 +1269,19 @@ function validateTemplatePlaceholders(options = {}) {
 }
 
 async function savePromptTemplate() {
-  const template = state.currentTemplate
-  if (!template?.id) {
-    toast('请先选择模板')
-    return
-  }
   if (!validateTemplatePlaceholders()) return
+  const editId = state.currentTemplateEditId || state.currentTemplate?.id || null
   const payload = {
     name: elements.templateNameInput.value.trim(),
     code: elements.templateCodeInput.value.trim(),
     type: elements.templateTypeInput.value.trim() || 'user',
     tags: elements.templateTagsInput.value.trim(),
     content: elements.templateContentInput.value.trim(),
-    variables: template.variables || JSON.stringify(extractPlaceholders(elements.templateContentInput.value).map((name) => ({ name, required: true }))),
+    variables: state.currentTemplate?.variables || JSON.stringify(extractPlaceholders(elements.templateContentInput.value).map((name) => ({ name, required: true }))),
     description: elements.templateDescriptionInput.value.trim(),
     exampleInput: elements.templateExampleInput.value.trim(),
     exampleOutput: elements.templateExampleOutput.value.trim(),
-    publicTemplate: Boolean(template.publicTemplate),
+    publicTemplate: Boolean(state.currentTemplate?.publicTemplate),
     sequence: Number(elements.templateSequenceInput.value || 0),
   }
   if (!payload.name || !payload.code || !payload.content) {
@@ -808,22 +1289,29 @@ async function savePromptTemplate() {
     return
   }
   const confirmed = await confirmAction({
-    title: '保存学习 Agent 模板',
-    message: `确认保存学习 Agent 模板「${payload.name}」？保存后后续学习卡片生成会使用新的模板内容。`,
-    acceptText: '确认保存',
+    title: editId ? '修改学习 Agent 模板' : '新增学习 Agent 模板',
+    message: editId
+      ? `确认修改学习 Agent 模板「${payload.name}」？保存后后续学习卡片生成会使用新的模板内容。`
+      : `确认新增学习 Agent 模板「${payload.name}」？保存后可以在学习页切换使用。`,
+    acceptText: editId ? '确认修改' : '确认新增',
   })
   if (!confirmed) return
   setLoading(true)
   try {
     if (state.preview) {
+      const template = editId ? state.promptTemplates.find((item) => sameId(item.id, editId)) : { id: String(Date.now()) }
       Object.assign(template, payload)
+      if (!editId) state.promptTemplates.unshift(template)
       renderTemplateOptions()
+      renderTemplateConfigs()
       elements.templateSelect.value = payload.code
       fillTemplateForm(template)
       toast('设计预览：模板已保存')
       return
     }
-    await request(`/api/v1/ai/prompt-templates/${template.id}`, { method: 'PUT', body: JSON.stringify(payload) })
+    const path = editId ? `/api/v1/ai/prompt-templates/${encodeURIComponent(editId)}` : '/api/v1/ai/prompt-templates'
+    const method = editId ? 'PUT' : 'POST'
+    await request(path, { method, body: JSON.stringify(payload) })
     await loadPromptTemplates()
     elements.templateSelect.value = payload.code
     await renderSelectedTemplate()
@@ -1434,6 +1922,7 @@ function renderWordbookEntries() {
             <small>${escapeHtml(statusLabel(entry.status))} · 掌握 ${entry.masteryScore ?? 0}</small>
           </button>
           <div class="row-actions">
+            <button class="icon-action-button" type="button" data-entry-transfer="${escapeHtml(entry.id)}" title="复制或移动" aria-label="复制或移动">＋</button>
             <button class="danger-icon-button" type="button" data-entry-delete="${escapeHtml(entry.id)}" title="删除单词">×</button>
           </div>
         </div>
@@ -1448,6 +1937,9 @@ function renderWordbookEntries() {
   })
   elements.wordbookEntryList.querySelectorAll('[data-entry-delete]').forEach((button) => {
     button.addEventListener('click', () => deleteWordbookEntry(button.getAttribute('data-entry-delete')))
+  })
+elements.wordbookEntryList.querySelectorAll('[data-entry-transfer]').forEach((button) => {
+    button.addEventListener('click', () => openEntryTransferModal(button.getAttribute('data-entry-transfer')))
   })
   renderWordbookFocus(selectedEntry)
   renderNotes(selectedEntry)
@@ -1601,7 +2093,7 @@ function renderWordbookFocus(entry) {
     toggleFocusTags()
   })
   elements.wordbookFocus.querySelectorAll('[data-focus-sentence]').forEach((button) => {
-    button.addEventListener('click', () => speak(examples[Number(button.getAttribute('data-focus-sentence'))]?.sentence, elements.voiceSelect.value))
+    button.addEventListener('click', () => speakSentence(examples[Number(button.getAttribute('data-focus-sentence'))]?.sentence))
   })
   elements.wordbookFocus.querySelectorAll('[data-focus-word-voice]').forEach((button) => {
     button.addEventListener('click', () => speak(entry.term || entry.normalizedTerm, button.getAttribute('data-focus-word-voice')))
@@ -1696,6 +2188,88 @@ async function deleteWordbookEntry(entryId) {
   } catch (error) {
     logEvent('error', '删除词条失败', error.message)
     toast(`删除词条失败：${error.message}`)
+  }
+}
+
+function openEntryTransferModal(entryId) {
+  const entry = state.wordbookEntries.find((item) => sameId(item.id, entryId)) || state.reviewEntries.find((item) => sameId(item.id, entryId))
+  if (!entry) return
+  state.currentTransferEntryId = entry.id
+  elements.entryTransferTerm.textContent = entry.term || entry.normalizedTerm || '当前单词'
+  renderEntryTransferList(entry)
+  elements.entryTransferModal.classList.remove('hidden')
+}
+
+function closeEntryTransferModal() {
+  elements.entryTransferModal?.classList.add('hidden')
+  state.currentTransferEntryId = null
+}
+
+function renderEntryTransferList(entry) {
+  const list = state.wordbooks.filter((wordbook) => !sameId(wordbook.id, entry.wordbookId))
+  if (!list.length) {
+    elements.entryTransferList.className = 'wordbook-picker-list empty'
+    elements.entryTransferList.textContent = '暂无其他单词本'
+    return
+  }
+  elements.entryTransferList.className = 'wordbook-picker-list'
+  elements.entryTransferList.innerHTML = list
+    .map(
+      (wordbook) => `
+        <div class="wordbook-picker-item transfer-item">
+          <div>
+          <strong>${escapeHtml(wordbook.name)}</strong>
+          <span>${escapeHtml(wordbook.description || (wordbook.isDefault ? '默认单词本' : '自定义单词本'))}</span>
+          <small>${wordbook.entryCount || 0} 个单词 · ${wordbook.dueCount || 0} 个待复习</small>
+          </div>
+          <div class="transfer-actions">
+            <button class="secondary-button compact" type="button" data-transfer-copy="${escapeHtml(wordbook.id)}">复制</button>
+            <button class="primary-button compact-primary" type="button" data-transfer-move="${escapeHtml(wordbook.id)}">移动</button>
+          </div>
+        </div>
+      `,
+    )
+    .join('')
+  elements.entryTransferList.querySelectorAll('[data-transfer-copy]').forEach((button) => {
+    button.addEventListener('click', () => transferWordbookEntry(entry.id, button.getAttribute('data-transfer-copy'), true))
+  })
+  elements.entryTransferList.querySelectorAll('[data-transfer-move]').forEach((button) => {
+    button.addEventListener('click', () => transferWordbookEntry(entry.id, button.getAttribute('data-transfer-move'), false))
+  })
+}
+
+async function transferWordbookEntry(entryId, targetWordbookId, copy = true) {
+  setLoading(true)
+  try {
+    if (state.preview) {
+      const entry = state.wordbookEntries.find((item) => sameId(item.id, entryId)) || state.reviewEntries.find((item) => sameId(item.id, entryId))
+      if (!entry) return
+      const targetWordbook = state.wordbooks.find((item) => sameId(item.id, targetWordbookId))
+      if (!targetWordbook) return
+      if (copy) {
+        const cloned = { ...entry, id: String(Date.now()), wordbookId: targetWordbook.id }
+        state.wordbookEntries.unshift(cloned)
+      } else {
+        entry.wordbookId = targetWordbook.id
+      }
+      renderWordbookEntries()
+      renderWordbooks()
+      closeEntryTransferModal()
+      toast(copy ? '设计预览：已复制到单词本' : '设计预览：已移动到单词本')
+      return
+    }
+    await request(`/api/v1/learning/wordbook-entries/${encodeURIComponent(entryId)}/transfer`, {
+      method: 'POST',
+      body: JSON.stringify({ targetWordbookId: Number(targetWordbookId), copy }),
+    })
+    await Promise.allSettled([loadWordbooks(), loadWordbookEntries(), loadDueReviews(), loadActivity()])
+    closeEntryTransferModal()
+    toast(copy ? '已复制到其它单词本' : '已移动到其它单词本')
+  } catch (error) {
+    logEvent('error', '移动词条失败', error.message)
+    toast(`移动词条失败：${error.message}`)
+  } finally {
+    setLoading(false)
   }
 }
 
@@ -1997,7 +2571,7 @@ function renderExamples(parsed) {
     )
     .join('')
   elements.examples.querySelectorAll('[data-sentence-index]').forEach((button) => {
-    button.addEventListener('click', () => speak(examples[Number(button.getAttribute('data-sentence-index'))]?.sentence))
+    button.addEventListener('click', () => speakSentence(examples[Number(button.getAttribute('data-sentence-index'))]?.sentence))
   })
 }
 
@@ -2368,12 +2942,16 @@ function renderReviewFocus(entryOrRecord) {
       }
     </div>
     <div class="review-card-actions">
-      <button class="secondary-button compact" type="button" data-review-prev ${canPrev ? '' : 'disabled'}>上一个</button>
-      <button class="secondary-button compact" type="button" data-review-next ${canNext ? '' : 'disabled'}>下一个</button>
+      <div class="review-card-nav">
+        <button class="secondary-button compact" type="button" data-review-prev ${canPrev ? '' : 'disabled'}>上一个</button>
+        <button class="secondary-button compact" type="button" data-review-next ${canNext ? '' : 'disabled'}>下一个</button>
+      </div>
+      <button class="icon-action-button" type="button" data-review-transfer="${escapeHtml(entryOrRecord.id)}" title="复制或移动" aria-label="复制或移动">＋</button>
     </div>
   `
   elements.reviewFocus.querySelector('[data-review-prev]')?.addEventListener('click', () => goToReviewOffset(-1))
   elements.reviewFocus.querySelector('[data-review-next]')?.addEventListener('click', () => goToReviewOffset(1))
+  elements.reviewFocus.querySelector('[data-review-transfer]')?.addEventListener('click', () => openEntryTransferModal(entryOrRecord.id))
   elements.reviewFocus.querySelector('.typing-board')?.addEventListener(
     'wheel',
     (event) => {
@@ -2485,7 +3063,7 @@ function renderReviewCompleteModal(entry) {
         .join('')
     : '暂无例句'
   elements.modalExamples.querySelectorAll('[data-modal-sentence]').forEach((button) => {
-    button.addEventListener('click', () => speak(examples[Number(button.getAttribute('data-modal-sentence'))]?.sentence, elements.voiceSelect.value))
+    button.addEventListener('click', () => speakSentence(examples[Number(button.getAttribute('data-modal-sentence'))]?.sentence))
   })
   elements.reviewCompleteModal.classList.remove('hidden')
 }
@@ -2567,7 +3145,7 @@ function openForgottenDetailModal(entry) {
   `
   elements.forgottenDetailContent.querySelector('[data-forgotten-word-audio]')?.addEventListener('click', () => speak(entry.term || entry.normalizedTerm, elements.voiceSelect.value))
   elements.forgottenDetailContent.querySelectorAll('[data-forgotten-sentence]').forEach((button) => {
-    button.addEventListener('click', () => speak(examples[Number(button.getAttribute('data-forgotten-sentence'))]?.sentence, elements.voiceSelect.value))
+    button.addEventListener('click', () => speakSentence(examples[Number(button.getAttribute('data-forgotten-sentence'))]?.sentence))
   })
   bindStudyTermCards(elements.forgottenDetailContent, '[data-collocation-term]', '词组')
   bindInlineAudio(elements.forgottenDetailContent)
@@ -2861,7 +3439,7 @@ function pronunciationUrl(text, type = 'us') {
 }
 
 function playRemoteAudio(content, fallback) {
-  playRemoteAudioByType(content, elements.voiceSelect.value, fallback)
+  playRemoteAudioByType(content, currentVoiceType(), fallback)
 }
 
 function playRemoteAudioByType(content, voiceType = 'us', fallback) {
@@ -2878,7 +3456,7 @@ function playRemoteAudioByType(content, voiceType = 'us', fallback) {
     })
 }
 
-function speak(text, voiceType = elements.voiceSelect.value) {
+function speak(text, voiceType = currentVoiceType()) {
   const content = String(text || '').trim()
   if (!content) {
     toast('暂无可播放内容')
@@ -2891,16 +3469,213 @@ function speak(text, voiceType = elements.voiceSelect.value) {
   playRemoteAudioByType(content, voiceType)
 }
 
-function speakWithBrowserVoice(content, voiceType = elements.voiceSelect.value) {
+function speakSentence(text) {
+  const content = String(text || '').trim()
+  if (!content) {
+    toast('暂无可播放内容')
+    return
+  }
+  if ('speechSynthesis' in window && 'SpeechSynthesisUtterance' in window) {
+    speakWithBrowserVoice(content, currentVoiceType(), { sentence: true })
+    return
+  }
+  playRemoteAudioByType(content, currentVoiceType())
+}
+
+function speakWithBrowserVoice(content, voiceType = currentVoiceType(), options = {}) {
   if (!('speechSynthesis' in window && 'SpeechSynthesisUtterance' in window)) return
   window.speechSynthesis.cancel()
   const utterance = new SpeechSynthesisUtterance(content)
   utterance.lang = voiceType === 'uk' ? 'en-GB' : 'en-US'
-  utterance.rate = 0.86
-  utterance.pitch = 1
+  const voice = chooseSpeechVoice(voiceType, options.sentence ? state.speechSettings.sentenceVoiceName : '')
+  if (voice) {
+    utterance.voice = voice
+    utterance.lang = voice.lang || utterance.lang
+  }
+  utterance.rate = options.sentence ? state.speechSettings.sentenceRate : 0.86
+  utterance.pitch = options.sentence ? state.speechSettings.sentencePitch : 1
   utterance.onerror = () => toast('浏览器阻止了音频播放，请检查站点声音权限')
   window.speechSynthesis.speak(utterance)
   toast('正在播放发音')
+}
+
+function currentVoiceType(voiceType = state.speechSettings.voiceType) {
+  return voiceType === 'uk' ? 'uk' : 'us'
+}
+
+function normalizeSpeechSettings(settings = {}) {
+  return {
+    voiceType: currentVoiceType(settings.voiceType),
+    sentenceVoiceName: String(settings.sentenceVoiceName || '').trim(),
+    sentenceRate: clampNumber(settings.sentenceRate, 0.55, 1.15, 0.78),
+    sentencePitch: clampNumber(settings.sentencePitch, 0.8, 1.2, 1),
+  }
+}
+
+function persistSpeechSettingsLocal() {
+  localStorage.setItem('learning.voiceType', state.speechSettings.voiceType)
+  localStorage.setItem('learning.sentenceVoiceName', state.speechSettings.sentenceVoiceName)
+  localStorage.setItem('learning.sentenceRate', String(state.speechSettings.sentenceRate))
+  localStorage.setItem('learning.sentencePitch', String(state.speechSettings.sentencePitch))
+}
+
+function speechPreferencePayload() {
+  return {
+    voiceType: state.speechSettings.voiceType,
+    sentenceVoiceName: state.speechSettings.sentenceVoiceName,
+    sentenceRate: state.speechSettings.sentenceRate,
+    sentencePitch: state.speechSettings.sentencePitch,
+  }
+}
+
+function applySpeechSettings(settings = {}) {
+  state.speechSettings = normalizeSpeechSettings({ ...state.speechSettings, ...settings })
+  if (elements.voiceSelect) {
+    elements.voiceSelect.value = currentVoiceType()
+  }
+  if (elements.sentenceRateInput) {
+    elements.sentenceRateInput.value = String(state.speechSettings.sentenceRate)
+  }
+  if (elements.sentencePitchInput) {
+    elements.sentencePitchInput.value = String(state.speechSettings.sentencePitch)
+  }
+  populateSentenceVoices()
+  renderSpeechSettingValues()
+}
+
+async function loadSpeechPreferences() {
+  if (state.preview || !state.token) {
+    applySpeechSettings(state.speechSettings)
+    return
+  }
+  try {
+    const preferences = await request('/api/v1/learning/preferences/speech')
+    applySpeechSettings(preferences || {})
+    persistSpeechSettingsLocal()
+  } catch (error) {
+    applySpeechSettings(state.speechSettings)
+    logEvent('error', '发音设置加载失败', error.message)
+  }
+}
+
+async function saveSpeechPreferences({ quiet = false } = {}) {
+  persistSpeechSettingsLocal()
+  if (state.preview || !state.token) return
+  try {
+    const preferences = await request('/api/v1/learning/preferences/speech', {
+      method: 'PUT',
+      body: JSON.stringify(speechPreferencePayload()),
+    })
+    applySpeechSettings(preferences || {})
+    persistSpeechSettingsLocal()
+    if (!quiet) toast('发音设置已保存')
+  } catch (error) {
+    logEvent('error', '发音设置保存失败', error.message)
+    if (!quiet) toast(`发音设置暂未保存到服务端：${error.message}`)
+  }
+}
+
+function scheduleSpeechPreferenceSave() {
+  persistSpeechSettingsLocal()
+  window.clearTimeout(state.speechSaveTimer)
+  state.speechSaveTimer = window.setTimeout(() => {
+    saveSpeechPreferences({ quiet: true })
+  }, 500)
+}
+
+function initSpeechSettings() {
+  applySpeechSettings(state.speechSettings)
+  if (elements.voiceSelect) {
+    elements.voiceSelect.addEventListener('change', () => {
+      state.speechSettings.voiceType = currentVoiceType(elements.voiceSelect.value)
+      populateSentenceVoices()
+      scheduleSpeechPreferenceSave()
+    })
+  }
+  if (elements.sentenceRateInput) {
+    elements.sentenceRateInput.addEventListener('input', () => {
+      state.speechSettings.sentenceRate = clampNumber(elements.sentenceRateInput.value, 0.55, 1.15, 0.78)
+      renderSpeechSettingValues()
+      scheduleSpeechPreferenceSave()
+    })
+  }
+  if (elements.sentencePitchInput) {
+    elements.sentencePitchInput.addEventListener('input', () => {
+      state.speechSettings.sentencePitch = clampNumber(elements.sentencePitchInput.value, 0.8, 1.2, 1)
+      renderSpeechSettingValues()
+      scheduleSpeechPreferenceSave()
+    })
+  }
+  elements.sentenceVoiceSelect?.addEventListener('change', () => {
+    state.speechSettings.sentenceVoiceName = elements.sentenceVoiceSelect.value
+    scheduleSpeechPreferenceSave()
+  })
+  elements.testSentenceVoiceBtn?.addEventListener('click', () => {
+    speakSentence('They had to abandon the project due to lack of funds.')
+  })
+  if ('speechSynthesis' in window) {
+    window.speechSynthesis.addEventListener?.('voiceschanged', populateSentenceVoices)
+    window.setTimeout(populateSentenceVoices, 250)
+  }
+  populateSentenceVoices()
+  renderSpeechSettingValues()
+}
+
+function renderSpeechSettingValues() {
+  if (elements.sentenceRateValue) {
+    elements.sentenceRateValue.textContent = `${state.speechSettings.sentenceRate.toFixed(2)}x`
+  }
+  if (elements.sentencePitchValue) {
+    elements.sentencePitchValue.textContent = state.speechSettings.sentencePitch.toFixed(2)
+  }
+}
+
+function populateSentenceVoices() {
+  if (!elements.sentenceVoiceSelect) return
+  const voices = speechVoices().filter((voice) => voice.lang?.toLowerCase().startsWith('en'))
+  const voiceType = currentVoiceType()
+  const preferred = voices.filter((voice) => voiceMatchesAccent(voice, voiceType))
+  const others = voices.filter((voice) => !voiceMatchesAccent(voice, voiceType))
+  elements.sentenceVoiceSelect.innerHTML = ''
+  elements.sentenceVoiceSelect.appendChild(new Option('自动选择更自然的英语音色', ''))
+  for (const voice of [...preferred, ...others]) {
+    elements.sentenceVoiceSelect.appendChild(new Option(voiceLabel(voice), voice.name))
+  }
+  if ([...elements.sentenceVoiceSelect.options].some((option) => option.value === state.speechSettings.sentenceVoiceName)) {
+    elements.sentenceVoiceSelect.value = state.speechSettings.sentenceVoiceName
+  } else {
+    elements.sentenceVoiceSelect.value = ''
+  }
+}
+
+function speechVoices() {
+  return 'speechSynthesis' in window ? window.speechSynthesis.getVoices() : []
+}
+
+function chooseSpeechVoice(voiceType, preferredName = '') {
+  const voices = speechVoices()
+  if (!voices.length) return null
+  if (preferredName) {
+    const selected = voices.find((voice) => voice.name === preferredName)
+    if (selected) return selected
+  }
+  const matching = voices.filter((voice) => voiceMatchesAccent(voice, voiceType))
+  return (
+    matching.find((voice) => /natural|premium|google|samantha|daniel|aria|jenny/i.test(voice.name)) ||
+    matching[0] ||
+    voices.find((voice) => voice.lang?.toLowerCase().startsWith('en')) ||
+    null
+  )
+}
+
+function voiceMatchesAccent(voice, voiceType) {
+  const lang = String(voice.lang || '').toLowerCase()
+  return currentVoiceType(voiceType) === 'uk' ? lang.startsWith('en-gb') : lang.startsWith('en-us')
+}
+
+function voiceLabel(voice) {
+  const local = voice.localService ? '本地' : '在线'
+  return `${voice.name} · ${voice.lang || 'en'} · ${local}`
 }
 
 function firstExample(parsed) {
@@ -3294,6 +4069,16 @@ function readJsonStorage(key) {
   }
 }
 
+function readNumberStorage(key, fallback) {
+  return clampNumber(localStorage.getItem(key), Number.NEGATIVE_INFINITY, Number.POSITIVE_INFINITY, fallback)
+}
+
+function clampNumber(value, min, max, fallback) {
+  const number = Number(value)
+  if (!Number.isFinite(number)) return fallback
+  return Math.max(min, Math.min(max, number))
+}
+
 function readErrorMessage(text) {
   if (!text) return ''
   try {
@@ -3336,7 +4121,8 @@ if (elements.apiBaseInput) {
 elements.toggleSidebarBtn.addEventListener('click', toggleSidebar)
 elements.sidebarBackdrop.addEventListener('click', () => setSidebarCollapsed(true))
 window.matchMedia('(max-width: 1100px)').addEventListener('change', handleViewportChange)
-elements.reloadAgentsBtn.addEventListener('click', loadAgents)
+elements.reloadAgentsBtn?.addEventListener('click', loadAgents)
+elements.reloadAgentConfigsBtn?.addEventListener('click', loadAgents)
 elements.reloadModelsBtn.addEventListener('click', loadModelConfigs)
 elements.openModelModalBtn.addEventListener('click', () => openModelModal())
 elements.closeModelModalBtn.addEventListener('click', closeModelModal)
@@ -3346,6 +4132,19 @@ elements.modelConfigModal.addEventListener('click', (event) => {
 elements.modelProviderInput.addEventListener('change', () => syncModelProviderDefaults())
 elements.modelDefaultToggleBtn?.addEventListener('click', () => toggleModelFlag(elements.modelDefaultInput))
 elements.modelEnabledToggleBtn?.addEventListener('click', () => toggleModelFlag(elements.modelEnabledInput))
+elements.openAgentModalBtn?.addEventListener('click', () => openAgentModal())
+elements.closeAgentModalBtn?.addEventListener('click', closeAgentModal)
+elements.agentModal?.addEventListener('click', (event) => {
+  if (event.target === elements.agentModal) closeAgentModal()
+})
+elements.agentModelProviderInput?.addEventListener('change', () => syncAgentModelProviderDefaults())
+elements.saveAgentBtn?.addEventListener('click', saveAgentConfig)
+elements.openTemplateModalBtn?.addEventListener('click', () => openTemplateModal())
+elements.closeTemplateModalBtn?.addEventListener('click', closeTemplateModal)
+elements.templateModal?.addEventListener('click', (event) => {
+  if (event.target === elements.templateModal) closeTemplateModal()
+})
+elements.reloadTemplatesBtn?.addEventListener('click', loadPromptTemplates)
 elements.openAccountModalBtn.addEventListener('click', openAccountModal)
 elements.closeAccountModalBtn.addEventListener('click', closeAccountModal)
 elements.accountModal.addEventListener('click', (event) => {
@@ -3368,6 +4167,7 @@ elements.agentSelect.addEventListener('change', changeLearningAgent)
 elements.templateSelect.addEventListener('change', renderSelectedTemplate)
 elements.templateContentInput.addEventListener('input', () => validateTemplatePlaceholders({ quiet: true }))
 elements.saveTemplateBtn.addEventListener('click', savePromptTemplate)
+elements.saveSpeechBtn?.addEventListener('click', () => saveSpeechPreferences())
 elements.wordbookSelect.addEventListener('change', () => changeWordbook(elements.wordbookSelect.value))
 elements.wordStatusFilter.addEventListener('change', loadWordbookEntries)
 elements.reloadSystemLogsBtn.addEventListener('click', loadSystemLogs)
@@ -3382,6 +4182,10 @@ elements.closeAddWordbookModalBtn.addEventListener('click', closeAddWordbookModa
 elements.addWordbookModal.addEventListener('click', (event) => {
   if (event.target === elements.addWordbookModal) closeAddWordbookModal()
 })
+elements.closeEntryTransferModalBtn?.addEventListener('click', closeEntryTransferModal)
+elements.entryTransferModal?.addEventListener('click', (event) => {
+  if (event.target === elements.entryTransferModal) closeEntryTransferModal()
+})
 elements.closeEntryStatusModalBtn.addEventListener('click', closeEntryStatusModal)
 elements.entryStatusModal.addEventListener('click', (event) => {
   if (event.target === elements.entryStatusModal) closeEntryStatusModal()
@@ -3390,7 +4194,7 @@ elements.entryStatusModal.querySelectorAll('[data-status-choice]').forEach((butt
   button.addEventListener('click', () => chooseEntryStatus(button.getAttribute('data-status-choice')))
 })
 elements.speakWordBtn.addEventListener('click', () => speak(state.currentRecord?.normalizedTerm || elements.termInput.value))
-elements.speakSentenceBtn.addEventListener('click', () => speak(firstExample(state.currentRecord?.parsed)))
+elements.speakSentenceBtn.addEventListener('click', () => speakSentence(firstExample(state.currentRecord?.parsed)))
 elements.editStudyNoteBtn.addEventListener('click', editCurrentNote)
 elements.editReviewNoteBtn.addEventListener('click', editCurrentNote)
 elements.chatBtn.addEventListener('click', chat)
@@ -3403,13 +4207,13 @@ elements.closeReviewModalBtn.addEventListener('click', closeReviewModal)
 elements.reviewCompleteModal.addEventListener('click', (event) => {
   if (event.target === elements.reviewCompleteModal) closeReviewModal()
 })
-elements.reviewCompleteModal.querySelectorAll('[data-modal-result]').forEach((button) => {
-  button.addEventListener('click', () => {
-    const entryId = state.pendingReviewEntryId || state.currentReviewEntry?.id
-    if (!entryId) return
-    submitReview(entryId, button.getAttribute('data-modal-result'))
+  elements.reviewCompleteModal.querySelectorAll('[data-modal-result]').forEach((button) => {
+    button.addEventListener('click', () => {
+      const entryId = state.pendingReviewEntryId || state.currentReviewEntry?.id
+      if (!entryId) return
+      submitReview(entryId, button.getAttribute('data-modal-result'))
+    })
   })
-})
 elements.closeForgottenDetailModalBtn.addEventListener('click', closeForgottenDetailModal)
 elements.forgottenBackToReviewBtn.addEventListener('click', closeForgottenDetailModal)
 elements.forgottenDetailModal.addEventListener('click', (event) => {

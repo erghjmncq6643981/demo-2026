@@ -12,6 +12,7 @@ import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
 import org.springframework.util.StringUtils;
+import org.springframework.transaction.annotation.Transactional;
 
 import java.time.LocalDateTime;
 import java.util.List;
@@ -37,10 +38,14 @@ public class AiPromptTemplateService {
     }
 
     public List<AiPromptTemplate> list(String type) {
+        return list(type, true);
+    }
+
+    public List<AiPromptTemplate> list(String type, boolean enabledOnly) {
         return templateMapper.selectList(new LambdaQueryWrapper<AiPromptTemplate>()
                 .eq(StringUtils.hasText(type), AiPromptTemplate::getType, type)
                 .eq(AiPromptTemplate::getDeleted, false)
-                .eq(AiPromptTemplate::getEnabled, true)
+                .eq(enabledOnly, AiPromptTemplate::getEnabled, true)
                 .orderByAsc(AiPromptTemplate::getSequence));
     }
 
@@ -79,6 +84,60 @@ public class AiPromptTemplateService {
         template.setUpdateTime(LocalDateTime.now());
         templateMapper.updateById(template);
         log.info("用户「{}」更新了提示词模板「{}」", userDisplayNameService.currentUserName(), template.getName());
+    }
+
+    @Transactional(rollbackFor = Exception.class)
+    public void delete(Long id) {
+        long aliveCount = templateMapper.selectCount(new LambdaQueryWrapper<AiPromptTemplate>()
+                .eq(AiPromptTemplate::getDeleted, false));
+        if (aliveCount <= 1) {
+            throw LearningAssistantException.badRequest(
+                    LearningConstants.ErrorCode.PROMPT_TEMPLATE_LAST_NOT_DELETABLE,
+                    "最后一个学习 Agent 模板不能删除");
+        }
+        AiPromptTemplate template = templateMapper.selectById(id);
+        if (template == null || Boolean.TRUE.equals(template.getDeleted())) {
+            throw LearningAssistantException.notFound(
+                    LearningConstants.ErrorCode.PROMPT_TEMPLATE_NOT_FOUND,
+                    "模板不存在: " + id);
+        }
+        template.setDeleted(true);
+        template.setUpdateTime(LocalDateTime.now());
+        templateMapper.updateById(template);
+        log.info("用户「{}」删除了提示词模板「{}」", userDisplayNameService.currentUserName(), template.getName());
+    }
+
+    @Transactional(rollbackFor = Exception.class)
+    public Long clone(Long id) {
+        AiPromptTemplate source = templateMapper.selectById(id);
+        if (source == null || Boolean.TRUE.equals(source.getDeleted())) {
+            throw LearningAssistantException.notFound(
+                    LearningConstants.ErrorCode.PROMPT_TEMPLATE_NOT_FOUND,
+                    "模板不存在: " + id);
+        }
+        String cloneCode = source.getCode() + "-" + LocalDateTime.now().getNano();
+        if (getByCode(cloneCode) != null) {
+            cloneCode = cloneCode + "-" + id;
+        }
+        AiPromptTemplate clone = new AiPromptTemplate();
+        clone.setName(source.getName() + " 副本");
+        clone.setCode(cloneCode);
+        clone.setType(source.getType());
+        clone.setTags(source.getTags());
+        clone.setContent(source.getContent());
+        clone.setVariables(source.getVariables());
+        clone.setDescription(source.getDescription());
+        clone.setExampleInput(source.getExampleInput());
+        clone.setExampleOutput(source.getExampleOutput());
+        clone.setPublicTemplate(source.getPublicTemplate());
+        clone.setEnabled(source.getEnabled());
+        clone.setSequence(source.getSequence());
+        clone.setDeleted(false);
+        clone.setCreateTime(LocalDateTime.now());
+        clone.setUpdateTime(LocalDateTime.now());
+        templateMapper.insert(clone);
+        log.info("用户「{}」复制了提示词模板「{}」", userDisplayNameService.currentUserName(), source.getName());
+        return clone.getId();
     }
 
     public String render(String code, Map<String, Object> variables) {

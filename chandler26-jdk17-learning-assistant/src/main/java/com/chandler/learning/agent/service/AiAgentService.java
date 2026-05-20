@@ -11,6 +11,7 @@ import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
 import org.springframework.util.StringUtils;
+import org.springframework.transaction.annotation.Transactional;
 
 import java.time.LocalDateTime;
 import java.util.List;
@@ -37,11 +38,11 @@ public class AiAgentService {
         return agentMapper.selectById(id);
     }
 
-    public List<AiAgent> list(String type) {
+    public List<AiAgent> list(String type, boolean enabledOnly) {
         return agentMapper.selectList(new LambdaQueryWrapper<AiAgent>()
                 .eq(StringUtils.hasText(type), AiAgent::getType, type)
                 .eq(AiAgent::getDeleted, false)
-                .eq(AiAgent::getEnabled, true)
+                .eq(enabledOnly, AiAgent::getEnabled, true)
                 .orderByAsc(AiAgent::getSequence));
     }
 
@@ -93,13 +94,53 @@ public class AiAgentService {
         log.info("用户「{}」{}了 Agent#{}", userDisplayNameService.currentUserName(), enabled ? "启用" : "停用", id);
     }
 
+    @Transactional(rollbackFor = Exception.class)
     public void delete(Long id) {
+        long aliveCount = agentMapper.selectCount(new LambdaQueryWrapper<AiAgent>()
+                .eq(AiAgent::getDeleted, false));
+        if (aliveCount <= 1) {
+            throw LearningAssistantException.badRequest(
+                    LearningConstants.ErrorCode.AGENT_LAST_NOT_DELETABLE,
+                    "最后一个学习 Agent 不能删除");
+        }
         AiAgent agent = new AiAgent();
         agent.setId(id);
         agent.setDeleted(true);
         agent.setUpdateTime(LocalDateTime.now());
         agentMapper.updateById(agent);
         log.info("用户「{}」删除了 Agent#{}", userDisplayNameService.currentUserName(), id);
+    }
+
+    @Transactional(rollbackFor = Exception.class)
+    public Long clone(Long id) {
+        AiAgent source = agentMapper.selectById(id);
+        if (source == null || Boolean.TRUE.equals(source.getDeleted())) {
+            throw LearningAssistantException.notFound(
+                    LearningConstants.ErrorCode.AGENT_NOT_FOUND,
+                    "Agent 不存在: " + id);
+        }
+        AiAgent clone = new AiAgent();
+        clone.setName(source.getName() + " 副本");
+        clone.setCode(source.getCode() + "-" + LocalDateTime.now().getNano());
+        clone.setType(source.getType());
+        clone.setIcon(source.getIcon());
+        clone.setDescription(source.getDescription());
+        clone.setSystemPrompt(source.getSystemPrompt());
+        clone.setConcisePrompt(source.getConcisePrompt());
+        clone.setWelcomeMessage(source.getWelcomeMessage());
+        clone.setModelProvider(source.getModelProvider());
+        clone.setModelName(source.getModelName());
+        clone.setTemperature(source.getTemperature());
+        clone.setMaxTokens(source.getMaxTokens());
+        clone.setPresetCommands(source.getPresetCommands());
+        clone.setEnabled(source.getEnabled());
+        clone.setSequence(source.getSequence());
+        clone.setDeleted(false);
+        clone.setCreateTime(LocalDateTime.now());
+        clone.setUpdateTime(LocalDateTime.now());
+        agentMapper.insert(clone);
+        log.info("用户「{}」复制了 Agent「{}」", userDisplayNameService.currentUserName(), source.getName());
+        return clone.getId();
     }
 
     private void copy(AgentSaveRequest request, AiAgent agent) {

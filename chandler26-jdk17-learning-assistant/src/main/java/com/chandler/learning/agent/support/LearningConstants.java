@@ -72,6 +72,13 @@ public final class LearningConstants {
         public static final int MAX_HISTORY_SIZE = 20;
         public static final String ROLE_USER = "user";
         public static final String ROLE_ASSISTANT = "assistant";
+        public static final String BUSINESS_TYPE_LEARNING = "learning";
+        public static final String SCENE_ENGLISH_VOCABULARY = "english_vocabulary";
+        public static final String SCENE_ENGLISH_ARTICLE = "english_article";
+        public static final String SCENE_MATH = "math";
+        public static final String SCENE_PINYIN = "pinyin";
+        public static final String SCENE_WRITING = "writing";
+        public static final String SCENE_TITLE_ENGLISH_VOCABULARY = "英语词汇学习";
 
         private ChatSession() {
         }
@@ -88,6 +95,24 @@ public final class LearningConstants {
         public static final String SOURCE_SERVER = "server";
 
         private SystemLog() {
+        }
+    }
+
+    public static final class UserPreference {
+        public static final String KEY_SPEECH_VOICE_TYPE = "speech.voice_type";
+        public static final String KEY_SPEECH_SENTENCE_VOICE_NAME = "speech.sentence_voice_name";
+        public static final String KEY_SPEECH_SENTENCE_RATE = "speech.sentence_rate";
+        public static final String KEY_SPEECH_SENTENCE_PITCH = "speech.sentence_pitch";
+        public static final String VOICE_TYPE_US = "us";
+        public static final String VOICE_TYPE_UK = "uk";
+        public static final double SENTENCE_RATE_DEFAULT = 0.78D;
+        public static final double SENTENCE_RATE_MIN = 0.55D;
+        public static final double SENTENCE_RATE_MAX = 1.15D;
+        public static final double SENTENCE_PITCH_DEFAULT = 1D;
+        public static final double SENTENCE_PITCH_MIN = 0.8D;
+        public static final double SENTENCE_PITCH_MAX = 1.2D;
+
+        private UserPreference() {
         }
     }
 
@@ -217,10 +242,14 @@ public final class LearningConstants {
         public static final String PROMPT_TEMPLATE_NOT_FOUND = "PROMPT_TEMPLATE_NOT_FOUND";
         public static final String PROMPT_TEMPLATE_DISABLED = "PROMPT_TEMPLATE_DISABLED";
         public static final String PROMPT_TEMPLATE_CODE_EXISTS = "PROMPT_TEMPLATE_CODE_EXISTS";
+        public static final String PROMPT_TEMPLATE_LAST_NOT_DELETABLE = "PROMPT_TEMPLATE_LAST_NOT_DELETABLE";
         public static final String VOCABULARY_EMPTY = "VOCABULARY_EMPTY";
         public static final String VOCABULARY_RECORD_NOT_FOUND = "VOCABULARY_RECORD_NOT_FOUND";
         public static final String WORDBOOK_NOT_FOUND = "WORDBOOK_NOT_FOUND";
+        public static final String WORDBOOK_NOT_EMPTY = "WORDBOOK_NOT_EMPTY";
+        public static final String WORDBOOK_TRANSFER_INVALID = "WORDBOOK_TRANSFER_INVALID";
         public static final String ENTRY_NOT_FOUND = "ENTRY_NOT_FOUND";
+        public static final String AGENT_LAST_NOT_DELETABLE = "AGENT_LAST_NOT_DELETABLE";
         public static final String HASH_FAILED = "HASH_FAILED";
 
         private ErrorCode() {

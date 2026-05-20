@@ -1,4 +1,5 @@
--- 英语词汇学习结果缓存表，执行 ai_agent_mysql.sql 后再执行本文件。
+-- 英语词汇学习结果缓存初始化脚本。
+-- 依赖 00_ai_agent_init_mysql.sql。
 
 CREATE TABLE IF NOT EXISTS english_vocabulary_study_record (
     id BIGINT NOT NULL COMMENT '主键',

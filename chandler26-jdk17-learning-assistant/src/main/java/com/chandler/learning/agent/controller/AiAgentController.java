@@ -34,8 +34,9 @@ public class AiAgentController {
 
     @GetMapping
     @Operation(summary = "Agent 列表")
-    public List<AiAgent> list(@RequestParam(required = false) String type) {
-        return agentService.list(type);
+    public List<AiAgent> list(@RequestParam(required = false) String type,
+                              @RequestParam(defaultValue = "true") Boolean enabledOnly) {
+        return agentService.list(type, Boolean.TRUE.equals(enabledOnly));
     }
 
     @GetMapping("/{id}")
@@ -78,5 +79,11 @@ public class AiAgentController {
     @Operation(summary = "删除 Agent")
     public void delete(@PathVariable Long id) {
         agentService.delete(id);
+    }
+
+    @PostMapping("/{id}/clone")
+    @Operation(summary = "复制 Agent")
+    public Long clone(@PathVariable Long id) {
+        return agentService.clone(id);
     }
 }

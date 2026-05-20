@@ -4,7 +4,7 @@
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>English Learning Agent</title>
-    <link rel="stylesheet" href="/styles.css?v=20260519-22" />
+    <link rel="stylesheet" href="/styles.css?v=20260520-03" />
   </head>
   <body>
     <main class="app">
@@ -168,11 +168,11 @@
                 <div class="panel-heading">
                   <div>
                     <p class="eyebrow">Wordbook</p>
-                    <h3>单词表管理</h3>
+                    <h3>单词本管理</h3>
                   </div>
                   <div class="inline-actions">
                     <button class="secondary-button compact" id="reloadWordbookEntriesBtn" type="button">刷新</button>
-                    <button class="primary-button compact-primary" id="openWordbookModalBtn" type="button">新增词书</button>
+                    <button class="primary-button compact-primary" id="openWordbookModalBtn" type="button">新增单词本</button>
                   </div>
                 </div>
                 <div id="wordbookCards" class="wordbook-cards empty">暂无词书</div>
@@ -191,64 +191,91 @@
                 </div>
                 <div id="modelConfigList" class="model-list empty">暂无模型配置</div>
 
-                <div class="agent-config-grid">
-                  <section class="sub-panel">
-                    <div class="panel-heading">
-                      <div>
-                        <p class="eyebrow">Agent</p>
-                        <h3>学习 Agent</h3>
-                      </div>
-                      <span class="mini-pill">学习配置</span>
+                <section class="sub-panel">
+                  <div class="panel-heading">
+                    <div>
+                      <p class="eyebrow">Agent</p>
+                      <h3>学习配置</h3>
                     </div>
+                    <span class="mini-pill">学习卡生成与朗读</span>
+                  </div>
+                  <div class="agent-config-grid">
                     <label>
-                      Agent
+                      学习 Agent
                       <select id="agentSelect"></select>
                     </label>
                     <label>
-                      模板
+                      学习模板
                       <select id="templateSelect">
                         <option value="english_vocab_card_json">词汇卡片 JSON</option>
                         <option value="english_vocab_quiz_json">练习题 JSON</option>
                       </select>
                     </label>
-                    <div class="template-summary" id="templateSummary">选择模板后查看完整信息。</div>
+                  </div>
+                  <div class="template-summary" id="templateSummary">选择模板后查看完整信息。</div>
+                  <label>
+                    默认发音
+                    <select id="voiceSelect">
+                      <option value="us">美音</option>
+                      <option value="uk">英音</option>
+                    </select>
+                  </label>
+                  <div class="speech-settings">
+                    <div class="panel-subtitle compact-subtitle">句子朗读</div>
                     <label>
-                      默认发音
-                      <select id="voiceSelect">
-                        <option value="us">美音</option>
-                        <option value="uk">英音</option>
+                      句子音色
+                      <select id="sentenceVoiceSelect">
+                        <option value="">自动选择英语音色</option>
                       </select>
                     </label>
-                  </section>
+                    <label class="range-field">
+                      <span class="range-head">
+                        <span>句子语速</span>
+                        <strong id="sentenceRateValue">0.78x</strong>
+                      </span>
+                      <input id="sentenceRateInput" type="range" min="0.55" max="1.15" step="0.05" value="0.78" />
+                    </label>
+                    <label class="range-field">
+                      <span class="range-head">
+                        <span>句子音调</span>
+                        <strong id="sentencePitchValue">1.00</strong>
+                      </span>
+                      <input id="sentencePitchInput" type="range" min="0.80" max="1.20" step="0.05" value="1.00" />
+                    </label>
+                    <div class="inline-actions">
+                      <button class="secondary-button compact" id="testSentenceVoiceBtn" type="button">试听句子</button>
+                      <button class="primary-button compact-primary" id="saveSpeechBtn" type="button">保存设置</button>
+                    </div>
+                  </div>
+                </section>
 
-                  <section class="sub-panel template-editor-panel">
-                    <div class="panel-heading">
-                      <div>
-                        <p class="eyebrow">Template</p>
-                        <h3>学习 Agent 模板</h3>
-                      </div>
-                      <button class="secondary-button compact" id="saveTemplateBtn" type="button">保存模板</button>
-                    </div>
-                    <div class="template-meta-grid">
-                      <label>模板名称<input id="templateNameInput" /></label>
-                      <label>模板编码<input id="templateCodeInput" disabled /></label>
-                      <label>类型<input id="templateTypeInput" /></label>
-                      <label>排序<input id="templateSequenceInput" type="number" min="0" /></label>
-                    </div>
-                    <label>标签<input id="templateTagsInput" /></label>
-                    <label>描述<textarea id="templateDescriptionInput" rows="3"></textarea></label>
-                    <div class="template-meta-grid">
-                      <label>示例输入<textarea id="templateExampleInput" rows="4"></textarea></label>
-                      <label>示例输出<textarea id="templateExampleOutput" rows="4"></textarea></label>
-                    </div>
+                <section class="sub-panel compact-list-panel">
+                  <div class="panel-heading">
                     <div>
-                      <div class="panel-subtitle">占位符</div>
-                      <div id="templatePlaceholderList" class="chips empty">暂无占位符</div>
+                      <p class="eyebrow">Agent</p>
+                      <h3>学习 Agent 管理</h3>
                     </div>
-                    <label>模板内容<textarea id="templateContentInput" rows="12" placeholder="必须包含 {{term}}"></textarea></label>
-                    <div id="templateValidationMessage" class="validation-message">模板内容需要包含声明的占位符。</div>
-                  </section>
-                </div>
+                    <div class="inline-actions">
+                      <button class="secondary-button compact" id="reloadAgentConfigsBtn" type="button">刷新</button>
+                      <button class="primary-button compact-primary" id="openAgentModalBtn" type="button">新增学习Agent</button>
+                    </div>
+                  </div>
+                  <div id="agentConfigList" class="model-list empty">暂无学习 Agent</div>
+                </section>
+
+                <section class="sub-panel compact-list-panel">
+                  <div class="panel-heading">
+                    <div>
+                      <p class="eyebrow">Template</p>
+                      <h3>学习 Agent 模板管理</h3>
+                    </div>
+                    <div class="inline-actions">
+                      <button class="secondary-button compact" id="reloadTemplatesBtn" type="button">刷新</button>
+                      <button class="primary-button compact-primary" id="openTemplateModalBtn" type="button">新增学习Agent模板</button>
+                    </div>
+                  </div>
+                  <div id="templateConfigList" class="model-list empty">暂无学习 Agent 模板</div>
+                </section>
               </section>
 
               <section class="panel log-panel profile-section" id="systemLogPanel">
@@ -288,7 +315,7 @@
               </div>
               <div class="wordbook-tools">
                 <label class="compact-field">
-                  词表
+                  单词本
                   <select id="wordbookSelect"></select>
                 </label>
                 <label class="compact-field">
@@ -406,7 +433,7 @@
               </div>
               <div class="review-start-controls">
                 <label class="compact-field">
-                  词书
+                  单词本
                   <select id="reviewWordbookSelect"></select>
                 </label>
                 <label class="compact-field small-field">
@@ -483,6 +510,76 @@
         </div>
       </div>
     </section>
+    <section class="modal-backdrop hidden" id="agentModal" aria-modal="true" role="dialog">
+      <div class="config-modal">
+        <div class="panel-heading">
+          <div>
+            <p class="eyebrow">Agent</p>
+            <h3 id="agentModalTitle">新增学习Agent</h3>
+          </div>
+          <button class="icon-button" id="closeAgentModalBtn" type="button" title="关闭">×</button>
+        </div>
+        <div class="model-form-grid">
+          <label>Agent 名称<input id="agentNameInput" placeholder="例如：英语词汇学习" /></label>
+          <label>Agent 编码<input id="agentCodeInput" placeholder="例如：english_vocabulary" /></label>
+          <label>类型<input id="agentTypeInput" placeholder="chat" /></label>
+          <label>图标<input id="agentIconInput" placeholder="✦" /></label>
+          <label>
+            模型供应商
+            <select id="agentModelProviderInput"></select>
+          </label>
+          <label>
+            模型名称
+            <select id="agentModelNameInput"></select>
+          </label>
+          <label>排序<input id="agentSequenceInput" type="number" min="0" value="0" /></label>
+          <label>温度<input id="agentTemperatureInput" type="number" min="0" max="2" step="0.1" /></label>
+          <label>最大 Tokens<input id="agentMaxTokensInput" type="number" min="1" step="1" /></label>
+          <label class="full-row">描述<textarea id="agentDescriptionInput" rows="3"></textarea></label>
+          <label class="full-row">系统提示词<textarea id="agentSystemPromptInput" rows="5"></textarea></label>
+          <label class="full-row">精简提示词<textarea id="agentConcisePromptInput" rows="4"></textarea></label>
+          <label class="full-row">欢迎语<textarea id="agentWelcomeMessageInput" rows="3"></textarea></label>
+          <label class="full-row">预设指令 JSON<textarea id="agentPresetCommandsInput" rows="4"></textarea></label>
+        </div>
+        <div class="modal-actions">
+          <button class="primary-button compact-primary" id="saveAgentBtn" type="button">保存学习Agent</button>
+        </div>
+      </div>
+    </section>
+    <section class="modal-backdrop hidden" id="templateModal" aria-modal="true" role="dialog">
+      <div class="config-modal">
+        <div class="panel-heading">
+          <div>
+            <p class="eyebrow">Template</p>
+            <h3 id="templateModalTitle">新增学习Agent模板</h3>
+          </div>
+          <button class="icon-button" id="closeTemplateModalBtn" type="button" title="关闭">×</button>
+        </div>
+        <div class="template-editor-panel">
+          <div class="template-meta-grid">
+            <label>模板名称<input id="templateNameInput" /></label>
+            <label>模板编码<input id="templateCodeInput" /></label>
+            <label>类型<input id="templateTypeInput" /></label>
+            <label>排序<input id="templateSequenceInput" type="number" min="0" /></label>
+          </div>
+          <label>标签<input id="templateTagsInput" /></label>
+          <label>描述<textarea id="templateDescriptionInput" rows="3"></textarea></label>
+          <div class="template-meta-grid">
+            <label>示例输入<textarea id="templateExampleInput" rows="4"></textarea></label>
+            <label>示例输出<textarea id="templateExampleOutput" rows="4"></textarea></label>
+          </div>
+          <div>
+            <div class="panel-subtitle">占位符</div>
+            <div id="templatePlaceholderList" class="chips empty">暂无占位符</div>
+          </div>
+          <label>模板内容<textarea id="templateContentInput" rows="12" placeholder="必须包含 {{term}}"></textarea></label>
+          <div id="templateValidationMessage" class="validation-message">模板内容需要包含声明的占位符。</div>
+        </div>
+        <div class="modal-actions">
+          <button class="primary-button compact-primary" id="saveTemplateBtn" type="button">保存模板</button>
+        </div>
+      </div>
+    </section>
     <section class="modal-backdrop hidden" id="accountModal" aria-modal="true" role="dialog">
       <div class="config-modal small-modal">
         <div class="panel-heading">
@@ -508,20 +605,20 @@
         <div class="panel-heading">
           <div>
             <p class="eyebrow">Wordbook</p>
-            <h3 id="wordbookModalTitle">新增词书</h3>
+            <h3 id="wordbookModalTitle">新增单词本</h3>
           </div>
           <button class="icon-button" id="closeWordbookModalBtn" type="button" title="关闭">×</button>
         </div>
         <div class="model-form-grid">
-          <label>词书名称<input id="newWordbookInput" placeholder="例如：四级高频词" /></label>
+          <label>单词本名称<input id="newWordbookInput" placeholder="例如：四级高频词" /></label>
           <label>描述<input id="wordbookDescriptionInput" placeholder="例如：考试核心词" /></label>
           <label class="switch-line compact-switch">
             <input id="wordbookDefaultInput" type="checkbox" />
-            <span>设为默认词书</span>
+            <span>设为默认单词本</span>
           </label>
         </div>
         <div class="modal-actions">
-          <button class="primary-button compact-primary" id="createWordbookBtn" type="button">保存词书</button>
+          <button class="primary-button compact-primary" id="createWordbookBtn" type="button">保存单词本</button>
         </div>
       </div>
     </section>
@@ -536,6 +633,19 @@
         </div>
         <p class="panel-description">将 <strong id="addWordbookTerm">当前单词</strong> 加入哪个词书？</p>
         <div id="addWordbookList" class="wordbook-picker-list empty">暂无词书</div>
+      </div>
+    </section>
+    <section class="modal-backdrop hidden" id="entryTransferModal" aria-modal="true" role="dialog">
+      <div class="review-modal add-wordbook-modal">
+        <div class="panel-heading">
+          <div>
+            <p class="eyebrow">Wordbook</p>
+            <h3>复制或移动</h3>
+          </div>
+          <button class="icon-button" id="closeEntryTransferModalBtn" type="button" title="关闭">×</button>
+        </div>
+        <p class="panel-description">将 <strong id="entryTransferTerm">当前单词</strong> 复制或移动到其它单词本。</p>
+        <div id="entryTransferList" class="wordbook-picker-list empty">暂无可选单词本</div>
       </div>
     </section>
     <section class="modal-backdrop hidden" id="entryStatusModal" aria-modal="true" role="dialog">
@@ -607,6 +717,6 @@
         </div>
       </div>
     </section>
-    <script type="module" src="/app.js?v=20260519-22"></script>
+    <script type="module" src="/app.js?v=20260520-03"></script>
   </body>
 </html>

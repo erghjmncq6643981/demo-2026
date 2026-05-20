@@ -9,6 +9,7 @@ import com.chandler.learning.agent.domain.dto.learning.ReviewSubmitRequest;
 import com.chandler.learning.agent.domain.dto.learning.ReviewSubmitResponse;
 import com.chandler.learning.agent.domain.dto.learning.VocabularyRelationResponse;
 import com.chandler.learning.agent.domain.dto.learning.VocabularyTagResponse;
+import com.chandler.learning.agent.domain.dto.learning.WordbookEntryTransferRequest;
 import com.chandler.learning.agent.domain.dto.learning.WordbookEntryResponse;
 import com.chandler.learning.agent.domain.dto.learning.WordbookEntryUpdateRequest;
 import com.chandler.learning.agent.domain.dto.learning.WordbookResponse;
@@ -30,6 +31,7 @@ import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
 import org.springframework.util.StringUtils;
+import org.springframework.transaction.annotation.Transactional;
 
 import java.time.LocalDateTime;
 import java.time.LocalDate;
@@ -38,6 +40,7 @@ import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
+import java.util.Objects;
 
 /**
  * 单词本与复习计划服务。
@@ -139,6 +142,15 @@ public class WordbookService {
 
     public void deleteWordbook(Long userId, Long wordbookId) {
         LearningWordbook wordbook = requireWordbook(userId, wordbookId);
+        long entryCount = entryMapper.selectCount(new LambdaQueryWrapper<LearningWordbookEntry>()
+                .eq(LearningWordbookEntry::getUserId, userId)
+                .eq(LearningWordbookEntry::getWordbookId, wordbookId)
+                .eq(LearningWordbookEntry::getDeleted, false));
+        if (entryCount > 0) {
+            throw LearningAssistantException.badRequest(
+                    LearningConstants.ErrorCode.WORDBOOK_NOT_EMPTY,
+                    "单词本中还有单词，不能删除");
+        }
         LocalDateTime now = LocalDateTime.now();
         wordbook.setDeleted(true);
         wordbook.setIsDefault(false);
@@ -167,6 +179,65 @@ public class WordbookService {
         log.info("用户「{}」删除了词书「{}」", userDisplayNameService.userName(userId), wordbook.getName());
         log.debug("词书删除后重新选择默认词书 userId={} deletedWordbookId={} nextDefaultId={}",
                 userId, wordbookId, nextDefault == null ? null : nextDefault.getId());
+    }
+
+    @Transactional(rollbackFor = Exception.class)
+    public WordbookEntryResponse transferEntry(Long userId, Long entryId, WordbookEntryTransferRequest request) {
+        LearningWordbookEntry source = requireEntry(userId, entryId);
+        LearningWordbook targetWordbook = requireWordbook(userId, request.getTargetWordbookId());
+        if (Objects.equals(source.getWordbookId(), targetWordbook.getId())) {
+            return toEntryResponse(source);
+        }
+        boolean copy = Boolean.TRUE.equals(request.getCopy());
+        LocalDateTime now = LocalDateTime.now();
+        if (copy) {
+            LearningWordbookEntry clone = new LearningWordbookEntry();
+            clone.setUserId(userId);
+            clone.setWordbookId(targetWordbook.getId());
+            clone.setVocabularyId(source.getVocabularyId());
+            clone.setTerm(source.getTerm());
+            clone.setNormalizedTerm(source.getNormalizedTerm());
+            clone.setNote(source.getNote());
+            clone.setSnapshotRawContent(source.getSnapshotRawContent());
+            clone.setSnapshotParsedJson(source.getSnapshotParsedJson());
+            clone.setSnapshotTagsJson(source.getSnapshotTagsJson());
+            clone.setSnapshotRelationsJson(source.getSnapshotRelationsJson());
+            clone.setSnapshotProvider(source.getSnapshotProvider());
+            clone.setSnapshotModelName(source.getSnapshotModelName());
+            clone.setSnapshotSessionId(source.getSnapshotSessionId());
+            clone.setSnapshotTime(source.getSnapshotTime());
+            clone.setStatus(source.getStatus());
+            clone.setReviewStage(source.getReviewStage());
+            clone.setMasteryScore(source.getMasteryScore());
+            clone.setFirstReviewTime(source.getFirstReviewTime());
+            clone.setLastReviewTime(source.getLastReviewTime());
+            clone.setNextReviewTime(source.getNextReviewTime());
+            clone.setDueCount(source.getDueCount());
+            clone.setReviewCount(source.getReviewCount());
+            clone.setCorrectCount(source.getCorrectCount());
+            clone.setWrongCount(source.getWrongCount());
+            clone.setDeleted(false);
+            clone.setCreateTime(now);
+            clone.setUpdateTime(now);
+            entryMapper.insert(clone);
+            systemLogService.record(userId, "wordbook", "复制词条",
+                    source.getNormalizedTerm() + " -> " + targetWordbook.getName());
+            log.info("用户「{}」把单词「{}」复制到了词书「{}」",
+                    userDisplayNameService.userName(userId),
+                    source.getNormalizedTerm(),
+                    targetWordbook.getName());
+            return toEntryResponse(clone);
+        }
+        source.setWordbookId(targetWordbook.getId());
+        source.setUpdateTime(now);
+        entryMapper.updateById(source);
+        systemLogService.record(userId, "wordbook", "移动词条",
+                source.getNormalizedTerm() + " -> " + targetWordbook.getName());
+        log.info("用户「{}」把单词「{}」移动到了词书「{}」",
+                userDisplayNameService.userName(userId),
+                source.getNormalizedTerm(),
+                targetWordbook.getName());
+        return toEntryResponse(source);
     }
 
     public LearningActivityResponse activity(Long userId, int days) {
@@ -790,5 +861,9 @@ public class WordbookService {
             case LearningConstants.Review.STATUS_FORGOTTEN -> "遗忘";
             default -> "模糊";
         };
+    }
+
+    private boolean sameId(Long left, Long right) {
+        return Objects.equals(left, right);
     }
 }

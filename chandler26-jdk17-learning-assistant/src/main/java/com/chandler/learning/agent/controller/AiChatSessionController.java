@@ -25,8 +25,9 @@ public class AiChatSessionController {
     @Operation(summary = "会话列表")
     public List<ChatSessionResponse> list(@RequestParam(required = false) String agentCode,
                                           @RequestParam(required = false) String businessType,
-                                          @RequestParam(required = false) String businessId) {
-        return chatSessionService.listSessions(agentCode, businessType, businessId);
+                                          @RequestParam(required = false) String businessId,
+                                          @RequestParam(required = false) String sceneCode) {
+        return chatSessionService.listSessions(null, agentCode, businessType, businessId, sceneCode);
     }
 
     @GetMapping("/{sessionId}")

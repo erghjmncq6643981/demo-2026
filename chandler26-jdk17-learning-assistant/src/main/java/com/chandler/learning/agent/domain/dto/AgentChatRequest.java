@@ -28,6 +28,9 @@ public class AgentChatRequest {
     @Schema(description = "业务 ID，例如单词 ID")
     private String businessId;
 
+    @Schema(description = "学习场景编码，例如 english_vocabulary")
+    private String sceneCode;
+
     @Schema(description = "指定模型配置 ID，可选")
     private Long modelConfigId;
 

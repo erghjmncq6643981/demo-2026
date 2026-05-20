@@ -19,11 +19,15 @@ public class AiChatSession {
     @TableId(value = "id", type = IdType.ASSIGN_ID)
     private Long id;
 
+    private Long userId;
+
     private String agentCode;
 
     private String businessType;
 
     private String businessId;
+
+    private String sceneCode;
 
     private String title;
 

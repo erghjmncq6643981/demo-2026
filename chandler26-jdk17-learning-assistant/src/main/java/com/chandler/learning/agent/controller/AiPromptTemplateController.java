@@ -25,8 +25,9 @@ public class AiPromptTemplateController {
 
     @GetMapping
     @Operation(summary = "模板列表")
-    public List<AiPromptTemplate> list(@RequestParam(required = false) String type) {
-        return templateService.list(type);
+    public List<AiPromptTemplate> list(@RequestParam(required = false) String type,
+                                       @RequestParam(defaultValue = "true") Boolean enabledOnly) {
+        return templateService.list(type, Boolean.TRUE.equals(enabledOnly));
     }
 
     @GetMapping("/code/{code}")
@@ -45,6 +46,18 @@ public class AiPromptTemplateController {
     @Operation(summary = "更新模板")
     public void update(@PathVariable Long id, @Valid @RequestBody PromptTemplateSaveRequest request) {
         templateService.update(id, request);
+    }
+
+    @DeleteMapping("/{id}")
+    @Operation(summary = "删除模板")
+    public void delete(@PathVariable Long id) {
+        templateService.delete(id);
+    }
+
+    @PostMapping("/{id}/clone")
+    @Operation(summary = "复制模板")
+    public Long clone(@PathVariable Long id) {
+        return templateService.clone(id);
     }
 
     @PostMapping("/{code}/render")

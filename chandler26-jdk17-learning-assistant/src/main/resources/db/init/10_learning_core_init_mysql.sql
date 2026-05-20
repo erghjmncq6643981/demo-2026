@@ -1,5 +1,5 @@
--- 学习助手用户、词书、标签、关联词与复习计划表。
--- 依赖 english_vocabulary_study_record_mysql.sql，请在词汇缓存表之后执行。
+-- 学习助手用户、词书、标签、关联词、复习与偏好初始化脚本。
+-- 适用于全新数据库初始化；依赖 00_ai_agent_init_mysql.sql 和 english_vocabulary_study_record_mysql.sql。
 
 CREATE TABLE IF NOT EXISTS learning_user (
     id BIGINT NOT NULL COMMENT '主键',
@@ -140,3 +140,15 @@ CREATE TABLE IF NOT EXISTS learning_review_record (
     KEY idx_learning_review_record_entry (entry_id, create_time),
     KEY idx_learning_review_record_term (normalized_term)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci COMMENT='复习记录';
+
+CREATE TABLE IF NOT EXISTS learning_user_preference (
+    id BIGINT NOT NULL COMMENT '主键',
+    user_id BIGINT NOT NULL COMMENT '用户 ID',
+    preference_key VARCHAR(80) NOT NULL COMMENT '偏好键，例如 speech.voice_type',
+    preference_value TEXT DEFAULT NULL COMMENT '偏好值',
+    create_time DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP COMMENT '创建时间',
+    update_time DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP COMMENT '更新时间',
+    PRIMARY KEY (id),
+    UNIQUE KEY uk_learning_user_preference (user_id, preference_key),
+    KEY idx_learning_user_preference_user (user_id, update_time)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci COMMENT='学习助手用户偏好设置';

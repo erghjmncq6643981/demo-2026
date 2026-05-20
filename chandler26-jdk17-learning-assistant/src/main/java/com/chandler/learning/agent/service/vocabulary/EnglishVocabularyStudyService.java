@@ -161,8 +161,9 @@ public class EnglishVocabularyStudyService {
         chatRequest.setTemplateCode(resolveTemplateCode(request));
         chatRequest.setModelConfigId(request.getModelConfigId());
         chatRequest.setTitle("Vocabulary - " + normalizedTerm);
-        chatRequest.setBusinessType("vocabulary");
-        chatRequest.setBusinessId(normalizedTerm);
+        chatRequest.setBusinessType(LearningConstants.ChatSession.BUSINESS_TYPE_LEARNING);
+        chatRequest.setBusinessId(LearningConstants.ChatSession.SCENE_ENGLISH_VOCABULARY);
+        chatRequest.setSceneCode(LearningConstants.ChatSession.SCENE_ENGLISH_VOCABULARY);
         chatRequest.setMessage("请生成英语词汇「" + normalizedTerm + "」的结构化学习卡片。");
         chatRequest.setVariables(variables);
         return aiChatService.chat(chatRequest);

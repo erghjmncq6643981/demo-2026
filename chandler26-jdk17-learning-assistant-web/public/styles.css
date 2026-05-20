@@ -923,6 +923,42 @@ textarea:focus {
   text-transform: uppercase;
 }
 
+.compact-subtitle {
+  margin: 0;
+  font-weight: 900;
+}
+
+.speech-settings {
+  display: grid;
+  gap: 10px;
+  padding-top: 12px;
+  border-top: 1px solid var(--line);
+}
+
+.range-field {
+  gap: 8px;
+}
+
+.range-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  color: var(--muted);
+  font-size: 12px;
+  font-weight: 850;
+}
+
+.range-head strong {
+  color: var(--yellow);
+  font-size: 12px;
+}
+
+input[type="range"] {
+  width: 100%;
+  accent-color: var(--yellow);
+}
+
 .wordbook-cards,
 .wordbook-picker-list,
 .entry-list,
@@ -981,6 +1017,25 @@ textarea:focus {
   display: grid;
   gap: 5px;
   padding: 14px;
+}
+
+.wordbook-picker-item strong,
+.wordbook-picker-item span,
+.wordbook-picker-item small {
+  overflow-wrap: anywhere;
+}
+
+.transfer-item {
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 12px;
+}
+
+.transfer-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  justify-content: flex-end;
 }
 
 .wordbook-card.active,
@@ -1482,6 +1537,29 @@ textarea:focus {
   align-items: center;
   justify-content: space-between;
   gap: 10px;
+}
+
+.review-card-nav {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.review-card-actions {
+  align-items: flex-end;
+}
+
+.transfer-item {
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 12px;
+}
+
+.transfer-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  justify-content: flex-end;
 }
 
 .review-card-topline span {
@@ -2054,6 +2132,7 @@ textarea:focus {
   .template-meta-grid,
   .model-form-grid,
   .model-toggle-row,
+  .speech-settings,
   .metric-row,
   .sidebar-footer,
   .nav-menu {
@@ -2064,7 +2143,8 @@ textarea:focus {
   .wordbook-card,
   .focus-subgrid,
   .status-choice-list,
-  .search-card {
+  .search-card,
+  .transfer-item {
     grid-template-columns: 1fr;
   }
 
@@ -2218,6 +2298,14 @@ textarea:focus {
   .review-actions,
   .modal-review-actions {
     grid-template-columns: 1fr;
+  }
+
+  .transfer-actions {
+    justify-content: stretch;
+  }
+
+  .transfer-actions button {
+    flex: 1 1 0;
   }
 
   .review-actions button,

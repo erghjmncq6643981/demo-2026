@@ -140,8 +140,9 @@ public class AiChatService {
     }
 
     private AiChatSession resolveSession(AiAgent agent, AgentChatRequest request, long startTime) {
+        Long userId = chatSessionService.currentUserId();
         if (request.getSessionId() != null) {
-            AiChatSession session = chatSessionService.getSession(request.getSessionId());
+            AiChatSession session = chatSessionService.getOwnedSession(userId, request.getSessionId());
             if (session == null) {
                 throw LearningAssistantException.notFound(
                         LearningConstants.ErrorCode.CHAT_SESSION_NOT_FOUND,
@@ -152,9 +153,9 @@ public class AiChatService {
 
         String title = StringUtils.hasText(request.getTitle())
                 ? request.getTitle()
-                : agent.getName() + "-" + startTime;
-        return chatSessionService.createSession(agent.getCode(), title, request.getBusinessType(),
-                request.getBusinessId(), request.getVariables());
+                : sceneDisplayTitle(request.getSceneCode(), request.getBusinessType(), request.getBusinessId(), agent.getName(), startTime);
+        return chatSessionService.createSession(userId, agent.getCode(), title, request.getBusinessType(),
+                request.getBusinessId(), request.getSceneCode(), request.getVariables());
     }
 
     private List<ChatMessageParam> buildMessages(AiAgent agent, AgentChatRequest request, AiChatSession session) {
@@ -277,5 +278,18 @@ public class AiChatService {
         } catch (Exception ex) {
             return new HashMap<>();
         }
+    }
+
+    private String sceneDisplayTitle(String sceneCode, String businessType, String businessId, String agentName, long startTime) {
+        if (LearningConstants.ChatSession.SCENE_ENGLISH_VOCABULARY.equals(sceneCode)) {
+            return LearningConstants.ChatSession.SCENE_TITLE_ENGLISH_VOCABULARY;
+        }
+        if (StringUtils.hasText(businessType) && StringUtils.hasText(businessId)) {
+            return businessType + "-" + businessId;
+        }
+        if (StringUtils.hasText(sceneCode)) {
+            return sceneCode;
+        }
+        return agentName + "-" + startTime;
     }
 }

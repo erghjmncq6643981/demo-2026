@@ -12,11 +12,15 @@ public class ChatSessionResponse {
 
     private Long id;
 
+    private Long userId;
+
     private String agentCode;
 
     private String businessType;
 
     private String businessId;
+
+    private String sceneCode;
 
     private String title;
 

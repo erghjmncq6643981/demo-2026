@@ -5,6 +5,7 @@ import com.chandler.learning.agent.domain.dto.learning.LearningActivityResponse;
 import com.chandler.learning.agent.domain.dto.learning.ReviewSubmitRequest;
 import com.chandler.learning.agent.domain.dto.learning.ReviewSubmitResponse;
 import com.chandler.learning.agent.domain.dto.learning.WordbookEntryResponse;
+import com.chandler.learning.agent.domain.dto.learning.WordbookEntryTransferRequest;
 import com.chandler.learning.agent.domain.dto.learning.WordbookEntryUpdateRequest;
 import com.chandler.learning.agent.domain.dto.learning.WordbookResponse;
 import com.chandler.learning.agent.domain.dto.learning.WordbookSaveRequest;
@@ -121,6 +122,16 @@ public class WordbookController {
             @PathVariable Long entryId) {
         LearningUser user = authService.requireUser(authorization);
         wordbookService.deleteEntry(user.getId(), entryId);
+    }
+
+    @PostMapping("/wordbook-entries/{entryId}/transfer")
+    @Operation(summary = "复制或移动词条到其它词书")
+    public WordbookEntryResponse transferEntry(
+            @RequestHeader(value = "Authorization", required = false) String authorization,
+            @PathVariable Long entryId,
+            @Valid @RequestBody WordbookEntryTransferRequest request) {
+        LearningUser user = authService.requireUser(authorization);
+        return wordbookService.transferEntry(user.getId(), entryId, request);
     }
 
     @GetMapping("/reviews/due")

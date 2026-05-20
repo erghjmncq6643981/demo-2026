@@ -1,4 +1,5 @@
--- AI Agent 能力相关表，适用于 MySQL 8.x
+-- 学习助手 AI / 会话 / 模型初始化脚本。
+-- 适用于全新数据库初始化。
 
 CREATE TABLE IF NOT EXISTS ai_agent (
     id BIGINT NOT NULL COMMENT '主键',
@@ -52,15 +53,18 @@ CREATE TABLE IF NOT EXISTS ai_prompt_template (
 
 CREATE TABLE IF NOT EXISTS ai_chat_session (
     id BIGINT NOT NULL COMMENT '主键',
+    user_id BIGINT NOT NULL COMMENT '用户 ID',
     agent_code VARCHAR(50) NOT NULL COMMENT 'Agent 编码',
-    business_type VARCHAR(50) DEFAULT NULL COMMENT '业务类型，例如 vocabulary',
+    business_type VARCHAR(50) DEFAULT NULL COMMENT '业务类型',
     business_id VARCHAR(128) DEFAULT NULL COMMENT '业务 ID',
+    scene_code VARCHAR(64) NOT NULL COMMENT '学习场景编码，例如 english_vocabulary',
     title VARCHAR(200) DEFAULT NULL COMMENT '会话标题',
     variables_json JSON COMMENT '会话级变量 JSON',
     deleted TINYINT(1) NOT NULL DEFAULT 0 COMMENT '是否删除',
     create_time DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP COMMENT '创建时间',
     update_time DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP COMMENT '更新时间',
     PRIMARY KEY (id),
+    KEY idx_ai_chat_session_user_scene (user_id, scene_code, deleted, update_time),
     KEY idx_ai_chat_session_agent (agent_code),
     KEY idx_ai_chat_session_biz (business_type, business_id),
     KEY idx_ai_chat_session_update_time (update_time)

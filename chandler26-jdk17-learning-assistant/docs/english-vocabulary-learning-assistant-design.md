@@ -14,6 +14,18 @@
 - 支持学习体验：前端拆分为登录、个人信息、单词本、学习、复习几个主区域。
 - 支持后续扩展：保留 Agent、Prompt 模板、多供应商、系统日志和复习记录。
 
+会话规则：
+
+- AI 会话按“用户 + 学习场景”复用。
+- 英语词汇学习只保留一个主会话，场景编码为 `english_vocabulary`。
+- 文章、数学、拼音、写作等未来学习类型可使用不同场景编码，各场景内部仍只保留一个主会话。
+
+会话规则：
+
+- AI 会话按“用户 + 学习场景”复用。
+- 英语词汇学习只保留一个主会话，场景编码为 `english_vocabulary`。
+- 文章、数学、拼音、写作等未来学习类型可使用不同场景编码，各场景内部仍只保留一个主会话。
+
 ## 2. 当前实现范围
 
 已实现：
@@ -26,6 +38,7 @@
 - 单词本独立菜单：按词表查看单词，按熟悉、模糊、遗忘筛选，支持修改状态和从词表删除。
 - 学习/复习共享 Markdown 笔记：同一词书词条的笔记在学习页和复习页实时一致。
 - 模型配置管理：个人信息页可新增、编辑、启用/禁用模型配置，并设置默认和优先级。
+- 用户偏好持久化：句子朗读的默认发音、音色、语速、音调保存到数据库，浏览器 localStorage 仅作为兜底。
 - 词汇标签：词性、含义主题、难度、搭配、词族。
 - 词汇关联：同义词、反义词、词族、搭配、共享标签相近词。
 - 艾宾浩斯复习计划：待复习队列、复习提交、下一次复习时间。
@@ -99,7 +112,7 @@ AI Provider API
   - 学习活跃图：参考 GitHub contribution heatmap，根据学习量和复习量展示近一段时间活跃度。
   - 词书数量、单词数量、待复习数量。
   - 单词表管理：采用“列表 + 新增按钮 + 弹窗”的管理方式，支持新建/编辑词书、设置默认词书、单个删除词书；编辑使用图标按钮，不提供清空按钮。
-  - Agent 管理：模型列表、学习 Agent、Prompt 模板、默认发音、强制刷新。
+  - Agent 管理：模型列表、学习 Agent、Prompt 模板、默认发音、句子朗读偏好、强制刷新。
   - 模型列表：新增/编辑模型、配置 API Key 和 Base URL、启停、默认模型、优先级、单个删除；新增/编辑通过弹窗完成，供应商与模型明细联动，顺序使用数字输入，默认模型和启用状态使用按钮式开关单独成行，不提供清空按钮。
   - 学习 Agent 模板：可查看并修改完整模板信息、示例输入输出、模板内容和占位符；保存时校验声明的占位符必须存在。
   - 系统日志：AI 调用、缓存命中、模型配置、词书、复习提交、错误等，数据来自服务端日志表。
@@ -120,7 +133,7 @@ AI Provider API
   - 标签和相关单词。
   - 加入当前词书。
   - Markdown 学习笔记，和复习页笔记共用同一 `learning_wordbook_entry.note`。
-  - 单词/例句发音。
+  - 单词/例句发音，其中句子朗读偏好会自动保存到用户偏好表。
 - 复习：
   - 今日复习中选择词书和数量后直接进入复习卡片，不展示独立待复习任务列表。
   - 支持按单词字母跟敲，错误时跟敲框抖动并播放提示音。
@@ -417,6 +430,13 @@ POST   /api/v1/learning/system-logs
 DELETE /api/v1/learning/system-logs
 ```
 
+用户偏好接口：
+
+```http
+GET  /api/v1/learning/preferences/speech
+PUT  /api/v1/learning/preferences/speech
+```
+
 说明：
 
 - 系统日志持久化到 `learning_system_log`，不再只存浏览器 localStorage。
@@ -476,6 +496,21 @@ src/main/resources/db/learning_user_wordbook_review_mysql.sql
 src/main/resources/db/learning_vocabulary_relation_enrichment_mysql.sql
 ```
 
+新库初始化建议顺序：
+
+```text
+src/main/resources/db/init/00_ai_agent_init_mysql.sql
+src/main/resources/db/init/05_english_vocabulary_study_record_init_mysql.sql
+src/main/resources/db/init/10_learning_core_init_mysql.sql
+```
+
+已有库补丁建议顺序：
+
+```text
+src/main/resources/db/90_learning_schema_patch_mysql.sql
+src/main/resources/db/91_learning_operational_patch_mysql.sql
+```
+
 用户已说明 `ai_agent_mysql.sql` 已执行。新增迁移集中在：
 
 ```text
@@ -483,6 +518,7 @@ src/main/resources/db/learning_notes_model_wordbook_enhancement_mysql.sql
 src/main/resources/db/security_jwt_system_log_api_key_encryption_mysql.sql
 src/main/resources/db/learning_vocab_example_translation_prompt_mysql.sql
 src/main/resources/db/learning_vocab_related_phonetic_prompt_mysql.sql
+src/main/resources/db/learning_user_preference_mysql.sql
 ```
 
 本次新增迁移包含：
@@ -492,6 +528,7 @@ src/main/resources/db/learning_vocab_related_phonetic_prompt_mysql.sql
 - 为 `learning_wordbook_entry` 增加 `status` 和索引。
 - 创建 `learning_system_log`，用于服务端系统日志。
 - 将 `ai_model_config.api_key` 调整为 `TEXT`，存储 AES-GCM 密文，兼容历史明文读取。
+- 创建 `learning_user_preference`，用于保存用户级句子朗读设置等偏好。
 
 本次个人快照新增迁移：
 
@@ -517,6 +554,14 @@ src/main/resources/db/learning_vocab_related_phonetic_prompt_mysql.sql
 
 该迁移会更新 `english_vocab_card_json` 模板，使后续 AI 返回的 `synonyms`、`antonyms`、`word_family` 每条包含 `phonetic.uk/us`。不新增表字段。
 
+用户偏好新增迁移：
+
+```text
+src/main/resources/db/learning_user_preference_mysql.sql
+```
+
+该迁移会创建 `learning_user_preference`，当前用于保存句子朗读的默认发音、音色、语速和音调。登录用户修改朗读设置后会写入该表；浏览器本地缓存仅用于无后端或接口异常时兜底。
+
 如果已经执行过旧版 `learning_user_wordbook_review_mysql.sql`，且还没有执行过关系增强迁移，还需要额外执行：
 
 ```text
@@ -538,6 +583,22 @@ src/main/resources/db/learning_vocabulary_relation_enrichment_mysql.sql
 | `ai_model_call_record` | 模型调用记录 |
 | `ai_model_config` | 可在个人信息页维护的模型配置 |
 | `learning_system_log` | 服务端系统日志 |
+
+#### `ai_chat_session`
+
+| 字段 | 说明 |
+| --- | --- |
+| `id` | 主键 |
+| `user_id` | 用户 ID |
+| `agent_code` | Agent 编码 |
+| `business_type` | 业务类型 |
+| `business_id` | 业务 ID |
+| `scene_code` | 学习场景编码 |
+| `title` | 会话标题 |
+| `variables_json` | 会话级变量 JSON |
+| `deleted` | 是否删除 |
+| `create_time` | 创建时间 |
+| `update_time` | 更新时间 |
 
 #### `ai_model_config`
 
@@ -570,6 +631,24 @@ src/main/resources/db/learning_vocabulary_relation_enrichment_mysql.sql
 | `business_type` | 关联业务类型 |
 | `business_id` | 关联业务 ID |
 | `create_time` | 创建时间 |
+
+#### `learning_user_preference`
+
+| 字段 | 说明 |
+| --- | --- |
+| `id` | 主键 |
+| `user_id` | 用户 ID |
+| `preference_key` | 偏好键，例如 `speech.voice_type` |
+| `preference_value` | 偏好值 |
+| `create_time` | 创建时间 |
+| `update_time` | 更新时间 |
+
+偏好键：
+
+- `speech.voice_type`
+- `speech.sentence_voice_name`
+- `speech.sentence_rate`
+- `speech.sentence_pitch`
 
 ### 7.3 词汇缓存表
 
@@ -848,7 +927,7 @@ src/main/resources/db/learning_vocabulary_relation_enrichment_mysql.sql
 - UK / US 音标后分别提供发音按钮。
 - 搭配词组提供发音按钮；点击词组去学习前需要二次确认。
 - 相关单词展示核心词性、核心含义、可推导音标和发音按钮；点击相关单词去学习前需要二次确认。
-- 复习完成弹窗中的例句播放使用个人信息中配置的默认发音。
+  - 复习完成弹窗中的例句播放使用个人信息中配置的默认发音和句子朗读偏好。
 - 优先调用有道词典音频地址，失败后回退浏览器 SpeechSynthesis。
 
 ## 9. 安全与成本控制
@@ -860,6 +939,7 @@ src/main/resources/db/learning_vocabulary_relation_enrichment_mysql.sql
 - 用户认证使用 Spring Security + JWT，服务端无状态校验 `Authorization: Bearer <jwt>`。
 - `learning_user_token` 为旧版轻量 Token 表，当前 JWT 认证不再写入。
 - 系统日志持久化到 `learning_system_log`，前端仅保留乐观展示和短期页面状态。
+- 句子朗读设置持久化到 `learning_user_preference`，前端 localStorage 仅作为登录失败或加载失败时的兜底缓存。
 
 ## 10. 验证结果
 
