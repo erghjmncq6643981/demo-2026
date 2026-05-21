@@ -1,5 +1,5 @@
 import { escapeHtml, formatDateTime } from '/src/shared/text.js'
-import { normalizeArray, renderCollocationMini, renderRelationItem, statusLabel } from '/src/shared/vocabulary.js'
+import { normalizeArray, renderCollocationMini, renderRelationItem, semanticRelations, statusLabel } from '/src/shared/vocabulary.js'
 
 export function createWordbookDetailFeature(ctx) {
   const {
@@ -32,7 +32,7 @@ export function createWordbookDetailFeature(ctx) {
     const collocations = normalizeArray(parsed?.collocations || parsed?.phrases || parsed?.common_phrases).slice(0, 6)
     const memoryTips = normalizeArray(parsed?.memory_tips || parsed?.memoryTips || parsed?.tips || parsed?.memory).slice(0, 3)
     const tags = Array.isArray(entry.tags) ? entry.tags.slice(0, 6) : []
-    const relations = Array.isArray(entry.relations) ? entry.relations.slice(0, 6) : []
+    const relations = semanticRelations(entry.relations).slice(0, 6)
     const phoneticItems = [
       parsed?.phonetic?.uk && { type: 'uk', label: 'UK', text: parsed.phonetic.uk },
       parsed?.phonetic?.us && { type: 'us', label: 'US', text: parsed.phonetic.us },

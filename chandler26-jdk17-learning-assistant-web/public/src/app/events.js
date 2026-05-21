@@ -40,6 +40,7 @@ export function bindAppEvents(ctx) {
     savePromptTemplate,
     saveSpeechPreferences,
     changeWordbook,
+    renderWordbookEntries,
     loadSystemLogs,
     clearLogs,
     study,
@@ -135,6 +136,10 @@ elements.saveSpeechBtn?.addEventListener('click', async () => {
 })
 elements.wordbookSelect.addEventListener('change', () => changeWordbook(elements.wordbookSelect.value))
 elements.wordStatusFilter.addEventListener('change', loadWordbookEntries)
+elements.wordPrefixInput?.addEventListener('input', () => {
+  state.wordPrefixFilter = elements.wordPrefixInput.value.trim()
+  renderWordbookEntries()
+})
 elements.reloadSystemLogsBtn.addEventListener('click', loadSystemLogs)
 elements.clearLogBtn.addEventListener('click', clearLogs)
 elements.studyForm.addEventListener('submit', (event) => {

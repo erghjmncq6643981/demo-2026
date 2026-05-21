@@ -284,6 +284,7 @@ bindAppEvents({
   savePromptTemplate: profile.savePromptTemplate,
   saveSpeechPreferences,
   changeWordbook: profile.changeWordbook,
+  renderWordbookEntries: profile.renderWordbookEntries,
   loadSystemLogs: profile.loadSystemLogs,
   clearLogs: profile.clearLogs,
   study: studyFacade.study,

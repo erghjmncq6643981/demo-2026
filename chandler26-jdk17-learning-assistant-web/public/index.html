@@ -288,7 +288,13 @@
 
             <section class="wordbook-layout">
               <section class="panel">
-                <div class="panel-heading"><h3>单词列表</h3></div>
+                <div class="panel-heading wordbook-list-heading">
+                  <h3>单词列表</h3>
+                  <label class="entry-prefix-field">
+                    <span class="sr-only">前缀匹配</span>
+                    <input id="wordPrefixInput" autocomplete="off" placeholder="前缀匹配" />
+                  </label>
+                </div>
                 <div id="wordbookEntryList" class="entry-list empty">暂无单词</div>
               </section>
               <section class="panel wordbook-focus-panel">

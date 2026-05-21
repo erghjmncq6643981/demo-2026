@@ -315,10 +315,12 @@ export function createWordbookProfileFeature(ctx) {
 
   function renderWordbookEntries() {
     const filter = elements.wordStatusFilter?.value || ''
-    const entries = filter && state.preview ? state.wordbookEntries.filter((entry) => (entry.status || 'vague') === filter) : state.wordbookEntries
+    const prefix = String(state.wordPrefixFilter || elements.wordPrefixInput?.value || '').trim().toLowerCase()
+    const statusFiltered = filter && state.preview ? state.wordbookEntries.filter((entry) => (entry.status || 'vague') === filter) : state.wordbookEntries
+    const entries = prefix ? statusFiltered.filter((entry) => entryMatchesPrefix(entry, prefix)) : statusFiltered
     if (!entries.length) {
       elements.wordbookEntryList.className = 'entry-list empty'
-      elements.wordbookEntryList.textContent = state.token ? '当前词书还没有单词' : '登录后查看单词本'
+      elements.wordbookEntryList.textContent = prefix ? '没有匹配前缀的单词' : state.token ? '当前词书还没有单词' : '登录后查看单词本'
       state.selectedEntry = null
       renderWordbookFocus(null)
       ctx.renderNotes(null)
@@ -357,6 +359,11 @@ export function createWordbookProfileFeature(ctx) {
     })
     renderWordbookFocus(selectedEntry)
     ctx.renderNotes(selectedEntry)
+  }
+
+  function entryMatchesPrefix(entry, prefix) {
+    const values = [entry.term, entry.normalizedTerm, entry.parsed?.term]
+    return values.some((value) => String(value || '').trim().toLowerCase().startsWith(prefix))
   }
 
   function selectWordbookEntry(entry, options = {}) {

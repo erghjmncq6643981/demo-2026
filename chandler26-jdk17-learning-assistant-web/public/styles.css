@@ -48,6 +48,15 @@ button {
   display: none !important;
 }
 
+.sr-only {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+}
+
 .app {
   min-height: 100vh;
 }
@@ -610,7 +619,7 @@ textarea:focus {
 
 .wordbook-layout {
   display: grid;
-  grid-template-columns: minmax(220px, 20%) minmax(0, 80%);
+  grid-template-columns: minmax(280px, 22%) minmax(0, 78%);
   gap: 18px;
   min-height: 0;
   overflow: hidden;
@@ -996,6 +1005,21 @@ input[type="range"] {
 .entry-list {
   align-content: start;
   grid-auto-rows: minmax(0, max-content);
+}
+
+.wordbook-list-heading {
+  align-items: center;
+}
+
+.entry-prefix-field {
+  width: min(180px, 52%);
+  margin: 0;
+}
+
+.entry-prefix-field input {
+  height: 38px;
+  border-color: rgba(129, 140, 248, 0.34);
+  background: rgba(15, 23, 42, 0.58);
 }
 
 .wordbook-card,
@@ -2176,7 +2200,8 @@ input[type="range"] {
 
   .compact-field,
   .compact-field.small-field,
-  .topbar-actions {
+  .topbar-actions,
+  .entry-prefix-field {
     width: 100%;
   }
 

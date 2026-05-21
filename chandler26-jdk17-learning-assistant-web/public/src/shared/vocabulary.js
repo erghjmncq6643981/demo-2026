@@ -107,10 +107,16 @@ export function relationTypeLabel(type) {
       synonym: '同义',
       antonym: '反义',
       word_family: '词族',
-      collocation: '搭配',
-      tag_overlap: '相近',
     }[type] || type || '相关'
   )
+}
+
+export function isSemanticRelation(item) {
+  return ['synonym', 'antonym', 'word_family'].includes(item?.relationType)
+}
+
+export function semanticRelations(relations) {
+  return Array.isArray(relations) ? relations.filter(isSemanticRelation) : []
 }
 
 export function relationMeaningLine(item) {

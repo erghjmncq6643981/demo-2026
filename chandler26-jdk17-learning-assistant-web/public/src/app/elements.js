@@ -49,6 +49,7 @@ export function createElements() {
   wordbookCards: $('wordbookCards'),
   wordbookEntryList: $('wordbookEntryList'),
   wordStatusFilter: $('wordStatusFilter'),
+  wordPrefixInput: $('wordPrefixInput'),
   reloadWordbookViewBtn: $('reloadWordbookViewBtn'),
   wordbookFocus: $('wordbookFocus'),
   entryStatusModal: $('entryStatusModal'),

@@ -30,6 +30,7 @@ export function createInitialState() {
     currentStatusEntryId: null,
     currentTransferEntryId: null,
     selectedEntry: null,
+    wordPrefixFilter: '',
     currentNoteEntry: null,
     currentRecord: null,
     currentSessionId: null,

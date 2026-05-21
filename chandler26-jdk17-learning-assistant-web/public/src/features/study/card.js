@@ -8,6 +8,7 @@ import {
   readText,
   renderCollocationMini,
   renderRelationItem,
+  semanticRelations,
   stringifyValue,
   tagLabel,
 } from '/src/shared/vocabulary.js'
@@ -116,7 +117,7 @@ export function createStudyCardFeature(ctx) {
   }
 
   function renderRelations(relations) {
-    const list = Array.isArray(relations) ? relations : []
+    const list = semanticRelations(relations)
     if (!list.length) {
       elements.relationList.className = 'relation-list empty'
       elements.relationList.textContent = '暂无关联词'
