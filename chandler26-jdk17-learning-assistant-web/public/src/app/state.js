@@ -1,0 +1,57 @@
+import { readJsonStorage, readNumberStorage } from '/src/shared/storage.js'
+import { normalizeWordbookId } from '/src/shared/wordbook.js'
+
+function initialSidebarCollapsed() {
+  const saved = localStorage.getItem('learning.sidebarCollapsed')
+  if (saved !== null) return saved === '1'
+  return window.matchMedia('(max-width: 1100px)').matches
+}
+
+export function createInitialState() {
+  return {
+    build: '20260520-04',
+    apiBase: localStorage.getItem('learning.apiBase') || 'http://localhost:16681',
+    token: localStorage.getItem('learning.token') || '',
+    user: readJsonStorage('learning.user'),
+    preview: new URLSearchParams(window.location.search).get('preview') === '1',
+    activeView: localStorage.getItem('learning.activeView') || 'profileView',
+    sidebarCollapsed: initialSidebarCollapsed(),
+    wordbooks: [],
+    wordbookEntries: [],
+    reviewEntries: [],
+    previewReviewEntries: [],
+    modelConfigs: [],
+    agentConfigs: [],
+    currentWordbookId: normalizeWordbookId(localStorage.getItem('learning.wordbookId')) || null,
+    currentWordbookEditId: null,
+    currentModelEditId: null,
+    currentAgentEditId: null,
+    currentTemplateEditId: null,
+    currentStatusEntryId: null,
+    currentTransferEntryId: null,
+    selectedEntry: null,
+    currentNoteEntry: null,
+    currentRecord: null,
+    currentSessionId: null,
+    activeProfileTab: localStorage.getItem('learning.profileTab') || 'accountPanel',
+    currentReviewEntry: null,
+    currentReviewIndex: 0,
+    reviewTyped: '',
+    reviewWrongCount: 0,
+    pendingReviewEntryId: null,
+    pendingDeleteConfirm: null,
+    promptTemplates: [],
+    currentTemplate: null,
+    lastAgentCode: localStorage.getItem('learning.lastAgentCode') || 'english_vocabulary',
+    lastTemplateCode: localStorage.getItem('learning.lastTemplateCode') || 'english_vocab_card_json',
+    activity: null,
+    systemLogs: readJsonStorage('learning.systemLogs') || [],
+    speechSettings: {
+      voiceType: localStorage.getItem('learning.voiceType') || 'us',
+      sentenceVoiceName: localStorage.getItem('learning.sentenceVoiceName') || '',
+      sentenceRate: readNumberStorage('learning.sentenceRate', 0.78),
+      sentencePitch: readNumberStorage('learning.sentencePitch', 1),
+    },
+    speechSaveTimer: null,
+  }
+}
