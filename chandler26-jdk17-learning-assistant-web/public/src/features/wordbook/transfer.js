@@ -17,8 +17,8 @@ export function createWordbookTransferFeature(ctx) {
           <small>${wordbook.entryCount || 0} 个单词 · ${wordbook.dueCount || 0} 个待复习</small>
           </div>
           <div class="transfer-actions">
-            <button class="secondary-button compact" type="button" data-transfer-copy="${ctx.escapeHtml(wordbook.id)}">复制</button>
-            <button class="primary-button compact-primary" type="button" data-transfer-move="${ctx.escapeHtml(wordbook.id)}">移动</button>
+            <button class="primary-button compact-primary transfer-action-button" type="button" data-transfer-copy="${ctx.escapeHtml(wordbook.id)}">复制</button>
+            <button class="secondary-button compact transfer-action-button" type="button" data-transfer-move="${ctx.escapeHtml(wordbook.id)}">移动</button>
           </div>
         </div>
       `,

@@ -55,6 +55,7 @@ const speechFeature = createSpeechFeature({
   toast,
   logEvent,
   clampNumber,
+  renderLearningConfigSummary: (...args) => profile.renderLearningConfigSummary(...args),
 })
 
 const {
@@ -100,6 +101,7 @@ const {
   renderModelConfigs: profile.renderModelConfigs,
   renderAgentConfigs: profile.renderAgentConfigs,
   renderLearningAgentOptions: profile.renderLearningAgentOptions,
+  renderLearningConfigSummary: profile.renderLearningConfigSummary,
   renderTemplateOptions: profile.renderTemplateOptions,
   renderTemplateConfigs: profile.renderTemplateConfigs,
   renderReviewQueue: review.renderReviewQueue,
@@ -262,6 +264,8 @@ bindAppEvents({
   openAgentModal: profile.openAgentModal,
   closeAgentModal: profile.closeAgentModal,
   syncAgentModelProviderDefaults: profile.syncAgentModelProviderDefaults,
+  openLearningConfigModal: profile.openLearningConfigModal,
+  closeLearningConfigModal: profile.closeLearningConfigModal,
   saveAgentConfig: profile.saveAgentConfig,
   openTemplateModal: profile.openTemplateModal,
   closeTemplateModal: profile.closeTemplateModal,
@@ -311,6 +315,7 @@ profile.renderSystemLogs()
 studyFacade.renderRawJson(null)
 profile.renderProviderOptions()
 profile.syncModelProviderDefaults()
+profile.renderLearningConfigSummary()
 profile.loadAgents()
 profile.loadModelConfigs()
 profile.loadPromptTemplates()

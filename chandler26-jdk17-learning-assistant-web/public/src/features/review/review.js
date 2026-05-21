@@ -211,23 +211,27 @@ export function createReviewFeature(ctx) {
     const canNext = total > 1 && state.currentReviewIndex < total - 1
     elements.reviewFocus.className = 'review-focus-card'
     elements.reviewFocus.innerHTML = `
-      <div class="review-card-topline">
-        <p class="eyebrow">Typing Review</p>
-        <span>${total ? `${state.currentReviewIndex + 1} / ${total}` : '0 / 0'}</span>
+      <div class="review-card-fixed">
+        <div class="review-card-topline">
+          <p class="eyebrow">Typing Review</p>
+          <span>${total ? `${state.currentReviewIndex + 1} / ${total}` : '0 / 0'}</span>
+        </div>
+        <h4>${escapeHtml(term)}</h4>
+        <p class="phonetic">${escapeHtml([parsed?.phonetic?.uk, parsed?.phonetic?.us].filter(Boolean).join('    ') || '暂无音标')}</p>
       </div>
-      <h4>${escapeHtml(term)}</h4>
-      <p class="phonetic">${escapeHtml([parsed?.phonetic?.uk, parsed?.phonetic?.us].filter(Boolean).join('    ') || '暂无音标')}</p>
-      <div class="typing-board" tabindex="0" aria-label="跟敲单词 ${escapeHtml(term)}">
-        <div class="typing-letters">${letters}</div>
-        <div class="typing-progress"><span style="width: ${progress}%"></span></div>
-        <p class="typing-hint">按键盘逐字输入，错误会提示；完成后查看例句并提交复习结果。</p>
-      </div>
-      <div class="mini-definition-list">
+      <div class="review-card-scroll">
+        <div class="typing-board" tabindex="0" aria-label="跟敲单词 ${escapeHtml(term)}">
+          <div class="typing-letters">${letters}</div>
+          <div class="typing-progress"><span style="width: ${progress}%"></span></div>
+          <p class="typing-hint">按键盘逐字输入，错误会提示；完成后查看例句并提交复习结果。</p>
+        </div>
+        <div class="mini-definition-list">
         ${
           definitions.length
             ? definitions.map((item) => `<div><span>${escapeHtml(item.pos || 'meaning')}</span><p>${escapeHtml(item.cn || item.en || '')}</p></div>`).join('')
             : '<div class="empty">暂无释义</div>'
         }
+        </div>
       </div>
       <div class="review-card-actions">
         <div class="review-card-nav">

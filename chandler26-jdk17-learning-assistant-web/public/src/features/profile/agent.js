@@ -3,13 +3,14 @@ import { escapeHtml } from '/src/shared/text.js'
 import { renderModelSelect, renderProviderSelect } from '/src/features/profile/provider.js'
 
 export function createAgentProfileFeature(ctx) {
-  const { state, elements, request, setLoading, toast, logEvent, confirmAction, confirmDelete, setConnection, providerCatalog } = ctx
+  const { state, elements, request, setLoading, toast, logEvent, confirmAction, confirmDelete, setConnection, providerCatalog, renderLearningConfigSummary } = ctx
 
   function loadAgents() {
     if (state.preview) {
       renderAgentConfigs()
       setConnection(true)
       renderLearningAgentOptions()
+      renderLearningConfigSummary?.()
       return Promise.resolve()
     }
     return request('/api/v1/ai/agents?enabledOnly=false')
@@ -17,15 +18,18 @@ export function createAgentProfileFeature(ctx) {
         state.agentConfigs = Array.isArray(agents) ? agents : []
         renderAgentConfigs()
         renderLearningAgentOptions()
+        renderLearningConfigSummary?.()
         if (![...elements.agentSelect.options].some((item) => item.value === state.lastAgentCode)) {
           state.lastAgentCode = elements.agentSelect.value || 'english_vocabulary'
         }
+        localStorage.setItem('learning.lastAgentCode', state.lastAgentCode)
         setConnection(true)
       })
       .catch((error) => {
         setConnection(false)
         renderAgentConfigs()
         renderLearningAgentOptions()
+        renderLearningConfigSummary?.()
         logEvent('error', 'Agent 加载失败', error.message)
       })
   }
@@ -48,6 +52,8 @@ export function createAgentProfileFeature(ctx) {
     }
     elements.agentSelect.value = agents.some((item) => item.code === previous) ? previous : agents[0]?.code || 'english_vocabulary'
     state.lastAgentCode = elements.agentSelect.value || previous
+    localStorage.setItem('learning.lastAgentCode', state.lastAgentCode)
+    renderLearningConfigSummary?.()
   }
 
   function renderAgentProviderOptions(selectedProvider = '') {
@@ -250,10 +256,12 @@ export function createAgentProfileFeature(ctx) {
       agent.enabled = targetEnabled
       renderAgentConfigs()
       renderLearningAgentOptions()
+      renderLearningConfigSummary?.()
       return
     }
     await request(`/api/v1/ai/agents/${encodeURIComponent(id)}/${targetEnabled ? 'enable' : 'disable'}`, { method: 'POST' })
     await loadAgents()
+    renderLearningConfigSummary?.()
   }
 
   async function deleteAgentConfig(id) {
@@ -273,6 +281,7 @@ export function createAgentProfileFeature(ctx) {
       state.agentConfigs = state.agentConfigs.filter((agent) => !sameId(agent.id, id))
       renderAgentConfigs()
       renderLearningAgentOptions()
+      renderLearningConfigSummary?.()
       toast('设计预览：学习 Agent 已删除')
       return
     }
@@ -289,6 +298,7 @@ export function createAgentProfileFeature(ctx) {
       state.agentConfigs.push(clone)
       renderAgentConfigs()
       renderLearningAgentOptions()
+      renderLearningConfigSummary?.()
       toast('设计预览：学习 Agent 已复制')
       return
     }
@@ -311,6 +321,8 @@ export function createAgentProfileFeature(ctx) {
       }
     }
     state.lastAgentCode = nextCode
+    localStorage.setItem('learning.lastAgentCode', nextCode)
+    renderLearningConfigSummary?.()
     logEvent('ai', '修改学习 Agent', nextCode)
   }
 

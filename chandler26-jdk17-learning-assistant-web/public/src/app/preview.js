@@ -9,6 +9,7 @@ export function loadPreviewData(ctx) {
     renderModelConfigs,
     renderAgentConfigs,
     renderLearningAgentOptions,
+    renderLearningConfigSummary,
     renderTemplateOptions,
     renderTemplateConfigs,
     renderWordbooks,
@@ -119,6 +120,7 @@ export function loadPreviewData(ctx) {
   renderLearningAgentOptions()
   renderTemplateOptions()
   renderTemplateConfigs()
+  renderLearningConfigSummary?.()
   renderWordbooks()
   renderWordbookEntries()
   renderReviewQueue(state.reviewEntries)

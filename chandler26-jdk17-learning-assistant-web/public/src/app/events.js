@@ -19,6 +19,8 @@ export function bindAppEvents(ctx) {
     toggleModelFlag,
     openAgentModal,
     closeAgentModal,
+    openLearningConfigModal,
+    closeLearningConfigModal,
     syncAgentModelProviderDefaults,
     saveAgentConfig,
     openTemplateModal,
@@ -92,6 +94,11 @@ elements.closeAgentModalBtn?.addEventListener('click', closeAgentModal)
 elements.agentModal?.addEventListener('click', (event) => {
   if (event.target === elements.agentModal) closeAgentModal()
 })
+elements.openLearningConfigModalBtn?.addEventListener('click', openLearningConfigModal)
+elements.closeLearningConfigModalBtn?.addEventListener('click', closeLearningConfigModal)
+elements.learningConfigModal?.addEventListener('click', (event) => {
+  if (event.target === elements.learningConfigModal) closeLearningConfigModal()
+})
 elements.agentModelProviderInput?.addEventListener('change', () => syncAgentModelProviderDefaults())
 elements.saveAgentBtn?.addEventListener('click', saveAgentConfig)
 elements.openTemplateModalBtn?.addEventListener('click', () => openTemplateModal())
@@ -122,7 +129,10 @@ elements.agentSelect.addEventListener('change', changeLearningAgent)
 elements.templateSelect.addEventListener('change', renderSelectedTemplate)
 elements.templateContentInput.addEventListener('input', () => validateTemplatePlaceholders({ quiet: true }))
 elements.saveTemplateBtn.addEventListener('click', savePromptTemplate)
-elements.saveSpeechBtn?.addEventListener('click', () => saveSpeechPreferences())
+elements.saveSpeechBtn?.addEventListener('click', async () => {
+  const saved = await saveSpeechPreferences()
+  if (saved !== false) closeLearningConfigModal()
+})
 elements.wordbookSelect.addEventListener('change', () => changeWordbook(elements.wordbookSelect.value))
 elements.wordStatusFilter.addEventListener('change', loadWordbookEntries)
 elements.reloadSystemLogsBtn.addEventListener('click', loadSystemLogs)

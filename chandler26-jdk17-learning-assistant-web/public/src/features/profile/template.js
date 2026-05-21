@@ -2,12 +2,13 @@ import { sameId } from '/src/shared/ids.js'
 import { escapeHtml, escapeRegExp } from '/src/shared/text.js'
 
 export function createTemplateProfileFeature(ctx) {
-  const { state, elements, request, setLoading, toast, logEvent, confirmAction, confirmDelete } = ctx
+  const { state, elements, request, setLoading, toast, logEvent, confirmAction, confirmDelete, renderLearningConfigSummary } = ctx
 
   function loadPromptTemplates() {
     if (state.preview) {
       renderTemplateOptions()
       renderTemplateConfigs()
+      renderLearningConfigSummary?.()
       return Promise.resolve()
     }
     return request('/api/v1/ai/prompt-templates?type=user&enabledOnly=false')
@@ -15,17 +16,19 @@ export function createTemplateProfileFeature(ctx) {
         state.promptTemplates = Array.isArray(templates) ? templates : []
         renderTemplateOptions()
         renderTemplateConfigs()
+        renderLearningConfigSummary?.()
       })
       .catch((error) => {
         logEvent('error', '模板加载失败', error.message)
         renderTemplateOptions()
         renderTemplateConfigs()
+        renderLearningConfigSummary?.()
       })
   }
 
   function renderTemplateOptions() {
     if (!elements.templateSelect) return
-    const previous = elements.templateSelect.value || 'english_vocab_card_json'
+    const previous = elements.templateSelect.value || state.lastTemplateCode || 'english_vocab_card_json'
     const templates = state.promptTemplates.filter((item) => item.enabled !== false && !item.deleted).length
       ? state.promptTemplates.filter((item) => item.enabled !== false && !item.deleted)
       : [
@@ -41,6 +44,7 @@ export function createTemplateProfileFeature(ctx) {
     }
     elements.templateSelect.value = templates.some((item) => item.code === previous) ? previous : templates[0]?.code || ''
     renderSelectedTemplate()
+    renderLearningConfigSummary?.()
   }
 
   function renderTemplateConfigs() {
@@ -137,6 +141,7 @@ export function createTemplateProfileFeature(ctx) {
       state.promptTemplates = state.promptTemplates.filter((template) => !sameId(template.id, id))
       renderTemplateConfigs()
       renderTemplateOptions()
+      renderLearningConfigSummary?.()
       toast('设计预览：学习 Agent 模板已删除')
       return
     }
@@ -153,6 +158,7 @@ export function createTemplateProfileFeature(ctx) {
       state.promptTemplates.push(clone)
       renderTemplateConfigs()
       renderTemplateOptions()
+      renderLearningConfigSummary?.()
       toast('设计预览：模板已复制')
       return
     }
@@ -195,6 +201,8 @@ export function createTemplateProfileFeature(ctx) {
     }
     state.currentTemplate = template || null
     fillTemplateForm(template)
+    localStorage.setItem('learning.lastTemplateCode', state.lastTemplateCode || code)
+    renderLearningConfigSummary?.()
   }
 
   function fillTemplateForm(template) {
@@ -202,6 +210,7 @@ export function createTemplateProfileFeature(ctx) {
     state.currentTemplate = template || null
     state.currentTemplateEditId = template?.id || null
     state.lastTemplateCode = template?.code || elements.templateSelect?.value || ''
+    if (state.lastTemplateCode) localStorage.setItem('learning.lastTemplateCode', state.lastTemplateCode)
     elements.templateNameInput.value = template?.name || ''
     elements.templateCodeInput.value = template?.code || ''
     elements.templateTypeInput.value = template?.type || 'user'

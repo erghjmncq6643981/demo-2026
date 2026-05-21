@@ -1,5 +1,5 @@
 export function createSpeechFeature(ctx) {
-  const { state, elements, request, toast, logEvent, clampNumber } = ctx
+  const { state, elements, request, toast, logEvent, clampNumber, renderLearningConfigSummary } = ctx
 
   function pronunciationUrl(text, type = 'us') {
     const encoded = encodeURIComponent(text)
@@ -109,6 +109,7 @@ export function createSpeechFeature(ctx) {
     }
     populateSentenceVoices()
     renderSpeechSettingValues()
+    renderLearningConfigSummary?.()
   }
 
   async function loadSpeechPreferences() {
@@ -128,7 +129,7 @@ export function createSpeechFeature(ctx) {
 
   async function saveSpeechPreferences({ quiet = false } = {}) {
     persistSpeechSettingsLocal()
-    if (state.preview || !state.token) return
+    if (state.preview || !state.token) return true
     try {
       const preferences = await request('/api/v1/learning/preferences/speech', {
         method: 'PUT',
@@ -136,10 +137,13 @@ export function createSpeechFeature(ctx) {
       })
       applySpeechSettings(preferences || {})
       persistSpeechSettingsLocal()
+      renderLearningConfigSummary?.()
       if (!quiet) toast('发音设置已保存')
+      return true
     } catch (error) {
       logEvent('error', '发音设置保存失败', error.message)
       if (!quiet) toast(`发音设置暂未保存到服务端：${error.message}`)
+      return false
     }
   }
 
@@ -157,6 +161,7 @@ export function createSpeechFeature(ctx) {
       elements.voiceSelect.addEventListener('change', () => {
         state.speechSettings.voiceType = currentVoiceType(elements.voiceSelect.value)
         populateSentenceVoices()
+        renderLearningConfigSummary?.()
         scheduleSpeechPreferenceSave()
       })
     }
@@ -164,6 +169,7 @@ export function createSpeechFeature(ctx) {
       elements.sentenceRateInput.addEventListener('input', () => {
         state.speechSettings.sentenceRate = clampNumber(elements.sentenceRateInput.value, 0.55, 1.15, 0.78)
         renderSpeechSettingValues()
+        renderLearningConfigSummary?.()
         scheduleSpeechPreferenceSave()
       })
     }
@@ -171,11 +177,13 @@ export function createSpeechFeature(ctx) {
       elements.sentencePitchInput.addEventListener('input', () => {
         state.speechSettings.sentencePitch = clampNumber(elements.sentencePitchInput.value, 0.8, 1.2, 1)
         renderSpeechSettingValues()
+        renderLearningConfigSummary?.()
         scheduleSpeechPreferenceSave()
       })
     }
     elements.sentenceVoiceSelect?.addEventListener('change', () => {
       state.speechSettings.sentenceVoiceName = elements.sentenceVoiceSelect.value
+      renderLearningConfigSummary?.()
       scheduleSpeechPreferenceSave()
     })
     elements.testSentenceVoiceBtn?.addEventListener('click', () => {

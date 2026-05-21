@@ -197,56 +197,11 @@
                       <p class="eyebrow">Agent</p>
                       <h3>学习配置</h3>
                     </div>
-                    <span class="mini-pill">学习卡生成与朗读</span>
-                  </div>
-                  <div class="agent-config-grid">
-                    <label>
-                      学习 Agent
-                      <select id="agentSelect"></select>
-                    </label>
-                    <label>
-                      学习模板
-                      <select id="templateSelect">
-                        <option value="english_vocab_card_json">词汇卡片 JSON</option>
-                        <option value="english_vocab_quiz_json">练习题 JSON</option>
-                      </select>
-                    </label>
-                  </div>
-                  <div class="template-summary" id="templateSummary">选择模板后查看完整信息。</div>
-                  <label>
-                    默认发音
-                    <select id="voiceSelect">
-                      <option value="us">美音</option>
-                      <option value="uk">英音</option>
-                    </select>
-                  </label>
-                  <div class="speech-settings">
-                    <div class="panel-subtitle compact-subtitle">句子朗读</div>
-                    <label>
-                      句子音色
-                      <select id="sentenceVoiceSelect">
-                        <option value="">自动选择英语音色</option>
-                      </select>
-                    </label>
-                    <label class="range-field">
-                      <span class="range-head">
-                        <span>句子语速</span>
-                        <strong id="sentenceRateValue">0.78x</strong>
-                      </span>
-                      <input id="sentenceRateInput" type="range" min="0.55" max="1.15" step="0.05" value="0.78" />
-                    </label>
-                    <label class="range-field">
-                      <span class="range-head">
-                        <span>句子音调</span>
-                        <strong id="sentencePitchValue">1.00</strong>
-                      </span>
-                      <input id="sentencePitchInput" type="range" min="0.80" max="1.20" step="0.05" value="1.00" />
-                    </label>
                     <div class="inline-actions">
-                      <button class="secondary-button compact" id="testSentenceVoiceBtn" type="button">试听句子</button>
-                      <button class="primary-button compact-primary" id="saveSpeechBtn" type="button">保存设置</button>
+                      <button class="secondary-button compact" id="openLearningConfigModalBtn" type="button">修改</button>
                     </div>
                   </div>
+                  <div id="learningConfigList" class="model-list empty">暂无学习配置</div>
                 </section>
 
                 <section class="sub-panel compact-list-panel">
@@ -543,6 +498,65 @@
         </div>
         <div class="modal-actions">
           <button class="primary-button compact-primary" id="saveAgentBtn" type="button">保存学习Agent</button>
+        </div>
+      </div>
+    </section>
+    <section class="modal-backdrop hidden" id="learningConfigModal" aria-modal="true" role="dialog">
+      <div class="config-modal">
+        <div class="panel-heading">
+          <div>
+            <p class="eyebrow">Learning</p>
+            <h3>修改学习配置</h3>
+          </div>
+          <button class="icon-button" id="closeLearningConfigModalBtn" type="button" title="关闭">×</button>
+        </div>
+        <div class="agent-config-grid">
+          <label>
+            学习 Agent
+            <select id="agentSelect"></select>
+          </label>
+          <label>
+            学习模板
+            <select id="templateSelect">
+              <option value="english_vocab_card_json">词汇卡片 JSON</option>
+              <option value="english_vocab_quiz_json">练习题 JSON</option>
+            </select>
+          </label>
+        </div>
+        <div class="template-summary" id="templateSummary">选择模板后查看完整信息。</div>
+        <label>
+          默认发音
+          <select id="voiceSelect">
+            <option value="us">美音</option>
+            <option value="uk">英音</option>
+          </select>
+        </label>
+        <div class="speech-settings">
+          <div class="panel-subtitle compact-subtitle">句子朗读</div>
+          <label>
+            句子音色
+            <select id="sentenceVoiceSelect">
+              <option value="">自动选择英语音色</option>
+            </select>
+          </label>
+          <label class="range-field">
+            <span class="range-head">
+              <span>句子语速</span>
+              <strong id="sentenceRateValue">0.78x</strong>
+            </span>
+            <input id="sentenceRateInput" type="range" min="0.55" max="1.15" step="0.05" value="0.78" />
+          </label>
+          <label class="range-field">
+            <span class="range-head">
+              <span>句子音调</span>
+              <strong id="sentencePitchValue">1.00</strong>
+            </span>
+            <input id="sentencePitchInput" type="range" min="0.80" max="1.20" step="0.05" value="1.00" />
+          </label>
+        </div>
+        <div class="modal-actions">
+          <button class="secondary-button compact" id="testSentenceVoiceBtn" type="button">试听句子</button>
+          <button class="primary-button compact-primary" id="saveSpeechBtn" type="button">保存学习配置</button>
         </div>
       </div>
     </section>
