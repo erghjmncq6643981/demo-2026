@@ -1,4 +1,5 @@
 import { readErrorMessage } from '/src/shared/text.js'
+import { hideModal, showModal } from '/src/shared/modal.js'
 
 export function createAppServices({ state, elements }) {
   let renderSystemLogs = () => {}
@@ -68,7 +69,7 @@ export function createAppServices({ state, elements }) {
       elements.deleteConfirmAcceptBtn.textContent = acceptText
       elements.deleteConfirmAcceptBtn.classList.toggle('danger-button', danger)
       elements.deleteConfirmAcceptBtn.classList.toggle('primary-button', !danger)
-      elements.deleteConfirmModal.classList.remove('hidden')
+      showModal(elements.deleteConfirmModal)
       elements.deleteConfirmAcceptBtn.focus()
     })
   }
@@ -78,7 +79,7 @@ export function createAppServices({ state, elements }) {
   }
 
   function closeDeleteConfirm(confirmed = false) {
-    elements.deleteConfirmModal?.classList.add('hidden')
+    hideModal(elements.deleteConfirmModal)
     const resolve = state.pendingDeleteConfirm
     state.pendingDeleteConfirm = null
     if (resolve) resolve(confirmed)

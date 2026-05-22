@@ -1,3 +1,5 @@
+import { hideModal, showModal } from '/src/shared/modal.js'
+
 export function createReviewModalFeature(ctx) {
   const {
     state,
@@ -39,12 +41,12 @@ export function createReviewModalFeature(ctx) {
     elements.modalExamples.querySelectorAll('[data-modal-sentence]').forEach((button) => {
       button.addEventListener('click', () => speakSentence(examples[Number(button.getAttribute('data-modal-sentence'))]?.sentence))
     })
-    elements.reviewCompleteModal.classList.remove('hidden')
+    showModal(elements.reviewCompleteModal)
   }
 
   function closeReviewModal(options = {}) {
     if (!elements.reviewCompleteModal) return
-    elements.reviewCompleteModal.classList.add('hidden')
+    hideModal(elements.reviewCompleteModal)
     state.pendingReviewEntryId = null
     if (!options.keepTyped) {
       state.reviewTyped = ''
@@ -123,12 +125,12 @@ export function createReviewModalFeature(ctx) {
     })
     bindStudyTermCards(elements.forgottenDetailContent, '[data-collocation-term]', '词组')
     bindInlineAudio(elements.forgottenDetailContent)
-    elements.forgottenDetailModal.classList.remove('hidden')
+    showModal(elements.forgottenDetailModal)
   }
 
   function closeForgottenDetailModal() {
     if (!elements.forgottenDetailModal) return
-    elements.forgottenDetailModal.classList.add('hidden')
+    hideModal(elements.forgottenDetailModal)
   }
 
   return {

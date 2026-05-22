@@ -9,7 +9,7 @@ function initialSidebarCollapsed() {
 
 export function createInitialState() {
   return {
-    build: '20260520-04',
+    build: '20260522-01',
     apiBase: localStorage.getItem('learning.apiBase') || 'http://localhost:16681',
     token: localStorage.getItem('learning.token') || '',
     user: readJsonStorage('learning.user'),

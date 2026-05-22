@@ -1,3 +1,5 @@
+import { hideModal, showModal } from '/src/shared/modal.js'
+
 export function createWordbookTransferFeature(ctx) {
   function renderEntryTransferList(entry) {
     const list = ctx.state.wordbooks.filter((wordbook) => !ctx.sameId(wordbook.id, entry.wordbookId))
@@ -38,11 +40,11 @@ export function createWordbookTransferFeature(ctx) {
     ctx.state.currentTransferEntryId = entry.id
     ctx.elements.entryTransferTerm.textContent = entry.term || entry.normalizedTerm || '当前单词'
     renderEntryTransferList(entry)
-    ctx.elements.entryTransferModal.classList.remove('hidden')
+    showModal(ctx.elements.entryTransferModal)
   }
 
   function closeEntryTransferModal() {
-    ctx.elements.entryTransferModal?.classList.add('hidden')
+    hideModal(ctx.elements.entryTransferModal)
     ctx.state.currentTransferEntryId = null
   }
 

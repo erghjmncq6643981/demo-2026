@@ -1,3 +1,5 @@
+import { hideModal, showModal } from '/src/shared/modal.js'
+
 export function createAccountProfileFeature(ctx) {
   const { state, elements, request, setLoading, toast, logEvent, updateAuthView } = ctx
 
@@ -6,11 +8,11 @@ export function createAccountProfileFeature(ctx) {
     elements.accountCurrentPasswordInput.value = ''
     elements.accountNewPasswordInput.value = ''
     elements.accountConfirmPasswordInput.value = ''
-    elements.accountModal.classList.remove('hidden')
+    showModal(elements.accountModal)
   }
 
   function closeAccountModal() {
-    elements.accountModal?.classList.add('hidden')
+    hideModal(elements.accountModal)
   }
 
   async function saveAccountProfile() {

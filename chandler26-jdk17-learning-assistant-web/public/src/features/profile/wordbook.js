@@ -1,4 +1,5 @@
 import { sameId } from '/src/shared/ids.js'
+import { hideModal, showModal } from '/src/shared/modal.js'
 import { escapeHtml } from '/src/shared/text.js'
 import { statusLabel } from '/src/shared/vocabulary.js'
 import { syncCurrentWordbookId } from '/src/shared/wordbook.js'
@@ -127,11 +128,11 @@ export function createWordbookProfileFeature(ctx) {
       resetWordbookForm({ keepModalOpen: true })
       elements.wordbookModalTitle.textContent = '新增词书'
     }
-    elements.wordbookModal.classList.remove('hidden')
+    showModal(elements.wordbookModal)
   }
 
   function closeWordbookModal() {
-    elements.wordbookModal?.classList.add('hidden')
+    hideModal(elements.wordbookModal)
   }
 
   async function createWordbook() {
@@ -266,11 +267,11 @@ export function createWordbookProfileFeature(ctx) {
     if (!entry) return
     state.currentStatusEntryId = entry.id
     elements.entryStatusTerm.textContent = entry.term || entry.normalizedTerm || '当前单词'
-    elements.entryStatusModal.classList.remove('hidden')
+    showModal(elements.entryStatusModal)
   }
 
   function closeEntryStatusModal() {
-    elements.entryStatusModal?.classList.add('hidden')
+    hideModal(elements.entryStatusModal)
     state.currentStatusEntryId = null
   }
 

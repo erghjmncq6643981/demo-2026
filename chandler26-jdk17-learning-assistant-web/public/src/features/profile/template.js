@@ -1,4 +1,5 @@
 import { sameId } from '/src/shared/ids.js'
+import { hideModal, showModal } from '/src/shared/modal.js'
 import { escapeHtml, escapeRegExp } from '/src/shared/text.js'
 
 export function createTemplateProfileFeature(ctx) {
@@ -98,11 +99,11 @@ export function createTemplateProfileFeature(ctx) {
       resetTemplateForm({ keepModalOpen: true })
       elements.templateModalTitle.textContent = '新增学习Agent模板'
     }
-    elements.templateModal.classList.remove('hidden')
+    showModal(elements.templateModal)
   }
 
   function closeTemplateModal() {
-    elements.templateModal?.classList.add('hidden')
+    hideModal(elements.templateModal)
   }
 
   function resetTemplateForm(options = {}) {

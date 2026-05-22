@@ -1,4 +1,5 @@
 import { sameId } from '/src/shared/ids.js'
+import { hideModal, showModal } from '/src/shared/modal.js'
 import { escapeHtml } from '/src/shared/text.js'
 import { renderModelSelect, renderProviderSelect } from '/src/features/profile/provider.js'
 
@@ -122,11 +123,11 @@ export function createAgentProfileFeature(ctx) {
       resetAgentForm({ keepModalOpen: true })
       elements.agentModalTitle.textContent = '新增学习Agent'
     }
-    elements.agentModal.classList.remove('hidden')
+    showModal(elements.agentModal)
   }
 
   function closeAgentModal() {
-    elements.agentModal?.classList.add('hidden')
+    hideModal(elements.agentModal)
   }
 
   function fillAgentForm(agent) {

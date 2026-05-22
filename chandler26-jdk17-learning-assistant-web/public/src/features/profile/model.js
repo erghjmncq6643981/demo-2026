@@ -1,4 +1,5 @@
 import { sameId } from '/src/shared/ids.js'
+import { hideModal, showModal } from '/src/shared/modal.js'
 import { escapeHtml } from '/src/shared/text.js'
 import { providerDefaults, renderModelSelect, renderProviderSelect } from '/src/features/profile/provider.js'
 
@@ -64,11 +65,11 @@ export function createModelProfileFeature(ctx) {
       resetModelForm({ keepModalOpen: true })
       elements.modelModalTitle.textContent = '新增模型'
     }
-    elements.modelConfigModal.classList.remove('hidden')
+    showModal(elements.modelConfigModal)
   }
 
   function closeModelModal() {
-    elements.modelConfigModal.classList.add('hidden')
+    hideModal(elements.modelConfigModal)
   }
 
   function renderModelConfigs() {

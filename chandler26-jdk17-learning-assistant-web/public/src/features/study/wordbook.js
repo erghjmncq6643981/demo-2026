@@ -1,4 +1,5 @@
 import { sameId } from '/src/shared/ids.js'
+import { hideModal, showModal } from '/src/shared/modal.js'
 import { syncCurrentWordbookId } from '/src/shared/wordbook.js'
 import { escapeHtml } from '/src/shared/text.js'
 
@@ -37,11 +38,11 @@ export function createStudyWordbookFeature(ctx) {
   function openAddWordbookModal(term) {
     elements.addWordbookTerm.textContent = term
     renderAddWordbookList(term)
-    elements.addWordbookModal.classList.remove('hidden')
+    showModal(elements.addWordbookModal)
   }
 
   function closeAddWordbookModal() {
-    elements.addWordbookModal.classList.add('hidden')
+    hideModal(elements.addWordbookModal)
   }
 
   function renderAddWordbookList(term) {

@@ -1,3 +1,4 @@
+import { hideModal, showModal } from '/src/shared/modal.js'
 import { escapeHtml } from '/src/shared/text.js'
 
 function optionText(select) {
@@ -56,11 +57,11 @@ export function createLearningConfigProfileFeature(ctx) {
 
   function openLearningConfigModal() {
     renderLearningConfigSummary()
-    elements.learningConfigModal?.classList.remove('hidden')
+    showModal(elements.learningConfigModal)
   }
 
   function closeLearningConfigModal() {
-    elements.learningConfigModal?.classList.add('hidden')
+    hideModal(elements.learningConfigModal)
   }
 
   return {
