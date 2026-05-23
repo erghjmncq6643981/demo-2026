@@ -2,7 +2,7 @@ import { sameId } from '/src/shared/ids.js'
 import { hideModal, showModal } from '/src/shared/modal.js'
 import { escapeHtml } from '/src/shared/text.js'
 import { statusLabel } from '/src/shared/vocabulary.js'
-import { syncCurrentWordbookId } from '/src/shared/wordbook.js'
+import { normalizeWordbooks, resolveSelectedWordbookId, syncCurrentWordbookId } from '/src/shared/wordbook.js'
 import { createWordbookDetailFeature } from '/src/features/profile/wordbook-detail.js'
 
 export function createWordbookProfileFeature(ctx) {
@@ -47,7 +47,7 @@ export function createWordbookProfileFeature(ctx) {
     }
     return request('/api/v1/learning/wordbooks')
       .then((wordbooks) => {
-        state.wordbooks = Array.isArray(wordbooks) ? wordbooks : []
+        state.wordbooks = normalizeWordbooks(wordbooks)
         renderWordbooks()
         return loadWordbookEntries()
       })
@@ -69,9 +69,7 @@ export function createWordbookProfileFeature(ctx) {
       return
     }
 
-    const hasSelected = state.wordbooks.some((item) => sameId(item.id, state.currentWordbookId))
-    const fallback = state.wordbooks.find((item) => item.isDefault) || state.wordbooks[0]
-    syncCurrentWordbookId(state, elements, hasSelected ? state.currentWordbookId : fallback.id)
+    resolveSelectedWordbookId(state, elements)
 
     for (const wordbook of state.wordbooks) {
       const option = document.createElement('option')

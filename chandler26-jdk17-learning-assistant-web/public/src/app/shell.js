@@ -111,7 +111,11 @@ export function createAppShell(ctx) {
     const fallback = document.getElementById(tabId) ? tabId : 'accountPanel'
     state.activeProfileTab = fallback
     localStorage.setItem('learning.profileTab', fallback)
-    document.querySelectorAll('.profile-tab').forEach((button) => button.classList.toggle('active', button.dataset.profileTab === fallback))
+    document.querySelectorAll('.profile-tab').forEach((button) => {
+      const active = button.dataset.profileTab === fallback
+      button.classList.toggle('active', active)
+      if (active) button.scrollIntoView({ behavior: 'smooth', block: 'nearest', inline: 'nearest' })
+    })
     document.querySelectorAll('.profile-section').forEach((section) => section.classList.toggle('active', section.id === fallback))
   }
 
