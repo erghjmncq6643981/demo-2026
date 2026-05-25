@@ -10,6 +10,8 @@ import com.chandler.motivation.domain.mapper.MotivationUserMapper;
 import com.chandler.motivation.security.JwtClaims;
 import com.chandler.motivation.security.JwtTokenService;
 import com.chandler.motivation.security.MotivationUserPrincipal;
+import com.chandler.motivation.support.MotivationConstants;
+import com.chandler.motivation.support.MotivationEnums;
 import java.nio.charset.StandardCharsets;
 import java.security.MessageDigest;
 import java.security.SecureRandom;
@@ -34,6 +36,9 @@ public class AuthService {
     private final JwtTokenService jwtTokenService;
     private final SecureRandom secureRandom = new SecureRandom();
 
+    /**
+     * 注册家长账号并立即返回登录态。
+     */
     public AuthResponse register(AuthRequest request) {
         String username = normalizeUsername(request.getUsername());
         if (!StringUtils.hasText(username)) {
@@ -52,14 +57,17 @@ public class AuthService {
         user.setUsername(username);
         user.setNickname(StringUtils.hasText(request.getNickname()) ? request.getNickname().trim() : username);
         user.setPasswordHash(hashPassword(request.getPassword()));
-        user.setUserType("PARENT");
-        user.setEnabled(1);
-        user.setDeleted(0);
+        user.setUserType(MotivationEnums.UserType.PARENT.code());
+        user.setEnabled(MotivationConstants.Flag.YES);
+        user.setDeleted(MotivationConstants.Flag.NO);
         userMapper.insert(user);
-        log.info("家长用户「{}」完成注册", user.getNickname());
+        log.info("用户「{}」完成家长账号注册", user.getNickname());
         return createLoginResponse(user);
     }
 
+    /**
+     * 为孩子档案创建独立登录账号。
+     */
     public MotivationUser createChildAccount(String username, String password, String nickname) {
         String normalizedUsername = normalizeUsername(username);
         if (!StringUtils.hasText(normalizedUsername)) {
@@ -75,24 +83,33 @@ public class AuthService {
         user.setUsername(normalizedUsername);
         user.setNickname(StringUtils.hasText(nickname) ? nickname.trim() : normalizedUsername);
         user.setPasswordHash(hashPassword(password));
-        user.setUserType("CHILD");
-        user.setEnabled(1);
-        user.setDeleted(0);
+        user.setUserType(MotivationEnums.UserType.CHILD.code());
+        user.setEnabled(MotivationConstants.Flag.YES);
+        user.setDeleted(MotivationConstants.Flag.NO);
         userMapper.insert(user);
-        log.info("孩子用户「{}」创建成功", user.getNickname());
+        log.info("用户「{}」的孩子账号创建成功", user.getNickname());
         return user;
     }
 
+    /**
+     * 校验用户名和密码，成功后签发 JWT。
+     */
     public AuthResponse login(AuthRequest request) {
         String username = normalizeUsername(request.getUsername());
         MotivationUser user = findByUsername(username);
-        if (user == null || !Integer.valueOf(1).equals(user.getEnabled()) || !Integer.valueOf(0).equals(user.getDeleted())) {
+        if (user == null
+                || !Integer.valueOf(MotivationConstants.Flag.YES).equals(user.getEnabled())
+                || !Integer.valueOf(MotivationConstants.Flag.NO).equals(user.getDeleted())) {
             throw new MotivationException("AUTH_INVALID", "用户名或密码错误");
         }
         if (!verifyPassword(request.getPassword(), user.getPasswordHash())) {
             throw new MotivationException("AUTH_INVALID", "用户名或密码错误");
         }
-        log.info("家长用户「{}」登录成功", user.getNickname());
+        String userTypeName = MotivationEnums.descriptionOf(
+                MotivationEnums.UserType.class,
+                user.getUserType(),
+                MotivationEnums.UserType.PARENT);
+        log.info("{}用户「{}」登录成功", userTypeName, user.getNickname());
         return createLoginResponse(user);
     }
 

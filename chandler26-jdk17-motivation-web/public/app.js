@@ -34,12 +34,16 @@ const state = {
   pointAdjustModalOpen: false,
   balanceModalOpen: false,
   rewardExchangeModalOpen: false,
+  taskCheckInModalOpen: false,
   calendarDayModalOpen: false,
   calendarEventModalOpen: false,
   selectedCalendarDateKey: '',
   selectedCalendarEventId: '',
   selectedBalancePointType: '',
   selectedRewardId: '',
+  selectedCheckInTaskId: '',
+  selectedCheckInTaskDate: '',
+  selectedCheckInRewardCount: 0,
   exchangeSuccess: null,
   rewardExchangeSuccess: null,
   loginCarouselIndex: 0,
@@ -84,6 +88,10 @@ const state = {
     task: false,
     reward: false,
     currency: false,
+  },
+  todoExpanded: {
+    task: false,
+    reward: false,
   },
   pointExchangeRule: demoState.pointExchangeRule || { starWeight: 1, flowerWeight: 10, crownWeight: 100 },
   pointCurrencies: normalizePointCurrencies(demoState.pointCurrencies, demoState.pointExchangeRule),
@@ -327,6 +335,14 @@ function bindEvents() {
   document.querySelectorAll('[data-action="reject-task-record"]').forEach((button) => {
     button.addEventListener('click', () => handleTaskRecordReview(button.dataset.recordId, false))
   })
+  document.querySelector('[data-action="toggle-task-todo"]')?.addEventListener('click', () => {
+    state.todoExpanded = { ...state.todoExpanded, task: !state.todoExpanded?.task }
+    render()
+  })
+  document.querySelector('[data-action="toggle-reward-todo"]')?.addEventListener('click', () => {
+    state.todoExpanded = { ...state.todoExpanded, reward: !state.todoExpanded?.reward }
+    render()
+  })
   document.querySelectorAll('[data-action="open-calendar-day"]').forEach((target) => {
     target.addEventListener('click', () => openCalendarDayModal(target.dataset.date))
   })
@@ -342,6 +358,27 @@ function bindEvents() {
   document.querySelectorAll('[data-action="close-calendar-event-modal"]').forEach((button) => {
     button.addEventListener('click', closeCalendarEventModal)
   })
+  document.querySelectorAll('[data-action="close-checkin-modal"]').forEach((button) => {
+    button.addEventListener('click', closeTaskCheckInModal)
+  })
+  document.querySelectorAll('[data-action="select-checkin-reward"]').forEach((button) => {
+    button.addEventListener('pointerdown', (event) => {
+      event.preventDefault()
+      beginCheckInRewardDrag(Number(button.dataset.rewardIndex || 0))
+    })
+    button.addEventListener('pointerenter', () => {
+      extendCheckInRewardDrag(Number(button.dataset.rewardIndex || 0))
+    })
+    button.addEventListener('click', (event) => {
+      event.preventDefault()
+      if (state.checkInRewardDragging) {
+        state.checkInRewardDragging = false
+        return
+      }
+      toggleCheckInReward(Number(button.dataset.rewardIndex || 0))
+    })
+  })
+  document.querySelector('[data-form="task-checkin"]')?.addEventListener('submit', handleTaskCheckInSubmit)
   bindFilterActions()
   document.querySelectorAll('[data-schedule-mode]').forEach((input) => {
     input.addEventListener('change', () => {
@@ -364,8 +401,11 @@ function bindEvents() {
     })
   })
   document.querySelectorAll('[data-action="complete-task"]').forEach((button) => {
-    button.addEventListener('click', () => handleCompleteTask(button.dataset.taskId, button.dataset.taskDate))
+    button.addEventListener('click', () => openTaskCheckInModal(button.dataset.taskId, button.dataset.taskDate))
   })
+  bindBlockDragSelection('[data-daily-hour-picker]', '[name="dailyHours"]')
+  bindBlockDragSelection('[data-weekday-picker]', '[name="weekDays"]')
+  bindBlockDragSelection('[data-monthday-picker]', '[name="monthDays"]')
 }
 
 function initLoginCarousel() {
@@ -400,6 +440,53 @@ function bindTaskModalControls() {
   form.taskColor?.addEventListener('input', () => syncTaskColor(form))
   syncTaskColor(form)
   syncDailyHiddenHours(form)
+}
+
+function bindBlockDragSelection(containerSelector, inputSelector) {
+  document.querySelectorAll(containerSelector).forEach((container) => {
+    let dragging = false
+    let targetChecked = true
+    let customSelection = false
+    const applyInput = (input) => {
+      if (!input || input.disabled) return
+      input.checked = targetChecked
+      input.dispatchEvent(new Event('change', { bubbles: true }))
+    }
+    container.addEventListener('pointerdown', (event) => {
+      const label = event.target.closest('label')
+      const input = label?.querySelector(inputSelector)
+      if (!input || input.disabled) return
+      event.preventDefault()
+      dragging = true
+      customSelection = true
+      targetChecked = !input.checked
+      container.setPointerCapture?.(event.pointerId)
+      applyInput(input)
+    })
+    container.addEventListener('pointerover', (event) => {
+      if (!dragging) return
+      const input = event.target.closest('label')?.querySelector(inputSelector)
+      applyInput(input)
+    })
+    const stopDragging = (event) => {
+      dragging = false
+      try {
+        container.releasePointerCapture?.(event.pointerId)
+      } catch {
+        // Pointer capture may already be released by the browser.
+      }
+    }
+    container.addEventListener('pointerup', stopDragging)
+    container.addEventListener('pointercancel', stopDragging)
+    container.addEventListener('pointerleave', () => {
+      dragging = false
+    })
+    container.addEventListener('click', (event) => {
+      if (!customSelection) return
+      event.preventDefault()
+      customSelection = false
+    })
+  })
 }
 
 function bindPointExchangePreview() {
@@ -767,10 +854,11 @@ async function createStarterRewards(childId) {
 }
 
 async function handleCompleteTask(taskId, taskDate = state.todayKey) {
-  const task = state.tasks.find((item) => String(item.id) === String(taskId))
-  const event = state.calendarEvents.find((item) => String(item.taskId) === String(taskId) && item.taskDate === taskDate)
-  if (!task && !event) return
-  const taskMeta = task || event
+  const taskMeta = getTaskMeta(taskId, taskDate)
+  if (!taskMeta) return
+  const basePoints = Math.max(1, Number(taskMeta.basePoints || 1))
+  const selectedCount = Math.max(1, Math.min(Number(state.selectedCheckInRewardCount || basePoints), basePoints))
+  const completionProgress = Math.max(1, Math.round((selectedCount / basePoints) * 100))
   const submittedStatus = isChildUser() || Number(taskMeta.requireApproval) === 1 || taskMeta.requireApproval === true
   if (state.offline) {
     state.calendarEvents = state.calendarEvents.map((event) => (
@@ -779,20 +867,25 @@ async function handleCompleteTask(taskId, taskDate = state.todayKey) {
             ...event,
             recordId: event.recordId || Number(`${Date.now()}${String(taskId).slice(-3)}`),
             status: submittedStatus ? 'SUBMITTED' : 'APPROVED',
-            completionProgress: 100,
-            scoreAwarded: submittedStatus ? 0 : taskMeta.basePoints,
+            completionProgress,
+            scoreAwarded: submittedStatus ? 0 : selectedCount,
             persisted: true,
             submittedAt: new Date().toISOString(),
           }
         : event
     ))
+    state.taskCheckInModalOpen = false
     toast(submittedStatus ? '演示：已提交审核' : '演示：任务已完成')
     render()
     return
   }
   try {
-    await api.completeTask(taskId, { taskDate, completionProgress: 100 })
+    await api.completeTask(taskId, { taskDate, completionProgress, remark: `选择 ${selectedCount}/${basePoints} 个奖励图标` })
     await Promise.all([loadCoreData(), loadCalendar()])
+    state.taskCheckInModalOpen = false
+    state.selectedCheckInTaskId = ''
+    state.selectedCheckInTaskDate = ''
+    state.selectedCheckInRewardCount = 0
     state.selectedCalendarDateKey = taskDate
     state.selectedCalendarEventId = calendarTaskEventId(taskId, taskDate)
     toast(submittedStatus ? '已提交审核' : '完成并入账')
@@ -800,6 +893,17 @@ async function handleCompleteTask(taskId, taskDate = state.todayKey) {
     toast(error.message)
     render()
   }
+}
+
+async function handleTaskCheckInSubmit(event) {
+  event.preventDefault()
+  await handleCompleteTask(state.selectedCheckInTaskId, state.selectedCheckInTaskDate || state.todayKey)
+}
+
+function getTaskMeta(taskId, taskDate = state.todayKey) {
+  const task = state.tasks.find((item) => String(item.id) === String(taskId))
+  const event = state.calendarEvents.find((item) => String(item.taskId) === String(taskId) && item.taskDate === taskDate)
+  return task || event || null
 }
 
 async function handleTaskRecordReview(recordId, approved) {
@@ -1341,6 +1445,57 @@ function closeRewardExchangeModal() {
   render()
 }
 
+function openTaskCheckInModal(taskId, taskDate = state.todayKey) {
+  const taskMeta = getTaskMeta(taskId, taskDate)
+  if (!taskMeta) return
+  const basePoints = Math.max(1, Number(taskMeta.basePoints || 1))
+  state.selectedCheckInTaskId = taskId
+  state.selectedCheckInTaskDate = taskDate || state.todayKey
+  state.selectedCheckInRewardCount = basePoints
+  state.taskCheckInModalOpen = true
+  render()
+}
+
+function closeTaskCheckInModal() {
+  state.taskCheckInModalOpen = false
+  state.selectedCheckInTaskId = ''
+  state.selectedCheckInTaskDate = ''
+  state.selectedCheckInRewardCount = 0
+  render()
+}
+
+function beginCheckInRewardDrag(index) {
+  if (!Number.isFinite(index) || index < 1) return
+  state.checkInRewardDragging = true
+  state.selectedCheckInRewardCount = index
+  syncCheckInRewardDom()
+}
+
+function extendCheckInRewardDrag(index) {
+  if (!state.checkInRewardDragging || !Number.isFinite(index) || index < 1) return
+  state.selectedCheckInRewardCount = index
+  syncCheckInRewardDom()
+}
+
+function toggleCheckInReward(index) {
+  state.checkInRewardDragging = false
+  if (!Number.isFinite(index) || index < 1) return
+  state.selectedCheckInRewardCount = Number(state.selectedCheckInRewardCount || 0) === index ? Math.max(1, index - 1) : index
+  syncCheckInRewardDom()
+}
+
+function syncCheckInRewardDom() {
+  const selectedCount = Number(state.selectedCheckInRewardCount || 0)
+  document.querySelectorAll('[data-action="select-checkin-reward"]').forEach((button) => {
+    const index = Number(button.dataset.rewardIndex || 0)
+    button.classList.toggle('active', index <= selectedCount)
+  })
+  const countNode = document.querySelector('[data-checkin-reward-count]')
+  if (countNode) {
+    countNode.textContent = `${selectedCount} / ${countNode.dataset.total || selectedCount}`
+  }
+}
+
 function openPointCurrencyModal(currencyId = null) {
   if (!state.selectedChildId) {
     toast('请先新增孩子档案')
@@ -1485,6 +1640,7 @@ async function handleCreateTaskSubmit(event) {
   const dailyHours = formData.getAll('dailyHours').map((value) => Number(value)).filter((value) => value >= 6 && value <= 22)
   const startHour = dailyHours.length ? Math.min(...dailyHours) : Number(formData.get('startHour') || 6)
   const endHour = dailyHours.length ? Math.max(...dailyHours) : Number(formData.get('endHour') || 22)
+  const dailyRequiredCount = Math.max(1, Number(formData.get('dailyRequiredCount') || 1))
   const weeklyRequiredCount = Math.max(1, Number(formData.get('weeklyRequiredCount') || 1))
   const monthlyRequiredCount = Math.max(1, Number(formData.get('monthlyRequiredCount') || 1))
   const scheduleJson = buildTaskScheduleJson({
@@ -1493,6 +1649,7 @@ async function handleCreateTaskSubmit(event) {
     startHour,
     endHour,
     dailyHours,
+    dailyRequiredCount,
     weeklyDays,
     monthDays,
     weeklyRequiredCount,
@@ -1767,7 +1924,7 @@ function buildTaskScheduleJson(options) {
         startHour: options.startHour,
         endHour: options.endHour,
       },
-      requiredCount: 1,
+      requiredCount: options.dailyRequiredCount,
     })
   }
   if (options.periodType === 'MONTHLY') {

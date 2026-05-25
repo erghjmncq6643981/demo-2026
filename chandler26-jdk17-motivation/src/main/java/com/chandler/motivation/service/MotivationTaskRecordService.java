@@ -10,6 +10,7 @@ import com.chandler.motivation.domain.dto.task.TaskCompleteRequest;
 import com.chandler.motivation.domain.dto.task.TaskReviewRequest;
 import com.chandler.motivation.domain.mapper.MotivationTaskRecordMapper;
 import com.chandler.motivation.support.MotivationConstants;
+import com.chandler.motivation.support.MotivationEnums;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import java.time.LocalDate;
@@ -31,6 +32,9 @@ public class MotivationTaskRecordService extends ServiceImpl<MotivationTaskRecor
     private final AuthService authService;
     private final ObjectMapper objectMapper;
 
+    /**
+     * 读取某任务某一天的记录快照。
+     */
     public MotivationTaskRecord findByTaskAndDate(Long taskId, LocalDate taskDate) {
         return getOne(new LambdaQueryWrapper<MotivationTaskRecord>()
                 .eq(MotivationTaskRecord::getTaskId, taskId)
@@ -49,31 +53,41 @@ public class MotivationTaskRecordService extends ServiceImpl<MotivationTaskRecor
         return record;
     }
 
+    /**
+     * 按孩子和日期区间查询任务记录。
+     */
     public List<MotivationTaskRecord> listByChildAndRange(Long childId, LocalDate startDate, LocalDate endDate) {
         return list(new LambdaQueryWrapper<MotivationTaskRecord>()
                 .eq(MotivationTaskRecord::getChildId, childId)
-                .eq(MotivationTaskRecord::getDeleted, 0)
+                .eq(MotivationTaskRecord::getDeleted, MotivationConstants.Flag.NO)
                 .ge(startDate != null, MotivationTaskRecord::getTaskDate, startDate)
                 .le(endDate != null, MotivationTaskRecord::getTaskDate, endDate)
                 .orderByAsc(MotivationTaskRecord::getTaskDate)
                 .orderByAsc(MotivationTaskRecord::getTaskId));
     }
 
+    /**
+     * 删除任务时只清理后续未完成的日历记录。
+     */
     @Transactional
     public void deleteByTask(Long taskId, Long userId) {
         List<MotivationTaskRecord> records = list(new LambdaQueryWrapper<MotivationTaskRecord>()
                 .eq(MotivationTaskRecord::getTaskId, taskId)
-                .eq(MotivationTaskRecord::getDeleted, 0));
+                .eq(MotivationTaskRecord::getDeleted, MotivationConstants.Flag.NO)
+                .ne(MotivationTaskRecord::getStatus, MotivationEnums.TaskStatus.APPROVED.code()));
         if (records.isEmpty()) {
             return;
         }
-        records.forEach((record) -> record.setDeleted(1));
+        records.forEach((record) -> record.setDeleted(MotivationConstants.Flag.YES));
         updateBatchById(records);
         MotivationTaskRecord first = records.get(0);
-        systemLogService.record(userId, first.getChildId(), MotivationConstants.LogType.TASK,
+        systemLogService.recordBusiness(userId, first.getChildId(), MotivationEnums.LogType.TASK,
                 "清理任务记录", "删除任务后清理了 " + records.size() + " 条日历记录");
     }
 
+    /**
+     * 孩子或家长提交任务完成申请。
+     */
     @Transactional
     public MotivationTaskRecord complete(Long taskId, TaskCompleteRequest request, Long userId) {
         MotivationTask task = taskService.requireActiveTask(taskId, userId);
@@ -81,88 +95,97 @@ public class MotivationTaskRecordService extends ServiceImpl<MotivationTaskRecor
         validateScheduledDate(task, taskDate);
         validatePeriodRequiredCount(task, taskDate);
         MotivationTaskRecord existing = findByTaskAndDate(taskId, taskDate);
-        if (existing != null && MotivationConstants.TaskStatus.APPROVED.equals(existing.getStatus())) {
+        if (existing != null && MotivationEnums.codeEquals(MotivationEnums.TaskStatus.APPROVED, existing.getStatus())) {
             throw new MotivationException("TASK_RECORD_ALREADY_APPROVED", "这一天的任务已经完成并入账");
         }
 
         MotivationTaskRecord record = existing == null ? new MotivationTaskRecord() : existing;
         applyTaskSnapshot(record, task, taskDate);
-        record.setSourceType(MotivationConstants.UserType.CHILD);
+        record.setSourceType(MotivationEnums.UserType.CHILD.code());
         record.setSubmittedByUserId(userId);
         record.setSubmittedAt(LocalDateTime.now());
         record.setCompletionProgress(resolveProgress(request == null ? null : request.getCompletionProgress()));
         record.setAttachmentJson("{}");
-        record.setDeleted(0);
+        record.setDeleted(MotivationConstants.Flag.NO);
 
         int scoreAwarded = calculateScore(task.getBasePoints(), record.getCompletionProgress());
         MotivationUser operator = authService.requireUser();
-        boolean childSubmitted = MotivationConstants.UserType.CHILD.equals(operator.getUserType());
-        if (childSubmitted || Integer.valueOf(1).equals(task.getRequireApproval())) {
-            record.setStatus(MotivationConstants.TaskStatus.SUBMITTED);
-            record.setScoreAwarded(0);
+        boolean childSubmitted = MotivationEnums.codeEquals(MotivationEnums.UserType.CHILD, operator.getUserType());
+        if (childSubmitted || Integer.valueOf(MotivationConstants.Flag.YES).equals(task.getRequireApproval())) {
+            record.setStatus(MotivationEnums.TaskStatus.SUBMITTED.code());
+            record.setScoreAwarded(MotivationConstants.Schedule.EMPTY_PROGRESS);
             record.setReviewedByUserId(null);
             record.setReviewedAt(null);
             record.setReviewRemark(null);
             createOrUpdateSnapshot(record);
-            systemLogService.record(userId, task.getChildId(), MotivationConstants.LogType.TASK,
-                    "提交任务打卡", "提交任务「" + task.getName() + "」，等待审核");
+            systemLogService.recordBusiness(userId, task.getChildId(), MotivationEnums.LogType.TASK,
+                    "提交任务打卡",
+                    "提交了任务「" + task.getName() + "」的打卡申请，等待审核");
             return record;
         }
 
-        record.setStatus(MotivationConstants.TaskStatus.APPROVED);
+        record.setStatus(MotivationEnums.TaskStatus.APPROVED.code());
         record.setReviewedByUserId(userId);
         record.setReviewedAt(LocalDateTime.now());
         record.setReviewRemark("自动通过");
         record.setScoreAwarded(scoreAwarded);
         createOrUpdateSnapshot(record);
         awardTaskScore(record, userId);
-        systemLogService.record(userId, task.getChildId(), MotivationConstants.LogType.TASK,
-                "完成任务", "完成任务「" + task.getName() + "」，获得 " + scoreAwarded + " " + task.getPointType());
+        systemLogService.recordBusiness(userId, task.getChildId(), MotivationEnums.LogType.TASK,
+                "完成任务",
+                "任务「" + task.getName() + "」完成，获得 " + scoreAwarded + " 个"
+                        + MotivationEnums.descriptionOf(MotivationEnums.PointType.class, task.getPointType(), MotivationEnums.PointType.STAR));
         return record;
     }
 
+    /**
+     * 审核家长待确认的任务打卡。
+     */
     @Transactional
     public MotivationTaskRecord approve(Long recordId, TaskReviewRequest request, Long userId) {
         MotivationTaskRecord record = requireRecord(recordId, userId);
-        if (MotivationConstants.TaskStatus.APPROVED.equals(record.getStatus())) {
+        if (MotivationEnums.codeEquals(MotivationEnums.TaskStatus.APPROVED, record.getStatus())) {
             return record;
         }
-        if (!MotivationConstants.TaskStatus.SUBMITTED.equals(record.getStatus())) {
+        if (!MotivationEnums.codeEquals(MotivationEnums.TaskStatus.SUBMITTED, record.getStatus())) {
             throw new MotivationException("TASK_RECORD_NOT_SUBMITTED", "只有待审核任务可以通过");
         }
         validateRecordRequiredCount(record);
-        record.setStatus(MotivationConstants.TaskStatus.APPROVED);
+        record.setStatus(MotivationEnums.TaskStatus.APPROVED.code());
         record.setReviewedByUserId(userId);
         record.setReviewedAt(LocalDateTime.now());
         record.setReviewRemark(request == null ? null : request.getRemark());
         record.setScoreAwarded(calculateScore(record.getBasePointsSnapshot(), record.getCompletionProgress()));
         updateById(record);
         awardTaskScore(record, userId);
-        systemLogService.record(userId, record.getChildId(), MotivationConstants.LogType.TASK,
-                "审核通过任务", "任务「" + record.getTaskNameSnapshot() + "」审核通过");
+        systemLogService.recordBusiness(userId, record.getChildId(), MotivationEnums.LogType.TASK,
+                "审核通过任务", "通过了任务「" + record.getTaskNameSnapshot() + "」的打卡申请");
         return record;
     }
 
+    /**
+     * 驳回家长待确认的任务打卡。
+     */
     @Transactional
     public MotivationTaskRecord reject(Long recordId, TaskReviewRequest request, Long userId) {
         MotivationTaskRecord record = requireRecord(recordId, userId);
-        if (!MotivationConstants.TaskStatus.SUBMITTED.equals(record.getStatus())) {
+        if (!MotivationEnums.codeEquals(MotivationEnums.TaskStatus.SUBMITTED, record.getStatus())) {
             throw new MotivationException("TASK_RECORD_NOT_SUBMITTED", "只有待审核任务可以拒绝");
         }
-        record.setStatus(MotivationConstants.TaskStatus.REJECTED);
+        record.setStatus(MotivationEnums.TaskStatus.REJECTED.code());
         record.setReviewedByUserId(userId);
         record.setReviewedAt(LocalDateTime.now());
         record.setReviewRemark(request == null ? null : request.getRemark());
         record.setScoreAwarded(0);
         updateById(record);
-        systemLogService.record(userId, record.getChildId(), MotivationConstants.LogType.TASK,
-                "审核拒绝任务", "任务「" + record.getTaskNameSnapshot() + "」审核未通过");
+        systemLogService.recordBusiness(userId, record.getChildId(), MotivationEnums.LogType.TASK,
+                "审核拒绝任务", "拒绝了任务「" + record.getTaskNameSnapshot() + "」的打卡申请");
         return record;
     }
 
     private MotivationTaskRecord requireRecord(Long recordId, Long userId) {
         MotivationTaskRecord record = getById(recordId);
-        if (record == null || Integer.valueOf(1).equals(record.getDeleted())) {
+        if (record == null || Integer.valueOf(MotivationConstants.Flag.YES).equals(record.getDeleted())) {
             throw new MotivationException("TASK_RECORD_NOT_FOUND", "任务记录不存在");
         }
         childService.requireManageAccess(record.getChildId(), userId);
@@ -196,33 +219,33 @@ public class MotivationTaskRecordService extends ServiceImpl<MotivationTaskRecor
 
     private void validateScheduledDate(MotivationTask task, LocalDate taskDate) {
         JsonNode schedule = readSchedule(task.getScheduleJson());
-        if (MotivationConstants.PeriodType.WEEKLY.equals(task.getPeriodType())
+        if (MotivationEnums.codeEquals(MotivationEnums.PeriodType.WEEKLY, task.getPeriodType())
                 && !containsDay(schedule.get("days"), taskDate.getDayOfWeek().getValue())) {
             throw new MotivationException("TASK_NOT_SCHEDULED_DATE", "这一天不在任务可完成日期内");
         }
-        if (MotivationConstants.PeriodType.MONTHLY.equals(task.getPeriodType())
+        if (MotivationEnums.codeEquals(MotivationEnums.PeriodType.MONTHLY, task.getPeriodType())
                 && !containsDay(schedule.get("days"), taskDate.getDayOfMonth())) {
             throw new MotivationException("TASK_NOT_SCHEDULED_DATE", "这一天不在任务可完成日期内");
         }
     }
 
     private void validatePeriodRequiredCount(MotivationTask task, LocalDate taskDate) {
-        if (MotivationConstants.PeriodType.DAILY.equals(task.getPeriodType())) {
+        if (MotivationEnums.codeEquals(MotivationEnums.PeriodType.DAILY, task.getPeriodType())) {
             return;
         }
         JsonNode schedule = readSchedule(task.getScheduleJson());
         int requiredCount = Math.max(1, schedule.path("requiredCount").asInt(1));
         MotivationTaskRecord existing = findByTaskAndDate(task.getId(), taskDate);
-        LocalDate startDate = MotivationConstants.PeriodType.WEEKLY.equals(task.getPeriodType())
+        LocalDate startDate = MotivationEnums.codeEquals(MotivationEnums.PeriodType.WEEKLY, task.getPeriodType())
                 ? taskDate.with(TemporalAdjusters.previousOrSame(java.time.DayOfWeek.MONDAY))
                 : taskDate.withDayOfMonth(1);
-        LocalDate endDate = MotivationConstants.PeriodType.WEEKLY.equals(task.getPeriodType())
+        LocalDate endDate = MotivationEnums.codeEquals(MotivationEnums.PeriodType.WEEKLY, task.getPeriodType())
                 ? taskDate.with(TemporalAdjusters.nextOrSame(java.time.DayOfWeek.SUNDAY))
                 : taskDate.withDayOfMonth(taskDate.lengthOfMonth());
         long approvedCount = count(new LambdaQueryWrapper<MotivationTaskRecord>()
                 .eq(MotivationTaskRecord::getTaskId, task.getId())
-                .eq(MotivationTaskRecord::getDeleted, 0)
-                .eq(MotivationTaskRecord::getStatus, MotivationConstants.TaskStatus.APPROVED)
+                .eq(MotivationTaskRecord::getDeleted, MotivationConstants.Flag.NO)
+                .eq(MotivationTaskRecord::getStatus, MotivationEnums.TaskStatus.APPROVED.code())
                 .ne(existing != null && existing.getId() != null, MotivationTaskRecord::getId, existing == null ? null : existing.getId())
                 .ge(MotivationTaskRecord::getTaskDate, startDate)
                 .le(MotivationTaskRecord::getTaskDate, endDate));
@@ -254,22 +277,22 @@ public class MotivationTaskRecordService extends ServiceImpl<MotivationTaskRecor
     private void validateRecordRequiredCount(MotivationTaskRecord record) {
         JsonNode schedule = readSchedule(record.getScheduleSnapshotJson());
         String periodType = schedule.path("type").asText("");
-        if (!MotivationConstants.PeriodType.WEEKLY.equals(periodType)
-                && !MotivationConstants.PeriodType.MONTHLY.equals(periodType)) {
+        if (!MotivationEnums.codeEquals(MotivationEnums.PeriodType.WEEKLY, periodType)
+                && !MotivationEnums.codeEquals(MotivationEnums.PeriodType.MONTHLY, periodType)) {
             return;
         }
         int requiredCount = Math.max(1, schedule.path("requiredCount").asInt(1));
         LocalDate taskDate = record.getTaskDate();
-        LocalDate startDate = MotivationConstants.PeriodType.WEEKLY.equals(periodType)
+        LocalDate startDate = MotivationEnums.codeEquals(MotivationEnums.PeriodType.WEEKLY, periodType)
                 ? taskDate.with(TemporalAdjusters.previousOrSame(java.time.DayOfWeek.MONDAY))
                 : taskDate.withDayOfMonth(1);
-        LocalDate endDate = MotivationConstants.PeriodType.WEEKLY.equals(periodType)
+        LocalDate endDate = MotivationEnums.codeEquals(MotivationEnums.PeriodType.WEEKLY, periodType)
                 ? taskDate.with(TemporalAdjusters.nextOrSame(java.time.DayOfWeek.SUNDAY))
                 : taskDate.withDayOfMonth(taskDate.lengthOfMonth());
         long approvedCount = count(new LambdaQueryWrapper<MotivationTaskRecord>()
                 .eq(MotivationTaskRecord::getTaskId, record.getTaskId())
-                .eq(MotivationTaskRecord::getDeleted, 0)
-                .eq(MotivationTaskRecord::getStatus, MotivationConstants.TaskStatus.APPROVED)
+                .eq(MotivationTaskRecord::getDeleted, MotivationConstants.Flag.NO)
+                .eq(MotivationTaskRecord::getStatus, MotivationEnums.TaskStatus.APPROVED.code())
                 .ne(record.getId() != null, MotivationTaskRecord::getId, record.getId())
                 .ge(MotivationTaskRecord::getTaskDate, startDate)
                 .le(MotivationTaskRecord::getTaskDate, endDate));

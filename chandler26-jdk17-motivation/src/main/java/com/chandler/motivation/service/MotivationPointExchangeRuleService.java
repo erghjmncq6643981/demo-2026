@@ -11,6 +11,7 @@ import com.chandler.motivation.domain.dto.points.PointExchangeRuleRequest;
 import com.chandler.motivation.domain.dto.points.PointExchangeRuleResponse;
 import com.chandler.motivation.domain.mapper.MotivationPointExchangeRuleMapper;
 import com.chandler.motivation.support.MotivationConstants;
+import com.chandler.motivation.support.MotivationEnums;
 import java.util.Set;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
@@ -25,19 +26,25 @@ public class MotivationPointExchangeRuleService extends ServiceImpl<MotivationPo
     private static final int DEFAULT_FLOWER_WEIGHT = 10;
     private static final int DEFAULT_CROWN_WEIGHT = 100;
     private static final Set<String> POINT_TYPES = Set.of(
-            MotivationConstants.PointType.STAR,
-            MotivationConstants.PointType.FLOWER,
-            MotivationConstants.PointType.CROWN);
+            MotivationEnums.PointType.STAR.code(),
+            MotivationEnums.PointType.FLOWER.code(),
+            MotivationEnums.PointType.CROWN.code());
 
     private final MotivationChildService childService;
     private final MotivationPointLedgerService pointLedgerService;
     private final MotivationSystemLogService systemLogService;
 
+    /**
+     * 获取孩子币值兑换规则。
+     */
     public PointExchangeRuleResponse getRule(Long childId, Long userId) {
         childService.requireViewAccess(childId, userId);
         return toResponse(getOrDefault(childId));
     }
 
+    /**
+     * 保存孩子币值之间的兑换比例。
+     */
     @Transactional
     public PointExchangeRuleResponse saveRule(Long childId, Long userId, PointExchangeRuleRequest request) {
         childService.requireManageAccess(childId, userId);
@@ -59,12 +66,15 @@ public class MotivationPointExchangeRuleService extends ServiceImpl<MotivationPo
         } else {
             updateById(rule);
         }
-        systemLogService.record(userId, childId, MotivationConstants.LogType.POINT,
+        systemLogService.recordBusiness(userId, childId, MotivationEnums.LogType.POINT,
                 "设置币值",
-                "设置币值为星星币:红花币:皇冠币 = 1:" + starWeight + "、1:" + flowerWeight + "、1:" + crownWeight);
+                "设置了币值兑换比例：星星币 1:" + starWeight + "，红花币 1:" + flowerWeight + "，皇冠币 1:" + crownWeight);
         return toResponse(rule);
     }
 
+    /**
+     * 在孩子侧执行币值互换。
+     */
     @Transactional
     public PointExchangeResultResponse exchange(Long childId, Long userId, PointExchangeRequest request) {
         childService.requireViewAccess(childId, userId);
@@ -106,9 +116,9 @@ public class MotivationPointExchangeRuleService extends ServiceImpl<MotivationPo
                 sourceName,
                 "积分互换入账",
                 userId);
-        systemLogService.record(userId, childId, MotivationConstants.LogType.POINT,
+        systemLogService.recordBusiness(userId, childId, MotivationEnums.LogType.POINT,
                 "积分互换",
-                "使用 " + spentAmount + " " + pointName(fromPointType) + " 兑换 " + toAmount + " " + pointName(toPointType));
+                "使用 " + spentAmount + " 个" + pointName(fromPointType) + " 兑换了 " + toAmount + " 个" + pointName(toPointType));
 
         PointExchangeResultResponse response = new PointExchangeResultResponse();
         response.setFromPointType(fromPointType);
@@ -153,16 +163,16 @@ public class MotivationPointExchangeRuleService extends ServiceImpl<MotivationPo
 
     private int weightOf(MotivationPointExchangeRule rule, String pointType) {
         return switch (pointType) {
-            case MotivationConstants.PointType.CROWN -> rule.getCrownWeight();
-            case MotivationConstants.PointType.FLOWER -> rule.getFlowerWeight();
+            case "CROWN" -> rule.getCrownWeight();
+            case "FLOWER" -> rule.getFlowerWeight();
             default -> rule.getStarWeight();
         };
     }
 
     private String pointName(String pointType) {
         return switch (pointType) {
-            case MotivationConstants.PointType.CROWN -> "皇冠";
-            case MotivationConstants.PointType.FLOWER -> "红花";
+            case "CROWN" -> "皇冠";
+            case "FLOWER" -> "红花";
             default -> "星星";
         };
     }

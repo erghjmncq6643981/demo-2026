@@ -4,6 +4,7 @@ import com.chandler.motivation.domain.dataobject.MotivationTask;
 import com.chandler.motivation.domain.dataobject.MotivationTaskRecord;
 import com.chandler.motivation.domain.dto.calendar.CalendarEventResponse;
 import com.chandler.motivation.support.MotivationConstants;
+import com.chandler.motivation.support.MotivationEnums;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import java.time.DayOfWeek;
@@ -41,7 +42,7 @@ public class CalendarService {
         LocalDate resolvedStart = startDate == null ? LocalDate.now().withDayOfMonth(1) : startDate;
         LocalDate resolvedEnd = endDate == null ? YearMonth.from(resolvedStart).atEndOfMonth() : endDate;
         List<MotivationTask> tasks = taskService.listByChild(childId, userId).stream()
-                .filter(task -> MotivationConstants.TaskStatus.ACTIVE.equals(task.getStatus()))
+                .filter(task -> MotivationEnums.codeEquals(MotivationEnums.TaskStatus.ACTIVE, task.getStatus()))
                 .toList();
         Map<String, MotivationTaskRecord> recordMap = taskRecordService.listByChildAndRange(childId, resolvedStart, resolvedEnd)
                 .stream()
@@ -62,11 +63,13 @@ public class CalendarService {
 
     private boolean isScheduled(MotivationTask task, LocalDate date) {
         JsonNode schedule = readSchedule(task.getScheduleJson());
-        return switch (task.getPeriodType()) {
-            case MotivationConstants.PeriodType.WEEKLY -> isWeeklyScheduled(schedule, date.getDayOfWeek());
-            case MotivationConstants.PeriodType.MONTHLY -> isMonthlyScheduled(schedule, date);
-            default -> true;
-        };
+        if (MotivationEnums.codeEquals(MotivationEnums.PeriodType.WEEKLY, task.getPeriodType())) {
+            return isWeeklyScheduled(schedule, date.getDayOfWeek());
+        }
+        if (MotivationEnums.codeEquals(MotivationEnums.PeriodType.MONTHLY, task.getPeriodType())) {
+            return isMonthlyScheduled(schedule, date);
+        }
+        return true;
     }
 
     private boolean isWeeklyScheduled(JsonNode schedule, DayOfWeek dayOfWeek) {
@@ -125,9 +128,9 @@ public class CalendarService {
         response.setBasePoints(task.getBasePoints());
         response.setPeriodType(task.getPeriodType());
         response.setScheduleJson(task.getScheduleJson());
-        response.setCompletionProgress(0);
-        response.setStatus(MotivationConstants.TaskStatus.PENDING);
-        response.setScoreAwarded(0);
+        response.setCompletionProgress(MotivationConstants.Schedule.EMPTY_PROGRESS);
+        response.setStatus(MotivationEnums.TaskStatus.PENDING.code());
+        response.setScoreAwarded(MotivationConstants.Schedule.EMPTY_PROGRESS);
         response.setPersisted(false);
         return response;
     }

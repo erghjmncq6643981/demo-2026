@@ -870,11 +870,14 @@ input[type="color"] { padding: 4px; }
   padding: 0 12px;
   font-weight: 900;
 }
-.calendar-toolbar { justify-content: flex-start; flex-wrap: wrap; margin-bottom: 14px; }
+.calendar-toolbar { justify-content: space-between; flex-wrap: wrap; margin-bottom: 14px; }
 .calendar-toolbar-group {
   display: inline-flex;
   gap: 8px;
   flex-wrap: wrap;
+}
+.calendar-kind-group {
+  margin-left: auto;
 }
 .calendar-grid.week-view .day {
   min-height: 168px;
@@ -1110,6 +1113,15 @@ input[type="color"] { padding: 4px; }
   grid-template-columns: repeat(2, minmax(0, 1fr));
   gap: 10px;
 }
+.calendar-detail-focus {
+  display: grid;
+  place-items: center;
+  min-height: 94px;
+  padding: 16px;
+  border: 1px solid var(--line);
+  border-radius: 16px;
+  background: #fff;
+}
 .calendar-detail-card {
   min-height: 70px;
   display: grid;
@@ -1141,6 +1153,29 @@ input[type="color"] { padding: 4px; }
 .calendar-point-change.negative {
   color: var(--bad);
 }
+.point-change-icons {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 5px;
+  color: var(--point-color);
+  font-weight: 900;
+  line-height: 1;
+}
+.point-change-icons b,
+.point-change-icons strong {
+  font-size: 19px;
+}
+.point-change-icons span {
+  font-size: 22px;
+}
+.point-change-icons.large b,
+.point-change-icons.large strong {
+  font-size: 34px;
+}
+.point-change-icons.large span {
+  font-size: 42px;
+}
 .calendar-reward-detail strong {
   display: block;
   margin-bottom: 6px;
@@ -1162,6 +1197,15 @@ input[type="color"] { padding: 4px; }
 }
 .calendar-modal-actions {
   padding: 0 18px 18px;
+}
+.todo-more-btn {
+  min-height: 36px;
+  border: 1px dashed rgba(79, 70, 229, 0.28);
+  border-radius: 12px;
+  color: #4338ca;
+  background: rgba(255,255,255,0.82);
+  font-size: 12px;
+  font-weight: 900;
 }
 
 .exchange-rule-panel {
@@ -1452,6 +1496,66 @@ input[type="color"] { padding: 4px; }
   background: #f1f5f9;
   box-shadow: none;
   cursor: not-allowed;
+}
+.time-choice-grid {
+  touch-action: none;
+  user-select: none;
+}
+.checkin-task-note {
+  padding: 12px;
+  border: 1px solid rgba(79, 70, 229, 0.12);
+  border-radius: 14px;
+  color: #4338ca;
+  background: rgba(79, 70, 229, 0.08);
+  font-size: 13px;
+  font-weight: 800;
+  line-height: 1.45;
+}
+.checkin-reward-panel {
+  display: grid;
+  gap: 10px;
+  padding: 12px;
+  border: 1px solid color-mix(in srgb, var(--point-color) 18%, #ffffff);
+  border-radius: 16px;
+  background: color-mix(in srgb, var(--point-color) 7%, #ffffff);
+}
+.checkin-reward-grid {
+  display: grid;
+  grid-template-columns: repeat(8, minmax(0, 1fr));
+  gap: 8px;
+  touch-action: none;
+  user-select: none;
+}
+.checkin-reward-icon {
+  aspect-ratio: 1;
+  min-width: 0;
+  min-height: 34px;
+  display: grid;
+  place-items: center;
+  border: 1px solid var(--line);
+  border-radius: 11px;
+  color: #cbd5e1;
+  background: #fff;
+  font-size: 21px;
+  line-height: 1;
+}
+.checkin-reward-icon.active {
+  border-color: color-mix(in srgb, var(--point-color) 40%, #ffffff);
+  color: var(--point-color);
+  background: color-mix(in srgb, var(--point-color) 12%, #ffffff);
+  box-shadow: 0 8px 18px color-mix(in srgb, var(--point-color) 14%, transparent);
+}
+.checkin-reward-count {
+  justify-self: end;
+  min-height: 26px;
+  display: inline-flex;
+  align-items: center;
+  padding: 0 10px;
+  border-radius: 999px;
+  color: color-mix(in srgb, var(--point-color) 78%, #111827);
+  background: #fff;
+  font-size: 12px;
+  font-weight: 900;
 }
 .icon-field {
   position: relative;

@@ -8,6 +8,7 @@ import com.chandler.motivation.domain.dataobject.MotivationPointLedger;
 import com.chandler.motivation.domain.dto.points.PointAdjustRequest;
 import com.chandler.motivation.domain.mapper.MotivationPointLedgerMapper;
 import com.chandler.motivation.support.MotivationConstants;
+import com.chandler.motivation.support.MotivationEnums;
 import java.time.LocalDateTime;
 import java.util.List;
 import lombok.RequiredArgsConstructor;
@@ -22,6 +23,9 @@ public class MotivationPointLedgerService extends ServiceImpl<MotivationPointLed
     private final MotivationChildPointBalanceService balanceService;
     private final MotivationSystemLogService systemLogService;
 
+    /**
+     * 按来源追踪最近一条积分流水，避免重复入账。
+     */
     public MotivationPointLedger lastBySource(String sourceType, Long sourceId, Long childId, String pointType) {
         return getOne(new LambdaQueryWrapper<MotivationPointLedger>()
                 .eq(MotivationPointLedger::getSourceType, sourceType)
@@ -36,13 +40,17 @@ public class MotivationPointLedgerService extends ServiceImpl<MotivationPointLed
                 .eq(MotivationPointLedger::getChildId, childId)
                 .orderByDesc(MotivationPointLedger::getEventTime)
                 .orderByDesc(MotivationPointLedger::getId)
-                .last("limit " + Math.max(1, Math.min(limit, 200)));
+                .last("limit " + Math.max(MotivationConstants.Pagination.MIN_LIMIT,
+                        Math.min(limit, MotivationConstants.Pagination.LEDGER_MAX_LIMIT)));
         if (StringUtils.hasText(pointType)) {
             wrapper.eq(MotivationPointLedger::getPointType, pointType.trim());
         }
         return list(wrapper);
     }
 
+    /**
+     * 统一处理积分变动、账本和余额同步。
+     */
     @Transactional
     public MotivationPointLedger applyChange(Long childId,
                                              String pointType,
@@ -97,12 +105,16 @@ public class MotivationPointLedgerService extends ServiceImpl<MotivationPointLed
         ledger.setEventTime(LocalDateTime.now());
         save(ledger);
 
-        systemLogService.record(operatorUserId, childId, MotivationConstants.LogType.POINT,
+        systemLogService.recordBusiness(operatorUserId, childId, MotivationEnums.LogType.POINT,
                 amount > 0 ? "增加积分" : "扣减积分",
-                "积分类型 " + pointType + " 变动 " + amount + "，余额 " + balanceAfter);
+                "孩子「" + childId + "」的" + MotivationEnums.descriptionOf(MotivationEnums.PointType.class, pointType, MotivationEnums.PointType.STAR)
+                        + "发生 " + (amount > 0 ? "增加" : "扣减") + " " + Math.abs(amount) + "，当前余额 " + balanceAfter);
         return ledger;
     }
 
+    /**
+     * 父母手动调整积分，必须填写原因。
+     */
     @Transactional
     public MotivationPointLedger manualAdjust(Long childId, Long operatorUserId, PointAdjustRequest request) {
         if (request == null) {

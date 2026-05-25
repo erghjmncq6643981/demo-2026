@@ -2,6 +2,7 @@ package com.chandler.motivation.security;
 
 import com.chandler.motivation.domain.dataobject.MotivationUser;
 import com.chandler.motivation.domain.mapper.MotivationUserMapper;
+import com.chandler.motivation.support.MotivationConstants;
 import jakarta.servlet.FilterChain;
 import jakarta.servlet.ServletException;
 import jakarta.servlet.http.HttpServletRequest;
@@ -30,7 +31,9 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
             try {
                 JwtClaims claims = jwtTokenService.parse(token);
                 MotivationUser user = userMapper.selectById(claims.userId());
-                if (user != null && Integer.valueOf(1).equals(user.getEnabled()) && Integer.valueOf(0).equals(user.getDeleted())) {
+                if (user != null
+                        && Integer.valueOf(MotivationConstants.Flag.YES).equals(user.getEnabled())
+                        && Integer.valueOf(MotivationConstants.Flag.NO).equals(user.getDeleted())) {
                     MotivationUserPrincipal principal = new MotivationUserPrincipal(user);
                     UsernamePasswordAuthenticationToken authentication =
                             new UsernamePasswordAuthenticationToken(principal, token, List.of());

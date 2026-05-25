@@ -13,6 +13,7 @@ import com.chandler.motivation.domain.dto.reward.RewardExchangeReviewRequest;
 import com.chandler.motivation.domain.dto.reward.RewardFulfillmentRequest;
 import com.chandler.motivation.domain.mapper.MotivationRewardExchangeMapper;
 import com.chandler.motivation.support.MotivationConstants;
+import com.chandler.motivation.support.MotivationEnums;
 import java.time.LocalDateTime;
 import java.util.List;
 import java.util.Map;
@@ -35,9 +36,9 @@ public class MotivationRewardExchangeService extends ServiceImpl<MotivationRewar
     private final MotivationPointExchangeRuleService pointExchangeRuleService;
 
     private static final Set<String> POINT_TYPES = Set.of(
-            MotivationConstants.PointType.STAR,
-            MotivationConstants.PointType.FLOWER,
-            MotivationConstants.PointType.CROWN);
+            MotivationEnums.PointType.STAR.code(),
+            MotivationEnums.PointType.FLOWER.code(),
+            MotivationEnums.PointType.CROWN.code());
 
     public List<MotivationRewardExchange> listByChild(Long childId, Long userId, String status, int limit) {
         childService.requireViewAccess(childId, userId);
@@ -68,36 +69,36 @@ public class MotivationRewardExchangeService extends ServiceImpl<MotivationRewar
         exchange.setRewardIconSnapshot(reward.getRewardIcon());
         exchange.setRequiredPointType(paymentPlan.requiredPointType());
         exchange.setRequiredPointsSnapshot(reward.getRequiredPoints());
-        exchange.setFulfillmentStatus(MotivationConstants.RewardFulfillmentStatus.PENDING);
+        exchange.setFulfillmentStatus(MotivationEnums.RewardFulfillmentStatus.PENDING.code());
         exchange.setRemark(request.getRemark());
         exchange.setRequestedByUserId(userId);
         exchange.setRequestedAt(LocalDateTime.now());
 
-        exchange.setStatus(MotivationConstants.RewardExchangeStatus.REQUESTED);
+        exchange.setStatus(MotivationEnums.RewardExchangeStatus.REQUESTED.code());
         save(exchange);
         MotivationPointLedger ledger = deductRewardPoints(exchange, paymentPlan, userId);
         exchange.setDeductedLedgerId(ledger.getId());
         updateById(exchange);
-        systemLogService.record(userId, reward.getChildId(), MotivationConstants.LogType.REWARD,
-                "申请兑换奖励", "申请兑换奖励「" + reward.getName() + "」");
+        systemLogService.recordBusiness(userId, reward.getChildId(), MotivationEnums.LogType.REWARD,
+                "申请兑换奖励", "申请兑换了奖励「" + reward.getName() + "」");
         return exchange;
     }
 
     @Transactional
     public MotivationRewardExchange approve(Long exchangeId, RewardExchangeReviewRequest request, Long userId) {
         MotivationRewardExchange exchange = requireExchange(exchangeId, userId);
-        if (MotivationConstants.RewardExchangeStatus.APPROVED.equals(exchange.getStatus())
-                || MotivationConstants.RewardExchangeStatus.COMPLETED.equals(exchange.getStatus())) {
+        if (MotivationEnums.codeEquals(MotivationEnums.RewardExchangeStatus.APPROVED, exchange.getStatus())
+                || MotivationEnums.codeEquals(MotivationEnums.RewardExchangeStatus.COMPLETED, exchange.getStatus())) {
             return exchange;
         }
-        if (!MotivationConstants.RewardExchangeStatus.REQUESTED.equals(exchange.getStatus())) {
+        if (!MotivationEnums.codeEquals(MotivationEnums.RewardExchangeStatus.REQUESTED, exchange.getStatus())) {
             throw new MotivationException("REWARD_EXCHANGE_NOT_REQUESTED", "只有待确认兑换可以通过");
         }
         MotivationReward reward = rewardService.requireActiveReward(exchange.getRewardId(), userId);
         validateStock(reward);
         MotivationPointLedger ledger = ensureRewardPointsDeducted(exchange, reward, userId);
-        exchange.setStatus(MotivationConstants.RewardExchangeStatus.APPROVED);
-        exchange.setFulfillmentStatus(MotivationConstants.RewardFulfillmentStatus.PENDING);
+        exchange.setStatus(MotivationEnums.RewardExchangeStatus.APPROVED.code());
+        exchange.setFulfillmentStatus(MotivationEnums.RewardFulfillmentStatus.PENDING.code());
         exchange.setReviewedByUserId(userId);
         exchange.setReviewedAt(LocalDateTime.now());
         exchange.setDeductedLedgerId(ledger.getId());
@@ -106,62 +107,65 @@ public class MotivationRewardExchangeService extends ServiceImpl<MotivationRewar
         }
         updateById(exchange);
         decreaseStock(reward);
-        systemLogService.record(userId, exchange.getChildId(), MotivationConstants.LogType.REWARD,
-                "确认奖励兑换", "确认兑换奖励「" + exchange.getRewardNameSnapshot() + "」");
+        systemLogService.recordBusiness(userId, exchange.getChildId(), MotivationEnums.LogType.REWARD,
+                "确认奖励兑换", "通过了奖励「" + exchange.getRewardNameSnapshot() + "」的兑换申请");
         return exchange;
     }
 
     @Transactional
     public MotivationRewardExchange reject(Long exchangeId, RewardExchangeReviewRequest request, Long userId) {
         MotivationRewardExchange exchange = requireExchange(exchangeId, userId);
-        if (!MotivationConstants.RewardExchangeStatus.REQUESTED.equals(exchange.getStatus())) {
+        if (!MotivationEnums.codeEquals(MotivationEnums.RewardExchangeStatus.REQUESTED, exchange.getStatus())) {
             throw new MotivationException("REWARD_EXCHANGE_NOT_REQUESTED", "只有待确认兑换可以拒绝");
         }
         refundRewardPoints(exchange, userId);
-        exchange.setStatus(MotivationConstants.RewardExchangeStatus.REJECTED);
+        exchange.setStatus(MotivationEnums.RewardExchangeStatus.REJECTED.code());
         exchange.setReviewedByUserId(userId);
         exchange.setReviewedAt(LocalDateTime.now());
         if (request != null && request.getRemark() != null && !request.getRemark().isBlank()) {
             exchange.setRemark(request.getRemark().trim());
         }
         updateById(exchange);
-        systemLogService.record(userId, exchange.getChildId(), MotivationConstants.LogType.REWARD,
-                "拒绝奖励兑换", "拒绝兑换奖励「" + exchange.getRewardNameSnapshot() + "」");
+        systemLogService.recordBusiness(userId, exchange.getChildId(), MotivationEnums.LogType.REWARD,
+                "拒绝奖励兑换", "拒绝了奖励「" + exchange.getRewardNameSnapshot() + "」的兑换申请");
         return exchange;
     }
 
     @Transactional
     public MotivationRewardExchange updateFulfillment(Long exchangeId, RewardFulfillmentRequest request, Long userId) {
         MotivationRewardExchange exchange = requireManageExchange(exchangeId, userId);
-        if (!MotivationConstants.RewardExchangeStatus.APPROVED.equals(exchange.getStatus())
-                && !MotivationConstants.RewardExchangeStatus.COMPLETED.equals(exchange.getStatus())) {
+        if (!MotivationEnums.codeEquals(MotivationEnums.RewardExchangeStatus.APPROVED, exchange.getStatus())
+                && !MotivationEnums.codeEquals(MotivationEnums.RewardExchangeStatus.COMPLETED, exchange.getStatus())) {
             throw new MotivationException("REWARD_EXCHANGE_NOT_APPROVED", "只有已通过兑换可以更新礼物状态");
         }
         String fulfillmentStatus = normalizeFulfillmentStatus(request == null ? null : request.getFulfillmentStatus(), false);
         exchange.setFulfillmentStatus(fulfillmentStatus);
         exchange.setFulfillmentUpdatedByUserId(userId);
         exchange.setFulfillmentUpdatedAt(LocalDateTime.now());
-        if (MotivationConstants.RewardFulfillmentStatus.COMPLETED.equals(fulfillmentStatus)) {
+        if (MotivationEnums.codeEquals(MotivationEnums.RewardFulfillmentStatus.COMPLETED, fulfillmentStatus)) {
             exchange.setCompletedAt(LocalDateTime.now());
         }
         if (request != null && request.getRemark() != null && !request.getRemark().isBlank()) {
             exchange.setRemark(request.getRemark().trim());
         }
         updateById(exchange);
-        systemLogService.record(userId, exchange.getChildId(), MotivationConstants.LogType.REWARD,
-                "更新礼物状态", "更新奖励「" + exchange.getRewardNameSnapshot() + "」状态为 " + fulfillmentStatus);
+        systemLogService.recordBusiness(userId, exchange.getChildId(), MotivationEnums.LogType.REWARD,
+                "更新礼物状态", "把奖励「" + exchange.getRewardNameSnapshot() + "」的状态改成了 "
+                        + MotivationEnums.descriptionOf(MotivationEnums.RewardFulfillmentStatus.class,
+                        fulfillmentStatus,
+                        MotivationEnums.RewardFulfillmentStatus.PENDING));
         return exchange;
     }
 
     @Transactional
     public MotivationRewardExchange confirm(Long exchangeId, RewardExchangeConfirmRequest request, Long userId) {
         MotivationRewardExchange exchange = requireViewExchange(exchangeId, userId);
-        if (!MotivationConstants.RewardExchangeStatus.APPROVED.equals(exchange.getStatus())
-                && !MotivationConstants.RewardExchangeStatus.COMPLETED.equals(exchange.getStatus())) {
+        if (!MotivationEnums.codeEquals(MotivationEnums.RewardExchangeStatus.APPROVED, exchange.getStatus())
+                && !MotivationEnums.codeEquals(MotivationEnums.RewardExchangeStatus.COMPLETED, exchange.getStatus())) {
             throw new MotivationException("REWARD_EXCHANGE_NOT_APPROVED", "只有已通过兑换可以确认礼物");
         }
-        exchange.setStatus(MotivationConstants.RewardExchangeStatus.COMPLETED);
-        exchange.setFulfillmentStatus(MotivationConstants.RewardFulfillmentStatus.CONFIRMED);
+        exchange.setStatus(MotivationEnums.RewardExchangeStatus.COMPLETED.code());
+        exchange.setFulfillmentStatus(MotivationEnums.RewardFulfillmentStatus.CONFIRMED.code());
         exchange.setConfirmedByUserId(userId);
         exchange.setConfirmedAt(LocalDateTime.now());
         exchange.setCompletedAt(LocalDateTime.now());
@@ -169,8 +173,8 @@ public class MotivationRewardExchangeService extends ServiceImpl<MotivationRewar
             exchange.setRemark(request.getRemark().trim());
         }
         updateById(exchange);
-        systemLogService.record(userId, exchange.getChildId(), MotivationConstants.LogType.REWARD,
-                "确认礼物兑换券", "确认收到奖励「" + exchange.getRewardNameSnapshot() + "」");
+        systemLogService.recordBusiness(userId, exchange.getChildId(), MotivationEnums.LogType.REWARD,
+                "确认礼物兑换券", "确认收到了奖励「" + exchange.getRewardNameSnapshot() + "」");
         return exchange;
     }
 
@@ -198,15 +202,15 @@ public class MotivationRewardExchangeService extends ServiceImpl<MotivationRewar
 
     private String normalizeFulfillmentStatus(String fulfillmentStatus, boolean allowConfirmed) {
         String normalized = fulfillmentStatus == null ? "" : fulfillmentStatus.trim().toUpperCase();
-        if (allowConfirmed && MotivationConstants.RewardFulfillmentStatus.CONFIRMED.equals(normalized)) {
+        if (allowConfirmed && MotivationEnums.codeEquals(MotivationEnums.RewardFulfillmentStatus.CONFIRMED, normalized)) {
             return normalized;
         }
-        return switch (normalized) {
-            case MotivationConstants.RewardFulfillmentStatus.SCHEDULED,
-                    MotivationConstants.RewardFulfillmentStatus.IN_PROGRESS,
-                    MotivationConstants.RewardFulfillmentStatus.COMPLETED -> normalized;
-            default -> MotivationConstants.RewardFulfillmentStatus.PENDING;
-        };
+        if (MotivationEnums.codeEquals(MotivationEnums.RewardFulfillmentStatus.SCHEDULED, normalized)
+                || MotivationEnums.codeEquals(MotivationEnums.RewardFulfillmentStatus.IN_PROGRESS, normalized)
+                || MotivationEnums.codeEquals(MotivationEnums.RewardFulfillmentStatus.COMPLETED, normalized)) {
+            return normalized;
+        }
+        return MotivationEnums.RewardFulfillmentStatus.PENDING.code();
     }
 
     private MotivationPointLedger ensureRewardPointsDeducted(MotivationRewardExchange exchange,
@@ -310,7 +314,7 @@ public class MotivationRewardExchangeService extends ServiceImpl<MotivationRewar
     }
 
     private String normalizePointType(String pointType) {
-        String normalized = StringUtils.hasText(pointType) ? pointType.trim().toUpperCase() : MotivationConstants.PointType.STAR;
+        String normalized = StringUtils.hasText(pointType) ? pointType.trim().toUpperCase() : MotivationEnums.PointType.STAR.code();
         if (!POINT_TYPES.contains(normalized)) {
             throw new MotivationException("POINT_TYPE_INVALID", "积分类型不正确");
         }
@@ -319,9 +323,9 @@ public class MotivationRewardExchangeService extends ServiceImpl<MotivationRewar
 
     private int pointWeight(String pointType, PointExchangeRuleResponse rule) {
         Map<String, Integer> weights = Map.of(
-                MotivationConstants.PointType.STAR, Math.max(1, rule.getStarWeight()),
-                MotivationConstants.PointType.FLOWER, Math.max(1, rule.getFlowerWeight()),
-                MotivationConstants.PointType.CROWN, Math.max(1, rule.getCrownWeight()));
+                MotivationEnums.PointType.STAR.code(), Math.max(1, rule.getStarWeight()),
+                MotivationEnums.PointType.FLOWER.code(), Math.max(1, rule.getFlowerWeight()),
+                MotivationEnums.PointType.CROWN.code(), Math.max(1, rule.getCrownWeight()));
         return weights.getOrDefault(pointType, 1);
     }
 

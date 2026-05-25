@@ -47,7 +47,7 @@ export function renderCalendar({ monthDate, events, viewMode = 'month', eventKin
           <button class="btn ${isWeekView ? '' : 'primary'}" type="button" data-calendar-view-mode="month">月视图</button>
           <button class="btn ${isWeekView ? 'primary' : ''}" type="button" data-calendar-view-mode="week">周视图</button>
         </div>
-        <div class="calendar-toolbar-group">
+        <div class="calendar-toolbar-group calendar-kind-group">
           <button class="btn ${eventKind === 'tasks' ? 'primary' : ''}" type="button" data-calendar-event-kind="tasks">任务</button>
           <button class="btn ${eventKind === 'points' ? 'primary' : ''}" type="button" data-calendar-event-kind="points">积分</button>
           <button class="btn ${eventKind === 'rewards' ? 'primary' : ''}" type="button" data-calendar-event-kind="rewards">奖励</button>
@@ -67,7 +67,9 @@ export function renderCalendar({ monthDate, events, viewMode = 'month', eventKin
 function renderCalendarEvent(event) {
   const color = event.color || event.taskColor || event.pointColor || '#6c63ff'
   const progress = event.subtitle || eventScheduleText(event)
-  const title = event.title || event.taskName || '任务'
+  const title = event.kind === 'points'
+    ? `${event.changeAmount >= 0 ? '+' : '-'}${Math.abs(Number(event.changeAmount || 0))} ${pointIcon(event.pointType)}`
+    : event.title || event.taskName || '任务'
   const compactTitle = truncateTitle(title, 6)
   return `
     <button class="event" type="button"

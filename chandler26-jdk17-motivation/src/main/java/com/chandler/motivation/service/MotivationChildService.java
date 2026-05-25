@@ -8,6 +8,7 @@ import com.chandler.motivation.domain.dataobject.MotivationUser;
 import com.chandler.motivation.domain.dto.child.ChildSaveRequest;
 import com.chandler.motivation.domain.mapper.MotivationChildMapper;
 import com.chandler.motivation.support.MotivationConstants;
+import com.chandler.motivation.support.MotivationEnums;
 import java.util.List;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
@@ -22,6 +23,9 @@ public class MotivationChildService extends ServiceImpl<MotivationChildMapper, M
     private final MotivationSystemLogService systemLogService;
     private final AuthService authService;
 
+    /**
+     * 创建孩子档案，并按需创建孩子登录账号。
+     */
     @Transactional
     public MotivationChild create(ChildSaveRequest request, Long userId) {
         if (request == null || !StringUtils.hasText(request.getNickname())) {
@@ -33,14 +37,14 @@ public class MotivationChildService extends ServiceImpl<MotivationChildMapper, M
         child.setBirthday(request.getBirthday());
         child.setGender(StringUtils.hasText(request.getGender()) ? request.getGender() : "UNKNOWN");
         child.setRemark(request.getRemark());
-        child.setStatus(MotivationConstants.ChildStatus.ACTIVE);
-        child.setDeleted(0);
+        child.setStatus(MotivationEnums.ChildStatus.ACTIVE.code());
+        child.setDeleted(MotivationConstants.Flag.NO);
         child.setCreatedByUserId(userId);
         save(child);
         familyMemberService.createPrimaryParent(child.getId(), userId);
         createChildAccountIfNeeded(child, request);
-        systemLogService.record(userId, child.getId(), MotivationConstants.LogType.SYSTEM,
-                "创建孩子档案", "为孩子「" + child.getNickname() + "」创建激励档案");
+        systemLogService.recordBusiness(userId, child.getId(), MotivationEnums.LogType.SYSTEM,
+                "创建孩子档案", "为孩子「" + child.getNickname() + "」创建了激励档案");
         return child;
     }
 
@@ -48,14 +52,17 @@ public class MotivationChildService extends ServiceImpl<MotivationChildMapper, M
         return list(new LambdaQueryWrapper<MotivationChild>()
                 .inSql(MotivationChild::getId,
                         "select child_id from motivation_family_member where user_id = " + userId
-                                + " and status = '" + MotivationConstants.ChildStatus.ACTIVE + "'")
-                .eq(MotivationChild::getDeleted, 0)
+                                + " and status = '" + MotivationEnums.ChildStatus.ACTIVE.code() + "'")
+                .eq(MotivationChild::getDeleted, MotivationConstants.Flag.NO)
                 .orderByDesc(MotivationChild::getUpdateTime));
     }
 
+    /**
+     * 修改孩子档案，并按需补建孩子登录账号。
+     */
     public MotivationChild update(Long childId, ChildSaveRequest request, Long userId) {
         MotivationChild child = getById(childId);
-        if (child == null || Integer.valueOf(1).equals(child.getDeleted())) {
+        if (child == null || Integer.valueOf(MotivationConstants.Flag.YES).equals(child.getDeleted())) {
             throw new MotivationException("CHILD_NOT_FOUND", "孩子档案不存在");
         }
         requireManageAccess(childId, userId);
@@ -69,30 +76,39 @@ public class MotivationChildService extends ServiceImpl<MotivationChildMapper, M
         child.setRemark(request.getRemark());
         updateById(child);
         createChildAccountIfNeeded(child, request);
-        systemLogService.record(userId, child.getId(), MotivationConstants.LogType.SYSTEM,
-                "修改孩子档案", "修改孩子「" + child.getNickname() + "」的档案");
+        systemLogService.recordBusiness(userId, child.getId(), MotivationEnums.LogType.SYSTEM,
+                "修改孩子档案", "修改了孩子「" + child.getNickname() + "」的档案");
         return child;
     }
 
+    /**
+     * 软删除孩子档案，保留历史业务记录。
+     */
     public void delete(Long childId, Long userId) {
         MotivationChild child = getById(childId);
-        if (child == null || Integer.valueOf(1).equals(child.getDeleted())) {
+        if (child == null || Integer.valueOf(MotivationConstants.Flag.YES).equals(child.getDeleted())) {
             throw new MotivationException("CHILD_NOT_FOUND", "孩子档案不存在");
         }
         requireManageAccess(childId, userId);
-        child.setDeleted(1);
-        child.setStatus(MotivationConstants.ChildStatus.INACTIVE);
+        child.setDeleted(MotivationConstants.Flag.YES);
+        child.setStatus(MotivationEnums.ChildStatus.INACTIVE.code());
         updateById(child);
-        systemLogService.record(userId, child.getId(), MotivationConstants.LogType.SYSTEM,
-                "删除孩子档案", "删除孩子「" + child.getNickname() + "」的档案");
+        systemLogService.recordBusiness(userId, child.getId(), MotivationEnums.LogType.SYSTEM,
+                "删除孩子档案", "删除了孩子「" + child.getNickname() + "」的档案");
     }
 
+    /**
+     * 校验当前用户是否有孩子档案管理权限。
+     */
     public void requireManageAccess(Long childId, Long userId) {
         if (!familyMemberService.canManage(childId, userId)) {
             throw new MotivationException("CHILD_ACCESS_DENIED", "无权管理该孩子档案");
         }
     }
 
+    /**
+     * 校验当前用户是否有孩子档案查看权限。
+     */
     public void requireViewAccess(Long childId, Long userId) {
         if (!familyMemberService.canView(childId, userId)) {
             throw new MotivationException("CHILD_ACCESS_DENIED", "无权查看该孩子档案");

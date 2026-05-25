@@ -8,6 +8,7 @@ import com.chandler.motivation.domain.dto.points.PointCurrencySaveRequest;
 import com.chandler.motivation.domain.dto.points.PointExchangeRuleRequest;
 import com.chandler.motivation.domain.mapper.MotivationPointCurrencyMapper;
 import com.chandler.motivation.support.MotivationConstants;
+import com.chandler.motivation.support.MotivationEnums;
 import java.util.Comparator;
 import java.util.List;
 import java.util.Map;
@@ -21,19 +22,25 @@ import org.springframework.util.StringUtils;
 public class MotivationPointCurrencyService extends ServiceImpl<MotivationPointCurrencyMapper, MotivationPointCurrency> {
 
     private static final Map<String, CurrencyDefaults> DEFAULTS = Map.of(
-            MotivationConstants.PointType.STAR, new CurrencyDefaults("星星", "★", "#f59e0b", 1, 1),
-            MotivationConstants.PointType.FLOWER, new CurrencyDefaults("红花", "✿", "#ec4899", 10, 2),
-            MotivationConstants.PointType.CROWN, new CurrencyDefaults("皇冠", "♛", "#7c3aed", 100, 3));
+            MotivationEnums.PointType.STAR.code(), new CurrencyDefaults("星星", "★", "#f59e0b", 1, 1),
+            MotivationEnums.PointType.FLOWER.code(), new CurrencyDefaults("红花", "✿", "#ec4899", 10, 2),
+            MotivationEnums.PointType.CROWN.code(), new CurrencyDefaults("皇冠", "♛", "#7c3aed", 100, 3));
 
     private final MotivationChildService childService;
     private final MotivationPointExchangeRuleService pointExchangeRuleService;
     private final MotivationSystemLogService systemLogService;
 
+    /**
+     * 获取孩子的币值配置，缺失时自动补默认值。
+     */
     public List<MotivationPointCurrency> listByChild(Long childId, Long userId) {
         childService.requireViewAccess(childId, userId);
         return withDefaults(childId);
     }
 
+    /**
+     * 创建孩子币值配置。
+     */
     @Transactional
     public MotivationPointCurrency create(PointCurrencySaveRequest request, Long userId) {
         if (request == null || request.getChildId() == null) {
@@ -48,20 +55,23 @@ public class MotivationPointCurrencyService extends ServiceImpl<MotivationPointC
         MotivationPointCurrency currency = new MotivationPointCurrency();
         applyRequest(currency, request, pointType);
         currency.setChildId(request.getChildId());
-        currency.setDeleted(0);
+        currency.setDeleted(MotivationConstants.Flag.NO);
         currency.setCreatedByUserId(userId);
         currency.setUpdatedByUserId(userId);
         save(currency);
         syncExchangeRule(request.getChildId(), userId);
-        systemLogService.record(userId, currency.getChildId(), MotivationConstants.LogType.POINT,
-                "创建币值", "创建币值「" + currency.getName() + "」，比例 " + currency.getExchangeWeight());
+        systemLogService.recordBusiness(userId, currency.getChildId(), MotivationEnums.LogType.POINT,
+                "创建币值", "创建了币值「" + currency.getName() + "」，兑换比例为 1:" + currency.getExchangeWeight());
         return currency;
     }
 
+    /**
+     * 修改币值配置。
+     */
     @Transactional
     public MotivationPointCurrency update(Long currencyId, PointCurrencySaveRequest request, Long userId) {
         MotivationPointCurrency currency = getById(currencyId);
-        if (currency == null || Integer.valueOf(1).equals(currency.getDeleted())) {
+        if (currency == null || Integer.valueOf(MotivationConstants.Flag.YES).equals(currency.getDeleted())) {
             throw new MotivationException("POINT_CURRENCY_NOT_FOUND", "币值不存在");
         }
         childService.requireManageAccess(currency.getChildId(), userId);
@@ -76,25 +86,28 @@ public class MotivationPointCurrencyService extends ServiceImpl<MotivationPointC
         currency.setUpdatedByUserId(userId);
         updateById(currency);
         syncExchangeRule(currency.getChildId(), userId);
-        systemLogService.record(userId, currency.getChildId(), MotivationConstants.LogType.POINT,
-                "修改币值", "修改币值「" + currency.getName() + "」，比例 " + currency.getExchangeWeight());
+        systemLogService.recordBusiness(userId, currency.getChildId(), MotivationEnums.LogType.POINT,
+                "修改币值", "修改了币值「" + currency.getName() + "」，兑换比例为 1:" + currency.getExchangeWeight());
         return currency;
     }
 
+    /**
+     * 软删除币值配置。
+     */
     @Transactional
     public void delete(Long currencyId, Long userId) {
         MotivationPointCurrency currency = getById(currencyId);
-        if (currency == null || Integer.valueOf(1).equals(currency.getDeleted())) {
+        if (currency == null || Integer.valueOf(MotivationConstants.Flag.YES).equals(currency.getDeleted())) {
             throw new MotivationException("POINT_CURRENCY_NOT_FOUND", "币值不存在");
         }
         childService.requireManageAccess(currency.getChildId(), userId);
-        currency.setDeleted(1);
-        currency.setStatus(MotivationConstants.ChildStatus.INACTIVE);
+        currency.setDeleted(MotivationConstants.Flag.YES);
+        currency.setStatus(MotivationEnums.ChildStatus.INACTIVE.code());
         currency.setUpdatedByUserId(userId);
         updateById(currency);
         syncExchangeRule(currency.getChildId(), userId);
-        systemLogService.record(userId, currency.getChildId(), MotivationConstants.LogType.POINT,
-                "删除币值", "删除币值「" + currency.getName() + "」");
+        systemLogService.recordBusiness(userId, currency.getChildId(), MotivationEnums.LogType.POINT,
+                "删除币值", "删除了币值「" + currency.getName() + "」");
     }
 
     public List<MotivationPointCurrency> withDefaults(Long childId) {
@@ -109,7 +122,7 @@ public class MotivationPointCurrencyService extends ServiceImpl<MotivationPointC
         }
         List<MotivationPointCurrency> currencies = list(new LambdaQueryWrapper<MotivationPointCurrency>()
                 .eq(MotivationPointCurrency::getChildId, childId)
-                .eq(MotivationPointCurrency::getDeleted, 0));
+                .eq(MotivationPointCurrency::getDeleted, MotivationConstants.Flag.NO));
         currencies.sort(Comparator
                 .comparing((MotivationPointCurrency currency) -> currency.getSortNo() == null ? 0 : currency.getSortNo())
                 .thenComparing(MotivationPointCurrency::getExchangeWeight)
@@ -124,21 +137,23 @@ public class MotivationPointCurrencyService extends ServiceImpl<MotivationPointC
         currency.setIcon(StringUtils.hasText(request.getIcon()) ? request.getIcon().trim() : defaults.icon());
         currency.setColor(StringUtils.hasText(request.getColor()) ? request.getColor().trim() : defaults.color());
         currency.setExchangeWeight(positiveWeight(request.getExchangeWeight(), defaults.exchangeWeight()));
-        currency.setStatus(StringUtils.hasText(request.getStatus()) ? request.getStatus().trim().toUpperCase() : MotivationConstants.ChildStatus.ACTIVE);
+        currency.setStatus(StringUtils.hasText(request.getStatus())
+                ? request.getStatus().trim().toUpperCase()
+                : MotivationEnums.ChildStatus.ACTIVE.code());
         currency.setSortNo(request.getSortNo() == null ? defaults.sortNo() : request.getSortNo());
     }
 
     private void syncExchangeRule(Long childId, Long userId) {
         Map<String, Integer> weights = withDefaults(childId).stream()
-                .filter((currency) -> MotivationConstants.ChildStatus.ACTIVE.equals(currency.getStatus()))
+                .filter((currency) -> MotivationEnums.codeEquals(MotivationEnums.ChildStatus.ACTIVE, currency.getStatus()))
                 .collect(java.util.stream.Collectors.toMap(
                         MotivationPointCurrency::getPointType,
                         MotivationPointCurrency::getExchangeWeight,
                         (left, right) -> left));
         PointExchangeRuleRequest request = new PointExchangeRuleRequest();
-        request.setStarWeight(weights.getOrDefault(MotivationConstants.PointType.STAR, DEFAULTS.get(MotivationConstants.PointType.STAR).exchangeWeight()));
-        request.setFlowerWeight(weights.getOrDefault(MotivationConstants.PointType.FLOWER, DEFAULTS.get(MotivationConstants.PointType.FLOWER).exchangeWeight()));
-        request.setCrownWeight(weights.getOrDefault(MotivationConstants.PointType.CROWN, DEFAULTS.get(MotivationConstants.PointType.CROWN).exchangeWeight()));
+        request.setStarWeight(weights.getOrDefault(MotivationEnums.PointType.STAR.code(), DEFAULTS.get(MotivationEnums.PointType.STAR.code()).exchangeWeight()));
+        request.setFlowerWeight(weights.getOrDefault(MotivationEnums.PointType.FLOWER.code(), DEFAULTS.get(MotivationEnums.PointType.FLOWER.code()).exchangeWeight()));
+        request.setCrownWeight(weights.getOrDefault(MotivationEnums.PointType.CROWN.code(), DEFAULTS.get(MotivationEnums.PointType.CROWN.code()).exchangeWeight()));
         pointExchangeRuleService.saveRule(childId, userId, request);
     }
 
@@ -146,12 +161,12 @@ public class MotivationPointCurrencyService extends ServiceImpl<MotivationPointC
         return getOne(new LambdaQueryWrapper<MotivationPointCurrency>()
                 .eq(MotivationPointCurrency::getChildId, childId)
                 .eq(MotivationPointCurrency::getPointType, pointType)
-                .eq(MotivationPointCurrency::getDeleted, 0)
+                .eq(MotivationPointCurrency::getDeleted, MotivationConstants.Flag.NO)
                 .last("limit 1"));
     }
 
     private String normalizePointType(String pointType) {
-        String normalized = StringUtils.hasText(pointType) ? pointType.trim().toUpperCase() : MotivationConstants.PointType.STAR;
+        String normalized = StringUtils.hasText(pointType) ? pointType.trim().toUpperCase() : MotivationEnums.PointType.STAR.code();
         if (!DEFAULTS.containsKey(normalized)) {
             throw new MotivationException("POINT_TYPE_INVALID", "积分类型不正确");
         }
@@ -170,8 +185,8 @@ public class MotivationPointCurrencyService extends ServiceImpl<MotivationPointC
         currency.setIcon(defaults.icon());
         currency.setColor(defaults.color());
         currency.setExchangeWeight(defaults.exchangeWeight());
-        currency.setStatus(MotivationConstants.ChildStatus.ACTIVE);
-        currency.setDeleted(0);
+        currency.setStatus(MotivationEnums.ChildStatus.ACTIVE.code());
+        currency.setDeleted(MotivationConstants.Flag.NO);
         currency.setSortNo(defaults.sortNo());
         return currency;
     }

@@ -92,6 +92,7 @@ export function renderApp(state, actions) {
     ${renderChildModal(state)}
     ${renderGoalModal(state)}
     ${renderTaskModal(state)}
+    ${renderTaskCheckInModal(state)}
     ${renderRewardModal(state)}
     ${renderRewardExchangeModal(state)}
     ${renderPointCurrencyModal(state)}
@@ -522,13 +523,13 @@ function renderTaskManageView(state) {
         fields: `
           <label><span>任务分类</span>${renderSelect('task-category', filters.category || '', [['', '全部'], ['STUDY', '学习'], ['LIFE', '生活'], ['SPORT', '运动'], ['HABIT', '习惯']], 'task')}</label>
           <label><span>任务类型</span>${renderSelect('task-period', filters.periodType || '', [['', '全部'], ['DAILY', '每日'], ['WEEKLY', '每周'], ['MONTHLY', '每月']], 'task')}</label>
-          <label><span>积分类型</span>${renderSelect('task-point', filters.pointType || '', [['', '全部'], ['STAR', '星星'], ['FLOWER', '红花'], ['CROWN', '皇冠']], 'task')}</label>
+          <label><span>奖励类型</span>${renderSelect('task-point', filters.pointType || '', [['', '全部'], ['STAR', '星星'], ['FLOWER', '红花'], ['CROWN', '皇冠']], 'task')}</label>
           <label><span>状态</span>${renderSelect('task-status', filters.status || '', [['', '全部'], ['ACTIVE', '启用'], ['PAUSED', '暂停']], 'task')}</label>
         `,
       })}
       <div class="table-card">
         <div class="table-head task-table">
-          <span>任务</span><span>任务类型和时间段</span><span>积分</span><span>操作</span>
+          <span>任务</span><span>任务类型和时间段</span><span>奖励</span><span>操作</span>
         </div>
         ${tasks.map(renderTaskRow).join('') || '<div class="empty">暂无任务</div>'}
       </div>
@@ -558,6 +559,8 @@ function renderTaskReviewTodo(state) {
   const todos = (state.calendarEvents || [])
     .filter((event) => event.status === 'SUBMITTED' && event.recordId)
     .sort((left, right) => String(right.submittedAt || right.taskDate || '').localeCompare(String(left.submittedAt || left.taskDate || '')))
+  const expanded = Boolean(state.todoExpanded?.task)
+  const visibleTodos = expanded ? todos : todos.slice(0, 3)
   return `
     <section class="todo-panel task-review-panel">
       <div class="section-inline-head">
@@ -565,7 +568,7 @@ function renderTaskReviewTodo(state) {
         <span>${todos.length} 条</span>
       </div>
       <div class="todo-list">
-        ${todos.map((event) => `
+        ${visibleTodos.map((event) => `
           <div class="todo-item">
             <span class="task-dot" style="--task-color:${event.taskColor || '#6c63ff'}"></span>
             <div>
@@ -578,6 +581,7 @@ function renderTaskReviewTodo(state) {
             </div>
           </div>
         `).join('') || '<div class="empty compact-empty">暂无任务待确认</div>'}
+        ${todos.length > 3 ? `<button class="todo-more-btn" type="button" data-action="toggle-task-todo">${expanded ? '收起' : `更多 ${todos.length - 3} 条`}</button>` : ''}
       </div>
     </section>
   `
@@ -640,15 +644,16 @@ function renderCalendarView(state, actions) {
 
 function buildCalendarDisplayEvents(state) {
   return [
-    ...normalizeTaskCalendarEvents(state.calendarEvents || []),
-    ...normalizePointCalendarEvents(state.ledger || []),
-    ...normalizeRewardCalendarEvents(state.exchanges || []),
+    ...normalizeTaskCalendarEvents(state.calendarEvents || [], state.tasks || []),
+    ...normalizePointCalendarEvents(state.ledger || [], state.tasks || []),
+    ...normalizeRewardCalendarEvents(state.exchanges || [], state.rewards || []),
   ].filter((event) => event.date)
 }
 
-function normalizeTaskCalendarEvents(events) {
+function normalizeTaskCalendarEvents(events, tasks = []) {
   return events.map((event) => {
     const date = formatDateValue(event.taskDate)
+    const task = tasks.find((item) => String(item.id) === String(event.taskId))
     const statusText = calendarEventStatusText({ ...event, kind: 'tasks' })
     return {
       ...event,
@@ -656,8 +661,13 @@ function normalizeTaskCalendarEvents(events) {
       kindLabel: '任务',
       uid: `task-${event.taskId}-${date}`,
       date,
-      title: event.taskName || '任务',
-      color: event.taskColor || '#6c63ff',
+      title: event.taskName || task?.name || '任务',
+      description: event.description || task?.description || '',
+      color: event.taskColor || task?.taskColor || '#6c63ff',
+      pointType: event.pointType || task?.pointType,
+      pointColor: event.pointColor || task?.pointColor,
+      basePoints: event.basePoints ?? task?.basePoints,
+      scheduleJson: event.scheduleJson || task?.scheduleJson,
       subtitle: event.status === 'PENDING' ? scheduleLabel(event) : statusText,
       statusLabel: statusText,
       note: event.status === 'APPROVED'
@@ -669,28 +679,32 @@ function normalizeTaskCalendarEvents(events) {
   })
 }
 
-function normalizePointCalendarEvents(ledger) {
+function normalizePointCalendarEvents(ledger, tasks = []) {
   return ledger.map((item) => {
     const amount = Number(item.changeAmount || 0)
     const date = formatDateValue(item.eventTime || item.createTime)
+    const task = tasks.find((task) => String(task.name || '') === String(item.sourceName || ''))
     return {
       kind: 'points',
       kindLabel: '积分',
       uid: `point-${item.id || `${date}-${item.sourceName || 'ledger'}`}`,
       date,
       title: item.sourceName || '积分变动',
-      subtitle: `${amount >= 0 ? '+' : ''}${amount} ${pointName(item.pointType)}`,
-      statusLabel: amount >= 0 ? '积分增加' : '积分扣减',
-      color: amount >= 0 ? '#22c55e' : '#ef4444',
+      subtitle: `${amount >= 0 ? '+' : ''}${amount} ${pointIcon(item.pointType)}`,
+      statusLabel: amount >= 0 ? '增加' : '扣减',
+      color: task?.taskColor || (amount >= 0 ? '#22c55e' : '#94a3b8'),
       pointType: item.pointType,
+      pointColor: task?.pointColor,
       changeAmount: amount,
-      note: item.reason || '积分流水记录。',
+      note: item.reason || '',
     }
   })
 }
 
-function normalizeRewardCalendarEvents(exchanges) {
+function normalizeRewardCalendarEvents(exchanges, rewards = []) {
   return exchanges.map((exchange) => {
+    const reward = rewards.find((item) => String(item.id) === String(exchange.rewardId)
+      || String(item.name || '') === String(exchange.rewardNameSnapshot || ''))
     const date = formatDateValue(exchange.confirmedAt || exchange.completedAt || exchange.fulfillmentUpdatedAt || exchange.reviewedAt || exchange.requestedAt || exchange.createTime)
     const status = exchange.status || 'REQUESTED'
     const fulfillmentStatus = exchange.fulfillmentStatus || 'PENDING'
@@ -709,6 +723,11 @@ function normalizeRewardCalendarEvents(exchanges) {
       title: `${exchange.rewardIconSnapshot || '🎁'} ${exchange.rewardNameSnapshot || '奖励兑换'}`,
       rewardName: exchange.rewardNameSnapshot || '奖励兑换',
       rewardDetail: exchange.remark || `${exchange.requiredPointsSnapshot || 0} ${pointName(exchange.requiredPointType)}兑换`,
+      rewardDescription: reward?.description || exchange.remark || '',
+      requiredPointType: exchange.requiredPointType,
+      requiredPoints: exchange.requiredPointsSnapshot || 0,
+      rewardIcon: exchange.rewardIconSnapshot || '🎁',
+      rewardColor: exchange.rewardColorSnapshot || '#ff9f43',
       rewardStateLabel: stateLabel,
       subtitle: `${exchange.requiredPointsSnapshot || 0} ${pointName(exchange.requiredPointType)} · ${stateLabel}`,
       status,
@@ -738,7 +757,7 @@ function renderCalendarDayModal(state) {
         <div class="modal-head">
           <div>
             <h2>${escapeHtml(formatCalendarDateLabel(state.selectedCalendarDateKey))}</h2>
-            <p>任务日志里每一条都能点开查看并打卡。</p>
+            <p>${state.calendarEventKind === 'tasks' ? '点开任务可以查看说明并打卡。' : state.calendarEventKind === 'points' ? '点开记录查看图标数量。' : '点开奖励查看兑换内容。'}</p>
           </div>
           <button class="icon-btn" type="button" data-action="close-calendar-day-modal">×</button>
         </div>
@@ -760,6 +779,8 @@ function renderCalendarEventModal(state) {
   if (!event) return ''
   const scoreCount = Number(event.scoreAwarded || event.basePoints || 1)
   const isTask = event.kind === 'tasks'
+  const isPoint = event.kind === 'points'
+  const isReward = event.kind === 'rewards'
   const approved = event.status === 'APPROVED'
   const canCheckIn = isTask && !approved
   return `
@@ -768,39 +789,28 @@ function renderCalendarEventModal(state) {
         <div class="modal-head">
           <div>
             <h2>${escapeHtml(event.title)}</h2>
-            <p>${escapeHtml(formatCalendarDateLabel(event.date))} · ${escapeHtml(calendarEventStatusText(event))}</p>
+            <p>${escapeHtml(isTask ? (event.description || event.note || '') : isReward ? (event.rewardDescription || '') : (event.note || event.title || ''))}</p>
           </div>
           <button class="icon-btn" type="button" data-action="close-calendar-event-modal">×</button>
         </div>
         <div class="calendar-detail">
-          <div class="calendar-detail-head">
-            <span class="task-dot" style="--task-color:${event.color || '#6c63ff'}"></span>
+          ${isReward ? '' : `<div class="calendar-detail-head">
+            <span class="${isReward ? 'reward-mini' : 'task-dot'}" style="${isReward ? `--reward-color:${event.rewardColor || event.color || '#ff9f43'}` : `--task-color:${event.color || '#6c63ff'}`}">${isReward ? escapeHtml(event.rewardIcon || '🎁') : ''}</span>
             <div>
-              <strong>${escapeHtml(event.kindLabel)}</strong>
-              <p>${escapeHtml(event.subtitle)}</p>
+              <strong>${escapeHtml(isTask ? event.title || '任务' : event.title || '积分')}</strong>
+              <p>${escapeHtml(isTask ? (event.description || event.note || '') : isReward ? (event.rewardDescription || '') : (event.note || ''))}</p>
             </div>
+          </div>`}
+          <div class="calendar-detail-focus">
+            ${isPoint
+              ? renderPointChangeIcons(event, 'large')
+              : isReward
+                ? renderLimitedPointIcons(pointIcon(event.requiredPointType), event.requiredPoints, pointTypeColor(event.requiredPointType), 12)
+                : renderTaskRewardIcons(event, scoreCount, 'calendar large')}
           </div>
-          <div class="calendar-detail-grid">
-            <div class="calendar-detail-card">
-              <span>日期</span>
-              <strong>${escapeHtml(event.date)}</strong>
-            </div>
-            <div class="calendar-detail-card">
-              <span>状态</span>
-              <strong>${escapeHtml(event.statusLabel)}</strong>
-            </div>
-            <div class="calendar-detail-card wide">
-              <span>${event.kind === 'points' ? '积分变化' : event.kind === 'rewards' ? '奖励信息' : '积分'}</span>
-              ${event.kind === 'points'
-                ? `<div class="calendar-point-change ${event.changeAmount >= 0 ? 'positive' : 'negative'}">${event.changeAmount >= 0 ? '+' : ''}${event.changeAmount} ${pointName(event.pointType)}</div>`
-                : event.kind === 'rewards'
-                  ? `<div class="calendar-reward-detail"><strong>${escapeHtml(event.rewardName || event.title)}</strong><p>${escapeHtml(event.rewardDetail || '')}</p></div>`
-                  : renderCalendarStatusScore(event, scoreCount, 'calendar')}
-            </div>
-          </div>
-          <div class="calendar-detail-note">
+          ${event.note && !isPoint && !isReward ? `<div class="calendar-detail-note">
             ${escapeHtml(event.note)}
-          </div>
+          </div>` : ''}
         </div>
         <div class="modal-actions calendar-modal-actions">
           <button class="btn" type="button" data-action="close-calendar-event-modal">返回</button>
@@ -813,24 +823,25 @@ function renderCalendarEventModal(state) {
 
 function renderCalendarLogItem(event) {
   const scoreCount = Number(event.scoreAwarded || event.basePoints || 1)
+  const isPoint = event.kind === 'points'
+  const isReward = event.kind === 'rewards'
   return `
     <button class="calendar-log-item" type="button" data-action="open-calendar-event" data-calendar-event-id="${escapeHtml(event.uid)}" data-task-id="${escapeHtml(event.taskId || '')}" data-task-date="${escapeHtml(event.date)}">
-      <span class="task-dot" style="--task-color:${event.color || '#6c63ff'}"></span>
+      <span class="${isReward ? 'reward-mini' : 'task-dot'}" style="${isReward ? `--reward-color:${event.rewardColor || event.color || '#ff9f43'}` : `--task-color:${event.color || '#6c63ff'}`}">${isReward ? escapeHtml(event.rewardIcon || '🎁') : ''}</span>
       <div class="calendar-log-main">
         <strong>${escapeHtml(event.title)}</strong>
-        <small>${escapeHtml(event.subtitle)}</small>
+        <small>${escapeHtml(event.kind === 'tasks' ? (event.description || event.note || '') : isReward ? (event.rewardDescription || '') : (event.note || ''))}</small>
       </div>
       <div class="calendar-log-score">
-        ${event.kind === 'points'
-          ? `<span class="calendar-point-change ${event.changeAmount >= 0 ? 'positive' : 'negative'}">${event.changeAmount >= 0 ? '+' : ''}${event.changeAmount}</span>`
-          : event.kind === 'rewards'
-            ? `<span class="calendar-log-status">${escapeHtml(event.rewardStateLabel)}</span>`
+        ${isPoint
+          ? renderPointChangeIcons(event, 'compact')
+          : isReward
+            ? renderLimitedPointIcons(pointIcon(event.requiredPointType), event.requiredPoints, pointTypeColor(event.requiredPointType), 6)
             : renderCalendarStatusScore(event, scoreCount, 'log')}
-        <span class="calendar-log-status">${escapeHtml(event.statusLabel)}</span>
       </div>
       ${event.kind === 'tasks'
         ? `<span class="calendar-log-action ${event.status === 'APPROVED' ? 'done' : ''}">打卡</span>`
-        : `<span class="calendar-log-action done">${event.kindLabel}</span>`}
+        : ''}
     </button>
   `
 }
@@ -841,27 +852,36 @@ function renderCalendarStatusScore(event, count, density = '') {
   return renderScoreIcons(event.pointType, count, color, `${density} ${completed ? '' : 'muted'}`.trim())
 }
 
+function renderPointChangeIcons(event, density = '') {
+  const amount = Number(event.changeAmount || 0)
+  const color = amount >= 0 ? '#22c55e' : '#cbd5e1'
+  return `
+    <span class="point-change-icons ${amount >= 0 ? 'positive' : 'negative'} ${density}" style="--point-color:${color}">
+      <b>${amount >= 0 ? '+' : '-'}</b>
+      <strong>${Math.abs(amount)}</strong>
+      <span>${pointIcon(event.pointType)}</span>
+    </span>
+  `
+}
+
+function renderTaskRewardIcons(event, count, density = '') {
+  const color = event.status === 'APPROVED' ? event.pointColor : '#cbd5e1'
+  return renderScoreIcons(event.pointType, count, color, `${density} ${event.status === 'APPROVED' ? '' : 'muted'}`.trim())
+}
+
 function renderCalendarDaySummary(kind, events) {
   if (kind === 'points') {
-    const positiveCount = events.filter((event) => event.changeAmount >= 0).length
-    const negativeCount = events.filter((event) => event.changeAmount < 0).length
+    const positiveCount = events.reduce((sum, event) => sum + Math.max(0, Number(event.changeAmount || 0)), 0)
+    const negativeCount = events.reduce((sum, event) => sum + Math.abs(Math.min(0, Number(event.changeAmount || 0))), 0)
     return `
-      <span>${events.length} 条积分</span>
-      <span>${positiveCount} 增加</span>
-      <span>${negativeCount} 扣减</span>
+      <span>${events.length} 条</span>
+      <span>+${positiveCount}</span>
+      <span>-${negativeCount}</span>
     `
   }
   if (kind === 'rewards') {
-    const requested = events.filter((event) => event.status === 'REQUESTED').length
-    const approved = events.filter((event) => event.status === 'APPROVED').length
-    const completed = events.filter((event) => event.status === 'COMPLETED').length
-    const rejected = events.filter((event) => event.status === 'REJECTED').length
     return `
-      <span>${events.length} 条奖励</span>
-      <span>${requested} 待确认</span>
-      <span>${approved} 兑换券</span>
-      <span>${completed} 已完成</span>
-      <span>${rejected} 已拒绝</span>
+      <span>${events.length} 个奖励</span>
     `
   }
   const completedCount = events.filter((event) => event.status === 'APPROVED').length
@@ -872,6 +892,52 @@ function renderCalendarDaySummary(kind, events) {
     <span>${completedCount} 已完成</span>
     <span>${submittedCount} 待审核</span>
     <span>${pendingCount} 待打卡</span>
+  `
+}
+
+function renderTaskCheckInModal(state) {
+  if (!state.taskCheckInModalOpen || !state.selectedCheckInTaskId) return ''
+  const taskDate = state.selectedCheckInTaskDate || state.todayKey
+  const event = (state.calendarEvents || []).find((item) => String(item.taskId) === String(state.selectedCheckInTaskId) && item.taskDate === taskDate)
+  const task = (state.tasks || []).find((item) => String(item.id) === String(state.selectedCheckInTaskId))
+  const taskMeta = task || event
+  if (!taskMeta) return ''
+  const pointType = taskMeta.pointType || 'STAR'
+  const pointColor = taskMeta.pointColor || pointTypeColor(pointType)
+  const basePoints = Math.max(1, Number(taskMeta.basePoints || 1))
+  const selectedCount = clamp(Number(state.selectedCheckInRewardCount || basePoints), 1, basePoints)
+  return `
+    <div class="modal-backdrop">
+      <section class="modal narrow checkin-modal">
+        <div class="modal-head">
+          <div><h2>任务打卡</h2><p>${escapeHtml(taskMeta.name || taskMeta.taskName || '任务')}</p></div>
+          <button class="icon-btn" type="button" data-action="close-checkin-modal">×</button>
+        </div>
+        <form class="modal-form" data-form="task-checkin">
+          <div class="checkin-task-note wide">
+            ${escapeHtml(taskMeta.description || '完成后选择本次获得的奖励数量。')}
+          </div>
+          <div class="checkin-reward-panel wide" style="--point-color:${escapeHtml(pointColor)}">
+            <div class="field-label">奖励</div>
+            <div class="checkin-reward-grid">
+              ${Array.from({ length: basePoints }, (_, index) => {
+                const number = index + 1
+                return `
+                  <button class="checkin-reward-icon ${number <= selectedCount ? 'active' : ''}" type="button" data-action="select-checkin-reward" data-reward-index="${number}" aria-label="选择 ${number} 个奖励">
+                    ${pointIcon(pointType)}
+                  </button>
+                `
+              }).join('')}
+            </div>
+            <div class="checkin-reward-count" data-checkin-reward-count data-total="${basePoints}">${selectedCount} / ${basePoints}</div>
+          </div>
+          <div class="modal-actions wide">
+            <button class="btn" type="button" data-action="close-checkin-modal">取消</button>
+            <button class="btn primary" type="submit">打卡</button>
+          </div>
+        </form>
+      </section>
+    </div>
   `
 }
 
@@ -928,7 +994,6 @@ function renderRewardManageView(state) {
   return `
     <section class="panel panel-pad">
       ${renderExchangeTodo(state)}
-      ${renderPointExchangeRulePanel(state)}
       <div class="section-inline-head">
         <h2>奖励列表</h2>
         <div class="section-actions">
@@ -1034,6 +1099,8 @@ function renderPointExchangeRulePanel(state) {
 
 function renderExchangeTodo(state) {
   const todos = (state.exchanges || []).filter((exchange) => ['REQUESTED', 'APPROVED'].includes(exchange.status))
+  const expanded = Boolean(state.todoExpanded?.reward)
+  const visibleTodos = expanded ? todos : todos.slice(0, 3)
   return `
     <section class="todo-panel">
       <div class="section-inline-head">
@@ -1041,7 +1108,7 @@ function renderExchangeTodo(state) {
         <span>${todos.length} 条</span>
       </div>
       <div class="todo-list">
-        ${todos.map((exchange) => `
+        ${visibleTodos.map((exchange) => `
           <div class="todo-item">
             <span class="reward-mini" style="--reward-color:${exchange.rewardColorSnapshot || '#6c63ff'}">${escapeHtml(exchange.rewardIconSnapshot || '🎁')}</span>
             <div>
@@ -1055,6 +1122,7 @@ function renderExchangeTodo(state) {
             </div>
           </div>
         `).join('') || '<div class="empty compact-empty">暂无兑换待办</div>'}
+        ${todos.length > 3 ? `<button class="todo-more-btn" type="button" data-action="toggle-reward-todo">${expanded ? '收起' : `更多 ${todos.length - 3} 条`}</button>` : ''}
       </div>
     </section>
   `
@@ -1198,7 +1266,8 @@ function renderTaskModal(state) {
   const periodType = task.periodType || schedule.type || 'DAILY'
   const startHour = Number(schedule.timeRange?.startHour ?? schedule.startHour ?? 6)
   const endHour = Number(schedule.timeRange?.endHour ?? schedule.endHour ?? 22)
-  const dailyHours = getDailyHours(schedule, startHour, endHour)
+  const isEditingTask = Boolean(task.id || draftDay)
+  const dailyHours = getDailyHours(schedule, startHour, endHour, isEditingTask)
   const selectedDays = Array.isArray(schedule.days) ? schedule.days.map(Number) : []
   const requiredCount = Number(schedule.requiredCount ?? schedule.timesPerWeek ?? 1)
   const pointType = task.pointType || 'STAR'
@@ -1209,7 +1278,7 @@ function renderTaskModal(state) {
     <div class="modal-backdrop">
       <section class="modal">
         <div class="modal-head">
-          <div><h2>${task.id ? '修改任务' : '新增任务'}</h2><p>设置周期、可完成时间、完成次数和积分。</p></div>
+          <div><h2>${task.id ? '修改任务' : '新增任务'}</h2><p>设置周期、可完成时间、任务次数和奖励。</p></div>
           <button class="icon-btn" type="button" data-action="close-task-modal">×</button>
         </div>
         <form class="modal-form" data-form="task">
@@ -1234,6 +1303,7 @@ function renderTaskModal(state) {
             ${renderDailyHourPicker(dailyHours, task.taskColor || '#30d5ff')}
             <input type="hidden" name="startHour" value="${escapeHtml(startHour)}" />
             <input type="hidden" name="endHour" value="${escapeHtml(endHour)}" />
+            <label class="count-field"><span>任务次数</span><input type="number" min="1" max="24" name="dailyRequiredCount" value="${escapeHtml(requiredCount || 1)}" /></label>
           </div>
           <div class="schedule-panel wide ${periodType === 'WEEKLY' ? '' : 'hidden'}" data-schedule-panel="WEEKLY">
             <div class="schedule-title">每周可完成日期</div>
@@ -1246,13 +1316,13 @@ function renderTaskModal(state) {
             <label class="count-field"><span>每月完成次数</span><input type="number" min="1" max="31" name="monthlyRequiredCount" value="${escapeHtml(requiredCount || 1)}" /></label>
           </div>
           <div class="point-config wide">
-            <div class="field-label">积分图标</div>
+            <div class="field-label">奖励类型</div>
             ${renderPointTypePicker(pointType)}
           </div>
-          <label><span>分值</span><input type="number" min="1" max="99" name="basePoints" value="${escapeHtml(basePoints)}" /></label>
-          <label><span>积分颜色</span><input type="color" name="pointColor" value="${escapeHtml(pointColor)}" title="选择积分图标颜色" /></label>
+          <label><span>奖励数量</span><input type="number" min="1" max="99" name="basePoints" value="${escapeHtml(basePoints)}" /></label>
+          <label><span>奖励颜色</span><input type="color" name="pointColor" value="${escapeHtml(pointColor)}" title="选择奖励图标颜色" /></label>
           <div class="approval-mode wide">
-            <span class="field-label">积分生效方式</span>
+            <span class="field-label">奖励生效方式</span>
             <div class="segmented">
               <label><input type="radio" name="requireApproval" value="false" ${requireApproval ? '' : 'checked'} /> <span>打卡生效</span></label>
               <label><input type="radio" name="requireApproval" value="true" ${requireApproval ? 'checked' : ''} /> <span>审批后生效</span></label>
@@ -1287,9 +1357,12 @@ function renderDailyHourPicker(selectedHours, taskColor) {
   `
 }
 
-function getDailyHours(schedule, startHour, endHour) {
+function getDailyHours(schedule, startHour, endHour, useRangeFallback = true) {
   if (Array.isArray(schedule.hours) && schedule.hours.length) {
     return schedule.hours.map(Number).filter((hour) => hour >= 6 && hour <= 22)
+  }
+  if (!useRangeFallback) {
+    return []
   }
   const safeStart = clamp(Number(startHour), 6, 22)
   const safeEnd = clamp(Number(endHour), 6, 22)
@@ -1298,7 +1371,7 @@ function getDailyHours(schedule, startHour, endHour) {
 
 function renderWeekDayPicker(selectedDays, taskColor = '#30d5ff') {
   return `
-    <div class="time-choice-grid week-picker" data-task-color-surface style="--task-color:${escapeHtml(taskColor)}">
+    <div class="time-choice-grid week-picker" data-weekday-picker data-task-color-surface style="--task-color:${escapeHtml(taskColor)}">
       ${weekDays.map(([value, label]) => `
         <label class="block-choice day-choice" title="${escapeHtml(label)}">
           <input type="checkbox" name="weekDays" value="${value}" ${selectedDays.includes(value) ? 'checked' : ''} />
@@ -1311,7 +1384,7 @@ function renderWeekDayPicker(selectedDays, taskColor = '#30d5ff') {
 
 function renderMonthDayPicker(selectedDays, taskColor = '#30d5ff') {
   return `
-    <div class="time-choice-grid month-day-picker" data-task-color-surface style="--task-color:${escapeHtml(taskColor)}">
+    <div class="time-choice-grid month-day-picker" data-monthday-picker data-task-color-surface style="--task-color:${escapeHtml(taskColor)}">
       ${dayOfMonthOptions.map(([value, label]) => `
         <label class="block-choice month-choice" title="${escapeHtml(label)}">
           <input type="checkbox" name="monthDays" value="${value}" ${selectedDays.includes(value) ? 'checked' : ''} />
