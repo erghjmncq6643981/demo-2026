@@ -1,1 +1,3 @@
 config/application-local.yaml
+.run/
+logs/dev/
