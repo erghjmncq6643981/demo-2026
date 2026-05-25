@@ -58,6 +58,12 @@ const state = {
     pointType: '',
     status: '',
   },
+  filterAdvanced: {
+    child: false,
+    goal: false,
+    task: false,
+    reward: false,
+  },
   pointExchangeRule: demoState.pointExchangeRule || { starWeight: 1, flowerWeight: 10, crownWeight: 100 },
   connectionMessage: '正在尝试连接后端...',
   toast: '',
@@ -111,6 +117,7 @@ function render() {
 }
 
 function bindEvents() {
+  initLoginCarousel()
   document.querySelector('[data-form="auth"]')?.addEventListener('submit', handleAuthSubmit)
   document.querySelector('[data-action="toggle-sidebar"]')?.addEventListener('click', toggleSidebar)
   document.querySelectorAll('[data-action="close-sidebar"]').forEach((button) => {
@@ -166,6 +173,9 @@ function bindEvents() {
     button.addEventListener('click', closeGoalModal)
   })
   document.querySelector('[data-action="open-task-modal"]')?.addEventListener('click', () => openTaskModal())
+  document.querySelectorAll('[data-action="open-task-modal-for-date"]').forEach((button) => {
+    button.addEventListener('click', () => openTaskModal(null, { date: button.dataset.taskDate }))
+  })
   document.querySelectorAll('[data-action="close-task-modal"]').forEach((button) => {
     button.addEventListener('click', closeTaskModal)
   })
@@ -231,6 +241,12 @@ function bindEvents() {
   document.querySelectorAll('[data-action="confirm-reward-ticket"]').forEach((button) => {
     button.addEventListener('click', () => handleRewardTicketConfirm(button.dataset.exchangeId))
   })
+  document.querySelectorAll('[data-action="approve-task-record"]').forEach((button) => {
+    button.addEventListener('click', () => handleTaskRecordReview(button.dataset.recordId, true))
+  })
+  document.querySelectorAll('[data-action="reject-task-record"]').forEach((button) => {
+    button.addEventListener('click', () => handleTaskRecordReview(button.dataset.recordId, false))
+  })
   document.querySelectorAll('[data-action="open-calendar-day"]').forEach((target) => {
     target.addEventListener('click', () => openCalendarDayModal(target.dataset.date))
   })
@@ -263,29 +279,40 @@ function bindEvents() {
   })
 }
 
+function initLoginCarousel() {
+  const carousel = document.querySelector('[data-login-carousel]')
+  if (!carousel || carousel.dataset.ready === '1') return
+  carousel.dataset.ready = '1'
+  const slides = Array.from(carousel.children)
+  if (slides.length < 3) return
+  const slideWidth = () => slides[1]?.getBoundingClientRect().width || carousel.clientWidth
+  const gap = () => Number.parseFloat(getComputedStyle(carousel).columnGap || getComputedStyle(carousel).gap || '0') || 0
+  const scrollToRealStart = (behavior = 'auto') => {
+    carousel.scrollTo({ left: slideWidth() + gap(), behavior })
+  }
+  requestAnimationFrame(() => scrollToRealStart())
+  let scrollTimer = 0
+  carousel.addEventListener('scroll', () => {
+    window.clearTimeout(scrollTimer)
+    scrollTimer = window.setTimeout(() => {
+      const step = slideWidth() + gap()
+      const max = carousel.scrollWidth - carousel.clientWidth
+      if (carousel.scrollLeft < step * 0.35) {
+        carousel.scrollTo({ left: max - step, behavior: 'auto' })
+      } else if (carousel.scrollLeft > max - step * 0.35) {
+        scrollToRealStart()
+      }
+    }, 90)
+  }, { passive: true })
+}
+
 function bindTaskModalControls() {
   const form = document.querySelector('[data-form="task"]')
   if (!form) return
-  const syncPreview = () => {
-    const pointType = String(new FormData(form).get('pointType') || 'STAR')
-    const pointColor = String(form.pointColor?.value || '#ffd84d')
-    const basePoints = Math.max(1, Math.min(99, Number(form.basePoints?.value || 1)))
-    const preview = form.querySelector('[data-point-preview-icons]')
-    if (preview) {
-      preview.style.setProperty('--point-color', pointColor)
-      preview.innerHTML = Array.from({ length: basePoints }, () => `<span class="score-icon">${pointIcon(pointType)}</span>`).join('')
-    }
-  }
-  form.querySelectorAll('[name="pointType"]').forEach((input) => {
-    input.addEventListener('change', syncPreview)
-  })
-  form.pointColor?.addEventListener('input', syncPreview)
-  form.basePoints?.addEventListener('input', syncPreview)
   form.querySelectorAll('[name="dailyHours"]').forEach((input) => {
     input.addEventListener('change', () => syncDailyHiddenHours(form))
   })
   form.taskColor?.addEventListener('input', () => syncTaskColor(form))
-  syncPreview()
   syncTaskColor(form)
   syncDailyHiddenHours(form)
 }
@@ -325,6 +352,15 @@ function syncTaskColor(form) {
 }
 
 function bindFilterActions() {
+  ;['child', 'goal', 'task', 'reward'].forEach((scope) => {
+    document.querySelector(`[data-action="toggle-${scope}-filters"]`)?.addEventListener('click', () => {
+      state.filterAdvanced = {
+        ...state.filterAdvanced,
+        [scope]: !state.filterAdvanced?.[scope],
+      }
+      render()
+    })
+  })
   document.querySelector('[data-action="search-child-filters"]')?.addEventListener('click', () => {
     state.childFilters = {
       keyword: readControlValue('[data-filter="child-keyword"]'),
@@ -335,6 +371,7 @@ function bindFilterActions() {
   })
   document.querySelector('[data-action="reset-child-filters"]')?.addEventListener('click', () => {
     state.childFilters = { keyword: '', gender: '', status: '' }
+    state.filterAdvanced = { ...state.filterAdvanced, child: false }
     render()
   })
   document.querySelector('[data-action="search-goal-filters"]')?.addEventListener('click', () => {
@@ -346,6 +383,7 @@ function bindFilterActions() {
   })
   document.querySelector('[data-action="reset-goal-filters"]')?.addEventListener('click', () => {
     state.goalFilters = { keyword: '', status: '' }
+    state.filterAdvanced = { ...state.filterAdvanced, goal: false }
     render()
   })
   document.querySelector('[data-action="search-task-filters"]')?.addEventListener('click', () => {
@@ -360,6 +398,7 @@ function bindFilterActions() {
   })
   document.querySelector('[data-action="reset-task-filters"]')?.addEventListener('click', () => {
     state.taskFilters = { keyword: '', category: '', periodType: '', pointType: '', status: '' }
+    state.filterAdvanced = { ...state.filterAdvanced, task: false }
     render()
   })
   document.querySelector('[data-action="search-reward-filters"]')?.addEventListener('click', () => {
@@ -372,6 +411,7 @@ function bindFilterActions() {
   })
   document.querySelector('[data-action="reset-reward-filters"]')?.addEventListener('click', () => {
     state.rewardFilters = { keyword: '', pointType: '', status: '' }
+    state.filterAdvanced = { ...state.filterAdvanced, reward: false }
     render()
   })
   document.querySelectorAll('[data-filter], [data-select]').forEach((control) => {
@@ -604,13 +644,22 @@ async function handleCompleteTask(taskId, taskDate = state.todayKey) {
   const event = state.calendarEvents.find((item) => String(item.taskId) === String(taskId) && item.taskDate === taskDate)
   if (!task && !event) return
   const taskMeta = task || event
+  const submittedStatus = isChildUser() || Number(taskMeta.requireApproval) === 1 || taskMeta.requireApproval === true
   if (state.offline) {
     state.calendarEvents = state.calendarEvents.map((event) => (
       String(event.taskId) === String(taskId) && event.taskDate === taskDate
-        ? { ...event, status: taskMeta.requireApproval ? 'SUBMITTED' : 'APPROVED', completionProgress: 100, scoreAwarded: taskMeta.basePoints, persisted: true }
+        ? {
+            ...event,
+            recordId: event.recordId || Number(`${Date.now()}${String(taskId).slice(-3)}`),
+            status: submittedStatus ? 'SUBMITTED' : 'APPROVED',
+            completionProgress: 100,
+            scoreAwarded: submittedStatus ? 0 : taskMeta.basePoints,
+            persisted: true,
+            submittedAt: new Date().toISOString(),
+          }
         : event
     ))
-    toast(taskMeta.requireApproval ? '演示：已提交审核' : '演示：任务已完成')
+    toast(submittedStatus ? '演示：已提交审核' : '演示：任务已完成')
     render()
     return
   }
@@ -619,11 +668,44 @@ async function handleCompleteTask(taskId, taskDate = state.todayKey) {
     await Promise.all([loadCoreData(), loadCalendar()])
     state.selectedCalendarDateKey = taskDate
     state.selectedCalendarEventId = calendarTaskEventId(taskId, taskDate)
-    toast(taskMeta.requireApproval ? '已提交审核' : '完成并入账')
+    toast(submittedStatus ? '已提交审核' : '完成并入账')
   } catch (error) {
     toast(error.message)
     render()
   }
+}
+
+async function handleTaskRecordReview(recordId, approved) {
+  const record = state.calendarEvents.find((event) => String(event.recordId) === String(recordId))
+  if (!record) return
+  state.confirmDialog = {
+    title: approved ? '通过任务打卡' : '拒绝任务打卡',
+    message: `${approved ? '通过' : '拒绝'}「${record.taskName || '任务'}」这次打卡？`,
+    confirmText: approved ? '通过' : '拒绝',
+    variant: approved ? 'primary' : 'danger',
+    action: async () => {
+      if (state.offline) {
+        state.calendarEvents = state.calendarEvents.map((event) => String(event.recordId) === String(recordId)
+          ? {
+              ...event,
+              status: approved ? 'APPROVED' : 'REJECTED',
+              scoreAwarded: approved ? Number(event.basePoints || 0) : 0,
+              reviewedAt: new Date().toISOString(),
+            }
+          : event)
+        toast(approved ? '演示：任务已通过' : '演示：任务已拒绝')
+        return
+      }
+      if (approved) {
+        await api.approveTaskRecord(recordId, { remark: '父母确认打卡' })
+      } else {
+        await api.rejectTaskRecord(recordId, { remark: '父母拒绝打卡' })
+      }
+      await Promise.all([loadCoreData(), loadCalendar()])
+      toast(approved ? '任务已通过' : '任务已拒绝')
+    },
+  }
+  render()
 }
 
 async function handleExchangeReward(rewardId) {
@@ -975,7 +1057,7 @@ function goRewardStore() {
   render()
 }
 
-function openTaskModal(taskId = null) {
+function openTaskModal(taskId = null, options = {}) {
   if (!state.selectedChildId) {
     toast('请先新增孩子档案')
     return
@@ -985,6 +1067,7 @@ function openTaskModal(taskId = null) {
     return
   }
   state.editingTask = taskId ? state.tasks.find((task) => String(task.id) === String(taskId)) || null : null
+  state.taskDraftDate = taskId ? '' : String(options.date || '')
   state.taskModalOpen = true
   render()
 }
@@ -992,6 +1075,7 @@ function openTaskModal(taskId = null) {
 function closeTaskModal() {
   state.taskModalOpen = false
   state.editingTask = null
+  state.taskDraftDate = ''
   render()
 }
 
@@ -1203,6 +1287,7 @@ async function handleCreateTaskSubmit(event) {
       : [...state.tasks, nextTask]
     state.taskModalOpen = false
     state.editingTask = null
+    state.taskDraftDate = ''
     state.calendarEvents = buildDemoCalendar(state.tasks, state.monthDate)
     toast(taskId ? '演示：任务已修改' : '演示：任务已创建')
     render()
@@ -1216,6 +1301,7 @@ async function handleCreateTaskSubmit(event) {
     }
     state.taskModalOpen = false
     state.editingTask = null
+    state.taskDraftDate = ''
     await Promise.all([loadCoreData(), loadCalendar()])
     toast(taskId ? '任务已修改' : '任务已创建')
   } catch (error) {

@@ -45,21 +45,44 @@ button svg { pointer-events: none; }
   font-size: 44px;
   line-height: 1.08;
 }
+.login-hero-copy p {
+  margin: 10px 0 0;
+  max-width: 440px;
+  color: var(--muted);
+  font-size: 15px;
+  font-weight: 700;
+}
+.rainbow-title span:nth-child(1) { color: #ff5c8a; }
+.rainbow-title span:nth-child(2) { color: #ff9f43; }
+.rainbow-title span:nth-child(3) { color: #22c55e; }
+.rainbow-title span:nth-child(4) { color: #06b6d4; }
+.rainbow-title span:nth-child(5) { color: #6c63ff; }
+.rainbow-title span:nth-child(6) { color: #ec4899; }
 .login-showcase-grid {
-  display: grid;
-  grid-template-columns: minmax(0, 1.1fr) minmax(0, 0.9fr);
+  display: flex;
   gap: 14px;
+  max-width: 100%;
+  overflow-x: auto;
+  overscroll-behavior-x: contain;
+  scroll-snap-type: x mandatory;
+  scrollbar-width: none;
+}
+.login-showcase-grid::-webkit-scrollbar {
+  display: none;
 }
 .login-shot {
+  width: min(300px, 76vw);
+  min-width: min(300px, 76vw);
   min-height: 184px;
+  height: 184px;
   padding: 14px;
   border: 1px solid rgba(255,255,255,0.76);
   border-radius: 20px;
   background: rgba(255,255,255,0.84);
   box-shadow: 0 16px 38px rgba(80, 97, 153, 0.12);
   overflow: hidden;
+  scroll-snap-align: center;
 }
-.calendar-shot { grid-row: span 2; }
 .shot-bar {
   display: flex;
   align-items: center;
@@ -107,11 +130,11 @@ button svg { pointer-events: none; }
 }
 .shot-calendar {
   display: grid;
-  grid-template-columns: repeat(3, minmax(0, 1fr));
-  gap: 8px;
+  grid-template-columns: repeat(7, minmax(0, 1fr));
+  gap: 5px;
 }
 .shot-calendar span {
-  min-height: 34px;
+  min-height: 27px;
   display: grid;
   place-items: center;
   border: 1px solid var(--line);
@@ -455,6 +478,26 @@ input[type="color"] { padding: 4px; }
   gap: 7px;
 }
 .filter-action .small-btn { min-height: 40px; }
+.management-filter {
+  grid-template-columns: minmax(220px, 1fr) minmax(250px, auto);
+  align-items: end;
+}
+.management-filter .keyword-filter {
+  min-width: 0;
+}
+.management-filter .filter-actions {
+  grid-template-columns: repeat(3, minmax(70px, auto));
+}
+.advanced-filters {
+  grid-column: 1 / -1;
+  display: grid;
+  grid-template-columns: repeat(4, minmax(132px, 1fr));
+  gap: 12px;
+  padding: 12px;
+  border: 1px solid rgba(31, 41, 55, 0.07);
+  border-radius: 14px;
+  background: #f8fbff;
+}
 .table-card {
   border: 1px solid var(--line);
   border-radius: 18px;
@@ -550,19 +593,6 @@ input[type="color"] { padding: 4px; }
   font-size: 16px;
   line-height: 1;
   text-shadow: 0 1px 0 rgba(255,255,255,0.65);
-}
-.score-icons.preview {
-  min-height: 42px;
-  padding: 9px 11px;
-  border: 1px solid rgba(31, 41, 55, 0.1);
-  border-radius: 14px;
-  background: #fff;
-  box-shadow: 0 8px 18px rgba(88, 101, 146, 0.06);
-}
-.score-icons.preview .score-icon {
-  width: 24px;
-  height: 24px;
-  font-size: 23px;
 }
 .row-actions { display: flex; gap: 7px; flex-wrap: wrap; }
 .task-row-actions {
@@ -789,11 +819,15 @@ input[type="color"] { padding: 4px; }
 }
 .calendar-grid {
   display: grid;
-  grid-template-columns: repeat(7, minmax(0, 1fr));
+  grid-template-columns: repeat(7, minmax(116px, 1fr));
   gap: 8px;
+  overflow-x: auto;
+  overscroll-behavior-x: contain;
+  padding-bottom: 4px;
 }
 .dow { padding: 0 6px 4px; color: var(--muted); font-size: 12px; }
 .day {
+  min-width: 116px;
   min-height: 116px;
   padding: 10px;
   border: 1px solid var(--line);
@@ -847,7 +881,6 @@ input[type="color"] { padding: 4px; }
 }
 .event i { width: 8px; height: 8px; border-radius: 999px; background: currentColor; }
 .event span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.event em { grid-column: 2; font-style: normal; opacity: 0.75; }
 .event-more {
   min-height: 24px;
   display: flex;
@@ -967,7 +1000,7 @@ input[type="color"] { padding: 4px; }
   font-weight: 900;
 }
 .calendar-log-action {
-  min-width: 44px;
+  min-width: 52px;
   min-height: 30px;
   display: inline-flex;
   align-items: center;
@@ -977,6 +1010,7 @@ input[type="color"] { padding: 4px; }
   background: linear-gradient(135deg, #6c63ff, #42c6ff);
   font-size: 12px;
   font-weight: 900;
+  white-space: nowrap;
 }
 .calendar-log-action.done {
   color: #047857;
@@ -1200,8 +1234,15 @@ input[type="color"] { padding: 4px; }
 .modal-head {
   display: flex;
   justify-content: space-between;
+  align-items: flex-start;
   gap: 16px;
   padding: 18px 18px 10px;
+}
+.modal-head > div {
+  min-width: 0;
+}
+.modal-head > .icon-btn {
+  flex: none;
 }
 .modal-head h2 { margin: 0; font-size: 20px; }
 .modal-head p { margin: 4px 0 0; color: var(--muted); font-size: 13px; }
@@ -1412,27 +1453,6 @@ input[type="color"] { padding: 4px; }
 .point-type-choice input:checked + span {
   border-color: rgba(79, 70, 229, 0.42);
   background: rgba(79, 70, 229, 0.09);
-}
-.point-preview-field {
-  display: grid;
-  gap: 0;
-  min-width: 0;
-}
-.point-preview {
-  position: relative;
-  display: block;
-  min-width: 0;
-  color: var(--muted);
-  font-size: 12px;
-  font-weight: 800;
-}
-.point-preview input[type="color"] {
-  position: absolute;
-  inset: 0;
-  width: 100%;
-  height: 100%;
-  opacity: 0;
-  cursor: pointer;
 }
 .modal-actions {
   display: flex;
@@ -1702,20 +1722,22 @@ input[type="color"] { padding: 4px; }
     padding: 14px;
   }
   .login-hero-copy h1 {
-    font-size: 30px;
+    font-size: 29px;
+  }
+  .login-hero-copy p {
+    font-size: 13px;
   }
   .login-showcase {
     gap: 12px;
   }
   .login-showcase-grid {
-    grid-template-columns: 1fr;
     gap: 10px;
   }
-  .calendar-shot {
-    grid-row: auto;
-  }
   .login-shot {
-    min-height: auto;
+    width: min(230px, 74vw);
+    min-width: min(230px, 74vw);
+    height: 142px;
+    min-height: 142px;
     padding: 12px;
     border-radius: 16px;
   }
@@ -1724,12 +1746,36 @@ input[type="color"] { padding: 4px; }
     gap: 5px;
   }
   .shot-calendar span {
-    min-height: 28px;
+    min-height: 19px;
     border-radius: 8px;
+    font-size: 10px;
+  }
+  .shot-list { gap: 6px; }
+  .shot-list div,
+  .shot-rewards div {
+    min-height: 30px;
+    padding: 6px;
+  }
+  .shot-rewards em {
+    width: 28px;
+    height: 28px;
   }
   .workspace { padding: 14px; }
-  .workspace-header, .modal-head { flex-direction: column; align-items: flex-start; }
+  .workspace-header { flex-direction: column; align-items: flex-start; }
+  .modal-head { flex-direction: row; align-items: flex-start; }
   .side-nav, .filter-bar, .filter-bar.compact, .stats, .reward-grid, .view-grid, .modal-form { grid-template-columns: 1fr; }
+  .management-filter {
+    grid-template-columns: 1fr;
+  }
+  .management-filter .filter-action {
+    width: 100%;
+  }
+  .management-filter .filter-actions {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
+  .advanced-filters {
+    grid-template-columns: 1fr;
+  }
   .exchange-rule-form,
   .exchange-form-grid,
   .balance-exchange-targets { grid-template-columns: 1fr; }
@@ -1796,17 +1842,34 @@ input[type="color"] { padding: 4px; }
   }
   .section-inline-head { align-items: flex-start; }
   .section-actions { justify-content: flex-start; }
-  .calendar-log-item { grid-template-columns: auto minmax(0, 1fr); }
-  .calendar-log-score,
-  .calendar-log-action { grid-column: 2; justify-self: start; }
+  .calendar-log-item {
+    grid-template-columns: auto minmax(0, 1fr) minmax(54px, auto);
+    gap: 8px;
+  }
+  .calendar-log-score {
+    grid-column: 2;
+    justify-self: start;
+  }
+  .calendar-log-action {
+    grid-column: 3;
+    grid-row: 1 / span 2;
+    align-self: center;
+    justify-self: end;
+  }
   .calendar-detail-grid { grid-template-columns: 1fr; }
   .todo-item { grid-template-columns: auto minmax(0, 1fr); }
   .todo-item .row-actions { grid-column: 1 / -1; }
   .ticket-item { grid-template-columns: auto minmax(0, 1fr); }
   .ticket-state { grid-column: 2; width: fit-content; }
   .icon-picker { grid-template-columns: repeat(6, 34px); }
-  .calendar-grid { gap: 6px; }
-  .day { min-height: 96px; padding: 8px; }
-  .event em { display: none; }
+  .calendar-grid {
+    grid-template-columns: repeat(7, minmax(92px, 1fr));
+    gap: 6px;
+  }
+  .day {
+    min-width: 92px;
+    min-height: 96px;
+    padding: 8px;
+  }
   .login-panel { padding: 22px; }
 }

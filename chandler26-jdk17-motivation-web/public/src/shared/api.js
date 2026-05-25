@@ -56,6 +56,7 @@ export const api = {
   deleteTask: (taskId) => request(`/tasks/${taskId}`, { method: 'DELETE' }),
   completeTask: (taskId, body) => request(`/tasks/${taskId}/complete`, { method: 'POST', body }),
   approveTaskRecord: (recordId, body = {}) => request(`/tasks/records/${recordId}/approve`, { method: 'POST', body }),
+  rejectTaskRecord: (recordId, body = {}) => request(`/tasks/records/${recordId}/reject`, { method: 'POST', body }),
   calendar: (childId, date) => request(`/calendar?childId=${encodeURIComponent(childId)}&year=${date.getFullYear()}&month=${date.getMonth() + 1}`),
   pointSummary: (childId) => request(`/children/${childId}/points/summary`),
   ledger: (childId) => request(`/children/${childId}/points/ledger?limit=20`),

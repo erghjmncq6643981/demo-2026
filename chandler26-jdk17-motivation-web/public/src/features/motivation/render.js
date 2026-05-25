@@ -97,30 +97,13 @@ function renderLoginPage(state) {
     <main class="login-page">
       <section class="login-showcase" aria-label="系统能力概览">
         <div class="login-hero-copy">
-          <h1>儿童激励记录系统</h1>
+          <h1 class="rainbow-title">
+            ${Array.from('宝贝激励助手').map((char) => `<span>${char}</span>`).join('')}
+          </h1>
+          <p>把每日努力变成看得见的积分、日历和奖励。</p>
         </div>
-        <div class="login-showcase-grid" aria-hidden="true">
-          <article class="login-shot task-shot">
-            <div class="shot-bar"><span></span><b>任务管理</b></div>
-            <div class="shot-list">
-              <div><i style="--task-color:#ff5c8a"></i><strong>晨读</strong><span>★★★</span></div>
-              <div><i style="--task-color:#34c759"></i><strong>整理书包</strong><span>✿✿</span></div>
-              <div><i style="--task-color:#6c63ff"></i><strong>练字作业</strong><span>♛</span></div>
-            </div>
-          </article>
-          <article class="login-shot calendar-shot">
-            <div class="shot-bar"><span></span><b>任务日历</b></div>
-            <div class="shot-calendar">
-              ${Array.from({ length: 21 }, (_, index) => `<span class="${[2, 4, 8, 13, 18].includes(index) ? 'active' : ''}">${index + 1}</span>`).join('')}
-            </div>
-          </article>
-          <article class="login-shot store-shot">
-            <div class="shot-bar"><span></span><b>奖励商店</b></div>
-            <div class="shot-rewards">
-              <div><em>🎁</em><strong>积木礼物</strong><small>80 ★</small></div>
-              <div><em>🍦</em><strong>冰淇淋</strong><small>40 ✿</small></div>
-            </div>
-          </article>
+        <div class="login-showcase-grid" data-login-carousel aria-label="核心功能预览">
+          ${renderLoginCarouselSlides()}
         </div>
       </section>
       <section class="login-panel" aria-label="账号登录">
@@ -129,7 +112,7 @@ function renderLoginPage(state) {
           <div>
             <p class="login-panel-kicker">ACCOUNT</p>
             <h2>欢迎回来</h2>
-            <p>${escapeHtml(state.connectionMessage || '登录后进入家庭激励工作台')}</p>
+            <p>登录后继续奖励兑换</p>
           </div>
         </div>
         <form class="login-form" data-form="auth">
@@ -151,6 +134,45 @@ function renderLoginPage(state) {
   `
 }
 
+function renderLoginCarouselSlides() {
+  const slides = ['store', 'task', 'calendar', 'store', 'task']
+  return slides.map((type, index) => renderLoginShot(type, index === 0 || index === slides.length - 1)).join('')
+}
+
+function renderLoginShot(type, duplicate = false) {
+  if (type === 'task') {
+    return `
+      <article class="login-shot task-shot" ${duplicate ? 'aria-hidden="true"' : ''}>
+        <div class="shot-bar"><span></span><b>任务管理</b></div>
+        <div class="shot-list">
+          <div><i style="--task-color:#ff5c8a"></i><strong>晨读</strong><span>★★★</span></div>
+          <div><i style="--task-color:#34c759"></i><strong>整理书包</strong><span>✿✿</span></div>
+          <div><i style="--task-color:#6c63ff"></i><strong>练字作业</strong><span>♛</span></div>
+        </div>
+      </article>
+    `
+  }
+  if (type === 'calendar') {
+    return `
+      <article class="login-shot calendar-shot" ${duplicate ? 'aria-hidden="true"' : ''}>
+        <div class="shot-bar"><span></span><b>任务日历</b></div>
+        <div class="shot-calendar">
+          ${Array.from({ length: 21 }, (_, index) => `<span class="${[2, 4, 8, 13, 18].includes(index) ? 'active' : ''}">${index + 1}</span>`).join('')}
+        </div>
+      </article>
+    `
+  }
+  return `
+    <article class="login-shot store-shot" ${duplicate ? 'aria-hidden="true"' : ''}>
+      <div class="shot-bar"><span></span><b>奖励商店</b></div>
+      <div class="shot-rewards">
+        <div><em>🎁</em><strong>积木礼物</strong><small>80 ★</small></div>
+        <div><em>🍦</em><strong>冰淇淋</strong><small>40 ✿</small></div>
+      </div>
+    </article>
+  `
+}
+
 function renderSidebar(state) {
   const items = visibleNavItems(state)
   return `
@@ -159,7 +181,7 @@ function renderSidebar(state) {
       <div class="sidebar-brand">
         <div class="brand-mark">★</div>
         <div>
-          <strong>成长激励</strong>
+          <strong>宝贝激励助手</strong>
           <span>${escapeHtml(state.selectedChild?.nickname || '未选择孩子')}</span>
         </div>
       </div>
@@ -309,6 +331,7 @@ function renderProfileView(state) {
 function renderChildList(state) {
   const filters = state.childFilters || {}
   const children = filterChildren(state.children || [], filters)
+  const expanded = Boolean(state.filterAdvanced?.child)
   return `
     <div class="section-inline-head">
       <h2>孩子档案</h2>
@@ -317,12 +340,16 @@ function renderChildList(state) {
         <button class="btn primary" type="button" data-action="open-child-modal">新增孩子</button>
       </div>
     </div>
-    <div class="filter-bar compact">
-      <label><span>关键词</span><input name="keyword" data-filter="child-keyword" data-filter-scope="child" value="${escapeHtml(filters.keyword || '')}" placeholder="昵称或备注" /></label>
-      <label><span>性别</span>${renderSelect('child-gender', filters.gender || '', [['', '全部'], ['UNKNOWN', '未设置'], ['MALE', '男孩'], ['FEMALE', '女孩']], 'child')}</label>
-      <label><span>状态</span>${renderSelect('child-status', filters.status || '', [['', '全部'], ['ACTIVE', '启用'], ['INACTIVE', '停用']], 'child')}</label>
-      <div class="filter-action"><span>筛选</span><div class="filter-actions"><button class="small-btn primary-lite" type="button" data-action="search-child-filters">搜索</button><button class="small-btn" type="button" data-action="reset-child-filters">重置</button></div></div>
-    </div>
+    ${renderManagementFilterBar({
+      scope: 'child',
+      filters,
+      keywordPlaceholder: '昵称或备注',
+      expanded,
+      fields: `
+        <label><span>性别</span>${renderSelect('child-gender', filters.gender || '', [['', '全部'], ['UNKNOWN', '未设置'], ['MALE', '男孩'], ['FEMALE', '女孩']], 'child')}</label>
+        <label><span>状态</span>${renderSelect('child-status', filters.status || '', [['', '全部'], ['ACTIVE', '启用'], ['INACTIVE', '停用']], 'child')}</label>
+      `,
+    })}
     <div class="table-card">
       <div class="table-head child-table">
         <span>孩子</span><span>性别</span><span>生日</span><span>状态</span><span>操作</span>
@@ -355,6 +382,7 @@ function renderChildRow(child, selectedChildId) {
 function renderGoalList(state) {
   const filters = state.goalFilters || {}
   const goals = filterGoals(state.goals || [], filters)
+  const expanded = Boolean(state.filterAdvanced?.goal)
   return `
     <div class="section-inline-head">
       <h2>成长目标</h2>
@@ -363,11 +391,15 @@ function renderGoalList(state) {
         <button class="btn primary" type="button" data-action="open-goal-modal">新增目标</button>
       </div>
     </div>
-    <div class="filter-bar compact">
-      <label><span>关键词</span><input name="keyword" data-filter="goal-keyword" data-filter-scope="goal" value="${escapeHtml(filters.keyword || '')}" placeholder="目标名称或说明" /></label>
-      <label><span>状态</span>${renderSelect('goal-status', filters.status || '', [['', '全部'], ['ACTIVE', '启用'], ['PAUSED', '暂停'], ['FINISHED', '完成']], 'goal')}</label>
-      <div class="filter-action"><span>筛选</span><div class="filter-actions"><button class="small-btn primary-lite" type="button" data-action="search-goal-filters">搜索</button><button class="small-btn" type="button" data-action="reset-goal-filters">重置</button></div></div>
-    </div>
+    ${renderManagementFilterBar({
+      scope: 'goal',
+      filters,
+      keywordPlaceholder: '目标名称或说明',
+      expanded,
+      fields: `
+        <label><span>状态</span>${renderSelect('goal-status', filters.status || '', [['', '全部'], ['ACTIVE', '启用'], ['PAUSED', '暂停'], ['FINISHED', '完成']], 'goal')}</label>
+      `,
+    })}
     <div class="table-card">
       <div class="table-head goal-table">
         <span>目标</span><span>目标积分</span><span>周期</span><span>状态</span><span>操作</span>
@@ -395,11 +427,32 @@ function renderGoalRow(goal) {
   `
 }
 
+function renderManagementFilterBar({ scope, filters, keywordPlaceholder, expanded, fields }) {
+  return `
+    <div class="filter-bar management-filter ${expanded ? 'expanded' : ''}">
+      <label class="keyword-filter"><span>关键词</span><input name="keyword" data-filter="${scope}-keyword" data-filter-scope="${scope}" value="${escapeHtml(filters.keyword || '')}" placeholder="${escapeHtml(keywordPlaceholder)}" /></label>
+      <div class="filter-action">
+        <span>筛选</span>
+        <div class="filter-actions">
+          <button class="small-btn primary-lite" type="button" data-action="search-${scope}-filters">搜索</button>
+          <button class="small-btn" type="button" data-action="toggle-${scope}-filters" aria-expanded="${expanded ? 'true' : 'false'}">更多</button>
+          <button class="small-btn" type="button" data-action="reset-${scope}-filters">重置</button>
+        </div>
+      </div>
+      <div class="advanced-filters ${expanded ? '' : 'hidden'}">
+        ${fields}
+      </div>
+    </div>
+  `
+}
+
 function renderTaskManageView(state) {
   const filters = state.taskFilters || {}
   const tasks = filterTasks(state.tasks, filters)
+  const expanded = Boolean(state.filterAdvanced?.task)
   return `
     <section class="panel panel-pad">
+      ${renderTaskReviewTodo(state)}
       <div class="section-inline-head">
         <h2>任务列表</h2>
         <div class="section-actions">
@@ -407,14 +460,18 @@ function renderTaskManageView(state) {
           <button class="btn primary" type="button" data-action="open-task-modal">新增任务</button>
         </div>
       </div>
-      <div class="filter-bar">
-        <label><span>关键词</span><input name="keyword" data-filter="task-keyword" data-filter-scope="task" value="${escapeHtml(filters.keyword || '')}" placeholder="任务名称" /></label>
-        <label><span>任务分类</span>${renderSelect('task-category', filters.category || '', [['', '全部'], ['STUDY', '学习'], ['LIFE', '生活'], ['SPORT', '运动'], ['HABIT', '习惯']], 'task')}</label>
-        <label><span>任务类型</span>${renderSelect('task-period', filters.periodType || '', [['', '全部'], ['DAILY', '每日'], ['WEEKLY', '每周'], ['MONTHLY', '每月']], 'task')}</label>
-        <label><span>积分类型</span>${renderSelect('task-point', filters.pointType || '', [['', '全部'], ['STAR', '星星'], ['FLOWER', '红花'], ['CROWN', '皇冠']], 'task')}</label>
-        <label><span>状态</span>${renderSelect('task-status', filters.status || '', [['', '全部'], ['ACTIVE', '启用'], ['PAUSED', '暂停']], 'task')}</label>
-        <div class="filter-action"><span>筛选</span><div class="filter-actions"><button class="small-btn primary-lite" type="button" data-action="search-task-filters">搜索</button><button class="small-btn" type="button" data-action="reset-task-filters">重置</button></div></div>
-      </div>
+      ${renderManagementFilterBar({
+        scope: 'task',
+        filters,
+        keywordPlaceholder: '任务名称',
+        expanded,
+        fields: `
+          <label><span>任务分类</span>${renderSelect('task-category', filters.category || '', [['', '全部'], ['STUDY', '学习'], ['LIFE', '生活'], ['SPORT', '运动'], ['HABIT', '习惯']], 'task')}</label>
+          <label><span>任务类型</span>${renderSelect('task-period', filters.periodType || '', [['', '全部'], ['DAILY', '每日'], ['WEEKLY', '每周'], ['MONTHLY', '每月']], 'task')}</label>
+          <label><span>积分类型</span>${renderSelect('task-point', filters.pointType || '', [['', '全部'], ['STAR', '星星'], ['FLOWER', '红花'], ['CROWN', '皇冠']], 'task')}</label>
+          <label><span>状态</span>${renderSelect('task-status', filters.status || '', [['', '全部'], ['ACTIVE', '启用'], ['PAUSED', '暂停']], 'task')}</label>
+        `,
+      })}
       <div class="table-card">
         <div class="table-head task-table">
           <span>任务</span><span>任务类型和时间段</span><span>积分</span><span>操作</span>
@@ -439,6 +496,36 @@ function renderTaskRow(task) {
         <button class="row-icon-btn danger" type="button" data-action="delete-task" data-task-id="${task.id}" aria-label="删除任务" title="删除任务">${renderActionIcon('delete')}</button>
       </div>
     </div>
+  `
+}
+
+function renderTaskReviewTodo(state) {
+  if (!isManagementUser(state)) return ''
+  const todos = (state.calendarEvents || [])
+    .filter((event) => event.status === 'SUBMITTED' && event.recordId)
+    .sort((left, right) => String(right.submittedAt || right.taskDate || '').localeCompare(String(left.submittedAt || left.taskDate || '')))
+  return `
+    <section class="todo-panel task-review-panel">
+      <div class="section-inline-head">
+        <h2>任务待确认</h2>
+        <span>${todos.length} 条</span>
+      </div>
+      <div class="todo-list">
+        ${todos.map((event) => `
+          <div class="todo-item">
+            <span class="task-dot" style="--task-color:${event.taskColor || '#6c63ff'}"></span>
+            <div>
+              <strong>${escapeHtml(event.taskName || '任务打卡')}</strong>
+              <small>${escapeHtml(formatDateValue(event.taskDate))} · ${renderScoreIcons(event.pointType, Number(event.basePoints || 1), event.pointColor, 'tiny')}</small>
+            </div>
+            <div class="row-actions">
+              <button class="small-btn primary-lite" type="button" data-action="approve-task-record" data-record-id="${event.recordId}">通过</button>
+              <button class="small-btn danger" type="button" data-action="reject-task-record" data-record-id="${event.recordId}">拒绝</button>
+            </div>
+          </div>
+        `).join('') || '<div class="empty compact-empty">暂无任务待确认</div>'}
+      </div>
+    </section>
   `
 }
 
@@ -590,6 +677,7 @@ function renderCalendarDayModal(state) {
   const events = calendarEventsForDate(state, state.selectedCalendarDateKey)
   const visibleEvents = filterCalendarEventsByKind(state, events)
   const summary = renderCalendarDaySummary(state.calendarEventKind || 'tasks', visibleEvents)
+  const canQuickCreate = isManagementUser(state) && (state.calendarEventKind || 'tasks') === 'tasks'
   return `
     <div class="modal-backdrop calendar-layer calendar-day-layer">
       <section class="modal calendar-modal calendar-day-modal">
@@ -602,6 +690,7 @@ function renderCalendarDayModal(state) {
         </div>
         <div class="calendar-summary">
           ${summary}
+          ${canQuickCreate ? `<button class="small-btn primary-lite calendar-quick-add" type="button" data-action="open-task-modal-for-date" data-task-date="${escapeHtml(state.selectedCalendarDateKey)}">新增当日任务</button>` : ''}
         </div>
         <div class="calendar-log-list">
           ${visibleEvents.map((event) => renderCalendarLogItem(event)).join('') || '<div class="empty compact-empty">这一天没有对应记录</div>'}
@@ -647,12 +736,12 @@ function renderCalendarEventModal(state) {
               <strong>${escapeHtml(event.statusLabel)}</strong>
             </div>
             <div class="calendar-detail-card wide">
-              <span>${event.kind === 'points' ? '积分变化' : event.kind === 'rewards' ? '奖励信息' : '积分预览'}</span>
+              <span>${event.kind === 'points' ? '积分变化' : event.kind === 'rewards' ? '奖励信息' : '积分'}</span>
               ${event.kind === 'points'
                 ? `<div class="calendar-point-change ${event.changeAmount >= 0 ? 'positive' : 'negative'}">${event.changeAmount >= 0 ? '+' : ''}${event.changeAmount} ${pointName(event.pointType)}</div>`
                 : event.kind === 'rewards'
                   ? `<div class="calendar-reward-detail"><strong>${escapeHtml(event.rewardName || event.title)}</strong><p>${escapeHtml(event.rewardDetail || '')}</p></div>`
-                  : renderScoreIcons(event.pointType, scoreCount, event.pointColor, 'calendar')}
+                  : renderCalendarStatusScore(event, scoreCount, 'calendar')}
             </div>
           </div>
           <div class="calendar-detail-note">
@@ -669,6 +758,7 @@ function renderCalendarEventModal(state) {
 }
 
 function renderCalendarLogItem(event) {
+  const scoreCount = Number(event.scoreAwarded || event.basePoints || 1)
   return `
     <button class="calendar-log-item" type="button" data-action="open-calendar-event" data-calendar-event-id="${escapeHtml(event.uid)}" data-task-id="${escapeHtml(event.taskId || '')}" data-task-date="${escapeHtml(event.date)}">
       <span class="task-dot" style="--task-color:${event.color || '#6c63ff'}"></span>
@@ -681,14 +771,20 @@ function renderCalendarLogItem(event) {
           ? `<span class="calendar-point-change ${event.changeAmount >= 0 ? 'positive' : 'negative'}">${event.changeAmount >= 0 ? '+' : ''}${event.changeAmount}</span>`
           : event.kind === 'rewards'
             ? `<span class="calendar-log-status">${escapeHtml(event.rewardStateLabel)}</span>`
-            : renderScoreIcons(event.pointType, Number(event.scoreAwarded || event.basePoints || 1), event.pointColor, 'log')}
+            : renderCalendarStatusScore(event, scoreCount, 'log')}
         <span class="calendar-log-status">${escapeHtml(event.statusLabel)}</span>
       </div>
       ${event.kind === 'tasks'
-        ? `<span class="calendar-log-action ${event.status === 'APPROVED' ? 'done' : ''}">${event.status === 'APPROVED' ? '完成' : '打卡'}</span>`
+        ? `<span class="calendar-log-action ${event.status === 'APPROVED' ? 'done' : ''}">打卡</span>`
         : `<span class="calendar-log-action done">${event.kindLabel}</span>`}
     </button>
   `
+}
+
+function renderCalendarStatusScore(event, count, density = '') {
+  const completed = event.status === 'APPROVED'
+  const color = completed ? event.pointColor : '#cbd5e1'
+  return renderScoreIcons(event.pointType, count, color, `${density} ${completed ? '' : 'muted'}`.trim())
 }
 
 function renderCalendarDaySummary(kind, events) {
@@ -749,6 +845,7 @@ function renderStoreView(state) {
 function renderRewardManageView(state) {
   const filters = state.rewardFilters || {}
   const rewards = filterRewards(state.rewards, filters)
+  const expanded = Boolean(state.filterAdvanced?.reward)
   return `
     <section class="panel panel-pad">
       ${renderExchangeTodo(state)}
@@ -760,12 +857,16 @@ function renderRewardManageView(state) {
           <button class="btn primary" type="button" data-action="open-reward-modal">新增奖励</button>
         </div>
       </div>
-      <div class="filter-bar">
-        <label><span>关键词</span><input name="keyword" data-filter="reward-keyword" data-filter-scope="reward" value="${escapeHtml(filters.keyword || '')}" placeholder="奖励名称" /></label>
-        <label><span>积分类型</span>${renderSelect('reward-point', filters.pointType || '', [['', '全部'], ['STAR', '星星'], ['FLOWER', '红花'], ['CROWN', '皇冠']], 'reward')}</label>
-        <label><span>状态</span>${renderSelect('reward-status', filters.status || '', [['', '全部'], ['ACTIVE', '启用'], ['PAUSED', '暂停']], 'reward')}</label>
-        <div class="filter-action"><span>筛选</span><div class="filter-actions"><button class="small-btn primary-lite" type="button" data-action="search-reward-filters">搜索</button><button class="small-btn" type="button" data-action="reset-reward-filters">重置</button></div></div>
-      </div>
+      ${renderManagementFilterBar({
+        scope: 'reward',
+        filters,
+        keywordPlaceholder: '奖励名称',
+        expanded,
+        fields: `
+          <label><span>积分类型</span>${renderSelect('reward-point', filters.pointType || '', [['', '全部'], ['STAR', '星星'], ['FLOWER', '红花'], ['CROWN', '皇冠']], 'reward')}</label>
+          <label><span>状态</span>${renderSelect('reward-status', filters.status || '', [['', '全部'], ['ACTIVE', '启用'], ['PAUSED', '暂停']], 'reward')}</label>
+        `,
+      })}
       <div class="table-card">
         <div class="table-head reward-table">
           <span>奖励</span><span>需要积分</span><span>库存</span><span>实现方式</span><span>操作</span>
@@ -955,7 +1056,9 @@ function renderLedger(state) {
 
 function renderTaskModal(state) {
   if (!state.taskModalOpen) return ''
-  const task = state.editingTask || {}
+  const draftDate = state.taskDraftDate || ''
+  const draftDay = draftDate ? Number(String(draftDate).slice(8, 10)) : 0
+  const task = state.editingTask || (draftDay ? { periodType: 'MONTHLY', scheduleJson: JSON.stringify({ type: 'MONTHLY', category: 'HABIT', days: [draftDay], requiredCount: 1 }) } : {})
   const schedule = parseSchedule(task.scheduleJson)
   const periodType = task.periodType || schedule.type || 'DAILY'
   const startHour = Number(schedule.timeRange?.startHour ?? schedule.startHour ?? 6)
@@ -976,7 +1079,7 @@ function renderTaskModal(state) {
         </div>
         <form class="modal-form" data-form="task">
           <input type="hidden" name="taskId" value="${escapeHtml(task.id || '')}" />
-          <label><span>任务名称</span><input name="name" value="${escapeHtml(task.name || '')}" placeholder="例如：晨读 20 分钟" /></label>
+          <label><span>任务名称</span><input name="name" value="${escapeHtml(task.name || '')}" placeholder="${draftDate ? '例如：当天阅读任务' : '例如：晨读 20 分钟'}" /></label>
           <label><span>所属目标</span>${renderSelect('goalId', task.goalId || state.goals[0]?.id || '', state.goals.map((goal) => [goal.id, goal.name]))}</label>
           <label><span>任务分类</span>${renderSelect('taskCategory', schedule.category || 'HABIT', [['STUDY', '学习'], ['LIFE', '生活'], ['SPORT', '运动'], ['HABIT', '习惯']])}</label>
           <label class="wide"><span>说明</span><input name="description" value="${escapeHtml(task.description || '')}" placeholder="给孩子看的简短说明" /></label>
@@ -1012,13 +1115,7 @@ function renderTaskModal(state) {
             ${renderPointTypePicker(pointType)}
           </div>
           <label><span>分值</span><input type="number" min="1" max="99" name="basePoints" value="${escapeHtml(basePoints)}" /></label>
-          <div class="point-preview-field">
-            <span class="field-label">积分预览</span>
-            <label class="point-preview" title="点击图标选择积分颜色">
-              <input type="color" name="pointColor" value="${escapeHtml(pointColor)}" />
-              <span class="score-icons preview" data-point-preview-icons style="--point-color:${escapeHtml(pointColor)}">${renderScoreIconItems(pointType, basePoints)}</span>
-            </label>
-          </div>
+          <label><span>积分颜色</span><input type="color" name="pointColor" value="${escapeHtml(pointColor)}" title="选择积分图标颜色" /></label>
           <div class="approval-mode wide">
             <span class="field-label">积分生效方式</span>
             <div class="segmented">

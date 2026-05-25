@@ -67,6 +67,8 @@ export function renderCalendar({ monthDate, events, viewMode = 'month', eventKin
 function renderCalendarEvent(event) {
   const color = event.color || event.taskColor || event.pointColor || '#6c63ff'
   const progress = event.subtitle || eventScheduleText(event)
+  const title = event.title || event.taskName || '任务'
+  const compactTitle = truncateTitle(title, 6)
   return `
     <button class="event" type="button"
       data-action="open-calendar-event"
@@ -75,10 +77,15 @@ function renderCalendarEvent(event) {
       data-task-id="${escapeHtml(event.taskId || '')}"
       data-task-date="${escapeHtml(event.date || event.taskDate)}"
       style="--event-bg:${hexToRgba(color, 0.12)}; --event-line:${hexToRgba(color, 0.2)}; --event-ink:${color};"
-      title="${escapeHtml(event.title || event.taskName)} / ${escapeHtml(progress)}">
-      <i></i><span>${escapeHtml(event.title || event.taskName)}</span><em>${escapeHtml(progress)}</em>
+      title="${escapeHtml(title)} / ${escapeHtml(progress)}">
+      <i></i><span>${escapeHtml(compactTitle)}</span>
     </button>
   `
+}
+
+function truncateTitle(title, length) {
+  const chars = Array.from(String(title || '任务'))
+  return chars.length > length ? `${chars.slice(0, length).join('')}...` : chars.join('')
 }
 
 function renderLegend(eventKind) {

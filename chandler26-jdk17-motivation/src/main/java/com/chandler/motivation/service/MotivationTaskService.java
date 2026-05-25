@@ -156,6 +156,18 @@ public class MotivationTaskService extends ServiceImpl<MotivationTaskMapper, Mot
             if (startHour > endHour) {
                 throw new MotivationException("TASK_TIME_RANGE_INVALID", "开始时间不能晚于结束时间");
             }
+            List<Integer> selectedHours = normalizeDays(source.get("hours"), 6, 22);
+            if (selectedHours.isEmpty()) {
+                selectedHours = new ArrayList<>();
+                for (int hour = startHour; hour <= endHour; hour++) {
+                    selectedHours.add(hour);
+                }
+            } else {
+                startHour = selectedHours.stream().min(Integer::compareTo).orElse(startHour);
+                endHour = selectedHours.stream().max(Integer::compareTo).orElse(endHour);
+            }
+            ArrayNode hours = normalized.putArray("hours");
+            selectedHours.forEach(hours::add);
             ObjectNode timeRange = normalized.putObject("timeRange");
             timeRange.put("startHour", startHour);
             timeRange.put("endHour", endHour);
