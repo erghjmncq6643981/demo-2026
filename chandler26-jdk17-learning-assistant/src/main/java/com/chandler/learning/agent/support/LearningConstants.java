@@ -31,6 +31,8 @@ public final class LearningConstants {
         public static final int PASSWORD_DIGEST_PART_INDEX = 2;
         public static final String PASSWORD_HASH_SEPARATOR = ":";
         public static final int BEARER_PREFIX_LENGTH = BEARER_PREFIX.length();
+        public static final int PHONE_MAX_LENGTH = 32;
+        public static final int EMAIL_MAX_LENGTH = 128;
 
         private Auth() {
         }
@@ -221,6 +223,8 @@ public final class LearningConstants {
         public static final String USER_DISABLED = "USER_DISABLED";
         public static final String PASSWORD_TOO_SHORT = "PASSWORD_TOO_SHORT";
         public static final String PASSWORD_INCORRECT = "PASSWORD_INCORRECT";
+        public static final String PHONE_INVALID = "PHONE_INVALID";
+        public static final String EMAIL_INVALID = "EMAIL_INVALID";
         public static final String JWT_INVALID = "JWT_INVALID";
         public static final String JWT_SIGN_FAILED = "JWT_SIGN_FAILED";
         public static final String JSON_SERIALIZE_FAILED = "JSON_SERIALIZE_FAILED";

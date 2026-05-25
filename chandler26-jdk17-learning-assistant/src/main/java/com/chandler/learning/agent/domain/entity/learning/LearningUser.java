@@ -18,6 +18,10 @@ public class LearningUser {
 
     private String nickname;
 
+    private String phone;
+
+    private String email;
+
     private String passwordHash;
 
     private Boolean enabled;

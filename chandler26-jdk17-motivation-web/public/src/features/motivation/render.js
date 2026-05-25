@@ -4,7 +4,7 @@ import { clamp, escapeHtml, pointIcon, pointName, statusName } from '/src/shared
 const navItems = [
   ['profile', '个人信息'],
   ['tasks', '任务管理'],
-  ['calendar', '日历'],
+  ['calendar', '任务日历'],
   ['store', '奖励商店'],
   ['rewards', '奖励管理'],
 ]
@@ -20,10 +20,12 @@ const weekDays = [
 ]
 
 const dayOfMonthOptions = Array.from({ length: 31 }, (_, index) => [index + 1, `${index + 1} 日`])
-const hourOptions = Array.from({ length: 17 }, (_, index) => {
-  const hour = index + 6
-  return [hour, `${String(hour).padStart(2, '0')}:00`]
-})
+const dailyHourOptions = Array.from({ length: 24 }, (_, hour) => hour)
+const pointTypeOptions = [
+  ['STAR', '星星'],
+  ['FLOWER', '红花'],
+  ['CROWN', '皇冠'],
+]
 const rewardIconOptions = ['🎁', '🍦', '🧸', '📚', '🎨', '🚲', '🎮', '🎬', '🎟️', '🍰', '🍕', '🏆', '👑', '⭐', '🌈', '🎵', '⚽', '🛝', '🍭', '🪁', '🧩', '🚀', '💎', '🎯', '🪄', '📷', '🌟', '🐣', '🦄', '🍓', '🍉', '🍎', '🍪', '🛹', '🎈']
 
 export function renderApp(state, actions) {
@@ -41,6 +43,8 @@ export function renderApp(state, actions) {
         ${renderCurrentView(state, actions)}
       </section>
     </main>
+    ${renderCalendarDayModal(state)}
+    ${renderCalendarEventModal(state)}
     ${renderChildModal(state)}
     ${renderGoalModal(state)}
     ${renderTaskModal(state)}
@@ -110,7 +114,7 @@ function renderWorkspaceHeader(state) {
   const titles = {
     profile: ['个人信息', '家庭成员、孩子档案和积分概览。'],
     tasks: ['任务管理', '用列表筛选任务，新增或修改任务规则。'],
-    calendar: ['日历', 'Notion 风格月视图，展示任务计划和完成记录。'],
+    calendar: ['任务日历', 'Notion 风格月视图，展示任务计划和完成记录。'],
     store: ['奖励商店', '孩子可以用星星、红花或皇冠兑换奖励。'],
     rewards: ['奖励管理', '维护奖励库存、颜色、积分要求和审核规则。'],
   }
@@ -123,8 +127,8 @@ function renderWorkspaceHeader(state) {
         <p>${subtitle}</p>
       </div>
       <div class="header-actions">
-        ${state.currentView === 'profile' ? '<button class="btn primary" type="button" data-action="open-child-modal">新增孩子</button>' : ''}
-        ${state.currentView === 'profile' ? '<button class="btn" type="button" data-action="open-goal-modal">新增目标</button>' : ''}
+        ${state.currentView === 'profile' && (state.profileSubView || 'children') === 'children' ? '<button class="btn primary" type="button" data-action="open-child-modal">新增孩子</button>' : ''}
+        ${state.currentView === 'profile' && state.profileSubView === 'goals' ? '<button class="btn primary" type="button" data-action="open-goal-modal">新增目标</button>' : ''}
         ${state.currentView === 'tasks' ? '<button class="btn primary" type="button" data-action="open-task-modal">新增任务</button>' : ''}
         ${state.currentView === 'rewards' ? '<button class="btn primary" type="button" data-action="open-reward-modal">新增奖励</button>' : ''}
         ${state.currentView === 'profile' ? '<button class="btn" type="button" data-action="open-adjust-modal">手动加减分</button>' : ''}
@@ -142,6 +146,7 @@ function renderCurrentView(state, actions) {
 }
 
 function renderProfileView(state) {
+  const activeSubView = state.profileSubView || 'children'
   if (!state.selectedChild) {
     return `
       <div class="view-grid">
@@ -166,10 +171,11 @@ function renderProfileView(state) {
         ${renderStats(state)}
       </section>
       <section class="panel panel-pad wide">
-        ${renderChildList(state)}
-      </section>
-      <section class="panel panel-pad wide">
-        ${renderGoalList(state)}
+        <div class="profile-subnav">
+          <button class="${activeSubView === 'children' ? 'active' : ''}" type="button" data-profile-subview="children">孩子档案</button>
+          <button class="${activeSubView === 'goals' ? 'active' : ''}" type="button" data-profile-subview="goals">成长目标</button>
+        </div>
+        ${activeSubView === 'goals' ? renderGoalList(state) : renderChildList(state)}
       </section>
       <section class="panel panel-pad wide">
         ${renderLedger(state)}
@@ -269,14 +275,14 @@ function renderTaskManageView(state) {
       <div class="filter-bar">
         <label><span>关键词</span><input name="keyword" data-filter="task-keyword" data-filter-scope="task" value="${escapeHtml(filters.keyword || '')}" placeholder="任务名称" /></label>
         <label><span>任务分类</span>${renderSelect('task-category', filters.category || '', [['', '全部'], ['STUDY', '学习'], ['LIFE', '生活'], ['SPORT', '运动'], ['HABIT', '习惯']], 'task')}</label>
-        <label><span>任务周期</span>${renderSelect('task-period', filters.periodType || '', [['', '全部'], ['DAILY', '每日'], ['WEEKLY', '每周'], ['MONTHLY', '每月']], 'task')}</label>
+        <label><span>任务类型</span>${renderSelect('task-period', filters.periodType || '', [['', '全部'], ['DAILY', '每日'], ['WEEKLY', '每周'], ['MONTHLY', '每月']], 'task')}</label>
         <label><span>积分类型</span>${renderSelect('task-point', filters.pointType || '', [['', '全部'], ['STAR', '星星'], ['FLOWER', '红花'], ['CROWN', '皇冠']], 'task')}</label>
         <label><span>状态</span>${renderSelect('task-status', filters.status || '', [['', '全部'], ['ACTIVE', '启用'], ['PAUSED', '暂停']], 'task')}</label>
         <div class="filter-action"><span>筛选</span><div class="filter-actions"><button class="small-btn primary-lite" type="button" data-action="search-task-filters">搜索</button><button class="small-btn" type="button" data-action="reset-task-filters">重置</button></div></div>
       </div>
       <div class="table-card">
         <div class="table-head task-table">
-          <span>任务</span><span>分类</span><span>周期</span><span>积分</span><span>操作</span>
+          <span>任务</span><span>任务类型和时间段</span><span>积分</span><span>操作</span>
         </div>
         ${tasks.map(renderTaskRow).join('') || '<div class="empty">暂无任务</div>'}
       </div>
@@ -291,16 +297,54 @@ function renderTaskRow(task) {
         <span class="task-dot" style="--task-color:${task.taskColor || '#6c63ff'}"></span>
         <div><strong>${escapeHtml(task.name)}</strong><small>${escapeHtml(task.description || '')}</small></div>
       </div>
-      <span>${categoryLabel(task)}</span>
-      <span>${scheduleLabel(task)}</span>
-      <span class="score-pill" style="color:${task.pointColor || '#f59e0b'}">${pointIcon(task.pointType)} ${task.basePoints}</span>
-      <div class="row-actions">
-        <button class="small-btn" type="button" data-action="edit-task" data-task-id="${task.id}">修改</button>
-        <button class="small-btn" type="button" data-action="complete-task" data-task-id="${task.id}">打卡</button>
-        <button class="small-btn danger" type="button" data-action="delete-task" data-task-id="${task.id}">删除</button>
+      ${renderTaskScheduleCell(task)}
+      <span class="score-pill score-pill-icons" title="${escapeHtml(`${task.basePoints || 1} ${pointName(task.pointType)}`)}">${renderScoreIcons(task.pointType, task.basePoints, task.pointColor, 'compact')}</span>
+      <div class="row-actions task-row-actions">
+        <button class="row-icon-btn" type="button" data-action="edit-task" data-task-id="${task.id}" aria-label="修改任务" title="修改任务">${renderActionIcon('edit')}</button>
+        <button class="row-icon-btn danger" type="button" data-action="delete-task" data-task-id="${task.id}" aria-label="删除任务" title="删除任务">${renderActionIcon('delete')}</button>
       </div>
     </div>
   `
+}
+
+function renderTaskScheduleCell(task) {
+  const schedule = parseSchedule(task.scheduleJson)
+  const periodType = task.periodType || schedule.type || 'DAILY'
+  return `
+    <div class="task-time-cell">
+      <div class="task-time-meta">
+        <strong>${periodLabel(periodType)}</strong>
+        <span>${categoryLabel(task)} · ${escapeHtml(scheduleLabel(task).replace(/^每日\s*/, '').replace(/^每周\s*/, '').replace(/^每月\s*/, ''))}</span>
+      </div>
+      ${renderTaskTimeBlocks(task, schedule, periodType)}
+    </div>
+  `
+}
+
+function renderTaskTimeBlocks(task, schedule, periodType) {
+  if (periodType === 'WEEKLY') {
+    const selectedDays = new Set((schedule.days || []).map(Number))
+    return `
+      <div class="time-blocks week-blocks compact-blocks">
+        ${weekDays.map(([value, label]) => `
+          <span class="time-block ${selectedDays.has(value) ? 'active' : ''}" title="${escapeHtml(label)}">${label.slice(1)}</span>
+        `).join('')}
+      </div>
+    `
+  }
+  if (periodType === 'MONTHLY') {
+    const selectedDays = new Set((schedule.days || []).map(Number))
+    return `
+      <div class="time-blocks month-blocks compact-blocks">
+        ${dayOfMonthOptions.map(([value]) => `
+          <span class="time-block ${selectedDays.has(value) ? 'active' : ''}" title="${value}日">${value}</span>
+        `).join('')}
+      </div>
+    `
+  }
+  const startHour = Number(schedule.timeRange?.startHour ?? schedule.startHour ?? 6)
+  const endHour = Number(schedule.timeRange?.endHour ?? schedule.endHour ?? 22)
+  return renderDailyHourBlocks(startHour, endHour, 'compact-blocks')
 }
 
 function renderCalendarView(state, actions) {
@@ -313,6 +357,111 @@ function renderCalendarView(state, actions) {
         onNext: actions.nextMonth,
       })}
     </section>
+  `
+}
+
+function renderCalendarDayModal(state) {
+  if (!state.calendarDayModalOpen || !state.selectedCalendarDateKey) return ''
+  const events = calendarEventsForDate(state, state.selectedCalendarDateKey)
+  const completedCount = events.filter((event) => event.status === 'APPROVED').length
+  const submittedCount = events.filter((event) => event.status === 'SUBMITTED').length
+  const pendingCount = events.filter((event) => event.status === 'PENDING').length
+  return `
+    <div class="modal-backdrop calendar-layer calendar-day-layer">
+      <section class="modal calendar-modal calendar-day-modal">
+        <div class="modal-head">
+          <div>
+            <h2>${escapeHtml(formatCalendarDateLabel(state.selectedCalendarDateKey))}</h2>
+            <p>任务日志里每一条都能点开查看并打卡。</p>
+          </div>
+          <button class="icon-btn" type="button" data-action="close-calendar-day-modal">×</button>
+        </div>
+        <div class="calendar-summary">
+          <span>${events.length} 个任务</span>
+          <span>${completedCount} 已完成</span>
+          <span>${submittedCount} 待审核</span>
+          <span>${pendingCount} 待打卡</span>
+        </div>
+        <div class="calendar-log-list">
+          ${events.map((event) => renderCalendarLogItem(event)).join('') || '<div class="empty compact-empty">这一天没有任务</div>'}
+        </div>
+      </section>
+    </div>
+  `
+}
+
+function renderCalendarEventModal(state) {
+  if (!state.calendarEventModalOpen || !state.selectedCalendarDateKey || !state.selectedCalendarEventTaskId) return ''
+  const event = getCalendarEvent(state, state.selectedCalendarEventTaskId, state.selectedCalendarDateKey)
+  if (!event) return ''
+  const approved = event.status === 'APPROVED'
+  const canCheckIn = !approved
+  const scoreCount = Number(event.scoreAwarded || event.basePoints || 1)
+  return `
+    <div class="modal-backdrop calendar-layer calendar-event-layer">
+      <section class="modal calendar-modal narrow calendar-event-modal">
+        <div class="modal-head">
+          <div>
+            <h2>${escapeHtml(event.taskName)}</h2>
+            <p>${escapeHtml(formatCalendarDateLabel(event.taskDate))} · ${escapeHtml(calendarEventStatusText(event))}</p>
+          </div>
+          <button class="icon-btn" type="button" data-action="close-calendar-event-modal">×</button>
+        </div>
+        <div class="calendar-detail">
+          <div class="calendar-detail-head">
+            <span class="task-dot" style="--task-color:${event.taskColor || '#6c63ff'}"></span>
+            <div>
+              <strong>${escapeHtml(categoryLabel(event))}</strong>
+              <p>${escapeHtml(scheduleLabel(event))}</p>
+            </div>
+          </div>
+          <div class="calendar-detail-grid">
+            <div class="calendar-detail-card">
+              <span>任务日期</span>
+              <strong>${escapeHtml(event.taskDate)}</strong>
+            </div>
+            <div class="calendar-detail-card">
+              <span>积分结果</span>
+              <strong>${approved ? '已入账' : '待完成'}</strong>
+            </div>
+            <div class="calendar-detail-card wide">
+              <span>积分预览</span>
+              ${renderScoreIcons(event.pointType, scoreCount, event.pointColor, 'calendar')}
+            </div>
+          </div>
+          <div class="calendar-detail-note">
+            ${escapeHtml(event.status === 'APPROVED'
+              ? '这条任务已经完成并入账。'
+              : event.status === 'SUBMITTED'
+                ? '这条任务已经提交，等待家长审核。'
+                : '这条任务还可以打卡。')}
+          </div>
+        </div>
+        <div class="modal-actions calendar-modal-actions">
+          <button class="btn" type="button" data-action="close-calendar-event-modal">返回</button>
+          ${canCheckIn ? `<button class="btn primary" type="button" data-action="complete-task" data-task-id="${event.taskId}" data-task-date="${escapeHtml(event.taskDate)}">${event.status === 'SUBMITTED' ? '重新提交' : '打卡'}</button>` : ''}
+        </div>
+      </section>
+    </div>
+  `
+}
+
+function renderCalendarLogItem(event) {
+  const scoreCount = Number(event.scoreAwarded || event.basePoints || 1)
+  const done = event.status === 'APPROVED'
+  return `
+    <button class="calendar-log-item" type="button" data-action="open-calendar-event" data-task-id="${event.taskId}" data-task-date="${escapeHtml(event.taskDate)}">
+      <span class="task-dot" style="--task-color:${event.taskColor || '#6c63ff'}"></span>
+      <div class="calendar-log-main">
+        <strong>${escapeHtml(event.taskName)}</strong>
+        <small>${escapeHtml(scheduleLabel(event))}</small>
+      </div>
+      <div class="calendar-log-score">
+        ${renderScoreIcons(event.pointType, scoreCount, event.pointColor, 'log')}
+        <span class="calendar-log-status">${escapeHtml(calendarEventStatusText(event))}</span>
+      </div>
+      <span class="calendar-log-action ${done ? 'done' : ''}">${done ? '完成' : '打卡'}</span>
+    </button>
   `
 }
 
@@ -460,6 +609,10 @@ function renderTaskModal(state) {
   const endHour = Number(schedule.timeRange?.endHour ?? schedule.endHour ?? 22)
   const selectedDays = Array.isArray(schedule.days) ? schedule.days.map(Number) : []
   const requiredCount = Number(schedule.requiredCount ?? schedule.timesPerWeek ?? 1)
+  const pointType = task.pointType || 'STAR'
+  const pointColor = task.pointColor || '#ffd84d'
+  const basePoints = Number(task.basePoints || 1)
+  const requireApproval = Number(task.requireApproval) === 1 || task.requireApproval === true
   return `
     <div class="modal-backdrop">
       <section class="modal">
@@ -473,42 +626,52 @@ function renderTaskModal(state) {
           <label><span>所属目标</span>${renderSelect('goalId', task.goalId || state.goals[0]?.id || '', state.goals.map((goal) => [goal.id, goal.name]))}</label>
           <label><span>任务分类</span>${renderSelect('taskCategory', schedule.category || 'HABIT', [['STUDY', '学习'], ['LIFE', '生活'], ['SPORT', '运动'], ['HABIT', '习惯']])}</label>
           <label class="wide"><span>说明</span><input name="description" value="${escapeHtml(task.description || '')}" placeholder="给孩子看的简短说明" /></label>
-          <div class="schedule-title wide">任务周期</div>
-          <div class="segmented wide">
-            ${[['DAILY', '每日'], ['WEEKLY', '每周'], ['MONTHLY', '每月']].map(([value, label]) => `
-              <label><input type="radio" name="periodType" value="${value}" data-schedule-mode ${periodType === value ? 'checked' : ''} /> <span>${label}</span></label>
-            `).join('')}
+          <div class="schedule-type-row wide">
+            <div>
+              <div class="schedule-title">任务类型</div>
+              <div class="segmented">
+                ${[['DAILY', '每日'], ['WEEKLY', '每周'], ['MONTHLY', '每月']].map(([value, label]) => `
+                  <label><input type="radio" name="periodType" value="${value}" data-schedule-mode ${periodType === value ? 'checked' : ''} /> <span>${label}</span></label>
+                `).join('')}
+              </div>
+            </div>
+            <label><span>色彩</span><input type="color" name="taskColor" value="${escapeHtml(task.taskColor || '#30d5ff')}" /></label>
           </div>
           <div class="schedule-panel wide ${periodType === 'DAILY' ? '' : 'hidden'}" data-schedule-panel="DAILY">
             <div class="schedule-title">每日可完成时间</div>
-            <div class="schedule-grid two">
-              <label><span>开始时间</span>${renderSelect('startHour', startHour, hourOptions)}</label>
-              <label><span>结束时间</span>${renderSelect('endHour', endHour, hourOptions)}</label>
-            </div>
+            ${renderDailyHourPicker(startHour, endHour)}
+            <input type="hidden" name="startHour" value="${escapeHtml(startHour)}" />
+            <input type="hidden" name="endHour" value="${escapeHtml(endHour)}" />
           </div>
           <div class="schedule-panel wide ${periodType === 'WEEKLY' ? '' : 'hidden'}" data-schedule-panel="WEEKLY">
             <div class="schedule-title">每周可完成日期</div>
-            <div class="week-picker">
-              ${weekDays.map(([value, label]) => `
-                <label><input type="checkbox" name="weekDays" value="${value}" ${selectedDays.includes(value) ? 'checked' : ''} /> <span>${label}</span></label>
-              `).join('')}
-            </div>
+            ${renderWeekDayPicker(selectedDays)}
             <label class="count-field"><span>每周完成次数</span><input type="number" min="1" max="7" name="weeklyRequiredCount" value="${escapeHtml(requiredCount || 1)}" /></label>
           </div>
           <div class="schedule-panel wide ${periodType === 'MONTHLY' ? '' : 'hidden'}" data-schedule-panel="MONTHLY">
             <div class="schedule-title">每月可完成日期</div>
-            <div class="month-day-picker">
-              ${dayOfMonthOptions.map(([value, label]) => `
-                <label><input type="checkbox" name="monthDays" value="${value}" ${selectedDays.includes(value) ? 'checked' : ''} /> <span>${label}</span></label>
-              `).join('')}
-            </div>
+            ${renderMonthDayPicker(selectedDays)}
             <label class="count-field"><span>每月完成次数</span><input type="number" min="1" max="31" name="monthlyRequiredCount" value="${escapeHtml(requiredCount || 1)}" /></label>
           </div>
-          <label><span>任务颜色</span><input type="color" name="taskColor" value="${escapeHtml(task.taskColor || '#30d5ff')}" /></label>
-          <label><span>积分图标</span>${renderSelect('pointType', task.pointType || 'STAR', [['STAR', '星星'], ['FLOWER', '红花'], ['CROWN', '皇冠']])}</label>
-          <label><span>积分颜色</span><input type="color" name="pointColor" value="${escapeHtml(task.pointColor || '#ffd84d')}" /></label>
-          <label><span>分值</span><input type="number" min="1" max="99" name="basePoints" value="${escapeHtml(task.basePoints || 1)}" /></label>
-          <label class="check-line wide"><input type="checkbox" name="requireApproval" ${Number(task.requireApproval) === 1 ? 'checked' : ''} /> <span>需要家长审核后入账</span></label>
+          <div class="point-config wide">
+            <div class="field-label">积分图标</div>
+            ${renderPointTypePicker(pointType)}
+          </div>
+          <label><span>分值</span><input type="number" min="1" max="99" name="basePoints" value="${escapeHtml(basePoints)}" /></label>
+          <div class="point-preview-field">
+            <span class="field-label">积分预览</span>
+            <label class="point-preview" title="点击图标选择积分颜色">
+              <input type="color" name="pointColor" value="${escapeHtml(pointColor)}" />
+              <span class="score-icons preview" data-point-preview-icons style="--point-color:${escapeHtml(pointColor)}">${renderScoreIconItems(pointType, basePoints)}</span>
+            </label>
+          </div>
+          <div class="approval-mode wide">
+            <span class="field-label">积分生效方式</span>
+            <div class="segmented">
+              <label><input type="radio" name="requireApproval" value="false" ${requireApproval ? '' : 'checked'} /> <span>打卡生效</span></label>
+              <label><input type="radio" name="requireApproval" value="true" ${requireApproval ? 'checked' : ''} /> <span>审批后生效</span></label>
+            </div>
+          </div>
           <div class="modal-actions wide">
             <button class="btn" type="button" data-action="close-task-modal">取消</button>
             <button class="btn primary" type="submit">保存</button>
@@ -516,6 +679,111 @@ function renderTaskModal(state) {
         </form>
       </section>
     </div>
+  `
+}
+
+function renderDailyHourPicker(startHour, endHour) {
+  return `
+    <div class="time-choice-grid hour-choice-grid" data-daily-hour-picker>
+      ${dailyHourOptions.map((hour) => {
+        const selectable = hour >= 6 && hour <= 22
+        const checked = selectable && hour >= startHour && hour <= endHour
+        const label = `${String(hour).padStart(2, '0')}:00`
+        return `
+          <label class="block-choice hour-choice ${selectable ? '' : 'disabled'}" title="${escapeHtml(selectable ? label : `${label} 不可选`)}">
+            <input type="checkbox" name="dailyHours" value="${hour}" ${checked ? 'checked' : ''} ${selectable ? '' : 'disabled'} />
+            <span>${hour}</span>
+          </label>
+        `
+      }).join('')}
+    </div>
+  `
+}
+
+function renderWeekDayPicker(selectedDays) {
+  return `
+    <div class="time-choice-grid week-picker">
+      ${weekDays.map(([value, label]) => `
+        <label class="block-choice day-choice" title="${escapeHtml(label)}">
+          <input type="checkbox" name="weekDays" value="${value}" ${selectedDays.includes(value) ? 'checked' : ''} />
+          <span>${label}</span>
+        </label>
+      `).join('')}
+    </div>
+  `
+}
+
+function renderMonthDayPicker(selectedDays) {
+  return `
+    <div class="time-choice-grid month-day-picker">
+      ${dayOfMonthOptions.map(([value, label]) => `
+        <label class="block-choice month-choice" title="${escapeHtml(label)}">
+          <input type="checkbox" name="monthDays" value="${value}" ${selectedDays.includes(value) ? 'checked' : ''} />
+          <span>${value}</span>
+        </label>
+      `).join('')}
+    </div>
+  `
+}
+
+function renderPointTypePicker(selectedPointType) {
+  return `
+    <div class="point-type-picker">
+      ${pointTypeOptions.map(([value, label]) => `
+        <label class="point-type-choice" title="${escapeHtml(label)}">
+          <input type="radio" name="pointType" value="${value}" ${selectedPointType === value ? 'checked' : ''} />
+          <span><b>${pointIcon(value)}</b>${escapeHtml(label)}</span>
+        </label>
+      `).join('')}
+    </div>
+  `
+}
+
+function renderScoreIcons(pointType, count, color, density = '') {
+  return `
+    <span class="score-icons ${density}" style="--point-color:${escapeHtml(color || '#f59e0b')}">
+      ${renderScoreIconItems(pointType, count)}
+    </span>
+  `
+}
+
+function renderScoreIconItems(pointType, count) {
+  const safeCount = clamp(Number(count || 1), 1, 99)
+  return Array.from({ length: safeCount }, () => `<span class="score-icon">${pointIcon(pointType)}</span>`).join('')
+}
+
+function renderDailyHourBlocks(startHour, endHour, density = '') {
+  const safeStart = clamp(Number(startHour), 6, 22)
+  const safeEnd = clamp(Number(endHour), 6, 22)
+  return `
+    <div class="time-blocks hour-blocks ${density}">
+      ${dailyHourOptions.map((hour) => {
+        const selectable = hour >= 6 && hour <= 22
+        const active = selectable && hour >= safeStart && hour <= safeEnd
+        const label = `${formatHour(hour)} 时间块`
+        return `<span class="time-block ${active ? 'active' : ''} ${selectable ? '' : 'disabled'}" title="${escapeHtml(label)}">${hour}</span>`
+      }).join('')}
+    </div>
+  `
+}
+
+function renderActionIcon(type) {
+  if (type === 'delete') {
+    return `
+      <svg viewBox="0 0 24 24" aria-hidden="true">
+        <path d="M3 6h18"></path>
+        <path d="M8 6V4h8v2"></path>
+        <path d="M19 6l-1 14H6L5 6"></path>
+        <path d="M10 11v5"></path>
+        <path d="M14 11v5"></path>
+      </svg>
+    `
+  }
+  return `
+    <svg viewBox="0 0 24 24" aria-hidden="true">
+      <path d="M12 20h9"></path>
+      <path d="M16.5 3.5a2.1 2.1 0 0 1 3 3L7 19l-4 1 1-4Z"></path>
+    </svg>
   `
 }
 
@@ -661,6 +929,31 @@ function renderConfirmModal(state) {
   `
 }
 
+function calendarEventsForDate(state, dateKey) {
+  return (state.calendarEvents || []).filter((event) => event.taskDate === dateKey)
+}
+
+function getCalendarEvent(state, taskId, dateKey) {
+  return calendarEventsForDate(state, dateKey).find((event) => String(event.taskId) === String(taskId))
+}
+
+function calendarEventStatusText(event) {
+  if (event.status === 'APPROVED') {
+    return `已完成 +${event.scoreAwarded || event.basePoints || 0} ${pointName(event.pointType)}`
+  }
+  if (event.status === 'SUBMITTED') return '待审核'
+  if (event.status === 'REJECTED') return '未通过'
+  return '待打卡'
+}
+
+function formatCalendarDateLabel(dateKey) {
+  if (!dateKey) return '任务日志'
+  const date = new Date(`${dateKey}T00:00:00`)
+  if (Number.isNaN(date.getTime())) return dateKey
+  const week = ['周日', '周一', '周二', '周三', '周四', '周五', '周六'][date.getDay()]
+  return `${dateKey} ${week}`
+}
+
 function renderSelect(name, value, options, scope = '') {
   return `
     <select name="${name}" data-select="${name}" ${scope ? `data-select-scope="${scope}"` : ''}>
@@ -724,18 +1017,28 @@ function normalizeSearchText(value) {
 
 function scheduleLabel(task) {
   const schedule = parseSchedule(task.scheduleJson)
+  const periodType = task.periodType || schedule.type || 'DAILY'
   const requiredCount = Number(schedule.requiredCount || schedule.timesPerWeek || 1)
-  if (task.periodType === 'WEEKLY') {
+  if (periodType === 'WEEKLY') {
     const days = schedule.days?.map((day) => weekDays.find(([value]) => value === day)?.[1]).filter(Boolean)
     return `每周 ${days?.join('、') || '周一'} · 完成 ${requiredCount} 次`
   }
-  if (task.periodType === 'MONTHLY') {
+  if (periodType === 'MONTHLY') {
     const days = schedule.days?.map((day) => `${day}日`).filter(Boolean)
     return `每月 ${days?.join('、') || '1日'} · 完成 ${requiredCount} 次`
   }
   const startHour = schedule.timeRange?.startHour ?? schedule.startHour ?? 6
   const endHour = schedule.timeRange?.endHour ?? schedule.endHour ?? 22
   return `每日 ${formatHour(startHour)}-${formatHour(endHour)}`
+}
+
+function periodLabel(periodType) {
+  const labels = {
+    DAILY: '每日',
+    WEEKLY: '每周',
+    MONTHLY: '每月',
+  }
+  return labels[periodType] || '每日'
 }
 
 function formatHour(hour) {

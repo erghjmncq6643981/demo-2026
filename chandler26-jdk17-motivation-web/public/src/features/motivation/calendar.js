@@ -14,14 +14,17 @@ export function renderCalendar({ monthDate, events, onPrevious, onNext }) {
     const date = new Date(gridStart)
     date.setDate(gridStart.getDate() + index)
     const dateKey = formatDate(date)
-    const dayEvents = events.filter((event) => formatDate(event.taskDate) === dateKey).slice(0, 4)
+    const allDayEvents = events.filter((event) => formatDate(event.taskDate) === dateKey)
+    const dayEvents = allDayEvents.slice(0, 3)
+    const overflowCount = Math.max(0, allDayEvents.length - dayEvents.length)
     const outside = date.getMonth() !== monthDate.getMonth()
     const today = dateKey === todayKey
     cells.push(`
-      <div class="day ${outside ? 'outside' : ''} ${today ? 'today' : ''}" data-date="${dateKey}">
+      <div class="day ${outside ? 'outside' : ''} ${today ? 'today' : ''}" data-action="open-calendar-day" data-date="${dateKey}">
         <div class="date">${date.getDate()}</div>
         <div class="events">
           ${dayEvents.map(renderCalendarEvent).join('')}
+          ${overflowCount ? `<div class="event-more" title="还有 ${overflowCount} 个任务">... +${overflowCount}</div>` : ''}
         </div>
       </div>
     `)
@@ -37,7 +40,7 @@ export function renderCalendar({ monthDate, events, onPrevious, onNext }) {
       <div class="calendar-header">
         <div class="calendar-title">
           <strong>${monthTitle(monthDate)}</strong>
-          <span>Notion-like calendar / 月视图</span>
+          <span>任务日历 / Notion 风格月视图</span>
         </div>
         <div class="nav">
           <button class="icon-btn" type="button" data-action="calendar-prev" aria-label="上个月">‹</button>
@@ -69,6 +72,9 @@ function renderCalendarEvent(event) {
   const progress = event.status === 'APPROVED' ? `${pointIcon(event.pointType)} +${event.scoreAwarded || event.basePoints || 0}` : eventScheduleText(event)
   return `
     <button class="event" type="button"
+      data-action="open-calendar-event"
+      data-task-id="${event.taskId}"
+      data-task-date="${escapeHtml(event.taskDate)}"
       style="--event-bg:${hexToRgba(color, 0.12)}; --event-line:${hexToRgba(color, 0.2)}; --event-ink:${color};"
       title="${escapeHtml(event.taskName)} / ${escapeHtml(progress)}">
       <i></i><span>${escapeHtml(event.taskName)}</span><em>${escapeHtml(progress)}</em>

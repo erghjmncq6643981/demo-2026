@@ -7,6 +7,10 @@ public class UserProfileUpdateRequest {
 
     private String nickname;
 
+    private String phone;
+
+    private String email;
+
     private String currentPassword;
 
     private String newPassword;

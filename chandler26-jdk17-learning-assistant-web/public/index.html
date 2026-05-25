@@ -601,7 +601,7 @@
       </div>
     </section>
     <section class="modal-backdrop hidden" id="accountModal" aria-modal="true" role="dialog">
-      <div class="config-modal small-modal">
+      <div class="config-modal account-modal">
         <div class="panel-heading">
           <div>
             <p class="eyebrow">Account</p>
@@ -609,14 +609,36 @@
           </div>
           <button class="icon-button" id="closeAccountModalBtn" type="button" title="关闭">×</button>
         </div>
-        <div class="model-form-grid">
-          <label>昵称<input id="accountNicknameInput" placeholder="显示昵称" /></label>
-          <label>当前密码<input id="accountCurrentPasswordInput" type="password" placeholder="修改密码时必填" /></label>
-          <label>新密码<input id="accountNewPasswordInput" type="password" placeholder="至少 6 位" /></label>
-          <label>确认新密码<input id="accountConfirmPasswordInput" type="password" placeholder="再次输入新密码" /></label>
-        </div>
-        <div class="modal-actions">
-          <button class="primary-button compact-primary" id="saveAccountBtn" type="button">保存修改</button>
+        <nav class="account-tabs" aria-label="账户设置">
+          <button class="account-tab active" type="button" data-account-tab="accountBasicPanel">基本资料</button>
+          <button class="account-tab" type="button" data-account-tab="accountSecurityPanel">安全设置</button>
+        </nav>
+        <div class="account-tab-panels">
+          <section class="account-tab-panel active" id="accountBasicPanel">
+            <div class="model-form-grid">
+              <label>昵称<input id="accountNicknameInput" placeholder="显示昵称" /></label>
+              <label>账户<input id="accountUsernameInput" disabled /></label>
+            </div>
+            <div class="modal-actions">
+              <button class="primary-button compact-primary" id="saveAccountProfileBtn" type="button">更新资料</button>
+            </div>
+          </section>
+          <section class="account-tab-panel" id="accountSecurityPanel">
+            <div class="model-form-grid">
+              <label class="account-password-field">
+                账户密码
+                <input id="accountNewPasswordInput" type="password" placeholder="至少 6 位" autocomplete="new-password" />
+                <span class="password-strength" id="accountPasswordStrength">密码强度：未输入</span>
+              </label>
+              <label>当前密码<input id="accountCurrentPasswordInput" type="password" placeholder="修改密码时必填" autocomplete="current-password" /></label>
+              <label>确认新密码<input id="accountConfirmPasswordInput" type="password" placeholder="再次输入新密码" autocomplete="new-password" /></label>
+              <label>手机号码<input id="accountPhoneInput" inputmode="tel" placeholder="例如：13800138000" /></label>
+              <label>联系邮箱<input id="accountEmailInput" type="email" placeholder="例如：name@example.com" /></label>
+            </div>
+            <div class="modal-actions">
+              <button class="primary-button compact-primary" id="saveAccountSecurityBtn" type="button">保存安全设置</button>
+            </div>
+          </section>
         </div>
       </div>
     </section>

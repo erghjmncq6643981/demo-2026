@@ -27,7 +27,10 @@ export function bindAppEvents(ctx) {
     closeTemplateModal,
     openAccountModal,
     closeAccountModal,
+    setAccountModalTab,
     saveAccountProfile,
+    saveAccountSecurity,
+    updateAccountPasswordStrength,
     loadWordbookEntries,
     openWordbookModal,
     closeWordbookModal,
@@ -113,7 +116,12 @@ elements.closeAccountModalBtn.addEventListener('click', closeAccountModal)
 elements.accountModal.addEventListener('click', (event) => {
   if (event.target === elements.accountModal) closeAccountModal()
 })
-elements.saveAccountBtn.addEventListener('click', saveAccountProfile)
+elements.accountModal.querySelectorAll('[data-account-tab]').forEach((button) => {
+  button.addEventListener('click', () => setAccountModalTab(button.dataset.accountTab))
+})
+elements.accountNewPasswordInput?.addEventListener('input', updateAccountPasswordStrength)
+elements.saveAccountProfileBtn.addEventListener('click', saveAccountProfile)
+elements.saveAccountSecurityBtn.addEventListener('click', saveAccountSecurity)
 elements.reloadWordbookEntriesBtn.addEventListener('click', loadWordbookEntries)
 elements.reloadWordbookViewBtn.addEventListener('click', loadWordbookEntries)
 elements.openWordbookModalBtn.addEventListener('click', () => openWordbookModal())

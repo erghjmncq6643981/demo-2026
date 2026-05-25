@@ -24,6 +24,7 @@ import java.security.MessageDigest;
 import java.security.SecureRandom;
 import java.time.LocalDateTime;
 import java.util.HexFormat;
+import java.util.regex.Pattern;
 
 /**
  * 学习助手账户服务，负责注册、登录、JWT 用户解析和个人资料维护。
@@ -34,6 +35,8 @@ import java.util.HexFormat;
 public class AuthService {
 
     private static final String PASSWORD_PREFIX = "sha256$";
+    private static final Pattern PHONE_PATTERN = Pattern.compile("^[0-9+\\-()\\s]{3,32}$");
+    private static final Pattern EMAIL_PATTERN = Pattern.compile("^[^@\\s]+@[^@\\s]+\\.[^@\\s]+$");
 
     private final LearningUserMapper userMapper;
     private final WordbookService wordbookService;
@@ -115,6 +118,16 @@ public class AuthService {
                         "当前密码不正确");
             }
             user.setPasswordHash(hashPassword(newPassword));
+            changed = true;
+        }
+
+        if (resolvedRequest.getPhone() != null) {
+            user.setPhone(normalizePhone(resolvedRequest.getPhone()));
+            changed = true;
+        }
+
+        if (resolvedRequest.getEmail() != null) {
+            user.setEmail(normalizeEmail(resolvedRequest.getEmail()));
             changed = true;
         }
 
@@ -208,7 +221,35 @@ public class AuthService {
         response.setId(user.getId());
         response.setUsername(user.getUsername());
         response.setNickname(user.getNickname());
+        response.setPhone(user.getPhone());
+        response.setEmail(user.getEmail());
         return response;
+    }
+
+    private String normalizePhone(String phone) {
+        String value = phone == null ? "" : phone.trim();
+        if (!StringUtils.hasText(value)) {
+            return null;
+        }
+        if (value.length() > LearningConstants.Auth.PHONE_MAX_LENGTH || !PHONE_PATTERN.matcher(value).matches()) {
+            throw LearningAssistantException.badRequest(
+                    LearningConstants.ErrorCode.PHONE_INVALID,
+                    "手机号码格式不正确");
+        }
+        return value;
+    }
+
+    private String normalizeEmail(String email) {
+        String value = email == null ? "" : email.trim();
+        if (!StringUtils.hasText(value)) {
+            return null;
+        }
+        if (value.length() > LearningConstants.Auth.EMAIL_MAX_LENGTH || !EMAIL_PATTERN.matcher(value).matches()) {
+            throw LearningAssistantException.badRequest(
+                    LearningConstants.ErrorCode.EMAIL_INVALID,
+                    "联系邮箱格式不正确");
+        }
+        return value;
     }
 
     private String hashPassword(String password) {

@@ -44,7 +44,8 @@ export function createAppServices({ state, elements }) {
       elements.saveSpeechBtn,
       elements.saveModelBtn,
       elements.saveTemplateBtn,
-      elements.saveAccountBtn,
+      elements.saveAccountProfileBtn,
+      elements.saveAccountSecurityBtn,
     ]) {
       if (element) element.disabled = isLoading
     }
