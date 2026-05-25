@@ -1,0 +1,75 @@
+-- 激励系统积分流水、奖励与兑换初始化脚本。
+-- 适用于全新数据库初始化。
+
+CREATE TABLE IF NOT EXISTS motivation_point_ledger (
+    id BIGINT NOT NULL COMMENT '主键',
+    child_id BIGINT NOT NULL COMMENT '孩子 ID',
+    point_type VARCHAR(20) NOT NULL COMMENT '积分类型：STAR、FLOWER、CROWN',
+    change_amount INT NOT NULL COMMENT '积分变动，正数加分、负数扣分',
+    balance_after INT NOT NULL COMMENT '变动后余额',
+    source_type VARCHAR(32) NOT NULL COMMENT '来源类型：TASK_RECORD、MANUAL_ADJUST、REWARD_EXCHANGE、SYSTEM',
+    source_id BIGINT NOT NULL COMMENT '来源 ID',
+    source_name VARCHAR(128) DEFAULT NULL COMMENT '来源名称快照',
+    reason VARCHAR(255) DEFAULT NULL COMMENT '变动原因',
+    operator_user_id BIGINT DEFAULT NULL COMMENT '操作人用户 ID',
+    event_time DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP COMMENT '流水发生时间',
+    create_time DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP COMMENT '创建时间',
+    update_time DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP COMMENT '更新时间',
+    PRIMARY KEY (id),
+    UNIQUE KEY uk_motivation_point_ledger_source (source_type, source_id, point_type, child_id),
+    KEY idx_motivation_point_ledger_child_time (child_id, point_type, event_time),
+    KEY idx_motivation_point_ledger_source (source_type, source_id),
+    KEY idx_motivation_point_ledger_operator (operator_user_id, create_time)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci COMMENT='激励系统积分流水';
+
+CREATE TABLE IF NOT EXISTS motivation_reward (
+    id BIGINT NOT NULL COMMENT '主键',
+    child_id BIGINT NOT NULL COMMENT '孩子 ID',
+    name VARCHAR(64) NOT NULL COMMENT '奖励名称',
+    description VARCHAR(255) DEFAULT NULL COMMENT '奖励说明',
+    reward_icon VARCHAR(32) DEFAULT NULL COMMENT '奖励图标',
+    reward_color VARCHAR(32) DEFAULT NULL COMMENT '奖励颜色',
+    required_point_type VARCHAR(20) NOT NULL COMMENT '所需积分类型',
+    required_points INT NOT NULL COMMENT '所需积分数量',
+    stock_total INT NOT NULL DEFAULT 0 COMMENT '总库存',
+    stock_remaining INT NOT NULL DEFAULT 0 COMMENT '剩余库存',
+    exchange_limit_type VARCHAR(20) NOT NULL DEFAULT 'UNLIMITED' COMMENT '兑换限制：UNLIMITED、DAILY、WEEKLY、MONTHLY',
+    exchange_limit_count INT NOT NULL DEFAULT 0 COMMENT '限制次数',
+    require_approval TINYINT(1) NOT NULL DEFAULT 1 COMMENT '是否需要家长确认',
+    status VARCHAR(20) NOT NULL DEFAULT 'ACTIVE' COMMENT '状态：ACTIVE、PAUSED、ARCHIVED',
+    deleted TINYINT(1) NOT NULL DEFAULT 0 COMMENT '是否删除',
+    sort_no INT NOT NULL DEFAULT 0 COMMENT '排序号',
+    created_by_user_id BIGINT DEFAULT NULL COMMENT '创建人用户 ID',
+    updated_by_user_id BIGINT DEFAULT NULL COMMENT '更新人用户 ID',
+    create_time DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP COMMENT '创建时间',
+    update_time DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP COMMENT '更新时间',
+    PRIMARY KEY (id),
+    KEY idx_motivation_reward_child_status (child_id, status, deleted, update_time),
+    KEY idx_motivation_reward_point_type (child_id, required_point_type, status)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci COMMENT='激励系统奖励';
+
+CREATE TABLE IF NOT EXISTS motivation_reward_exchange (
+    id BIGINT NOT NULL COMMENT '主键',
+    reward_id BIGINT NOT NULL COMMENT '奖励 ID',
+    child_id BIGINT NOT NULL COMMENT '孩子 ID',
+    reward_name_snapshot VARCHAR(64) NOT NULL COMMENT '奖励名称快照',
+    reward_color_snapshot VARCHAR(32) DEFAULT NULL COMMENT '奖励颜色快照',
+    reward_icon_snapshot VARCHAR(32) DEFAULT NULL COMMENT '奖励图标快照',
+    required_point_type VARCHAR(20) NOT NULL COMMENT '所需积分类型快照',
+    required_points_snapshot INT NOT NULL COMMENT '所需积分数量快照',
+    status VARCHAR(20) NOT NULL DEFAULT 'REQUESTED' COMMENT '状态：REQUESTED、APPROVED、REJECTED、COMPLETED、CANCELLED',
+    requested_by_user_id BIGINT DEFAULT NULL COMMENT '发起人用户 ID',
+    reviewed_by_user_id BIGINT DEFAULT NULL COMMENT '审核人用户 ID',
+    deducted_ledger_id BIGINT DEFAULT NULL COMMENT '扣减积分流水 ID',
+    requested_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP COMMENT '发起时间',
+    reviewed_at DATETIME DEFAULT NULL COMMENT '审核时间',
+    completed_at DATETIME DEFAULT NULL COMMENT '完成时间',
+    remark VARCHAR(255) DEFAULT NULL COMMENT '备注',
+    create_time DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP COMMENT '创建时间',
+    update_time DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP COMMENT '更新时间',
+    PRIMARY KEY (id),
+    KEY idx_motivation_reward_exchange_child (child_id, status, create_time),
+    KEY idx_motivation_reward_exchange_reward (reward_id, status, create_time),
+    KEY idx_motivation_reward_exchange_request_time (requested_at),
+    KEY idx_motivation_reward_exchange_deducted_ledger (deducted_ledger_id)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci COMMENT='激励系统奖励兑换记录';

@@ -1,0 +1,71 @@
+const API_BASE = localStorage.getItem('motivation_api_base') || 'http://127.0.0.1:17680/api/v1'
+const TOKEN_KEY = 'motivation_token'
+
+export function getToken() {
+  return localStorage.getItem(TOKEN_KEY) || ''
+}
+
+export function setToken(token) {
+  if (token) {
+    localStorage.setItem(TOKEN_KEY, token)
+  } else {
+    localStorage.removeItem(TOKEN_KEY)
+  }
+}
+
+export async function request(path, options = {}) {
+  const headers = new Headers(options.headers || {})
+  headers.set('Accept', 'application/json')
+  if (options.body !== undefined && !headers.has('Content-Type')) {
+    headers.set('Content-Type', 'application/json')
+  }
+  const token = getToken()
+  if (token) {
+    headers.set('Authorization', `Bearer ${token}`)
+  }
+
+  const response = await fetch(`${API_BASE}${path}`, {
+    ...options,
+    headers,
+    body: options.body === undefined ? undefined : JSON.stringify(options.body),
+  })
+  const payload = await response.json().catch(() => null)
+  if (!response.ok || (payload && payload.code !== 0)) {
+    const message = payload?.message || `请求失败：${response.status}`
+    throw new Error(message)
+  }
+  return payload?.data
+}
+
+export const api = {
+  health: () => request('/health'),
+  register: (body) => request('/auth/register', { method: 'POST', body }),
+  login: (body) => request('/auth/login', { method: 'POST', body }),
+  profile: () => request('/auth/profile'),
+  children: () => request('/children'),
+  createChild: (body) => request('/children', { method: 'POST', body }),
+  updateChild: (childId, body) => request(`/children/${childId}`, { method: 'PUT', body }),
+  deleteChild: (childId) => request(`/children/${childId}`, { method: 'DELETE' }),
+  goals: (childId) => request(`/goals?childId=${encodeURIComponent(childId)}`),
+  createGoal: (body) => request('/goals', { method: 'POST', body }),
+  updateGoal: (goalId, body) => request(`/goals/${goalId}`, { method: 'PUT', body }),
+  deleteGoal: (goalId) => request(`/goals/${goalId}`, { method: 'DELETE' }),
+  tasks: (childId) => request(`/tasks?childId=${encodeURIComponent(childId)}`),
+  createTask: (body) => request('/tasks', { method: 'POST', body }),
+  updateTask: (taskId, body) => request(`/tasks/${taskId}`, { method: 'PUT', body }),
+  deleteTask: (taskId) => request(`/tasks/${taskId}`, { method: 'DELETE' }),
+  completeTask: (taskId, body) => request(`/tasks/${taskId}/complete`, { method: 'POST', body }),
+  approveTaskRecord: (recordId, body = {}) => request(`/tasks/records/${recordId}/approve`, { method: 'POST', body }),
+  calendar: (childId, date) => request(`/calendar?childId=${encodeURIComponent(childId)}&year=${date.getFullYear()}&month=${date.getMonth() + 1}`),
+  pointSummary: (childId) => request(`/children/${childId}/points/summary`),
+  ledger: (childId) => request(`/children/${childId}/points/ledger?limit=20`),
+  manualAdjust: (childId, body) => request(`/children/${childId}/points/manual-adjust`, { method: 'POST', body }),
+  rewards: (childId) => request(`/rewards?childId=${encodeURIComponent(childId)}`),
+  createReward: (body) => request('/rewards', { method: 'POST', body }),
+  updateReward: (rewardId, body) => request(`/rewards/${rewardId}`, { method: 'PUT', body }),
+  deleteReward: (rewardId) => request(`/rewards/${rewardId}`, { method: 'DELETE' }),
+  exchangeReward: (body) => request('/rewards/exchange', { method: 'POST', body }),
+  rewardExchanges: (childId) => request(`/rewards/exchanges?childId=${encodeURIComponent(childId)}&limit=20`),
+  approveRewardExchange: (exchangeId, body = {}) => request(`/rewards/exchanges/${exchangeId}/approve`, { method: 'POST', body }),
+  rejectRewardExchange: (exchangeId, body = {}) => request(`/rewards/exchanges/${exchangeId}/reject`, { method: 'POST', body }),
+}
