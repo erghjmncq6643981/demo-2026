@@ -615,7 +615,7 @@
         </nav>
         <div class="account-tab-panels">
           <section class="account-tab-panel active" id="accountBasicPanel">
-            <div class="model-form-grid">
+            <div class="model-form-grid account-basic-grid">
               <label>昵称<input id="accountNicknameInput" placeholder="显示昵称" /></label>
               <label>账户<input id="accountUsernameInput" disabled /></label>
             </div>
@@ -632,30 +632,7 @@
                 </div>
                 <button class="icon-action-button" id="editAccountPasswordBtn" type="button" title="修改密码" aria-label="修改密码">✎</button>
               </div>
-              <div class="account-security-row" data-security-mode="phone">
-                <div class="account-security-row-copy">
-                  <strong>手机号码</strong>
-                  <span class="account-security-row-value" id="accountPhoneValue">未绑定</span>
-                </div>
-                <button class="icon-action-button" id="editAccountPhoneBtn" type="button" title="修改手机号码" aria-label="修改手机号码">✎</button>
-              </div>
-              <div class="account-security-row" data-security-mode="email">
-                <div class="account-security-row-copy">
-                  <strong>邮箱</strong>
-                  <span class="account-security-row-value" id="accountEmailValue">未绑定</span>
-                </div>
-                <button class="icon-action-button" id="editAccountEmailBtn" type="button" title="修改联系邮箱" aria-label="修改联系邮箱">✎</button>
-              </div>
-            </div>
-            <div class="account-security-editor hidden" id="accountSecurityEditor">
-              <div class="security-editor-head">
-                <div>
-                  <p class="eyebrow">Security</p>
-                  <h4 id="accountSecurityEditorTitle">修改密码</h4>
-                </div>
-                <p class="panel-description" id="accountSecurityEditorDescription">请选择要修改的安全项。</p>
-              </div>
-              <div class="account-security-editor-panel" data-security-panel="password">
+              <div class="account-security-editor-panel hidden" data-security-panel="password">
                 <div class="model-form-grid account-security-password-grid">
                   <label>当前密码<input id="accountCurrentPasswordInput" type="password" placeholder="修改密码时必填" autocomplete="current-password" /></label>
                   <label class="account-password-field">
@@ -666,20 +643,34 @@
                   <label>确认新密码<input id="accountConfirmPasswordInput" type="password" placeholder="再次输入新密码" autocomplete="new-password" /></label>
                 </div>
               </div>
-              <div class="account-security-editor-panel" data-security-panel="phone">
+              <div class="account-security-row" data-security-mode="phone">
+                <div class="account-security-row-copy">
+                  <strong>手机号码</strong>
+                  <span class="account-security-row-value" id="accountPhoneValue">未绑定</span>
+                </div>
+                <button class="icon-action-button" id="editAccountPhoneBtn" type="button" title="修改手机号码" aria-label="修改手机号码">✎</button>
+              </div>
+              <div class="account-security-editor-panel hidden" data-security-panel="phone">
                 <div class="model-form-grid account-security-single-grid">
                   <label class="account-security-single-field">手机号码<input id="accountPhoneInput" inputmode="tel" placeholder="例如：13800138000" /></label>
                 </div>
               </div>
-              <div class="account-security-editor-panel" data-security-panel="email">
+              <div class="account-security-row" data-security-mode="email">
+                <div class="account-security-row-copy">
+                  <strong>邮箱</strong>
+                  <span class="account-security-row-value" id="accountEmailValue">未绑定</span>
+                </div>
+                <button class="icon-action-button" id="editAccountEmailBtn" type="button" title="修改联系邮箱" aria-label="修改联系邮箱">✎</button>
+              </div>
+              <div class="account-security-editor-panel hidden" data-security-panel="email">
                 <div class="model-form-grid account-security-single-grid">
                   <label class="account-security-single-field">联系邮箱<input id="accountEmailInput" type="email" placeholder="例如：name@example.com" /></label>
                 </div>
               </div>
-              <div class="modal-actions">
-                <button class="secondary-button compact" id="cancelAccountSecurityBtn" type="button">取消</button>
-                <button class="primary-button compact-primary" id="saveAccountSecurityBtn" type="button">保存安全设置</button>
-              </div>
+            </div>
+            <div class="modal-actions account-security-actions" id="accountSecurityActions">
+              <button class="secondary-button compact" id="cancelAccountSecurityBtn" type="button">取消</button>
+              <button class="primary-button compact-primary" id="saveAccountSecurityBtn" type="button">保存安全设置</button>
             </div>
           </section>
         </div>

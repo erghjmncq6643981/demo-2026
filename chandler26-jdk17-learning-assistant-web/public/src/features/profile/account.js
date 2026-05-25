@@ -13,6 +13,7 @@ export function createAccountProfileFeature(ctx) {
   }
 
   function closeAccountModal() {
+    resetSecurityEditor()
     hideModal(elements.accountModal)
   }
 
@@ -26,42 +27,45 @@ export function createAccountProfileFeature(ctx) {
   }
 
   async function saveAccountSecurity() {
-    const mode = state.accountSecurityEditMode
-    if (!mode) {
-      toast('请选择要修改的安全项')
-      return
-    }
+    const modes = []
     const payload = {}
-    if (mode === 'password') {
+    if (hasPasswordInput()) {
       const passwordPayload = readPasswordPayload()
       if (!passwordPayload) return
       Object.assign(payload, passwordPayload)
+      modes.push('password')
     }
-    if (mode === 'phone') {
-      const phone = elements.accountPhoneInput.value.trim()
-      if (!phone) {
-        toast('请输入手机号码')
-        return
-      }
+    const phone = elements.accountPhoneInput.value.trim()
+    if (phone) {
       if (!/^[0-9+\-()\s]{3,32}$/.test(phone)) {
         toast('手机号码格式不正确')
         return
       }
       payload.phone = phone
+      modes.push('phone')
     }
-    if (mode === 'email') {
-      const email = elements.accountEmailInput.value.trim()
-      if (!email) {
-        toast('请输入联系邮箱')
-        return
-      }
+    const email = elements.accountEmailInput.value.trim()
+    if (email) {
       if (!/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(email)) {
         toast('联系邮箱格式不正确')
         return
       }
       payload.email = email
+      modes.push('email')
     }
-    await saveAccount(payload, '安全设置已更新', securityLogTitle(mode))
+    if (!modes.length) {
+      toast('没有可保存的修改')
+      return
+    }
+    await saveAccount(payload, '安全设置已更新', securityLogTitle(modes))
+  }
+
+  function hasPasswordInput() {
+    return Boolean(
+      elements.accountCurrentPasswordInput.value ||
+        elements.accountNewPasswordInput.value ||
+        elements.accountConfirmPasswordInput.value,
+    )
   }
 
   function readPasswordPayload() {
@@ -137,35 +141,27 @@ export function createAccountProfileFeature(ctx) {
   }
 
   function openAccountSecurityEditor(mode) {
-    const meta = securityModeMeta(mode)
-    if (!meta) return
-    state.accountSecurityEditMode = mode
-    elements.accountSecurityEditor.classList.remove('hidden')
-    elements.accountSecurityEditorTitle.textContent = meta.title
-    elements.accountSecurityEditorDescription.textContent = meta.description
-    elements.accountModal.querySelectorAll('.account-security-editor-panel').forEach((panel) => {
-      panel.classList.toggle('active', panel.dataset.securityPanel === mode)
-    })
-    elements.accountModal.querySelectorAll('.account-security-row').forEach((row) => {
-      row.classList.toggle('active', row.dataset.securityMode === mode)
-    })
-    resetSecurityInputs(mode)
+    if (!securityModes().includes(mode)) return
+    const openModes = new Set(openedSecurityModes())
+    const willOpen = !openModes.has(mode)
+    if (willOpen) {
+      openModes.add(mode)
+    } else {
+      openModes.delete(mode)
+      resetSecurityInputs(mode)
+    }
+    state.accountSecurityEditModes = [...openModes]
+    syncSecurityEditors()
   }
 
   function cancelAccountSecurityEditor() {
-    resetSecurityEditor()
+    closeAccountModal()
   }
 
   function resetSecurityEditor() {
-    state.accountSecurityEditMode = ''
-    elements.accountSecurityEditor?.classList.add('hidden')
-    elements.accountModal.querySelectorAll('.account-security-editor-panel').forEach((panel) => {
-      panel.classList.remove('active')
-    })
-    elements.accountModal.querySelectorAll('.account-security-row').forEach((row) => {
-      row.classList.remove('active')
-    })
+    state.accountSecurityEditModes = []
     resetSecurityInputs()
+    syncSecurityEditors()
   }
 
   function resetSecurityInputs(mode = '') {
@@ -189,31 +185,40 @@ export function createAccountProfileFeature(ctx) {
     elements.accountEmailValue.classList.toggle('account-security-row-value-muted', !email)
   }
 
-  function securityModeMeta(mode) {
-    const map = {
-      password: {
-        title: '修改密码',
-        description: '输入当前密码后设置新密码，保存后需要使用新密码登录。',
-      },
-      phone: {
-        title: '修改手机号码',
-        description: '请输入新的手机号码，保存后页面只展示后端返回的脱敏号码。',
-      },
-      email: {
-        title: '修改联系邮箱',
-        description: '请输入新的联系邮箱，保存后页面只展示后端返回的脱敏邮箱。',
-      },
-    }
-    return map[mode] || null
+  function syncSecurityEditors() {
+    const openModes = openedSecurityModes()
+    elements.accountModal.querySelectorAll('.account-security-editor-panel').forEach((panel) => {
+      const open = openModes.includes(panel.dataset.securityPanel)
+      panel.classList.toggle('hidden', !open)
+      panel.classList.toggle('active', open)
+    })
+    elements.accountModal.querySelectorAll('.account-security-row').forEach((row) => {
+      const active = openModes.includes(row.dataset.securityMode)
+      row.classList.toggle('active', active)
+      const button = row.querySelector('.icon-action-button')
+      if (button) {
+        button.classList.toggle('active', active)
+        button.setAttribute('aria-pressed', String(active))
+        button.textContent = active ? '−' : '✎'
+      }
+    })
   }
 
-  function securityLogTitle(mode) {
+  function openedSecurityModes() {
+    return Array.isArray(state.accountSecurityEditModes) ? state.accountSecurityEditModes.filter((mode) => securityModes().includes(mode)) : []
+  }
+
+  function securityModes() {
+    return ['password', 'phone', 'email']
+  }
+
+  function securityLogTitle(modes) {
     const map = {
       password: '更新账户密码',
       phone: '更新手机号码',
       email: '更新联系邮箱',
     }
-    return map[mode] || '更新安全设置'
+    return modes.map((mode) => map[mode]).filter(Boolean).join('、') || '更新安全设置'
   }
 
   function maskPhonePreview(phone) {

@@ -22,6 +22,7 @@ public class MotivationReward {
     private Integer stockRemaining;
     private String exchangeLimitType;
     private Integer exchangeLimitCount;
+    private String fulfillmentType;
     private Integer requireApproval;
     private String status;
     private Integer deleted;

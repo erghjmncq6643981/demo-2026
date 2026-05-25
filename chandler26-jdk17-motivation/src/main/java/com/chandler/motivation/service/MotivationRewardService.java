@@ -39,7 +39,8 @@ public class MotivationRewardService extends ServiceImpl<MotivationRewardMapper,
         reward.setStockRemaining(request.getStockTotal() == null ? 0 : request.getStockTotal());
         reward.setExchangeLimitType(StringUtils.hasText(request.getExchangeLimitType()) ? request.getExchangeLimitType() : MotivationConstants.ExchangeLimitType.UNLIMITED);
         reward.setExchangeLimitCount(request.getExchangeLimitCount() == null ? 0 : request.getExchangeLimitCount());
-        reward.setRequireApproval(Boolean.FALSE.equals(request.getRequireApproval()) ? 0 : 1);
+        reward.setFulfillmentType(normalizeFulfillmentType(request.getFulfillmentType()));
+        reward.setRequireApproval(1);
         reward.setStatus(MotivationConstants.RewardStatus.ACTIVE);
         reward.setDeleted(0);
         reward.setSortNo(request.getSortNo() == null ? 0 : request.getSortNo());
@@ -70,7 +71,8 @@ public class MotivationRewardService extends ServiceImpl<MotivationRewardMapper,
         reward.setStockRemaining(request.getStockTotal() == null ? 0 : request.getStockTotal());
         reward.setExchangeLimitType(StringUtils.hasText(request.getExchangeLimitType()) ? request.getExchangeLimitType() : MotivationConstants.ExchangeLimitType.UNLIMITED);
         reward.setExchangeLimitCount(request.getExchangeLimitCount() == null ? 0 : request.getExchangeLimitCount());
-        reward.setRequireApproval(Boolean.FALSE.equals(request.getRequireApproval()) ? 0 : 1);
+        reward.setFulfillmentType(normalizeFulfillmentType(request.getFulfillmentType()));
+        reward.setRequireApproval(1);
         reward.setSortNo(request.getSortNo() == null ? reward.getSortNo() : request.getSortNo());
         reward.setUpdatedByUserId(userId);
         updateById(reward);
@@ -112,5 +114,17 @@ public class MotivationRewardService extends ServiceImpl<MotivationRewardMapper,
             throw new MotivationException("REWARD_NOT_ACTIVE", "奖励未启用");
         }
         return reward;
+    }
+
+    private String normalizeFulfillmentType(String fulfillmentType) {
+        String normalized = StringUtils.hasText(fulfillmentType)
+                ? fulfillmentType.trim().toUpperCase()
+                : MotivationConstants.RewardFulfillmentType.INVENTORY_DEDUCT;
+        return switch (normalized) {
+            case MotivationConstants.RewardFulfillmentType.PARENT_EXECUTE,
+                    MotivationConstants.RewardFulfillmentType.PARENT_PURCHASE,
+                    MotivationConstants.RewardFulfillmentType.PARENT_FULFILL -> normalized;
+            default -> MotivationConstants.RewardFulfillmentType.INVENTORY_DEDUCT;
+        };
     }
 }

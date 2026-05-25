@@ -5,6 +5,7 @@ import com.baomidou.mybatisplus.extension.service.impl.ServiceImpl;
 import com.chandler.motivation.common.exception.MotivationException;
 import com.chandler.motivation.domain.dataobject.MotivationTask;
 import com.chandler.motivation.domain.dataobject.MotivationTaskRecord;
+import com.chandler.motivation.domain.dataobject.MotivationUser;
 import com.chandler.motivation.domain.dto.task.TaskCompleteRequest;
 import com.chandler.motivation.domain.dto.task.TaskReviewRequest;
 import com.chandler.motivation.domain.mapper.MotivationTaskRecordMapper;
@@ -27,6 +28,7 @@ public class MotivationTaskRecordService extends ServiceImpl<MotivationTaskRecor
     private final MotivationChildService childService;
     private final MotivationPointLedgerService pointLedgerService;
     private final MotivationSystemLogService systemLogService;
+    private final AuthService authService;
     private final ObjectMapper objectMapper;
 
     public MotivationTaskRecord findByTaskAndDate(Long taskId, LocalDate taskDate) {
@@ -78,7 +80,9 @@ public class MotivationTaskRecordService extends ServiceImpl<MotivationTaskRecor
         record.setDeleted(0);
 
         int scoreAwarded = calculateScore(task.getBasePoints(), record.getCompletionProgress());
-        if (Integer.valueOf(1).equals(task.getRequireApproval())) {
+        MotivationUser operator = authService.requireUser();
+        boolean childSubmitted = MotivationConstants.UserType.CHILD.equals(operator.getUserType());
+        if (childSubmitted || Integer.valueOf(1).equals(task.getRequireApproval())) {
             record.setStatus(MotivationConstants.TaskStatus.SUBMITTED);
             record.setScoreAwarded(0);
             record.setReviewedByUserId(null);

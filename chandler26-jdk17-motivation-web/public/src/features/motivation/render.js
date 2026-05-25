@@ -1,5 +1,5 @@
 import { renderCalendar } from '/src/features/motivation/calendar.js'
-import { clamp, escapeHtml, formatDate, pointIcon, pointName, statusName } from '/src/shared/text.js'
+import { clamp, escapeHtml, formatDate, fulfillmentStatusName, pointIcon, pointName, statusName } from '/src/shared/text.js'
 
 const navItems = [
   ['profile', '个人信息'],
@@ -23,6 +23,12 @@ const pointTypeOptions = [
   ['STAR', '星星'],
   ['FLOWER', '红花'],
   ['CROWN', '皇冠'],
+]
+const fulfillmentTypeOptions = [
+  ['INVENTORY_DEDUCT', '库存扣减'],
+  ['PARENT_EXECUTE', '家长执行'],
+  ['PARENT_PURCHASE', '家长购买'],
+  ['PARENT_FULFILL', '家长实现'],
 ]
 const rewardIconOptions = ['🎁', '🍦', '🧸', '📚', '🎨', '🚲', '🎮', '🎬', '🎟️', '🍰', '🍕', '🏆', '👑', '⭐', '🌈', '🎵', '⚽', '🛝', '🍭', '🪁', '🧩', '🚀', '💎', '🎯', '🪄', '📷', '🌟', '🐣', '🦄', '🍓', '🍉', '🍎', '🍪', '🛹', '🎈']
 
@@ -65,8 +71,9 @@ export function renderApp(state, actions) {
     `
   }
   return `
-    <main class="app-shell">
+    <main class="app-shell ${state.sidebarCollapsed ? 'sidebar-collapsed' : ''}">
       ${renderSidebar(state)}
+      <button class="sidebar-backdrop" type="button" data-action="close-sidebar" aria-label="隐藏导航"></button>
       <section class="workspace">
         ${renderWorkspaceHeader(state)}
         ${renderCurrentView(state, actions)}
@@ -79,6 +86,7 @@ export function renderApp(state, actions) {
     ${renderTaskModal(state)}
     ${renderRewardModal(state)}
     ${renderPointAdjustModal(state)}
+    ${renderBalanceModal(state)}
     ${renderConfirmModal(state)}
     ${renderToast(state.toast)}
   `
@@ -89,54 +97,30 @@ function renderLoginPage(state) {
     <main class="login-page">
       <section class="login-showcase" aria-label="系统能力概览">
         <div class="login-hero-copy">
-          <p class="login-kicker">FAMILY MOTIVATION</p>
           <h1>儿童激励记录系统</h1>
-          <p>把每日任务、成长目标、积分入账和奖励兑换，收进一个清爽又适合孩子操作的家庭激励工作台。</p>
         </div>
-        <div class="login-feature-grid">
-          <article>
-            <strong>任务日历</strong>
-            <span>每日、每周、每月计划一眼看清</span>
+        <div class="login-showcase-grid" aria-hidden="true">
+          <article class="login-shot task-shot">
+            <div class="shot-bar"><span></span><b>任务管理</b></div>
+            <div class="shot-list">
+              <div><i style="--task-color:#ff5c8a"></i><strong>晨读</strong><span>★★★</span></div>
+              <div><i style="--task-color:#34c759"></i><strong>整理书包</strong><span>✿✿</span></div>
+              <div><i style="--task-color:#6c63ff"></i><strong>练字作业</strong><span>♛</span></div>
+            </div>
           </article>
-          <article>
-            <strong>彩色积分</strong>
-            <span>星星、红花、皇冠都能自定义颜色</span>
+          <article class="login-shot calendar-shot">
+            <div class="shot-bar"><span></span><b>任务日历</b></div>
+            <div class="shot-calendar">
+              ${Array.from({ length: 21 }, (_, index) => `<span class="${[2, 4, 8, 13, 18].includes(index) ? 'active' : ''}">${index + 1}</span>`).join('')}
+            </div>
           </article>
-          <article>
-            <strong>奖励商店</strong>
-            <span>孩子申请兑换，父母侧待办审核</span>
+          <article class="login-shot store-shot">
+            <div class="shot-bar"><span></span><b>奖励商店</b></div>
+            <div class="shot-rewards">
+              <div><em>🎁</em><strong>积木礼物</strong><small>80 ★</small></div>
+              <div><em>🍦</em><strong>冰淇淋</strong><small>40 ✿</small></div>
+            </div>
           </article>
-        </div>
-        <div class="login-preview-card">
-          <div class="preview-head">
-            <div>
-              <span>今日成长</span>
-              <strong>小星的任务板</strong>
-            </div>
-            <em>今天</em>
-          </div>
-          <div class="preview-task-list">
-            <div class="preview-task pink">
-              <span>★</span>
-              <div><strong>晨读 20 分钟</strong><small>07:00 · 打卡生效</small></div>
-              <b>+8</b>
-            </div>
-            <div class="preview-task green">
-              <span>✿</span>
-              <div><strong>整理书包</strong><small>18:00 · 审批后生效</small></div>
-              <b>+5</b>
-            </div>
-            <div class="preview-task violet">
-              <span>♛</span>
-              <div><strong>练字作业</strong><small>周一 / 周四 / 周五 · 完成 2 次</small></div>
-              <b>+15</b>
-            </div>
-          </div>
-          <div class="preview-reward-strip">
-            <div><span>⭐</span><strong>128</strong><small>星星余额</small></div>
-            <div><span>🌸</span><strong>42</strong><small>红花余额</small></div>
-            <div><span>🎁</span><strong>3</strong><small>待办奖励</small></div>
-          </div>
         </div>
       </section>
       <section class="login-panel" aria-label="账号登录">
@@ -171,6 +155,7 @@ function renderSidebar(state) {
   const items = visibleNavItems(state)
   return `
     <aside class="sidebar">
+      <button class="sidebar-close" type="button" data-action="close-sidebar" aria-label="隐藏导航">×</button>
       <div class="sidebar-brand">
         <div class="brand-mark">★</div>
         <div>
@@ -210,9 +195,14 @@ function renderWorkspaceHeader(state) {
   return `
     <header class="workspace-header">
       <div>
-        <p class="eyebrow">Motivation 1.0</p>
-        <h1>${title}</h1>
-        <p>${subtitle}</p>
+        <div class="workspace-title-row">
+          <button class="icon-btn nav-toggle" type="button" data-action="toggle-sidebar" title="${state.sidebarCollapsed ? '显示导航' : '隐藏导航'}" aria-label="${state.sidebarCollapsed ? '显示导航' : '隐藏导航'}" aria-expanded="${state.sidebarCollapsed ? 'false' : 'true'}">☰</button>
+          <div>
+            <p class="eyebrow">Motivation 1.0</p>
+            <h1>${title}</h1>
+            <p>${subtitle}</p>
+          </div>
+        </div>
         ${state.currentView === 'profile' ? renderProfileSubnav(state) : ''}
       </div>
       <div class="header-actions"></div>
@@ -308,6 +298,7 @@ function renderProfileView(state) {
       <section class="panel panel-pad">
         ${renderStats(state)}
       </section>
+      ${renderRewardTickets(state)}
       <section class="panel panel-pad wide">
         ${renderLedger(state)}
       </section>
@@ -559,13 +550,16 @@ function normalizePointCalendarEvents(ledger) {
 
 function normalizeRewardCalendarEvents(exchanges) {
   return exchanges.map((exchange) => {
-    const date = formatDateValue(exchange.completedAt || exchange.reviewedAt || exchange.requestedAt || exchange.createTime)
+    const date = formatDateValue(exchange.confirmedAt || exchange.completedAt || exchange.fulfillmentUpdatedAt || exchange.reviewedAt || exchange.requestedAt || exchange.createTime)
     const status = exchange.status || 'REQUESTED'
+    const fulfillmentStatus = exchange.fulfillmentStatus || 'PENDING'
     const colorMap = {
       REQUESTED: exchange.rewardColorSnapshot || '#ff9f43',
+      APPROVED: '#6c63ff',
       COMPLETED: '#22c55e',
       REJECTED: '#ef4444',
     }
+    const stateLabel = status === 'APPROVED' ? fulfillmentStatusName(fulfillmentStatus) : statusName(status)
     return {
       kind: 'rewards',
       kindLabel: '奖励',
@@ -574,13 +568,16 @@ function normalizeRewardCalendarEvents(exchanges) {
       title: `${exchange.rewardIconSnapshot || '🎁'} ${exchange.rewardNameSnapshot || '奖励兑换'}`,
       rewardName: exchange.rewardNameSnapshot || '奖励兑换',
       rewardDetail: exchange.remark || `${exchange.requiredPointsSnapshot || 0} ${pointName(exchange.requiredPointType)}兑换`,
-      rewardStateLabel: statusName(status),
-      subtitle: `${exchange.requiredPointsSnapshot || 0} ${pointName(exchange.requiredPointType)} · ${statusName(status)}`,
+      rewardStateLabel: stateLabel,
+      subtitle: `${exchange.requiredPointsSnapshot || 0} ${pointName(exchange.requiredPointType)} · ${stateLabel}`,
       status,
-      statusLabel: statusName(status),
+      fulfillmentStatus,
+      statusLabel: stateLabel,
       color: colorMap[status] || exchange.rewardColorSnapshot || '#ff9f43',
       note: status === 'REQUESTED'
         ? '孩子已提交兑换申请，等待父母确认。'
+        : status === 'APPROVED'
+          ? `这张礼物兑换券当前为「${fulfillmentStatusName(fulfillmentStatus)}」。`
         : status === 'COMPLETED'
           ? '这条奖励兑换已经完成。'
           : '这条奖励兑换未通过。',
@@ -706,11 +703,13 @@ function renderCalendarDaySummary(kind, events) {
   }
   if (kind === 'rewards') {
     const requested = events.filter((event) => event.status === 'REQUESTED').length
+    const approved = events.filter((event) => event.status === 'APPROVED').length
     const completed = events.filter((event) => event.status === 'COMPLETED').length
     const rejected = events.filter((event) => event.status === 'REJECTED').length
     return `
       <span>${events.length} 条奖励</span>
       <span>${requested} 待确认</span>
+      <span>${approved} 兑换券</span>
       <span>${completed} 已完成</span>
       <span>${rejected} 已拒绝</span>
     `
@@ -753,6 +752,7 @@ function renderRewardManageView(state) {
   return `
     <section class="panel panel-pad">
       ${renderExchangeTodo(state)}
+      ${renderPointExchangeRulePanel(state)}
       <div class="section-inline-head">
         <h2>奖励列表</h2>
         <div class="section-actions">
@@ -768,7 +768,7 @@ function renderRewardManageView(state) {
       </div>
       <div class="table-card">
         <div class="table-head reward-table">
-          <span>奖励</span><span>需要积分</span><span>库存</span><span>审核</span><span>操作</span>
+          <span>奖励</span><span>需要积分</span><span>库存</span><span>实现方式</span><span>操作</span>
         </div>
         ${rewards.map(renderRewardRow).join('') || '<div class="empty">暂无奖励</div>'}
       </div>
@@ -776,13 +776,35 @@ function renderRewardManageView(state) {
   `
 }
 
+function renderPointExchangeRulePanel(state) {
+  const rule = normalizeExchangeRule(state.pointExchangeRule)
+  return `
+    <div class="exchange-rule-panel">
+      <div>
+        <h2>币值</h2>
+      </div>
+      <form class="exchange-rule-form" data-form="point-exchange-rule">
+        <label><span>星星币</span><input type="number" min="1" name="starWeight" value="${escapeHtml(rule.starWeight)}" /></label>
+        <label><span>红花币</span><input type="number" min="1" name="flowerWeight" value="${escapeHtml(rule.flowerWeight)}" /></label>
+        <label><span>皇冠币</span><input type="number" min="1" name="crownWeight" value="${escapeHtml(rule.crownWeight)}" /></label>
+        <button class="btn primary" type="submit">保存</button>
+      </form>
+      <div class="exchange-ratio-preview">
+        <span>${pointIcon('STAR')} 星星币 1:${rule.starWeight}</span>
+        <span>${pointIcon('FLOWER')} 红花币 1:${rule.flowerWeight}</span>
+        <span>${pointIcon('CROWN')} 皇冠币 1:${rule.crownWeight}</span>
+      </div>
+    </div>
+  `
+}
+
 function renderExchangeTodo(state) {
-  const todos = (state.exchanges || []).filter((exchange) => exchange.status === 'REQUESTED')
+  const todos = (state.exchanges || []).filter((exchange) => ['REQUESTED', 'APPROVED'].includes(exchange.status))
   return `
     <section class="todo-panel">
       <div class="section-inline-head">
         <h2>兑换待办</h2>
-        <span>${todos.length} 条待确认</span>
+        <span>${todos.length} 条</span>
       </div>
       <div class="todo-list">
         ${todos.map((exchange) => `
@@ -790,29 +812,35 @@ function renderExchangeTodo(state) {
             <span class="reward-mini" style="--reward-color:${exchange.rewardColorSnapshot || '#6c63ff'}">${escapeHtml(exchange.rewardIconSnapshot || '🎁')}</span>
             <div>
               <strong>${escapeHtml(exchange.rewardNameSnapshot || '奖励兑换')}</strong>
-              <small>${exchange.requiredPointsSnapshot || 0} ${pointName(exchange.requiredPointType)} · ${escapeHtml(exchange.requestedAt || '')}</small>
+              <small>${exchange.requiredPointsSnapshot || 0} ${pointIcon(exchange.requiredPointType)} · ${exchange.status === 'REQUESTED' ? '待确认' : fulfillmentStatusName(exchange.fulfillmentStatus)}</small>
             </div>
             <div class="row-actions">
-              <button class="small-btn primary-lite" type="button" data-action="approve-exchange" data-exchange-id="${exchange.id}">通过</button>
-              <button class="small-btn danger" type="button" data-action="reject-exchange" data-exchange-id="${exchange.id}">拒绝</button>
+              ${exchange.status === 'REQUESTED'
+                ? `<button class="small-btn primary-lite" type="button" data-action="approve-exchange" data-exchange-id="${exchange.id}">通过</button><button class="small-btn danger" type="button" data-action="reject-exchange" data-exchange-id="${exchange.id}">拒绝</button>`
+                : renderFulfillmentActions(exchange)}
             </div>
           </div>
-        `).join('') || '<div class="empty compact-empty">暂无待确认兑换</div>'}
+        `).join('') || '<div class="empty compact-empty">暂无兑换待办</div>'}
       </div>
     </section>
   `
 }
 
 function renderRewardRow(reward) {
+  const fulfillmentType = fulfillmentTypeName(reward.fulfillmentType)
   return `
     <div class="table-row reward-table">
       <div class="task-name-cell">
         <span class="reward-mini" style="--reward-color:${reward.rewardColor || '#6c63ff'}">${escapeHtml(reward.rewardIcon || '🎁')}</span>
-        <div><strong>${escapeHtml(reward.name)}</strong><small>${escapeHtml(reward.description || '')}</small></div>
+        <div>
+          <strong>${escapeHtml(reward.name)}</strong>
+          <small>${escapeHtml(reward.description || '')}</small>
+          <span class="fulfillment-chip">${escapeHtml(fulfillmentType)}</span>
+        </div>
       </div>
       <span class="score-pill">${reward.requiredPoints} ${pointIcon(reward.requiredPointType)}</span>
       <span>${reward.stockTotal > 0 ? `${reward.stockRemaining}/${reward.stockTotal}` : '不限'}</span>
-      <span>${Number(reward.requireApproval) === 1 ? '需要确认' : '自动兑换'}</span>
+      <span>${escapeHtml(fulfillmentType)}</span>
       <div class="row-actions task-row-actions">
         <button class="row-icon-btn" type="button" data-action="edit-reward" data-reward-id="${reward.id}" aria-label="修改奖励" title="修改奖励">${renderActionIcon('edit')}</button>
         <button class="row-icon-btn danger" type="button" data-action="delete-reward" data-reward-id="${reward.id}" aria-label="删除奖励" title="删除奖励">${renderActionIcon('delete')}</button>
@@ -832,11 +860,10 @@ function renderStats(state) {
       ${['STAR', 'FLOWER', 'CROWN'].map((type) => {
         const balance = balances.get(type) || { balance: 0, earnedTotal: 0, spentTotal: 0 }
         return `
-          <div class="stat">
-            <div class="label">${pointName(type)}余额</div>
-            <div class="value">${pointIcon(type)} ${balance.balance}</div>
-            <div class="foot">累计获得 ${balance.earnedTotal}，已使用 ${balance.spentTotal}</div>
-          </div>
+          <button class="stat balance-stat" type="button" data-action="open-balance-modal" data-point-type="${type}">
+            <div class="label">${pointIcon(type)} ${pointName(type)}</div>
+            <div class="value">${renderPointIcons(type, balance.balance)}</div>
+          </button>
         `
       }).join('')}
       <div class="stat">
@@ -846,6 +873,64 @@ function renderStats(state) {
       </div>
     </div>
   `
+}
+
+function renderRewardTickets(state) {
+  const tickets = (state.exchanges || []).filter((exchange) => (
+    ['REQUESTED', 'APPROVED', 'COMPLETED'].includes(exchange.status)
+    && exchange.status !== 'REJECTED'
+  ))
+  return `
+    <section class="panel panel-pad wide">
+      <div class="section-inline-head">
+        <h2>礼物兑换券</h2>
+        <span>${tickets.length} 张</span>
+      </div>
+      <div class="ticket-list">
+        ${tickets.map((exchange) => {
+          const confirmed = exchange.status === 'COMPLETED' || exchange.fulfillmentStatus === 'CONFIRMED'
+          const confirmable = exchange.status === 'APPROVED' && !confirmed
+          const stateText = exchange.status === 'REQUESTED'
+            ? '待家长确认'
+            : confirmed ? '已确认' : '可确认'
+          const subtitle = exchange.status === 'REQUESTED'
+            ? '待家长确认'
+            : fulfillmentStatusName(exchange.fulfillmentStatus)
+          return `
+          <button class="ticket-item ${confirmed ? 'confirmed' : ''} ${exchange.status === 'REQUESTED' ? 'pending' : ''}" type="button" ${confirmable ? `data-action="confirm-reward-ticket" data-exchange-id="${exchange.id}"` : 'disabled'}>
+            <span class="reward-mini" style="--reward-color:${exchange.rewardColorSnapshot || '#6c63ff'}">${escapeHtml(exchange.rewardIconSnapshot || '🎁')}</span>
+            <div>
+              <strong>${escapeHtml(exchange.rewardNameSnapshot || '礼物券')}</strong>
+              <small>${escapeHtml(subtitle)}</small>
+            </div>
+            <span class="ticket-state">${escapeHtml(stateText)}</span>
+          </button>
+        `}).join('') || '<div class="empty compact-empty">暂无礼物兑换券</div>'}
+      </div>
+    </section>
+  `
+}
+
+function renderFulfillmentActions(exchange) {
+  const status = exchange.fulfillmentStatus || 'PENDING'
+  const options = [
+    ['SCHEDULED', '加入日程'],
+    ['IN_PROGRESS', '待实现'],
+    ['COMPLETED', '已实现'],
+  ]
+  return options.map(([value, label]) => `
+    <button class="small-btn ${status === value ? 'primary-lite' : ''}" type="button" data-action="update-fulfillment" data-exchange-id="${exchange.id}" data-fulfillment-status="${value}">${label}</button>
+  `).join('') + `<button class="small-btn" type="button" data-action="confirm-reward-ticket" data-exchange-id="${exchange.id}">确认</button>`
+}
+
+function fulfillmentTypeName(type) {
+  const names = {
+    INVENTORY_DEDUCT: '库存扣减',
+    PARENT_EXECUTE: '家长执行',
+    PARENT_PURCHASE: '家长购买',
+    PARENT_FULFILL: '家长实现',
+  }
+  return names[type] || '库存扣减'
 }
 
 function renderLedger(state) {
@@ -1031,6 +1116,26 @@ function renderScoreIconItems(pointType, count) {
   return Array.from({ length: safeCount }, () => `<span class="score-icon">${pointIcon(pointType)}</span>`).join('')
 }
 
+function renderPointIcons(pointType, count) {
+  const safeCount = Math.max(0, Number(count || 0))
+  const visibleCount = Math.min(safeCount, 10)
+  return `
+    <span class="balance-icon-cluster" style="--point-color:${pointTypeColor(pointType)}" aria-label="${safeCount} ${pointName(pointType)}">
+      ${Array.from({ length: visibleCount }, () => `<span>${pointIcon(pointType)}</span>`).join('')}
+      <b>${safeCount}</b>
+    </span>
+  `
+}
+
+function renderFullScoreIcons(pointType, count) {
+  const safeCount = Math.max(0, Number(count || 0))
+  const visibleCount = Math.min(safeCount, 300)
+  const icons = Array.from({ length: visibleCount }, () => `<span class="score-icon">${pointIcon(pointType)}</span>`).join('')
+  const more = safeCount > visibleCount ? `<span class="score-more">+${safeCount - visibleCount}</span>` : ''
+  return `${icons}${more}`
+    || '<span class="empty compact-empty">暂无积分</span>'
+}
+
 function renderDailyHourBlocks(selectedHours, density = '') {
   const selectedSet = new Set(selectedHours.map(Number))
   return `
@@ -1136,7 +1241,7 @@ function renderRewardModal(state) {
           <input type="hidden" name="rewardId" value="${escapeHtml(reward.id || '')}" />
           <label><span>奖励名称</span><input name="name" value="${escapeHtml(reward.name || '')}" placeholder="例如：周末冰淇淋" /></label>
           <div class="icon-field">
-            <label><span>图标</span><input name="rewardIcon" value="${escapeHtml(reward.rewardIcon || '🎁')}" /></label>
+          <label><span>图标</span><input name="rewardIcon" value="${escapeHtml(reward.rewardIcon || '🎁')}" /></label>
             <div class="icon-picker">
               ${rewardIconOptions.map((icon) => `
                 <label class="icon-choice" title="${escapeHtml(icon)}">
@@ -1153,7 +1258,17 @@ function renderRewardModal(state) {
           <label><span>库存</span><input type="number" min="0" name="stockTotal" value="${escapeHtml(reward.stockTotal || 0)}" /></label>
           <label><span>兑换限制</span>${renderSelect('exchangeLimitType', reward.exchangeLimitType || 'UNLIMITED', [['UNLIMITED', '不限'], ['DAILY', '每日'], ['WEEKLY', '每周'], ['MONTHLY', '每月']])}</label>
           <label><span>限制次数</span><input type="number" min="0" name="exchangeLimitCount" value="${escapeHtml(reward.exchangeLimitCount || 0)}" /></label>
-          <label class="check-line wide"><input type="checkbox" name="requireApproval" ${Number(reward.requireApproval ?? 1) === 1 ? 'checked' : ''} /> <span>兑换需要家长确认</span></label>
+          <div class="wide">
+            <div class="field-label">实现方式</div>
+            <div class="segmented reward-fulfillment">
+              ${fulfillmentTypeOptions.map(([value, label]) => `
+                <label>
+                  <input type="radio" name="fulfillmentType" value="${value}" ${String(reward.fulfillmentType || 'INVENTORY_DEDUCT') === value ? 'checked' : ''} />
+                  <span>${label}</span>
+                </label>
+              `).join('')}
+            </div>
+          </div>
           <div class="modal-actions wide">
             <button class="btn" type="button" data-action="close-reward-modal">取消</button>
             <button class="btn primary" type="submit">保存</button>
@@ -1183,6 +1298,68 @@ function renderPointAdjustModal(state) {
             <button class="btn primary" type="submit">保存</button>
           </div>
         </form>
+      </section>
+    </div>
+  `
+}
+
+function renderBalanceModal(state) {
+  if (!state.balanceModalOpen) return ''
+  const pointType = state.selectedBalancePointType || 'STAR'
+  const balances = new Map((state.balances || []).map((item) => [item.pointType, item]))
+  const balance = balances.get(pointType) || { pointType, balance: 0, earnedTotal: 0, spentTotal: 0 }
+  const balanceAmount = Math.max(0, Number(balance.balance || 0))
+  const rule = normalizeExchangeRule(state.pointExchangeRule)
+  const targets = pointType === 'STAR' ? ['FLOWER', 'CROWN'] : pointType === 'FLOWER' ? ['CROWN'] : []
+  return `
+    <div class="modal-backdrop">
+      <section class="modal balance-modal">
+        <div class="modal-head">
+          <div><h2>${pointIcon(pointType)} ${pointName(pointType)}余额</h2></div>
+          <div class="modal-head-actions">
+            <button class="btn primary" type="button" data-action="go-reward-store">兑换奖励</button>
+            <button class="icon-btn" type="button" data-action="close-balance-modal">×</button>
+          </div>
+        </div>
+        <div class="balance-modal-body">
+          <div class="balance-showcase">
+            <div class="balance-showcase-head">
+              <strong>${balanceAmount}</strong>
+            </div>
+            <div class="full-score-icons" style="--point-color:${pointTypeColor(pointType)}">
+              ${renderFullScoreIcons(pointType, balanceAmount)}
+            </div>
+          </div>
+          <form class="point-exchange-form" data-form="point-exchange">
+            <div class="balance-exchange-targets">
+              ${targets.map((toPointType) => {
+                const preview = calculateExchangePreview(pointType, toPointType, balanceAmount, rule)
+                const exchangeAmount = exchangeSourceAmount(pointType, toPointType, preview.toAmount, rule)
+                const canExchange = preview.toAmount > 0 && exchangeAmount > 0
+                return `
+                  <article class="exchange-target-card" style="--point-color:${pointTypeColor(toPointType)}">
+                    <div class="exchange-target-head">
+                      <span class="exchange-target-icon">${pointIcon(toPointType)}</span>
+                      <strong>${preview.toAmount}</strong>
+                    </div>
+                    <button class="btn primary" type="button" data-action="quick-point-exchange" data-to-point-type="${toPointType}" data-from-amount="${exchangeAmount}" ${canExchange ? '' : 'disabled'}>兑换</button>
+                  </article>
+                `
+              }).join('') || '<div class="empty compact-empty">当前积分暂无更高币值可兑换</div>'}
+            </div>
+            <div class="modal-actions hidden">
+              <button class="btn" type="button" data-action="close-balance-modal">取消</button>
+              <button class="btn primary" type="submit">兑换</button>
+            </div>
+            ${state.exchangeSuccess ? `
+              <div class="exchange-success" style="--point-color:${pointTypeColor(state.exchangeSuccess.toPointType)}">
+                <span>${pointIcon(state.exchangeSuccess.toPointType)}</span>
+                <strong>兑换成功</strong>
+                <b>+${state.exchangeSuccess.toAmount}</b>
+              </div>
+            ` : ''}
+          </form>
+        </div>
       </section>
     </div>
   `
@@ -1220,7 +1397,9 @@ function calendarEventStatusText(event) {
     return event.changeAmount >= 0 ? '积分入账' : '积分扣减'
   }
   if (event.kind === 'rewards') {
-    return event.status === 'REQUESTED' ? '待确认' : statusName(event.status)
+    return event.status === 'APPROVED'
+      ? fulfillmentStatusName(event.fulfillmentStatus)
+      : event.status === 'REQUESTED' ? '待确认' : statusName(event.status)
   }
   if (event.status === 'APPROVED') {
     return `已完成 +${event.scoreAwarded || event.basePoints || 0} ${pointName(event.pointType)}`
@@ -1258,6 +1437,50 @@ function renderSelect(name, value, options, scope = '') {
       ${options.map(([optionValue, label]) => `<option value="${escapeHtml(optionValue)}" ${String(optionValue) === String(value) ? 'selected' : ''}>${escapeHtml(label)}</option>`).join('')}
     </select>
   `
+}
+
+function normalizeExchangeRule(rule = {}) {
+  return {
+    childId: rule.childId,
+    starWeight: Math.max(1, Number(rule.starWeight || 1)),
+    flowerWeight: Math.max(1, Number(rule.flowerWeight || 10)),
+    crownWeight: Math.max(1, Number(rule.crownWeight || 100)),
+  }
+}
+
+function calculateExchangePreview(fromPointType, toPointType, fromAmount, rule = {}) {
+  const normalizedRule = normalizeExchangeRule(rule)
+  const weights = {
+    STAR: normalizedRule.starWeight,
+    FLOWER: normalizedRule.flowerWeight,
+    CROWN: normalizedRule.crownWeight,
+  }
+  const fromWeight = weights[fromPointType] || weights.STAR
+  const toWeight = weights[toPointType] || weights.STAR
+  return {
+    toAmount: Math.floor((Number(fromAmount || 0) * fromWeight) / toWeight),
+  }
+}
+
+function exchangeSourceAmount(fromPointType, toPointType, toAmount, rule = {}) {
+  const normalizedRule = normalizeExchangeRule(rule)
+  const weights = {
+    STAR: normalizedRule.starWeight,
+    FLOWER: normalizedRule.flowerWeight,
+    CROWN: normalizedRule.crownWeight,
+  }
+  const fromWeight = weights[fromPointType] || weights.STAR
+  const toWeight = weights[toPointType] || weights.STAR
+  return Math.max(0, Math.ceil((Number(toAmount || 0) * toWeight) / fromWeight))
+}
+
+function pointTypeColor(pointType) {
+  const colors = {
+    STAR: '#f59e0b',
+    FLOWER: '#ec4899',
+    CROWN: '#7c3aed',
+  }
+  return colors[pointType] || colors.STAR
 }
 
 function filterTasks(tasks, filters) {

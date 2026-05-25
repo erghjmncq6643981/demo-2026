@@ -3,8 +3,10 @@ package com.chandler.motivation.controller;
 import com.chandler.motivation.common.result.ApiResponse;
 import com.chandler.motivation.domain.dataobject.MotivationReward;
 import com.chandler.motivation.domain.dataobject.MotivationRewardExchange;
+import com.chandler.motivation.domain.dto.reward.RewardExchangeConfirmRequest;
 import com.chandler.motivation.domain.dto.reward.RewardExchangeRequest;
 import com.chandler.motivation.domain.dto.reward.RewardExchangeReviewRequest;
+import com.chandler.motivation.domain.dto.reward.RewardFulfillmentRequest;
 import com.chandler.motivation.domain.dto.reward.RewardSaveRequest;
 import com.chandler.motivation.service.AuthService;
 import com.chandler.motivation.service.MotivationRewardExchangeService;
@@ -74,5 +76,17 @@ public class RewardController {
     public ApiResponse<MotivationRewardExchange> reject(@PathVariable Long exchangeId,
                                                         @RequestBody(required = false) RewardExchangeReviewRequest request) {
         return ApiResponse.ok(rewardExchangeService.reject(exchangeId, request, authService.requireUser().getId()));
+    }
+
+    @PutMapping("/exchanges/{exchangeId}/fulfillment")
+    public ApiResponse<MotivationRewardExchange> updateFulfillment(@PathVariable Long exchangeId,
+                                                                   @RequestBody(required = false) RewardFulfillmentRequest request) {
+        return ApiResponse.ok(rewardExchangeService.updateFulfillment(exchangeId, request, authService.requireUser().getId()));
+    }
+
+    @PostMapping("/exchanges/{exchangeId}/confirm")
+    public ApiResponse<MotivationRewardExchange> confirm(@PathVariable Long exchangeId,
+                                                         @RequestBody(required = false) RewardExchangeConfirmRequest request) {
+        return ApiResponse.ok(rewardExchangeService.confirm(exchangeId, request, authService.requireUser().getId()));
     }
 }

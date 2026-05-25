@@ -7,4 +7,5 @@ import lombok.Data;
 public class PointSummaryResponse {
     private Long childId;
     private List<PointBalanceResponse> balances;
+    private PointExchangeRuleResponse exchangeRule;
 }

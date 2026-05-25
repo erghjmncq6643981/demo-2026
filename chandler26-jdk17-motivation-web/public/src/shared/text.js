@@ -52,7 +52,7 @@ export function statusName(status) {
     REJECTED: '未通过',
     SKIPPED: '已跳过',
     REQUESTED: '待确认',
-    COMPLETED: '已兑换',
+    COMPLETED: '已确认',
     ACTIVE: '启用',
     PAUSED: '暂停',
     FINISHED: '完成',
@@ -60,6 +60,17 @@ export function statusName(status) {
     INACTIVE: '停用',
   }
   return names[status] || status || '未知'
+}
+
+export function fulfillmentStatusName(status) {
+  const names = {
+    PENDING: '待实现',
+    SCHEDULED: '已加入日程',
+    IN_PROGRESS: '待实现',
+    COMPLETED: '已实现',
+    CONFIRMED: '已确认',
+  }
+  return names[status] || '待实现'
 }
 
 export function clamp(value, min, max) {

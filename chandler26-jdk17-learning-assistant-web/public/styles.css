@@ -2039,6 +2039,10 @@ input[type="range"] {
   display: block;
 }
 
+.account-basic-grid {
+  grid-template-columns: minmax(0, 1fr);
+}
+
 .account-security-list {
   display: grid;
   gap: 10px;
@@ -2086,43 +2090,36 @@ input[type="range"] {
   color: rgba(148, 163, 184, 0.78);
 }
 
-.account-security-editor {
-  margin-top: 14px;
+.account-security-editor-panel {
   padding: 14px;
   border: 1px solid rgba(129, 140, 248, 0.32);
   border-radius: 12px;
   background: rgba(15, 23, 42, 0.5);
 }
 
-.account-security-editor.hidden {
-  display: none;
-}
-
-.security-editor-head {
-  display: flex;
-  align-items: start;
-  justify-content: space-between;
-  gap: 14px;
-  margin-bottom: 12px;
-}
-
-.security-editor-head h4 {
-  margin: 2px 0 0;
-  font-size: 18px;
-}
-
-.security-editor-head .panel-description {
-  max-width: 380px;
-  margin: 0;
-  text-align: right;
-}
-
-.account-security-editor-panel {
+.account-security-editor-panel.hidden {
   display: none;
 }
 
 .account-security-editor-panel.active {
   display: block;
+}
+
+.account-security-actions {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  margin-top: 4px;
+  gap: 10px;
+}
+
+.account-security-actions .secondary-button.compact,
+.account-security-actions .primary-button.compact-primary {
+  width: 100%;
+  height: 40px;
+  min-height: 40px;
+  padding: 0 14px;
+  font-size: 13px;
+  line-height: 1.2;
 }
 
 .account-security-single-grid {
@@ -2134,11 +2131,7 @@ input[type="range"] {
 }
 
 .account-security-password-grid {
-  grid-template-columns: repeat(2, minmax(0, 1fr));
-}
-
-.account-security-password-grid label:last-child {
-  grid-column: 1 / -1;
+  grid-template-columns: minmax(0, 1fr);
 }
 
 .account-password-field {
@@ -2485,8 +2478,22 @@ input[type="range"] {
     min-width: 0;
   }
 
+  .topbar-title {
+    flex: 1 1 auto;
+    min-width: 0;
+  }
+
+  .topbar-title .eyebrow {
+    line-height: 1.15;
+  }
+
   .content-topbar h2 {
+    min-width: 0;
     font-size: 22px;
+    line-height: 1.15;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
   }
 
   #profileView.view.active {
@@ -2575,16 +2582,6 @@ input[type="range"] {
     padding: 10px 11px;
   }
 
-  .security-editor-head {
-    display: grid;
-    gap: 8px;
-  }
-
-  .security-editor-head .panel-description {
-    max-width: none;
-    text-align: left;
-  }
-
   .account-security-password-grid,
   .account-security-single-grid {
     grid-template-columns: minmax(0, 1fr);
@@ -2596,7 +2593,6 @@ input[type="range"] {
 
   .compact-field,
   .compact-field.small-field,
-  .topbar-actions,
   .entry-prefix-field {
     width: 100%;
   }

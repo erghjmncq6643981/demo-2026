@@ -1,7 +1,11 @@
 import { api, getToken, setToken } from '/src/shared/api.js'
 import { buildDemoCalendar, demoState } from '/src/features/motivation/demo-data.js'
 import { renderApp } from '/src/features/motivation/render.js'
-import { formatDate, pointIcon } from '/src/shared/text.js'
+import { formatDate, fulfillmentStatusName, pointIcon, pointName } from '/src/shared/text.js'
+
+const SIDEBAR_KEY = 'motivation.sidebarCollapsed'
+const isCompactLayout = () => window.matchMedia('(max-width: 1180px)').matches
+const initialSidebarCollapsed = localStorage.getItem(SIDEBAR_KEY) === '1' || isCompactLayout()
 
 const state = {
   ...structuredClone(demoState),
@@ -12,6 +16,7 @@ const state = {
   selectedChild: demoState.children[0] || null,
   currentView: 'profile',
   profileSubView: 'home',
+  sidebarCollapsed: initialSidebarCollapsed,
   calendarViewMode: 'month',
   calendarEventKind: 'tasks',
   shouldFocusToday: false,
@@ -20,10 +25,13 @@ const state = {
   childModalOpen: false,
   goalModalOpen: false,
   pointAdjustModalOpen: false,
+  balanceModalOpen: false,
   calendarDayModalOpen: false,
   calendarEventModalOpen: false,
   selectedCalendarDateKey: '',
   selectedCalendarEventId: '',
+  selectedBalancePointType: '',
+  exchangeSuccess: null,
   confirmDialog: null,
   editingTask: null,
   editingReward: null,
@@ -50,6 +58,7 @@ const state = {
     pointType: '',
     status: '',
   },
+  pointExchangeRule: demoState.pointExchangeRule || { starWeight: 1, flowerWeight: 10, crownWeight: 100 },
   connectionMessage: '正在尝试连接后端...',
   toast: '',
 }
@@ -103,6 +112,10 @@ function render() {
 
 function bindEvents() {
   document.querySelector('[data-form="auth"]')?.addEventListener('submit', handleAuthSubmit)
+  document.querySelector('[data-action="toggle-sidebar"]')?.addEventListener('click', toggleSidebar)
+  document.querySelectorAll('[data-action="close-sidebar"]').forEach((button) => {
+    button.addEventListener('click', () => setSidebarCollapsed(true))
+  })
   document.querySelector('[data-action="calendar-prev"]')?.addEventListener('click', actions.previousMonth)
   document.querySelector('[data-action="calendar-next"]')?.addEventListener('click', actions.nextMonth)
   document.querySelector('[data-action="calendar-today"]')?.addEventListener('click', actions.goToToday)
@@ -115,6 +128,7 @@ function bindEvents() {
   document.querySelectorAll('[data-nav-view]').forEach((button) => {
     button.addEventListener('click', () => {
       state.currentView = normalizeViewForRole(button.dataset.navView || 'profile')
+      collapseSidebarOnMobile()
       render()
     })
   })
@@ -128,6 +142,20 @@ function bindEvents() {
   document.querySelector('[data-action="open-adjust-modal"]')?.addEventListener('click', openPointAdjustModal)
   document.querySelectorAll('[data-action="close-adjust-modal"]').forEach((button) => {
     button.addEventListener('click', closePointAdjustModal)
+  })
+  document.querySelectorAll('[data-action="open-balance-modal"]').forEach((button) => {
+    button.addEventListener('click', () => openBalanceModal(button.dataset.pointType))
+  })
+  document.querySelectorAll('[data-action="close-balance-modal"]').forEach((button) => {
+    button.addEventListener('click', closeBalanceModal)
+  })
+  document.querySelector('[data-form="point-exchange"]')?.addEventListener('submit', handlePointExchangeSubmit)
+  document.querySelectorAll('[data-action="quick-point-exchange"]').forEach((button) => {
+    button.addEventListener('click', () => handleQuickPointExchange(button.dataset.toPointType, Number(button.dataset.fromAmount || 1)))
+  })
+  document.querySelector('[data-form="point-exchange-rule"]')?.addEventListener('submit', handlePointExchangeRuleSubmit)
+  document.querySelectorAll('[data-action="go-reward-store"]').forEach((button) => {
+    button.addEventListener('click', goRewardStore)
   })
   document.querySelector('[data-action="open-child-modal"]')?.addEventListener('click', () => openChildModal())
   document.querySelectorAll('[data-action="close-child-modal"]').forEach((button) => {
@@ -159,6 +187,7 @@ function bindEvents() {
     })
   })
   bindTaskModalControls()
+  bindPointExchangePreview()
   document.querySelectorAll('[data-action="close-confirm-modal"]').forEach((button) => {
     button.addEventListener('click', closeConfirmDialog)
   })
@@ -195,6 +224,12 @@ function bindEvents() {
   })
   document.querySelectorAll('[data-action="reject-exchange"]').forEach((button) => {
     button.addEventListener('click', () => handleRewardExchangeReview(button.dataset.exchangeId, false))
+  })
+  document.querySelectorAll('[data-action="update-fulfillment"]').forEach((button) => {
+    button.addEventListener('click', () => handleRewardFulfillmentUpdate(button.dataset.exchangeId, button.dataset.fulfillmentStatus))
+  })
+  document.querySelectorAll('[data-action="confirm-reward-ticket"]').forEach((button) => {
+    button.addEventListener('click', () => handleRewardTicketConfirm(button.dataset.exchangeId))
   })
   document.querySelectorAll('[data-action="open-calendar-day"]').forEach((target) => {
     target.addEventListener('click', () => openCalendarDayModal(target.dataset.date))
@@ -253,6 +288,25 @@ function bindTaskModalControls() {
   syncPreview()
   syncTaskColor(form)
   syncDailyHiddenHours(form)
+}
+
+function bindPointExchangePreview() {
+  const form = document.querySelector('[data-form="point-exchange"]')
+  if (!form) return
+  const syncPreview = () => {
+    const fromPointType = String(form.fromPointType?.value || 'STAR')
+    const toPointType = String(form.toPointType?.value || 'FLOWER')
+    const fromAmount = Math.max(1, Number(form.fromAmount?.value || 1))
+    const preview = calculatePointExchange(fromPointType, toPointType, fromAmount, state.pointExchangeRule)
+    const previewNode = form.querySelector('[data-exchange-preview]')
+    if (previewNode) {
+      previewNode.textContent = `预估：${fromAmount} ${pointName(fromPointType)} 可兑换 ${preview.toAmount} ${pointName(toPointType)}`
+    }
+  }
+  form.fromPointType?.addEventListener('change', syncPreview)
+  form.toPointType?.addEventListener('change', syncPreview)
+  form.fromAmount?.addEventListener('input', syncPreview)
+  syncPreview()
 }
 
 function syncDailyHiddenHours(form) {
@@ -422,7 +476,9 @@ async function loadCoreData() {
   ])
   state.goals = goals
   state.tasks = tasks
+  state.calendarEvents = mergeTaskCalendarEvents(state.calendarEvents, tasks)
   state.balances = summary?.balances || []
+  state.pointExchangeRule = summary?.exchangeRule || state.pointExchangeRule || { starWeight: 1, flowerWeight: 10, crownWeight: 100 }
   state.ledger = ledger
   state.rewards = rewards
   state.exchanges = exchanges
@@ -521,11 +577,11 @@ async function createStarterTasks(childId, goalId) {
 
 async function createStarterRewards(childId) {
   const rewards = [
-    ['积木礼物', '完成一周自主管理后兑换', '🎁', '#ff9f43', 'STAR', 80, true],
-    ['周末冰淇淋', '每周限兑一次的小甜点', '🍦', '#34c759', 'FLOWER', 40, false],
-    ['皇冠特权', '亲子游戏时间 30 分钟', '♛', '#6c63ff', 'CROWN', 1, true],
+    ['积木礼物', '完成一周自主管理后兑换', '🎁', '#ff9f43', 'STAR', 80, 'PARENT_PURCHASE'],
+    ['周末冰淇淋', '每周限兑一次的小甜点', '🍦', '#34c759', 'FLOWER', 40, 'PARENT_EXECUTE'],
+    ['皇冠特权', '亲子游戏时间 30 分钟', '♛', '#6c63ff', 'CROWN', 1, 'PARENT_FULFILL'],
   ]
-  for (const [name, description, rewardIcon, rewardColor, requiredPointType, requiredPoints, requireApproval] of rewards) {
+  for (const [name, description, rewardIcon, rewardColor, requiredPointType, requiredPoints, fulfillmentType] of rewards) {
     await api.createReward({
       childId,
       name,
@@ -537,7 +593,8 @@ async function createStarterRewards(childId) {
       stockTotal: 0,
       exchangeLimitType: 'UNLIMITED',
       exchangeLimitCount: 0,
-      requireApproval,
+      fulfillmentType,
+      requireApproval: true,
     })
   }
 }
@@ -590,6 +647,7 @@ async function handleExchangeReward(rewardId) {
             requiredPointType: reward.requiredPointType,
             requiredPointsSnapshot: reward.requiredPoints,
             status: 'REQUESTED',
+            fulfillmentStatus: 'PENDING',
             requestedAt: new Date().toISOString(),
             remark: '演示兑换申请',
           },
@@ -600,7 +658,7 @@ async function handleExchangeReward(rewardId) {
       }
       await api.exchangeReward({ rewardId: reward.id, remark: '前端发起兑换' })
       await loadCoreData()
-      toast(reward.requireApproval ? '已提交兑换申请' : '兑换完成')
+      toast('已提交兑换申请')
     },
   }
   render()
@@ -617,7 +675,7 @@ async function handleRewardExchangeReview(exchangeId, approved) {
     action: async () => {
       if (state.offline) {
         state.exchanges = state.exchanges.map((item) => String(item.id) === String(exchangeId)
-          ? { ...item, status: approved ? 'COMPLETED' : 'REJECTED', reviewedAt: new Date().toISOString() }
+          ? { ...item, status: approved ? 'APPROVED' : 'REJECTED', fulfillmentStatus: approved ? 'PENDING' : item.fulfillmentStatus, reviewedAt: new Date().toISOString() }
           : item)
         toast(approved ? '演示：兑换已通过' : '演示：兑换已拒绝')
         return
@@ -629,6 +687,64 @@ async function handleRewardExchangeReview(exchangeId, approved) {
       }
       await loadCoreData()
       toast(approved ? '兑换已通过' : '兑换已拒绝')
+    },
+  }
+  render()
+}
+
+async function handleRewardFulfillmentUpdate(exchangeId, fulfillmentStatus = 'PENDING') {
+  const exchange = state.exchanges.find((item) => String(item.id) === String(exchangeId))
+  if (!exchange) return
+  const label = fulfillmentStatusName(fulfillmentStatus)
+  state.confirmDialog = {
+    title: '更新礼物状态',
+    message: `把「${exchange.rewardNameSnapshot}」更新为「${label}」？`,
+    confirmText: '更新',
+    variant: 'primary',
+    action: async () => {
+      if (state.offline) {
+        state.exchanges = state.exchanges.map((item) => String(item.id) === String(exchangeId)
+          ? {
+              ...item,
+              fulfillmentStatus,
+              fulfillmentUpdatedAt: new Date().toISOString(),
+              completedAt: fulfillmentStatus === 'COMPLETED' ? new Date().toISOString() : item.completedAt,
+            }
+          : item)
+        toast(`演示：已更新为${label}`)
+        return
+      }
+      await api.updateRewardFulfillment(exchangeId, { fulfillmentStatus, remark: `更新为${label}` })
+      await loadCoreData()
+      toast(`已更新为${label}`)
+    },
+  }
+  render()
+}
+
+async function handleRewardTicketConfirm(exchangeId) {
+  const exchange = state.exchanges.find((item) => String(item.id) === String(exchangeId))
+  if (!exchange) return
+  if (exchange.status === 'COMPLETED' || exchange.fulfillmentStatus === 'CONFIRMED') {
+    toast('这张礼物券已经确认')
+    return
+  }
+  state.confirmDialog = {
+    title: '确认礼物券',
+    message: `确认「${exchange.rewardNameSnapshot}」已经收到或完成了吗？`,
+    confirmText: '确认',
+    variant: 'primary',
+    action: async () => {
+      if (state.offline) {
+        state.exchanges = state.exchanges.map((item) => String(item.id) === String(exchangeId)
+          ? { ...item, status: 'COMPLETED', fulfillmentStatus: 'CONFIRMED', confirmedAt: new Date().toISOString(), completedAt: new Date().toISOString() }
+          : item)
+        toast('演示：礼物券已确认')
+        return
+      }
+      await api.confirmRewardExchange(exchangeId, { remark: '确认礼物券' })
+      await loadCoreData()
+      toast('礼物券已确认')
     },
   }
   render()
@@ -669,6 +785,121 @@ async function handlePointAdjustSubmit(event) {
     state.pointAdjustModalOpen = false
     await loadCoreData()
     toast(amount > 0 ? '手动加分已入账' : '手动扣分已入账')
+    render()
+  } catch (error) {
+    toast(error.message)
+    render()
+  }
+}
+
+async function handlePointExchangeRuleSubmit(event) {
+  event.preventDefault()
+  const formData = new FormData(event.currentTarget)
+  const payload = {
+    starWeight: Math.max(1, Number(formData.get('starWeight') || 1)),
+    flowerWeight: Math.max(1, Number(formData.get('flowerWeight') || 10)),
+    crownWeight: Math.max(1, Number(formData.get('crownWeight') || 100)),
+  }
+  if (!(payload.starWeight < payload.flowerWeight && payload.flowerWeight < payload.crownWeight)) {
+    toast('币值必须满足：星星币 < 红花币 < 皇冠币')
+    return
+  }
+  if (state.offline) {
+    state.pointExchangeRule = {
+      childId: state.selectedChildId,
+      ...payload,
+    }
+    toast('演示：币值已保存')
+    render()
+    return
+  }
+  try {
+    state.pointExchangeRule = await api.savePointExchangeRule(state.selectedChildId, payload)
+    toast('币值已保存')
+    render()
+  } catch (error) {
+    toast(error.message)
+    render()
+  }
+}
+
+async function handlePointExchangeSubmit(event) {
+  event.preventDefault()
+  const formData = new FormData(event.currentTarget)
+  await exchangePoints({
+    fromPointType: String(formData.get('fromPointType') || state.selectedBalancePointType || 'STAR'),
+    toPointType: String(formData.get('toPointType') || 'FLOWER'),
+    fromAmount: Math.max(1, Number(formData.get('fromAmount') || 1)),
+  })
+}
+
+async function handleQuickPointExchange(toPointType, fromAmount) {
+  await exchangePoints({
+    fromPointType: state.selectedBalancePointType || 'STAR',
+    toPointType: String(toPointType || 'FLOWER'),
+    fromAmount: Math.max(0, Number(fromAmount || 0)),
+  })
+}
+
+async function exchangePoints(request) {
+  const payload = {
+    fromPointType: String(request.fromPointType || state.selectedBalancePointType || 'STAR'),
+    toPointType: String(request.toPointType || 'FLOWER'),
+    fromAmount: Math.max(0, Number(request.fromAmount || 0)),
+  }
+  if (payload.fromAmount <= 0) {
+    toast('当前数量不足以兑换目标积分')
+    return
+  }
+  if (payload.fromPointType === payload.toPointType) {
+    toast('请选择不同的积分类型')
+    return
+  }
+  const preview = calculatePointExchange(payload.fromPointType, payload.toPointType, payload.fromAmount, state.pointExchangeRule)
+  if (preview.toAmount <= 0) {
+    toast('当前数量不足以兑换目标积分')
+    return
+  }
+  if (state.offline) {
+    state.balances = upsertBalance(upsertBalance(state.balances, payload.fromPointType, -payload.fromAmount), payload.toPointType, preview.toAmount)
+    state.ledger = [
+      {
+        id: `demo-ledger-${Date.now()}`,
+        pointType: payload.fromPointType,
+        changeAmount: -payload.fromAmount,
+        sourceName: '积分互换',
+        reason: `兑换为${pointName(payload.toPointType)}`,
+        eventTime: new Date().toISOString(),
+      },
+      {
+        id: `demo-ledger-${Date.now() + 1}`,
+        pointType: payload.toPointType,
+        changeAmount: preview.toAmount,
+        sourceName: '积分互换',
+        reason: `由${pointName(payload.fromPointType)}兑换`,
+        eventTime: new Date().toISOString(),
+      },
+      ...state.ledger,
+    ]
+    state.exchangeSuccess = {
+      toPointType: payload.toPointType,
+      toAmount: preview.toAmount,
+    }
+    toast(`演示：已兑换 ${preview.toAmount} ${pointName(payload.toPointType)}`)
+    render()
+    return
+  }
+  try {
+    const result = await api.exchangePoints(state.selectedChildId, payload)
+    state.pointExchangeRule = result.exchangeRule || state.pointExchangeRule
+    await loadCoreData()
+    state.balanceModalOpen = true
+    state.selectedBalancePointType = result.toPointType
+    state.exchangeSuccess = {
+      toPointType: result.toPointType,
+      toAmount: result.toAmount,
+    }
+    toast(`已兑换 ${result.toAmount} ${pointName(result.toPointType)}`)
     render()
   } catch (error) {
     toast(error.message)
@@ -718,6 +949,32 @@ function closePointAdjustModal() {
   render()
 }
 
+function openBalanceModal(pointType = 'STAR') {
+  if (!state.selectedChildId) {
+    toast('请先新增孩子档案')
+    return
+  }
+  state.selectedBalancePointType = pointType || 'STAR'
+  state.balanceModalOpen = true
+  state.exchangeSuccess = null
+  render()
+}
+
+function closeBalanceModal() {
+  state.balanceModalOpen = false
+  state.selectedBalancePointType = ''
+  state.exchangeSuccess = null
+  render()
+}
+
+function goRewardStore() {
+  state.balanceModalOpen = false
+  state.selectedBalancePointType = ''
+  state.exchangeSuccess = null
+  state.currentView = 'store'
+  render()
+}
+
 function openTaskModal(taskId = null) {
   if (!state.selectedChildId) {
     toast('请先新增孩子档案')
@@ -764,6 +1021,23 @@ function logout() {
   render()
 }
 
+function setSidebarCollapsed(collapsed) {
+  state.sidebarCollapsed = Boolean(collapsed)
+  localStorage.setItem(SIDEBAR_KEY, state.sidebarCollapsed ? '1' : '0')
+  render()
+}
+
+function toggleSidebar() {
+  setSidebarCollapsed(!state.sidebarCollapsed)
+}
+
+function collapseSidebarOnMobile() {
+  if (isCompactLayout()) {
+    state.sidebarCollapsed = true
+    localStorage.setItem(SIDEBAR_KEY, '1')
+  }
+}
+
 function isChildUser() {
   return String(state.user?.userType || '').toUpperCase() === 'CHILD'
 }
@@ -787,6 +1061,10 @@ function normalizeProfileSubViewForRole(subView) {
 function applyRoleLanding() {
   state.currentView = isChildUser() ? 'calendar' : 'profile'
   state.profileSubView = 'home'
+  if (isCompactLayout()) {
+    state.sidebarCollapsed = true
+    localStorage.setItem(SIDEBAR_KEY, '1')
+  }
 }
 
 function openCalendarDayModal(dateKey) {
@@ -1063,7 +1341,8 @@ async function handleRewardSubmit(event) {
     stockTotal: Number(formData.get('stockTotal') || 0),
     exchangeLimitType: String(formData.get('exchangeLimitType') || 'UNLIMITED'),
     exchangeLimitCount: Number(formData.get('exchangeLimitCount') || 0),
-    requireApproval: formData.get('requireApproval') === 'on',
+    fulfillmentType: String(formData.get('fulfillmentType') || 'INVENTORY_DEDUCT'),
+    requireApproval: true,
   }
   if (!payload.name) {
     toast('请填写奖励名称')
@@ -1075,7 +1354,7 @@ async function handleRewardSubmit(event) {
       ...payload,
       status: 'ACTIVE',
       stockRemaining: payload.stockTotal,
-      requireApproval: payload.requireApproval ? 1 : 0,
+      requireApproval: 1,
     }
     state.rewards = rewardId
       ? state.rewards.map((reward) => String(reward.id) === rewardId ? nextReward : reward)
@@ -1249,8 +1528,31 @@ function resetChildScopedData() {
   state.calendarEvents = []
   state.calendarDayModalOpen = false
   state.calendarEventModalOpen = false
+  state.balanceModalOpen = false
   state.selectedCalendarDateKey = ''
   state.selectedCalendarEventId = ''
+  state.selectedBalancePointType = ''
+}
+
+function mergeTaskCalendarEvents(events, tasks) {
+  const taskMap = new Map((tasks || []).map((task) => [String(task.id), task]))
+  return (events || []).map((event) => {
+    const task = taskMap.get(String(event.taskId))
+    if (!task) return event
+    return {
+      ...event,
+      goalId: event.goalId || task.goalId,
+      childId: event.childId || task.childId,
+      taskName: event.taskName || task.name,
+      taskColor: event.taskColor || task.taskColor,
+      pointType: event.pointType || task.pointType,
+      pointColor: event.pointColor || task.pointColor,
+      basePoints: event.basePoints ?? task.basePoints,
+      periodType: event.periodType || task.periodType,
+      scheduleJson: event.scheduleJson || task.scheduleJson,
+      requireApproval: event.requireApproval ?? task.requireApproval,
+    }
+  })
 }
 
 function addDays(date, days) {
@@ -1297,6 +1599,21 @@ function upsertBalance(balances, pointType, amount) {
       spentTotal: Number(balance.spentTotal || 0) + (amount < 0 ? Math.abs(amount) : 0),
     }
   })
+}
+
+function calculatePointExchange(fromPointType, toPointType, fromAmount, rule = {}) {
+  const weights = {
+    STAR: Number(rule.starWeight || 1),
+    FLOWER: Number(rule.flowerWeight || 10),
+    CROWN: Number(rule.crownWeight || 100),
+  }
+  const fromWeight = weights[fromPointType] || weights.STAR
+  const toWeight = weights[toPointType] || weights.STAR
+  return {
+    toAmount: Math.floor((Number(fromAmount || 0) * fromWeight) / toWeight),
+    fromWeight,
+    toWeight,
+  }
 }
 
 render()

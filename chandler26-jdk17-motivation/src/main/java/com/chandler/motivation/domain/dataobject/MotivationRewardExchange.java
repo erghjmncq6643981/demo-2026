@@ -19,12 +19,17 @@ public class MotivationRewardExchange {
     private String requiredPointType;
     private Integer requiredPointsSnapshot;
     private String status;
+    private String fulfillmentStatus;
     private Long requestedByUserId;
     private Long reviewedByUserId;
+    private Long fulfillmentUpdatedByUserId;
     private Long deductedLedgerId;
     private LocalDateTime requestedAt;
     private LocalDateTime reviewedAt;
+    private LocalDateTime fulfillmentUpdatedAt;
     private LocalDateTime completedAt;
+    private Long confirmedByUserId;
+    private LocalDateTime confirmedAt;
     private String remark;
     private LocalDateTime createTime;
     private LocalDateTime updateTime;

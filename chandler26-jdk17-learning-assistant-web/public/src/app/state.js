@@ -27,7 +27,7 @@ export function createInitialState() {
     currentModelEditId: null,
     currentAgentEditId: null,
     currentTemplateEditId: null,
-    accountSecurityEditMode: '',
+    accountSecurityEditModes: [],
     currentStatusEntryId: null,
     currentTransferEntryId: null,
     selectedEntry: null,

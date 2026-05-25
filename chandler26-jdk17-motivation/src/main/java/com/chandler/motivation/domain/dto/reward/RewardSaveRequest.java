@@ -14,6 +14,7 @@ public class RewardSaveRequest {
     private Integer stockTotal;
     private String exchangeLimitType;
     private Integer exchangeLimitCount;
+    private String fulfillmentType;
     private Boolean requireApproval;
     private Integer sortNo;
 }

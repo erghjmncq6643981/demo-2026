@@ -60,6 +60,9 @@ export const api = {
   pointSummary: (childId) => request(`/children/${childId}/points/summary`),
   ledger: (childId) => request(`/children/${childId}/points/ledger?limit=20`),
   manualAdjust: (childId, body) => request(`/children/${childId}/points/manual-adjust`, { method: 'POST', body }),
+  pointExchangeRule: (childId) => request(`/children/${childId}/points/exchange-rule`),
+  savePointExchangeRule: (childId, body) => request(`/children/${childId}/points/exchange-rule`, { method: 'PUT', body }),
+  exchangePoints: (childId, body) => request(`/children/${childId}/points/exchange`, { method: 'POST', body }),
   rewards: (childId) => request(`/rewards?childId=${encodeURIComponent(childId)}`),
   createReward: (body) => request('/rewards', { method: 'POST', body }),
   updateReward: (rewardId, body) => request(`/rewards/${rewardId}`, { method: 'PUT', body }),
@@ -68,4 +71,6 @@ export const api = {
   rewardExchanges: (childId) => request(`/rewards/exchanges?childId=${encodeURIComponent(childId)}&limit=20`),
   approveRewardExchange: (exchangeId, body = {}) => request(`/rewards/exchanges/${exchangeId}/approve`, { method: 'POST', body }),
   rejectRewardExchange: (exchangeId, body = {}) => request(`/rewards/exchanges/${exchangeId}/reject`, { method: 'POST', body }),
+  updateRewardFulfillment: (exchangeId, body = {}) => request(`/rewards/exchanges/${exchangeId}/fulfillment`, { method: 'PUT', body }),
+  confirmRewardExchange: (exchangeId, body = {}) => request(`/rewards/exchanges/${exchangeId}/confirm`, { method: 'POST', body }),
 }

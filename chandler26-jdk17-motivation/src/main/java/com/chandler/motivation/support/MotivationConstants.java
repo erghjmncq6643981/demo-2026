@@ -81,6 +81,27 @@ public final class MotivationConstants {
         }
     }
 
+    public static final class RewardFulfillmentType {
+        public static final String INVENTORY_DEDUCT = "INVENTORY_DEDUCT";
+        public static final String PARENT_EXECUTE = "PARENT_EXECUTE";
+        public static final String PARENT_PURCHASE = "PARENT_PURCHASE";
+        public static final String PARENT_FULFILL = "PARENT_FULFILL";
+
+        private RewardFulfillmentType() {
+        }
+    }
+
+    public static final class RewardFulfillmentStatus {
+        public static final String PENDING = "PENDING";
+        public static final String SCHEDULED = "SCHEDULED";
+        public static final String IN_PROGRESS = "IN_PROGRESS";
+        public static final String COMPLETED = "COMPLETED";
+        public static final String CONFIRMED = "CONFIRMED";
+
+        private RewardFulfillmentStatus() {
+        }
+    }
+
     public static final class RewardExchangeStatus {
         public static final String REQUESTED = "REQUESTED";
         public static final String APPROVED = "APPROVED";
@@ -96,6 +117,7 @@ public final class MotivationConstants {
         public static final String TASK_RECORD = "TASK_RECORD";
         public static final String MANUAL_ADJUST = "MANUAL_ADJUST";
         public static final String REWARD_EXCHANGE = "REWARD_EXCHANGE";
+        public static final String POINT_EXCHANGE = "POINT_EXCHANGE";
         public static final String SYSTEM = "SYSTEM";
 
         private LedgerSourceType() {

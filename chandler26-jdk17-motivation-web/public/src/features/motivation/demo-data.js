@@ -104,6 +104,12 @@ export const demoState = {
     { pointType: 'FLOWER', balance: 42, earnedTotal: 42, spentTotal: 0 },
     { pointType: 'CROWN', balance: 3, earnedTotal: 4, spentTotal: 1 },
   ],
+  pointExchangeRule: {
+    childId: 101,
+    starWeight: 1,
+    flowerWeight: 10,
+    crownWeight: 100,
+  },
   rewards: [
     {
       id: 401,
@@ -115,6 +121,7 @@ export const demoState = {
       requiredPointType: 'STAR',
       requiredPoints: 80,
       stockRemaining: 3,
+      fulfillmentType: 'PARENT_PURCHASE',
       requireApproval: 1,
       status: 'ACTIVE',
     },
@@ -128,7 +135,8 @@ export const demoState = {
       requiredPointType: 'FLOWER',
       requiredPoints: 40,
       stockRemaining: 10,
-      requireApproval: 0,
+      fulfillmentType: 'PARENT_EXECUTE',
+      requireApproval: 1,
       status: 'ACTIVE',
     },
     {
@@ -141,6 +149,7 @@ export const demoState = {
       requiredPointType: 'CROWN',
       requiredPoints: 1,
       stockRemaining: 0,
+      fulfillmentType: 'PARENT_FULFILL',
       requireApproval: 1,
       status: 'ACTIVE',
     },
@@ -151,7 +160,9 @@ export const demoState = {
     { id: 503, pointType: 'STAR', changeAmount: -80, sourceName: '积木礼物', reason: '奖励兑换扣减', eventTime: `${formatDate(today)}T20:00:00` },
   ],
   exchanges: [
-    { id: 601, rewardNameSnapshot: '积木礼物', requiredPointType: 'STAR', requiredPointsSnapshot: 80, status: 'REQUESTED', requestedAt: `${formatDate(today)}T20:00:00` },
+    { id: 601, rewardNameSnapshot: '积木礼物', rewardIconSnapshot: '🎁', rewardColorSnapshot: '#ff9f43', requiredPointType: 'STAR', requiredPointsSnapshot: 80, status: 'REQUESTED', fulfillmentStatus: 'PENDING', requestedAt: `${formatDate(today)}T20:00:00` },
+    { id: 602, rewardNameSnapshot: '周末冰淇淋', rewardIconSnapshot: '🍦', rewardColorSnapshot: '#34c759', requiredPointType: 'FLOWER', requiredPointsSnapshot: 40, status: 'APPROVED', fulfillmentStatus: 'COMPLETED', requestedAt: `${formatDate(today)}T10:00:00`, reviewedAt: `${formatDate(today)}T10:10:00`, fulfillmentUpdatedAt: `${formatDate(today)}T10:20:00` },
+    { id: 603, rewardNameSnapshot: '皇冠特权', rewardIconSnapshot: '♛', rewardColorSnapshot: '#6c63ff', requiredPointType: 'CROWN', requiredPointsSnapshot: 1, status: 'COMPLETED', fulfillmentStatus: 'CONFIRMED', requestedAt: `${formatDate(today)}T09:00:00`, reviewedAt: `${formatDate(today)}T09:05:00`, confirmedAt: `${formatDate(today)}T09:30:00` },
   ],
   calendarEvents: [],
 }
