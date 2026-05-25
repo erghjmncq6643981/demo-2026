@@ -5,5 +5,6 @@ import lombok.Data;
 @Data
 public class RewardExchangeRequest {
     private Long rewardId;
+    private String paymentPointType;
     private String remark;
 }

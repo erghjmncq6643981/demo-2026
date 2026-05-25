@@ -11,6 +11,7 @@ import com.chandler.motivation.domain.dto.points.PointSummaryResponse;
 import com.chandler.motivation.service.AuthService;
 import com.chandler.motivation.service.MotivationChildPointBalanceService;
 import com.chandler.motivation.service.MotivationChildService;
+import com.chandler.motivation.service.MotivationPointCurrencyService;
 import com.chandler.motivation.service.MotivationPointExchangeRuleService;
 import com.chandler.motivation.service.MotivationPointLedgerService;
 import java.util.List;
@@ -31,6 +32,7 @@ public class LedgerController {
 
     private final MotivationPointLedgerService pointLedgerService;
     private final MotivationPointExchangeRuleService pointExchangeRuleService;
+    private final MotivationPointCurrencyService pointCurrencyService;
     private final MotivationChildPointBalanceService balanceService;
     private final MotivationChildService childService;
     private final AuthService authService;
@@ -43,6 +45,7 @@ public class LedgerController {
         response.setChildId(childId);
         response.setBalances(balanceService.listSummary(childId));
         response.setExchangeRule(pointExchangeRuleService.getRule(childId, userId));
+        response.setCurrencies(pointCurrencyService.listByChild(childId, userId));
         return ApiResponse.ok(response);
     }
 

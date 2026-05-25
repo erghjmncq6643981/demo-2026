@@ -1,9 +1,14 @@
 import { api, getToken, setToken } from '/src/shared/api.js'
 import { buildDemoCalendar, demoState } from '/src/features/motivation/demo-data.js'
 import { renderApp } from '/src/features/motivation/render.js'
-import { formatDate, fulfillmentStatusName, pointIcon, pointName } from '/src/shared/text.js'
+import { formatDate, fulfillmentStatusName, pointName } from '/src/shared/text.js'
 
 const SIDEBAR_KEY = 'motivation.sidebarCollapsed'
+const DEFAULT_CURRENCIES = [
+  { pointType: 'STAR', name: '星星', icon: '★', color: '#f59e0b', exchangeWeight: 1, status: 'ACTIVE', sortNo: 1 },
+  { pointType: 'FLOWER', name: '红花', icon: '✿', color: '#ec4899', exchangeWeight: 10, status: 'ACTIVE', sortNo: 2 },
+  { pointType: 'CROWN', name: '皇冠', icon: '♛', color: '#7c3aed', exchangeWeight: 100, status: 'ACTIVE', sortNo: 3 },
+]
 const isCompactLayout = () => window.matchMedia('(max-width: 1180px)').matches
 const initialSidebarCollapsed = localStorage.getItem(SIDEBAR_KEY) === '1' || isCompactLayout()
 
@@ -22,6 +27,7 @@ const state = {
   shouldFocusToday: false,
   taskModalOpen: false,
   rewardModalOpen: false,
+  pointCurrencyModalOpen: false,
   childModalOpen: false,
   goalModalOpen: false,
   pointAdjustModalOpen: false,
@@ -35,6 +41,7 @@ const state = {
   confirmDialog: null,
   editingTask: null,
   editingReward: null,
+  editingPointCurrency: null,
   editingChild: null,
   editingGoal: null,
   childFilters: {
@@ -58,13 +65,20 @@ const state = {
     pointType: '',
     status: '',
   },
+  currencyFilters: {
+    keyword: '',
+    pointType: '',
+    status: '',
+  },
   filterAdvanced: {
     child: false,
     goal: false,
     task: false,
     reward: false,
+    currency: false,
   },
   pointExchangeRule: demoState.pointExchangeRule || { starWeight: 1, flowerWeight: 10, crownWeight: 100 },
+  pointCurrencies: normalizePointCurrencies(demoState.pointCurrencies, demoState.pointExchangeRule),
   connectionMessage: '正在尝试连接后端...',
   toast: '',
 }
@@ -161,6 +175,19 @@ function bindEvents() {
     button.addEventListener('click', () => handleQuickPointExchange(button.dataset.toPointType, Number(button.dataset.fromAmount || 1)))
   })
   document.querySelector('[data-form="point-exchange-rule"]')?.addEventListener('submit', handlePointExchangeRuleSubmit)
+  document.querySelector('[data-action="open-currency-modal"]')?.addEventListener('click', () => openPointCurrencyModal())
+  document.querySelectorAll('[data-action="close-currency-modal"]').forEach((button) => {
+    button.addEventListener('click', closePointCurrencyModal)
+  })
+  document.querySelector('[data-form="point-currency"]')?.addEventListener('submit', handlePointCurrencySubmit)
+  document.querySelectorAll('[name="currencyIconChoice"]').forEach((input) => {
+    input.addEventListener('change', () => {
+      const form = input.closest('form')
+      if (form?.icon) {
+        form.icon.value = input.value
+      }
+    })
+  })
   document.querySelectorAll('[data-action="go-reward-store"]').forEach((button) => {
     button.addEventListener('click', goRewardStore)
   })
@@ -217,6 +244,9 @@ function bindEvents() {
   document.querySelectorAll('[data-action="edit-reward"]').forEach((button) => {
     button.addEventListener('click', () => openRewardModal(button.dataset.rewardId))
   })
+  document.querySelectorAll('[data-action="edit-currency"]').forEach((button) => {
+    button.addEventListener('click', () => openPointCurrencyModal(button.dataset.currencyId))
+  })
   document.querySelectorAll('[data-action="delete-child"]').forEach((button) => {
     button.addEventListener('click', () => openDeleteConfirm('child', button.dataset.childId))
   })
@@ -228,6 +258,9 @@ function bindEvents() {
   })
   document.querySelectorAll('[data-action="delete-reward"]').forEach((button) => {
     button.addEventListener('click', () => openDeleteConfirm('reward', button.dataset.rewardId))
+  })
+  document.querySelectorAll('[data-action="delete-currency"]').forEach((button) => {
+    button.addEventListener('click', () => openDeleteConfirm('currency', button.dataset.currencyId))
   })
   document.querySelectorAll('[data-action="approve-exchange"]').forEach((button) => {
     button.addEventListener('click', () => handleRewardExchangeReview(button.dataset.exchangeId, true))
@@ -352,7 +385,7 @@ function syncTaskColor(form) {
 }
 
 function bindFilterActions() {
-  ;['child', 'goal', 'task', 'reward'].forEach((scope) => {
+  ;['child', 'goal', 'task', 'reward', 'currency'].forEach((scope) => {
     document.querySelector(`[data-action="toggle-${scope}-filters"]`)?.addEventListener('click', () => {
       state.filterAdvanced = {
         ...state.filterAdvanced,
@@ -412,6 +445,19 @@ function bindFilterActions() {
   document.querySelector('[data-action="reset-reward-filters"]')?.addEventListener('click', () => {
     state.rewardFilters = { keyword: '', pointType: '', status: '' }
     state.filterAdvanced = { ...state.filterAdvanced, reward: false }
+    render()
+  })
+  document.querySelector('[data-action="search-currency-filters"]')?.addEventListener('click', () => {
+    state.currencyFilters = {
+      keyword: readControlValue('[data-filter="currency-keyword"]'),
+      pointType: readControlValue('[data-select="currency-point"]'),
+      status: readControlValue('[data-select="currency-status"]'),
+    }
+    render()
+  })
+  document.querySelector('[data-action="reset-currency-filters"]')?.addEventListener('click', () => {
+    state.currencyFilters = { keyword: '', pointType: '', status: '' }
+    state.filterAdvanced = { ...state.filterAdvanced, currency: false }
     render()
   })
   document.querySelectorAll('[data-filter], [data-select]').forEach((control) => {
@@ -519,6 +565,7 @@ async function loadCoreData() {
   state.calendarEvents = mergeTaskCalendarEvents(state.calendarEvents, tasks)
   state.balances = summary?.balances || []
   state.pointExchangeRule = summary?.exchangeRule || state.pointExchangeRule || { starWeight: 1, flowerWeight: 10, crownWeight: 100 }
+  state.pointCurrencies = normalizePointCurrencies(summary?.currencies || state.pointCurrencies, state.pointExchangeRule)
   state.ledger = ledger
   state.rewards = rewards
   state.exchanges = exchanges
@@ -905,6 +952,71 @@ async function handlePointExchangeRuleSubmit(event) {
   }
 }
 
+async function handlePointCurrencySubmit(event) {
+  event.preventDefault()
+  const formData = new FormData(event.currentTarget)
+  const currencyId = String(formData.get('currencyId') || '').trim()
+  const pointType = String(formData.get('pointType') || 'STAR')
+  const payload = {
+    childId: state.selectedChildId,
+    pointType,
+    name: String(formData.get('name') || '').trim(),
+    icon: String(formData.get('icon') || '★').trim(),
+    color: String(formData.get('color') || '#f59e0b'),
+    exchangeWeight: Math.max(1, Number(formData.get('exchangeWeight') || 1)),
+    status: String(formData.get('status') || 'ACTIVE'),
+    sortNo: Number(formData.get('sortNo') || defaultCurrencySort(pointType)),
+  }
+  if (!payload.name) {
+    toast('请填写币值名称')
+    return
+  }
+  if (!payload.icon) {
+    toast('请选择币值图标')
+    return
+  }
+  const currentDuplicate = state.pointCurrencies.find((currency) => (
+    String(currency.pointType) === payload.pointType
+    && String(currency.id || '') !== currencyId
+    && Number(currency.deleted || 0) !== 1
+  ))
+  if (currentDuplicate) {
+    toast('该积分类型已经存在，请直接修改')
+    return
+  }
+  if (state.offline) {
+    const nextCurrency = {
+      id: currencyId || `demo-currency-${Date.now()}`,
+      ...payload,
+      deleted: 0,
+    }
+    state.pointCurrencies = currencyId
+      ? state.pointCurrencies.map((currency) => String(currency.id) === currencyId ? nextCurrency : currency)
+      : [...state.pointCurrencies, nextCurrency]
+    syncRuleFromCurrencies()
+    state.pointCurrencyModalOpen = false
+    state.editingPointCurrency = null
+    toast(currencyId ? '演示：币值已修改' : '演示：币值已创建')
+    render()
+    return
+  }
+  try {
+    if (currencyId) {
+      await api.updatePointCurrency(state.selectedChildId, currencyId, payload)
+    } else {
+      await api.createPointCurrency(state.selectedChildId, payload)
+    }
+    state.pointCurrencyModalOpen = false
+    state.editingPointCurrency = null
+    await loadCoreData()
+    toast(currencyId ? '币值已修改' : '币值已创建')
+    render()
+  } catch (error) {
+    toast(error.message)
+    render()
+  }
+}
+
 async function handlePointExchangeSubmit(event) {
   event.preventDefault()
   const formData = new FormData(event.currentTarget)
@@ -1095,6 +1207,22 @@ function closeRewardModal() {
   render()
 }
 
+function openPointCurrencyModal(currencyId = null) {
+  if (!state.selectedChildId) {
+    toast('请先新增孩子档案')
+    return
+  }
+  state.editingPointCurrency = currencyId ? state.pointCurrencies.find((currency) => String(currency.id) === String(currencyId)) || null : null
+  state.pointCurrencyModalOpen = true
+  render()
+}
+
+function closePointCurrencyModal() {
+  state.pointCurrencyModalOpen = false
+  state.editingPointCurrency = null
+  render()
+}
+
 function logout() {
   setToken('')
   state.user = null
@@ -1139,7 +1267,7 @@ function normalizeProfileSubViewForRole(subView) {
   if (!isManagementUser()) {
     return 'home'
   }
-  return ['home', 'children', 'goals', 'tasks', 'rewards'].includes(subView) ? subView : 'home'
+  return ['home', 'children', 'goals', 'tasks', 'rewards', 'currencies'].includes(subView) ? subView : 'home'
 }
 
 function applyRoleLanding() {
@@ -1539,6 +1667,11 @@ function getDeleteTarget(type, id) {
       item: state.rewards.find((reward) => String(reward.id) === String(id)),
       name: (item) => item.name,
     },
+    currency: {
+      label: '币值',
+      item: state.pointCurrencies.find((currency) => String(currency.id) === String(id)),
+      name: (item) => item.name,
+    },
   }
   const target = targetMap[type]
   if (!target?.item) return null
@@ -1580,6 +1713,12 @@ async function deleteResource(type, id) {
     await api.deleteReward(id)
     await loadCoreData()
     toast('奖励已删除')
+    return
+  }
+  if (type === 'currency') {
+    await api.deletePointCurrency(state.selectedChildId, id)
+    await loadCoreData()
+    toast('币值已删除')
   }
 }
 
@@ -1602,6 +1741,10 @@ function deleteOfflineResource(type, id) {
   if (type === 'reward') {
     state.rewards = state.rewards.filter((reward) => String(reward.id) !== String(id))
   }
+  if (type === 'currency') {
+    state.pointCurrencies = state.pointCurrencies.filter((currency) => String(currency.id) !== String(id))
+    syncRuleFromCurrencies()
+  }
 }
 
 function resetChildScopedData() {
@@ -1611,6 +1754,7 @@ function resetChildScopedData() {
   state.ledger = []
   state.rewards = []
   state.exchanges = []
+  state.pointCurrencies = normalizePointCurrencies([], state.pointExchangeRule)
   state.calendarEvents = []
   state.calendarDayModalOpen = false
   state.calendarEventModalOpen = false
@@ -1699,6 +1843,45 @@ function calculatePointExchange(fromPointType, toPointType, fromAmount, rule = {
     toAmount: Math.floor((Number(fromAmount || 0) * fromWeight) / toWeight),
     fromWeight,
     toWeight,
+  }
+}
+
+function normalizePointCurrencies(currencies = [], rule = {}) {
+  const normalizedRule = {
+    STAR: Number(rule?.starWeight || 1),
+    FLOWER: Number(rule?.flowerWeight || 10),
+    CROWN: Number(rule?.crownWeight || 100),
+  }
+  const byType = new Map((currencies || [])
+    .filter((currency) => currency && Number(currency.deleted || 0) !== 1)
+    .map((currency) => [String(currency.pointType || '').toUpperCase(), currency]))
+  return DEFAULT_CURRENCIES.map((defaults) => {
+    const current = byType.get(defaults.pointType) || {}
+    return {
+      childId: current.childId || demoState.children[0]?.id || null,
+      ...defaults,
+      ...current,
+      pointType: defaults.pointType,
+      exchangeWeight: Number(current.exchangeWeight || normalizedRule[defaults.pointType] || defaults.exchangeWeight),
+      status: current.status || defaults.status,
+      sortNo: Number(current.sortNo ?? defaults.sortNo),
+    }
+  })
+}
+
+function defaultCurrencySort(pointType) {
+  return DEFAULT_CURRENCIES.find((currency) => currency.pointType === pointType)?.sortNo || 0
+}
+
+function syncRuleFromCurrencies() {
+  const currencies = normalizePointCurrencies(state.pointCurrencies, state.pointExchangeRule)
+  state.pointCurrencies = currencies
+  const byType = new Map(currencies.map((currency) => [currency.pointType, currency]))
+  state.pointExchangeRule = {
+    childId: state.selectedChildId,
+    starWeight: Number(byType.get('STAR')?.exchangeWeight || 1),
+    flowerWeight: Number(byType.get('FLOWER')?.exchangeWeight || 10),
+    crownWeight: Number(byType.get('CROWN')?.exchangeWeight || 100),
   }
 }
 

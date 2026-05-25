@@ -24,6 +24,11 @@ const pointTypeOptions = [
   ['FLOWER', '红花'],
   ['CROWN', '皇冠'],
 ]
+const defaultCurrencyMeta = {
+  STAR: { name: '星星', icon: '★', color: '#f59e0b', exchangeWeight: 1, sortNo: 1 },
+  FLOWER: { name: '红花', icon: '✿', color: '#ec4899', exchangeWeight: 10, sortNo: 2 },
+  CROWN: { name: '皇冠', icon: '♛', color: '#7c3aed', exchangeWeight: 100, sortNo: 3 },
+}
 const fulfillmentTypeOptions = [
   ['INVENTORY_DEDUCT', '库存扣减'],
   ['PARENT_EXECUTE', '家长执行'],
@@ -31,6 +36,7 @@ const fulfillmentTypeOptions = [
   ['PARENT_FULFILL', '家长实现'],
 ]
 const rewardIconOptions = ['🎁', '🍦', '🧸', '📚', '🎨', '🚲', '🎮', '🎬', '🎟️', '🍰', '🍕', '🏆', '👑', '⭐', '🌈', '🎵', '⚽', '🛝', '🍭', '🪁', '🧩', '🚀', '💎', '🎯', '🪄', '📷', '🌟', '🐣', '🦄', '🍓', '🍉', '🍎', '🍪', '🛹', '🎈']
+const currencyIconOptions = ['★', '☆', '✦', '✧', '✿', '❀', '♛', '👑', '🏆', '🎖️', '🏅', '💎', '🌟', '⭐', '🌈', '🎁', '🍭', '🎈', '🪄', '🚀', '🎯']
 
 function isChildUser(state) {
   return String(state.user?.userType || '').toUpperCase() === 'CHILD'
@@ -55,6 +61,7 @@ function profileSubnavItems(state) {
     ['goals', '成长目标'],
     ['tasks', '任务管理'],
     ['rewards', '奖励管理'],
+    ['currencies', '币值管理'],
   ]
 }
 
@@ -85,6 +92,7 @@ export function renderApp(state, actions) {
     ${renderGoalModal(state)}
     ${renderTaskModal(state)}
     ${renderRewardModal(state)}
+    ${renderPointCurrencyModal(state)}
     ${renderPointAdjustModal(state)}
     ${renderBalanceModal(state)}
     ${renderConfirmModal(state)}
@@ -207,6 +215,7 @@ function renderWorkspaceHeader(state) {
     goals: ['成长目标', '管理目标方向，并承载每日、每周和每月任务。'],
     tasks: ['任务管理', '用列表筛选任务，新增或修改任务规则。'],
     rewards: ['奖励管理', '维护奖励库存、颜色、积分要求和审核规则。'],
+    currencies: ['币值管理', '配置星星、红花、皇冠的图标、颜色和比例。'],
   }
   const titles = {
     profile: profileTitles[profileSubView(state)] || profileTitles.home,
@@ -302,6 +311,15 @@ function renderProfileView(state) {
       <div class="view-grid">
         <div class="wide">
           ${renderRewardManageView(state)}
+        </div>
+      </div>
+    `
+  }
+  if (activeSubView === 'currencies') {
+    return `
+      <div class="view-grid">
+        <div class="wide">
+          ${renderCurrencyManageView(state)}
         </div>
       </div>
     `
@@ -877,8 +895,62 @@ function renderRewardManageView(state) {
   `
 }
 
+function renderCurrencyManageView(state) {
+  const filters = state.currencyFilters || {}
+  const currencies = filterCurrencies(getPointCurrencies(state), filters)
+  const expanded = Boolean(state.filterAdvanced?.currency)
+  return `
+    <section class="panel panel-pad">
+      <div class="section-inline-head">
+        <h2>币值列表</h2>
+        <div class="section-actions">
+          <span>${currencies.length} 个</span>
+          <button class="btn primary" type="button" data-action="open-currency-modal">新增币值</button>
+        </div>
+      </div>
+      ${renderManagementFilterBar({
+        scope: 'currency',
+        filters,
+        keywordPlaceholder: '名称或图标',
+        expanded,
+        fields: `
+          <label><span>积分类型</span>${renderSelect('currency-point', filters.pointType || '', [['', '全部'], ...pointTypeOptions], 'currency')}</label>
+          <label><span>状态</span>${renderSelect('currency-status', filters.status || '', [['', '全部'], ['ACTIVE', '启用'], ['INACTIVE', '停用']], 'currency')}</label>
+        `,
+      })}
+      <div class="table-card">
+        <div class="table-head currency-table">
+          <span>币值</span><span>积分类型</span><span>比例</span><span>状态</span><span>操作</span>
+        </div>
+        ${currencies.map(renderCurrencyRow).join('') || '<div class="empty">暂无币值配置</div>'}
+      </div>
+    </section>
+  `
+}
+
+function renderCurrencyRow(currency) {
+  const meta = currencyMeta(currency.pointType, [currency])
+  const canMutate = Boolean(currency.id)
+  return `
+    <div class="table-row currency-table">
+      <div class="task-name-cell">
+        <span class="currency-mini" style="--point-color:${escapeHtml(meta.color)}">${escapeHtml(meta.icon)}</span>
+        <div><strong>${escapeHtml(meta.name)}</strong><small>${escapeHtml(meta.color)} · 排序 ${currency.sortNo ?? meta.sortNo ?? 0}</small></div>
+      </div>
+      <span>${escapeHtml(pointName(currency.pointType))}</span>
+      <span class="score-pill">${escapeHtml(meta.icon)} 1:${escapeHtml(currency.exchangeWeight || meta.exchangeWeight)}</span>
+      <span>${statusName(currency.status || 'ACTIVE')}</span>
+      <div class="row-actions task-row-actions">
+        <button class="row-icon-btn" type="button" data-action="edit-currency" data-currency-id="${escapeHtml(currency.id || '')}" aria-label="修改币值" title="修改币值" ${canMutate ? '' : 'disabled'}>${renderActionIcon('edit')}</button>
+        <button class="row-icon-btn danger" type="button" data-action="delete-currency" data-currency-id="${escapeHtml(currency.id || '')}" aria-label="删除币值" title="删除币值" ${canMutate ? '' : 'disabled'}>${renderActionIcon('delete')}</button>
+      </div>
+    </div>
+  `
+}
+
 function renderPointExchangeRulePanel(state) {
   const rule = normalizeExchangeRule(state.pointExchangeRule)
+  const currencies = getPointCurrencies(state)
   return `
     <div class="exchange-rule-panel">
       <div>
@@ -891,9 +963,9 @@ function renderPointExchangeRulePanel(state) {
         <button class="btn primary" type="submit">保存</button>
       </form>
       <div class="exchange-ratio-preview">
-        <span>${pointIcon('STAR')} 星星币 1:${rule.starWeight}</span>
-        <span>${pointIcon('FLOWER')} 红花币 1:${rule.flowerWeight}</span>
-        <span>${pointIcon('CROWN')} 皇冠币 1:${rule.crownWeight}</span>
+        <span>${currencyIcon('STAR', currencies)} ${currencyName('STAR', currencies)} 1:${rule.starWeight}</span>
+        <span>${currencyIcon('FLOWER', currencies)} ${currencyName('FLOWER', currencies)} 1:${rule.flowerWeight}</span>
+        <span>${currencyIcon('CROWN', currencies)} ${currencyName('CROWN', currencies)} 1:${rule.crownWeight}</span>
       </div>
     </div>
   `
@@ -952,6 +1024,7 @@ function renderRewardRow(reward) {
 
 function renderStats(state) {
   const balances = new Map((state.balances || []).map((item) => [item.pointType, item]))
+  const currencies = getPointCurrencies(state)
   const todayEvents = state.calendarEvents.filter((event) => event.taskDate === state.todayKey)
   const completedToday = todayEvents.filter((event) => event.status === 'APPROVED').length
   const todayTasks = todayEvents.length || state.tasks.length
@@ -960,10 +1033,11 @@ function renderStats(state) {
     <div class="stats">
       ${['STAR', 'FLOWER', 'CROWN'].map((type) => {
         const balance = balances.get(type) || { balance: 0, earnedTotal: 0, spentTotal: 0 }
+        const meta = currencyMeta(type, currencies)
         return `
-          <button class="stat balance-stat" type="button" data-action="open-balance-modal" data-point-type="${type}">
-            <div class="label">${pointIcon(type)} ${pointName(type)}</div>
-            <div class="value">${renderPointIcons(type, balance.balance)}</div>
+          <button class="stat balance-stat balance-stat-compact" type="button" data-action="open-balance-modal" data-point-type="${type}" title="${escapeHtml(meta.name)}">
+            <div class="balance-number">${Number(balance.balance || 0)}</div>
+            <div class="balance-big-icon" style="--point-color:${escapeHtml(meta.color)}">${escapeHtml(meta.icon)}</div>
           </button>
         `
       }).join('')}
@@ -1376,6 +1450,52 @@ function renderRewardModal(state) {
   `
 }
 
+function renderPointCurrencyModal(state) {
+  if (!state.pointCurrencyModalOpen) return ''
+  const currency = state.editingPointCurrency || {}
+  const pointType = currency.pointType || 'STAR'
+  const defaults = defaultCurrencyMeta[pointType] || defaultCurrencyMeta.STAR
+  const icon = currency.icon || defaults.icon
+  return `
+    <div class="modal-backdrop">
+      <section class="modal">
+        <div class="modal-head">
+          <div><h2>${currency.id ? '修改币值' : '新增币值'}</h2><p>配置孩子看到的积分图标、颜色和兑换比例。</p></div>
+          <button class="icon-btn" type="button" data-action="close-currency-modal">×</button>
+        </div>
+        <form class="modal-form" data-form="point-currency">
+          <input type="hidden" name="currencyId" value="${escapeHtml(currency.id || '')}" />
+          <label><span>名称</span><input name="name" value="${escapeHtml(currency.name || defaults.name)}" placeholder="例如：星星" /></label>
+          <label><span>积分类型</span>${renderSelect('pointType', pointType, pointTypeOptions)}</label>
+          <div class="icon-field wide">
+            <label><span>图标</span><input name="icon" value="${escapeHtml(icon)}" /></label>
+            <div class="icon-picker currency-icon-picker">
+              ${currencyIconOptions.map((option) => `
+                <label class="icon-choice" title="${escapeHtml(option)}">
+                  <input type="radio" name="currencyIconChoice" value="${escapeHtml(option)}" ${String(icon) === option ? 'checked' : ''} />
+                  <span>${escapeHtml(option)}</span>
+                </label>
+              `).join('')}
+            </div>
+          </div>
+          <label><span>颜色</span><input type="color" name="color" value="${escapeHtml(currency.color || defaults.color)}" /></label>
+          <label><span>比例</span><input type="number" min="1" name="exchangeWeight" value="${escapeHtml(currency.exchangeWeight || defaults.exchangeWeight)}" /></label>
+          <label><span>状态</span>${renderSelect('status', currency.status || 'ACTIVE', [['ACTIVE', '启用'], ['INACTIVE', '停用']])}</label>
+          <label><span>排序</span><input type="number" min="0" name="sortNo" value="${escapeHtml(currency.sortNo ?? defaults.sortNo)}" /></label>
+          <div class="currency-modal-preview wide">
+            <span class="currency-mini large" style="--point-color:${escapeHtml(currency.color || defaults.color)}">${escapeHtml(icon)}</span>
+            <strong>1:${escapeHtml(currency.exchangeWeight || defaults.exchangeWeight)}</strong>
+          </div>
+          <div class="modal-actions wide">
+            <button class="btn" type="button" data-action="close-currency-modal">取消</button>
+            <button class="btn primary" type="submit">保存</button>
+          </div>
+        </form>
+      </section>
+    </div>
+  `
+}
+
 function renderPointAdjustModal(state) {
   if (!state.pointAdjustModalOpen) return ''
   return `
@@ -1406,13 +1526,15 @@ function renderBalanceModal(state) {
   const balances = new Map((state.balances || []).map((item) => [item.pointType, item]))
   const balance = balances.get(pointType) || { pointType, balance: 0, earnedTotal: 0, spentTotal: 0 }
   const balanceAmount = Math.max(0, Number(balance.balance || 0))
+  const currencies = getPointCurrencies(state)
+  const currentCurrency = currencyMeta(pointType, currencies)
   const rule = normalizeExchangeRule(state.pointExchangeRule)
   const targets = pointType === 'STAR' ? ['FLOWER', 'CROWN'] : pointType === 'FLOWER' ? ['CROWN'] : []
   return `
     <div class="modal-backdrop">
       <section class="modal balance-modal">
         <div class="modal-head">
-          <div><h2>${pointIcon(pointType)} ${pointName(pointType)}余额</h2></div>
+          <div><h2><span class="inline-point-icon" style="--point-color:${escapeHtml(currentCurrency.color)}">${escapeHtml(currentCurrency.icon)}</span></h2></div>
           <div class="modal-head-actions">
             <button class="btn primary" type="button" data-action="go-reward-store">兑换奖励</button>
             <button class="icon-btn" type="button" data-action="close-balance-modal">×</button>
@@ -1423,9 +1545,7 @@ function renderBalanceModal(state) {
             <div class="balance-showcase-head">
               <strong>${balanceAmount}</strong>
             </div>
-            <div class="full-score-icons" style="--point-color:${pointTypeColor(pointType)}">
-              ${renderFullScoreIcons(pointType, balanceAmount)}
-            </div>
+            <div class="balance-showcase-icon" style="--point-color:${escapeHtml(currentCurrency.color)}">${escapeHtml(currentCurrency.icon)}</div>
           </div>
           <form class="point-exchange-form" data-form="point-exchange">
             <div class="balance-exchange-targets">
@@ -1433,10 +1553,11 @@ function renderBalanceModal(state) {
                 const preview = calculateExchangePreview(pointType, toPointType, balanceAmount, rule)
                 const exchangeAmount = exchangeSourceAmount(pointType, toPointType, preview.toAmount, rule)
                 const canExchange = preview.toAmount > 0 && exchangeAmount > 0
+                const targetCurrency = currencyMeta(toPointType, currencies)
                 return `
-                  <article class="exchange-target-card" style="--point-color:${pointTypeColor(toPointType)}">
+                  <article class="exchange-target-card" style="--point-color:${escapeHtml(targetCurrency.color)}">
                     <div class="exchange-target-head">
-                      <span class="exchange-target-icon">${pointIcon(toPointType)}</span>
+                      <span class="exchange-target-icon">${escapeHtml(targetCurrency.icon)}</span>
                       <strong>${preview.toAmount}</strong>
                     </div>
                     <button class="btn primary" type="button" data-action="quick-point-exchange" data-to-point-type="${toPointType}" data-from-amount="${exchangeAmount}" ${canExchange ? '' : 'disabled'}>兑换</button>
@@ -1449,8 +1570,8 @@ function renderBalanceModal(state) {
               <button class="btn primary" type="submit">兑换</button>
             </div>
             ${state.exchangeSuccess ? `
-              <div class="exchange-success" style="--point-color:${pointTypeColor(state.exchangeSuccess.toPointType)}">
-                <span>${pointIcon(state.exchangeSuccess.toPointType)}</span>
+              <div class="exchange-success" style="--point-color:${escapeHtml(currencyColor(state.exchangeSuccess.toPointType, currencies))}">
+                <span>${escapeHtml(currencyIcon(state.exchangeSuccess.toPointType, currencies))}</span>
                 <strong>兑换成功</strong>
                 <b>+${state.exchangeSuccess.toAmount}</b>
               </div>
@@ -1580,6 +1701,43 @@ function pointTypeColor(pointType) {
   return colors[pointType] || colors.STAR
 }
 
+function getPointCurrencies(state) {
+  const byType = new Map((state.pointCurrencies || [])
+    .filter((currency) => currency && Number(currency.deleted || 0) !== 1)
+    .map((currency) => [currency.pointType, currency]))
+  return pointTypeOptions.map(([pointType]) => ({
+    childId: state.selectedChildId,
+    pointType,
+    ...defaultCurrencyMeta[pointType],
+    ...(byType.get(pointType) || {}),
+  }))
+}
+
+function currencyMeta(pointType, currencies = []) {
+  const defaults = defaultCurrencyMeta[pointType] || defaultCurrencyMeta.STAR
+  const currency = currencies.find((item) => item.pointType === pointType) || {}
+  return {
+    ...defaults,
+    ...currency,
+    name: currency.name || defaults.name,
+    icon: currency.icon || defaults.icon,
+    color: currency.color || defaults.color,
+    exchangeWeight: Number(currency.exchangeWeight || defaults.exchangeWeight),
+  }
+}
+
+function currencyName(pointType, currencies = []) {
+  return currencyMeta(pointType, currencies).name
+}
+
+function currencyIcon(pointType, currencies = []) {
+  return currencyMeta(pointType, currencies).icon || pointIcon(pointType)
+}
+
+function currencyColor(pointType, currencies = []) {
+  return currencyMeta(pointType, currencies).color || pointTypeColor(pointType)
+}
+
 function filterTasks(tasks, filters) {
   const keyword = (filters.keyword || '').trim().toLowerCase()
   return tasks.filter((task) => {
@@ -1617,6 +1775,16 @@ function filterRewards(rewards, filters) {
     if (keyword && !fuzzyIncludes([reward.name, reward.description, reward.rewardIcon, pointName(reward.requiredPointType)].join(' '), keyword)) return false
     if (filters.pointType && reward.requiredPointType !== filters.pointType) return false
     if (filters.status && reward.status !== filters.status) return false
+    return true
+  })
+}
+
+function filterCurrencies(currencies, filters) {
+  const keyword = (filters.keyword || '').trim().toLowerCase()
+  return currencies.filter((currency) => {
+    if (keyword && !fuzzyIncludes([currency.name, currency.icon, pointName(currency.pointType), currency.exchangeWeight].join(' '), keyword)) return false
+    if (filters.pointType && currency.pointType !== filters.pointType) return false
+    if (filters.status && (currency.status || 'ACTIVE') !== filters.status) return false
     return true
   })
 }

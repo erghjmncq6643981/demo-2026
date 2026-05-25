@@ -110,6 +110,11 @@ export const demoState = {
     flowerWeight: 10,
     crownWeight: 100,
   },
+  pointCurrencies: [
+    { id: 701, childId: 101, pointType: 'STAR', name: '星星', icon: '★', color: '#f59e0b', exchangeWeight: 1, status: 'ACTIVE', sortNo: 1 },
+    { id: 702, childId: 101, pointType: 'FLOWER', name: '红花', icon: '✿', color: '#ec4899', exchangeWeight: 10, status: 'ACTIVE', sortNo: 2 },
+    { id: 703, childId: 101, pointType: 'CROWN', name: '皇冠', icon: '♛', color: '#7c3aed', exchangeWeight: 100, status: 'ACTIVE', sortNo: 3 },
+  ],
   rewards: [
     {
       id: 401,
