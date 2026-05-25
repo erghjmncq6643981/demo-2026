@@ -21,7 +21,13 @@ export function loadPreviewData(ctx) {
   } = ctx
 
   state.token = state.token || 'preview-token'
-  state.user = state.user || { id: 1, username: 'chandler', nickname: 'Chandler' }
+  state.user = state.user || {
+    id: 1,
+    username: 'chandler',
+    nickname: 'Chandler',
+    phoneMasked: '187****6252',
+    emailMasked: 'er****@163.com',
+  }
   state.wordbooks = [
     { id: 1, name: '默认词书', description: '日常学习沉淀', isDefault: true, entryCount: 18, dueCount: 3 },
     { id: 2, name: 'CET-4 高频词', description: '考试核心词', isDefault: false, entryCount: 64, dueCount: 9 },

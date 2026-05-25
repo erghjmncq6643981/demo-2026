@@ -95,7 +95,7 @@ public class MotivationTaskService extends ServiceImpl<MotivationTaskMapper, Mot
     }
 
     public List<MotivationTask> listByChild(Long childId, Long userId) {
-        childService.requireManageAccess(childId, userId);
+        childService.requireViewAccess(childId, userId);
         return list(new LambdaQueryWrapper<MotivationTask>()
                 .eq(MotivationTask::getChildId, childId)
                 .eq(MotivationTask::getDeleted, 0)
@@ -122,7 +122,7 @@ public class MotivationTaskService extends ServiceImpl<MotivationTaskMapper, Mot
         if (task == null || Integer.valueOf(1).equals(task.getDeleted())) {
             throw new MotivationException("TASK_NOT_FOUND", "任务不存在");
         }
-        childService.requireManageAccess(task.getChildId(), userId);
+        childService.requireViewAccess(task.getChildId(), userId);
         if (!MotivationConstants.TaskStatus.ACTIVE.equals(task.getStatus())) {
             throw new MotivationException("TASK_NOT_ACTIVE", "任务未启用");
         }

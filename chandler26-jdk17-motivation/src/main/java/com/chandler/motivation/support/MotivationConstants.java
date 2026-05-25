@@ -25,6 +25,7 @@ public final class MotivationConstants {
     public static final class FamilyRole {
         public static final String PARENT = "PARENT";
         public static final String GUARDIAN = "GUARDIAN";
+        public static final String CHILD = "CHILD";
 
         private FamilyRole() {
         }

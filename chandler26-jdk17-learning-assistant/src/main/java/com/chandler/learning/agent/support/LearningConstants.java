@@ -33,6 +33,11 @@ public final class LearningConstants {
         public static final int BEARER_PREFIX_LENGTH = BEARER_PREFIX.length();
         public static final int PHONE_MAX_LENGTH = 32;
         public static final int EMAIL_MAX_LENGTH = 128;
+        public static final int PHONE_MASK_THRESHOLD = 7;
+        public static final int PHONE_MASK_PREFIX_LENGTH = 3;
+        public static final int PHONE_MASK_SUFFIX_LENGTH = 4;
+        public static final int EMAIL_MASK_VISIBLE_PREFIX_LENGTH = 2;
+        public static final String CONTACT_MASK = "****";
 
         private Auth() {
         }

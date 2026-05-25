@@ -2,84 +2,127 @@ import { escapeHtml, formatDate, monthTitle, pointIcon, statusName } from '/src/
 
 const weekLabels = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun']
 
-export function renderCalendar({ monthDate, events, onPrevious, onNext }) {
-  const firstDay = new Date(monthDate.getFullYear(), monthDate.getMonth(), 1)
-  const startOffset = (firstDay.getDay() + 6) % 7
-  const gridStart = new Date(firstDay)
-  gridStart.setDate(firstDay.getDate() - startOffset)
-  const cells = []
+export function renderCalendar({ monthDate, events, viewMode = 'month', eventKind = 'tasks' }) {
+  const isWeekView = viewMode === 'week'
+  const gridStart = isWeekView ? getWeekStart(monthDate) : getMonthGridStart(monthDate)
+  const cellCount = isWeekView ? 7 : 42
   const todayKey = formatDate(new Date())
+  const cells = []
 
-  for (let index = 0; index < 42; index += 1) {
+  for (let index = 0; index < cellCount; index += 1) {
     const date = new Date(gridStart)
     date.setDate(gridStart.getDate() + index)
     const dateKey = formatDate(date)
-    const allDayEvents = events.filter((event) => formatDate(event.taskDate) === dateKey)
+    const allDayEvents = events.filter((event) => formatDate(event.date) === dateKey)
     const dayEvents = allDayEvents.slice(0, 3)
     const overflowCount = Math.max(0, allDayEvents.length - dayEvents.length)
-    const outside = date.getMonth() !== monthDate.getMonth()
+    const outside = !isWeekView && date.getMonth() !== monthDate.getMonth()
     const today = dateKey === todayKey
     cells.push(`
       <div class="day ${outside ? 'outside' : ''} ${today ? 'today' : ''}" data-action="open-calendar-day" data-date="${dateKey}">
-        <div class="date">${date.getDate()}</div>
+        <div class="date">${date.getDate()}${today ? '<span>今天</span>' : ''}</div>
         <div class="events">
           ${dayEvents.map(renderCalendarEvent).join('')}
-          ${overflowCount ? `<div class="event-more" title="还有 ${overflowCount} 个任务">... +${overflowCount}</div>` : ''}
+          ${overflowCount ? `<div class="event-more" title="还有 ${overflowCount} 条记录">... +${overflowCount}</div>` : ''}
         </div>
       </div>
     `)
   }
 
-  queueMicrotask(() => {
-    document.querySelector('[data-action="calendar-prev"]')?.addEventListener('click', onPrevious)
-    document.querySelector('[data-action="calendar-next"]')?.addEventListener('click', onNext)
-  })
-
   return `
     <div class="calendar-shell">
       <div class="calendar-header">
         <div class="calendar-title">
-          <strong>${monthTitle(monthDate)}</strong>
-          <span>任务日历 / Notion 风格月视图</span>
+          <strong>${isWeekView ? weekTitle(monthDate) : monthTitle(monthDate)}</strong>
+          <span>任务日历 / Notion 风格${isWeekView ? '周' : '月'}视图</span>
         </div>
         <div class="nav">
-          <button class="icon-btn" type="button" data-action="calendar-prev" aria-label="上个月">‹</button>
-          <button class="icon-btn" type="button" data-action="calendar-next" aria-label="下个月">›</button>
+          <button class="icon-btn" type="button" data-action="calendar-prev" aria-label="${isWeekView ? '上一周' : '上个月'}">‹</button>
+          <button class="small-btn today-btn" type="button" data-action="calendar-today">今天</button>
+          <button class="icon-btn" type="button" data-action="calendar-next" aria-label="${isWeekView ? '下一周' : '下个月'}">›</button>
         </div>
       </div>
       <div class="calendar-toolbar">
-        <button class="btn primary" type="button">月视图</button>
-        <button class="btn" type="button">任务</button>
-        <button class="btn" type="button">积分</button>
-        <button class="btn" type="button">奖励</button>
+        <div class="calendar-toolbar-group">
+          <button class="btn ${isWeekView ? '' : 'primary'}" type="button" data-calendar-view-mode="month">月视图</button>
+          <button class="btn ${isWeekView ? 'primary' : ''}" type="button" data-calendar-view-mode="week">周视图</button>
+        </div>
+        <div class="calendar-toolbar-group">
+          <button class="btn ${eventKind === 'tasks' ? 'primary' : ''}" type="button" data-calendar-event-kind="tasks">任务</button>
+          <button class="btn ${eventKind === 'points' ? 'primary' : ''}" type="button" data-calendar-event-kind="points">积分</button>
+          <button class="btn ${eventKind === 'rewards' ? 'primary' : ''}" type="button" data-calendar-event-kind="rewards">奖励</button>
+        </div>
       </div>
-      <div class="calendar-grid">
+      <div class="calendar-grid ${isWeekView ? 'week-view' : ''}">
         ${weekLabels.map((label) => `<div class="dow">${label}</div>`).join('')}
         ${cells.join('')}
       </div>
       <div class="legend">
-        <span><b style="background:#ff5c8a"></b> 日任务</span>
-        <span><b style="background:#6c63ff"></b> 周任务</span>
-        <span><b style="background:#34c759"></b> 月任务</span>
-        <span><b style="background:#ff9f43"></b> 奖励事件</span>
+        ${renderLegend(eventKind)}
       </div>
     </div>
   `
 }
 
 function renderCalendarEvent(event) {
-  const color = event.taskColor || event.pointColor || '#6c63ff'
-  const progress = event.status === 'APPROVED' ? `${pointIcon(event.pointType)} +${event.scoreAwarded || event.basePoints || 0}` : eventScheduleText(event)
+  const color = event.color || event.taskColor || event.pointColor || '#6c63ff'
+  const progress = event.subtitle || eventScheduleText(event)
   return `
     <button class="event" type="button"
       data-action="open-calendar-event"
-      data-task-id="${event.taskId}"
-      data-task-date="${escapeHtml(event.taskDate)}"
+      data-calendar-event-id="${escapeHtml(event.uid || '')}"
+      data-calendar-event-kind="${escapeHtml(event.kind || 'tasks')}"
+      data-task-id="${escapeHtml(event.taskId || '')}"
+      data-task-date="${escapeHtml(event.date || event.taskDate)}"
       style="--event-bg:${hexToRgba(color, 0.12)}; --event-line:${hexToRgba(color, 0.2)}; --event-ink:${color};"
-      title="${escapeHtml(event.taskName)} / ${escapeHtml(progress)}">
-      <i></i><span>${escapeHtml(event.taskName)}</span><em>${escapeHtml(progress)}</em>
+      title="${escapeHtml(event.title || event.taskName)} / ${escapeHtml(progress)}">
+      <i></i><span>${escapeHtml(event.title || event.taskName)}</span><em>${escapeHtml(progress)}</em>
     </button>
   `
+}
+
+function renderLegend(eventKind) {
+  if (eventKind === 'points') {
+    return `
+      <span><b style="background:#22c55e"></b> 积分增加</span>
+      <span><b style="background:#ef4444"></b> 积分扣减</span>
+      <span><b style="background:#f59e0b"></b> 积分流水</span>
+    `
+  }
+  if (eventKind === 'rewards') {
+    return `
+      <span><b style="background:#ff9f43"></b> 兑换申请</span>
+      <span><b style="background:#22c55e"></b> 已完成兑换</span>
+      <span><b style="background:#ef4444"></b> 已拒绝兑换</span>
+    `
+  }
+  return `
+    <span><b style="background:#ff5c8a"></b> 日任务</span>
+    <span><b style="background:#6c63ff"></b> 周任务</span>
+    <span><b style="background:#34c759"></b> 月任务</span>
+  `
+}
+
+function getMonthGridStart(monthDate) {
+  const firstDay = new Date(monthDate.getFullYear(), monthDate.getMonth(), 1)
+  const startOffset = (firstDay.getDay() + 6) % 7
+  const gridStart = new Date(firstDay)
+  gridStart.setDate(firstDay.getDate() - startOffset)
+  return gridStart
+}
+
+function getWeekStart(date) {
+  const weekStart = new Date(date)
+  const offset = (weekStart.getDay() + 6) % 7
+  weekStart.setDate(weekStart.getDate() - offset)
+  return weekStart
+}
+
+function weekTitle(date) {
+  const start = getWeekStart(date)
+  const end = new Date(start)
+  end.setDate(start.getDate() + 6)
+  return `${start.getFullYear()} 年 ${start.getMonth() + 1} 月 ${start.getDate()} 日 - ${end.getMonth() + 1} 月 ${end.getDate()} 日`
 }
 
 function eventScheduleText(event) {

@@ -31,7 +31,7 @@ public class LedgerController {
     @GetMapping("/summary")
     public ApiResponse<PointSummaryResponse> summary(@PathVariable Long childId) {
         Long userId = authService.requireUser().getId();
-        childService.requireManageAccess(childId, userId);
+        childService.requireViewAccess(childId, userId);
         PointSummaryResponse response = new PointSummaryResponse();
         response.setChildId(childId);
         response.setBalances(balanceService.listSummary(childId));
@@ -43,7 +43,7 @@ public class LedgerController {
                                                          @RequestParam(required = false) String pointType,
                                                          @RequestParam(defaultValue = "50") Integer limit) {
         Long userId = authService.requireUser().getId();
-        childService.requireManageAccess(childId, userId);
+        childService.requireViewAccess(childId, userId);
         return ApiResponse.ok(pointLedgerService.listByChild(childId, pointType, limit));
     }
 

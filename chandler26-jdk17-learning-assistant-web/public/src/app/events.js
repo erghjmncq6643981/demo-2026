@@ -28,6 +28,8 @@ export function bindAppEvents(ctx) {
     openAccountModal,
     closeAccountModal,
     setAccountModalTab,
+    openAccountSecurityEditor,
+    cancelAccountSecurityEditor,
     saveAccountProfile,
     saveAccountSecurity,
     updateAccountPasswordStrength,
@@ -119,6 +121,10 @@ elements.accountModal.addEventListener('click', (event) => {
 elements.accountModal.querySelectorAll('[data-account-tab]').forEach((button) => {
   button.addEventListener('click', () => setAccountModalTab(button.dataset.accountTab))
 })
+elements.editAccountPasswordBtn?.addEventListener('click', () => openAccountSecurityEditor('password'))
+elements.editAccountPhoneBtn?.addEventListener('click', () => openAccountSecurityEditor('phone'))
+elements.editAccountEmailBtn?.addEventListener('click', () => openAccountSecurityEditor('email'))
+elements.cancelAccountSecurityBtn?.addEventListener('click', cancelAccountSecurityEditor)
 elements.accountNewPasswordInput?.addEventListener('input', updateAccountPasswordStrength)
 elements.saveAccountProfileBtn.addEventListener('click', saveAccountProfile)
 elements.saveAccountSecurityBtn.addEventListener('click', saveAccountSecurity)

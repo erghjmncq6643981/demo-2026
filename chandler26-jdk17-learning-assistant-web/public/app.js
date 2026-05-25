@@ -272,6 +272,8 @@ bindAppEvents({
   openAccountModal: profile.openAccountModal,
   closeAccountModal: profile.closeAccountModal,
   setAccountModalTab: profile.setAccountModalTab,
+  openAccountSecurityEditor: profile.openAccountSecurityEditor,
+  cancelAccountSecurityEditor: profile.cancelAccountSecurityEditor,
   saveAccountProfile: profile.saveAccountProfile,
   saveAccountSecurity: profile.saveAccountSecurity,
   updateAccountPasswordStrength: profile.updateAccountPasswordStrength,

@@ -26,7 +26,7 @@ public class MotivationRewardExchangeService extends ServiceImpl<MotivationRewar
     private final MotivationChildService childService;
 
     public List<MotivationRewardExchange> listByChild(Long childId, Long userId, String status, int limit) {
-        childService.requireManageAccess(childId, userId);
+        childService.requireViewAccess(childId, userId);
         LambdaQueryWrapper<MotivationRewardExchange> wrapper = new LambdaQueryWrapper<MotivationRewardExchange>()
                 .eq(MotivationRewardExchange::getChildId, childId)
                 .orderByDesc(MotivationRewardExchange::getRequestedAt)

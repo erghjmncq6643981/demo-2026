@@ -221,9 +221,41 @@ public class AuthService {
         response.setId(user.getId());
         response.setUsername(user.getUsername());
         response.setNickname(user.getNickname());
-        response.setPhone(user.getPhone());
-        response.setEmail(user.getEmail());
+        response.setPhoneMasked(maskPhone(user.getPhone()));
+        response.setEmailMasked(maskEmail(user.getEmail()));
         return response;
+    }
+
+    private String maskPhone(String phone) {
+        if (!StringUtils.hasText(phone)) {
+            return "";
+        }
+        String value = phone.trim();
+        if (value.length() <= LearningConstants.Auth.PHONE_MASK_THRESHOLD) {
+            return LearningConstants.Auth.CONTACT_MASK;
+        }
+        return value.substring(LearningConstants.ZERO, LearningConstants.Auth.PHONE_MASK_PREFIX_LENGTH)
+                + LearningConstants.Auth.CONTACT_MASK
+                + value.substring(value.length() - LearningConstants.Auth.PHONE_MASK_SUFFIX_LENGTH);
+    }
+
+    private String maskEmail(String email) {
+        if (!StringUtils.hasText(email)) {
+            return "";
+        }
+        String value = email.trim();
+        int atIndex = value.indexOf('@');
+        if (atIndex <= LearningConstants.ZERO) {
+            return LearningConstants.Auth.CONTACT_MASK;
+        }
+        String name = value.substring(LearningConstants.ZERO, atIndex);
+        String domain = value.substring(atIndex);
+        if (name.length() <= LearningConstants.Auth.EMAIL_MASK_VISIBLE_PREFIX_LENGTH) {
+            return name.charAt(LearningConstants.ZERO) + LearningConstants.Auth.CONTACT_MASK + domain;
+        }
+        return name.substring(LearningConstants.ZERO, LearningConstants.Auth.EMAIL_MASK_VISIBLE_PREFIX_LENGTH)
+                + LearningConstants.Auth.CONTACT_MASK
+                + domain;
     }
 
     private String normalizePhone(String phone) {

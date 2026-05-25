@@ -31,4 +31,14 @@ public class MotivationFamilyMemberService extends ServiceImpl<MotivationFamilyM
                 .eq(MotivationFamilyMember::getStatus, MotivationConstants.ChildStatus.ACTIVE)
                 .eq(MotivationFamilyMember::getCanManage, 1)) > 0;
     }
+
+    public boolean canView(Long childId, Long userId) {
+        if (childId == null || userId == null) {
+            return false;
+        }
+        return count(new LambdaQueryWrapper<MotivationFamilyMember>()
+                .eq(MotivationFamilyMember::getChildId, childId)
+                .eq(MotivationFamilyMember::getUserId, userId)
+                .eq(MotivationFamilyMember::getStatus, MotivationConstants.ChildStatus.ACTIVE)) > 0;
+    }
 }

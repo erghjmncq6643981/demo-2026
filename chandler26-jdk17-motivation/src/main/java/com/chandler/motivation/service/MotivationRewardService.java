@@ -80,7 +80,7 @@ public class MotivationRewardService extends ServiceImpl<MotivationRewardMapper,
     }
 
     public List<MotivationReward> listByChild(Long childId, Long userId) {
-        childService.requireManageAccess(childId, userId);
+        childService.requireViewAccess(childId, userId);
         return list(new LambdaQueryWrapper<MotivationReward>()
                 .eq(MotivationReward::getChildId, childId)
                 .eq(MotivationReward::getDeleted, 0)
@@ -107,7 +107,7 @@ public class MotivationRewardService extends ServiceImpl<MotivationRewardMapper,
         if (reward == null || Integer.valueOf(1).equals(reward.getDeleted())) {
             throw new MotivationException("REWARD_NOT_FOUND", "奖励不存在");
         }
-        childService.requireManageAccess(reward.getChildId(), userId);
+        childService.requireViewAccess(reward.getChildId(), userId);
         if (!MotivationConstants.RewardStatus.ACTIVE.equals(reward.getStatus())) {
             throw new MotivationException("REWARD_NOT_ACTIVE", "奖励未启用");
         }

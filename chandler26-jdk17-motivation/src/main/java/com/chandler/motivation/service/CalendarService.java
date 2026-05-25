@@ -37,7 +37,7 @@ public class CalendarService {
     }
 
     public List<CalendarEventResponse> rangeView(Long childId, LocalDate startDate, LocalDate endDate, Long userId) {
-        childService.requireManageAccess(childId, userId);
+        childService.requireViewAccess(childId, userId);
         LocalDate resolvedStart = startDate == null ? LocalDate.now().withDayOfMonth(1) : startDate;
         LocalDate resolvedEnd = endDate == null ? YearMonth.from(resolvedStart).atEndOfMonth() : endDate;
         List<MotivationTask> tasks = taskService.listByChild(childId, userId).stream()

@@ -11,7 +11,7 @@ public class UserProfileResponse {
 
     private String nickname;
 
-    private String phone;
+    private String phoneMasked;
 
-    private String email;
+    private String emailMasked;
 }

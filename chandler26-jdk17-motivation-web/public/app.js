@@ -10,8 +10,11 @@ const state = {
   todayKey: formatDate(new Date()),
   selectedChildId: demoState.children[0]?.id || null,
   selectedChild: demoState.children[0] || null,
-  currentView: 'tasks',
-  profileSubView: 'children',
+  currentView: 'profile',
+  profileSubView: 'home',
+  calendarViewMode: 'month',
+  calendarEventKind: 'tasks',
+  shouldFocusToday: false,
   taskModalOpen: false,
   rewardModalOpen: false,
   childModalOpen: false,
@@ -20,7 +23,7 @@ const state = {
   calendarDayModalOpen: false,
   calendarEventModalOpen: false,
   selectedCalendarDateKey: '',
-  selectedCalendarEventTaskId: '',
+  selectedCalendarEventId: '',
   confirmDialog: null,
   editingTask: null,
   editingReward: null,
@@ -55,16 +58,38 @@ state.calendarEvents = buildDemoCalendar(state.tasks, state.monthDate)
 
 const actions = {
   setView(view) {
-    state.currentView = view
+    state.currentView = normalizeViewForRole(view)
     render()
   },
   previousMonth() {
-    state.monthDate = new Date(state.monthDate.getFullYear(), state.monthDate.getMonth() - 1, 1)
+    if (state.calendarViewMode === 'week') {
+      state.monthDate = addDays(state.monthDate, -7)
+    } else {
+      state.monthDate = new Date(state.monthDate.getFullYear(), state.monthDate.getMonth() - 1, 1)
+    }
     void loadCalendar()
   },
   nextMonth() {
-    state.monthDate = new Date(state.monthDate.getFullYear(), state.monthDate.getMonth() + 1, 1)
+    if (state.calendarViewMode === 'week') {
+      state.monthDate = addDays(state.monthDate, 7)
+    } else {
+      state.monthDate = new Date(state.monthDate.getFullYear(), state.monthDate.getMonth() + 1, 1)
+    }
     void loadCalendar()
+  },
+  goToToday() {
+    state.todayKey = formatDate(new Date())
+    state.monthDate = new Date()
+    state.shouldFocusToday = true
+    void loadCalendar()
+  },
+  setCalendarViewMode(viewMode) {
+    state.calendarViewMode = viewMode === 'week' ? 'week' : 'month'
+    render()
+  },
+  setCalendarEventKind(eventKind) {
+    state.calendarEventKind = ['tasks', 'points', 'rewards'].includes(eventKind) ? eventKind : 'tasks'
+    render()
   },
 }
 
@@ -73,23 +98,33 @@ const app = document.querySelector('#app')
 function render() {
   app.innerHTML = renderApp(state, actions)
   bindEvents()
+  focusTodayAfterRender()
 }
 
 function bindEvents() {
   document.querySelector('[data-form="auth"]')?.addEventListener('submit', handleAuthSubmit)
+  document.querySelector('[data-action="calendar-prev"]')?.addEventListener('click', actions.previousMonth)
+  document.querySelector('[data-action="calendar-next"]')?.addEventListener('click', actions.nextMonth)
+  document.querySelector('[data-action="calendar-today"]')?.addEventListener('click', actions.goToToday)
+  document.querySelectorAll('[data-calendar-view-mode]').forEach((button) => {
+    button.addEventListener('click', () => actions.setCalendarViewMode(button.dataset.calendarViewMode))
+  })
+  document.querySelectorAll('[data-calendar-event-kind]').forEach((button) => {
+    button.addEventListener('click', () => actions.setCalendarEventKind(button.dataset.calendarEventKind))
+  })
   document.querySelectorAll('[data-nav-view]').forEach((button) => {
     button.addEventListener('click', () => {
-      state.currentView = button.dataset.navView || 'tasks'
+      state.currentView = normalizeViewForRole(button.dataset.navView || 'profile')
       render()
     })
   })
   document.querySelectorAll('[data-profile-subview]').forEach((button) => {
     button.addEventListener('click', () => {
-      state.profileSubView = button.dataset.profileSubview || 'children'
+      state.profileSubView = normalizeProfileSubViewForRole(button.dataset.profileSubview || 'home')
       render()
     })
   })
-  document.querySelector('[data-action="refresh"]')?.addEventListener('click', () => loadInitialData(true))
+  document.querySelector('[data-action="logout"]')?.addEventListener('click', logout)
   document.querySelector('[data-action="open-adjust-modal"]')?.addEventListener('click', openPointAdjustModal)
   document.querySelectorAll('[data-action="close-adjust-modal"]').forEach((button) => {
     button.addEventListener('click', closePointAdjustModal)
@@ -167,7 +202,7 @@ function bindEvents() {
   document.querySelectorAll('[data-action="open-calendar-event"]').forEach((button) => {
     button.addEventListener('click', (event) => {
       event.stopPropagation()
-      openCalendarEventModal(button.dataset.taskId, button.dataset.taskDate)
+      openCalendarEventModal(button.dataset.calendarEventId || button.dataset.taskId, button.dataset.taskDate)
     })
   })
   document.querySelectorAll('[data-action="close-calendar-day-modal"]').forEach((button) => {
@@ -212,27 +247,11 @@ function bindTaskModalControls() {
   form.pointColor?.addEventListener('input', syncPreview)
   form.basePoints?.addEventListener('input', syncPreview)
   form.querySelectorAll('[name="dailyHours"]').forEach((input) => {
-    input.addEventListener('change', () => syncDailyHourRange(form, input))
+    input.addEventListener('change', () => syncDailyHiddenHours(form))
   })
+  form.taskColor?.addEventListener('input', () => syncTaskColor(form))
   syncPreview()
-  syncDailyHiddenHours(form)
-}
-
-function syncDailyHourRange(form, changedInput) {
-  const picker = changedInput.closest('[data-daily-hour-picker]')
-  if (!picker) return
-  const hours = Array.from(picker.querySelectorAll('[name="dailyHours"]:not(:disabled)'))
-  const selected = hours.filter((input) => input.checked).map((input) => Number(input.value))
-  if (!selected.length) {
-    changedInput.checked = true
-    selected.push(Number(changedInput.value))
-  }
-  const startHour = Math.min(...selected)
-  const endHour = Math.max(...selected)
-  hours.forEach((input) => {
-    const hour = Number(input.value)
-    input.checked = hour >= startHour && hour <= endHour
-  })
+  syncTaskColor(form)
   syncDailyHiddenHours(form)
 }
 
@@ -242,6 +261,13 @@ function syncDailyHiddenHours(form) {
   const endHour = selected.length ? Math.max(...selected) : 22
   if (form.startHour) form.startHour.value = String(startHour)
   if (form.endHour) form.endHour.value = String(endHour)
+}
+
+function syncTaskColor(form) {
+  const taskColor = String(form.taskColor?.value || '#30d5ff')
+  form.querySelectorAll('[data-task-color-surface]').forEach((surface) => {
+    surface.style.setProperty('--task-color', taskColor)
+  })
 }
 
 function bindFilterActions() {
@@ -319,10 +345,12 @@ async function handleAuthSubmit(event) {
     setToken(response.token)
     state.user = response.user
     state.offline = false
-    state.currentView = 'tasks'
+    applyRoleLanding()
     state.connectionMessage = '已登录真实后端'
     toast(mode === 'register' ? '注册成功' : '登录成功')
-    await ensureStarterData()
+    if (!isChildUser()) {
+      await ensureStarterData()
+    }
     await loadInitialData(false)
   } catch (error) {
     toast(error.message)
@@ -346,7 +374,8 @@ async function loadInitialData(showToast = false, options = {}) {
     }
     state.user = user
     state.offline = false
-    state.currentView = state.currentView || 'tasks'
+    state.currentView = normalizeViewForRole(state.currentView || 'profile')
+    state.profileSubView = normalizeProfileSubViewForRole(state.profileSubView || 'home')
     state.connectionMessage = '已连接后端 1.0 API'
     const children = await api.children()
     state.children = children
@@ -356,6 +385,11 @@ async function loadInitialData(showToast = false, options = {}) {
       resetChildScopedData()
       if (options.skipStarterData) {
         if (showToast) toast('已刷新')
+        render()
+        return
+      }
+      if (isChildUser()) {
+        if (showToast) toast('当前孩子账号还没有绑定孩子档案')
         render()
         return
       }
@@ -414,6 +448,7 @@ async function selectChild(childId) {
 }
 
 async function loadCalendar() {
+  state.todayKey = formatDate(new Date())
   if (state.offline || !state.selectedChildId) {
     state.calendarEvents = buildDemoCalendar(state.tasks, state.monthDate)
     render()
@@ -526,7 +561,7 @@ async function handleCompleteTask(taskId, taskDate = state.todayKey) {
     await api.completeTask(taskId, { taskDate, completionProgress: 100 })
     await Promise.all([loadCoreData(), loadCalendar()])
     state.selectedCalendarDateKey = taskDate
-    state.selectedCalendarEventTaskId = taskId
+    state.selectedCalendarEventId = calendarTaskEventId(taskId, taskDate)
     toast(taskMeta.requireApproval ? '已提交审核' : '完成并入账')
   } catch (error) {
     toast(error.message)
@@ -719,26 +754,61 @@ function closeRewardModal() {
   render()
 }
 
+function logout() {
+  setToken('')
+  state.user = null
+  state.currentView = 'profile'
+  state.profileSubView = 'home'
+  state.connectionMessage = '已登出，请重新登录'
+  state.toast = ''
+  render()
+}
+
+function isChildUser() {
+  return String(state.user?.userType || '').toUpperCase() === 'CHILD'
+}
+
+function isManagementUser() {
+  const userType = String(state.user?.userType || '').toUpperCase()
+  return userType === 'PARENT' || userType === 'GUARDIAN'
+}
+
+function normalizeViewForRole(view) {
+  return ['profile', 'calendar', 'store'].includes(view) ? view : 'profile'
+}
+
+function normalizeProfileSubViewForRole(subView) {
+  if (!isManagementUser()) {
+    return 'home'
+  }
+  return ['home', 'children', 'goals', 'tasks', 'rewards'].includes(subView) ? subView : 'home'
+}
+
+function applyRoleLanding() {
+  state.currentView = isChildUser() ? 'calendar' : 'profile'
+  state.profileSubView = 'home'
+}
+
 function openCalendarDayModal(dateKey) {
   if (!dateKey) return
   state.selectedCalendarDateKey = dateKey
   state.calendarDayModalOpen = true
   state.calendarEventModalOpen = false
-  state.selectedCalendarEventTaskId = ''
+  state.selectedCalendarEventId = ''
   render()
 }
 
 function closeCalendarDayModal() {
   state.calendarDayModalOpen = false
   state.selectedCalendarDateKey = ''
-  state.selectedCalendarEventTaskId = ''
+  state.selectedCalendarEventId = ''
   render()
 }
 
-function openCalendarEventModal(taskId, dateKey) {
-  if (!taskId || !dateKey) return
+function openCalendarEventModal(eventId, dateKey) {
+  if (!eventId || !dateKey) return
   state.selectedCalendarDateKey = dateKey
-  state.selectedCalendarEventTaskId = taskId
+  state.selectedCalendarEventId = eventId
   state.calendarDayModalOpen = true
   state.calendarEventModalOpen = true
   render()
@@ -746,7 +816,7 @@ function openCalendarEventModal(taskId, dateKey) {
 
 function closeCalendarEventModal() {
   state.calendarEventModalOpen = false
-  state.selectedCalendarEventTaskId = ''
+  state.selectedCalendarEventId = ''
   render()
 }
 
@@ -798,6 +868,7 @@ async function handleCreateTaskSubmit(event) {
     category,
     startHour,
     endHour,
+    dailyHours,
     weeklyDays,
     monthDays,
     weeklyRequiredCount,
@@ -830,12 +901,8 @@ async function handleCreateTaskSubmit(event) {
     toast('请选择每月执行的日期')
     return
   }
-  if (periodType === 'DAILY' && startHour > endHour) {
-    toast('开始时间不能晚于结束时间')
-    return
-  }
   if (periodType === 'DAILY' && (!dailyHours.length || startHour < 6 || endHour > 22)) {
-    toast('每日时间段请选择 06:00 到 22:00 之间的方块')
+    toast('每日时间请选择 06:00 到 22:00 之间的方块')
     return
   }
   if (periodType === 'WEEKLY' && weeklyRequiredCount > weeklyDays.length) {
@@ -1059,6 +1126,7 @@ function buildTaskScheduleJson(options) {
   if (options.periodType === 'DAILY') {
     return JSON.stringify({
       ...base,
+      hours: options.dailyHours,
       timeRange: {
         startHour: options.startHour,
         endHour: options.endHour,
@@ -1182,7 +1250,29 @@ function resetChildScopedData() {
   state.calendarDayModalOpen = false
   state.calendarEventModalOpen = false
   state.selectedCalendarDateKey = ''
-  state.selectedCalendarEventTaskId = ''
+  state.selectedCalendarEventId = ''
+}
+
+function addDays(date, days) {
+  const next = new Date(date)
+  next.setDate(next.getDate() + days)
+  return next
+}
+
+function calendarTaskEventId(taskId, dateKey) {
+  return `task-${taskId}-${dateKey}`
+}
+
+function focusTodayAfterRender() {
+  if (!state.shouldFocusToday) return
+  state.shouldFocusToday = false
+  requestAnimationFrame(() => {
+    document.querySelector(`[data-date="${state.todayKey}"]`)?.scrollIntoView({
+      block: 'center',
+      inline: 'center',
+      behavior: 'smooth',
+    })
+  })
 }
 
 function upsertBalance(balances, pointType, amount) {

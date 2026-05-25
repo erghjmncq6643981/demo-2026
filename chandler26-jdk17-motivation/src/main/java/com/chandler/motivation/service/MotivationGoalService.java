@@ -48,7 +48,7 @@ public class MotivationGoalService extends ServiceImpl<MotivationGoalMapper, Mot
     }
 
     public List<MotivationGoal> listByChild(Long childId, Long userId) {
-        childService.requireManageAccess(childId, userId);
+        childService.requireViewAccess(childId, userId);
         return list(new LambdaQueryWrapper<MotivationGoal>()
                 .eq(MotivationGoal::getChildId, childId)
                 .eq(MotivationGoal::getDeleted, 0)

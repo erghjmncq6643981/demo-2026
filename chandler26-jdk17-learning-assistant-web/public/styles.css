@@ -2039,6 +2039,108 @@ input[type="range"] {
   display: block;
 }
 
+.account-security-list {
+  display: grid;
+  gap: 10px;
+}
+
+.account-security-row {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 38px;
+  align-items: center;
+  gap: 12px;
+  min-height: 64px;
+  padding: 12px 14px;
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  background: rgba(15, 23, 42, 0.42);
+}
+
+.account-security-row.active {
+  border-color: rgba(129, 140, 248, 0.58);
+  background: rgba(129, 140, 248, 0.12);
+}
+
+.account-security-row-copy {
+  display: grid;
+  gap: 5px;
+  min-width: 0;
+}
+
+.account-security-row-copy strong {
+  color: var(--text);
+  font-size: 14px;
+}
+
+.account-security-row-value {
+  min-width: 0;
+  overflow: hidden;
+  color: var(--muted);
+  font-size: 13px;
+  font-weight: 800;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.account-security-row-value-muted {
+  color: rgba(148, 163, 184, 0.78);
+}
+
+.account-security-editor {
+  margin-top: 14px;
+  padding: 14px;
+  border: 1px solid rgba(129, 140, 248, 0.32);
+  border-radius: 12px;
+  background: rgba(15, 23, 42, 0.5);
+}
+
+.account-security-editor.hidden {
+  display: none;
+}
+
+.security-editor-head {
+  display: flex;
+  align-items: start;
+  justify-content: space-between;
+  gap: 14px;
+  margin-bottom: 12px;
+}
+
+.security-editor-head h4 {
+  margin: 2px 0 0;
+  font-size: 18px;
+}
+
+.security-editor-head .panel-description {
+  max-width: 380px;
+  margin: 0;
+  text-align: right;
+}
+
+.account-security-editor-panel {
+  display: none;
+}
+
+.account-security-editor-panel.active {
+  display: block;
+}
+
+.account-security-single-grid {
+  grid-template-columns: minmax(0, 1fr);
+}
+
+.account-security-single-field {
+  max-width: 460px;
+}
+
+.account-security-password-grid {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
+.account-security-password-grid label:last-child {
+  grid-column: 1 / -1;
+}
+
 .account-password-field {
   align-content: start;
 }
@@ -2465,6 +2567,31 @@ input[type="range"] {
   .account-tab {
     min-width: 112px;
     flex: 0 0 auto;
+  }
+
+  .account-security-row {
+    grid-template-columns: minmax(0, 1fr) 32px;
+    min-height: 58px;
+    padding: 10px 11px;
+  }
+
+  .security-editor-head {
+    display: grid;
+    gap: 8px;
+  }
+
+  .security-editor-head .panel-description {
+    max-width: none;
+    text-align: left;
+  }
+
+  .account-security-password-grid,
+  .account-security-single-grid {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .account-security-single-field {
+    max-width: none;
   }
 
   .compact-field,

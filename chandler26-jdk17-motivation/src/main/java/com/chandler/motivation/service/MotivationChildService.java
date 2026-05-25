@@ -88,4 +88,10 @@ public class MotivationChildService extends ServiceImpl<MotivationChildMapper, M
             throw new MotivationException("CHILD_ACCESS_DENIED", "无权管理该孩子档案");
         }
     }
+
+    public void requireViewAccess(Long childId, Long userId) {
+        if (!familyMemberService.canView(childId, userId)) {
+            throw new MotivationException("CHILD_ACCESS_DENIED", "无权查看该孩子档案");
+        }
+    }
 }
