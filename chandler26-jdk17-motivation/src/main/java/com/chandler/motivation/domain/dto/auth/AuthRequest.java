@@ -16,4 +16,10 @@ public class AuthRequest {
 
     @Size(max = 64, message = "昵称不能超过 64 个字符")
     private String nickname;
+
+    @Size(max = 32, message = "手机号码不能超过 32 个字符")
+    private String phoneNumber;
+
+    @Size(max = 64, message = "邀请码不能超过 64 个字符")
+    private String invitationCode;
 }

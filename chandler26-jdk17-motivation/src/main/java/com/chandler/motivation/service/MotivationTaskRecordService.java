@@ -60,6 +60,21 @@ public class MotivationTaskRecordService extends ServiceImpl<MotivationTaskRecor
     }
 
     @Transactional
+    public void deleteByTask(Long taskId, Long userId) {
+        List<MotivationTaskRecord> records = list(new LambdaQueryWrapper<MotivationTaskRecord>()
+                .eq(MotivationTaskRecord::getTaskId, taskId)
+                .eq(MotivationTaskRecord::getDeleted, 0));
+        if (records.isEmpty()) {
+            return;
+        }
+        records.forEach((record) -> record.setDeleted(1));
+        updateBatchById(records);
+        MotivationTaskRecord first = records.get(0);
+        systemLogService.record(userId, first.getChildId(), MotivationConstants.LogType.TASK,
+                "清理任务记录", "删除任务后清理了 " + records.size() + " 条日历记录");
+    }
+
+    @Transactional
     public MotivationTaskRecord complete(Long taskId, TaskCompleteRequest request, Long userId) {
         MotivationTask task = taskService.requireActiveTask(taskId, userId);
         LocalDate taskDate = request != null && request.getTaskDate() != null ? request.getTaskDate() : LocalDate.now();

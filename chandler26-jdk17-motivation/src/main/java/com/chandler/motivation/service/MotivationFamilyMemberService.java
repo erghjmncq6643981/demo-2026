@@ -21,6 +21,25 @@ public class MotivationFamilyMemberService extends ServiceImpl<MotivationFamilyM
         save(member);
     }
 
+    public void createChildMember(Long childId, Long userId) {
+        MotivationFamilyMember existing = getOne(new LambdaQueryWrapper<MotivationFamilyMember>()
+                .eq(MotivationFamilyMember::getChildId, childId)
+                .eq(MotivationFamilyMember::getUserId, userId)
+                .last("limit 1"));
+        MotivationFamilyMember member = existing == null ? new MotivationFamilyMember() : existing;
+        member.setChildId(childId);
+        member.setUserId(userId);
+        member.setRelationRole(MotivationConstants.FamilyRole.CHILD);
+        member.setIsPrimary(0);
+        member.setCanManage(0);
+        member.setStatus(MotivationConstants.ChildStatus.ACTIVE);
+        if (member.getId() == null) {
+            save(member);
+        } else {
+            updateById(member);
+        }
+    }
+
     public boolean canManage(Long childId, Long userId) {
         if (childId == null || userId == null) {
             return false;

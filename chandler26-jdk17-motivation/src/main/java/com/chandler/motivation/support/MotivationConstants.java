@@ -117,6 +117,8 @@ public final class MotivationConstants {
         public static final String TASK_RECORD = "TASK_RECORD";
         public static final String MANUAL_ADJUST = "MANUAL_ADJUST";
         public static final String REWARD_EXCHANGE = "REWARD_EXCHANGE";
+        public static final String REWARD_EXCHANGE_CHANGE = "REWARD_EXCHANGE_CHANGE";
+        public static final String REWARD_EXCHANGE_REFUND = "REWARD_EXCHANGE_REFUND";
         public static final String POINT_EXCHANGE = "POINT_EXCHANGE";
         public static final String SYSTEM = "SYSTEM";
 

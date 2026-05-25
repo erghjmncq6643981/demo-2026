@@ -39,6 +39,12 @@ public class AuthService {
         if (!StringUtils.hasText(username)) {
             throw new MotivationException("USERNAME_REQUIRED", "用户名不能为空");
         }
+        if (!StringUtils.hasText(request.getPhoneNumber())) {
+            throw new MotivationException("PHONE_REQUIRED", "手机号码不能为空");
+        }
+        if (!StringUtils.hasText(request.getInvitationCode())) {
+            throw new MotivationException("INVITATION_CODE_REQUIRED", "邀请码不能为空");
+        }
         if (findByUsername(username) != null) {
             throw new MotivationException("USER_ALREADY_EXISTS", "用户名已存在: " + username);
         }
@@ -52,6 +58,29 @@ public class AuthService {
         userMapper.insert(user);
         log.info("家长用户「{}」完成注册", user.getNickname());
         return createLoginResponse(user);
+    }
+
+    public MotivationUser createChildAccount(String username, String password, String nickname) {
+        String normalizedUsername = normalizeUsername(username);
+        if (!StringUtils.hasText(normalizedUsername)) {
+            throw new MotivationException("CHILD_USERNAME_REQUIRED", "孩子账号不能为空");
+        }
+        if (!StringUtils.hasText(password) || password.length() < 6 || password.length() > 64) {
+            throw new MotivationException("CHILD_PASSWORD_INVALID", "孩子密码长度必须在 6 到 64 个字符之间");
+        }
+        if (findByUsername(normalizedUsername) != null) {
+            throw new MotivationException("USER_ALREADY_EXISTS", "用户名已存在: " + normalizedUsername);
+        }
+        MotivationUser user = new MotivationUser();
+        user.setUsername(normalizedUsername);
+        user.setNickname(StringUtils.hasText(nickname) ? nickname.trim() : normalizedUsername);
+        user.setPasswordHash(hashPassword(password));
+        user.setUserType("CHILD");
+        user.setEnabled(1);
+        user.setDeleted(0);
+        userMapper.insert(user);
+        log.info("孩子用户「{}」创建成功", user.getNickname());
+        return user;
     }
 
     public AuthResponse login(AuthRequest request) {

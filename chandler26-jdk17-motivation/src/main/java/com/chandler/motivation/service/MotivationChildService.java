@@ -4,6 +4,7 @@ import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import com.baomidou.mybatisplus.extension.service.impl.ServiceImpl;
 import com.chandler.motivation.common.exception.MotivationException;
 import com.chandler.motivation.domain.dataobject.MotivationChild;
+import com.chandler.motivation.domain.dataobject.MotivationUser;
 import com.chandler.motivation.domain.dto.child.ChildSaveRequest;
 import com.chandler.motivation.domain.mapper.MotivationChildMapper;
 import com.chandler.motivation.support.MotivationConstants;
@@ -19,6 +20,7 @@ public class MotivationChildService extends ServiceImpl<MotivationChildMapper, M
 
     private final MotivationFamilyMemberService familyMemberService;
     private final MotivationSystemLogService systemLogService;
+    private final AuthService authService;
 
     @Transactional
     public MotivationChild create(ChildSaveRequest request, Long userId) {
@@ -36,6 +38,7 @@ public class MotivationChildService extends ServiceImpl<MotivationChildMapper, M
         child.setCreatedByUserId(userId);
         save(child);
         familyMemberService.createPrimaryParent(child.getId(), userId);
+        createChildAccountIfNeeded(child, request);
         systemLogService.record(userId, child.getId(), MotivationConstants.LogType.SYSTEM,
                 "创建孩子档案", "为孩子「" + child.getNickname() + "」创建激励档案");
         return child;
@@ -65,6 +68,7 @@ public class MotivationChildService extends ServiceImpl<MotivationChildMapper, M
         child.setGender(StringUtils.hasText(request.getGender()) ? request.getGender() : "UNKNOWN");
         child.setRemark(request.getRemark());
         updateById(child);
+        createChildAccountIfNeeded(child, request);
         systemLogService.record(userId, child.getId(), MotivationConstants.LogType.SYSTEM,
                 "修改孩子档案", "修改孩子「" + child.getNickname() + "」的档案");
         return child;
@@ -93,5 +97,22 @@ public class MotivationChildService extends ServiceImpl<MotivationChildMapper, M
         if (!familyMemberService.canView(childId, userId)) {
             throw new MotivationException("CHILD_ACCESS_DENIED", "无权查看该孩子档案");
         }
+    }
+
+    private void createChildAccountIfNeeded(MotivationChild child, ChildSaveRequest request) {
+        if (!Boolean.TRUE.equals(request.getCreateChildAccount())) {
+            return;
+        }
+        if (!StringUtils.hasText(request.getChildUsername())) {
+            throw new MotivationException("CHILD_USERNAME_REQUIRED", "请填写孩子账号");
+        }
+        if (!StringUtils.hasText(request.getChildPassword())) {
+            throw new MotivationException("CHILD_PASSWORD_REQUIRED", "请填写孩子密码");
+        }
+        MotivationUser childUser = authService.createChildAccount(
+                request.getChildUsername(),
+                request.getChildPassword(),
+                child.getNickname());
+        familyMemberService.createChildMember(child.getId(), childUser.getId());
     }
 }

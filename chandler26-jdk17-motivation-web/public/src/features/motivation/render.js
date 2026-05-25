@@ -74,6 +74,7 @@ export function renderApp(state, actions) {
   if (!state.user) {
     return `
       ${renderLoginPage(state)}
+      ${renderRegisterModal(state)}
       ${renderToast(state.toast)}
     `
   }
@@ -92,6 +93,7 @@ export function renderApp(state, actions) {
     ${renderGoalModal(state)}
     ${renderTaskModal(state)}
     ${renderRewardModal(state)}
+    ${renderRewardExchangeModal(state)}
     ${renderPointCurrencyModal(state)}
     ${renderPointAdjustModal(state)}
     ${renderBalanceModal(state)}
@@ -101,6 +103,7 @@ export function renderApp(state, actions) {
 }
 
 function renderLoginPage(state) {
+  const activeIndex = Number(state.loginCarouselIndex || 0)
   return `
     <main class="login-page">
       <section class="login-showcase" aria-label="系统能力概览">
@@ -110,8 +113,17 @@ function renderLoginPage(state) {
           </h1>
           <p>把每日努力变成看得见的积分、日历和奖励。</p>
         </div>
-        <div class="login-showcase-grid" data-login-carousel aria-label="核心功能预览">
-          ${renderLoginCarouselSlides()}
+        <div class="login-carousel" data-login-carousel aria-label="核心功能预览">
+          <button class="carousel-arrow left" type="button" data-action="login-carousel-prev" aria-label="上一张">‹</button>
+          <div class="login-showcase-grid" style="--carousel-index:${activeIndex}">
+            ${renderLoginCarouselSlides(activeIndex)}
+          </div>
+          <button class="carousel-arrow right" type="button" data-action="login-carousel-next" aria-label="下一张">›</button>
+          <div class="carousel-dots">
+            ${[0, 1, 2].map((index) => `
+              <button class="${activeIndex === index ? 'active' : ''}" type="button" data-login-carousel-nav="${index}" aria-label="第 ${index + 1} 张"></button>
+            `).join('')}
+          </div>
         </div>
       </section>
       <section class="login-panel" aria-label="账号登录">
@@ -134,7 +146,7 @@ function renderLoginPage(state) {
           </label>
           <div class="login-actions">
             <button class="btn primary" type="submit" data-auth-mode="login">登录</button>
-            <button class="btn" type="submit" data-auth-mode="register">注册</button>
+            <button class="btn" type="button" data-action="open-register-modal">注册</button>
           </div>
         </form>
       </section>
@@ -143,14 +155,14 @@ function renderLoginPage(state) {
 }
 
 function renderLoginCarouselSlides() {
-  const slides = ['store', 'task', 'calendar', 'store', 'task']
-  return slides.map((type, index) => renderLoginShot(type, index === 0 || index === slides.length - 1)).join('')
+  const slides = ['store', 'task', 'calendar']
+  return slides.map((type) => renderLoginShot(type)).join('')
 }
 
-function renderLoginShot(type, duplicate = false) {
+function renderLoginShot(type) {
   if (type === 'task') {
     return `
-      <article class="login-shot task-shot" ${duplicate ? 'aria-hidden="true"' : ''}>
+      <article class="login-shot task-shot">
         <div class="shot-bar"><span></span><b>任务管理</b></div>
         <div class="shot-list">
           <div><i style="--task-color:#ff5c8a"></i><strong>晨读</strong><span>★★★</span></div>
@@ -162,7 +174,7 @@ function renderLoginShot(type, duplicate = false) {
   }
   if (type === 'calendar') {
     return `
-      <article class="login-shot calendar-shot" ${duplicate ? 'aria-hidden="true"' : ''}>
+      <article class="login-shot calendar-shot">
         <div class="shot-bar"><span></span><b>任务日历</b></div>
         <div class="shot-calendar">
           ${Array.from({ length: 21 }, (_, index) => `<span class="${[2, 4, 8, 13, 18].includes(index) ? 'active' : ''}">${index + 1}</span>`).join('')}
@@ -171,13 +183,37 @@ function renderLoginShot(type, duplicate = false) {
     `
   }
   return `
-    <article class="login-shot store-shot" ${duplicate ? 'aria-hidden="true"' : ''}>
+    <article class="login-shot store-shot">
       <div class="shot-bar"><span></span><b>奖励商店</b></div>
       <div class="shot-rewards">
         <div><em>🎁</em><strong>积木礼物</strong><small>80 ★</small></div>
         <div><em>🍦</em><strong>冰淇淋</strong><small>40 ✿</small></div>
       </div>
     </article>
+  `
+}
+
+function renderRegisterModal(state) {
+  if (!state.registerModalOpen) return ''
+  return `
+    <div class="modal-backdrop">
+      <section class="modal narrow register-modal">
+        <div class="modal-head">
+          <div><h2>注册账号</h2><p>创建家长账号后开始配置孩子档案。</p></div>
+          <button class="icon-btn" type="button" data-action="close-register-modal">×</button>
+        </div>
+        <form class="modal-form" data-form="register">
+          <label><span>账号</span><input name="username" autocomplete="username" placeholder="请输入账号" required /></label>
+          <label><span>密码</span><input name="password" type="password" autocomplete="new-password" placeholder="至少 6 位" required /></label>
+          <label><span>手机号码</span><input name="phoneNumber" inputmode="tel" placeholder="请输入手机号码" required /></label>
+          <label><span>邀请码</span><input name="invitationCode" placeholder="请输入邀请码" required /></label>
+          <div class="modal-actions wide">
+            <button class="btn" type="button" data-action="close-register-modal">取消</button>
+            <button class="btn primary" type="submit">注册</button>
+          </div>
+        </form>
+      </section>
+    </div>
   `
 }
 
@@ -189,7 +225,7 @@ function renderSidebar(state) {
       <div class="sidebar-brand">
         <div class="brand-mark">★</div>
         <div>
-          <strong>宝贝激励助手</strong>
+          <strong class="rainbow-title brand-title">${Array.from('宝贝激励助手').map((char) => `<span>${char}</span>`).join('')}</strong>
           <span>${escapeHtml(state.selectedChild?.nickname || '未选择孩子')}</span>
         </div>
       </div>
@@ -842,6 +878,7 @@ function renderCalendarDaySummary(kind, events) {
 function renderStoreView(state) {
   return `
     <section class="panel panel-pad">
+      ${state.rewardExchangeSuccess ? renderRewardCheer(state.rewardExchangeSuccess) : ''}
       <div class="reward-grid">
         ${state.rewards.map((reward) => `
           <article class="reward-card">
@@ -850,13 +887,37 @@ function renderStoreView(state) {
               <h3>${escapeHtml(reward.name)}</h3>
               <p>${escapeHtml(reward.description || '家庭奖励')}</p>
             </div>
-            <button class="btn primary" type="button" data-action="exchange-reward" data-reward-id="${reward.id}">
+            <div class="reward-card-price">
+              ${renderRewardPriceSummary(reward, state)}
+            </div>
+            <button class="btn primary" type="button" data-action="exchange-reward" data-reward-id="${reward.id}" data-no-card-click="true">
               ${reward.requiredPoints} ${pointIcon(reward.requiredPointType)}
             </button>
           </article>
         `).join('') || '<div class="empty">暂无奖励</div>'}
       </div>
     </section>
+  `
+}
+
+function renderRewardPriceSummary(reward, state) {
+  const currencies = getPointCurrencies(state)
+  const meta = currencyMeta(reward.requiredPointType || 'STAR', currencies)
+  return `
+    <span style="--point-color:${escapeHtml(meta.color)}">${escapeHtml(meta.icon)}</span>
+    <strong>${escapeHtml(reward.requiredPoints || 1)}</strong>
+  `
+}
+
+function renderRewardCheer(success) {
+  return `
+    <div class="reward-cheer" style="--reward-color:${escapeHtml(success.rewardColor || '#ff9f43')}">
+      <div class="cheer-burst">
+        ${Array.from({ length: 10 }, (_, index) => `<span style="--i:${index}">${escapeHtml(success.rewardIcon || '🎁')}</span>`).join('')}
+      </div>
+      <strong>兑换成功</strong>
+      <p>获得一个${escapeHtml(success.rewardName || '奖励')}奖励的兑换券</p>
+    </div>
   `
 }
 
@@ -1307,6 +1368,17 @@ function renderFullScoreIcons(pointType, count) {
     || '<span class="empty compact-empty">暂无积分</span>'
 }
 
+function renderLimitedPointIcons(icon, count, color, limit = 9) {
+  const safeCount = Math.max(0, Number(count || 0))
+  const visibleCount = Math.min(safeCount, limit)
+  return `
+    <span class="limited-point-icons" style="--point-color:${escapeHtml(color || '#f59e0b')}">
+      ${Array.from({ length: visibleCount }, () => `<i>${escapeHtml(icon)}</i>`).join('')}
+      ${safeCount > visibleCount ? '<b>...</b>' : ''}
+    </span>
+  `
+}
+
 function renderDailyHourBlocks(selectedHours, density = '') {
   const selectedSet = new Set(selectedHours.map(Number))
   return `
@@ -1344,6 +1416,7 @@ function renderActionIcon(type) {
 function renderChildModal(state) {
   if (!state.childModalOpen) return ''
   const child = state.editingChild || {}
+  const createAccount = Boolean(state.childAccountDraftEnabled)
   return `
     <div class="modal-backdrop">
       <section class="modal">
@@ -1358,6 +1431,14 @@ function renderChildModal(state) {
           <label><span>生日</span><input type="date" name="birthday" value="${escapeHtml(child.birthday || '')}" /></label>
           <label><span>头像链接</span><input name="avatarUrl" value="${escapeHtml(child.avatarUrl || '')}" placeholder="可选" /></label>
           <label class="wide"><span>备注</span><input name="remark" value="${escapeHtml(child.remark || '')}" placeholder="孩子偏好、阶段目标等" /></label>
+          <label class="switch-field wide">
+            <input type="checkbox" name="createChildAccount" value="true" ${createAccount ? 'checked' : ''} />
+            <span>创建子账户</span>
+          </label>
+          <div class="child-account-fields wide ${createAccount ? '' : 'hidden'}">
+            <label><span>子账户账号</span><input name="childUsername" placeholder="例如：baby-star" /></label>
+            <label><span>子账户密码</span><input name="childPassword" type="password" placeholder="至少 6 位" /></label>
+          </div>
           <div class="modal-actions wide">
             <button class="btn" type="button" data-action="close-child-modal">取消</button>
             <button class="btn primary" type="submit">保存</button>
@@ -1401,6 +1482,8 @@ function renderGoalModal(state) {
 function renderRewardModal(state) {
   if (!state.rewardModalOpen) return ''
   const reward = state.editingReward || {}
+  const rewardIcon = state.rewardDraftIcon || reward.rewardIcon || '🎁'
+  const rewardColor = reward.rewardColor || '#ff9f43'
   return `
     <div class="modal-backdrop">
       <section class="modal">
@@ -1412,13 +1495,14 @@ function renderRewardModal(state) {
           <input type="hidden" name="rewardId" value="${escapeHtml(reward.id || '')}" />
           <label><span>奖励名称</span><input name="name" value="${escapeHtml(reward.name || '')}" placeholder="例如：周末冰淇淋" /></label>
           <div class="icon-field">
-          <label><span>图标</span><input name="rewardIcon" value="${escapeHtml(reward.rewardIcon || '🎁')}" /></label>
-            <div class="icon-picker">
+            <label>
+              <span>图标</span>
+              <input name="rewardIcon" value="${escapeHtml(rewardIcon)}" readonly data-action="open-reward-icon-picker" />
+            </label>
+            <button class="icon-select-btn" type="button" data-action="open-reward-icon-picker" aria-label="选择奖励图标" style="--reward-color:${escapeHtml(rewardColor)}">${escapeHtml(rewardIcon)}</button>
+            <div class="icon-popover hidden">
               ${rewardIconOptions.map((icon) => `
-                <label class="icon-choice" title="${escapeHtml(icon)}">
-                  <input type="radio" name="rewardIconChoice" value="${escapeHtml(icon)}" ${String(reward.rewardIcon || '🎁') === icon ? 'checked' : ''} />
-                  <span>${escapeHtml(icon)}</span>
-                </label>
+                <button class="${String(rewardIcon) === icon ? 'active' : ''}" type="button" data-action="select-reward-icon" data-reward-icon="${escapeHtml(icon)}">${escapeHtml(icon)}</button>
               `).join('')}
             </div>
           </div>
@@ -1445,6 +1529,60 @@ function renderRewardModal(state) {
             <button class="btn primary" type="submit">保存</button>
           </div>
         </form>
+      </section>
+    </div>
+  `
+}
+
+function renderRewardExchangeModal(state) {
+  if (!state.rewardExchangeModalOpen || !state.selectedRewardId) return ''
+  const reward = (state.rewards || []).find((item) => String(item.id) === String(state.selectedRewardId))
+  if (!reward) return ''
+  const currencies = getPointCurrencies(state)
+  const balances = new Map((state.balances || []).map((item) => [item.pointType, Number(item.balance || 0)]))
+  const options = buildRewardPaymentOptions(reward, state.balances, state.pointExchangeRule)
+  const requiredCurrency = currencyMeta(reward.requiredPointType || 'STAR', currencies)
+  return `
+    <div class="modal-backdrop">
+      <section class="modal reward-exchange-modal">
+        <div class="modal-head">
+          <div class="reward-exchange-title">
+            <span class="reward-mini large" style="--reward-color:${escapeHtml(reward.rewardColor || '#ff9f43')}">${escapeHtml(reward.rewardIcon || '🎁')}</span>
+            <div><h2>${escapeHtml(reward.name || '奖励')}</h2></div>
+          </div>
+          <button class="icon-btn" type="button" data-action="close-reward-exchange-modal">×</button>
+        </div>
+        <div class="reward-balance-strip">
+          ${['STAR', 'FLOWER', 'CROWN'].map((pointType) => {
+            const meta = currencyMeta(pointType, currencies)
+            return `
+              <div class="reward-balance-item" style="--point-color:${escapeHtml(meta.color)}">
+                <strong>${balances.get(pointType) || 0}</strong>
+                <span>${escapeHtml(meta.icon)}</span>
+              </div>
+            `
+          }).join('')}
+        </div>
+        <div class="reward-price-panel" style="--point-color:${escapeHtml(requiredCurrency.color)}">
+          <strong>${escapeHtml(reward.requiredPoints || 1)}</strong>
+          ${renderLimitedPointIcons(requiredCurrency.icon, reward.requiredPoints, requiredCurrency.color, 9)}
+        </div>
+        <div class="reward-payment-options">
+          ${options.map((option) => {
+            const meta = currencyMeta(option.pointType, currencies)
+            const changeText = option.changeAmount > 0 ? `找零 ${option.changeAmount}` : ''
+            return `
+              <button class="payment-option ${option.enough ? '' : 'disabled'}" type="button" data-action="select-reward-payment" data-payment-point-type="${option.pointType}" ${option.enough ? '' : 'disabled'} style="--point-color:${escapeHtml(meta.color)}">
+                <span>${escapeHtml(meta.icon)}</span>
+                <strong>${option.payAmount}</strong>
+                <small>${escapeHtml(changeText)}</small>
+              </button>
+            `
+          }).join('')}
+        </div>
+        <div class="modal-actions wide">
+          <button class="btn" type="button" data-action="close-reward-exchange-modal">取消</button>
+        </div>
       </section>
     </div>
   `
@@ -1677,6 +1815,37 @@ function calculateExchangePreview(fromPointType, toPointType, fromAmount, rule =
   const toWeight = weights[toPointType] || weights.STAR
   return {
     toAmount: Math.floor((Number(fromAmount || 0) * fromWeight) / toWeight),
+  }
+}
+
+function buildRewardPaymentOptions(reward, balances = [], rule = {}) {
+  if (!reward) return []
+  const weights = normalizeRewardWeights(rule)
+  const requiredPointType = String(reward.requiredPointType || 'STAR')
+  const requiredWeight = weights[requiredPointType] || weights.STAR
+  const requiredPoints = Math.max(1, Number(reward.requiredPoints || 1))
+  const requiredValue = requiredPoints * requiredWeight
+  const balanceMap = new Map((balances || []).map((balance) => [balance.pointType, Number(balance.balance || 0)]))
+  return ['STAR', 'FLOWER', 'CROWN']
+    .filter((pointType) => (weights[pointType] || 0) >= requiredWeight)
+    .map((pointType) => {
+      const paymentWeight = weights[pointType] || weights.STAR
+      const payAmount = Math.max(1, Math.ceil(requiredValue / paymentWeight))
+      const changeValue = payAmount * paymentWeight - requiredValue
+      return {
+        pointType,
+        payAmount,
+        changeAmount: pointType === requiredPointType ? 0 : Math.ceil(changeValue / requiredWeight),
+        enough: (balanceMap.get(pointType) || 0) >= payAmount,
+      }
+    })
+}
+
+function normalizeRewardWeights(rule = {}) {
+  return {
+    STAR: Math.max(1, Number(rule.starWeight || 1)),
+    FLOWER: Math.max(1, Number(rule.flowerWeight || 10)),
+    CROWN: Math.max(1, Number(rule.crownWeight || 100)),
   }
 }
 

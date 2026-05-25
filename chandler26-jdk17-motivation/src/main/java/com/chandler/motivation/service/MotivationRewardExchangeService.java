@@ -6,6 +6,7 @@ import com.chandler.motivation.common.exception.MotivationException;
 import com.chandler.motivation.domain.dataobject.MotivationPointLedger;
 import com.chandler.motivation.domain.dataobject.MotivationReward;
 import com.chandler.motivation.domain.dataobject.MotivationRewardExchange;
+import com.chandler.motivation.domain.dto.points.PointExchangeRuleResponse;
 import com.chandler.motivation.domain.dto.reward.RewardExchangeConfirmRequest;
 import com.chandler.motivation.domain.dto.reward.RewardExchangeRequest;
 import com.chandler.motivation.domain.dto.reward.RewardExchangeReviewRequest;
@@ -14,18 +15,29 @@ import com.chandler.motivation.domain.mapper.MotivationRewardExchangeMapper;
 import com.chandler.motivation.support.MotivationConstants;
 import java.time.LocalDateTime;
 import java.util.List;
+import java.util.Map;
+import java.util.Set;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import org.springframework.util.StringUtils;
 
 @Service
 @RequiredArgsConstructor
 public class MotivationRewardExchangeService extends ServiceImpl<MotivationRewardExchangeMapper, MotivationRewardExchange> {
 
+    private static final long REFUND_SOURCE_OFFSET = 1_000_000_000L;
+
     private final MotivationRewardService rewardService;
     private final MotivationPointLedgerService pointLedgerService;
     private final MotivationSystemLogService systemLogService;
     private final MotivationChildService childService;
+    private final MotivationPointExchangeRuleService pointExchangeRuleService;
+
+    private static final Set<String> POINT_TYPES = Set.of(
+            MotivationConstants.PointType.STAR,
+            MotivationConstants.PointType.FLOWER,
+            MotivationConstants.PointType.CROWN);
 
     public List<MotivationRewardExchange> listByChild(Long childId, Long userId, String status, int limit) {
         childService.requireViewAccess(childId, userId);
@@ -47,13 +59,14 @@ public class MotivationRewardExchangeService extends ServiceImpl<MotivationRewar
         }
         MotivationReward reward = rewardService.requireActiveReward(request.getRewardId(), userId);
         validateStock(reward);
+        PaymentPlan paymentPlan = buildPaymentPlan(reward, request.getPaymentPointType(), userId);
         MotivationRewardExchange exchange = new MotivationRewardExchange();
         exchange.setRewardId(reward.getId());
         exchange.setChildId(reward.getChildId());
         exchange.setRewardNameSnapshot(reward.getName());
         exchange.setRewardColorSnapshot(reward.getRewardColor());
         exchange.setRewardIconSnapshot(reward.getRewardIcon());
-        exchange.setRequiredPointType(reward.getRequiredPointType());
+        exchange.setRequiredPointType(paymentPlan.requiredPointType());
         exchange.setRequiredPointsSnapshot(reward.getRequiredPoints());
         exchange.setFulfillmentStatus(MotivationConstants.RewardFulfillmentStatus.PENDING);
         exchange.setRemark(request.getRemark());
@@ -62,6 +75,9 @@ public class MotivationRewardExchangeService extends ServiceImpl<MotivationRewar
 
         exchange.setStatus(MotivationConstants.RewardExchangeStatus.REQUESTED);
         save(exchange);
+        MotivationPointLedger ledger = deductRewardPoints(exchange, paymentPlan, userId);
+        exchange.setDeductedLedgerId(ledger.getId());
+        updateById(exchange);
         systemLogService.record(userId, reward.getChildId(), MotivationConstants.LogType.REWARD,
                 "申请兑换奖励", "申请兑换奖励「" + reward.getName() + "」");
         return exchange;
@@ -79,7 +95,7 @@ public class MotivationRewardExchangeService extends ServiceImpl<MotivationRewar
         }
         MotivationReward reward = rewardService.requireActiveReward(exchange.getRewardId(), userId);
         validateStock(reward);
-        MotivationPointLedger ledger = deductRewardPoints(exchange, userId);
+        MotivationPointLedger ledger = ensureRewardPointsDeducted(exchange, reward, userId);
         exchange.setStatus(MotivationConstants.RewardExchangeStatus.APPROVED);
         exchange.setFulfillmentStatus(MotivationConstants.RewardFulfillmentStatus.PENDING);
         exchange.setReviewedByUserId(userId);
@@ -101,6 +117,7 @@ public class MotivationRewardExchangeService extends ServiceImpl<MotivationRewar
         if (!MotivationConstants.RewardExchangeStatus.REQUESTED.equals(exchange.getStatus())) {
             throw new MotivationException("REWARD_EXCHANGE_NOT_REQUESTED", "只有待确认兑换可以拒绝");
         }
+        refundRewardPoints(exchange, userId);
         exchange.setStatus(MotivationConstants.RewardExchangeStatus.REJECTED);
         exchange.setReviewedByUserId(userId);
         exchange.setReviewedAt(LocalDateTime.now());
@@ -192,19 +209,124 @@ public class MotivationRewardExchangeService extends ServiceImpl<MotivationRewar
         };
     }
 
-    private MotivationPointLedger deductRewardPoints(MotivationRewardExchange exchange, Long userId) {
+    private MotivationPointLedger ensureRewardPointsDeducted(MotivationRewardExchange exchange,
+                                                             MotivationReward reward,
+                                                             Long userId) {
+        if (exchange.getDeductedLedgerId() != null) {
+            MotivationPointLedger ledger = pointLedgerService.getById(exchange.getDeductedLedgerId());
+            if (ledger != null) {
+                return ledger;
+            }
+        }
+        PaymentPlan paymentPlan = buildPaymentPlan(reward, exchange.getRequiredPointType(), userId);
+        return deductRewardPoints(exchange, paymentPlan, userId);
+    }
+
+    private MotivationPointLedger deductRewardPoints(MotivationRewardExchange exchange, PaymentPlan paymentPlan, Long userId) {
         int requiredPoints = exchange.getRequiredPointsSnapshot() == null ? 0 : exchange.getRequiredPointsSnapshot();
         if (requiredPoints <= 0) {
             throw new MotivationException("REWARD_POINTS_REQUIRED", "奖励所需积分必须大于 0");
         }
-        return pointLedgerService.applyChange(exchange.getChildId(),
-                exchange.getRequiredPointType(),
-                -requiredPoints,
+        MotivationPointLedger ledger = pointLedgerService.applyChange(exchange.getChildId(),
+                paymentPlan.paymentPointType(),
+                -paymentPlan.paymentAmount(),
                 MotivationConstants.LedgerSourceType.REWARD_EXCHANGE,
                 exchange.getId(),
                 exchange.getRewardNameSnapshot(),
-                "奖励兑换扣减",
+                paymentPlan.reason(),
                 userId);
+        if (paymentPlan.changeAmount() > 0) {
+            pointLedgerService.applyChange(exchange.getChildId(),
+                    paymentPlan.requiredPointType(),
+                    paymentPlan.changeAmount(),
+                    MotivationConstants.LedgerSourceType.REWARD_EXCHANGE_CHANGE,
+                    exchange.getId(),
+                    exchange.getRewardNameSnapshot(),
+                    "高币值支付找零",
+                    userId);
+        }
+        return ledger;
+    }
+
+    private void refundRewardPoints(MotivationRewardExchange exchange, Long userId) {
+        if (exchange.getDeductedLedgerId() == null) {
+            return;
+        }
+        MotivationPointLedger deductedLedger = pointLedgerService.getById(exchange.getDeductedLedgerId());
+        if (deductedLedger == null || deductedLedger.getChangeAmount() == null || deductedLedger.getChangeAmount() >= 0) {
+            return;
+        }
+        int refundAmount = Math.abs(deductedLedger.getChangeAmount());
+        pointLedgerService.applyChange(exchange.getChildId(),
+                deductedLedger.getPointType(),
+                refundAmount,
+                MotivationConstants.LedgerSourceType.REWARD_EXCHANGE_REFUND,
+                exchange.getId(),
+                exchange.getRewardNameSnapshot(),
+                "兑换拒绝返还",
+                userId);
+        if (!deductedLedger.getPointType().equals(exchange.getRequiredPointType())) {
+            MotivationPointLedger changeLedger = pointLedgerService.lastBySource(
+                    MotivationConstants.LedgerSourceType.REWARD_EXCHANGE_CHANGE,
+                    exchange.getId(),
+                    exchange.getChildId(),
+                    exchange.getRequiredPointType());
+            if (changeLedger != null && changeLedger.getChangeAmount() != null && changeLedger.getChangeAmount() > 0) {
+                pointLedgerService.applyChange(exchange.getChildId(),
+                        exchange.getRequiredPointType(),
+                        -changeLedger.getChangeAmount(),
+                        MotivationConstants.LedgerSourceType.REWARD_EXCHANGE_REFUND,
+                        refundSourceId(exchange.getId()),
+                        exchange.getRewardNameSnapshot() + " 找零回收",
+                        "兑换拒绝回收找零",
+                        userId);
+            }
+        }
+    }
+
+    private PaymentPlan buildPaymentPlan(MotivationReward reward, String requestedPaymentPointType, Long userId) {
+        String requiredPointType = normalizePointType(reward.getRequiredPointType());
+        int requiredPoints = reward.getRequiredPoints() == null ? 0 : reward.getRequiredPoints();
+        if (requiredPoints <= 0) {
+            throw new MotivationException("REWARD_POINTS_REQUIRED", "奖励所需积分必须大于 0");
+        }
+        String paymentPointType = StringUtils.hasText(requestedPaymentPointType)
+                ? normalizePointType(requestedPaymentPointType)
+                : requiredPointType;
+        PointExchangeRuleResponse rule = pointExchangeRuleService.getRule(reward.getChildId(), userId);
+        int requiredWeight = pointWeight(requiredPointType, rule);
+        int paymentWeight = pointWeight(paymentPointType, rule);
+        if (paymentWeight < requiredWeight) {
+            throw new MotivationException("REWARD_PAYMENT_TYPE_INVALID", "只能使用同币值或更高币值兑换奖励");
+        }
+        int totalValue = requiredPoints * requiredWeight;
+        int paymentAmount = (int) Math.ceil((double) totalValue / paymentWeight);
+        int changeValue = paymentAmount * paymentWeight - totalValue;
+        int changeAmount = paymentPointType.equals(requiredPointType) ? 0 : (int) Math.ceil((double) changeValue / requiredWeight);
+        String reason = paymentPointType.equals(requiredPointType)
+                ? "奖励兑换扣减"
+                : "奖励兑换扣减，高币值支付";
+        return new PaymentPlan(requiredPointType, paymentPointType, paymentAmount, changeAmount, reason);
+    }
+
+    private String normalizePointType(String pointType) {
+        String normalized = StringUtils.hasText(pointType) ? pointType.trim().toUpperCase() : MotivationConstants.PointType.STAR;
+        if (!POINT_TYPES.contains(normalized)) {
+            throw new MotivationException("POINT_TYPE_INVALID", "积分类型不正确");
+        }
+        return normalized;
+    }
+
+    private int pointWeight(String pointType, PointExchangeRuleResponse rule) {
+        Map<String, Integer> weights = Map.of(
+                MotivationConstants.PointType.STAR, Math.max(1, rule.getStarWeight()),
+                MotivationConstants.PointType.FLOWER, Math.max(1, rule.getFlowerWeight()),
+                MotivationConstants.PointType.CROWN, Math.max(1, rule.getCrownWeight()));
+        return weights.getOrDefault(pointType, 1);
+    }
+
+    private Long refundSourceId(Long exchangeId) {
+        return exchangeId == null ? null : exchangeId + REFUND_SOURCE_OFFSET;
     }
 
     private void validateStock(MotivationReward reward) {
@@ -220,5 +342,12 @@ public class MotivationRewardExchangeService extends ServiceImpl<MotivationRewar
         }
         reward.setStockRemaining(Math.max(0, reward.getStockRemaining() - 1));
         rewardService.updateById(reward);
+    }
+
+    private record PaymentPlan(String requiredPointType,
+                               String paymentPointType,
+                               int paymentAmount,
+                               int changeAmount,
+                               String reason) {
     }
 }

@@ -28,16 +28,24 @@ const state = {
   taskModalOpen: false,
   rewardModalOpen: false,
   pointCurrencyModalOpen: false,
+  registerModalOpen: false,
   childModalOpen: false,
   goalModalOpen: false,
   pointAdjustModalOpen: false,
   balanceModalOpen: false,
+  rewardExchangeModalOpen: false,
   calendarDayModalOpen: false,
   calendarEventModalOpen: false,
   selectedCalendarDateKey: '',
   selectedCalendarEventId: '',
   selectedBalancePointType: '',
+  selectedRewardId: '',
   exchangeSuccess: null,
+  rewardExchangeSuccess: null,
+  loginCarouselIndex: 0,
+  loginCarouselPinned: false,
+  rewardIconPickerOpen: false,
+  childAccountDraftEnabled: false,
   confirmDialog: null,
   editingTask: null,
   editingReward: null,
@@ -133,6 +141,20 @@ function render() {
 function bindEvents() {
   initLoginCarousel()
   document.querySelector('[data-form="auth"]')?.addEventListener('submit', handleAuthSubmit)
+  document.querySelector('[data-action="open-register-modal"]')?.addEventListener('click', openRegisterModal)
+  document.querySelectorAll('[data-action="close-register-modal"]').forEach((button) => {
+    button.addEventListener('click', closeRegisterModal)
+  })
+  document.querySelector('[data-form="register"]')?.addEventListener('submit', handleRegisterSubmit)
+  document.querySelectorAll('[data-login-carousel-nav]').forEach((button) => {
+    button.addEventListener('click', () => setLoginCarouselIndex(Number(button.dataset.loginCarouselNav || 0), true))
+  })
+  document.querySelectorAll('[data-action="login-carousel-prev"]').forEach((button) => {
+    button.addEventListener('click', () => stepLoginCarousel(-1))
+  })
+  document.querySelectorAll('[data-action="login-carousel-next"]').forEach((button) => {
+    button.addEventListener('click', () => stepLoginCarousel(1))
+  })
   document.querySelector('[data-action="toggle-sidebar"]')?.addEventListener('click', toggleSidebar)
   document.querySelectorAll('[data-action="close-sidebar"]').forEach((button) => {
     button.addEventListener('click', () => setSidebarCollapsed(true))
@@ -210,18 +232,43 @@ function bindEvents() {
   document.querySelectorAll('[data-action="close-reward-modal"]').forEach((button) => {
     button.addEventListener('click', closeRewardModal)
   })
+  document.querySelectorAll('[data-action="open-reward-icon-picker"]').forEach((button) => {
+    button.addEventListener('click', (event) => {
+      event.preventDefault()
+      const field = button.closest('.icon-field')
+      field?.querySelector('.icon-popover')?.classList.toggle('hidden')
+    })
+  })
+  document.querySelectorAll('[data-action="select-reward-icon"]').forEach((button) => {
+    button.addEventListener('click', (event) => {
+      event.preventDefault()
+      const icon = button.dataset.rewardIcon || '🎁'
+      const field = button.closest('.icon-field')
+      const form = button.closest('form')
+      if (form?.rewardIcon) {
+        form.rewardIcon.value = icon
+      }
+      field?.querySelector('.icon-select-btn')?.replaceChildren(document.createTextNode(icon))
+      field?.querySelectorAll('[data-action="select-reward-icon"]').forEach((item) => {
+        item.classList.toggle('active', item === button)
+      })
+      field?.querySelector('.icon-popover')?.classList.add('hidden')
+    })
+  })
+  document.querySelectorAll('[data-action="close-reward-exchange-modal"]').forEach((button) => {
+    button.addEventListener('click', closeRewardExchangeModal)
+  })
+  document.querySelectorAll('[data-action="select-reward-payment"]').forEach((button) => {
+    button.addEventListener('click', () => handleExchangeReward(state.selectedRewardId, button.dataset.paymentPointType))
+  })
   document.querySelector('[data-form="task"]')?.addEventListener('submit', handleCreateTaskSubmit)
   document.querySelector('[data-form="reward"]')?.addEventListener('submit', handleRewardSubmit)
   document.querySelector('[data-form="child"]')?.addEventListener('submit', handleChildSubmit)
   document.querySelector('[data-form="goal"]')?.addEventListener('submit', handleGoalSubmit)
   document.querySelector('[data-form="point-adjust"]')?.addEventListener('submit', handlePointAdjustSubmit)
-  document.querySelectorAll('[name="rewardIconChoice"]').forEach((input) => {
-    input.addEventListener('change', () => {
-      const form = input.closest('form')
-      if (form?.rewardIcon) {
-        form.rewardIcon.value = input.value
-      }
-    })
+  document.querySelector('[name="createChildAccount"]')?.addEventListener('change', () => {
+    const enabled = Boolean(document.querySelector('[name="createChildAccount"]')?.checked)
+    document.querySelector('.child-account-fields')?.classList.toggle('hidden', !enabled)
   })
   bindTaskModalControls()
   bindPointExchangePreview()
@@ -307,6 +354,15 @@ function bindEvents() {
   document.querySelectorAll('[data-action="exchange-reward"]').forEach((button) => {
     button.addEventListener('click', () => handleExchangeReward(button.dataset.rewardId))
   })
+  document.querySelectorAll('.reward-card').forEach((card) => {
+    card.addEventListener('click', (event) => {
+      if (event.target.closest('[data-no-card-click]')) return
+      const button = card.querySelector('[data-action="exchange-reward"]')
+      if (button?.dataset.rewardId) {
+        handleExchangeReward(button.dataset.rewardId)
+      }
+    })
+  })
   document.querySelectorAll('[data-action="complete-task"]').forEach((button) => {
     button.addEventListener('click', () => handleCompleteTask(button.dataset.taskId, button.dataset.taskDate))
   })
@@ -316,27 +372,23 @@ function initLoginCarousel() {
   const carousel = document.querySelector('[data-login-carousel]')
   if (!carousel || carousel.dataset.ready === '1') return
   carousel.dataset.ready = '1'
-  const slides = Array.from(carousel.children)
-  if (slides.length < 3) return
-  const slideWidth = () => slides[1]?.getBoundingClientRect().width || carousel.clientWidth
-  const gap = () => Number.parseFloat(getComputedStyle(carousel).columnGap || getComputedStyle(carousel).gap || '0') || 0
-  const scrollToRealStart = (behavior = 'auto') => {
-    carousel.scrollTo({ left: slideWidth() + gap(), behavior })
-  }
-  requestAnimationFrame(() => scrollToRealStart())
-  let scrollTimer = 0
-  carousel.addEventListener('scroll', () => {
-    window.clearTimeout(scrollTimer)
-    scrollTimer = window.setTimeout(() => {
-      const step = slideWidth() + gap()
-      const max = carousel.scrollWidth - carousel.clientWidth
-      if (carousel.scrollLeft < step * 0.35) {
-        carousel.scrollTo({ left: max - step, behavior: 'auto' })
-      } else if (carousel.scrollLeft > max - step * 0.35) {
-        scrollToRealStart()
-      }
-    }, 90)
-  }, { passive: true })
+  window.clearInterval(initLoginCarousel.timer)
+  initLoginCarousel.timer = window.setInterval(() => {
+    if (!state.user && !state.loginCarouselPinned && !state.registerModalOpen) {
+      setLoginCarouselIndex((Number(state.loginCarouselIndex || 0) + 1) % 3, false)
+    }
+  }, 3200)
+}
+
+function setLoginCarouselIndex(index, pinned = false) {
+  state.loginCarouselIndex = ((Number(index) % 3) + 3) % 3
+  state.loginCarouselPinned = pinned
+  render()
+}
+
+function stepLoginCarousel(delta) {
+  state.loginCarouselPinned = false
+  setLoginCarouselIndex((Number(state.loginCarouselIndex || 0) + delta) % 3, false)
 }
 
 function bindTaskModalControls() {
@@ -472,22 +524,20 @@ function bindFilterActions() {
 
 async function handleAuthSubmit(event) {
   event.preventDefault()
-  const submitter = event.submitter
   const formData = new FormData(event.currentTarget)
   const payload = {
     username: String(formData.get('username') || '').trim(),
     password: String(formData.get('password') || '').trim(),
     nickname: '星星家长',
   }
-  const mode = submitter?.dataset.authMode || 'login'
   try {
-    const response = mode === 'register' ? await api.register(payload) : await api.login(payload)
+    const response = await api.login(payload)
     setToken(response.token)
     state.user = response.user
     state.offline = false
     applyRoleLanding()
     state.connectionMessage = '已登录真实后端'
-    toast(mode === 'register' ? '注册成功' : '登录成功')
+    toast('登录成功')
     if (!isChildUser()) {
       await ensureStarterData()
     }
@@ -495,6 +545,36 @@ async function handleAuthSubmit(event) {
   } catch (error) {
     toast(error.message)
     state.connectionMessage = '后端未登录，继续显示演示数据'
+    render()
+  }
+}
+
+async function handleRegisterSubmit(event) {
+  event.preventDefault()
+  const formData = new FormData(event.currentTarget)
+  const payload = {
+    username: String(formData.get('username') || '').trim(),
+    password: String(formData.get('password') || '').trim(),
+    phoneNumber: String(formData.get('phoneNumber') || '').trim(),
+    invitationCode: String(formData.get('invitationCode') || '').trim(),
+    nickname: String(formData.get('username') || '').trim() || '星星家长',
+  }
+  if (!payload.username || !payload.password || !payload.phoneNumber || !payload.invitationCode) {
+    toast('请完整填写注册信息')
+    return
+  }
+  try {
+    const response = await api.register(payload)
+    setToken(response.token)
+    state.user = response.user
+    state.offline = false
+    state.registerModalOpen = false
+    applyRoleLanding()
+    await ensureStarterData()
+    await loadInitialData(false)
+    toast('注册成功')
+  } catch (error) {
+    toast(error.message)
     render()
   }
 }
@@ -755,42 +835,63 @@ async function handleTaskRecordReview(recordId, approved) {
   render()
 }
 
-async function handleExchangeReward(rewardId) {
+async function handleExchangeReward(rewardId, paymentPointType = '') {
   const reward = state.rewards.find((item) => String(item.id) === String(rewardId))
   if (!reward) return
-  state.confirmDialog = {
-    title: '确认兑换奖励',
-    message: `确认申请兑换「${reward.name}」吗？父母侧会看到待确认事项。`,
-    confirmText: '确认兑换',
-    variant: 'primary',
-    action: async () => {
-      if (state.offline) {
-        state.exchanges = [
-          {
-            id: `demo-exchange-${Date.now()}`,
-            rewardId: reward.id,
-            childId: state.selectedChildId,
-            rewardNameSnapshot: reward.name,
-            rewardColorSnapshot: reward.rewardColor,
-            rewardIconSnapshot: reward.rewardIcon,
-            requiredPointType: reward.requiredPointType,
-            requiredPointsSnapshot: reward.requiredPoints,
-            status: 'REQUESTED',
-            fulfillmentStatus: 'PENDING',
-            requestedAt: new Date().toISOString(),
-            remark: '演示兑换申请',
-          },
-          ...state.exchanges,
-        ]
-        toast('演示：已提交兑换申请')
-        return
-      }
-      await api.exchangeReward({ rewardId: reward.id, remark: '前端发起兑换' })
-      await loadCoreData()
-      toast('已提交兑换申请')
-    },
+  if (!paymentPointType) {
+    openRewardExchangeModal(rewardId)
+    return
   }
-  render()
+  const option = buildRewardPaymentOptions(reward, state.balances, state.pointExchangeRule)
+    .find((item) => item.pointType === paymentPointType)
+  if (!option?.enough) {
+    toast('余额不足，先攒一攒吧')
+    return
+  }
+  try {
+    if (state.offline) {
+      state.balances = upsertBalance(state.balances, option.pointType, -option.payAmount)
+      if (option.changeAmount > 0) {
+        state.balances = upsertBalance(state.balances, reward.requiredPointType, option.changeAmount)
+      }
+      state.exchanges = [
+        {
+          id: `demo-exchange-${Date.now()}`,
+          rewardId: reward.id,
+          childId: state.selectedChildId,
+          rewardNameSnapshot: reward.name,
+          rewardColorSnapshot: reward.rewardColor,
+          rewardIconSnapshot: reward.rewardIcon,
+          requiredPointType: reward.requiredPointType,
+          requiredPointsSnapshot: reward.requiredPoints,
+          status: 'REQUESTED',
+          fulfillmentStatus: 'PENDING',
+          requestedAt: new Date().toISOString(),
+          remark: '演示兑换申请',
+        },
+        ...state.exchanges,
+      ]
+    } else {
+      await api.exchangeReward({ rewardId: reward.id, paymentPointType: option.pointType, remark: '前端发起兑换' })
+      await loadCoreData()
+    }
+    state.rewardExchangeModalOpen = false
+    state.selectedRewardId = ''
+    state.rewardExchangeSuccess = {
+      rewardName: reward.name,
+      rewardIcon: reward.rewardIcon || '🎁',
+      rewardColor: reward.rewardColor || '#ff9f43',
+    }
+    window.clearTimeout(handleExchangeReward.cheerTimer)
+    handleExchangeReward.cheerTimer = window.setTimeout(() => {
+      state.rewardExchangeSuccess = null
+      render()
+    }, 3200)
+    toast(`获得一个${reward.name}奖励的兑换券`)
+    render()
+  } catch (error) {
+    toast(error.message)
+  }
 }
 
 async function handleRewardExchangeReview(exchangeId, approved) {
@@ -806,6 +907,9 @@ async function handleRewardExchangeReview(exchangeId, approved) {
         state.exchanges = state.exchanges.map((item) => String(item.id) === String(exchangeId)
           ? { ...item, status: approved ? 'APPROVED' : 'REJECTED', fulfillmentStatus: approved ? 'PENDING' : item.fulfillmentStatus, reviewedAt: new Date().toISOString() }
           : item)
+        if (!approved) {
+          state.balances = upsertBalance(state.balances, exchange.requiredPointType, Number(exchange.requiredPointsSnapshot || 0))
+        }
         toast(approved ? '演示：兑换已通过' : '演示：兑换已拒绝')
         return
       }
@@ -1056,6 +1160,7 @@ async function exchangePoints(request) {
   }
   if (state.offline) {
     state.balances = upsertBalance(upsertBalance(state.balances, payload.fromPointType, -payload.fromAmount), payload.toPointType, preview.toAmount)
+    state.selectedBalancePointType = payload.toPointType
     state.ledger = [
       {
         id: `demo-ledger-${Date.now()}`,
@@ -1110,6 +1215,7 @@ function openChildModal(childId = null) {
 function closeChildModal() {
   state.childModalOpen = false
   state.editingChild = null
+  state.childAccountDraftEnabled = false
   render()
 }
 
@@ -1161,6 +1267,16 @@ function closeBalanceModal() {
   render()
 }
 
+function openRegisterModal() {
+  state.registerModalOpen = true
+  render()
+}
+
+function closeRegisterModal() {
+  state.registerModalOpen = false
+  render()
+}
+
 function goRewardStore() {
   state.balanceModalOpen = false
   state.selectedBalancePointType = ''
@@ -1197,6 +1313,8 @@ function openRewardModal(rewardId = null) {
     return
   }
   state.editingReward = rewardId ? state.rewards.find((reward) => String(reward.id) === String(rewardId)) || null : null
+  state.rewardDraftIcon = state.editingReward?.rewardIcon || '🎁'
+  state.rewardIconPickerOpen = false
   state.rewardModalOpen = true
   render()
 }
@@ -1204,6 +1322,22 @@ function openRewardModal(rewardId = null) {
 function closeRewardModal() {
   state.rewardModalOpen = false
   state.editingReward = null
+  state.rewardDraftIcon = ''
+  state.rewardIconPickerOpen = false
+  render()
+}
+
+function openRewardExchangeModal(rewardId) {
+  state.selectedRewardId = rewardId
+  state.rewardExchangeSuccess = null
+  state.rewardExchangeModalOpen = true
+  render()
+}
+
+function closeRewardExchangeModal() {
+  state.rewardExchangeModalOpen = false
+  state.selectedRewardId = ''
+  state.rewardExchangeSuccess = null
   render()
 }
 
@@ -1448,9 +1582,16 @@ async function handleChildSubmit(event) {
     birthday: nullableDate(formData.get('birthday')),
     gender: String(formData.get('gender') || 'UNKNOWN'),
     remark: String(formData.get('remark') || '').trim(),
+    createChildAccount: String(formData.get('createChildAccount') || 'false') === 'true',
+    childUsername: String(formData.get('childUsername') || '').trim(),
+    childPassword: String(formData.get('childPassword') || '').trim(),
   }
   if (!payload.nickname) {
     toast('请填写孩子昵称')
+    return
+  }
+  if (payload.createChildAccount && (!payload.childUsername || !payload.childPassword)) {
+    toast('请填写孩子账号和密码')
     return
   }
   if (state.offline) {
@@ -1466,6 +1607,7 @@ async function handleChildSubmit(event) {
     state.selectedChildId = nextChild.id
     state.childModalOpen = false
     state.editingChild = null
+    state.childAccountDraftEnabled = false
     toast(childId ? '演示：孩子档案已修改' : '演示：孩子档案已创建')
     render()
     return
@@ -1477,6 +1619,7 @@ async function handleChildSubmit(event) {
     state.selectedChildId = savedChild.id
     state.childModalOpen = false
     state.editingChild = null
+    state.childAccountDraftEnabled = false
     await loadInitialData(false)
     toast(childId ? '孩子档案已修改' : '孩子档案已创建')
   } catch (error) {
@@ -1759,9 +1902,11 @@ function resetChildScopedData() {
   state.calendarDayModalOpen = false
   state.calendarEventModalOpen = false
   state.balanceModalOpen = false
+  state.rewardExchangeModalOpen = false
   state.selectedCalendarDateKey = ''
   state.selectedCalendarEventId = ''
   state.selectedBalancePointType = ''
+  state.selectedRewardId = ''
 }
 
 function mergeTaskCalendarEvents(events, tasks) {
@@ -1843,6 +1988,40 @@ function calculatePointExchange(fromPointType, toPointType, fromAmount, rule = {
     toAmount: Math.floor((Number(fromAmount || 0) * fromWeight) / toWeight),
     fromWeight,
     toWeight,
+  }
+}
+
+function buildRewardPaymentOptions(reward, balances = [], rule = {}) {
+  if (!reward) return []
+  const weights = normalizeExchangeWeights(rule)
+  const requiredPointType = String(reward.requiredPointType || 'STAR')
+  const requiredWeight = weights[requiredPointType] || weights.STAR
+  const requiredPoints = Math.max(1, Number(reward.requiredPoints || 1))
+  const requiredValue = requiredPoints * requiredWeight
+  const balanceMap = new Map((balances || []).map((balance) => [balance.pointType, Number(balance.balance || 0)]))
+  return ['STAR', 'FLOWER', 'CROWN']
+    .filter((pointType) => (weights[pointType] || 0) >= requiredWeight)
+    .map((pointType) => {
+      const paymentWeight = weights[pointType] || weights.STAR
+      const payAmount = Math.max(1, Math.ceil(requiredValue / paymentWeight))
+      const changeValue = payAmount * paymentWeight - requiredValue
+      const changeAmount = pointType === requiredPointType ? 0 : Math.ceil(changeValue / requiredWeight)
+      const balance = balanceMap.get(pointType) || 0
+      return {
+        pointType,
+        payAmount,
+        changeAmount,
+        balance,
+        enough: balance >= payAmount,
+      }
+    })
+}
+
+function normalizeExchangeWeights(rule = {}) {
+  return {
+    STAR: Math.max(1, Number(rule.starWeight || 1)),
+    FLOWER: Math.max(1, Number(rule.flowerWeight || 10)),
+    CROWN: Math.max(1, Number(rule.crownWeight || 100)),
   }
 }
 

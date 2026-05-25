@@ -10,4 +10,7 @@ public class ChildSaveRequest {
     private LocalDate birthday;
     private String gender;
     private String remark;
+    private Boolean createChildAccount;
+    private String childUsername;
+    private String childPassword;
 }

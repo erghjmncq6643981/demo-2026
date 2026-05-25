@@ -48,7 +48,9 @@ public class TaskController {
 
     @DeleteMapping("/{taskId}")
     public ApiResponse<Boolean> delete(@PathVariable Long taskId) {
-        taskService.delete(taskId, authService.requireUser().getId());
+        Long userId = authService.requireUser().getId();
+        taskService.delete(taskId, userId);
+        taskRecordService.deleteByTask(taskId, userId);
         return ApiResponse.ok(Boolean.TRUE);
     }
 
