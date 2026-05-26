@@ -2,14 +2,25 @@ package com.chandler.motivation.service;
 
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import com.baomidou.mybatisplus.extension.service.impl.ServiceImpl;
+import com.chandler.motivation.domain.dataobject.MotivationUser;
 import com.chandler.motivation.domain.dataobject.MotivationFamilyMember;
 import com.chandler.motivation.domain.mapper.MotivationFamilyMemberMapper;
+import com.chandler.motivation.domain.mapper.MotivationUserMapper;
 import com.chandler.motivation.support.MotivationConstants;
 import com.chandler.motivation.support.MotivationEnums;
+import java.util.Collections;
+import java.util.List;
+import java.util.Map;
+import java.util.function.Function;
+import java.util.stream.Collectors;
+import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 
 @Service
+@RequiredArgsConstructor
 public class MotivationFamilyMemberService extends ServiceImpl<MotivationFamilyMemberMapper, MotivationFamilyMember> {
+
+    private final MotivationUserMapper userMapper;
 
     /**
      * 建立孩子档案的主家长管理关系。
@@ -66,5 +77,35 @@ public class MotivationFamilyMemberService extends ServiceImpl<MotivationFamilyM
                 .eq(MotivationFamilyMember::getChildId, childId)
                 .eq(MotivationFamilyMember::getUserId, userId)
                 .eq(MotivationFamilyMember::getStatus, MotivationEnums.ChildStatus.ACTIVE.code())) > 0;
+    }
+
+    public List<ChildAccount> listChildAccounts(List<Long> childIds) {
+        if (childIds == null || childIds.isEmpty()) {
+            return Collections.emptyList();
+        }
+        List<MotivationFamilyMember> members = list(new LambdaQueryWrapper<MotivationFamilyMember>()
+                .in(MotivationFamilyMember::getChildId, childIds)
+                .eq(MotivationFamilyMember::getRelationRole, MotivationEnums.FamilyRole.CHILD.code())
+                .eq(MotivationFamilyMember::getStatus, MotivationEnums.ChildStatus.ACTIVE.code()));
+        if (members.isEmpty()) {
+            return Collections.emptyList();
+        }
+        List<Long> userIds = members.stream()
+                .map(MotivationFamilyMember::getUserId)
+                .filter(id -> id != null)
+                .distinct()
+                .toList();
+        Map<Long, MotivationUser> userMap = userIds.isEmpty()
+                ? Collections.emptyMap()
+                : userMapper.selectBatchIds(userIds).stream()
+                .filter(user -> Integer.valueOf(MotivationConstants.Flag.NO).equals(user.getDeleted()))
+                .collect(Collectors.toMap(MotivationUser::getId, Function.identity(), (left, right) -> left));
+        return members.stream()
+                .map(member -> new ChildAccount(member.getChildId(), userMap.get(member.getUserId())))
+                .filter(account -> account.user() != null)
+                .toList();
+    }
+
+    public record ChildAccount(Long childId, MotivationUser user) {
     }
 }

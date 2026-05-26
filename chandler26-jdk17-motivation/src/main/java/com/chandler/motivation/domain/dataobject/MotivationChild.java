@@ -30,4 +30,8 @@ public class MotivationChild {
     private Long createdByUserId;
     private LocalDateTime createTime;
     private LocalDateTime updateTime;
+    @TableField(exist = false)
+    private Long childAccountUserId;
+    @TableField(exist = false)
+    private String childUsername;
 }

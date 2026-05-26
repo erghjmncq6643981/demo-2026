@@ -13,9 +13,11 @@ import {
 
 const navItems = [
   ['profile', '个人信息'],
+  ['growth', '宝贝成长'],
   ['calendar', '任务日历'],
   ['reward-calendar', '奖励日历'],
   ['store', '奖励商店'],
+  ['system-config', '系统配置'],
 ]
 
 const weekDays = [
@@ -59,6 +61,9 @@ function isManagementUser(state) {
 }
 
 function visibleNavItems(state) {
+  if (!isManagementUser(state)) {
+    return navItems.filter(([view]) => ['profile', 'calendar', 'reward-calendar', 'store'].includes(view))
+  }
   return navItems
 }
 
@@ -69,17 +74,18 @@ function profileSubnavItems(state) {
   return [
     ['home', '首页'],
     ['account', '账号信息'],
-    ['children', '宝贝档案'],
-    ['growth', '宝贝成长'],
     ['rewards', '奖励管理'],
     ['currencies', '币值管理'],
-    ['system-config', '系统配置'],
   ]
 }
 
 function profileSubView(state) {
   const items = profileSubnavItems(state).map(([view]) => view)
   return items.includes(state.profileSubView) ? state.profileSubView : items[0]
+}
+
+function growthSubView(state) {
+  return state.growthSubView === 'tasks' ? 'tasks' : 'goals'
 }
 
 function renderAvatarImage(src, fallback, className, previewKey = '') {
@@ -119,21 +125,24 @@ function monthKey(date) {
   return `${value.getFullYear()}-${String(value.getMonth() + 1).padStart(2, '0')}`
 }
 
-function chineseDateLabel(value) {
+function chineseDateLabel(value, emptyLabel = '请选择日期') {
   const date = parseDateKey(value)
-  if (!date) return '请选择生日'
+  if (!date) return emptyLabel
   return `${date.getFullYear()}年${date.getMonth() + 1}月${date.getDate()}日`
 }
 
-function renderChineseDatePicker(name, value) {
+function renderChineseDatePicker(name, value, options = {}) {
+  const label = options.label || '日期'
+  const placeholder = options.placeholder || `请选择${label}`
+  const ariaLabel = options.ariaLabel || `选择${label}`
   const selectedDate = parseDateKey(value)
   const currentMonth = monthKey(selectedDate || new Date())
   return `
-    <div class="date-picker-field" data-date-picker data-current-month="${escapeHtml(currentMonth)}" data-selected-date="${escapeHtml(value || '')}">
-      <span class="field-label">生日</span>
+    <div class="date-picker-field" data-date-picker data-current-month="${escapeHtml(currentMonth)}" data-selected-date="${escapeHtml(value || '')}" data-date-empty-label="${escapeHtml(placeholder)}">
+      <span class="field-label">${escapeHtml(label)}</span>
       <input type="hidden" name="${escapeHtml(name)}" value="${escapeHtml(value || '')}" data-date-picker-input />
-      <button class="date-picker-trigger" type="button" data-action="toggle-date-picker" aria-label="选择生日">
-        <span data-date-picker-label class="${value ? '' : 'placeholder'}">${escapeHtml(chineseDateLabel(value))}</span>
+      <button class="date-picker-trigger" type="button" data-action="toggle-date-picker" aria-label="${escapeHtml(ariaLabel)}">
+        <span data-date-picker-label class="${value ? '' : 'placeholder'}">${escapeHtml(chineseDateLabel(value, placeholder))}</span>
         <span class="date-picker-icon" aria-hidden="true">日</span>
       </button>
       <div class="date-picker-popover">
@@ -230,6 +239,7 @@ export function renderApp(state, actions) {
     ${renderTaskCheckInModal(state)}
     ${renderRewardModal(state)}
     ${renderRewardExchangeModal(state)}
+    ${renderRewardTicketModal(state)}
     ${renderPointCurrencyModal(state)}
     ${renderPointAdjustModal(state)}
     ${renderBalanceModal(state)}
@@ -385,18 +395,17 @@ function renderSidebar(state) {
 function renderWorkspaceHeader(state) {
   const profileTitles = {
     home: isChildUser(state) ? ['个人信息', '查看今日进度、积分余额和成长记录。'] : ['个人信息', '家庭成员、宝贝档案和积分概览。'],
-    account: ['账号信息', '查看与修改当前登录账号。'],
-    'system-config': ['系统配置', '调整任务日历日期大小和颜色。'],
-    children: ['宝贝档案', '维护宝贝资料、状态和家庭档案。'],
-    growth: ['宝贝成长', '管理成长目标和每日、每周、每月任务。'],
+    account: ['账号信息', '查看账号资料和宝贝档案。'],
     rewards: ['奖励管理', '维护奖励库存、颜色、积分要求和审核规则。'],
     currencies: ['币值管理', '配置星星、红花、皇冠的图标、颜色和比例。'],
   }
   const titles = {
     profile: profileTitles[profileSubView(state)] || profileTitles.home,
+    growth: ['宝贝成长', '管理成长目标和每日、每周、每月任务。'],
     calendar: ['任务日历', 'Notion 风格月视图，展示任务计划和完成记录。'],
     'reward-calendar': ['奖励日历', '查看奖励兑换、购买、运输和日程实现进度。'],
     store: ['奖励商店', '宝贝可以用星星、红花或皇冠兑换奖励。'],
+    'system-config': ['日历样式', '调整任务日历日期大小和颜色。'],
   }
   const [title, subtitle] = titles[state.currentView] || titles.profile
   return `
@@ -434,33 +443,17 @@ function renderProfileSubnav(state) {
 
 function renderCurrentView(state, actions) {
   if (state.currentView === 'profile') return renderProfileView(state)
+  if (state.currentView === 'growth') return renderGrowthView(state)
   if (state.currentView === 'calendar') return renderCalendarView(state, actions)
   if (state.currentView === 'reward-calendar') return renderRewardCalendarView(state, actions)
   if (state.currentView === 'store') return renderStoreView(state)
+  if (state.currentView === 'system-config') return renderSystemConfigPage(state)
   return renderProfileView(state)
 }
 
 function renderProfileView(state) {
   const activeSubView = profileSubView(state)
   const childUser = isChildUser(state)
-  if (activeSubView === 'children') {
-    return `
-      <div class="view-grid">
-        <section class="panel panel-pad wide">
-          ${renderChildList(state)}
-        </section>
-      </div>
-    `
-  }
-  if (activeSubView === 'growth') {
-    return `
-      <div class="view-grid">
-        <div class="wide">
-          ${renderGrowthManageView(state)}
-        </div>
-      </div>
-    `
-  }
   if (activeSubView === 'rewards') {
     return `
       <div class="view-grid">
@@ -485,15 +478,7 @@ function renderProfileView(state) {
         <section class="panel panel-pad wide">
           ${renderAccountSummary(state)}
         </section>
-      </div>
-    `
-  }
-  if (activeSubView === 'system-config') {
-    return `
-      <div class="view-grid">
-        <section class="panel panel-pad wide">
-          ${renderSystemConfigView(state)}
-        </section>
+        ${isManagementUser(state) ? `<section class="panel panel-pad wide">${renderChildList(state)}</section>` : ''}
       </div>
     `
   }
@@ -527,6 +512,34 @@ function renderProfileView(state) {
       ${renderRewardTickets(state)}
       <section class="panel panel-pad wide">
         ${renderLedger(state)}
+      </section>
+    </div>
+  `
+}
+
+function renderGrowthView(state) {
+  if (!isManagementUser(state)) {
+    return `
+      <section class="panel panel-pad">
+        <div class="empty compact-empty">宝贝账号暂无管理权限。</div>
+      </section>
+    `
+  }
+  return renderGrowthManageView(state)
+}
+
+function renderSystemConfigPage(state) {
+  if (!isManagementUser(state)) {
+    return `
+      <section class="panel panel-pad">
+        <div class="empty compact-empty">宝贝账号暂无系统配置权限。</div>
+      </section>
+    `
+  }
+  return `
+    <div class="view-grid">
+      <section class="panel panel-pad wide">
+        ${renderSystemConfigView(state)}
       </section>
     </div>
   `
@@ -610,7 +623,7 @@ function renderSystemConfigView(state) {
   const dateColor = config.calendarDateColor || '#1f2937'
   return `
     <div class="section-inline-head">
-      <h2>系统配置</h2>
+      <h2>日历样式</h2>
       <div class="section-actions">
         <button class="btn primary" type="button" data-action="save-system-config">保存配置</button>
       </div>
@@ -720,11 +733,12 @@ function renderChildList(state) {
 function renderChildRow(state, child, selectedChildId) {
   const selected = String(child.id) === String(selectedChildId)
   const avatarSrc = state.avatarObjectUrls?.children?.[child.id] || ''
+  const childAccountName = child.childUsername || child.childAccountUsername || ''
   return `
     <div class="table-row child-table">
       <div class="task-name-cell">
         ${renderAvatarImage(avatarSrc, child.nickname || '宝', 'child-mini', `child-row-${child.id}`)}
-        <div><strong>${escapeHtml(child.nickname)}</strong><small>${escapeHtml(child.remark || '暂无备注')}</small></div>
+        <div><strong>${escapeHtml(child.nickname)}</strong><small>${escapeHtml(childAccountName ? `子账户：${childAccountName}` : (child.remark || '暂无备注'))}</small></div>
       </div>
       <span>${genderLabel(child.gender)}</span>
       <span>${escapeHtml(child.birthday || '未设置')}</span>
@@ -739,13 +753,30 @@ function renderChildRow(state, child, selectedChildId) {
 }
 
 function renderGrowthManageView(state) {
+  const activeSubView = growthSubView(state)
   return `
     <div class="growth-workspace">
+      ${renderGrowthSubnav(activeSubView)}
       <section class="panel panel-pad">
-        ${renderGoalList(state)}
+        ${activeSubView === 'tasks' ? renderTaskManageView(state) : renderGoalList(state)}
       </section>
-      ${renderTaskManageView(state)}
     </div>
+  `
+}
+
+function renderGrowthSubnav(activeSubView) {
+  const items = [
+    ['goals', '成长目标'],
+    ['tasks', '任务管理'],
+  ]
+  return `
+    <nav class="profile-subnav growth-subnav" aria-label="宝贝成长导航">
+      ${items.map(([view, label]) => `
+        <button class="${activeSubView === view ? 'active' : ''}" type="button" data-growth-subview="${view}">
+          ${label}
+        </button>
+      `).join('')}
+    </nav>
   `
 }
 
@@ -821,7 +852,7 @@ function renderTaskManageView(state) {
   const tasks = filterTasks(state.tasks, filters)
   const expanded = Boolean(state.filterAdvanced?.task)
   return `
-    <section class="panel panel-pad">
+    <div class="task-manage-content">
       ${renderTaskReviewTodo(state)}
       <div class="section-inline-head">
         <h2>任务列表</h2>
@@ -848,7 +879,7 @@ function renderTaskManageView(state) {
         </div>
         ${tasks.map(renderTaskRow).join('') || '<div class="empty">暂无任务</div>'}
       </div>
-    </section>
+    </div>
   `
 }
 
@@ -1285,6 +1316,7 @@ function renderRewardCalendarManageActions(event) {
       <div class="reward-flow-card wide reward-calendar-actions">
         <span>父母维护</span>
         ${renderFulfillmentControls(event)}
+        ${renderParentRewardConfirmAction(event)}
       </div>
     `
   }
@@ -1570,7 +1602,7 @@ function renderExchangeTodo(state) {
             <div class="row-actions">
               ${exchange.status === 'REQUESTED'
                 ? `<button class="small-btn primary-lite" type="button" data-action="approve-exchange" data-exchange-id="${exchange.id}">通过</button><button class="small-btn danger" type="button" data-action="reject-exchange" data-exchange-id="${exchange.id}">拒绝</button>`
-                : renderFulfillmentControls(enrichedExchange)}
+                : `${renderFulfillmentControls(enrichedExchange)}${renderParentRewardConfirmAction(enrichedExchange)}`}
             </div>
           </div>
         `}).join('') || '<div class="empty compact-empty">暂无兑换待办</div>'}
@@ -1635,36 +1667,188 @@ function renderRewardTickets(state) {
   const tickets = (state.exchanges || []).filter((exchange) => (
     ['REQUESTED', 'APPROVED', 'COMPLETED'].includes(exchange.status)
     && exchange.status !== 'REJECTED'
-  ))
+  )).sort((left, right) => String(right.requestedAt || right.reviewedAt || right.completedAt || right.createdAt || '')
+    .localeCompare(String(left.requestedAt || left.reviewedAt || left.completedAt || left.createdAt || '')))
+  const activeTab = state.rewardTicketTab === 'used' ? 'used' : 'unused'
+  const unusedTickets = tickets.filter((exchange) => rewardTicketBucket(exchange) === 'unused')
+  const usedTickets = tickets.filter((exchange) => rewardTicketBucket(exchange) === 'used')
+  const activeTickets = activeTab === 'used' ? usedTickets : unusedTickets
   return `
     <section class="panel panel-pad wide">
       <div class="section-inline-head">
         <h2>礼物兑换券</h2>
         <span>${tickets.length} 张</span>
       </div>
+      <div class="ticket-tabs" role="tablist" aria-label="礼物兑换券分类">
+        <button class="${activeTab === 'unused' ? 'active' : ''}" type="button" role="tab" aria-selected="${activeTab === 'unused' ? 'true' : 'false'}" data-ticket-tab="unused">未使用 <b>${unusedTickets.length}</b></button>
+        <button class="${activeTab === 'used' ? 'active' : ''}" type="button" role="tab" aria-selected="${activeTab === 'used' ? 'true' : 'false'}" data-ticket-tab="used">已使用 <b>${usedTickets.length}</b></button>
+      </div>
       <div class="ticket-list">
-        ${tickets.map((exchange) => {
-          const confirmed = exchange.status === 'COMPLETED' || exchange.fulfillmentStatus === 'CONFIRMED'
-          const confirmable = exchange.status === 'APPROVED' && !confirmed
-          const stateText = exchange.status === 'REQUESTED'
-            ? '待家长确认'
-            : confirmed ? '已确认' : '可确认'
-          const subtitle = exchange.status === 'REQUESTED'
-            ? '待家长确认'
-            : fulfillmentStatusName(exchange.fulfillmentStatus)
-          return `
-          <button class="ticket-item ${confirmed ? 'confirmed' : ''} ${exchange.status === 'REQUESTED' ? 'pending' : ''}" type="button" ${confirmable ? `data-action="confirm-reward-ticket" data-exchange-id="${exchange.id}"` : 'disabled'}>
-            <span class="reward-mini" style="--reward-color:${exchange.rewardColorSnapshot || '#6c63ff'}">${escapeHtml(exchange.rewardIconSnapshot || '🎁')}</span>
-            <div>
-              <strong>${escapeHtml(exchange.rewardNameSnapshot || '礼物券')}</strong>
-              <small>${escapeHtml(subtitle)}</small>
-            </div>
-            <span class="ticket-state">${escapeHtml(stateText)}</span>
-          </button>
-        `}).join('') || '<div class="empty compact-empty">暂无礼物兑换券</div>'}
+        ${activeTickets.map((exchange) => renderRewardTicketItem(exchange)).join('') || '<div class="empty compact-empty">暂无礼物兑换券</div>'}
       </div>
     </section>
   `
+}
+
+function renderRewardTicketItem(exchange) {
+  const used = rewardTicketBucket(exchange) === 'used'
+  const badge = rewardTicketBadgeLabel(exchange)
+  const subtitle = rewardTicketSubtitle(exchange)
+  return `
+    <button class="ticket-item ${used ? 'confirmed' : ''} ${exchange.status === 'REQUESTED' ? 'pending' : ''}" type="button" data-action="open-reward-ticket" data-exchange-id="${escapeHtml(exchange.id)}">
+      <span class="reward-mini" style="--reward-color:${exchange.rewardColorSnapshot || '#6c63ff'}">${escapeHtml(exchange.rewardIconSnapshot || '🎁')}</span>
+      <div>
+        <strong>${escapeHtml(exchange.rewardNameSnapshot || '礼物券')}</strong>
+        <small>${escapeHtml(subtitle)}</small>
+      </div>
+      <span class="ticket-state">${escapeHtml(badge)}</span>
+    </button>
+  `
+}
+
+function renderRewardTicketModal(state) {
+  if (!state.rewardTicketModalOpen || !state.selectedRewardTicketId) return ''
+  const exchange = (state.exchanges || []).find((item) => String(item.id) === String(state.selectedRewardTicketId))
+  if (!exchange) return ''
+  const reward = findRewardForExchange(exchange, state.rewards || [])
+  const rewardIcon = exchange.rewardIconSnapshot || reward?.rewardIcon || '🎁'
+  const rewardColor = exchange.rewardColorSnapshot || reward?.rewardColor || '#6c63ff'
+  const requiredPointType = exchange.requiredPointType || reward?.requiredPointType || 'STAR'
+  const requiredPoints = Math.max(1, Number(exchange.requiredPointsSnapshot || reward?.requiredPoints || 1))
+  const canConfirm = exchange.status === 'APPROVED' && exchange.fulfillmentStatus !== 'CONFIRMED'
+  const timelineItems = renderRewardTicketTimelineItems(exchange)
+  return `
+    <div class="modal-backdrop reward-ticket-backdrop">
+      <section class="modal narrow reward-ticket-modal" aria-label="礼物兑换券详情">
+        <div class="modal-head">
+          <div>
+            <h2>礼物兑换券</h2>
+            <p>${escapeHtml(rewardTicketTitle(exchange))}</p>
+          </div>
+          <button class="icon-btn" type="button" data-action="close-reward-ticket-modal">×</button>
+        </div>
+        <div class="ticket-modal-summary">
+          <span class="reward-mini large" style="--reward-color:${escapeHtml(rewardColor)}">${escapeHtml(rewardIcon)}</span>
+          <div class="ticket-modal-summary-main">
+            <h3>${escapeHtml(exchange.rewardNameSnapshot || reward?.name || '奖励')}</h3>
+            <p>${escapeHtml(reward?.description || exchange.remark || '暂无奖励说明')}</p>
+            <div class="ticket-modal-meta">
+              <span class="ticket-meta-chip">${escapeHtml(rewardMainFlowName(exchange.status, exchange.fulfillmentStatus))}</span>
+              <span class="ticket-meta-chip">${escapeHtml(branchStatusName(exchange.branchStatus))}</span>
+              <span class="ticket-meta-chip ${exchange.status === 'APPROVED' && exchange.fulfillmentStatus !== 'CONFIRMED' ? 'accent' : ''}">${escapeHtml(rewardTicketBadgeLabel(exchange))}</span>
+            </div>
+          </div>
+          <div class="ticket-cost-panel" style="--point-color:${escapeHtml(pointTypeColor(requiredPointType))}">
+            <strong>${requiredPoints}</strong>
+            ${renderLimitedPointIcons(pointIcon(requiredPointType), requiredPoints, pointTypeColor(requiredPointType), 9)}
+          </div>
+        </div>
+        <div class="ticket-timeline-head">
+          <h3>礼物动态</h3>
+          <span>${timelineItems.length} 条动态</span>
+        </div>
+        <div class="ticket-timeline">
+          ${renderRewardTicketTimeline(timelineItems)}
+        </div>
+        <div class="modal-actions wide ticket-modal-actions">
+          ${canConfirm ? `<button class="btn primary" type="button" data-action="confirm-reward-ticket" data-exchange-id="${escapeHtml(exchange.id)}">确认礼物券</button>` : ''}
+          <button class="btn" type="button" data-action="close-reward-ticket-modal">关闭</button>
+        </div>
+      </section>
+    </div>
+  `
+}
+
+function rewardTicketBucket(exchange) {
+  return exchange.status === 'COMPLETED' || exchange.fulfillmentStatus === 'CONFIRMED' ? 'used' : 'unused'
+}
+
+function rewardTicketBadgeLabel(exchange) {
+  if (exchange.status === 'REQUESTED') return '待家长确认'
+  if (exchange.status === 'APPROVED' && exchange.fulfillmentStatus !== 'CONFIRMED') return '可提前确认'
+  return '已使用'
+}
+
+function rewardTicketSubtitle(exchange) {
+  if (exchange.status === 'REQUESTED') return '等待家长确认'
+  if (exchange.status === 'APPROVED' && exchange.fulfillmentStatus !== 'CONFIRMED') return '家长已确认，可提前确认'
+  return '礼物已使用'
+}
+
+function rewardTicketTitle(exchange) {
+  if (exchange.status === 'REQUESTED') return '等待家长确认，确认后就能继续查看动态'
+  if (exchange.status === 'APPROVED' && exchange.fulfillmentStatus !== 'CONFIRMED') return '家长已确认，宝贝可以提前确认'
+  return '礼物已使用完成'
+}
+
+function renderRewardTicketTimeline(items) {
+  return items.map((item) => `
+    <article class="ticket-timeline-item ${item.tone}">
+      <span class="ticket-timeline-dot"></span>
+      <div>
+        <div class="ticket-timeline-headline">
+          <strong>${escapeHtml(item.title)}</strong>
+          ${item.time ? `<small>${escapeHtml(item.time)}</small>` : ''}
+        </div>
+        <p>${escapeHtml(item.detail)}</p>
+      </div>
+    </article>
+  `).join('')
+}
+
+function renderRewardTicketTimelineItems(exchange) {
+  const items = []
+  const pushItem = (tone, title, detail, time = '') => {
+    items.push({ tone, title, detail, time })
+  }
+  pushItem('neutral', '兑换申请', '宝贝发起了礼物兑换。', formatActivityTime(exchange.requestedAt || exchange.createTime))
+  if (exchange.status === 'REJECTED') {
+    pushItem('negative', '家长拒绝', '这次兑换申请没有通过。', formatActivityTime(exchange.reviewedAt || exchange.requestedAt || exchange.createTime))
+    return items
+  }
+  if (exchange.reviewedAt || exchange.status === 'APPROVED' || exchange.status === 'COMPLETED') {
+    pushItem('positive', '家长确认', exchange.status === 'APPROVED' ? '家长已确认，宝贝可以提前确认。' : '兑换已经通过审核。', formatActivityTime(exchange.reviewedAt || exchange.requestedAt || exchange.createTime))
+  } else {
+    pushItem('neutral', '等待确认', '正在等待家长处理。', '')
+    return items
+  }
+  const fulfillmentType = exchange.fulfillmentType || 'INVENTORY_DEDUCT'
+  if (fulfillmentType === 'PARENT_PURCHASE') {
+    if (exchange.expectedArrivalDate) {
+      pushItem('neutral', '预计到达', `奖励预计在 ${exchange.expectedArrivalDate} 到达。`, exchange.expectedArrivalDate)
+    }
+    if (exchange.branchStatus === 'PURCHASE_ORDERED' || exchange.branchStatus === 'PURCHASE_SHIPPING' || exchange.branchStatus === 'PURCHASE_ARRIVED' || exchange.fulfillmentUpdatedAt) {
+      pushItem('positive', '家长已下单', '奖励正在运送中。', formatActivityTime(exchange.fulfillmentUpdatedAt || exchange.reviewedAt || exchange.requestedAt))
+    }
+    if (exchange.branchStatus === 'PURCHASE_SHIPPING' || exchange.branchStatus === 'PURCHASE_ARRIVED') {
+      pushItem('positive', '奖励运输中', '礼物已经进入运输阶段。', formatActivityTime(exchange.fulfillmentUpdatedAt || exchange.reviewedAt || exchange.requestedAt))
+    }
+    if (exchange.branchStatus === 'PURCHASE_ARRIVED' || exchange.status === 'COMPLETED' || exchange.fulfillmentStatus === 'CONFIRMED') {
+      pushItem('positive', '奖励已到货', '礼物已经准备好，可以确认。', formatActivityTime(exchange.fulfillmentUpdatedAt || exchange.completedAt || exchange.reviewedAt))
+    }
+  } else if (fulfillmentType === 'PARENT_FULFILL') {
+    if (exchange.scheduleStartDate || exchange.scheduleEndDate) {
+      const scheduleText = exchange.scheduleStartDate && exchange.scheduleEndDate
+        ? `${exchange.scheduleStartDate} 至 ${exchange.scheduleEndDate}`
+        : exchange.scheduleStartDate || exchange.scheduleEndDate
+      pushItem('neutral', '家长加入日程', `日程安排：${scheduleText}。`, scheduleText)
+    }
+    if (exchange.branchStatus === 'SCHEDULED' || exchange.branchStatus === 'IN_PROGRESS' || exchange.branchStatus === 'COMPLETED' || exchange.fulfillmentUpdatedAt) {
+      pushItem('positive', '奖励进行中', '家长已经开始安排这次奖励。', formatActivityTime(exchange.fulfillmentUpdatedAt || exchange.reviewedAt || exchange.requestedAt))
+    }
+  } else if (fulfillmentType === 'PARENT_EXECUTE') {
+    if (exchange.branchStatus === 'IN_PROGRESS' || exchange.branchStatus === 'COMPLETED' || exchange.fulfillmentUpdatedAt) {
+      pushItem('positive', '家长执行中', '奖励正在由家长执行。', formatActivityTime(exchange.fulfillmentUpdatedAt || exchange.reviewedAt || exchange.requestedAt))
+    }
+  } else {
+    pushItem('positive', '奖励已扣减', '库存扣减型奖励已经处理。', formatActivityTime(exchange.fulfillmentUpdatedAt || exchange.reviewedAt || exchange.requestedAt))
+  }
+  if (exchange.confirmedAt || exchange.status === 'COMPLETED' || exchange.fulfillmentStatus === 'CONFIRMED') {
+    pushItem('positive', '宝贝确认', '宝贝已经完成确认。', formatActivityTime(exchange.confirmedAt || exchange.completedAt || exchange.fulfillmentUpdatedAt))
+  } else if (exchange.status === 'APPROVED') {
+    pushItem('neutral', '等待宝贝确认', '宝贝可以在这里提前确认。', '')
+  }
+  return items
 }
 
 function renderFulfillmentControls(exchange) {
@@ -1673,7 +1857,7 @@ function renderFulfillmentControls(exchange) {
   if (fulfillmentType === 'PARENT_PURCHASE') {
     return `
       <div class="reward-flow-controls">
-        <label class="flow-date-field"><span>预计到达</span><input type="date" name="expectedArrivalDate" value="${escapeHtml(exchange.expectedArrivalDate || '')}" /></label>
+        ${renderChineseDatePicker('expectedArrivalDate', exchange.expectedArrivalDate || '', { label: '预计到达', placeholder: '请选择预计到达日期', ariaLabel: '选择预计到达日期' })}
         <button class="small-btn ${branchStatus === 'PURCHASE_ORDERED' ? 'primary-lite' : ''}" type="button" data-action="update-fulfillment" data-exchange-id="${exchange.exchangeId || exchange.id}" data-branch-status="PURCHASE_ORDERED">已下单</button>
         <button class="small-btn ${branchStatus === 'PURCHASE_SHIPPING' ? 'primary-lite' : ''}" type="button" data-action="update-fulfillment" data-exchange-id="${exchange.exchangeId || exchange.id}" data-branch-status="PURCHASE_SHIPPING">运输中</button>
         <button class="small-btn ${branchStatus === 'PURCHASE_ARRIVED' ? 'primary-lite' : ''}" type="button" data-action="update-fulfillment" data-exchange-id="${exchange.exchangeId || exchange.id}" data-branch-status="PURCHASE_ARRIVED">已到货</button>
@@ -1683,8 +1867,8 @@ function renderFulfillmentControls(exchange) {
   if (fulfillmentType === 'PARENT_FULFILL') {
     return `
       <div class="reward-flow-controls schedule-flow-controls">
-        <label class="flow-date-field"><span>开始</span><input type="date" name="scheduleStartDate" value="${escapeHtml(exchange.scheduleStartDate || '')}" /></label>
-        <label class="flow-date-field"><span>结束</span><input type="date" name="scheduleEndDate" value="${escapeHtml(exchange.scheduleEndDate || '')}" /></label>
+        ${renderChineseDatePicker('scheduleStartDate', exchange.scheduleStartDate || '', { label: '开始日期', placeholder: '请选择开始日期', ariaLabel: '选择开始日期' })}
+        ${renderChineseDatePicker('scheduleEndDate', exchange.scheduleEndDate || '', { label: '结束日期', placeholder: '请选择结束日期', ariaLabel: '选择结束日期' })}
         <button class="small-btn ${branchStatus === 'SCHEDULED' ? 'primary-lite' : ''}" type="button" data-action="update-fulfillment" data-exchange-id="${exchange.exchangeId || exchange.id}" data-branch-status="SCHEDULED">加入日程</button>
         <button class="small-btn ${branchStatus === 'IN_PROGRESS' ? 'primary-lite' : ''}" type="button" data-action="update-fulfillment" data-exchange-id="${exchange.exchangeId || exchange.id}" data-branch-status="IN_PROGRESS">进行中</button>
         <button class="small-btn ${branchStatus === 'COMPLETED' ? 'primary-lite' : ''}" type="button" data-action="update-fulfillment" data-exchange-id="${exchange.exchangeId || exchange.id}" data-branch-status="COMPLETED">已完成</button>
@@ -1701,6 +1885,23 @@ function renderFulfillmentControls(exchange) {
       `).join('')}
     </div>
   `
+}
+
+function renderParentRewardConfirmAction(exchange) {
+  if (!canParentConfirmReward(exchange)) return ''
+  return `
+    <button class="small-btn primary-lite reward-confirm-action" type="button" data-action="confirm-reward-ticket" data-exchange-id="${escapeHtml(exchange.exchangeId || exchange.id)}">
+      确认完成
+    </button>
+  `
+}
+
+function canParentConfirmReward(exchange) {
+  if (exchange.status !== 'APPROVED' || exchange.fulfillmentStatus === 'CONFIRMED') return false
+  const branchStatus = exchange.branchStatus || 'PENDING'
+  return exchange.fulfillmentStatus === 'COMPLETED'
+    || branchStatus === 'PURCHASE_ARRIVED'
+    || branchStatus === 'COMPLETED'
 }
 
 function findRewardForExchange(exchange, rewards = []) {
@@ -1970,7 +2171,8 @@ function renderActionIcon(type) {
 function renderChildModal(state) {
   if (!state.childModalOpen) return ''
   const child = state.editingChild || {}
-  const createAccount = Boolean(state.childAccountDraftEnabled)
+  const existingChildUsername = child.childUsername || child.childAccountUsername || ''
+  const createAccount = Boolean(state.childAccountDraftEnabled) && !existingChildUsername
   const childAvatarSrc = pendingAvatarPreview(state, 'child', child.id || '') || state.avatarObjectUrls?.children?.[child.id] || ''
   return `
     <div class="modal-backdrop">
@@ -1997,16 +2199,21 @@ function renderChildModal(state) {
           </div>
           <label><span>宝贝昵称</span><input name="nickname" value="${escapeHtml(child.nickname || '')}" placeholder="例如：小星" /></label>
           <label><span>性别</span>${renderSelect('gender', child.gender || 'UNKNOWN', [['UNKNOWN', '未设置'], ['MALE', '男孩'], ['FEMALE', '女孩']])}</label>
-          ${renderChineseDatePicker('birthday', child.birthday || '')}
+          ${renderChineseDatePicker('birthday', child.birthday || '', { label: '生日', placeholder: '请选择生日', ariaLabel: '选择生日' })}
           <label class="wide"><span>备注</span><input name="remark" value="${escapeHtml(child.remark || '')}" placeholder="宝贝偏好、阶段目标等" /></label>
-          <label class="switch-field wide">
-            <input type="checkbox" name="createChildAccount" value="true" ${createAccount ? 'checked' : ''} />
-            <span>创建子账户</span>
-          </label>
-          <div class="child-account-fields wide ${createAccount ? '' : 'hidden'}">
-            <label><span>子账户账号</span><input name="childUsername" autocomplete="new-password" autocapitalize="none" spellcheck="false" placeholder="例如：baby-star" /></label>
-            <label><span>子账户密码</span><input name="childPassword" autocomplete="new-password" type="password" placeholder="至少 6 位" /></label>
-          </div>
+          ${existingChildUsername
+            ? `<div class="child-account-summary wide">
+                <span>已创建子账户</span>
+                <strong>${escapeHtml(existingChildUsername)}</strong>
+              </div>`
+            : `<label class="switch-field wide">
+                <input type="checkbox" name="createChildAccount" value="true" ${createAccount ? 'checked' : ''} />
+                <span>创建子账户</span>
+              </label>
+              <div class="child-account-fields wide ${createAccount ? '' : 'hidden'}">
+                <label><span>子账户账号</span><input name="childUsername" autocomplete="new-password" autocapitalize="none" spellcheck="false" placeholder="例如：baby-star" /></label>
+                <label><span>子账户密码</span><input name="childPassword" autocomplete="new-password" type="password" placeholder="至少 6 位" /></label>
+              </div>`}
           <div class="modal-actions wide">
             <button class="btn" type="button" data-action="close-child-modal">取消</button>
             <button class="btn primary" type="submit">保存</button>
@@ -2034,8 +2241,8 @@ function renderGoalModal(state) {
           <label class="wide"><span>说明</span><input name="description" value="${escapeHtml(goal.description || '')}" placeholder="目标说明" /></label>
           <label><span>目标颜色</span><input type="color" name="goalColor" value="${escapeHtml(goal.goalColor || '#6c63ff')}" /></label>
           <label><span>目标积分</span><input type="number" min="0" name="targetPoints" value="${escapeHtml(goal.targetPoints || 0)}" /></label>
-          <label><span>开始日期</span><input type="date" name="startDate" value="${escapeHtml(goal.startDate || '')}" /></label>
-          <label><span>结束日期</span><input type="date" name="endDate" value="${escapeHtml(goal.endDate || '')}" /></label>
+          ${renderChineseDatePicker('startDate', goal.startDate || '', { label: '开始日期', placeholder: '请选择开始日期', ariaLabel: '选择开始日期' })}
+          ${renderChineseDatePicker('endDate', goal.endDate || '', { label: '结束日期', placeholder: '请选择结束日期', ariaLabel: '选择结束日期' })}
           <label><span>排序</span><input type="number" min="0" name="sortNo" value="${escapeHtml(goal.sortNo || 0)}" /></label>
           <div class="modal-actions wide">
             <button class="btn" type="button" data-action="close-goal-modal">取消</button>

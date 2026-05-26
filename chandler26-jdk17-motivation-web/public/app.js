@@ -30,6 +30,7 @@ const state = {
   selectedChild: demoState.children[0] || null,
   currentView: 'profile',
   profileSubView: 'home',
+  growthSubView: 'goals',
   accountModalOpen: false,
   accountDraft: readAccountDraftFromStorage(),
   avatarObjectUrls: {
@@ -51,6 +52,7 @@ const state = {
   pointAdjustModalOpen: false,
   balanceModalOpen: false,
   rewardExchangeModalOpen: false,
+  rewardTicketModalOpen: false,
   taskCheckInModalOpen: false,
   calendarDayModalOpen: false,
   calendarEventModalOpen: false,
@@ -58,6 +60,7 @@ const state = {
   selectedCalendarEventId: '',
   selectedBalancePointType: '',
   selectedRewardId: '',
+  selectedRewardTicketId: '',
   selectedCheckInTaskId: '',
   selectedCheckInTaskDate: '',
   selectedCheckInRewardCount: 0,
@@ -65,6 +68,7 @@ const state = {
   rewardExchangeSuccess: null,
   loginCarouselIndex: 0,
   loginCarouselPinned: false,
+  rewardTicketTab: 'unused',
   rewardIconPickerOpen: false,
   childAccountDraftEnabled: false,
   confirmDialog: null,
@@ -293,6 +297,12 @@ function bindEvents() {
       render()
     })
   })
+  document.querySelectorAll('[data-growth-subview]').forEach((button) => {
+    button.addEventListener('click', () => {
+      state.growthSubView = button.dataset.growthSubview === 'tasks' ? 'tasks' : 'goals'
+      render()
+    })
+  })
   document.querySelector('[data-action="open-account-modal"]')?.addEventListener('click', openAccountModal)
   document.querySelectorAll('[data-action="close-account-modal"]').forEach((button) => {
     button.addEventListener('click', closeAccountModal)
@@ -389,6 +399,18 @@ function bindEvents() {
   })
   document.querySelectorAll('[data-action="close-reward-exchange-modal"]').forEach((button) => {
     button.addEventListener('click', closeRewardExchangeModal)
+  })
+  document.querySelectorAll('[data-action="close-reward-ticket-modal"]').forEach((button) => {
+    button.addEventListener('click', closeRewardTicketModal)
+  })
+  document.querySelectorAll('[data-action="open-reward-ticket"]').forEach((button) => {
+    button.addEventListener('click', () => openRewardTicketModal(button.dataset.exchangeId))
+  })
+  document.querySelectorAll('[data-ticket-tab]').forEach((button) => {
+    button.addEventListener('click', () => {
+      state.rewardTicketTab = button.dataset.ticketTab === 'used' ? 'used' : 'unused'
+      render()
+    })
   })
   document.querySelectorAll('[data-action="select-reward-payment"]').forEach((button) => {
     button.addEventListener('click', () => handleExchangeReward(state.selectedRewardId, button.dataset.paymentPointType))
@@ -780,7 +802,7 @@ function setDatePickerValue(picker, dateKey) {
     input.dispatchEvent(new Event('change', { bubbles: true }))
   }
   if (label) {
-    label.textContent = formatChineseDateLabel(normalized)
+    label.textContent = formatChineseDateLabel(normalized, picker.dataset.dateEmptyLabel || '请选择日期')
     label.classList.toggle('placeholder', !normalized)
   }
   renderDatePickerMonth(picker)
@@ -800,9 +822,9 @@ function monthFromKey(value) {
   return Number.isNaN(date.getTime()) ? null : date
 }
 
-function formatChineseDateLabel(dateKey) {
+function formatChineseDateLabel(dateKey, emptyLabel = '请选择日期') {
   const date = dateFromDateKey(dateKey)
-  if (!date) return '请选择生日'
+  if (!date) return emptyLabel
   return `${date.getFullYear()}年${date.getMonth() + 1}月${date.getDate()}日`
 }
 
@@ -2155,6 +2177,19 @@ function closeRewardExchangeModal() {
   render()
 }
 
+function openRewardTicketModal(exchangeId) {
+  if (!exchangeId) return
+  state.selectedRewardTicketId = exchangeId
+  state.rewardTicketModalOpen = true
+  render()
+}
+
+function closeRewardTicketModal() {
+  state.rewardTicketModalOpen = false
+  state.selectedRewardTicketId = ''
+  render()
+}
+
 function openTaskCheckInModal(taskId, taskDate = state.todayKey) {
   const taskMeta = getTaskMeta(taskId, taskDate)
   if (!taskMeta) return
@@ -2231,6 +2266,7 @@ function logout() {
   state.user = null
   state.currentView = 'profile'
   state.profileSubView = 'home'
+  state.growthSubView = 'goals'
   state.connectionMessage = '已登出，请重新登录'
   state.toast = ''
   render()
@@ -2263,19 +2299,26 @@ function isManagementUser() {
 }
 
 function normalizeViewForRole(view) {
-  return ['profile', 'calendar', 'reward-calendar', 'store'].includes(view) ? view : 'profile'
+  const normalized = String(view || 'profile')
+  if (isManagementUser()) {
+    return ['profile', 'growth', 'calendar', 'reward-calendar', 'store', 'system-config'].includes(normalized)
+      ? normalized
+      : 'profile'
+  }
+  return ['profile', 'calendar', 'reward-calendar', 'store'].includes(normalized) ? normalized : 'calendar'
 }
 
 function normalizeProfileSubViewForRole(subView) {
   if (!isManagementUser()) {
     return 'home'
   }
-  return ['home', 'account', 'children', 'growth', 'rewards', 'currencies', 'system-config'].includes(subView) ? subView : 'home'
+  return ['home', 'account', 'rewards', 'currencies'].includes(subView) ? subView : 'home'
 }
 
 function applyRoleLanding() {
   state.currentView = isChildUser() ? 'calendar' : 'profile'
   state.profileSubView = 'home'
+  state.growthSubView = 'goals'
   if (isCompactLayout()) {
     state.sidebarCollapsed = true
     localStorage.setItem(SIDEBAR_KEY, '1')
@@ -2454,7 +2497,7 @@ async function handleChildSubmit(event) {
     birthday: nullableDate(formData.get('birthday')),
     gender: String(formData.get('gender') || 'UNKNOWN'),
     remark: String(formData.get('remark') || '').trim(),
-    createChildAccount: String(formData.get('createChildAccount') || 'false') === 'true',
+    createChildAccount: String(formData.get('createChildAccount') || 'false') === 'true' && !state.editingChild?.childUsername,
     childUsername: String(formData.get('childUsername') || '').trim(),
     childPassword: String(formData.get('childPassword') || '').trim(),
   }
@@ -2798,10 +2841,12 @@ function resetChildScopedData() {
   state.calendarEventModalOpen = false
   state.balanceModalOpen = false
   state.rewardExchangeModalOpen = false
+  state.rewardTicketModalOpen = false
   state.selectedCalendarDateKey = ''
   state.selectedCalendarEventId = ''
   state.selectedBalancePointType = ''
   state.selectedRewardId = ''
+  state.selectedRewardTicketId = ''
 }
 
 function mergeTaskCalendarEvents(events, tasks) {

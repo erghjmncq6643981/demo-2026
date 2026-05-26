@@ -13,6 +13,7 @@ export const demoState = {
     {
       id: 101,
       nickname: '小星',
+      childUsername: 'baby-star',
       gender: 'UNKNOWN',
       remark: '喜欢明亮颜色和皇冠任务',
     },

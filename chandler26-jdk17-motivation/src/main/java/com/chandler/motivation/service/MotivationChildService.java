@@ -12,6 +12,8 @@ import com.chandler.motivation.domain.mapper.MotivationChildMapper;
 import com.chandler.motivation.support.MotivationConstants;
 import com.chandler.motivation.support.MotivationEnums;
 import java.util.List;
+import java.util.Map;
+import java.util.stream.Collectors;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -52,12 +54,14 @@ public class MotivationChildService extends ServiceImpl<MotivationChildMapper, M
     }
 
     public List<MotivationChild> listByUser(Long userId) {
-        return list(new LambdaQueryWrapper<MotivationChild>()
+        List<MotivationChild> children = list(new LambdaQueryWrapper<MotivationChild>()
                 .inSql(MotivationChild::getId,
                         "select child_id from motivation_family_member where user_id = " + userId
                                 + " and status = '" + MotivationEnums.ChildStatus.ACTIVE.code() + "'")
                 .eq(MotivationChild::getDeleted, MotivationConstants.Flag.NO)
                 .orderByDesc(MotivationChild::getUpdateTime));
+        attachChildAccounts(children);
+        return children;
     }
 
     /**
@@ -80,6 +84,7 @@ public class MotivationChildService extends ServiceImpl<MotivationChildMapper, M
         createChildAccountIfNeeded(child, request);
         systemLogService.recordBusiness(userId, child.getId(), MotivationEnums.LogType.SYSTEM,
                 "修改孩子档案", "修改了孩子「" + child.getNickname() + "」的档案");
+        attachChildAccounts(List.of(child));
         return child;
     }
 
@@ -170,5 +175,32 @@ public class MotivationChildService extends ServiceImpl<MotivationChildMapper, M
                 request.getChildPassword(),
                 child.getNickname());
         familyMemberService.createChildMember(child.getId(), childUser.getId());
+        child.setChildAccountUserId(childUser.getId());
+        child.setChildUsername(childUser.getUsername());
+    }
+
+    private void attachChildAccounts(List<MotivationChild> children) {
+        if (children == null || children.isEmpty()) {
+            return;
+        }
+        List<Long> childIds = children.stream()
+                .map(MotivationChild::getId)
+                .filter(id -> id != null)
+                .toList();
+        if (childIds.isEmpty()) {
+            return;
+        }
+        Map<Long, MotivationUser> accountMap = familyMemberService.listChildAccounts(childIds).stream()
+                .collect(Collectors.toMap(
+                        MotivationFamilyMemberService.ChildAccount::childId,
+                        MotivationFamilyMemberService.ChildAccount::user,
+                        (left, right) -> left));
+        children.forEach(child -> {
+            MotivationUser user = accountMap.get(child.getId());
+            if (user != null) {
+                child.setChildAccountUserId(user.getId());
+                child.setChildUsername(user.getUsername());
+            }
+        });
     }
 }
