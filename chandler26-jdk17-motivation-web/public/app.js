@@ -249,6 +249,7 @@ const actions = {
 }
 
 const app = document.querySelector('#app')
+let navigationDelegatedBound = false
 
 function render() {
   app.innerHTML = renderApp(state, actions)
@@ -257,6 +258,7 @@ function render() {
 }
 
 function bindEvents() {
+  bindNavigationDelegation()
   initLoginCarousel()
   document.querySelector('[data-form="auth"]')?.addEventListener('submit', handleAuthSubmit)
   document.querySelector('[data-action="open-register-modal"]')?.addEventListener('click', openRegisterModal)
@@ -439,6 +441,9 @@ function bindEvents() {
   })
   document.querySelectorAll('[data-action="select-reward-payment"]').forEach((button) => {
     button.addEventListener('click', () => handleExchangeReward(state.selectedRewardId, button.dataset.paymentPointType))
+  })
+  document.querySelectorAll('[data-action="show-reward-payment-hint"]').forEach((button) => {
+    button.addEventListener('click', () => showRewardPaymentHint(button.dataset.paymentPointType))
   })
   document.querySelector('[data-form="task"]')?.addEventListener('submit', handleCreateTaskSubmit)
   document.querySelector('[data-form="reward"]')?.addEventListener('submit', handleRewardSubmit)
@@ -636,6 +641,20 @@ function bindEvents() {
   bindBlockDragSelection('[data-daily-hour-picker]', '[name="dailyHours"]')
   bindBlockDragSelection('[data-weekday-picker]', '[name="weekDays"]')
   bindBlockDragSelection('[data-monthday-picker]', '[name="monthDays"]')
+}
+
+function bindNavigationDelegation() {
+  if (navigationDelegatedBound) return
+  document.addEventListener('click', (event) => {
+    const target = event.target instanceof Element ? event.target.closest('[data-nav-view]') : null
+    if (!target) return
+    event.preventDefault()
+    event.stopPropagation()
+    state.currentView = normalizeViewForRole(target.dataset.navView || 'profile')
+    collapseSidebarOnMobile()
+    render()
+  }, true)
+  navigationDelegatedBound = true
 }
 
 function initLoginCarousel() {
@@ -1381,7 +1400,7 @@ async function handleExchangeReward(rewardId, paymentPointType = '') {
   const option = buildRewardPaymentOptions(reward, state.balances, state.pointExchangeRule)
     .find((item) => item.pointType === paymentPointType)
   if (!option?.enough) {
-    toast('余额不足，先攒一攒吧')
+    toast(rewardPaymentHint(reward, state.balances, state.pointExchangeRule))
     return
   }
   try {
@@ -1430,6 +1449,22 @@ async function handleExchangeReward(rewardId, paymentPointType = '') {
   } catch (error) {
     toast(error.message)
   }
+}
+
+function showRewardPaymentHint(paymentPointType = '') {
+  const reward = state.rewards.find((item) => String(item.id) === String(state.selectedRewardId))
+  if (!reward) return
+  toast(rewardPaymentHint(reward, state.balances, state.pointExchangeRule, paymentPointType))
+}
+
+function rewardPaymentHint(reward, balances = [], rule = {}, paymentPointType = '') {
+  const options = buildRewardPaymentOptions(reward, balances, rule)
+  const requiredPointType = String(reward.requiredPointType || 'STAR')
+  const higherEnough = options.find((option) => option.pointType !== requiredPointType && option.enough)
+  if (higherEnough) {
+    return `当前${pointName(requiredPointType)}不足，可以使用${pointName(higherEnough.pointType)}兑换并自动找零`
+  }
+  return '余额不足，先攒够目标图标或更高币值图标'
 }
 
 async function handleRewardExchangeReview(exchangeId, approved) {

@@ -311,6 +311,14 @@ input[type="color"] { padding: 4px; }
 }
 .sidebar-brand strong { display: block; font-size: 16px; }
 .sidebar-brand span { color: var(--muted); font-size: 12px; }
+.sidebar-brand .sidebar-child-name {
+  margin-top: 4px;
+  display: block;
+  color: var(--text);
+  font-size: 18px;
+  font-weight: 900;
+  line-height: 1.2;
+}
 .side-nav { display: grid; gap: 8px; }
 .side-nav button {
   min-height: 42px;
@@ -2658,14 +2666,41 @@ input[type="color"] { padding: 4px; }
   border-radius: 14px;
   font-size: 24px;
 }
+.reward-exchange-overview {
+  display: grid;
+  grid-template-columns: minmax(0, 0.8fr) minmax(0, 1.2fr);
+  gap: 12px;
+  padding: 0 18px 12px;
+}
+.reward-exchange-card {
+  display: grid;
+  align-content: center;
+  gap: 10px;
+  min-height: 128px;
+  padding: 14px;
+  border: 1px solid color-mix(in srgb, var(--point-color, #4f46e5) 18%, #ffffff);
+  border-radius: 18px;
+  background: color-mix(in srgb, var(--point-color, #4f46e5) 7%, #ffffff);
+}
+.reward-exchange-card > span {
+  color: var(--muted);
+  font-size: 12px;
+  font-weight: 900;
+}
+.reward-exchange-card.balances {
+  --point-color: #4f46e5;
+  background: #fff;
+}
+.reward-exchange-card .limited-point-icons {
+  justify-content: flex-start;
+}
 .reward-balance-strip {
   display: grid;
   grid-template-columns: repeat(3, minmax(0, 1fr));
   gap: 10px;
-  padding: 0 18px 12px;
 }
 .reward-balance-item {
-  min-height: 74px;
+  min-height: 66px;
   display: grid;
   place-items: center;
   gap: 2px;
@@ -2673,8 +2708,71 @@ input[type="color"] { padding: 4px; }
   border-radius: 16px;
   background: color-mix(in srgb, var(--point-color) 8%, #ffffff);
 }
-.reward-balance-item strong { font-size: 26px; line-height: 1; }
-.reward-balance-item span { color: var(--point-color); font-size: 28px; line-height: 1; }
+.reward-balance-item.target {
+  border-color: color-mix(in srgb, var(--point-color) 34%, #ffffff);
+  box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--point-color) 18%, transparent);
+}
+.currency-amount {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  color: var(--point-color);
+  line-height: 1;
+  white-space: nowrap;
+}
+.currency-amount strong {
+  color: var(--text);
+  font-size: 24px;
+  font-weight: 950;
+}
+.currency-amount b {
+  color: var(--muted);
+  font-size: 14px;
+  font-weight: 900;
+}
+.currency-amount span {
+  color: var(--point-color);
+  font-size: 29px;
+}
+.currency-amount.large strong { font-size: 34px; }
+.currency-amount.large span { font-size: 36px; }
+.currency-amount.balance-amount strong { font-size: 22px; }
+.currency-amount.balance-amount span { font-size: 25px; }
+.currency-amount.payment-amount strong { font-size: 24px; }
+.currency-amount.payment-amount span { font-size: 30px; }
+.point-cost-summary {
+  display: grid;
+  justify-items: center;
+  gap: 8px;
+}
+.point-cost-summary.calendar-cost .currency-amount strong {
+  font-size: 30px;
+}
+.reward-exchange-hint {
+  margin: 0 18px 14px;
+  padding: 10px 12px;
+  border-radius: 14px;
+  color: #4338ca;
+  background: rgba(79, 70, 229, 0.09);
+  font-size: 13px;
+  font-weight: 900;
+}
+.reward-exchange-hint.ready {
+  color: #047857;
+  background: #dcfce7;
+}
+.reward-exchange-hint.suggest {
+  color: #b45309;
+  background: #fef3c7;
+}
+.reward-exchange-hint.danger {
+  color: #b91c1c;
+  background: #fee2e2;
+}
+.reward-exchange-hint strong {
+  margin-left: 8px;
+}
 .reward-price-panel {
   display: grid;
   place-items: center;
@@ -2718,12 +2816,12 @@ input[type="color"] { padding: 4px; }
   background: color-mix(in srgb, var(--point-color) 9%, #ffffff);
   color: var(--text);
 }
-.payment-option span {
-  color: var(--point-color);
-  font-size: 28px;
-  line-height: 1;
+.payment-option em {
+  color: #4338ca;
+  font-size: 12px;
+  font-style: normal;
+  font-weight: 950;
 }
-.payment-option strong { font-size: 21px; }
 .payment-option small { min-height: 15px; color: var(--muted); font-size: 11px; font-weight: 900; }
 .payment-option.disabled {
   filter: grayscale(0.6);
@@ -3092,6 +3190,7 @@ input[type="color"] { padding: 4px; }
   .modal-head { flex-direction: row; align-items: flex-start; }
   .side-nav, .filter-bar, .filter-bar.compact, .stats, .reward-grid, .view-grid, .modal-form, .account-summary-grid, .system-config-form { grid-template-columns: 1fr; }
   .child-account-fields,
+  .reward-exchange-overview,
   .reward-balance-strip,
   .reward-payment-options {
     grid-template-columns: 1fr;

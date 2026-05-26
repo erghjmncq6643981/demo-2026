@@ -375,7 +375,7 @@ function renderSidebar(state) {
         <div class="brand-mark">★</div>
         <div>
           <strong class="rainbow-title brand-title">${Array.from('宝贝激励助手').map((char) => `<span>${char}</span>`).join('')}</strong>
-          <span>${escapeHtml(state.selectedChild?.nickname || '未选择宝贝')}</span>
+          <span class="sidebar-child-name">${escapeHtml(state.selectedChild?.nickname || '未选择宝贝')}</span>
         </div>
       </div>
       <nav class="side-nav">
@@ -1304,7 +1304,7 @@ function renderCalendarEventModal(state) {
             ${isPoint
               ? renderPointChangeIcons(event, 'large')
               : isReward
-                ? renderLimitedPointIcons(pointIcon(event.requiredPointType), event.requiredPoints, pointTypeColor(event.requiredPointType), 12)
+                ? renderPointCostSummary(event.requiredPointType, event.requiredPoints, state, 'calendar-cost')
                 : renderTaskRewardIcons(event, scoreCount, 'calendar large')}
           </div>
           ${isReward ? renderRewardFlowDetail(event, canManageReward) : ''}
@@ -1802,6 +1802,8 @@ function renderRewardTicketModal(state) {
   const rewardColor = exchange.rewardColorSnapshot || reward?.rewardColor || '#6c63ff'
   const requiredPointType = exchange.requiredPointType || reward?.requiredPointType || 'STAR'
   const requiredPoints = Math.max(1, Number(exchange.requiredPointsSnapshot || reward?.requiredPoints || 1))
+  const currencies = getPointCurrencies(state)
+  const requiredCurrency = currencyMeta(requiredPointType, currencies)
   const canConfirm = exchange.status === 'APPROVED' && exchange.fulfillmentStatus !== 'CONFIRMED'
   const timelineItems = renderRewardTicketTimelineItems(exchange)
   return `
@@ -1825,9 +1827,9 @@ function renderRewardTicketModal(state) {
               <span class="ticket-meta-chip ${exchange.status === 'APPROVED' && exchange.fulfillmentStatus !== 'CONFIRMED' ? 'accent' : ''}">${escapeHtml(rewardTicketBadgeLabel(exchange))}</span>
             </div>
           </div>
-          <div class="ticket-cost-panel" style="--point-color:${escapeHtml(pointTypeColor(requiredPointType))}">
-            <strong>${requiredPoints}</strong>
-            ${renderLimitedPointIcons(pointIcon(requiredPointType), requiredPoints, pointTypeColor(requiredPointType), 9)}
+          <div class="ticket-cost-panel" style="--point-color:${escapeHtml(requiredCurrency.color)}">
+            ${renderCurrencyAmount(requiredCurrency, requiredPoints, 'cost-amount')}
+            ${renderLimitedPointIcons(requiredCurrency.icon, requiredPoints, requiredCurrency.color, 9)}
           </div>
         </div>
         <div class="ticket-timeline-head">
@@ -2234,6 +2236,68 @@ function renderFullScoreIcons(pointType, count) {
     || '<span class="empty compact-empty">暂无积分</span>'
 }
 
+function renderCurrencyAmount(meta, amount, className = '') {
+  const safeAmount = Math.max(0, Number(amount || 0))
+  return `
+    <span class="currency-amount ${escapeHtml(className)}" style="--point-color:${escapeHtml(meta.color || '#f59e0b')}">
+      <strong>${safeAmount}</strong>
+      <b>×</b>
+      <span>${escapeHtml(meta.icon || '★')}</span>
+    </span>
+  `
+}
+
+function renderPointCostSummary(pointType, amount, state, className = '') {
+  const currencies = getPointCurrencies(state)
+  const meta = currencyMeta(pointType || 'STAR', currencies)
+  return `
+    <div class="point-cost-summary ${escapeHtml(className)}" style="--point-color:${escapeHtml(meta.color)}">
+      ${renderCurrencyAmount(meta, amount, 'cost-amount')}
+      ${renderLimitedPointIcons(meta.icon, amount, meta.color, 9)}
+    </div>
+  `
+}
+
+function renderRewardExchangeOverview(reward, balances, requiredCurrency, currencies, options) {
+  const requiredPointType = reward.requiredPointType || 'STAR'
+  const requiredPoints = Math.max(1, Number(reward.requiredPoints || 1))
+  const requiredOption = options.find((option) => option.pointType === requiredPointType)
+  const higherOption = options.find((option) => option.pointType !== requiredPointType && option.enough)
+  const hasEnough = options.some((option) => option.enough)
+  const hintClass = requiredOption?.enough ? 'ready' : higherOption ? 'suggest' : 'danger'
+  const hintText = requiredOption?.enough
+    ? `当前 ${requiredCurrency.icon} 足够，可以直接兑换。`
+    : higherOption
+      ? `当前 ${requiredCurrency.icon} 不足，可使用更高币值图标兑换，系统会自动找零成 ${requiredCurrency.icon}。`
+      : '余额不足，先攒够目标图标或更高币值图标。'
+  return `
+    <div class="reward-exchange-overview">
+      <article class="reward-exchange-card required" style="--point-color:${escapeHtml(requiredCurrency.color)}">
+        <span>礼物所需</span>
+        ${renderCurrencyAmount(requiredCurrency, requiredPoints, 'large')}
+        ${renderLimitedPointIcons(requiredCurrency.icon, requiredPoints, requiredCurrency.color, 9)}
+      </article>
+      <article class="reward-exchange-card balances">
+        <span>当前余额</span>
+        <div class="reward-balance-strip">
+          ${['STAR', 'FLOWER', 'CROWN'].map((pointType) => {
+            const meta = currencyMeta(pointType, currencies)
+            return `
+              <div class="reward-balance-item ${pointType === requiredPointType ? 'target' : ''}" style="--point-color:${escapeHtml(meta.color)}">
+                ${renderCurrencyAmount(meta, balances.get(pointType) || 0, 'balance-amount')}
+              </div>
+            `
+          }).join('')}
+        </div>
+      </article>
+    </div>
+    <div class="reward-exchange-hint ${hintClass}">
+      ${escapeHtml(hintText)}
+      ${hasEnough ? '' : '<strong>兑换按钮已置灰</strong>'}
+    </div>
+  `
+}
+
 function renderLimitedPointIcons(icon, count, color, limit = 9) {
   const safeCount = Math.max(0, Number(count || 0))
   const visibleCount = Math.min(safeCount, limit)
@@ -2461,30 +2525,20 @@ function renderRewardExchangeModal(state) {
           </div>
           <button class="icon-btn" type="button" data-action="close-reward-exchange-modal">×</button>
         </div>
-        <div class="reward-balance-strip">
-          ${['STAR', 'FLOWER', 'CROWN'].map((pointType) => {
-            const meta = currencyMeta(pointType, currencies)
-            return `
-              <div class="reward-balance-item" style="--point-color:${escapeHtml(meta.color)}">
-                <strong>${balances.get(pointType) || 0}</strong>
-                <span>${escapeHtml(meta.icon)}</span>
-              </div>
-            `
-          }).join('')}
-        </div>
-        <div class="reward-price-panel" style="--point-color:${escapeHtml(requiredCurrency.color)}">
-          <strong>${escapeHtml(reward.requiredPoints || 1)}</strong>
-          ${renderLimitedPointIcons(requiredCurrency.icon, reward.requiredPoints, requiredCurrency.color, 9)}
-        </div>
+        ${renderRewardExchangeOverview(reward, balances, requiredCurrency, currencies, options)}
         <div class="reward-payment-options">
           ${options.map((option) => {
             const meta = currencyMeta(option.pointType, currencies)
-            const changeText = option.changeAmount > 0 ? `找零 ${option.changeAmount}` : ''
+            const changeText = option.changeAmount > 0
+              ? `找零 ${option.changeAmount} × ${requiredCurrency.icon}`
+              : '直接兑换'
+            const disabledText = `余额 ${option.balance || 0} × ${meta.icon}`
             return `
-              <button class="payment-option ${option.enough ? '' : 'disabled'}" type="button" data-action="select-reward-payment" data-payment-point-type="${option.pointType}" ${option.enough ? '' : 'disabled'} style="--point-color:${escapeHtml(meta.color)}">
-                <span>${escapeHtml(meta.icon)}</span>
-                <strong>${option.payAmount}</strong>
-                <small>${escapeHtml(changeText)}</small>
+              <button class="payment-option ${option.enough ? '' : 'disabled'}" type="button" data-action="${option.enough ? 'select-reward-payment' : 'show-reward-payment-hint'}" data-payment-point-type="${option.pointType}" style="--point-color:${escapeHtml(meta.color)}">
+                <small>使用</small>
+                ${renderCurrencyAmount(meta, option.payAmount, 'payment-amount')}
+                <em>${option.enough ? '兑换' : '不可兑换'}</em>
+                <small>${escapeHtml(option.enough ? changeText : disabledText)}</small>
               </button>
             `
           }).join('')}
@@ -2749,6 +2803,7 @@ function buildRewardPaymentOptions(reward, balances = [], rule = {}) {
         pointType,
         payAmount,
         changeAmount: pointType === requiredPointType ? 0 : Math.ceil(changeValue / requiredWeight),
+        balance: balanceMap.get(pointType) || 0,
         enough: (balanceMap.get(pointType) || 0) >= payAmount,
       }
     })
