@@ -6,6 +6,8 @@ import com.chandler.motivation.common.exception.MotivationException;
 import com.chandler.motivation.domain.dataobject.MotivationChild;
 import com.chandler.motivation.domain.dataobject.MotivationUser;
 import com.chandler.motivation.domain.dto.child.ChildSaveRequest;
+import com.chandler.motivation.domain.dto.common.AvatarResource;
+import com.chandler.motivation.domain.dto.common.AvatarUploadResponse;
 import com.chandler.motivation.domain.mapper.MotivationChildMapper;
 import com.chandler.motivation.support.MotivationConstants;
 import com.chandler.motivation.support.MotivationEnums;
@@ -14,6 +16,7 @@ import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.util.StringUtils;
+import org.springframework.web.multipart.MultipartFile;
 
 @Service
 @RequiredArgsConstructor
@@ -22,6 +25,7 @@ public class MotivationChildService extends ServiceImpl<MotivationChildMapper, M
     private final MotivationFamilyMemberService familyMemberService;
     private final MotivationSystemLogService systemLogService;
     private final AuthService authService;
+    private final AvatarImageService avatarImageService;
 
     /**
      * 创建孩子档案，并按需创建孩子登录账号。
@@ -33,7 +37,6 @@ public class MotivationChildService extends ServiceImpl<MotivationChildMapper, M
         }
         MotivationChild child = new MotivationChild();
         child.setNickname(request.getNickname().trim());
-        child.setAvatarUrl(request.getAvatarUrl());
         child.setBirthday(request.getBirthday());
         child.setGender(StringUtils.hasText(request.getGender()) ? request.getGender() : "UNKNOWN");
         child.setRemark(request.getRemark());
@@ -70,7 +73,6 @@ public class MotivationChildService extends ServiceImpl<MotivationChildMapper, M
             throw new MotivationException("CHILD_NAME_REQUIRED", "孩子昵称不能为空");
         }
         child.setNickname(request.getNickname().trim());
-        child.setAvatarUrl(request.getAvatarUrl());
         child.setBirthday(request.getBirthday());
         child.setGender(StringUtils.hasText(request.getGender()) ? request.getGender() : "UNKNOWN");
         child.setRemark(request.getRemark());
@@ -95,6 +97,44 @@ public class MotivationChildService extends ServiceImpl<MotivationChildMapper, M
         updateById(child);
         systemLogService.recordBusiness(userId, child.getId(), MotivationEnums.LogType.SYSTEM,
                 "删除孩子档案", "删除了孩子「" + child.getNickname() + "」的档案");
+    }
+
+    /**
+     * 上传并压缩孩子头像，图片字节直接入库。
+     */
+    @Transactional
+    public AvatarUploadResponse updateAvatar(Long childId, Long userId, MultipartFile file) {
+        MotivationChild child = getById(childId);
+        if (child == null || Integer.valueOf(MotivationConstants.Flag.YES).equals(child.getDeleted())) {
+            throw new MotivationException("CHILD_NOT_FOUND", "孩子档案不存在");
+        }
+        requireManageAccess(childId, userId);
+        AvatarImageService.CompressedAvatar compressedAvatar = avatarImageService.compress(file);
+        String avatarUrl = "/children/" + childId + "/avatar?t=" + System.currentTimeMillis();
+        child.setAvatarData(compressedAvatar.data());
+        child.setAvatarContentType(compressedAvatar.contentType());
+        child.setAvatarUrl(avatarUrl);
+        updateById(child);
+        systemLogService.recordBusiness(userId, child.getId(), MotivationEnums.LogType.SYSTEM,
+                "更新孩子头像", "用户更新了孩子「" + child.getNickname() + "」的头像");
+        AvatarUploadResponse response = new AvatarUploadResponse();
+        response.setAvatarUrl(avatarUrl);
+        return response;
+    }
+
+    /**
+     * 读取孩子头像二进制。
+     */
+    public AvatarResource readAvatar(Long childId, Long userId) {
+        requireViewAccess(childId, userId);
+        MotivationChild child = baseMapper.selectAvatarById(childId);
+        if (child == null || child.getAvatarData() == null || child.getAvatarData().length == 0) {
+            throw new MotivationException("AVATAR_NOT_FOUND", "头像不存在");
+        }
+        String contentType = StringUtils.hasText(child.getAvatarContentType())
+                ? child.getAvatarContentType()
+                : MotivationConstants.Avatar.CONTENT_TYPE_JPEG;
+        return new AvatarResource(child.getAvatarData(), contentType);
     }
 
     /**

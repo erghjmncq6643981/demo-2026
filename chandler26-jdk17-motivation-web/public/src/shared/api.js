@@ -1,5 +1,6 @@
 const API_BASE = localStorage.getItem('motivation_api_base') || 'http://127.0.0.1:17680/api/v1'
 const TOKEN_KEY = 'motivation_token'
+const API_PREFIX = '/api/v1'
 
 export function getToken() {
   return localStorage.getItem(TOKEN_KEY) || ''
@@ -24,7 +25,7 @@ export async function request(path, options = {}) {
     headers.set('Authorization', `Bearer ${token}`)
   }
 
-  const response = await fetch(`${API_BASE}${path}`, {
+  const response = await fetch(apiUrl(path), {
     ...options,
     headers,
     body: options.body === undefined ? undefined : JSON.stringify(options.body),
@@ -37,16 +38,83 @@ export async function request(path, options = {}) {
   return payload?.data
 }
 
+export async function requestForm(path, formData, options = {}) {
+  const headers = new Headers(options.headers || {})
+  headers.set('Accept', 'application/json')
+  const token = getToken()
+  if (token) {
+    headers.set('Authorization', `Bearer ${token}`)
+  }
+  const response = await fetch(apiUrl(path), {
+    method: options.method || 'POST',
+    ...options,
+    headers,
+    body: formData,
+  })
+  const payload = await response.json().catch(() => null)
+  if (!response.ok || (payload && payload.code !== 0)) {
+    const message = payload?.message || `请求失败：${response.status}`
+    throw new Error(message)
+  }
+  return payload?.data
+}
+
+export async function requestBlob(path, options = {}) {
+  const headers = new Headers(options.headers || {})
+  headers.set('Accept', 'image/*,application/json')
+  const token = getToken()
+  if (token) {
+    headers.set('Authorization', `Bearer ${token}`)
+  }
+  const response = await fetch(apiUrl(path), {
+    ...options,
+    headers,
+  })
+  const contentType = response.headers.get('Content-Type') || ''
+  if (!response.ok || contentType.includes('application/json')) {
+    const text = await response.text().catch(() => '')
+    let message = `请求失败：${response.status}`
+    try {
+      const payload = JSON.parse(text)
+      message = payload?.message || message
+    } catch {
+      if (text) message = text
+    }
+    throw new Error(message)
+  }
+  return response.blob()
+}
+
+function apiUrl(path) {
+  const value = String(path || '')
+  if (/^https?:\/\//i.test(value)) {
+    return value
+  }
+  const normalized = value.startsWith(API_PREFIX) ? value.slice(API_PREFIX.length) : value
+  return `${API_BASE}${normalized.startsWith('/') ? normalized : `/${normalized}`}`
+}
+
 export const api = {
   health: () => request('/health'),
   register: (body) => request('/auth/register', { method: 'POST', body }),
   login: (body) => request('/auth/login', { method: 'POST', body }),
   profile: () => request('/auth/profile'),
   updateProfile: (body) => request('/auth/profile', { method: 'PUT', body }),
+  uploadProfileAvatar: (file) => {
+    const formData = new FormData()
+    formData.append('file', file)
+    return requestForm('/auth/profile/avatar', formData)
+  },
+  avatarBlob: (avatarUrl) => requestBlob(avatarUrl),
   children: () => request('/children'),
   createChild: (body) => request('/children', { method: 'POST', body }),
   updateChild: (childId, body) => request(`/children/${childId}`, { method: 'PUT', body }),
   deleteChild: (childId) => request(`/children/${childId}`, { method: 'DELETE' }),
+  uploadChildAvatar: (childId, file) => {
+    const formData = new FormData()
+    formData.append('file', file)
+    return requestForm(`/children/${childId}/avatar`, formData)
+  },
   goals: (childId) => request(`/goals?childId=${encodeURIComponent(childId)}`),
   createGoal: (body) => request('/goals', { method: 'POST', body }),
   updateGoal: (goalId, body) => request(`/goals/${goalId}`, { method: 'PUT', body }),

@@ -1,0 +1,33 @@
+
+    ▐             ▐ ▝▜
+ ▄▖ ▐▗▖  ▄▖ ▗▗▖  ▄▟  ▐   ▄▖  ▖▄
+▐▘▝ ▐▘▐ ▝ ▐ ▐▘▐ ▐▘▜  ▐  ▐▘▐  ▛ ▘
+▐   ▐ ▐ ▗▀▜ ▐ ▐ ▐ ▐  ▐  ▐▀▀  ▌
+▝▙▞ ▐ ▐ ▝▄▜ ▐ ▐ ▝▙█  ▝▄ ▝▙▞  ▌
+
+::: (architecture infrastructure) :::
+
+
+2026-05-26T13:01:32.747+08:00  INFO 41327 --- [motivation-platform] [           main] com.chandler.motivation.Application      : Starting Application using Java 21.0.10 with PID 41327 (/Users/chandler/Documents/repository/github/demo-2026/chandler26-jdk17-motivation/target/classes started by chandler in /Users/chandler/Documents/repository/github/demo-2026/chandler26-jdk17-motivation)
+2026-05-26T13:01:32.748+08:00  INFO 41327 --- [motivation-platform] [           main] com.chandler.motivation.Application      : No active profile set, falling back to 1 default profile: "default"
+2026-05-26T13:01:33.538+08:00  INFO 41327 --- [motivation-platform] [           main] o.s.cloud.context.scope.GenericScope     : BeanFactory id=74d5e766-a068-3eee-ac56-06f265f49e8c
+2026-05-26T13:01:33.858+08:00  INFO 41327 --- [motivation-platform] [           main] o.s.b.w.embedded.tomcat.TomcatWebServer  : Tomcat initialized with port 17680 (http)
+2026-05-26T13:01:33.868+08:00  INFO 41327 --- [motivation-platform] [           main] o.apache.catalina.core.StandardService   : Starting service [Tomcat]
+2026-05-26T13:01:33.868+08:00  INFO 41327 --- [motivation-platform] [           main] o.apache.catalina.core.StandardEngine    : Starting Servlet engine: [Apache Tomcat/10.1.33]
+2026-05-26T13:01:33.957+08:00  INFO 41327 --- [motivation-platform] [           main] o.a.c.c.C.[Tomcat].[localhost].[/]       : Initializing Spring embedded WebApplicationContext
+2026-05-26T13:01:33.958+08:00  INFO 41327 --- [motivation-platform] [           main] w.s.c.ServletWebServerApplicationContext : Root WebApplicationContext: initialization completed in 1180 ms
+ _ _   |_  _ _|_. ___ _ |    _ 
+| | |\/|_)(_| | |_\  |_)||_|_\ 
+     /               |         
+                        3.5.12 
+2026-05-26T13:01:34.659+08:00  INFO 41327 --- [motivation-platform] [           main] r$InitializeUserDetailsManagerConfigurer : Global AuthenticationManager configured with UserDetailsService bean with name userDetailsService
+2026-05-26T13:01:34.824+08:00  INFO 41327 --- [motivation-platform] [           main] o.s.b.a.e.web.EndpointLinksResolver      : Exposing 1 endpoint beneath base path '/actuator'
+2026-05-26T13:01:34.912+08:00  INFO 41327 --- [motivation-platform] [           main] m.e.s.MybatisPlusApplicationContextAware : Register ApplicationContext instances org.springframework.boot.web.servlet.context.AnnotationConfigServletWebServerApplicationContext@31c7528f
+2026-05-26T13:01:35.162+08:00  INFO 41327 --- [motivation-platform] [           main] o.s.b.w.embedded.tomcat.TomcatWebServer  : Tomcat started on port 17680 (http) with context path '/'
+2026-05-26T13:01:35.179+08:00  INFO 41327 --- [motivation-platform] [           main] com.chandler.motivation.Application      : Started Application in 2.698 seconds (process running for 2.911)
+2026-05-26T13:01:36.963+08:00  INFO 41327 --- [motivation-platform] [io-17680-exec-1] o.a.c.c.C.[Tomcat].[localhost].[/]       : Initializing Spring DispatcherServlet 'dispatcherServlet'
+2026-05-26T13:01:36.963+08:00  INFO 41327 --- [motivation-platform] [io-17680-exec-1] o.s.web.servlet.DispatcherServlet        : Initializing Servlet 'dispatcherServlet'
+2026-05-26T13:01:36.964+08:00  INFO 41327 --- [motivation-platform] [io-17680-exec-1] o.s.web.servlet.DispatcherServlet        : Completed initialization in 1 ms
+2026-05-26T13:01:37.038+08:00  INFO 41327 --- [motivation-platform] [io-17680-exec-2] com.alibaba.druid.pool.DruidDataSource   : {dataSource-1} inited
+2026-05-26T13:02:18.559+08:00  INFO 41327 --- [motivation-platform] [io-17680-exec-1] c.c.m.s.MotivationSystemLogService       : 用户「星星家长」于 2026-05-26 13:02:18 修改了孩子「钱弈呈」的档案
+2026-05-26T13:02:18.986+08:00  INFO 41327 --- [motivation-platform] [io-17680-exec-6] c.c.m.s.MotivationSystemLogService       : 用户「星星家长」于 2026-05-26 13:02:18 用户更新了孩子「钱弈呈」的头像

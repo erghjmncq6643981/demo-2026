@@ -50,6 +50,16 @@ public final class MotivationConstants {
         }
     }
 
+    public static final class Avatar {
+        public static final long MAX_BYTES = 1_048_576L;
+        public static final int MAX_DIMENSION = 256;
+        public static final float JPEG_QUALITY = 0.82F;
+        public static final String CONTENT_TYPE_JPEG = "image/jpeg";
+
+        private Avatar() {
+        }
+    }
+
     public static final class UserType {
         public static final String PARENT = MotivationEnums.UserType.PARENT.code();
         public static final String GUARDIAN = MotivationEnums.UserType.GUARDIAN.code();

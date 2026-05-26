@@ -6,6 +6,7 @@ import { formatDate, fulfillmentStatusName, pointName } from '/src/shared/text.j
 const SIDEBAR_KEY = 'motivation.sidebarCollapsed'
 const ACCOUNT_DRAFT_KEY = 'motivation.accountDraft'
 const SYSTEM_CONFIG_KEY = 'motivation.systemConfig'
+const AVATAR_MAX_BYTES = 1024 * 1024
 const DEFAULT_CURRENCIES = [
   { pointType: 'STAR', name: '星星', icon: '★', color: '#f59e0b', exchangeWeight: 1, status: 'ACTIVE', sortNo: 1 },
   { pointType: 'FLOWER', name: '红花', icon: '✿', color: '#ec4899', exchangeWeight: 10, status: 'ACTIVE', sortNo: 2 },
@@ -31,6 +32,11 @@ const state = {
   profileSubView: 'home',
   accountModalOpen: false,
   accountDraft: readAccountDraftFromStorage(),
+  avatarObjectUrls: {
+    account: '',
+    children: {},
+  },
+  avatarEditor: createEmptyAvatarEditor(),
   systemConfig: { ...defaultSystemConfig, ...storedSystemConfig },
   sidebarCollapsed: initialSidebarCollapsed,
   calendarViewMode: 'month',
@@ -131,10 +137,61 @@ function readSystemConfigFromStorage() {
 function persistAccountDraft(draft) {
   const value = {
     nickname: String(draft?.nickname || '').trim(),
-    avatarUrl: String(draft?.avatarUrl || '').trim(),
   }
   localStorage.setItem(ACCOUNT_DRAFT_KEY, JSON.stringify(value))
   state.accountDraft = value
+}
+
+function createEmptyAvatarEditor() {
+  return {
+    open: false,
+    scope: '',
+    childId: '',
+    sourceObjectUrl: '',
+    processedPreviewUrl: '',
+    processedFile: null,
+    image: null,
+    fileName: '',
+    naturalWidth: 0,
+    naturalHeight: 0,
+    zoom: 1,
+    offsetX: 0,
+    offsetY: 0,
+    dragging: false,
+    dragStartX: 0,
+    dragStartY: 0,
+    dragOriginX: 0,
+    dragOriginY: 0,
+  }
+}
+
+function getAvatarEditorKey(scope, childId = '') {
+  return `${scope}:${childId || ''}`
+}
+
+function getAvatarPreviewUrl(scope, childId = '') {
+  const editor = state.avatarEditor || {}
+  if (editor.scope === scope && String(editor.childId || '') === String(childId || '')) {
+    return editor.processedPreviewUrl || ''
+  }
+  if (scope === 'account') {
+    return state.avatarObjectUrls.account || ''
+  }
+  return state.avatarObjectUrls.children?.[childId] || ''
+}
+
+function clearAvatarEditorDraft(options = {}) {
+  const editor = state.avatarEditor || createEmptyAvatarEditor()
+  if (editor.sourceObjectUrl) {
+    URL.revokeObjectURL(editor.sourceObjectUrl)
+  }
+  if (editor.processedPreviewUrl) {
+    URL.revokeObjectURL(editor.processedPreviewUrl)
+  }
+  const next = createEmptyAvatarEditor()
+  next.scope = options.scope || ''
+  next.childId = options.childId || ''
+  state.avatarEditor = next
 }
 
 function persistSystemConfig(config) {
@@ -336,6 +393,9 @@ function bindEvents() {
   document.querySelector('[data-form="goal"]')?.addEventListener('submit', handleGoalSubmit)
   document.querySelector('[data-form="point-adjust"]')?.addEventListener('submit', handlePointAdjustSubmit)
   document.querySelector('[data-form="account"]')?.addEventListener('submit', handleAccountSubmit)
+  document.querySelectorAll('[data-avatar-file]').forEach((input) => {
+    input.addEventListener('change', handleAvatarFilePreview)
+  })
   document.querySelector('[data-form="system-config"]')?.addEventListener('submit', handleSystemConfigSubmit)
   document.querySelector('[data-action="save-system-config"]')?.addEventListener('click', () => {
     document.querySelector('[data-form="system-config"]')?.requestSubmit()
@@ -358,7 +418,14 @@ function bindEvents() {
   })
   document.querySelector('[name="createChildAccount"]')?.addEventListener('change', () => {
     const enabled = Boolean(document.querySelector('[name="createChildAccount"]')?.checked)
-    document.querySelector('.child-account-fields')?.classList.toggle('hidden', !enabled)
+    const fields = document.querySelector('.child-account-fields')
+    fields?.classList.toggle('hidden', !enabled)
+    if (!enabled && fields) {
+      const childUsername = fields.querySelector('[name="childUsername"]')
+      const childPassword = fields.querySelector('[name="childPassword"]')
+      if (childUsername) childUsername.value = ''
+      if (childPassword) childPassword.value = ''
+    }
   })
   bindTaskModalControls()
   bindPointExchangePreview()
@@ -505,12 +572,23 @@ function initLoginCarousel() {
 function setLoginCarouselIndex(index, pinned = false) {
   state.loginCarouselIndex = ((Number(index) % 3) + 3) % 3
   state.loginCarouselPinned = pinned
-  render()
+  updateLoginCarousel()
 }
 
 function stepLoginCarousel(delta) {
   state.loginCarouselPinned = false
   setLoginCarouselIndex((Number(state.loginCarouselIndex || 0) + delta) % 3, false)
+}
+
+function updateLoginCarousel() {
+  const activeIndex = Number(state.loginCarouselIndex || 0)
+  document.querySelectorAll('.login-showcase-grid').forEach((grid) => {
+    grid.style.setProperty('--carousel-index', String(activeIndex))
+  })
+  document.querySelectorAll('[data-login-carousel-nav]').forEach((button) => {
+    const isActive = Number(button.dataset.loginCarouselNav || 0) === activeIndex
+    button.classList.toggle('active', isActive)
+  })
 }
 
 function bindTaskModalControls() {
@@ -768,6 +846,7 @@ async function loadInitialData(showToast = false, options = {}) {
     state.connectionMessage = '已连接后端 1.0 API'
     const children = await api.children()
     state.children = children
+    await loadAvatarImages()
     state.selectedChild = children.find((child) => String(child.id) === String(state.selectedChildId)) || children[0] || null
     state.selectedChildId = state.selectedChild?.id || null
     if (!state.selectedChildId) {
@@ -818,6 +897,62 @@ async function loadCoreData() {
   state.ledger = ledger
   state.rewards = rewards
   state.exchanges = exchanges
+}
+
+async function loadAvatarImages() {
+  if (state.offline) return
+  await Promise.all([
+    loadAccountAvatarImage(),
+    ...((state.children || []).map((child) => loadChildAvatarImage(child))),
+  ])
+}
+
+async function loadAccountAvatarImage() {
+  const avatarUrl = state.user?.avatarUrl
+  if (!avatarUrl) {
+    replaceObjectUrl('account', '')
+    return
+  }
+  try {
+    const blob = await api.avatarBlob(avatarUrl)
+    replaceObjectUrl('account', URL.createObjectURL(blob))
+  } catch {
+    replaceObjectUrl('account', '')
+  }
+}
+
+async function loadChildAvatarImage(child) {
+  if (!child?.id) return
+  if (!child.avatarUrl) {
+    replaceObjectUrl(`child:${child.id}`, '')
+    return
+  }
+  try {
+    const blob = await api.avatarBlob(child.avatarUrl)
+    replaceObjectUrl(`child:${child.id}`, URL.createObjectURL(blob))
+  } catch {
+    replaceObjectUrl(`child:${child.id}`, '')
+  }
+}
+
+function replaceObjectUrl(key, nextUrl) {
+  if (key === 'account') {
+    if (state.avatarObjectUrls.account && state.avatarObjectUrls.account !== nextUrl) {
+      URL.revokeObjectURL(state.avatarObjectUrls.account)
+    }
+    state.avatarObjectUrls.account = nextUrl
+    return
+  }
+  const childId = key.replace('child:', '')
+  const current = state.avatarObjectUrls.children?.[childId]
+  if (current && current !== nextUrl) {
+    URL.revokeObjectURL(current)
+  }
+  if (nextUrl) {
+    state.avatarObjectUrls.children[childId] = nextUrl
+  } else {
+    delete state.avatarObjectUrls.children[childId]
+  }
 }
 
 async function selectChild(childId) {
@@ -1395,6 +1530,7 @@ async function exchangePoints(request) {
 function openChildModal(childId = null) {
   state.editingChild = childId ? state.children.find((child) => String(child.id) === String(childId)) || null : null
   state.childModalOpen = true
+  state.childAccountDraftEnabled = false
   render()
 }
 
@@ -1466,7 +1602,6 @@ function closeRegisterModal() {
 function openAccountModal() {
   state.accountDraft = {
     nickname: state.user?.nickname || state.accountDraft?.nickname || '',
-    avatarUrl: state.user?.avatarUrl || state.accountDraft?.avatarUrl || '',
   }
   state.accountModalOpen = true
   render()
@@ -1481,12 +1616,16 @@ function closeAccountModal(event) {
 async function handleAccountSubmit(event) {
   event.preventDefault()
   const formData = new FormData(event.currentTarget)
+  const avatarFile = formData.get('avatarFile')
   const payload = {
     nickname: String(formData.get('nickname') || '').trim(),
-    avatarUrl: String(formData.get('avatarUrl') || '').trim(),
   }
   if (!payload.nickname) {
     toast('请填写昵称')
+    return
+  }
+  if (avatarFile instanceof File && avatarFile.size > AVATAR_MAX_BYTES) {
+    toast('头像照片不能超过 1M')
     return
   }
   persistAccountDraft(payload)
@@ -1499,9 +1638,16 @@ async function handleAccountSubmit(event) {
   }
   try {
     state.user = await api.updateProfile(payload)
+    if (avatarFile instanceof File && avatarFile.size > 0) {
+      const avatarPayload = await api.uploadProfileAvatar(avatarFile)
+      state.user = {
+        ...state.user,
+        avatarUrl: avatarPayload?.avatarUrl || state.user?.avatarUrl || '',
+      }
+      await loadAccountAvatarImage()
+    }
     persistAccountDraft({
       nickname: state.user?.nickname || payload.nickname,
-      avatarUrl: state.user?.avatarUrl || payload.avatarUrl,
     })
     state.accountModalOpen = false
     toast('账号信息已保存')
@@ -1521,6 +1667,20 @@ function handleSystemConfigSubmit(event) {
   persistSystemConfig(payload)
   toast('系统配置已保存')
   render()
+}
+
+function handleAvatarFilePreview(event) {
+  const input = event.currentTarget
+  const file = input.files?.[0]
+  if (!file) return
+  if (file.size > AVATAR_MAX_BYTES) {
+    input.value = ''
+    toast('头像照片不能超过 1M')
+    return
+  }
+  const preview = document.querySelector(`[data-avatar-preview="${input.dataset.avatarFile}"]`)
+  if (!preview) return
+  preview.innerHTML = `<img src="${URL.createObjectURL(file)}" alt="头像预览" />`
 }
 
 function goRewardStore() {
@@ -1656,6 +1816,10 @@ function closePointCurrencyModal() {
 
 function logout() {
   setToken('')
+  replaceObjectUrl('account', '')
+  Object.keys(state.avatarObjectUrls.children || {}).forEach((childId) => {
+    replaceObjectUrl(`child:${childId}`, '')
+  })
   state.user = null
   state.currentView = 'profile'
   state.profileSubView = 'home'
@@ -1875,9 +2039,9 @@ async function handleChildSubmit(event) {
   event.preventDefault()
   const formData = new FormData(event.currentTarget)
   const childId = String(formData.get('childId') || '').trim()
+  const avatarFile = formData.get('avatarFile')
   const payload = {
     nickname: String(formData.get('nickname') || '').trim(),
-    avatarUrl: String(formData.get('avatarUrl') || '').trim(),
     birthday: nullableDate(formData.get('birthday')),
     gender: String(formData.get('gender') || 'UNKNOWN'),
     remark: String(formData.get('remark') || '').trim(),
@@ -1891,6 +2055,10 @@ async function handleChildSubmit(event) {
   }
   if (payload.createChildAccount && (!payload.childUsername || !payload.childPassword)) {
     toast('请填写孩子账号和密码')
+    return
+  }
+  if (avatarFile instanceof File && avatarFile.size > AVATAR_MAX_BYTES) {
+    toast('头像照片不能超过 1M')
     return
   }
   if (state.offline) {
@@ -1912,9 +2080,16 @@ async function handleChildSubmit(event) {
     return
   }
   try {
-    const savedChild = childId
+    let savedChild = childId
       ? await api.updateChild(childId, payload)
       : await api.createChild(payload)
+    if (avatarFile instanceof File && avatarFile.size > 0) {
+      const avatarPayload = await api.uploadChildAvatar(savedChild.id, avatarFile)
+      savedChild = {
+        ...savedChild,
+        avatarUrl: avatarPayload?.avatarUrl || savedChild.avatarUrl || '',
+      }
+    }
     state.selectedChildId = savedChild.id
     state.childModalOpen = false
     state.editingChild = null

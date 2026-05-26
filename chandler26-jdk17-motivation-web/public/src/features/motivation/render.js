@@ -72,6 +72,14 @@ function profileSubView(state) {
   return items.includes(state.profileSubView) ? state.profileSubView : items[0]
 }
 
+function renderAvatarImage(src, fallback, className, previewKey = '') {
+  const previewAttr = previewKey ? ` data-avatar-preview="${escapeHtml(previewKey)}"` : ''
+  if (src) {
+    return `<span class="${className}"${previewAttr}><img src="${escapeHtml(src)}" alt="" /></span>`
+  }
+  return `<span class="${className}"${previewAttr}>${escapeHtml((fallback || '宝').slice(0, 1))}</span>`
+}
+
 export function renderApp(state, actions) {
   if (!state.user) {
     return `
@@ -139,14 +147,14 @@ function renderLoginPage(state) {
             <p>登录后继续奖励兑换</p>
           </div>
         </div>
-        <form class="login-form" data-form="auth">
+        <form class="login-form" data-form="auth" autocomplete="on">
           <label>
             <span>账号</span>
-            <input name="username" autocomplete="username" placeholder="请输入账号" value="demo-parent" />
+            <input name="username" autocomplete="username" autocapitalize="none" spellcheck="false" placeholder="请输入账号" />
           </label>
           <label>
             <span>密码</span>
-            <input name="password" autocomplete="current-password" type="password" placeholder="请输入密码" value="123456" />
+            <input name="password" autocomplete="current-password" type="password" placeholder="请输入密码" />
           </label>
           <div class="login-actions">
             <button class="btn primary" type="submit" data-auth-mode="login">登录</button>
@@ -388,7 +396,7 @@ function renderProfileView(state) {
     <div class="view-grid">
       <section class="panel panel-pad">
         <div class="profile-card">
-          <div class="avatar">${escapeHtml((state.selectedChild?.nickname || '孩').slice(0, 1))}</div>
+          ${renderAvatarImage(state.avatarObjectUrls?.children?.[state.selectedChild?.id] || '', state.selectedChild?.nickname || '孩', 'avatar')}
           <div>
             <h2>${escapeHtml(state.selectedChild?.nickname || '未选择孩子')}</h2>
             <p>${escapeHtml(state.selectedChild?.remark || '暂无备注')}</p>
@@ -426,7 +434,7 @@ function renderAccountSummary(state) {
       </article>
       <article class="info-card">
         <span>头像</span>
-        <strong>${escapeHtml(user.avatarUrl ? '已设置' : '未设置')}</strong>
+        <strong class="avatar-status">${state.avatarObjectUrls?.account ? renderAvatarImage(state.avatarObjectUrls.account, '账', 'avatar-status', 'account-summary') : escapeHtml(user.avatarUrl ? '已设置' : '未设置')}</strong>
       </article>
     </div>
   `
@@ -471,8 +479,7 @@ function renderAccountModal(state) {
   const draft = state.accountDraft || {}
   const username = user.username || ''
   const nickname = draft.nickname ?? user.nickname ?? username
-  const avatarUrl = draft.avatarUrl ?? user.avatarUrl ?? ''
-  const avatarText = (nickname || username || '账').slice(0, 1)
+  const avatarSrc = state.avatarObjectUrls?.account || ''
   return `
     <div class="modal-backdrop" data-action="close-account-modal">
       <section class="modal narrow account-modal" data-account-modal>
@@ -485,7 +492,7 @@ function renderAccountModal(state) {
         </div>
         <form class="modal-form account-modal-form" data-form="account">
           <div class="account-summary-card wide">
-            <div class="account-avatar-preview">${escapeHtml(avatarText)}</div>
+            ${renderAvatarImage(avatarSrc, nickname || username || '账', 'account-avatar-preview', 'account')}
             <div class="account-summary-copy">
               <strong>${escapeHtml(nickname || '未命名账号')}</strong>
               <span>${escapeHtml(username || '未设置账号')}</span>
@@ -499,9 +506,10 @@ function renderAccountModal(state) {
             <span>昵称</span>
             <input name="nickname" value="${escapeHtml(nickname)}" placeholder="请输入昵称" required />
           </label>
-          <label class="wide">
-            <span>头像地址</span>
-            <input name="avatarUrl" value="${escapeHtml(avatarUrl)}" placeholder="可选" />
+          <label class="wide avatar-upload-field">
+            <span>头像照片</span>
+            <input type="file" name="avatarFile" accept="image/*" data-avatar-file="account" />
+            <small>最大 1M，保存后由后端压缩并写入数据库。</small>
           </label>
           <div class="modal-actions wide">
             <button class="btn" type="button" data-action="close-account-modal">取消</button>
@@ -539,17 +547,18 @@ function renderChildList(state) {
       <div class="table-head child-table">
         <span>孩子</span><span>性别</span><span>生日</span><span>状态</span><span>操作</span>
       </div>
-      ${children.map((child) => renderChildRow(child, state.selectedChildId)).join('') || '<div class="empty">暂无孩子档案</div>'}
+      ${children.map((child) => renderChildRow(state, child, state.selectedChildId)).join('') || '<div class="empty">暂无孩子档案</div>'}
     </div>
   `
 }
 
-function renderChildRow(child, selectedChildId) {
+function renderChildRow(state, child, selectedChildId) {
   const selected = String(child.id) === String(selectedChildId)
+  const avatarSrc = state.avatarObjectUrls?.children?.[child.id] || ''
   return `
     <div class="table-row child-table">
       <div class="task-name-cell">
-        <span class="child-mini">${escapeHtml((child.nickname || '孩').slice(0, 1))}</span>
+        ${renderAvatarImage(avatarSrc, child.nickname || '孩', 'child-mini', `child-row-${child.id}`)}
         <div><strong>${escapeHtml(child.nickname)}</strong><small>${escapeHtml(child.remark || '暂无备注')}</small></div>
       </div>
       <span>${genderLabel(child.gender)}</span>
@@ -1621,6 +1630,7 @@ function renderChildModal(state) {
   if (!state.childModalOpen) return ''
   const child = state.editingChild || {}
   const createAccount = Boolean(state.childAccountDraftEnabled)
+  const childAvatarSrc = state.avatarObjectUrls?.children?.[child.id] || ''
   return `
     <div class="modal-backdrop">
       <section class="modal">
@@ -1628,20 +1638,27 @@ function renderChildModal(state) {
           <div><h2>${child.id ? '修改孩子档案' : '新增孩子档案'}</h2><p>维护孩子昵称、生日和备注。</p></div>
           <button class="icon-btn" type="button" data-action="close-child-modal">×</button>
         </div>
-        <form class="modal-form" data-form="child">
+        <form class="modal-form" data-form="child" autocomplete="off">
           <input type="hidden" name="childId" value="${escapeHtml(child.id || '')}" />
+          <div class="account-summary-card wide">
+            ${renderAvatarImage(childAvatarSrc, child.nickname || '孩', 'account-avatar-preview', 'child')}
+            <div class="account-summary-copy">
+              <strong>${escapeHtml(child.nickname || '未命名孩子')}</strong>
+              <span>${escapeHtml(child.remark || '孩子头像会压缩后存入数据库')}</span>
+            </div>
+          </div>
           <label><span>孩子昵称</span><input name="nickname" value="${escapeHtml(child.nickname || '')}" placeholder="例如：小星" /></label>
           <label><span>性别</span>${renderSelect('gender', child.gender || 'UNKNOWN', [['UNKNOWN', '未设置'], ['MALE', '男孩'], ['FEMALE', '女孩']])}</label>
           <label><span>生日</span><input type="date" name="birthday" value="${escapeHtml(child.birthday || '')}" /></label>
-          <label><span>头像链接</span><input name="avatarUrl" value="${escapeHtml(child.avatarUrl || '')}" placeholder="可选" /></label>
+          <label class="wide avatar-upload-field"><span>头像照片</span><input type="file" name="avatarFile" accept="image/*" data-avatar-file="child" /><small>最大 1M，保存后由后端压缩并写入数据库。</small></label>
           <label class="wide"><span>备注</span><input name="remark" value="${escapeHtml(child.remark || '')}" placeholder="孩子偏好、阶段目标等" /></label>
           <label class="switch-field wide">
             <input type="checkbox" name="createChildAccount" value="true" ${createAccount ? 'checked' : ''} />
             <span>创建子账户</span>
           </label>
           <div class="child-account-fields wide ${createAccount ? '' : 'hidden'}">
-            <label><span>子账户账号</span><input name="childUsername" placeholder="例如：baby-star" /></label>
-            <label><span>子账户密码</span><input name="childPassword" type="password" placeholder="至少 6 位" /></label>
+            <label><span>子账户账号</span><input name="childUsername" autocomplete="new-password" autocapitalize="none" spellcheck="false" placeholder="例如：baby-star" /></label>
+            <label><span>子账户密码</span><input name="childPassword" autocomplete="new-password" type="password" placeholder="至少 6 位" /></label>
           </div>
           <div class="modal-actions wide">
             <button class="btn" type="button" data-action="close-child-modal">取消</button>

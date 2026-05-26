@@ -4,6 +4,11 @@ spring:
   application:
     name: motivation-platform
 
+  servlet:
+    multipart:
+      max-file-size: 1MB
+      max-request-size: 1MB
+
   datasource:
     username: micro
     password: 123456

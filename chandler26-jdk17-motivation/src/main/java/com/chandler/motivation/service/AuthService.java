@@ -8,6 +8,8 @@ import com.chandler.motivation.domain.dto.auth.AuthRequest;
 import com.chandler.motivation.domain.dto.auth.AuthResponse;
 import com.chandler.motivation.domain.dto.auth.UserProfileUpdateRequest;
 import com.chandler.motivation.domain.dto.auth.UserProfileResponse;
+import com.chandler.motivation.domain.dto.common.AvatarResource;
+import com.chandler.motivation.domain.dto.common.AvatarUploadResponse;
 import com.chandler.motivation.domain.mapper.MotivationUserMapper;
 import com.chandler.motivation.security.JwtClaims;
 import com.chandler.motivation.security.JwtTokenService;
@@ -24,7 +26,9 @@ import lombok.extern.slf4j.Slf4j;
 import org.springframework.security.core.Authentication;
 import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
 import org.springframework.util.StringUtils;
+import org.springframework.web.multipart.MultipartFile;
 
 @Slf4j
 @Service
@@ -36,6 +40,8 @@ public class AuthService {
 
     private final MotivationUserMapper userMapper;
     private final JwtTokenService jwtTokenService;
+    private final AvatarImageService avatarImageService;
+    private final MotivationSystemLogService systemLogService;
     private final SecureRandom secureRandom = new SecureRandom();
 
     /**
@@ -131,14 +137,45 @@ public class AuthService {
         LambdaUpdateWrapper<MotivationUser> updateWrapper = new LambdaUpdateWrapper<MotivationUser>()
                 .eq(MotivationUser::getId, user.getId())
                 .set(MotivationUser::getNickname, nickname);
-        if (request.getAvatarUrl() != null) {
-            updateWrapper.set(MotivationUser::getAvatarUrl,
-                    StringUtils.hasText(request.getAvatarUrl()) ? request.getAvatarUrl().trim() : null);
-        }
         userMapper.update(null, updateWrapper);
         MotivationUser latest = findByUsername(user.getUsername());
         log.info("用户「{}」更新了账号资料", latest.getNickname());
         return toProfile(latest);
+    }
+
+    /**
+     * 上传并压缩当前账号头像，图片字节直接入库。
+     */
+    @Transactional
+    public AvatarUploadResponse updateAvatar(MultipartFile file) {
+        MotivationUser user = requireUser();
+        AvatarImageService.CompressedAvatar compressedAvatar = avatarImageService.compress(file);
+        String avatarUrl = "/auth/profile/avatar?t=" + System.currentTimeMillis();
+        LambdaUpdateWrapper<MotivationUser> updateWrapper = new LambdaUpdateWrapper<MotivationUser>()
+                .eq(MotivationUser::getId, user.getId())
+                .set(MotivationUser::getAvatarData, compressedAvatar.data())
+                .set(MotivationUser::getAvatarContentType, compressedAvatar.contentType())
+                .set(MotivationUser::getAvatarUrl, avatarUrl);
+        userMapper.update(null, updateWrapper);
+        systemLogService.recordBusiness(user.getId(), null, MotivationEnums.LogType.SYSTEM,
+                "更新账号头像", "用户「" + user.getNickname() + "」更新了账号头像");
+        AvatarUploadResponse response = new AvatarUploadResponse();
+        response.setAvatarUrl(avatarUrl);
+        return response;
+    }
+
+    /**
+     * 读取当前账号头像二进制。
+     */
+    public AvatarResource readAvatar(Long userId) {
+        MotivationUser avatar = userMapper.selectAvatarById(userId);
+        if (avatar == null || avatar.getAvatarData() == null || avatar.getAvatarData().length == 0) {
+            throw new MotivationException("AVATAR_NOT_FOUND", "头像不存在");
+        }
+        String contentType = StringUtils.hasText(avatar.getAvatarContentType())
+                ? avatar.getAvatarContentType()
+                : MotivationConstants.Avatar.CONTENT_TYPE_JPEG;
+        return new AvatarResource(avatar.getAvatarData(), contentType);
     }
 
     public MotivationUser requireUser() {
