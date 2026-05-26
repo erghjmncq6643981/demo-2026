@@ -31,3 +31,15 @@
 2026-05-26T15:22:19.360+08:00  INFO 93175 --- [motivation-platform] [io-17680-exec-2] com.alibaba.druid.pool.DruidDataSource   : {dataSource-1} inited
 2026-05-26T15:24:01.929+08:00  INFO 93175 --- [motivation-platform] [io-17680-exec-2] c.c.motivation.service.AuthService       : 孩子用户「小星」登录成功
 2026-05-26T15:24:32.093+08:00  INFO 93175 --- [motivation-platform] [io-17680-exec-9] c.c.motivation.service.AuthService       : 家长用户「呈呈妈」登录成功
+2026-05-26T15:33:33.070+08:00  INFO 93175 --- [motivation-platform] [io-17680-exec-3] c.c.motivation.service.AuthService       : 家长用户「呈呈妈」登录成功
+2026-05-26T15:33:49.062+08:00  INFO 93175 --- [motivation-platform] [io-17680-exec-6] c.c.motivation.service.AuthService       : 家长用户「呈呈妈」登录成功
+2026-05-26T15:36:15.864+08:00  INFO 93175 --- [motivation-platform] [io-17680-exec-1] c.c.motivation.service.AuthService       : 孩子用户「小星」登录成功
+2026-05-26T15:37:31.487+08:00  INFO 93175 --- [motivation-platform] [ionShutdownHook] com.alibaba.druid.pool.DruidDataSource   : {dataSource-1} closing ...
+2026-05-26T15:37:31.491+08:00  INFO 93175 --- [motivation-platform] [ionShutdownHook] com.alibaba.druid.pool.DruidDataSource   : {dataSource-1} closed
+[ERROR] Failed to execute goal org.springframework.boot:spring-boot-maven-plugin:3.3.6:run (default-cli) on project chandler26-jdk17-motivation: Process terminated with exit code: 143 -> [Help 1]
+[ERROR] 
+[ERROR] To see the full stack trace of the errors, re-run Maven with the -e switch.
+[ERROR] Re-run Maven using the -X switch to enable full debug logging.
+[ERROR] 
+[ERROR] For more information about the errors and possible solutions, please read the following articles:
+[ERROR] [Help 1] http://cwiki.apache.org/confluence/display/MAVEN/MojoExecutionException

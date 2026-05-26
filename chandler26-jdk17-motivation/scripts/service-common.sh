@@ -29,7 +29,12 @@ service_pid() {
 
 service_is_running() {
   local pid="${1:-}"
-  [[ -n "${pid}" ]] && kill -0 "${pid}" 2>/dev/null
+  if [[ -z "${pid}" ]] || ! kill -0 "${pid}" 2>/dev/null; then
+    return 1
+  fi
+  local state
+  state="$(ps -o state= -p "${pid}" 2>/dev/null | tr -d '[:space:]')"
+  [[ -z "${state}" || "${state}" != Z* ]]
 }
 
 service_port() {
@@ -100,10 +105,40 @@ service_cleanup_pid() {
   rm -f "$(service_pid_file "${service_name}")"
 }
 
+service_wait_until_inactive() {
+  local service_name="$1"
+  local timeout_seconds="${2:-30}"
+
+  for ((i = 0; i < timeout_seconds; i++)); do
+    if ! service_is_active "${service_name}"; then
+      service_cleanup_pid "${service_name}"
+      return 0
+    fi
+    sleep 1
+  done
+
+  return 1
+}
+
+service_kill_all_processes() {
+  local service_name="$1"
+  local pids
+  pids="$(
+    {
+      service_pid "${service_name}"
+      service_listening_pids "${service_name}"
+    } | sort -u
+  )"
+
+  while IFS= read -r pid; do
+    [[ -n "${pid}" ]] || continue
+    kill -9 "${pid}" 2>/dev/null || true
+  done <<< "${pids}"
+}
+
 service_stop() {
   local service_name="$1"
-  local pid pid_file
-  pid_file="$(service_pid_file "${service_name}")"
+  local pid
   pid="$(service_pid "${service_name}")"
 
   if ! service_is_running "${pid}"; then
@@ -118,16 +153,17 @@ service_stop() {
   fi
 
   kill "${pid}" 2>/dev/null || true
-  for _ in {1..30}; do
-    if ! service_is_running "${pid}"; then
-      service_cleanup_pid "${service_name}"
-      echo "${service_name}: 已停止"
-      return 0
-    fi
-    sleep 1
-  done
+  if service_wait_until_inactive "${service_name}" 30; then
+    echo "${service_name}: 已停止"
+    return 0
+  fi
 
-  kill -9 "${pid}" 2>/dev/null || true
-  service_cleanup_pid "${service_name}"
-  echo "${service_name}: 已强制停止"
+  service_kill_all_processes "${service_name}"
+  if service_wait_until_inactive "${service_name}" 10; then
+    echo "${service_name}: 已强制停止"
+    return 0
+  fi
+
+  echo "${service_name}: 停止超时，仍未完全退出" >&2
+  return 1
 }
