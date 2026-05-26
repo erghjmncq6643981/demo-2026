@@ -38,7 +38,7 @@ public class MotivationPointLedgerService extends ServiceImpl<MotivationPointLed
     public List<MotivationPointLedger> listByChild(Long childId, String pointType, int limit) {
         LambdaQueryWrapper<MotivationPointLedger> wrapper = new LambdaQueryWrapper<MotivationPointLedger>()
                 .eq(MotivationPointLedger::getChildId, childId)
-                .orderByDesc(MotivationPointLedger::getEventTime)
+                .orderByDesc(MotivationPointLedger::getUpdateTime)
                 .orderByDesc(MotivationPointLedger::getId)
                 .last("limit " + Math.max(MotivationConstants.Pagination.MIN_LIMIT,
                         Math.min(limit, MotivationConstants.Pagination.LEDGER_MAX_LIMIT)));
@@ -64,7 +64,7 @@ public class MotivationPointLedgerService extends ServiceImpl<MotivationPointLed
             throw new MotivationException("CHILD_REQUIRED", "请选择孩子");
         }
         if (!StringUtils.hasText(pointType)) {
-            throw new MotivationException("POINT_TYPE_REQUIRED", "请选择积分类型");
+            throw new MotivationException("POINT_TYPE_REQUIRED", "请选择货币类型");
         }
         if (amount == 0) {
             throw new MotivationException("POINT_AMOUNT_REQUIRED", "积分变动不能为 0");

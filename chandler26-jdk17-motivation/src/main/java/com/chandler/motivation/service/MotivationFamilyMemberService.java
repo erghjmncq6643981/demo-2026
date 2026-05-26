@@ -86,7 +86,9 @@ public class MotivationFamilyMemberService extends ServiceImpl<MotivationFamilyM
         List<MotivationFamilyMember> members = list(new LambdaQueryWrapper<MotivationFamilyMember>()
                 .in(MotivationFamilyMember::getChildId, childIds)
                 .eq(MotivationFamilyMember::getRelationRole, MotivationEnums.FamilyRole.CHILD.code())
-                .eq(MotivationFamilyMember::getStatus, MotivationEnums.ChildStatus.ACTIVE.code()));
+                .eq(MotivationFamilyMember::getStatus, MotivationEnums.ChildStatus.ACTIVE.code())
+                .orderByDesc(MotivationFamilyMember::getUpdateTime)
+                .orderByDesc(MotivationFamilyMember::getId));
         if (members.isEmpty()) {
             return Collections.emptyList();
         }

@@ -33,7 +33,8 @@ public class MotivationChildPointBalanceService extends ServiceImpl<MotivationCh
     public List<PointBalanceResponse> listSummary(Long childId) {
         return list(new LambdaQueryWrapper<MotivationChildPointBalance>()
                 .eq(MotivationChildPointBalance::getChildId, childId)
-                .orderByAsc(MotivationChildPointBalance::getPointType))
+                .orderByDesc(MotivationChildPointBalance::getUpdateTime)
+                .orderByDesc(MotivationChildPointBalance::getId))
                 .stream()
                 .map(this::toResponse)
                 .toList();

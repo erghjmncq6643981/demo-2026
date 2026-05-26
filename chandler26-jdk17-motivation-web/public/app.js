@@ -64,6 +64,8 @@ const state = {
   selectedCheckInTaskId: '',
   selectedCheckInTaskDate: '',
   selectedCheckInRewardCount: 0,
+  revealedChildPasswords: {},
+  childPasswordEditEnabled: false,
   exchangeSuccess: null,
   rewardExchangeSuccess: null,
   loginCarouselIndex: 0,
@@ -241,7 +243,7 @@ const actions = {
     render()
   },
   setCalendarEventKind(eventKind) {
-    state.calendarEventKind = ['tasks', 'points', 'rewards'].includes(eventKind) ? eventKind : 'tasks'
+    state.calendarEventKind = ['tasks', 'points'].includes(eventKind) ? eventKind : 'tasks'
     render()
   },
 }
@@ -362,6 +364,29 @@ function bindEvents() {
   document.querySelector('[data-action="open-goal-modal"]')?.addEventListener('click', () => openGoalModal())
   document.querySelectorAll('[data-action="close-goal-modal"]').forEach((button) => {
     button.addEventListener('click', closeGoalModal)
+  })
+  document.querySelectorAll('[data-action="open-goal-icon-picker"]').forEach((button) => {
+    button.addEventListener('click', (event) => {
+      event.preventDefault()
+      const field = button.closest('.icon-field')
+      field?.querySelector('.icon-popover')?.classList.toggle('hidden')
+    })
+  })
+  document.querySelectorAll('[data-action="select-goal-icon"]').forEach((button) => {
+    button.addEventListener('click', (event) => {
+      event.preventDefault()
+      const icon = button.dataset.goalIcon || '★'
+      const field = button.closest('.icon-field')
+      const form = button.closest('form')
+      if (form?.icon) {
+        form.icon.value = icon
+      }
+      field?.querySelector('.icon-select-btn')?.replaceChildren(document.createTextNode(icon))
+      field?.querySelectorAll('[data-action="select-goal-icon"]').forEach((item) => {
+        item.classList.toggle('active', item === button)
+      })
+      field?.querySelector('.icon-popover')?.classList.add('hidden')
+    })
   })
   document.querySelector('[data-action="open-task-modal"]')?.addEventListener('click', () => openTaskModal())
   document.querySelectorAll('[data-action="open-task-modal-for-date"]').forEach((button) => {
@@ -574,6 +599,8 @@ function bindEvents() {
       toggleCheckInReward(Number(button.dataset.rewardIndex || 0))
     })
   })
+  document.querySelector('[data-action="decrease-checkin-reward"]')?.addEventListener('click', () => changeCheckInRewardCount(-1))
+  document.querySelector('[data-action="increase-checkin-reward"]')?.addEventListener('click', () => changeCheckInRewardCount(1))
   document.querySelector('[data-form="task-checkin"]')?.addEventListener('submit', handleTaskCheckInSubmit)
   bindFilterActions()
   document.querySelectorAll('[data-schedule-mode]').forEach((input) => {
@@ -598,6 +625,13 @@ function bindEvents() {
   })
   document.querySelectorAll('[data-action="complete-task"]').forEach((button) => {
     button.addEventListener('click', () => openTaskCheckInModal(button.dataset.taskId, button.dataset.taskDate))
+  })
+  document.querySelector('[data-action="read-child-password"]')?.addEventListener('click', (event) => {
+    void readChildPassword(event.currentTarget.dataset.childId)
+  })
+  document.querySelector('[data-action="enable-child-password-edit"]')?.addEventListener('click', () => {
+    state.childPasswordEditEnabled = true
+    render()
   })
   bindBlockDragSelection('[data-daily-hour-picker]', '[name="dailyHours"]')
   bindBlockDragSelection('[data-weekday-picker]', '[name="weekDays"]')
@@ -1300,7 +1334,7 @@ async function handleTaskCheckInSubmit(event) {
 
 function getTaskMeta(taskId, taskDate = state.todayKey) {
   const task = state.tasks.find((item) => String(item.id) === String(taskId))
-  const event = state.calendarEvents.find((item) => String(item.taskId) === String(taskId) && item.taskDate === taskDate)
+  const event = state.calendarEvents.find((item) => String(item.taskId) === String(taskId) && formatDateValue(item.taskDate) === taskDate)
   return task || event || null
 }
 
@@ -1438,7 +1472,7 @@ async function handleRewardFulfillmentUpdate(exchangeId, branchStatus = 'PENDING
     expectedArrivalDate: readClosestInputValue(sourceButton, 'expectedArrivalDate'),
     scheduleStartDate: readClosestInputValue(sourceButton, 'scheduleStartDate'),
     scheduleEndDate: readClosestInputValue(sourceButton, 'scheduleEndDate'),
-    remark: `更新为${label}`,
+    remark: readClosestInputValue(sourceButton, 'remark') || `更新为${label}`,
   }
   state.confirmDialog = {
     title: '更新礼物状态',
@@ -1455,6 +1489,7 @@ async function handleRewardFulfillmentUpdate(exchangeId, branchStatus = 'PENDING
               expectedArrivalDate: payload.expectedArrivalDate || item.expectedArrivalDate,
               scheduleStartDate: payload.scheduleStartDate || item.scheduleStartDate,
               scheduleEndDate: payload.scheduleEndDate || item.scheduleEndDate,
+              remark: payload.remark || item.remark,
               fulfillmentUpdatedAt: new Date().toISOString(),
               completedAt: deriveFulfillmentStatus(branchStatus) === 'COMPLETED' ? new Date().toISOString() : item.completedAt,
             }
@@ -1472,7 +1507,7 @@ async function handleRewardFulfillmentUpdate(exchangeId, branchStatus = 'PENDING
 
 function readClosestInputValue(sourceButton, name) {
   if (!sourceButton || !name) return ''
-  return sourceButton.closest('.reward-flow-controls, .todo-item, .calendar-detail')?.querySelector(`[name="${name}"]`)?.value || ''
+  return sourceButton.closest('.reward-flow-controls, .todo-item, .reward-day-todo-item, .calendar-detail')?.querySelector(`[name="${name}"]`)?.value || ''
 }
 
 function deriveFulfillmentStatus(branchStatus) {
@@ -1612,7 +1647,20 @@ async function handlePointCurrencySubmit(event) {
     && Number(currency.deleted || 0) !== 1
   ))
   if (currentDuplicate) {
-    toast('该积分类型已经存在，请直接修改')
+    toast('该货币类型已经存在，请直接修改')
+    return
+  }
+  const nextCurrencies = state.pointCurrencies.map((currency) => (
+    String(currency.id || '') === currencyId
+      ? { ...currency, ...payload }
+      : currency
+  ))
+  if (!currencyId) {
+    nextCurrencies.push({ ...payload, id: `preview-currency-${Date.now()}` })
+  }
+  const previewWeights = currencyWeightsFromList(nextCurrencies, state.pointExchangeRule)
+  if (!(previewWeights.STAR < previewWeights.FLOWER && previewWeights.FLOWER < previewWeights.CROWN)) {
+    toast('币值必须满足：1级 < 2级 < 3级')
     return
   }
   if (state.offline) {
@@ -1673,16 +1721,16 @@ async function exchangePoints(request) {
     fromAmount: Math.max(0, Number(request.fromAmount || 0)),
   }
   if (payload.fromAmount <= 0) {
-    toast('当前数量不足以兑换目标积分')
+    toast('当前数量不足以兑换目标货币')
     return
   }
   if (payload.fromPointType === payload.toPointType) {
-    toast('请选择不同的积分类型')
+    toast('请选择不同的货币类型')
     return
   }
   const preview = calculatePointExchange(payload.fromPointType, payload.toPointType, payload.fromAmount, state.pointExchangeRule)
   if (preview.toAmount <= 0) {
-    toast('当前数量不足以兑换目标积分')
+    toast('当前数量不足以兑换目标货币')
     return
   }
   if (state.offline) {
@@ -1737,6 +1785,7 @@ function openChildModal(childId = null) {
   state.editingChild = childId ? state.children.find((child) => String(child.id) === String(childId)) || null : null
   state.childModalOpen = true
   state.childAccountDraftEnabled = false
+  state.childPasswordEditEnabled = false
   const nextChildId = state.editingChild?.id || ''
   if (!isSameAvatarDraft(state.avatarEditor, 'child', nextChildId)) {
     clearAvatarEditorDraft({ scope: 'child', childId: nextChildId })
@@ -1748,6 +1797,7 @@ function closeChildModal() {
   state.childModalOpen = false
   state.editingChild = null
   state.childAccountDraftEnabled = false
+  state.childPasswordEditEnabled = false
   clearAvatarEditorDraft({ scope: 'child' })
   render()
 }
@@ -2206,6 +2256,7 @@ function closeTaskCheckInModal() {
   state.selectedCheckInTaskId = ''
   state.selectedCheckInTaskDate = ''
   state.selectedCheckInRewardCount = 0
+  state.checkInRewardDragging = false
   render()
 }
 
@@ -2229,16 +2280,24 @@ function toggleCheckInReward(index) {
   syncCheckInRewardDom()
 }
 
+function changeCheckInRewardCount(delta) {
+  const taskMeta = getTaskMeta(state.selectedCheckInTaskId, state.selectedCheckInTaskDate || state.todayKey)
+  const maxCount = Math.max(1, Number(taskMeta?.basePoints || 1))
+  const current = clamp(Number(state.selectedCheckInRewardCount || maxCount), 1, maxCount)
+  state.selectedCheckInRewardCount = clamp(current + Number(delta || 0), 1, maxCount)
+  state.checkInRewardDragging = false
+  syncCheckInRewardDom()
+}
+
 function syncCheckInRewardDom() {
   const selectedCount = Number(state.selectedCheckInRewardCount || 0)
   document.querySelectorAll('[data-action="select-checkin-reward"]').forEach((button) => {
     const index = Number(button.dataset.rewardIndex || 0)
     button.classList.toggle('active', index <= selectedCount)
   })
-  const countNode = document.querySelector('[data-checkin-reward-count]')
-  if (countNode) {
-    countNode.textContent = `${selectedCount} / ${countNode.dataset.total || selectedCount}`
-  }
+  document.querySelectorAll('[data-checkin-reward-count]').forEach((countNode) => {
+    countNode.textContent = String(selectedCount)
+  })
 }
 
 function openPointCurrencyModal(currencyId = null) {
@@ -2500,6 +2559,7 @@ async function handleChildSubmit(event) {
     createChildAccount: String(formData.get('createChildAccount') || 'false') === 'true' && !state.editingChild?.childUsername,
     childUsername: String(formData.get('childUsername') || '').trim(),
     childPassword: String(formData.get('childPassword') || '').trim(),
+    childPasswordToUpdate: String(formData.get('childPasswordToUpdate') || '').trim(),
   }
   if (!payload.nickname) {
     toast('请填写宝贝昵称')
@@ -2509,14 +2569,24 @@ async function handleChildSubmit(event) {
     toast('请填写宝贝账号和密码')
     return
   }
+  if (payload.childPasswordToUpdate && payload.childPasswordToUpdate.length < 6) {
+    toast('宝贝子账户新密码至少 6 位')
+    return
+  }
   if (pendingAvatarFile instanceof File && pendingAvatarFile.size > AVATAR_MAX_BYTES) {
     toast('头像照片不能超过 1M')
     return
   }
   if (state.offline) {
+    const existingChild = childId
+      ? state.children.find((child) => String(child.id) === childId)
+      : null
     const nextChild = {
+      ...(existingChild || {}),
       id: childId || `demo-child-${Date.now()}`,
       ...payload,
+      childUsername: existingChild?.childUsername || payload.childUsername || '',
+      childAccountUsername: existingChild?.childAccountUsername || payload.childUsername || '',
       status: 'ACTIVE',
     }
     if (pendingAvatarPreviewUrl) {
@@ -2531,6 +2601,7 @@ async function handleChildSubmit(event) {
     state.childModalOpen = false
     state.editingChild = null
     state.childAccountDraftEnabled = false
+    state.childPasswordEditEnabled = false
     clearAvatarEditorDraft({ scope: 'child' })
     toast(childId ? '演示：宝贝档案已修改' : '演示：宝贝档案已创建')
     render()
@@ -2551,12 +2622,35 @@ async function handleChildSubmit(event) {
     state.childModalOpen = false
     state.editingChild = null
     state.childAccountDraftEnabled = false
+    state.childPasswordEditEnabled = false
     clearAvatarEditorDraft({ scope: 'child' })
     await loadInitialData(false)
     toast(childId ? '宝贝档案已修改' : '宝贝档案已创建')
   } catch (error) {
     toast(error.message)
     render()
+  }
+}
+
+async function readChildPassword(childId) {
+  if (!childId) return
+  if (state.offline) {
+    state.revealedChildPasswords = {
+      ...state.revealedChildPasswords,
+      [childId]: 'demo123456',
+    }
+    render()
+    return
+  }
+  try {
+    const payload = await api.readChildAccountPassword(childId)
+    state.revealedChildPasswords = {
+      ...state.revealedChildPasswords,
+      [childId]: payload?.password || '',
+    }
+    render()
+  } catch (error) {
+    toast(error.message)
   }
 }
 
@@ -2995,12 +3089,22 @@ function defaultCurrencySort(pointType) {
 function syncRuleFromCurrencies() {
   const currencies = normalizePointCurrencies(state.pointCurrencies, state.pointExchangeRule)
   state.pointCurrencies = currencies
-  const byType = new Map(currencies.map((currency) => [currency.pointType, currency]))
+  const weights = currencyWeightsFromList(currencies, state.pointExchangeRule)
   state.pointExchangeRule = {
     childId: state.selectedChildId,
-    starWeight: Number(byType.get('STAR')?.exchangeWeight || 1),
-    flowerWeight: Number(byType.get('FLOWER')?.exchangeWeight || 10),
-    crownWeight: Number(byType.get('CROWN')?.exchangeWeight || 100),
+    starWeight: weights.STAR,
+    flowerWeight: weights.FLOWER,
+    crownWeight: weights.CROWN,
+  }
+}
+
+function currencyWeightsFromList(currencies = [], rule = {}) {
+  const normalized = normalizePointCurrencies(currencies, rule)
+  const byType = new Map(normalized.map((currency) => [currency.pointType, currency]))
+  return {
+    STAR: Number(byType.get('STAR')?.exchangeWeight || 1),
+    FLOWER: Number(byType.get('FLOWER')?.exchangeWeight || 10),
+    CROWN: Number(byType.get('CROWN')?.exchangeWeight || 100),
   }
 }
 

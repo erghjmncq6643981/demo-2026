@@ -79,12 +79,12 @@ public class MotivationPointExchangeRuleService extends ServiceImpl<MotivationPo
     public PointExchangeResultResponse exchange(Long childId, Long userId, PointExchangeRequest request) {
         childService.requireViewAccess(childId, userId);
         if (request == null) {
-            throw new MotivationException("POINT_EXCHANGE_REQUIRED", "请填写积分兑换信息");
+            throw new MotivationException("POINT_EXCHANGE_REQUIRED", "请填写货币兑换信息");
         }
         String fromPointType = normalizePointType(request.getFromPointType());
         String toPointType = normalizePointType(request.getToPointType());
         if (fromPointType.equals(toPointType)) {
-            throw new MotivationException("POINT_EXCHANGE_SAME_TYPE", "请选择不同的积分类型");
+            throw new MotivationException("POINT_EXCHANGE_SAME_TYPE", "请选择不同的货币类型");
         }
         int fromAmount = request.getFromAmount() == null ? 0 : request.getFromAmount();
         if (fromAmount <= 0) {
@@ -95,7 +95,7 @@ public class MotivationPointExchangeRuleService extends ServiceImpl<MotivationPo
         int toWeight = weightOf(rule, toPointType);
         int toAmount = (fromAmount * fromWeight) / toWeight;
         if (toAmount <= 0) {
-            throw new MotivationException("POINT_EXCHANGE_AMOUNT_TOO_SMALL", "当前数量不足以兑换目标积分");
+            throw new MotivationException("POINT_EXCHANGE_AMOUNT_TOO_SMALL", "当前数量不足以兑换目标货币");
         }
         int spentAmount = (int) Math.ceil((double) toAmount * toWeight / fromWeight);
         long sourceId = System.currentTimeMillis();
@@ -156,7 +156,7 @@ public class MotivationPointExchangeRuleService extends ServiceImpl<MotivationPo
     private String normalizePointType(String pointType) {
         String normalized = StringUtils.hasText(pointType) ? pointType.trim().toUpperCase() : "";
         if (!POINT_TYPES.contains(normalized)) {
-            throw new MotivationException("POINT_TYPE_INVALID", "积分类型不正确");
+            throw new MotivationException("POINT_TYPE_INVALID", "货币类型不正确");
         }
         return normalized;
     }

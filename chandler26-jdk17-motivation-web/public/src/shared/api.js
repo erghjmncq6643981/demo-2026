@@ -118,6 +118,8 @@ export const api = {
   createChild: (body) => request('/children', { method: 'POST', body }),
   updateChild: (childId, body) => request(`/children/${childId}`, { method: 'PUT', body }),
   deleteChild: (childId) => request(`/children/${childId}`, { method: 'DELETE' }),
+  readChildAccountPassword: (childId) => request(`/children/${childId}/account/password`),
+  updateChildAccountPassword: (childId, body) => request(`/children/${childId}/account/password`, { method: 'PUT', body }),
   uploadChildAvatar: (childId, file) => {
     const formData = new FormData()
     formData.append('file', file)

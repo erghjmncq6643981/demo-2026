@@ -62,8 +62,8 @@ public class MotivationTaskRecordService extends ServiceImpl<MotivationTaskRecor
                 .eq(MotivationTaskRecord::getDeleted, MotivationConstants.Flag.NO)
                 .ge(startDate != null, MotivationTaskRecord::getTaskDate, startDate)
                 .le(endDate != null, MotivationTaskRecord::getTaskDate, endDate)
-                .orderByAsc(MotivationTaskRecord::getTaskDate)
-                .orderByAsc(MotivationTaskRecord::getTaskId));
+                .orderByDesc(MotivationTaskRecord::getUpdateTime)
+                .orderByDesc(MotivationTaskRecord::getId));
     }
 
     /**
@@ -74,7 +74,9 @@ public class MotivationTaskRecordService extends ServiceImpl<MotivationTaskRecor
         List<MotivationTaskRecord> records = list(new LambdaQueryWrapper<MotivationTaskRecord>()
                 .eq(MotivationTaskRecord::getTaskId, taskId)
                 .eq(MotivationTaskRecord::getDeleted, MotivationConstants.Flag.NO)
-                .ne(MotivationTaskRecord::getStatus, MotivationEnums.TaskStatus.APPROVED.code()));
+                .ne(MotivationTaskRecord::getStatus, MotivationEnums.TaskStatus.APPROVED.code())
+                .orderByDesc(MotivationTaskRecord::getUpdateTime)
+                .orderByDesc(MotivationTaskRecord::getId));
         if (records.isEmpty()) {
             return;
         }

@@ -44,17 +44,23 @@ public class CalendarService {
         List<MotivationTask> tasks = taskService.listByChild(childId, userId).stream()
                 .filter(task -> MotivationEnums.codeEquals(MotivationEnums.TaskStatus.ACTIVE, task.getStatus()))
                 .toList();
-        Map<String, MotivationTaskRecord> recordMap = taskRecordService.listByChildAndRange(childId, resolvedStart, resolvedEnd)
-                .stream()
+        List<MotivationTaskRecord> records = taskRecordService.listByChildAndRange(childId, resolvedStart, resolvedEnd);
+        Map<String, MotivationTaskRecord> recordMap = records.stream()
                 .collect(Collectors.toMap(this::recordKey, Function.identity(), (left, right) -> left, LinkedHashMap::new));
+        List<CalendarEventResponse> events = records.stream()
+                .filter(record -> MotivationEnums.codeEquals(MotivationEnums.TaskStatus.APPROVED, record.getStatus()))
+                .map(this::toRecordEvent)
+                .collect(Collectors.toCollection(ArrayList::new));
 
-        List<CalendarEventResponse> events = new ArrayList<>();
         for (LocalDate date = resolvedStart; !date.isAfter(resolvedEnd); date = date.plusDays(1)) {
             for (MotivationTask task : tasks) {
                 if (!isScheduled(task, date)) {
                     continue;
                 }
                 MotivationTaskRecord record = recordMap.get(task.getId() + ":" + date);
+                if (record != null && MotivationEnums.codeEquals(MotivationEnums.TaskStatus.APPROVED, record.getStatus())) {
+                    continue;
+                }
                 events.add(record == null ? toPlannedEvent(task, date) : toRecordEvent(record));
             }
         }

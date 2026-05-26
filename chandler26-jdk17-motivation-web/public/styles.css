@@ -779,6 +779,12 @@ input[type="color"] { padding: 4px; }
   color: #3730a3;
   background: rgba(79, 70, 229, 0.16);
 }
+.time-blocks[style*="--task-color"] .time-block.active,
+.task-time-cell .time-block.active {
+  border-color: color-mix(in srgb, var(--task-color, #4f46e5) 42%, #ffffff);
+  color: color-mix(in srgb, var(--task-color, #4f46e5) 78%, #111827);
+  background: color-mix(in srgb, var(--task-color, #4f46e5) 15%, #ffffff);
+}
 .time-block.disabled {
   color: #cbd5e1;
   background: #f1f5f9;
@@ -829,6 +835,49 @@ input[type="color"] { padding: 4px; }
   color: var(--muted);
   font-size: 12px;
 }
+.reward-day-todo {
+  display: grid;
+  gap: 10px;
+  margin: 12px 0;
+  padding: 12px;
+  border: 1px solid rgba(255, 159, 67, 0.16);
+  border-radius: 16px;
+  background: linear-gradient(135deg, rgba(255, 251, 235, 0.94), rgba(236, 253, 245, 0.82));
+}
+.reward-day-todo .section-inline-head h3 {
+  margin: 0;
+  font-size: 15px;
+}
+.reward-day-todo-list {
+  display: grid;
+  gap: 9px;
+}
+.reward-day-todo-item {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  gap: 10px;
+  align-items: start;
+  padding: 10px;
+  border: 1px solid var(--line);
+  border-radius: 14px;
+  background: #fff;
+}
+.reward-day-todo-main {
+  min-width: 0;
+  display: grid;
+  gap: 7px;
+}
+.reward-day-todo-main strong,
+.reward-day-todo-main small {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.reward-day-todo-main small {
+  color: var(--muted);
+  font-size: 12px;
+  font-weight: 800;
+}
 .reward-flow-controls {
   display: flex;
   align-items: end;
@@ -857,6 +906,16 @@ input[type="color"] { padding: 4px; }
 }
 .reward-flow-controls > .date-picker-field .date-picker-popover {
   width: min(300px, calc(100vw - 56px));
+}
+.flow-remark-field {
+  min-width: 180px;
+  flex: 1 1 210px;
+  font-size: 11px;
+}
+.flow-remark-field input {
+  min-height: 32px;
+  border-radius: 10px;
+  font-size: 12px;
 }
 .flow-date-field {
   display: grid;
@@ -1274,6 +1333,9 @@ input[type="color"] { padding: 4px; }
   gap: 8px;
   padding: 0 18px 12px;
 }
+.calendar-summary .calendar-quick-add {
+  margin-left: auto;
+}
 .calendar-summary span {
   min-height: 30px;
   display: inline-flex;
@@ -1470,6 +1532,12 @@ input[type="color"] { padding: 4px; }
 .point-change-icons span {
   font-size: 22px;
 }
+.point-change-icons.positive {
+  color: #22c55e;
+}
+.point-change-icons.negative {
+  color: #94a3b8;
+}
 .point-change-icons.large b,
 .point-change-icons.large strong {
   font-size: 34px;
@@ -1646,21 +1714,21 @@ input[type="color"] { padding: 4px; }
   gap: 10px;
   flex-wrap: wrap;
 }
+.account-info-grid {
+  align-items: start;
+}
 .account-summary-grid {
   display: grid;
   grid-template-columns: repeat(4, minmax(0, 1fr));
   gap: 12px;
   margin-top: 14px;
 }
-.account-simple-layout {
-  display: grid;
-  gap: 14px;
-}
 .account-simple-card {
   display: grid;
-  grid-template-columns: auto minmax(0, 1fr) auto;
+  grid-template-columns: auto minmax(0, 1fr);
   align-items: center;
   gap: 14px;
+  margin-top: 12px;
   padding: 14px;
   border: 1px solid rgba(79, 70, 229, 0.12);
   border-radius: 18px;
@@ -1717,6 +1785,27 @@ input[type="color"] { padding: 4px; }
 .child-account-summary strong {
   font-size: 16px;
   font-weight: 950;
+}
+.child-account-actions {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+  margin-top: 4px;
+}
+.child-password-view,
+.child-password-edit {
+  display: grid;
+  gap: 6px;
+  margin-top: 8px;
+  padding: 10px;
+  border: 1px dashed rgba(79, 70, 229, 0.22);
+  border-radius: 12px;
+  background: #fff;
+}
+.child-password-view strong {
+  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  color: #4338ca;
+  letter-spacing: 0;
 }
 .activity-timeline {
   display: grid;
@@ -2310,6 +2399,37 @@ input[type="color"] { padding: 4px; }
   border-radius: 16px;
   background: color-mix(in srgb, var(--point-color) 7%, #ffffff);
 }
+.checkin-reward-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+.checkin-reward-stepper {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  padding: 5px;
+  border: 1px solid color-mix(in srgb, var(--point-color) 18%, #ffffff);
+  border-radius: 14px;
+  background: #fff;
+}
+.checkin-reward-stepper .icon-btn {
+  width: 32px;
+  height: 32px;
+  border-radius: 10px;
+  color: color-mix(in srgb, var(--point-color) 76%, #111827);
+  font-size: 20px;
+  font-weight: 900;
+  box-shadow: none;
+}
+.checkin-reward-stepper span {
+  min-width: 34px;
+  color: color-mix(in srgb, var(--point-color) 78%, #111827);
+  font-size: 18px;
+  font-weight: 950;
+  text-align: center;
+}
 .checkin-reward-grid {
   display: grid;
   grid-template-columns: repeat(8, minmax(0, 1fr));
@@ -2335,18 +2455,6 @@ input[type="color"] { padding: 4px; }
   color: var(--point-color);
   background: color-mix(in srgb, var(--point-color) 12%, #ffffff);
   box-shadow: 0 8px 18px color-mix(in srgb, var(--point-color) 14%, transparent);
-}
-.checkin-reward-count {
-  justify-self: end;
-  min-height: 26px;
-  display: inline-flex;
-  align-items: center;
-  padding: 0 10px;
-  border-radius: 999px;
-  color: color-mix(in srgb, var(--point-color) 78%, #111827);
-  background: #fff;
-  font-size: 12px;
-  font-weight: 900;
 }
 .icon-field {
   position: relative;

@@ -59,7 +59,8 @@ public class MotivationChildService extends ServiceImpl<MotivationChildMapper, M
                         "select child_id from motivation_family_member where user_id = " + userId
                                 + " and status = '" + MotivationEnums.ChildStatus.ACTIVE.code() + "'")
                 .eq(MotivationChild::getDeleted, MotivationConstants.Flag.NO)
-                .orderByDesc(MotivationChild::getUpdateTime));
+                .orderByDesc(MotivationChild::getUpdateTime)
+                .orderByDesc(MotivationChild::getId));
         attachChildAccounts(children);
         return children;
     }
@@ -67,6 +68,7 @@ public class MotivationChildService extends ServiceImpl<MotivationChildMapper, M
     /**
      * 修改孩子档案，并按需补建孩子登录账号。
      */
+    @Transactional
     public MotivationChild update(Long childId, ChildSaveRequest request, Long userId) {
         MotivationChild child = getById(childId);
         if (child == null || Integer.valueOf(MotivationConstants.Flag.YES).equals(child.getDeleted())) {
@@ -82,6 +84,7 @@ public class MotivationChildService extends ServiceImpl<MotivationChildMapper, M
         child.setRemark(request.getRemark());
         updateById(child);
         createChildAccountIfNeeded(child, request);
+        updateChildAccountPasswordIfNeeded(child, request, userId);
         systemLogService.recordBusiness(userId, child.getId(), MotivationEnums.LogType.SYSTEM,
                 "修改孩子档案", "修改了孩子「" + child.getNickname() + "」的档案");
         attachChildAccounts(List.of(child));
@@ -143,6 +146,35 @@ public class MotivationChildService extends ServiceImpl<MotivationChildMapper, M
     }
 
     /**
+     * 家长查看孩子子账户密码。仅返回已加密保存过的可查看副本。
+     */
+    public String readChildAccountPassword(Long childId, Long userId) {
+        MotivationChild child = getChildForManage(childId, userId);
+        attachChildAccounts(List.of(child));
+        if (child.getChildAccountUserId() == null) {
+            throw new MotivationException("CHILD_ACCOUNT_REQUIRED", "孩子账号不存在");
+        }
+        systemLogService.recordBusiness(userId, childId, MotivationEnums.LogType.SYSTEM,
+                "查看孩子账号密码", "查看了孩子「" + child.getNickname() + "」的子账户密码");
+        return authService.readChildPassword(child.getChildAccountUserId());
+    }
+
+    /**
+     * 家长重置孩子子账户密码，不要求孩子当前密码。
+     */
+    @Transactional
+    public void updateChildAccountPassword(Long childId, Long userId, String password) {
+        MotivationChild child = getChildForManage(childId, userId);
+        attachChildAccounts(List.of(child));
+        if (child.getChildAccountUserId() == null) {
+            throw new MotivationException("CHILD_ACCOUNT_REQUIRED", "孩子账号不存在");
+        }
+        authService.resetChildPassword(child.getChildAccountUserId(), password);
+        systemLogService.recordBusiness(userId, childId, MotivationEnums.LogType.SYSTEM,
+                "修改孩子账号密码", "修改了孩子「" + child.getNickname() + "」的子账户密码");
+    }
+
+    /**
      * 校验当前用户是否有孩子档案管理权限。
      */
     public void requireManageAccess(Long childId, Long userId) {
@@ -158,6 +190,15 @@ public class MotivationChildService extends ServiceImpl<MotivationChildMapper, M
         if (!familyMemberService.canView(childId, userId)) {
             throw new MotivationException("CHILD_ACCESS_DENIED", "无权查看该孩子档案");
         }
+    }
+
+    private MotivationChild getChildForManage(Long childId, Long userId) {
+        MotivationChild child = getById(childId);
+        if (child == null || Integer.valueOf(MotivationConstants.Flag.YES).equals(child.getDeleted())) {
+            throw new MotivationException("CHILD_NOT_FOUND", "孩子档案不存在");
+        }
+        requireManageAccess(childId, userId);
+        return child;
     }
 
     private void createChildAccountIfNeeded(MotivationChild child, ChildSaveRequest request) {
@@ -177,6 +218,19 @@ public class MotivationChildService extends ServiceImpl<MotivationChildMapper, M
         familyMemberService.createChildMember(child.getId(), childUser.getId());
         child.setChildAccountUserId(childUser.getId());
         child.setChildUsername(childUser.getUsername());
+    }
+
+    private void updateChildAccountPasswordIfNeeded(MotivationChild child, ChildSaveRequest request, Long userId) {
+        if (request == null || !StringUtils.hasText(request.getChildPasswordToUpdate())) {
+            return;
+        }
+        attachChildAccounts(List.of(child));
+        if (child.getChildAccountUserId() == null) {
+            throw new MotivationException("CHILD_ACCOUNT_REQUIRED", "孩子账号不存在，请先创建子账户");
+        }
+        authService.resetChildPassword(child.getChildAccountUserId(), request.getChildPasswordToUpdate());
+        systemLogService.recordBusiness(userId, child.getId(), MotivationEnums.LogType.SYSTEM,
+                "修改孩子账号密码", "修改了孩子「" + child.getNickname() + "」的子账户密码");
     }
 
     private void attachChildAccounts(List<MotivationChild> children) {

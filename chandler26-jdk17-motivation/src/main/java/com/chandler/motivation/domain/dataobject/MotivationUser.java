@@ -16,6 +16,8 @@ public class MotivationUser {
     private String username;
     private String nickname;
     private String passwordHash;
+    @JsonIgnore
+    private String passwordCipher;
     private String avatarUrl;
     @JsonIgnore
     @TableField(value = "avatar_data", select = false)

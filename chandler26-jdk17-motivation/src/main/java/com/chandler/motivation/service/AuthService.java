@@ -42,6 +42,7 @@ public class AuthService {
     private final JwtTokenService jwtTokenService;
     private final AvatarImageService avatarImageService;
     private final MotivationSystemLogService systemLogService;
+    private final PasswordCipherService passwordCipherService;
     private final SecureRandom secureRandom = new SecureRandom();
 
     /**
@@ -65,6 +66,7 @@ public class AuthService {
         user.setUsername(username);
         user.setNickname(StringUtils.hasText(request.getNickname()) ? request.getNickname().trim() : username);
         user.setPasswordHash(hashPassword(request.getPassword()));
+        user.setPasswordCipher(passwordCipherService.encrypt(request.getPassword()));
         user.setUserType(MotivationEnums.UserType.PARENT.code());
         user.setEnabled(MotivationConstants.Flag.YES);
         user.setDeleted(MotivationConstants.Flag.NO);
@@ -91,6 +93,7 @@ public class AuthService {
         user.setUsername(normalizedUsername);
         user.setNickname(StringUtils.hasText(nickname) ? nickname.trim() : normalizedUsername);
         user.setPasswordHash(hashPassword(password));
+        user.setPasswordCipher(passwordCipherService.encrypt(password));
         user.setUserType(MotivationEnums.UserType.CHILD.code());
         user.setEnabled(MotivationConstants.Flag.YES);
         user.setDeleted(MotivationConstants.Flag.NO);
@@ -141,6 +144,36 @@ public class AuthService {
         MotivationUser latest = findByUsername(user.getUsername());
         log.info("用户「{}」更新了账号资料", latest.getNickname());
         return toProfile(latest);
+    }
+
+    /**
+     * 家长重置孩子子账户密码，不要求孩子当前密码。
+     */
+    public void resetChildPassword(Long childAccountUserId, String password) {
+        if (childAccountUserId == null) {
+            throw new MotivationException("CHILD_ACCOUNT_REQUIRED", "孩子账号不存在");
+        }
+        validatePassword(password, "孩子密码长度必须在 6 到 64 个字符之间");
+        MotivationUser update = new MotivationUser();
+        update.setId(childAccountUserId);
+        update.setPasswordHash(hashPassword(password));
+        update.setPasswordCipher(passwordCipherService.encrypt(password));
+        userMapper.updateById(update);
+    }
+
+    /**
+     * 读取孩子子账户的可查看密码副本。
+     */
+    public String readChildPassword(Long childAccountUserId) {
+        if (childAccountUserId == null) {
+            throw new MotivationException("CHILD_ACCOUNT_REQUIRED", "孩子账号不存在");
+        }
+        MotivationUser childAccount = userMapper.selectById(childAccountUserId);
+        if (childAccount == null
+                || !MotivationEnums.codeEquals(MotivationEnums.UserType.CHILD, childAccount.getUserType())) {
+            throw new MotivationException("CHILD_ACCOUNT_REQUIRED", "孩子账号不存在");
+        }
+        return passwordCipherService.decrypt(childAccount.getPasswordCipher());
     }
 
     /**
@@ -255,5 +288,11 @@ public class AuthService {
 
     private String normalizeUsername(String username) {
         return username == null ? "" : username.trim().toLowerCase();
+    }
+
+    private void validatePassword(String password, String message) {
+        if (!StringUtils.hasText(password) || password.length() < 6 || password.length() > 64) {
+            throw new MotivationException("PASSWORD_INVALID", message);
+        }
     }
 }

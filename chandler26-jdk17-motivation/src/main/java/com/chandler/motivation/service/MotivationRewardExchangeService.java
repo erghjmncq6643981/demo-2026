@@ -45,7 +45,7 @@ public class MotivationRewardExchangeService extends ServiceImpl<MotivationRewar
         childService.requireViewAccess(childId, userId);
         LambdaQueryWrapper<MotivationRewardExchange> wrapper = new LambdaQueryWrapper<MotivationRewardExchange>()
                 .eq(MotivationRewardExchange::getChildId, childId)
-                .orderByDesc(MotivationRewardExchange::getRequestedAt)
+                .orderByDesc(MotivationRewardExchange::getUpdateTime)
                 .orderByDesc(MotivationRewardExchange::getId)
                 .last("limit " + Math.max(1, Math.min(limit, 100)));
         if (status != null && !status.isBlank()) {
@@ -328,7 +328,7 @@ public class MotivationRewardExchangeService extends ServiceImpl<MotivationRewar
     private MotivationPointLedger deductRewardPoints(MotivationRewardExchange exchange, PaymentPlan paymentPlan, Long userId) {
         int requiredPoints = exchange.getRequiredPointsSnapshot() == null ? 0 : exchange.getRequiredPointsSnapshot();
         if (requiredPoints <= 0) {
-            throw new MotivationException("REWARD_POINTS_REQUIRED", "奖励所需积分必须大于 0");
+            throw new MotivationException("REWARD_POINTS_REQUIRED", "奖励所需货币数量必须大于 0");
         }
         MotivationPointLedger ledger = pointLedgerService.applyChange(exchange.getChildId(),
                 paymentPlan.paymentPointType(),
@@ -391,7 +391,7 @@ public class MotivationRewardExchangeService extends ServiceImpl<MotivationRewar
         String requiredPointType = normalizePointType(reward.getRequiredPointType());
         int requiredPoints = reward.getRequiredPoints() == null ? 0 : reward.getRequiredPoints();
         if (requiredPoints <= 0) {
-            throw new MotivationException("REWARD_POINTS_REQUIRED", "奖励所需积分必须大于 0");
+            throw new MotivationException("REWARD_POINTS_REQUIRED", "奖励所需货币数量必须大于 0");
         }
         String paymentPointType = StringUtils.hasText(requestedPaymentPointType)
                 ? normalizePointType(requestedPaymentPointType)
@@ -415,7 +415,7 @@ public class MotivationRewardExchangeService extends ServiceImpl<MotivationRewar
     private String normalizePointType(String pointType) {
         String normalized = StringUtils.hasText(pointType) ? pointType.trim().toUpperCase() : MotivationEnums.PointType.STAR.code();
         if (!POINT_TYPES.contains(normalized)) {
-            throw new MotivationException("POINT_TYPE_INVALID", "积分类型不正确");
+            throw new MotivationException("POINT_TYPE_INVALID", "货币类型不正确");
         }
         return normalized;
     }

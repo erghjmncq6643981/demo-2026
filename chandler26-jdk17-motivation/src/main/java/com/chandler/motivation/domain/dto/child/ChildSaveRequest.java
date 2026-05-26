@@ -13,4 +13,6 @@ public class ChildSaveRequest {
     private Boolean createChildAccount;
     private String childUsername;
     private String childPassword;
+    private String childPasswordToView;
+    private String childPasswordToUpdate;
 }

@@ -31,7 +31,7 @@ public class MotivationTaskService extends ServiceImpl<MotivationTaskMapper, Mot
     private final ObjectMapper objectMapper;
 
     /**
-     * 创建任务，并保存周期、时间段、积分类型等规则快照。
+     * 创建任务，并保存周期、时间段、奖励类型等规则快照。
      */
     public MotivationTask create(TaskSaveRequest request, Long userId) {
         if (request == null || request.getChildId() == null || request.getGoalId() == null) {
@@ -115,8 +115,8 @@ public class MotivationTaskService extends ServiceImpl<MotivationTaskMapper, Mot
         return list(new LambdaQueryWrapper<MotivationTask>()
                 .eq(MotivationTask::getChildId, childId)
                 .eq(MotivationTask::getDeleted, MotivationConstants.Flag.NO)
-                .orderByAsc(MotivationTask::getSortNo)
-                .orderByDesc(MotivationTask::getUpdateTime));
+                .orderByDesc(MotivationTask::getUpdateTime)
+                .orderByDesc(MotivationTask::getId));
     }
 
     /**
@@ -200,7 +200,11 @@ public class MotivationTaskService extends ServiceImpl<MotivationTaskMapper, Mot
             ObjectNode timeRange = normalized.putObject("timeRange");
             timeRange.put("startHour", startHour);
             timeRange.put("endHour", endHour);
-            normalized.put("requiredCount", MotivationConstants.Schedule.MIN_REQUIRED_COUNT);
+            int requiredCount = resolveRequiredCount(source);
+            if (requiredCount > selectedHours.size()) {
+                throw new MotivationException("TASK_REQUIRED_COUNT_INVALID", "完成次数不能大于已选择的时间块数量");
+            }
+            normalized.put("requiredCount", requiredCount);
             return writeJson(normalized);
         }
 

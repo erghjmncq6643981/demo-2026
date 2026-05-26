@@ -81,7 +81,7 @@ export function branchStatusName(status) {
     PURCHASE_ARRIVED: '奖励已到货',
     SCHEDULED: '已加入日程',
     IN_PROGRESS: '奖励进行中',
-    COMPLETED: '已完成',
+    COMPLETED: '已实现',
   }
   return names[status] || '待处理'
 }

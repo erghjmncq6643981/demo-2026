@@ -54,6 +54,7 @@ public class MotivationPointCurrencyService extends ServiceImpl<MotivationPointC
         }
         MotivationPointCurrency currency = new MotivationPointCurrency();
         applyRequest(currency, request, pointType);
+        validateCurrencyWeights(request.getChildId(), null, pointType, currency.getExchangeWeight());
         currency.setChildId(request.getChildId());
         currency.setDeleted(MotivationConstants.Flag.NO);
         currency.setCreatedByUserId(userId);
@@ -83,6 +84,7 @@ public class MotivationPointCurrencyService extends ServiceImpl<MotivationPointC
         PointCurrencySaveRequest merged = request == null ? new PointCurrencySaveRequest() : request;
         merged.setChildId(currency.getChildId());
         applyRequest(currency, merged, pointType);
+        validateCurrencyWeights(currency.getChildId(), currencyId, pointType, currency.getExchangeWeight());
         currency.setUpdatedByUserId(userId);
         updateById(currency);
         syncExchangeRule(currency.getChildId(), userId);
@@ -124,9 +126,8 @@ public class MotivationPointCurrencyService extends ServiceImpl<MotivationPointC
                 .eq(MotivationPointCurrency::getChildId, childId)
                 .eq(MotivationPointCurrency::getDeleted, MotivationConstants.Flag.NO));
         currencies.sort(Comparator
-                .comparing((MotivationPointCurrency currency) -> currency.getSortNo() == null ? 0 : currency.getSortNo())
-                .thenComparing(MotivationPointCurrency::getExchangeWeight)
-                .thenComparing(MotivationPointCurrency::getPointType));
+                .comparing(MotivationPointCurrency::getUpdateTime, Comparator.nullsLast(Comparator.reverseOrder()))
+                .thenComparing(MotivationPointCurrency::getId, Comparator.nullsLast(Comparator.reverseOrder())));
         return currencies;
     }
 
@@ -168,9 +169,28 @@ public class MotivationPointCurrencyService extends ServiceImpl<MotivationPointC
     private String normalizePointType(String pointType) {
         String normalized = StringUtils.hasText(pointType) ? pointType.trim().toUpperCase() : MotivationEnums.PointType.STAR.code();
         if (!DEFAULTS.containsKey(normalized)) {
-            throw new MotivationException("POINT_TYPE_INVALID", "积分类型不正确");
+            throw new MotivationException("POINT_TYPE_INVALID", "货币类型不正确");
         }
         return normalized;
+    }
+
+    private void validateCurrencyWeights(Long childId, Long currentCurrencyId, String pointType, int exchangeWeight) {
+        Map<String, Integer> weights = withDefaults(childId).stream()
+                .filter((currency) -> currentCurrencyId == null || !currentCurrencyId.equals(currency.getId()))
+                .collect(java.util.stream.Collectors.toMap(
+                        MotivationPointCurrency::getPointType,
+                        MotivationPointCurrency::getExchangeWeight,
+                        (left, right) -> left));
+        weights.put(pointType, exchangeWeight);
+        int levelOne = weights.getOrDefault(MotivationEnums.PointType.STAR.code(), DEFAULTS.get(MotivationEnums.PointType.STAR.code()).exchangeWeight());
+        int levelTwo = weights.getOrDefault(MotivationEnums.PointType.FLOWER.code(), DEFAULTS.get(MotivationEnums.PointType.FLOWER.code()).exchangeWeight());
+        int levelThree = weights.getOrDefault(MotivationEnums.PointType.CROWN.code(), DEFAULTS.get(MotivationEnums.PointType.CROWN.code()).exchangeWeight());
+        if (levelOne >= levelTwo) {
+            throw new MotivationException("POINT_CURRENCY_LEVEL_INVALID", "1级货币的币值必须小于2级货币");
+        }
+        if (levelTwo >= levelThree) {
+            throw new MotivationException("POINT_CURRENCY_LEVEL_INVALID", "2级货币的币值必须小于3级货币");
+        }
     }
 
     private int positiveWeight(Integer value, int fallback) {

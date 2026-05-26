@@ -95,8 +95,8 @@ public class MotivationRewardService extends ServiceImpl<MotivationRewardMapper,
         return list(new LambdaQueryWrapper<MotivationReward>()
                 .eq(MotivationReward::getChildId, childId)
                 .eq(MotivationReward::getDeleted, MotivationConstants.Flag.NO)
-                .orderByAsc(MotivationReward::getSortNo)
-                .orderByDesc(MotivationReward::getUpdateTime));
+                .orderByDesc(MotivationReward::getUpdateTime)
+                .orderByDesc(MotivationReward::getId));
     }
 
     /**

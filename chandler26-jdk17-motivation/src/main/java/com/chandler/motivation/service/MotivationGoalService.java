@@ -56,8 +56,8 @@ public class MotivationGoalService extends ServiceImpl<MotivationGoalMapper, Mot
         return list(new LambdaQueryWrapper<MotivationGoal>()
                 .eq(MotivationGoal::getChildId, childId)
                 .eq(MotivationGoal::getDeleted, MotivationConstants.Flag.NO)
-                .orderByAsc(MotivationGoal::getSortNo)
-                .orderByDesc(MotivationGoal::getUpdateTime));
+                .orderByDesc(MotivationGoal::getUpdateTime)
+                .orderByDesc(MotivationGoal::getId));
     }
 
     /**

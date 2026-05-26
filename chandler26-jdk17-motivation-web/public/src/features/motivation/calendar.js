@@ -17,6 +17,9 @@ export function renderCalendar({
   const gridStart = isWeekView ? getWeekStart(monthDate) : getMonthGridStart(monthDate)
   const cellCount = isWeekView ? 7 : 42
   const todayKey = formatDate(new Date())
+  const subtitle = titleLabel === '奖励日历'
+    ? '跟踪兑换、购买、日程与确认进度。'
+    : '按月/周查看任务安排，切换积分查看入账与扣减。'
   const cells = []
 
   for (let index = 0; index < cellCount; index += 1) {
@@ -44,7 +47,7 @@ export function renderCalendar({
       <div class="calendar-header">
         <div class="calendar-title">
           <strong>${isWeekView ? weekTitle(monthDate) : monthTitle(monthDate)}</strong>
-          <span>${escapeHtml(titleLabel)} / Notion 风格${isWeekView ? '周' : '月'}视图</span>
+          <span>${escapeHtml(titleLabel)} · ${escapeHtml(subtitle)}</span>
         </div>
         <div class="nav">
           <button class="icon-btn" type="button" data-action="calendar-prev" aria-label="${isWeekView ? '上一周' : '上个月'}">‹</button>
@@ -60,7 +63,6 @@ export function renderCalendar({
         ${showKindToolbar ? `<div class="calendar-toolbar-group calendar-kind-group">
           <button class="btn ${eventKind === 'tasks' ? 'primary' : ''}" type="button" data-calendar-event-kind="tasks">任务</button>
           <button class="btn ${eventKind === 'points' ? 'primary' : ''}" type="button" data-calendar-event-kind="points">积分</button>
-          <button class="btn ${eventKind === 'rewards' ? 'primary' : ''}" type="button" data-calendar-event-kind="rewards">奖励</button>
         </div>` : ''}
       </div>
       <div class="calendar-grid ${isWeekView ? 'week-view' : ''}">

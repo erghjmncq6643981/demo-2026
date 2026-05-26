@@ -33,9 +33,9 @@ const weekDays = [
 const dayOfMonthOptions = Array.from({ length: 31 }, (_, index) => [index + 1, `${index + 1} 日`])
 const dailyHourOptions = Array.from({ length: 24 }, (_, hour) => hour)
 const pointTypeOptions = [
-  ['STAR', '星星'],
-  ['FLOWER', '红花'],
-  ['CROWN', '皇冠'],
+  ['STAR', '1级'],
+  ['FLOWER', '2级'],
+  ['CROWN', '3级'],
 ]
 const defaultCurrencyMeta = {
   STAR: { name: '星星', icon: '★', color: '#f59e0b', exchangeWeight: 1, sortNo: 1 },
@@ -50,6 +50,7 @@ const fulfillmentTypeOptions = [
 ]
 const rewardIconOptions = ['🎁', '🍦', '🧸', '📚', '🎨', '🚲', '🎮', '🎬', '🎟️', '🍰', '🍕', '🏆', '👑', '⭐', '🌈', '🎵', '⚽', '🛝', '🍭', '🪁', '🧩', '🚀', '💎', '🎯', '🪄', '📷', '🌟', '🐣', '🦄', '🍓', '🍉', '🍎', '🍪', '🛹', '🎈']
 const currencyIconOptions = ['★', '☆', '✦', '✧', '✿', '❀', '♛', '👑', '🏆', '🎖️', '🏅', '💎', '🌟', '⭐', '🌈', '🎁', '🍭', '🎈', '🪄', '🚀', '🎯']
+const goalIconOptions = ['★', '✦', '✿', '📚', '✏️', '🎯', '🏃', '🎵', '🎨', '🧩', '🌱', '🏆', '👑', '🌈', '🕒', '🧠', '💪', '🧹', '📖', '🚀', '⭐', '🎈']
 
 function isChildUser(state) {
   return String(state.user?.userType || '').toUpperCase() === 'CHILD'
@@ -396,13 +397,13 @@ function renderWorkspaceHeader(state) {
   const profileTitles = {
     home: isChildUser(state) ? ['个人信息', '查看今日进度、积分余额和成长记录。'] : ['个人信息', '家庭成员、宝贝档案和积分概览。'],
     account: ['账号信息', '查看账号资料和宝贝档案。'],
-    rewards: ['奖励管理', '维护奖励库存、颜色、积分要求和审核规则。'],
+    rewards: ['奖励管理', '维护奖励库存、颜色、货币要求和审核规则。'],
     currencies: ['币值管理', '配置星星、红花、皇冠的图标、颜色和比例。'],
   }
   const titles = {
     profile: profileTitles[profileSubView(state)] || profileTitles.home,
     growth: ['宝贝成长', '管理成长目标和每日、每周、每月任务。'],
-    calendar: ['任务日历', 'Notion 风格月视图，展示任务计划和完成记录。'],
+    calendar: ['任务日历', '按月/周查看任务安排，切换积分查看入账与扣减。'],
     'reward-calendar': ['奖励日历', '查看奖励兑换、购买、运输和日程实现进度。'],
     store: ['奖励商店', '宝贝可以用星星、红花或皇冠兑换奖励。'],
     'system-config': ['日历样式', '调整任务日历日期大小和颜色。'],
@@ -474,11 +475,14 @@ function renderProfileView(state) {
   }
   if (activeSubView === 'account') {
     return `
-      <div class="view-grid">
+      <div class="view-grid account-info-grid">
         <section class="panel panel-pad wide">
           ${renderAccountSummary(state)}
         </section>
         ${isManagementUser(state) ? `<section class="panel panel-pad wide">${renderChildList(state)}</section>` : ''}
+        <section class="panel panel-pad wide">
+          ${renderAccountActivityLogsPanel(state)}
+        </section>
       </div>
     `
   }
@@ -549,29 +553,35 @@ function renderAccountSummary(state) {
   const user = state.user || {}
   const avatarSrc = state.avatarObjectUrls?.account || ''
   return `
-    <div class="account-simple-layout">
-      <section class="account-simple-card">
-        ${renderAvatarUploadControl({
-          src: avatarSrc,
-          fallback: user.nickname || user.username || '账',
-          scope: 'account',
-          previewKey: 'account-summary',
-        })}
-        <div class="account-simple-copy">
-          <span>当前账号</span>
-          <strong>${escapeHtml(user.nickname || user.username || '未命名账号')}</strong>
-          <p>${escapeHtml(user.username || '未设置账号')}</p>
-        </div>
-        <button class="small-btn primary-lite" type="button" data-action="open-account-modal">修改</button>
-      </section>
-      <section class="activity-log-panel">
-        <div class="section-inline-head">
-          <h2>宝贝成长日志</h2>
-          <span>${(state.activityLogs || []).length} 条</span>
-        </div>
-        ${renderChildActivityLogs(state)}
-      </section>
+    <div class="section-inline-head">
+      <h2>当前账号</h2>
+      <button class="small-btn primary-lite" type="button" data-action="open-account-modal">修改</button>
     </div>
+    <div class="account-simple-card">
+      ${renderAvatarUploadControl({
+        src: avatarSrc,
+        fallback: user.nickname || user.username || '账',
+        scope: 'account',
+        previewKey: 'account-summary',
+      })}
+      <div class="account-simple-copy">
+        <span>当前账号</span>
+        <strong>${escapeHtml(user.nickname || user.username || '未命名账号')}</strong>
+        <p>${escapeHtml(user.username || '未设置账号')}</p>
+      </div>
+    </div>
+  `
+}
+
+function renderAccountActivityLogsPanel(state) {
+  return `
+    <section class="activity-log-panel">
+      <div class="section-inline-head">
+        <h2>宝贝成长日志</h2>
+        <span>${(state.activityLogs || []).length} 条</span>
+      </div>
+      ${renderChildActivityLogs(state)}
+    </section>
   `
 }
 
@@ -948,10 +958,11 @@ function renderTaskScheduleCell(task) {
 }
 
 function renderTaskTimeBlocks(task, schedule, periodType) {
+  const style = `style="--task-color:${escapeHtml(task.taskColor || '#6c63ff')}"`
   if (periodType === 'WEEKLY') {
     const selectedDays = new Set((schedule.days || []).map(Number))
     return `
-      <div class="time-blocks week-blocks compact-blocks">
+      <div class="time-blocks week-blocks compact-blocks" ${style}>
         ${weekDays.map(([value, label]) => `
           <span class="time-block ${selectedDays.has(value) ? 'active' : ''}" title="${escapeHtml(label)}">${label.slice(1)}</span>
         `).join('')}
@@ -961,7 +972,7 @@ function renderTaskTimeBlocks(task, schedule, periodType) {
   if (periodType === 'MONTHLY') {
     const selectedDays = new Set((schedule.days || []).map(Number))
     return `
-      <div class="time-blocks month-blocks compact-blocks">
+      <div class="time-blocks month-blocks compact-blocks" ${style}>
         ${dayOfMonthOptions.map(([value]) => `
           <span class="time-block ${selectedDays.has(value) ? 'active' : ''}" title="${value}日">${value}</span>
         `).join('')}
@@ -970,7 +981,7 @@ function renderTaskTimeBlocks(task, schedule, periodType) {
   }
   const startHour = Number(schedule.timeRange?.startHour ?? schedule.startHour ?? 6)
   const endHour = Number(schedule.timeRange?.endHour ?? schedule.endHour ?? 22)
-  return renderDailyHourBlocks(getDailyHours(schedule, startHour, endHour), 'compact-blocks')
+  return renderDailyHourBlocks(getDailyHours(schedule, startHour, endHour), 'compact-blocks', task.taskColor || '#6c63ff')
 }
 
 function renderCalendarView(state, actions) {
@@ -1012,7 +1023,6 @@ function buildCalendarDisplayEvents(state) {
   return [
     ...normalizeTaskCalendarEvents(state.calendarEvents || [], state.tasks || []),
     ...normalizePointCalendarEvents(state.ledger || [], state.tasks || []),
-    ...normalizeRewardCalendarEvents(state.exchanges || [], state.rewards || []),
   ].filter((event) => event.date)
 }
 
@@ -1164,6 +1174,13 @@ function dateFromKey(value) {
   return Number.isNaN(date.getTime()) ? null : date
 }
 
+function addDaysToDateKey(value, days) {
+  const date = dateFromKey(value)
+  if (!date) return ''
+  date.setDate(date.getDate() + Number(days || 0))
+  return formatDate(date)
+}
+
 function renderCalendarDayModal(state) {
   if (!state.calendarDayModalOpen || !state.selectedCalendarDateKey) return ''
   const events = calendarEventsForDate(state, state.selectedCalendarDateKey)
@@ -1171,13 +1188,18 @@ function renderCalendarDayModal(state) {
   const activeKind = state.currentView === 'reward-calendar' ? 'rewards' : (state.calendarEventKind || 'tasks')
   const summary = renderCalendarDaySummary(activeKind, visibleEvents)
   const canQuickCreate = isManagementUser(state) && activeKind === 'tasks'
+  const rewardDayTodo = activeKind === 'rewards' && isManagementUser(state)
+    ? renderRewardDayTodo(state, state.selectedCalendarDateKey)
+    : ''
   return `
     <div class="modal-backdrop calendar-layer calendar-day-layer">
       <section class="modal calendar-modal calendar-day-modal">
         <div class="modal-head">
           <div>
             <h2>${escapeHtml(formatCalendarDateLabel(state.selectedCalendarDateKey))}</h2>
-            <p>${activeKind === 'tasks' ? '点开任务可以查看说明并打卡。' : activeKind === 'points' ? '点开记录查看图标数量。' : '点开奖励查看兑换内容和履约进度。'}</p>
+            <p>${activeKind === 'tasks'
+              ? '点开任务看说明，直接完成打卡。'
+              : '点开记录看图标数量。'}</p>
           </div>
           <button class="icon-btn" type="button" data-action="close-calendar-day-modal">×</button>
         </div>
@@ -1185,12 +1207,68 @@ function renderCalendarDayModal(state) {
           ${summary}
           ${canQuickCreate ? `<button class="small-btn primary-lite calendar-quick-add" type="button" data-action="open-task-modal-for-date" data-task-date="${escapeHtml(state.selectedCalendarDateKey)}">新增当日任务</button>` : ''}
         </div>
+        ${rewardDayTodo}
         <div class="calendar-log-list">
           ${visibleEvents.map((event) => renderCalendarLogItem(event)).join('') || '<div class="empty compact-empty">这一天没有对应记录</div>'}
         </div>
       </section>
     </div>
   `
+}
+
+function renderRewardDayTodo(state, dateKey) {
+  const todos = (state.exchanges || [])
+    .filter((exchange) => ['REQUESTED', 'APPROVED'].includes(exchange.status) && exchange.fulfillmentStatus !== 'CONFIRMED')
+    .sort((left, right) => String(right.requestedAt || right.reviewedAt || '').localeCompare(String(left.requestedAt || left.reviewedAt || '')))
+  if (!todos.length) return ''
+  return `
+    <section class="reward-day-todo">
+      <div class="section-inline-head">
+        <h3>待办礼物</h3>
+        <span>${todos.length} 个</span>
+      </div>
+      <div class="reward-day-todo-list">
+        ${todos.map((exchange) => renderRewardDayTodoItem(exchange, state.rewards || [], dateKey)).join('')}
+      </div>
+    </section>
+  `
+}
+
+function renderRewardDayTodoItem(exchange, rewards, dateKey) {
+  const reward = findRewardForExchange(exchange, rewards)
+  const enrichedExchange = enrichRewardExchangeForAction(exchange, reward, dateKey)
+  return `
+    <article class="reward-day-todo-item">
+      <span class="reward-mini" style="--reward-color:${escapeHtml(enrichedExchange.rewardColorSnapshot || enrichedExchange.rewardColor || '#ff9f43')}">${escapeHtml(enrichedExchange.rewardIconSnapshot || enrichedExchange.rewardIcon || '🎁')}</span>
+      <div class="reward-day-todo-main">
+        <strong>${escapeHtml(enrichedExchange.rewardNameSnapshot || enrichedExchange.rewardName || '奖励兑换')}</strong>
+        <small>${escapeHtml(rewardMainFlowName(enrichedExchange.status, enrichedExchange.fulfillmentStatus))} · ${escapeHtml(fulfillmentTypeName(enrichedExchange.fulfillmentType))}</small>
+        ${enrichedExchange.status === 'REQUESTED'
+          ? `<div class="reward-flow-controls compact-flow-controls">
+              <button class="small-btn primary-lite" type="button" data-action="approve-exchange" data-exchange-id="${escapeHtml(enrichedExchange.id)}">通过</button>
+              <button class="small-btn danger" type="button" data-action="reject-exchange" data-exchange-id="${escapeHtml(enrichedExchange.id)}">拒绝</button>
+            </div>`
+          : `${renderFulfillmentControls(enrichedExchange, dateKey)}${renderParentRewardConfirmAction(enrichedExchange)}`}
+      </div>
+    </article>
+  `
+}
+
+function enrichRewardExchangeForAction(exchange, reward, dateKey) {
+  const fulfillmentType = exchange.fulfillmentType || reward?.fulfillmentType || 'INVENTORY_DEDUCT'
+  const defaults = rewardFlowDateDefaults({ ...exchange, fulfillmentType }, dateKey)
+  return {
+    ...exchange,
+    exchangeId: exchange.id,
+    fulfillmentType,
+    rewardName: exchange.rewardNameSnapshot || reward?.name || '奖励兑换',
+    rewardIcon: exchange.rewardIconSnapshot || reward?.rewardIcon || '🎁',
+    rewardColor: exchange.rewardColorSnapshot || reward?.rewardColor || '#ff9f43',
+    rewardDescription: reward?.description || exchange.remark || '',
+    expectedArrivalDate: defaults.expectedArrivalDate,
+    scheduleStartDate: defaults.scheduleStartDate,
+    scheduleEndDate: defaults.scheduleEndDate,
+  }
 }
 
 function renderCalendarEventModal(state) {
@@ -1210,7 +1288,7 @@ function renderCalendarEventModal(state) {
         <div class="modal-head">
           <div>
             <h2>${escapeHtml(event.title)}</h2>
-            <p>${escapeHtml(isTask ? (event.description || event.note || '') : isReward ? (event.rewardDescription || '') : (event.note || event.title || ''))}</p>
+            <p>${escapeHtml(isTask ? (event.description || event.note || '') : isPoint ? (event.note || '') : (event.rewardDescription || event.note || ''))}</p>
           </div>
           <button class="icon-btn" type="button" data-action="close-calendar-event-modal">×</button>
         </div>
@@ -1219,7 +1297,7 @@ function renderCalendarEventModal(state) {
             <span class="${isReward ? 'reward-mini' : 'task-dot'}" style="${isReward ? `--reward-color:${event.rewardColor || event.color || '#ff9f43'}` : `--task-color:${event.color || '#6c63ff'}`}">${isReward ? escapeHtml(event.rewardIcon || '🎁') : ''}</span>
             <div>
               <strong>${escapeHtml(isTask ? event.title || '任务' : event.title || '积分')}</strong>
-              <p>${escapeHtml(isTask ? (event.description || event.note || '') : isReward ? (event.rewardDescription || '') : (event.note || ''))}</p>
+              <p>${escapeHtml(isTask ? (event.note || event.description || '') : isPoint ? (event.note || '') : (event.rewardDescription || event.note || ''))}</p>
             </div>
           </div>`}
           <div class="calendar-detail-focus">
@@ -1262,7 +1340,7 @@ function renderCalendarLogItem(event) {
             : renderCalendarStatusScore(event, scoreCount, 'log')}
       </div>
       ${event.kind === 'tasks'
-        ? `<span class="calendar-log-action ${event.status === 'APPROVED' ? 'done' : ''}">打卡</span>`
+        ? `<span class="calendar-log-action ${event.status === 'APPROVED' ? 'done' : ''}">${event.status === 'APPROVED' ? '已完成' : '打卡'}</span>`
         : ''}
     </button>
   `
@@ -1271,7 +1349,9 @@ function renderCalendarLogItem(event) {
 function renderCalendarStatusScore(event, count, density = '') {
   const completed = event.status === 'APPROVED'
   const color = completed ? event.pointColor : '#cbd5e1'
-  return renderScoreIcons(event.pointType, count, color, `${density} ${completed ? '' : 'muted'}`.trim())
+  return completed
+    ? renderScoreIcons(event.pointType, count, color, density)
+    : renderScoreIcons(event.pointType, count, color, `${density} muted`.trim())
 }
 
 function renderRewardFlowDetail(event, canManageReward) {
@@ -1315,7 +1395,7 @@ function renderRewardCalendarManageActions(event) {
     return `
       <div class="reward-flow-card wide reward-calendar-actions">
         <span>父母维护</span>
-        ${renderFulfillmentControls(event)}
+        ${renderFulfillmentControls(event, event.date)}
         ${renderParentRewardConfirmAction(event)}
       </div>
     `
@@ -1379,7 +1459,7 @@ function renderCalendarDaySummary(kind, events) {
 function renderTaskCheckInModal(state) {
   if (!state.taskCheckInModalOpen || !state.selectedCheckInTaskId) return ''
   const taskDate = state.selectedCheckInTaskDate || state.todayKey
-  const event = (state.calendarEvents || []).find((item) => String(item.taskId) === String(state.selectedCheckInTaskId) && item.taskDate === taskDate)
+  const event = (state.calendarEvents || []).find((item) => String(item.taskId) === String(state.selectedCheckInTaskId) && formatDateValue(item.taskDate) === taskDate)
   const task = (state.tasks || []).find((item) => String(item.id) === String(state.selectedCheckInTaskId))
   const taskMeta = task || event
   if (!taskMeta) return ''
@@ -1387,6 +1467,7 @@ function renderTaskCheckInModal(state) {
   const pointColor = taskMeta.pointColor || pointTypeColor(pointType)
   const basePoints = Math.max(1, Number(taskMeta.basePoints || 1))
   const selectedCount = clamp(Number(state.selectedCheckInRewardCount || basePoints), 1, basePoints)
+  const activeIconCount = basePoints
   return `
     <div class="modal-backdrop">
       <section class="modal narrow checkin-modal">
@@ -1396,12 +1477,19 @@ function renderTaskCheckInModal(state) {
         </div>
         <form class="modal-form" data-form="task-checkin">
           <div class="checkin-task-note wide">
-            ${escapeHtml(taskMeta.description || '完成后选择本次获得的奖励数量。')}
+            ${escapeHtml(taskMeta.note || taskMeta.description || '选择这次完成获得的奖励数量。')}
           </div>
           <div class="checkin-reward-panel wide" style="--point-color:${escapeHtml(pointColor)}">
-            <div class="field-label">奖励</div>
+            <div class="checkin-reward-head">
+              <div class="field-label">奖励</div>
+              <div class="checkin-reward-stepper">
+                <button class="icon-btn" type="button" data-action="decrease-checkin-reward" aria-label="减少奖励数量">−</button>
+                <span data-checkin-reward-count data-total="${basePoints}">${selectedCount}</span>
+                <button class="icon-btn" type="button" data-action="increase-checkin-reward" aria-label="增加奖励数量">+</button>
+              </div>
+            </div>
             <div class="checkin-reward-grid">
-              ${Array.from({ length: basePoints }, (_, index) => {
+              ${Array.from({ length: activeIconCount }, (_, index) => {
                 const number = index + 1
                 return `
                   <button class="checkin-reward-icon ${number <= selectedCount ? 'active' : ''}" type="button" data-action="select-checkin-reward" data-reward-index="${number}" aria-label="选择 ${number} 个奖励">
@@ -1410,7 +1498,6 @@ function renderTaskCheckInModal(state) {
                 `
               }).join('')}
             </div>
-            <div class="checkin-reward-count" data-checkin-reward-count data-total="${basePoints}">${selectedCount} / ${basePoints}</div>
           </div>
           <div class="modal-actions wide">
             <button class="btn" type="button" data-action="close-checkin-modal">取消</button>
@@ -1488,13 +1575,13 @@ function renderRewardManageView(state) {
         keywordPlaceholder: '奖励名称',
         expanded,
         fields: `
-          <label><span>积分类型</span>${renderSelect('reward-point', filters.pointType || '', [['', '全部'], ['STAR', '星星'], ['FLOWER', '红花'], ['CROWN', '皇冠']], 'reward')}</label>
+          <label><span>货币类型</span>${renderSelect('reward-point', filters.pointType || '', [['', '全部'], ...pointTypeOptions], 'reward')}</label>
           <label><span>状态</span>${renderSelect('reward-status', filters.status || '', [['', '全部'], ['ACTIVE', '启用'], ['PAUSED', '暂停']], 'reward')}</label>
         `,
       })}
       <div class="table-card">
         <div class="table-head reward-table">
-          <span>奖励</span><span>需要积分</span><span>库存</span><span>实现方式</span><span>操作</span>
+        <span>奖励</span><span>需要货币</span><span>库存</span><span>实现方式</span><span>操作</span>
         </div>
         ${rewards.map(renderRewardRow).join('') || '<div class="empty">暂无奖励</div>'}
       </div>
@@ -1521,13 +1608,13 @@ function renderCurrencyManageView(state) {
         keywordPlaceholder: '名称或图标',
         expanded,
         fields: `
-          <label><span>积分类型</span>${renderSelect('currency-point', filters.pointType || '', [['', '全部'], ...pointTypeOptions], 'currency')}</label>
+          <label><span>货币类型</span>${renderSelect('currency-point', filters.pointType || '', [['', '全部'], ...pointTypeOptions], 'currency')}</label>
           <label><span>状态</span>${renderSelect('currency-status', filters.status || '', [['', '全部'], ['ACTIVE', '启用'], ['INACTIVE', '停用']], 'currency')}</label>
         `,
       })}
       <div class="table-card">
         <div class="table-head currency-table">
-          <span>币值</span><span>积分类型</span><span>比例</span><span>状态</span><span>操作</span>
+          <span>币值</span><span>货币类型</span><span>比例</span><span>状态</span><span>操作</span>
         </div>
         ${currencies.map(renderCurrencyRow).join('') || '<div class="empty">暂无币值配置</div>'}
       </div>
@@ -1544,7 +1631,7 @@ function renderCurrencyRow(currency) {
         <span class="currency-mini" style="--point-color:${escapeHtml(meta.color)}">${escapeHtml(meta.icon)}</span>
         <div><strong>${escapeHtml(meta.name)}</strong><small>${escapeHtml(meta.color)} · 排序 ${currency.sortNo ?? meta.sortNo ?? 0}</small></div>
       </div>
-      <span>${escapeHtml(pointName(currency.pointType))}</span>
+      <span>${escapeHtml(pointLevelName(currency.pointType))}</span>
       <span class="score-pill">${escapeHtml(meta.icon)} 1:${escapeHtml(currency.exchangeWeight || meta.exchangeWeight)}</span>
       <span>${statusName(currency.status || 'ACTIVE')}</span>
       <div class="row-actions task-row-actions">
@@ -1851,13 +1938,15 @@ function renderRewardTicketTimelineItems(exchange) {
   return items
 }
 
-function renderFulfillmentControls(exchange) {
+function renderFulfillmentControls(exchange, contextDate = '') {
   const branchStatus = exchange.branchStatus || 'PENDING'
   const fulfillmentType = exchange.fulfillmentType || 'INVENTORY_DEDUCT'
+  const defaults = rewardFlowDateDefaults(exchange, contextDate)
   if (fulfillmentType === 'PARENT_PURCHASE') {
     return `
       <div class="reward-flow-controls">
-        ${renderChineseDatePicker('expectedArrivalDate', exchange.expectedArrivalDate || '', { label: '预计到达', placeholder: '请选择预计到达日期', ariaLabel: '选择预计到达日期' })}
+        ${renderChineseDatePicker('expectedArrivalDate', defaults.expectedArrivalDate, { label: '预计到达', placeholder: '请选择预计到达日期', ariaLabel: '选择预计到达日期' })}
+        ${renderFulfillmentRemarkField('例如：今天已下单，预计 3 天后到达', exchange.remark || '')}
         <button class="small-btn ${branchStatus === 'PURCHASE_ORDERED' ? 'primary-lite' : ''}" type="button" data-action="update-fulfillment" data-exchange-id="${exchange.exchangeId || exchange.id}" data-branch-status="PURCHASE_ORDERED">已下单</button>
         <button class="small-btn ${branchStatus === 'PURCHASE_SHIPPING' ? 'primary-lite' : ''}" type="button" data-action="update-fulfillment" data-exchange-id="${exchange.exchangeId || exchange.id}" data-branch-status="PURCHASE_SHIPPING">运输中</button>
         <button class="small-btn ${branchStatus === 'PURCHASE_ARRIVED' ? 'primary-lite' : ''}" type="button" data-action="update-fulfillment" data-exchange-id="${exchange.exchangeId || exchange.id}" data-branch-status="PURCHASE_ARRIVED">已到货</button>
@@ -1867,11 +1956,12 @@ function renderFulfillmentControls(exchange) {
   if (fulfillmentType === 'PARENT_FULFILL') {
     return `
       <div class="reward-flow-controls schedule-flow-controls">
-        ${renderChineseDatePicker('scheduleStartDate', exchange.scheduleStartDate || '', { label: '开始日期', placeholder: '请选择开始日期', ariaLabel: '选择开始日期' })}
-        ${renderChineseDatePicker('scheduleEndDate', exchange.scheduleEndDate || '', { label: '结束日期', placeholder: '请选择结束日期', ariaLabel: '选择结束日期' })}
+        ${renderChineseDatePicker('scheduleStartDate', defaults.scheduleStartDate, { label: '开始日期', placeholder: '请选择开始日期', ariaLabel: '选择开始日期' })}
+        ${renderChineseDatePicker('scheduleEndDate', defaults.scheduleEndDate, { label: '结束日期', placeholder: '请选择结束日期', ariaLabel: '选择结束日期' })}
+        ${renderFulfillmentRemarkField('例如：周六带宝贝去野生动物园', exchange.remark || '')}
         <button class="small-btn ${branchStatus === 'SCHEDULED' ? 'primary-lite' : ''}" type="button" data-action="update-fulfillment" data-exchange-id="${exchange.exchangeId || exchange.id}" data-branch-status="SCHEDULED">加入日程</button>
         <button class="small-btn ${branchStatus === 'IN_PROGRESS' ? 'primary-lite' : ''}" type="button" data-action="update-fulfillment" data-exchange-id="${exchange.exchangeId || exchange.id}" data-branch-status="IN_PROGRESS">进行中</button>
-        <button class="small-btn ${branchStatus === 'COMPLETED' ? 'primary-lite' : ''}" type="button" data-action="update-fulfillment" data-exchange-id="${exchange.exchangeId || exchange.id}" data-branch-status="COMPLETED">已完成</button>
+        <button class="small-btn ${branchStatus === 'COMPLETED' ? 'primary-lite' : ''}" type="button" data-action="update-fulfillment" data-exchange-id="${exchange.exchangeId || exchange.id}" data-branch-status="COMPLETED">已实现</button>
       </div>
     `
   }
@@ -1885,6 +1975,27 @@ function renderFulfillmentControls(exchange) {
       `).join('')}
     </div>
   `
+}
+
+function renderFulfillmentRemarkField(placeholder, value = '') {
+  return `
+    <label class="flow-remark-field">
+      <span>备注</span>
+      <input name="remark" value="${escapeHtml(value)}" placeholder="${escapeHtml(placeholder)}" />
+    </label>
+  `
+}
+
+function rewardFlowDateDefaults(exchange, contextDate = '') {
+  const dateKey = formatDateValue(contextDate)
+  const fulfillmentType = exchange.fulfillmentType || 'INVENTORY_DEDUCT'
+  const expectedArrivalDate = exchange.expectedArrivalDate
+    || (fulfillmentType === 'PARENT_PURCHASE' && dateKey ? addDaysToDateKey(dateKey, 3) : '')
+  const scheduleStartDate = exchange.scheduleStartDate
+    || (fulfillmentType === 'PARENT_FULFILL' && dateKey ? dateKey : '')
+  const scheduleEndDate = exchange.scheduleEndDate
+    || (fulfillmentType === 'PARENT_FULFILL' && dateKey ? dateKey : '')
+  return { expectedArrivalDate, scheduleStartDate, scheduleEndDate }
 }
 
 function renderParentRewardConfirmAction(exchange) {
@@ -1968,7 +2079,6 @@ function renderTaskModal(state) {
           <label><span>任务名称</span><input name="name" value="${escapeHtml(task.name || '')}" placeholder="${draftDate ? '例如：当天阅读任务' : '例如：晨读 20 分钟'}" /></label>
           <label><span>所属目标</span>${renderSelect('goalId', task.goalId || state.goals[0]?.id || '', state.goals.map((goal) => [goal.id, goal.name]))}</label>
           <label><span>任务分类</span>${renderSelect('taskCategory', schedule.category || 'HABIT', [['STUDY', '学习'], ['LIFE', '生活'], ['SPORT', '运动'], ['HABIT', '习惯']])}</label>
-          <label class="wide"><span>说明</span><input name="description" value="${escapeHtml(task.description || '')}" placeholder="给宝贝看的简短说明" /></label>
           <div class="schedule-type-row wide">
             <div>
               <div class="schedule-title">任务类型</div>
@@ -2010,6 +2120,7 @@ function renderTaskModal(state) {
               <label><input type="radio" name="requireApproval" value="true" ${requireApproval ? 'checked' : ''} /> <span>审批后生效</span></label>
             </div>
           </div>
+          <label class="wide"><span>说明</span><input name="description" value="${escapeHtml(task.description || '')}" placeholder="给宝贝看的简短说明" /></label>
           <div class="modal-actions wide">
             <button class="btn" type="button" data-action="close-task-modal">取消</button>
             <button class="btn primary" type="submit">保存</button>
@@ -2134,10 +2245,10 @@ function renderLimitedPointIcons(icon, count, color, limit = 9) {
   `
 }
 
-function renderDailyHourBlocks(selectedHours, density = '') {
+function renderDailyHourBlocks(selectedHours, density = '', taskColor = '#6c63ff') {
   const selectedSet = new Set(selectedHours.map(Number))
   return `
-    <div class="time-blocks hour-blocks ${density}">
+    <div class="time-blocks hour-blocks ${density}" style="--task-color:${escapeHtml(taskColor)}">
       ${dailyHourOptions.map((hour) => {
         const selectable = hour >= 6 && hour <= 22
         const active = selectable && selectedSet.has(hour)
@@ -2194,7 +2305,6 @@ function renderChildModal(state) {
             <div class="account-summary-copy">
               <strong>${escapeHtml(child.nickname || '未命名宝贝')}</strong>
               <span>${escapeHtml(child.remark || '点击头像更换照片')}</span>
-              <small>照片会调整并压缩后存入数据库</small>
             </div>
           </div>
           <label><span>宝贝昵称</span><input name="nickname" value="${escapeHtml(child.nickname || '')}" placeholder="例如：小星" /></label>
@@ -2205,6 +2315,17 @@ function renderChildModal(state) {
             ? `<div class="child-account-summary wide">
                 <span>已创建子账户</span>
                 <strong>${escapeHtml(existingChildUsername)}</strong>
+                <div class="child-account-actions">
+                  <button class="small-btn primary-lite" type="button" data-action="read-child-password" data-child-id="${escapeHtml(child.id || '')}">查看密码</button>
+                  <button class="small-btn" type="button" data-action="enable-child-password-edit" data-child-id="${escapeHtml(child.id || '')}">修改密码</button>
+                </div>
+                <div class="child-password-view ${state.revealedChildPasswords?.[child.id] ? '' : 'hidden'}">
+                  <span>当前密码</span>
+                  <strong>${escapeHtml(state.revealedChildPasswords?.[child.id] || '')}</strong>
+                </div>
+                <div class="child-password-edit ${state.childPasswordEditEnabled ? '' : 'hidden'}">
+                  <label><span>新密码</span><input name="childPasswordToUpdate" autocomplete="new-password" type="password" placeholder="至少 6 位" /></label>
+                </div>
               </div>`
             : `<label class="switch-field wide">
                 <input type="checkbox" name="createChildAccount" value="true" ${createAccount ? 'checked' : ''} />
@@ -2227,6 +2348,8 @@ function renderChildModal(state) {
 function renderGoalModal(state) {
   if (!state.goalModalOpen) return ''
   const goal = state.editingGoal || {}
+  const goalIcon = goal.icon || '★'
+  const goalColor = goal.goalColor || '#6c63ff'
   return `
     <div class="modal-backdrop">
       <section class="modal">
@@ -2237,13 +2360,24 @@ function renderGoalModal(state) {
         <form class="modal-form" data-form="goal">
           <input type="hidden" name="goalId" value="${escapeHtml(goal.id || '')}" />
           <label><span>目标名称</span><input name="name" value="${escapeHtml(goal.name || '')}" placeholder="例如：阅读小达人" /></label>
-          <label><span>图标</span><input name="icon" value="${escapeHtml(goal.icon || '★')}" /></label>
-          <label class="wide"><span>说明</span><input name="description" value="${escapeHtml(goal.description || '')}" placeholder="目标说明" /></label>
+          <div class="icon-field goal-icon-field">
+            <label>
+              <span>图标</span>
+              <input name="icon" value="${escapeHtml(goalIcon)}" readonly data-action="open-goal-icon-picker" />
+            </label>
+            <button class="icon-select-btn" type="button" data-action="open-goal-icon-picker" aria-label="选择成长目标图标" style="--reward-color:${escapeHtml(goalColor)}">${escapeHtml(goalIcon)}</button>
+            <div class="icon-popover hidden">
+              ${goalIconOptions.map((icon) => `
+                <button class="${String(goalIcon) === icon ? 'active' : ''}" type="button" data-action="select-goal-icon" data-goal-icon="${escapeHtml(icon)}">${escapeHtml(icon)}</button>
+              `).join('')}
+            </div>
+          </div>
           <label><span>目标颜色</span><input type="color" name="goalColor" value="${escapeHtml(goal.goalColor || '#6c63ff')}" /></label>
           <label><span>目标积分</span><input type="number" min="0" name="targetPoints" value="${escapeHtml(goal.targetPoints || 0)}" /></label>
           ${renderChineseDatePicker('startDate', goal.startDate || '', { label: '开始日期', placeholder: '请选择开始日期', ariaLabel: '选择开始日期' })}
           ${renderChineseDatePicker('endDate', goal.endDate || '', { label: '结束日期', placeholder: '请选择结束日期', ariaLabel: '选择结束日期' })}
           <label><span>排序</span><input type="number" min="0" name="sortNo" value="${escapeHtml(goal.sortNo || 0)}" /></label>
+          <label class="wide"><span>说明</span><input name="description" value="${escapeHtml(goal.description || '')}" placeholder="目标说明" /></label>
           <div class="modal-actions wide">
             <button class="btn" type="button" data-action="close-goal-modal">取消</button>
             <button class="btn primary" type="submit">保存</button>
@@ -2263,7 +2397,7 @@ function renderRewardModal(state) {
     <div class="modal-backdrop">
       <section class="modal">
         <div class="modal-head">
-          <div><h2>${reward.id ? '修改奖励' : '新增奖励'}</h2><p>设置兑换所需积分、库存和颜色。</p></div>
+          <div><h2>${reward.id ? '修改奖励' : '新增奖励'}</h2><p>设置兑换所需货币、库存和颜色。</p></div>
           <button class="icon-btn" type="button" data-action="close-reward-modal">×</button>
         </div>
         <form class="modal-form" data-form="reward">
@@ -2283,8 +2417,8 @@ function renderRewardModal(state) {
           </div>
           <label class="wide"><span>说明</span><input name="description" value="${escapeHtml(reward.description || '')}" placeholder="奖励说明" /></label>
           <label><span>奖励颜色</span><input type="color" name="rewardColor" value="${escapeHtml(reward.rewardColor || '#ff9f43')}" /></label>
-          <label><span>积分类型</span>${renderSelect('requiredPointType', reward.requiredPointType || 'STAR', [['STAR', '星星'], ['FLOWER', '红花'], ['CROWN', '皇冠']])}</label>
-          <label><span>所需积分</span><input type="number" min="1" name="requiredPoints" value="${escapeHtml(reward.requiredPoints || 1)}" /></label>
+          <label><span>货币类型</span>${renderSelect('requiredPointType', reward.requiredPointType || 'STAR', pointTypeOptions)}</label>
+          <label><span>所需数量</span><input type="number" min="1" name="requiredPoints" value="${escapeHtml(reward.requiredPoints || 1)}" /></label>
           <label><span>库存</span><input type="number" min="0" name="stockTotal" value="${escapeHtml(reward.stockTotal || 0)}" /></label>
           <label><span>兑换限制</span>${renderSelect('exchangeLimitType', reward.exchangeLimitType || 'UNLIMITED', [['UNLIMITED', '不限'], ['DAILY', '每日'], ['WEEKLY', '每周'], ['MONTHLY', '每月']])}</label>
           <label><span>限制次数</span><input type="number" min="0" name="exchangeLimitCount" value="${escapeHtml(reward.exchangeLimitCount || 0)}" /></label>
@@ -2373,13 +2507,13 @@ function renderPointCurrencyModal(state) {
     <div class="modal-backdrop">
       <section class="modal">
         <div class="modal-head">
-          <div><h2>${currency.id ? '修改币值' : '新增币值'}</h2><p>配置宝贝看到的积分图标、颜色和兑换比例。</p></div>
+          <div><h2>${currency.id ? '修改币值' : '新增币值'}</h2><p>配置宝贝看到的货币图标、颜色和兑换比例。</p></div>
           <button class="icon-btn" type="button" data-action="close-currency-modal">×</button>
         </div>
         <form class="modal-form" data-form="point-currency">
           <input type="hidden" name="currencyId" value="${escapeHtml(currency.id || '')}" />
           <label><span>名称</span><input name="name" value="${escapeHtml(currency.name || defaults.name)}" placeholder="例如：星星" /></label>
-          <label><span>积分类型</span>${renderSelect('pointType', pointType, pointTypeOptions)}</label>
+          <label><span>货币类型</span>${renderSelect('pointType', pointType, pointTypeOptions)}</label>
           <div class="icon-field wide">
             <label>
               <span>图标</span>
@@ -2420,7 +2554,7 @@ function renderPointAdjustModal(state) {
           <button class="icon-btn" type="button" data-action="close-adjust-modal">×</button>
         </div>
         <form class="modal-form" data-form="point-adjust">
-          <label><span>积分类型</span>${renderSelect('pointType', 'STAR', [['STAR', '星星'], ['FLOWER', '红花'], ['CROWN', '皇冠']])}</label>
+          <label><span>货币类型</span>${renderSelect('pointType', 'STAR', pointTypeOptions)}</label>
           <label><span>方向</span>${renderSelect('direction', 'PLUS', [['PLUS', '加分'], ['MINUS', '扣分']])}</label>
           <label><span>分值</span><input type="number" min="1" max="999" name="amount" value="3" /></label>
           <label class="wide"><span>原因</span><input name="reason" placeholder="例如：主动帮助整理书桌" /></label>
@@ -2647,6 +2781,15 @@ function pointTypeColor(pointType) {
     CROWN: '#7c3aed',
   }
   return colors[pointType] || colors.STAR
+}
+
+function pointLevelName(pointType) {
+  const names = {
+    STAR: '1级',
+    FLOWER: '2级',
+    CROWN: '3级',
+  }
+  return names[pointType] || '1级'
 }
 
 function getPointCurrencies(state) {

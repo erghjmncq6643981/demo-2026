@@ -2,6 +2,7 @@ package com.chandler.motivation.controller;
 
 import com.chandler.motivation.common.result.ApiResponse;
 import com.chandler.motivation.domain.dataobject.MotivationChild;
+import com.chandler.motivation.domain.dto.child.ChildPasswordResponse;
 import com.chandler.motivation.domain.dto.child.ChildSaveRequest;
 import com.chandler.motivation.domain.dto.common.AvatarUploadResponse;
 import com.chandler.motivation.service.AuthService;
@@ -44,6 +45,20 @@ public class ChildController {
     @PutMapping("/{childId}")
     public ApiResponse<MotivationChild> update(@PathVariable Long childId, @Valid @RequestBody ChildSaveRequest request) {
         return ApiResponse.ok(childService.update(childId, request, authService.requireUser().getId()));
+    }
+
+    @GetMapping("/{childId}/account/password")
+    public ApiResponse<ChildPasswordResponse> readChildAccountPassword(@PathVariable Long childId) {
+        String password = childService.readChildAccountPassword(childId, authService.requireUser().getId());
+        return ApiResponse.ok(new ChildPasswordResponse(password));
+    }
+
+    @PutMapping("/{childId}/account/password")
+    public ApiResponse<Boolean> updateChildAccountPassword(@PathVariable Long childId,
+                                                           @Valid @RequestBody ChildSaveRequest request) {
+        String password = request == null ? null : request.getChildPasswordToUpdate();
+        childService.updateChildAccountPassword(childId, authService.requireUser().getId(), password);
+        return ApiResponse.ok(Boolean.TRUE);
     }
 
     @DeleteMapping("/{childId}")

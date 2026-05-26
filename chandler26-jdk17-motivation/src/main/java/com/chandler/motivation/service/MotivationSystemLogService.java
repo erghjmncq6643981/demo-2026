@@ -97,6 +97,7 @@ public class MotivationSystemLogService extends ServiceImpl<MotivationSystemLogM
         List<MotivationSystemLog> logs = list(new LambdaQueryWrapper<MotivationSystemLog>()
                 .in(MotivationSystemLog::getChildId, visibleChildIds)
                 .eq(MotivationSystemLog::getSource, MotivationEnums.LogSource.BUSINESS.code())
+                .orderByDesc(MotivationSystemLog::getUpdateTime)
                 .orderByDesc(MotivationSystemLog::getCreateTime)
                 .orderByDesc(MotivationSystemLog::getId)
                 .last("limit " + resolvedLimit));
