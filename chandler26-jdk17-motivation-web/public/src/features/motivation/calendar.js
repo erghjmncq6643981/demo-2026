@@ -2,8 +2,10 @@ import { escapeHtml, formatDate, monthTitle, pointIcon, statusName } from '/src/
 
 const weekLabels = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun']
 
-export function renderCalendar({ monthDate, events, viewMode = 'month', eventKind = 'tasks' }) {
+export function renderCalendar({ monthDate, events, viewMode = 'month', eventKind = 'tasks', systemConfig = {} }) {
   const isWeekView = viewMode === 'week'
+  const dateSize = clampNumber(systemConfig.calendarDateSize, 14, 28, 20)
+  const dateColor = isHexColor(systemConfig.calendarDateColor) ? systemConfig.calendarDateColor : '#1f2937'
   const gridStart = isWeekView ? getWeekStart(monthDate) : getMonthGridStart(monthDate)
   const cellCount = isWeekView ? 7 : 42
   const todayKey = formatDate(new Date())
@@ -30,7 +32,7 @@ export function renderCalendar({ monthDate, events, viewMode = 'month', eventKin
   }
 
   return `
-    <div class="calendar-shell">
+    <div class="calendar-shell" style="--calendar-date-size:${dateSize}px; --calendar-date-color:${dateColor};">
       <div class="calendar-header">
         <div class="calendar-title">
           <strong>${isWeekView ? weekTitle(monthDate) : monthTitle(monthDate)}</strong>
@@ -179,4 +181,14 @@ function hexToRgba(hex, alpha) {
   const green = (value >> 8) & 255
   const blue = value & 255
   return `rgba(${red}, ${green}, ${blue}, ${alpha})`
+}
+
+function clampNumber(value, min, max, fallback) {
+  const number = Number(value)
+  if (!Number.isFinite(number)) return fallback
+  return Math.min(max, Math.max(min, number))
+}
+
+function isHexColor(value) {
+  return /^#[0-9a-fA-F]{6}$/.test(String(value || ''))
 }

@@ -42,6 +42,7 @@ export const api = {
   register: (body) => request('/auth/register', { method: 'POST', body }),
   login: (body) => request('/auth/login', { method: 'POST', body }),
   profile: () => request('/auth/profile'),
+  updateProfile: (body) => request('/auth/profile', { method: 'PUT', body }),
   children: () => request('/children'),
   createChild: (body) => request('/children', { method: 'POST', body }),
   updateChild: (childId, body) => request(`/children/${childId}`, { method: 'PUT', body }),

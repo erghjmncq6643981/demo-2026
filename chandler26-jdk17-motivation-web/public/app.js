@@ -4,6 +4,8 @@ import { renderApp } from '/src/features/motivation/render.js'
 import { formatDate, fulfillmentStatusName, pointName } from '/src/shared/text.js'
 
 const SIDEBAR_KEY = 'motivation.sidebarCollapsed'
+const ACCOUNT_DRAFT_KEY = 'motivation.accountDraft'
+const SYSTEM_CONFIG_KEY = 'motivation.systemConfig'
 const DEFAULT_CURRENCIES = [
   { pointType: 'STAR', name: '星星', icon: '★', color: '#f59e0b', exchangeWeight: 1, status: 'ACTIVE', sortNo: 1 },
   { pointType: 'FLOWER', name: '红花', icon: '✿', color: '#ec4899', exchangeWeight: 10, status: 'ACTIVE', sortNo: 2 },
@@ -11,6 +13,12 @@ const DEFAULT_CURRENCIES = [
 ]
 const isCompactLayout = () => window.matchMedia('(max-width: 1180px)').matches
 const initialSidebarCollapsed = localStorage.getItem(SIDEBAR_KEY) === '1' || isCompactLayout()
+const defaultSystemConfig = {
+  calendarDateSize: 20,
+  calendarDateColor: '#1f2937',
+  calendarTodayColor: '#4338ca',
+}
+const storedSystemConfig = readSystemConfigFromStorage()
 
 const state = {
   ...structuredClone(demoState),
@@ -21,6 +29,9 @@ const state = {
   selectedChild: demoState.children[0] || null,
   currentView: 'profile',
   profileSubView: 'home',
+  accountModalOpen: false,
+  accountDraft: readAccountDraftFromStorage(),
+  systemConfig: { ...defaultSystemConfig, ...storedSystemConfig },
   sidebarCollapsed: initialSidebarCollapsed,
   calendarViewMode: 'month',
   calendarEventKind: 'tasks',
@@ -100,6 +111,36 @@ const state = {
 }
 
 state.calendarEvents = buildDemoCalendar(state.tasks, state.monthDate)
+
+function readAccountDraftFromStorage() {
+  try {
+    return JSON.parse(localStorage.getItem(ACCOUNT_DRAFT_KEY) || '{}') || {}
+  } catch {
+    return {}
+  }
+}
+
+function readSystemConfigFromStorage() {
+  try {
+    return JSON.parse(localStorage.getItem(SYSTEM_CONFIG_KEY) || '{}') || {}
+  } catch {
+    return {}
+  }
+}
+
+function persistAccountDraft(draft) {
+  const value = {
+    nickname: String(draft?.nickname || '').trim(),
+    avatarUrl: String(draft?.avatarUrl || '').trim(),
+  }
+  localStorage.setItem(ACCOUNT_DRAFT_KEY, JSON.stringify(value))
+  state.accountDraft = value
+}
+
+function persistSystemConfig(config) {
+  localStorage.setItem(SYSTEM_CONFIG_KEY, JSON.stringify(config))
+  state.systemConfig = { ...defaultSystemConfig, ...config }
+}
 
 const actions = {
   setView(view) {
@@ -189,6 +230,10 @@ function bindEvents() {
       render()
     })
   })
+  document.querySelector('[data-action="open-account-modal"]')?.addEventListener('click', openAccountModal)
+  document.querySelectorAll('[data-action="close-account-modal"]').forEach((button) => {
+    button.addEventListener('click', closeAccountModal)
+  })
   document.querySelector('[data-action="logout"]')?.addEventListener('click', logout)
   document.querySelector('[data-action="open-adjust-modal"]')?.addEventListener('click', openPointAdjustModal)
   document.querySelectorAll('[data-action="close-adjust-modal"]').forEach((button) => {
@@ -210,12 +255,28 @@ function bindEvents() {
     button.addEventListener('click', closePointCurrencyModal)
   })
   document.querySelector('[data-form="point-currency"]')?.addEventListener('submit', handlePointCurrencySubmit)
-  document.querySelectorAll('[name="currencyIconChoice"]').forEach((input) => {
-    input.addEventListener('change', () => {
-      const form = input.closest('form')
+  document.querySelectorAll('[data-action="open-currency-icon-picker"]').forEach((button) => {
+    button.addEventListener('click', (event) => {
+      event.preventDefault()
+      const field = button.closest('.icon-field')
+      field?.querySelector('.icon-popover')?.classList.toggle('hidden')
+    })
+  })
+  document.querySelectorAll('[data-action="select-currency-icon"]').forEach((button) => {
+    button.addEventListener('click', (event) => {
+      event.preventDefault()
+      const icon = button.dataset.currencyIcon || '★'
+      const field = button.closest('.icon-field')
+      const form = button.closest('form')
       if (form?.icon) {
-        form.icon.value = input.value
+        form.icon.value = icon
       }
+      field?.querySelector('.icon-select-btn')?.replaceChildren(document.createTextNode(icon))
+      form?.querySelector('[data-currency-preview-icon]')?.replaceChildren(document.createTextNode(icon))
+      field?.querySelectorAll('[data-action="select-currency-icon"]').forEach((item) => {
+        item.classList.toggle('active', item === button)
+      })
+      field?.querySelector('.icon-popover')?.classList.add('hidden')
     })
   })
   document.querySelectorAll('[data-action="go-reward-store"]').forEach((button) => {
@@ -274,6 +335,27 @@ function bindEvents() {
   document.querySelector('[data-form="child"]')?.addEventListener('submit', handleChildSubmit)
   document.querySelector('[data-form="goal"]')?.addEventListener('submit', handleGoalSubmit)
   document.querySelector('[data-form="point-adjust"]')?.addEventListener('submit', handlePointAdjustSubmit)
+  document.querySelector('[data-form="account"]')?.addEventListener('submit', handleAccountSubmit)
+  document.querySelector('[data-form="system-config"]')?.addEventListener('submit', handleSystemConfigSubmit)
+  document.querySelector('[data-action="save-system-config"]')?.addEventListener('click', () => {
+    document.querySelector('[data-form="system-config"]')?.requestSubmit()
+  })
+  document.querySelector('[name="calendarDateSize"]')?.addEventListener('input', (event) => {
+    const input = event.currentTarget
+    const preview = document.querySelector('[data-system-config-preview]')
+    const value = Number(input.value || defaultSystemConfig.calendarDateSize)
+    document.querySelector('[data-system-config-size]')?.replaceChildren(document.createTextNode(`${value}px`))
+    if (preview) {
+      preview.style.setProperty('--calendar-date-size', `${value}px`)
+    }
+  })
+  document.querySelector('[name="calendarDateColor"]')?.addEventListener('input', (event) => {
+    const input = event.currentTarget
+    const preview = document.querySelector('[data-system-config-preview]')
+    if (preview) {
+      preview.style.setProperty('--calendar-date-color', input.value || defaultSystemConfig.calendarDateColor)
+    }
+  })
   document.querySelector('[name="createChildAccount"]')?.addEventListener('change', () => {
     const enabled = Boolean(document.querySelector('[name="createChildAccount"]')?.checked)
     document.querySelector('.child-account-fields')?.classList.toggle('hidden', !enabled)
@@ -1381,6 +1463,66 @@ function closeRegisterModal() {
   render()
 }
 
+function openAccountModal() {
+  state.accountDraft = {
+    nickname: state.user?.nickname || state.accountDraft?.nickname || '',
+    avatarUrl: state.user?.avatarUrl || state.accountDraft?.avatarUrl || '',
+  }
+  state.accountModalOpen = true
+  render()
+}
+
+function closeAccountModal(event) {
+  if (event?.target?.closest?.('[data-account-modal]') && event.target.dataset.action !== 'close-account-modal') return
+  state.accountModalOpen = false
+  render()
+}
+
+async function handleAccountSubmit(event) {
+  event.preventDefault()
+  const formData = new FormData(event.currentTarget)
+  const payload = {
+    nickname: String(formData.get('nickname') || '').trim(),
+    avatarUrl: String(formData.get('avatarUrl') || '').trim(),
+  }
+  if (!payload.nickname) {
+    toast('请填写昵称')
+    return
+  }
+  persistAccountDraft(payload)
+  if (state.offline) {
+    state.user = { ...(state.user || {}), ...payload }
+    state.accountModalOpen = false
+    toast('演示：账号信息已保存')
+    render()
+    return
+  }
+  try {
+    state.user = await api.updateProfile(payload)
+    persistAccountDraft({
+      nickname: state.user?.nickname || payload.nickname,
+      avatarUrl: state.user?.avatarUrl || payload.avatarUrl,
+    })
+    state.accountModalOpen = false
+    toast('账号信息已保存')
+    render()
+  } catch (error) {
+    toast(error.message)
+  }
+}
+
+function handleSystemConfigSubmit(event) {
+  event.preventDefault()
+  const formData = new FormData(event.currentTarget)
+  const payload = {
+    calendarDateSize: Math.min(28, Math.max(14, Number(formData.get('calendarDateSize') || defaultSystemConfig.calendarDateSize))),
+    calendarDateColor: normalizeColor(formData.get('calendarDateColor'), defaultSystemConfig.calendarDateColor),
+  }
+  persistSystemConfig(payload)
+  toast('系统配置已保存')
+  render()
+}
+
 function goRewardStore() {
   state.balanceModalOpen = false
   state.selectedBalancePointType = ''
@@ -1556,7 +1698,7 @@ function normalizeProfileSubViewForRole(subView) {
   if (!isManagementUser()) {
     return 'home'
   }
-  return ['home', 'children', 'goals', 'tasks', 'rewards', 'currencies'].includes(subView) ? subView : 'home'
+  return ['home', 'account', 'system-config', 'children', 'goals', 'tasks', 'rewards', 'currencies'].includes(subView) ? subView : 'home'
 }
 
 function applyRoleLanding() {
@@ -1909,6 +2051,11 @@ function toast(message) {
 function nullableDate(value) {
   const text = String(value || '').trim()
   return text || null
+}
+
+function normalizeColor(value, fallback) {
+  const text = String(value || '').trim()
+  return /^#[0-9a-fA-F]{6}$/.test(text) ? text : fallback
 }
 
 function buildTaskScheduleJson(options) {

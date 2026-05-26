@@ -3,11 +3,13 @@ package com.chandler.motivation.controller;
 import com.chandler.motivation.common.result.ApiResponse;
 import com.chandler.motivation.domain.dto.auth.AuthRequest;
 import com.chandler.motivation.domain.dto.auth.AuthResponse;
+import com.chandler.motivation.domain.dto.auth.UserProfileUpdateRequest;
 import com.chandler.motivation.domain.dto.auth.UserProfileResponse;
 import com.chandler.motivation.service.AuthService;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import org.springframework.web.bind.annotation.GetMapping;
+import org.springframework.web.bind.annotation.PutMapping;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
@@ -33,5 +35,10 @@ public class AuthController {
     @GetMapping("/profile")
     public ApiResponse<UserProfileResponse> profile() {
         return ApiResponse.ok(authService.me());
+    }
+
+    @PutMapping("/profile")
+    public ApiResponse<UserProfileResponse> updateProfile(@Valid @RequestBody UserProfileUpdateRequest request) {
+        return ApiResponse.ok(authService.updateProfile(request));
     }
 }

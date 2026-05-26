@@ -1,10 +1,12 @@
 package com.chandler.motivation.service;
 
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
+import com.baomidou.mybatisplus.core.conditions.update.LambdaUpdateWrapper;
 import com.chandler.motivation.common.exception.MotivationException;
 import com.chandler.motivation.domain.dataobject.MotivationUser;
 import com.chandler.motivation.domain.dto.auth.AuthRequest;
 import com.chandler.motivation.domain.dto.auth.AuthResponse;
+import com.chandler.motivation.domain.dto.auth.UserProfileUpdateRequest;
 import com.chandler.motivation.domain.dto.auth.UserProfileResponse;
 import com.chandler.motivation.domain.mapper.MotivationUserMapper;
 import com.chandler.motivation.security.JwtClaims;
@@ -115,6 +117,28 @@ public class AuthService {
 
     public UserProfileResponse me() {
         return toProfile(requireUser());
+    }
+
+    /**
+     * 更新当前登录用户的基础资料。
+     */
+    public UserProfileResponse updateProfile(UserProfileUpdateRequest request) {
+        MotivationUser user = requireUser();
+        String nickname = request.getNickname() == null ? "" : request.getNickname().trim();
+        if (!StringUtils.hasText(nickname)) {
+            throw new MotivationException("NICKNAME_REQUIRED", "昵称不能为空");
+        }
+        LambdaUpdateWrapper<MotivationUser> updateWrapper = new LambdaUpdateWrapper<MotivationUser>()
+                .eq(MotivationUser::getId, user.getId())
+                .set(MotivationUser::getNickname, nickname);
+        if (request.getAvatarUrl() != null) {
+            updateWrapper.set(MotivationUser::getAvatarUrl,
+                    StringUtils.hasText(request.getAvatarUrl()) ? request.getAvatarUrl().trim() : null);
+        }
+        userMapper.update(null, updateWrapper);
+        MotivationUser latest = findByUsername(user.getUsername());
+        log.info("用户「{}」更新了账号资料", latest.getNickname());
+        return toProfile(latest);
     }
 
     public MotivationUser requireUser() {

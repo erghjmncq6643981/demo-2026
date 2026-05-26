@@ -57,6 +57,8 @@ function profileSubnavItems(state) {
   }
   return [
     ['home', '首页'],
+    ['account', '账号信息'],
+    ['system-config', '系统配置'],
     ['children', '孩子档案'],
     ['goals', '成长目标'],
     ['tasks', '任务管理'],
@@ -98,6 +100,7 @@ export function renderApp(state, actions) {
     ${renderPointCurrencyModal(state)}
     ${renderPointAdjustModal(state)}
     ${renderBalanceModal(state)}
+    ${renderAccountModal(state)}
     ${renderConfirmModal(state)}
     ${renderToast(state.toast)}
   `
@@ -248,6 +251,8 @@ function renderSidebar(state) {
 function renderWorkspaceHeader(state) {
   const profileTitles = {
     home: isChildUser(state) ? ['个人信息', '查看今日进度、积分余额和成长记录。'] : ['个人信息', '家庭成员、孩子档案和积分概览。'],
+    account: ['账号信息', '查看与修改当前登录账号。'],
+    'system-config': ['系统配置', '调整任务日历日期大小和颜色。'],
     children: ['孩子档案', '维护孩子资料、状态和家庭档案。'],
     goals: ['成长目标', '管理目标方向，并承载每日、每周和每月任务。'],
     tasks: ['任务管理', '用列表筛选任务，新增或修改任务规则。'],
@@ -303,19 +308,6 @@ function renderCurrentView(state, actions) {
 function renderProfileView(state) {
   const activeSubView = profileSubView(state)
   const childUser = isChildUser(state)
-  if (!state.selectedChild) {
-    return `
-      <div class="view-grid">
-        <section class="panel panel-pad wide">
-          <div class="section-inline-head">
-            <h2>${childUser ? '我的档案' : '孩子档案'}</h2>
-            ${childUser ? '' : '<button class="btn primary" type="button" data-action="open-child-modal">新增孩子</button>'}
-          </div>
-          <div class="empty compact-empty">${childUser ? '当前孩子账号还没有绑定孩子档案，请联系家长。' : '还没有孩子档案，先新增一个孩子再开始记录吧。'}</div>
-        </section>
-      </div>
-    `
-  }
   if (activeSubView === 'children') {
     return `
       <div class="view-grid">
@@ -361,6 +353,37 @@ function renderProfileView(state) {
       </div>
     `
   }
+  if (activeSubView === 'account') {
+    return `
+      <div class="view-grid">
+        <section class="panel panel-pad wide">
+          ${renderAccountSummary(state)}
+        </section>
+      </div>
+    `
+  }
+  if (activeSubView === 'system-config') {
+    return `
+      <div class="view-grid">
+        <section class="panel panel-pad wide">
+          ${renderSystemConfigView(state)}
+        </section>
+      </div>
+    `
+  }
+  if (!state.selectedChild) {
+    return `
+      <div class="view-grid">
+        <section class="panel panel-pad wide">
+          <div class="section-inline-head">
+            <h2>${childUser ? '我的档案' : '孩子档案'}</h2>
+            ${childUser ? '' : '<button class="btn primary" type="button" data-action="open-child-modal">新增孩子</button>'}
+          </div>
+          <div class="empty compact-empty">${childUser ? '当前孩子账号还没有绑定孩子档案，请联系家长。' : '还没有孩子档案，先新增一个孩子再开始记录吧。'}</div>
+        </section>
+      </div>
+    `
+  }
   return `
     <div class="view-grid">
       <section class="panel panel-pad">
@@ -378,6 +401,113 @@ function renderProfileView(state) {
       ${renderRewardTickets(state)}
       <section class="panel panel-pad wide">
         ${renderLedger(state)}
+      </section>
+    </div>
+  `
+}
+
+function renderAccountSummary(state) {
+  const user = state.user || {}
+  return `
+    <div class="section-inline-head">
+      <h2>账号信息</h2>
+      <div class="section-actions">
+        <button class="btn primary" type="button" data-action="open-account-modal">修改账号信息</button>
+      </div>
+    </div>
+    <div class="account-summary-grid">
+      <article class="info-card">
+        <span>账号</span>
+        <strong>${escapeHtml(user.username || '未设置')}</strong>
+      </article>
+      <article class="info-card">
+        <span>昵称</span>
+        <strong>${escapeHtml(user.nickname || '未设置')}</strong>
+      </article>
+      <article class="info-card">
+        <span>头像</span>
+        <strong>${escapeHtml(user.avatarUrl ? '已设置' : '未设置')}</strong>
+      </article>
+    </div>
+  `
+}
+
+function renderSystemConfigView(state) {
+  const config = state.systemConfig || {}
+  const dateSize = Number(config.calendarDateSize || 20)
+  const dateColor = config.calendarDateColor || '#1f2937'
+  return `
+    <div class="section-inline-head">
+      <h2>系统配置</h2>
+      <div class="section-actions">
+        <button class="btn primary" type="button" data-action="save-system-config">保存配置</button>
+      </div>
+    </div>
+    <form class="system-config-form" data-form="system-config">
+      <label>
+        <span>日期大小</span>
+        <input type="range" name="calendarDateSize" min="14" max="28" value="${escapeHtml(dateSize)}" />
+        <strong data-system-config-size>${escapeHtml(dateSize)}px</strong>
+      </label>
+      <label>
+        <span>日期颜色</span>
+        <input type="color" name="calendarDateColor" value="${escapeHtml(dateColor)}" />
+      </label>
+    </form>
+    <div class="system-config-preview" data-system-config-preview style="--calendar-date-size:${dateSize}px; --calendar-date-color:${dateColor};">
+      <div class="day">
+        <div class="date">18<span>今天</span></div>
+        <div class="events">
+          <div class="event"><i></i><span>晨读</span></div>
+        </div>
+      </div>
+    </div>
+  `
+}
+
+function renderAccountModal(state) {
+  if (!state.accountModalOpen) return ''
+  const user = state.user || {}
+  const draft = state.accountDraft || {}
+  const username = user.username || ''
+  const nickname = draft.nickname ?? user.nickname ?? username
+  const avatarUrl = draft.avatarUrl ?? user.avatarUrl ?? ''
+  const avatarText = (nickname || username || '账').slice(0, 1)
+  return `
+    <div class="modal-backdrop" data-action="close-account-modal">
+      <section class="modal narrow account-modal" data-account-modal>
+        <div class="modal-head">
+          <div>
+            <h2>账号信息</h2>
+            <p>修改当前登录账号的基础资料。</p>
+          </div>
+          <button class="icon-btn" type="button" data-action="close-account-modal">×</button>
+        </div>
+        <form class="modal-form account-modal-form" data-form="account">
+          <div class="account-summary-card wide">
+            <div class="account-avatar-preview">${escapeHtml(avatarText)}</div>
+            <div class="account-summary-copy">
+              <strong>${escapeHtml(nickname || '未命名账号')}</strong>
+              <span>${escapeHtml(username || '未设置账号')}</span>
+            </div>
+          </div>
+          <label>
+            <span>账号</span>
+            <input name="username" value="${escapeHtml(username)}" disabled />
+          </label>
+          <label>
+            <span>昵称</span>
+            <input name="nickname" value="${escapeHtml(nickname)}" placeholder="请输入昵称" required />
+          </label>
+          <label class="wide">
+            <span>头像地址</span>
+            <input name="avatarUrl" value="${escapeHtml(avatarUrl)}" placeholder="可选" />
+          </label>
+          <div class="modal-actions wide">
+            <button class="btn" type="button" data-action="close-account-modal">取消</button>
+            <button class="btn primary" type="submit">保存</button>
+          </div>
+        </form>
       </section>
     </div>
   `
@@ -637,6 +767,7 @@ function renderCalendarView(state, actions) {
         events: calendarEvents.filter((event) => event.kind === (state.calendarEventKind || 'tasks')),
         viewMode: state.calendarViewMode || 'month',
         eventKind: state.calendarEventKind || 'tasks',
+        systemConfig: state.systemConfig || {},
       })}
     </section>
   `
@@ -1679,13 +1810,14 @@ function renderPointCurrencyModal(state) {
           <label><span>名称</span><input name="name" value="${escapeHtml(currency.name || defaults.name)}" placeholder="例如：星星" /></label>
           <label><span>积分类型</span>${renderSelect('pointType', pointType, pointTypeOptions)}</label>
           <div class="icon-field wide">
-            <label><span>图标</span><input name="icon" value="${escapeHtml(icon)}" /></label>
-            <div class="icon-picker currency-icon-picker">
+            <label>
+              <span>图标</span>
+              <input name="icon" value="${escapeHtml(icon)}" readonly data-action="open-currency-icon-picker" />
+            </label>
+            <button class="icon-select-btn" type="button" data-action="open-currency-icon-picker" aria-label="选择币值图标" style="--reward-color:${escapeHtml(currency.color || defaults.color)}">${escapeHtml(icon)}</button>
+            <div class="icon-popover hidden">
               ${currencyIconOptions.map((option) => `
-                <label class="icon-choice" title="${escapeHtml(option)}">
-                  <input type="radio" name="currencyIconChoice" value="${escapeHtml(option)}" ${String(icon) === option ? 'checked' : ''} />
-                  <span>${escapeHtml(option)}</span>
-                </label>
+                <button class="${String(icon) === option ? 'active' : ''}" type="button" data-action="select-currency-icon" data-currency-icon="${escapeHtml(option)}">${escapeHtml(option)}</button>
               `).join('')}
             </div>
           </div>
@@ -1694,7 +1826,7 @@ function renderPointCurrencyModal(state) {
           <label><span>状态</span>${renderSelect('status', currency.status || 'ACTIVE', [['ACTIVE', '启用'], ['INACTIVE', '停用']])}</label>
           <label><span>排序</span><input type="number" min="0" name="sortNo" value="${escapeHtml(currency.sortNo ?? defaults.sortNo)}" /></label>
           <div class="currency-modal-preview wide">
-            <span class="currency-mini large" style="--point-color:${escapeHtml(currency.color || defaults.color)}">${escapeHtml(icon)}</span>
+            <span class="currency-mini large" data-currency-preview-icon style="--point-color:${escapeHtml(currency.color || defaults.color)}">${escapeHtml(icon)}</span>
             <strong>1:${escapeHtml(currency.exchangeWeight || defaults.exchangeWeight)}</strong>
           </div>
           <div class="modal-actions wide">
