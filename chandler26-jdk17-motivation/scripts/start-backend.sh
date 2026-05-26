@@ -18,10 +18,9 @@ else
 fi
 echo $! > "${pid_file}"
 
-sleep 1
-if ! service_is_active backend; then
+if ! service_wait_until_ready backend 45; then
+  service_cleanup_pid backend
   echo "backend: 启动失败，查看日志 ${log_file}" >&2
-  tail -n 20 "${log_file}" >&2 || true
   exit 1
 fi
 

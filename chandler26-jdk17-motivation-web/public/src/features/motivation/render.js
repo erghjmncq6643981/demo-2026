@@ -80,6 +80,73 @@ function renderAvatarImage(src, fallback, className, previewKey = '') {
   return `<span class="${className}"${previewAttr}>${escapeHtml((fallback || '宝').slice(0, 1))}</span>`
 }
 
+function pendingAvatarPreview(state, scope, childId = '') {
+  const editor = state.avatarEditor || {}
+  if (editor.scope !== scope) return ''
+  if (String(editor.childId || '') !== String(childId || '')) return ''
+  return editor.processedPreviewUrl || ''
+}
+
+function renderAvatarUploadControl({ src, fallback, scope, childId = '', previewKey = '' }) {
+  return `
+    <label class="avatar-change-button" title="点击更换头像" aria-label="点击更换头像">
+      ${renderAvatarImage(src, fallback, 'account-avatar-preview', previewKey)}
+      <input class="avatar-file-input" type="file" accept="image/*" data-avatar-file="${escapeHtml(scope)}" data-child-id="${escapeHtml(childId)}" />
+      <span class="avatar-change-mask">更换</span>
+    </label>
+  `
+}
+
+function renderAvatarEditor(state) {
+  const editor = state.avatarEditor || {}
+  if (!editor.open || !editor.sourceObjectUrl) return ''
+  const previewSize = 260
+  const naturalWidth = Math.max(1, Number(editor.naturalWidth || 1))
+  const naturalHeight = Math.max(1, Number(editor.naturalHeight || 1))
+  const baseScale = Math.max(previewSize / naturalWidth, previewSize / naturalHeight)
+  const imageWidth = Math.round(naturalWidth * baseScale)
+  const imageHeight = Math.round(naturalHeight * baseScale)
+  const zoom = Math.max(1, Number(editor.zoom || 1))
+  const offsetX = Number(editor.offsetX || 0)
+  const offsetY = Number(editor.offsetY || 0)
+  const transform = `translate(-50%, -50%) translate(${offsetX}px, ${offsetY}px) scale(${zoom})`
+  return `
+    <div class="modal-backdrop avatar-editor-backdrop">
+      <section class="modal narrow avatar-editor-modal" aria-label="调整头像">
+        <div class="modal-head">
+          <div>
+            <h2>调整头像</h2>
+            <p>拖动照片，把最想展示的位置放进头像框里。</p>
+          </div>
+          <button class="icon-btn" type="button" data-action="close-avatar-editor">×</button>
+        </div>
+        <div class="avatar-editor-body" data-avatar-editor-body>
+          <div class="avatar-editor-stage" data-avatar-editor-handle>
+            <img
+              src="${escapeHtml(editor.sourceObjectUrl)}"
+              alt=""
+              draggable="false"
+              data-avatar-editor-image
+              style="width:${imageWidth}px;height:${imageHeight}px;transform:${escapeHtml(transform)};"
+            />
+            <div class="avatar-editor-ring" aria-hidden="true"></div>
+          </div>
+          <div class="avatar-editor-tools">
+            <button class="small-btn" type="button" data-action="avatar-zoom-out">缩小</button>
+            <div class="avatar-zoom-value">${Math.round(zoom * 100)}%</div>
+            <button class="small-btn" type="button" data-action="avatar-zoom-in">放大</button>
+            <button class="small-btn" type="button" data-action="avatar-reset">重置</button>
+          </div>
+        </div>
+        <div class="modal-actions avatar-editor-actions">
+          <button class="btn" type="button" data-action="close-avatar-editor">取消</button>
+          <button class="btn primary" type="button" data-action="save-avatar-editor">使用头像</button>
+        </div>
+      </section>
+    </div>
+  `
+}
+
 export function renderApp(state, actions) {
   if (!state.user) {
     return `
@@ -109,6 +176,7 @@ export function renderApp(state, actions) {
     ${renderPointAdjustModal(state)}
     ${renderBalanceModal(state)}
     ${renderAccountModal(state)}
+    ${renderAvatarEditor(state)}
     ${renderConfirmModal(state)}
     ${renderToast(state.toast)}
   `
@@ -479,7 +547,7 @@ function renderAccountModal(state) {
   const draft = state.accountDraft || {}
   const username = user.username || ''
   const nickname = draft.nickname ?? user.nickname ?? username
-  const avatarSrc = state.avatarObjectUrls?.account || ''
+  const avatarSrc = pendingAvatarPreview(state, 'account') || state.avatarObjectUrls?.account || ''
   return `
     <div class="modal-backdrop" data-action="close-account-modal">
       <section class="modal narrow account-modal" data-account-modal>
@@ -492,10 +560,16 @@ function renderAccountModal(state) {
         </div>
         <form class="modal-form account-modal-form" data-form="account">
           <div class="account-summary-card wide">
-            ${renderAvatarImage(avatarSrc, nickname || username || '账', 'account-avatar-preview', 'account')}
+            ${renderAvatarUploadControl({
+              src: avatarSrc,
+              fallback: nickname || username || '账',
+              scope: 'account',
+              previewKey: 'account',
+            })}
             <div class="account-summary-copy">
               <strong>${escapeHtml(nickname || '未命名账号')}</strong>
               <span>${escapeHtml(username || '未设置账号')}</span>
+              <small>点击头像更换照片</small>
             </div>
           </div>
           <label>
@@ -505,11 +579,6 @@ function renderAccountModal(state) {
           <label>
             <span>昵称</span>
             <input name="nickname" value="${escapeHtml(nickname)}" placeholder="请输入昵称" required />
-          </label>
-          <label class="wide avatar-upload-field">
-            <span>头像照片</span>
-            <input type="file" name="avatarFile" accept="image/*" data-avatar-file="account" />
-            <small>最大 1M，保存后由后端压缩并写入数据库。</small>
           </label>
           <div class="modal-actions wide">
             <button class="btn" type="button" data-action="close-account-modal">取消</button>
@@ -1630,7 +1699,7 @@ function renderChildModal(state) {
   if (!state.childModalOpen) return ''
   const child = state.editingChild || {}
   const createAccount = Boolean(state.childAccountDraftEnabled)
-  const childAvatarSrc = state.avatarObjectUrls?.children?.[child.id] || ''
+  const childAvatarSrc = pendingAvatarPreview(state, 'child', child.id || '') || state.avatarObjectUrls?.children?.[child.id] || ''
   return `
     <div class="modal-backdrop">
       <section class="modal">
@@ -1641,16 +1710,22 @@ function renderChildModal(state) {
         <form class="modal-form" data-form="child" autocomplete="off">
           <input type="hidden" name="childId" value="${escapeHtml(child.id || '')}" />
           <div class="account-summary-card wide">
-            ${renderAvatarImage(childAvatarSrc, child.nickname || '孩', 'account-avatar-preview', 'child')}
+            ${renderAvatarUploadControl({
+              src: childAvatarSrc,
+              fallback: child.nickname || '孩',
+              scope: 'child',
+              childId: child.id || '',
+              previewKey: 'child',
+            })}
             <div class="account-summary-copy">
               <strong>${escapeHtml(child.nickname || '未命名孩子')}</strong>
-              <span>${escapeHtml(child.remark || '孩子头像会压缩后存入数据库')}</span>
+              <span>${escapeHtml(child.remark || '点击头像更换照片')}</span>
+              <small>照片会调整并压缩后存入数据库</small>
             </div>
           </div>
           <label><span>孩子昵称</span><input name="nickname" value="${escapeHtml(child.nickname || '')}" placeholder="例如：小星" /></label>
           <label><span>性别</span>${renderSelect('gender', child.gender || 'UNKNOWN', [['UNKNOWN', '未设置'], ['MALE', '男孩'], ['FEMALE', '女孩']])}</label>
           <label><span>生日</span><input type="date" name="birthday" value="${escapeHtml(child.birthday || '')}" /></label>
-          <label class="wide avatar-upload-field"><span>头像照片</span><input type="file" name="avatarFile" accept="image/*" data-avatar-file="child" /><small>最大 1M，保存后由后端压缩并写入数据库。</small></label>
           <label class="wide"><span>备注</span><input name="remark" value="${escapeHtml(child.remark || '')}" placeholder="孩子偏好、阶段目标等" /></label>
           <label class="switch-field wide">
             <input type="checkbox" name="createChildAccount" value="true" ${createAccount ? 'checked' : ''} />

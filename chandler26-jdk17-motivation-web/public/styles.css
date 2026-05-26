@@ -1426,18 +1426,58 @@ input[type="color"] { padding: 4px; }
   border-radius: 18px;
   background: #f8fbff;
 }
+.avatar-change-button {
+  position: relative;
+  display: block;
+  flex: none;
+  width: 72px;
+  height: 72px;
+  border: 0;
+  border-radius: 22px;
+  background: transparent;
+  cursor: pointer;
+}
 .account-avatar-preview {
-  width: 56px;
-  height: 56px;
+  width: 72px;
+  height: 72px;
   display: grid;
   place-items: center;
   flex: none;
-  border-radius: 18px;
+  border: 2px solid rgba(255, 255, 255, 0.92);
+  border-radius: 22px;
   color: #4338ca;
   background: linear-gradient(135deg, rgba(255, 107, 157, 0.16), rgba(6, 182, 212, 0.16));
+  box-shadow: 0 12px 28px rgba(88, 101, 146, 0.13);
   font-size: 24px;
   font-weight: 900;
   overflow: hidden;
+}
+.avatar-file-input {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  opacity: 0;
+  cursor: pointer;
+}
+.avatar-change-mask {
+  position: absolute;
+  inset: auto 5px 5px;
+  min-height: 24px;
+  display: grid;
+  place-items: center;
+  border-radius: 999px;
+  color: #fff;
+  background: linear-gradient(135deg, rgba(79, 70, 229, 0.92), rgba(6, 182, 212, 0.92));
+  box-shadow: 0 8px 18px rgba(79, 70, 229, 0.18);
+  font-size: 11px;
+  font-weight: 900;
+  opacity: 0.96;
+}
+.avatar-change-button:hover .account-avatar-preview,
+.avatar-change-button:focus-within .account-avatar-preview {
+  border-color: rgba(79, 70, 229, 0.34);
+  box-shadow: 0 14px 32px rgba(79, 70, 229, 0.18);
 }
 .avatar-status {
   width: 42px;
@@ -1448,11 +1488,6 @@ input[type="color"] { padding: 4px; }
   color: #4338ca;
   background: #f4f7ff;
   overflow: hidden;
-}
-.avatar-upload-field small {
-  color: var(--muted);
-  font-size: 12px;
-  font-weight: 600;
 }
 .account-summary-copy {
   display: grid;
@@ -1472,6 +1507,71 @@ input[type="color"] { padding: 4px; }
   color: var(--muted);
   font-size: 12px;
   font-weight: 800;
+}
+.avatar-editor-modal {
+  overflow: visible;
+}
+.avatar-editor-body {
+  display: grid;
+  justify-items: center;
+  gap: 15px;
+  padding: 0 18px 18px;
+}
+.avatar-editor-stage {
+  position: relative;
+  width: min(260px, calc(100vw - 84px));
+  aspect-ratio: 1;
+  overflow: hidden;
+  border-radius: 28px;
+  background:
+    linear-gradient(45deg, rgba(79, 70, 229, 0.08) 25%, transparent 25%),
+    linear-gradient(-45deg, rgba(79, 70, 229, 0.08) 25%, transparent 25%),
+    #f8fbff;
+  background-size: 22px 22px;
+  cursor: grab;
+  touch-action: none;
+  user-select: none;
+}
+.avatar-editor-stage:active {
+  cursor: grabbing;
+}
+.avatar-editor-stage img {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  max-width: none;
+  transform-origin: center;
+  user-select: none;
+  pointer-events: none;
+}
+.avatar-editor-ring {
+  position: absolute;
+  inset: 0;
+  border: 3px solid rgba(255, 255, 255, 0.96);
+  border-radius: 28px;
+  box-shadow:
+    inset 0 0 0 1px rgba(79, 70, 229, 0.2),
+    0 12px 32px rgba(88, 101, 146, 0.16);
+  pointer-events: none;
+}
+.avatar-editor-tools {
+  width: min(360px, 100%);
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, auto));
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+}
+.avatar-zoom-value {
+  min-width: 58px;
+  display: grid;
+  place-items: center;
+  color: #4338ca;
+  font-size: 13px;
+  font-weight: 900;
+}
+.avatar-editor-actions {
+  padding: 0 18px 18px;
 }
 .timeline { display: grid; gap: 12px; }
 .timeline-item { display: grid; grid-template-columns: 14px minmax(0, 1fr); gap: 12px; }
@@ -2445,4 +2545,25 @@ input[type="color"] { padding: 4px; }
     font-size: 10px;
   }
   .login-panel { padding: 22px; }
+  .account-summary-card {
+    align-items: flex-start;
+  }
+  .avatar-change-button,
+  .account-avatar-preview {
+    width: 64px;
+    height: 64px;
+    border-radius: 20px;
+  }
+  .avatar-change-mask {
+    min-height: 22px;
+    font-size: 10px;
+  }
+  .avatar-editor-tools {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    width: 100%;
+  }
+  .avatar-zoom-value {
+    order: -1;
+    grid-column: 1 / -1;
+  }
 }

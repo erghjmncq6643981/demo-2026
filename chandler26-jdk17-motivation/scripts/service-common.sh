@@ -53,12 +53,45 @@ service_is_active() {
   local service_name="$1"
   local pid
   pid="$(service_pid "${service_name}")"
-  if service_is_running "${pid}"; then
-    return 0
-  fi
   if [[ -n "$(service_listening_pids "${service_name}")" ]]; then
     return 0
   fi
+  if service_is_running "${pid}"; then
+    return 0
+  fi
+  return 1
+}
+
+service_is_ready() {
+  [[ -n "$(service_listening_pids "$1")" ]]
+}
+
+service_refresh_pid_from_port() {
+  local service_name="$1"
+  local port_pids pid_file
+  port_pids="$(service_listening_pids "${service_name}")"
+  if [[ -n "${port_pids}" ]]; then
+    pid_file="$(service_pid_file "${service_name}")"
+    printf '%s\n' "${port_pids%%$'\n'*}" > "${pid_file}"
+  fi
+}
+
+service_wait_until_ready() {
+  local service_name="$1"
+  local timeout_seconds="${2:-30}"
+  local log_file
+  log_file="$(service_log_file "${service_name}")"
+
+  for ((i = 0; i < timeout_seconds; i++)); do
+    if service_is_ready "${service_name}"; then
+      service_refresh_pid_from_port "${service_name}"
+      return 0
+    fi
+    sleep 1
+  done
+
+  echo "${service_name}: ${timeout_seconds}s 内没有监听端口 $(service_port "${service_name}")" >&2
+  tail -n 40 "${log_file}" >&2 || true
   return 1
 }
 
@@ -98,4 +131,3 @@ service_stop() {
   service_cleanup_pid "${service_name}"
   echo "${service_name}: 已强制停止"
 }
-

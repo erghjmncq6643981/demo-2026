@@ -14,10 +14,9 @@ fi
 nohup bash -lc "cd '${FRONTEND_DIR}' && exec node server.mjs" > "${log_file}" 2>&1 &
 echo $! > "${pid_file}"
 
-sleep 1
-if ! service_is_active frontend; then
+if ! service_wait_until_ready frontend 15; then
+  service_cleanup_pid frontend
   echo "frontend: 启动失败，查看日志 ${log_file}" >&2
-  tail -n 20 "${log_file}" >&2 || true
   exit 1
 fi
 

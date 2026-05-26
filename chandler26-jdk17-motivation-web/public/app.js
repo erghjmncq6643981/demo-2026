@@ -165,10 +165,6 @@ function createEmptyAvatarEditor() {
   }
 }
 
-function getAvatarEditorKey(scope, childId = '') {
-  return `${scope}:${childId || ''}`
-}
-
 function getAvatarPreviewUrl(scope, childId = '') {
   const editor = state.avatarEditor || {}
   if (editor.scope === scope && String(editor.childId || '') === String(childId || '')) {
@@ -180,17 +176,26 @@ function getAvatarPreviewUrl(scope, childId = '') {
   return state.avatarObjectUrls.children?.[childId] || ''
 }
 
+function isSameAvatarDraft(editor, scope, childId = '') {
+  return editor?.scope === scope && String(editor.childId || '') === String(childId || '')
+}
+
 function clearAvatarEditorDraft(options = {}) {
   const editor = state.avatarEditor || createEmptyAvatarEditor()
+  const keepProcessedDraft = Boolean(options.keepProcessedDraft)
   if (editor.sourceObjectUrl) {
     URL.revokeObjectURL(editor.sourceObjectUrl)
   }
-  if (editor.processedPreviewUrl) {
+  if (editor.processedPreviewUrl && !keepProcessedDraft) {
     URL.revokeObjectURL(editor.processedPreviewUrl)
   }
   const next = createEmptyAvatarEditor()
   next.scope = options.scope || ''
   next.childId = options.childId || ''
+  if (keepProcessedDraft) {
+    next.processedPreviewUrl = editor.processedPreviewUrl || ''
+    next.processedFile = editor.processedFile || null
+  }
   state.avatarEditor = next
 }
 
@@ -395,6 +400,24 @@ function bindEvents() {
   document.querySelector('[data-form="account"]')?.addEventListener('submit', handleAccountSubmit)
   document.querySelectorAll('[data-avatar-file]').forEach((input) => {
     input.addEventListener('change', handleAvatarFilePreview)
+  })
+  document.querySelectorAll('[data-avatar-editor-handle]').forEach((handle) => {
+    handle.addEventListener('pointerdown', startAvatarEditorDrag)
+  })
+  document.querySelectorAll('[data-action="close-avatar-editor"]').forEach((button) => {
+    button.addEventListener('click', closeAvatarEditor)
+  })
+  document.querySelectorAll('[data-action="save-avatar-editor"]').forEach((button) => {
+    button.addEventListener('click', saveAvatarEditor)
+  })
+  document.querySelectorAll('[data-action="avatar-zoom-in"]').forEach((button) => {
+    button.addEventListener('click', () => changeAvatarZoom(0.08))
+  })
+  document.querySelectorAll('[data-action="avatar-zoom-out"]').forEach((button) => {
+    button.addEventListener('click', () => changeAvatarZoom(-0.08))
+  })
+  document.querySelectorAll('[data-action="avatar-reset"]').forEach((button) => {
+    button.addEventListener('click', resetAvatarEditorTransform)
   })
   document.querySelector('[data-form="system-config"]')?.addEventListener('submit', handleSystemConfigSubmit)
   document.querySelector('[data-action="save-system-config"]')?.addEventListener('click', () => {
@@ -1531,6 +1554,10 @@ function openChildModal(childId = null) {
   state.editingChild = childId ? state.children.find((child) => String(child.id) === String(childId)) || null : null
   state.childModalOpen = true
   state.childAccountDraftEnabled = false
+  const nextChildId = state.editingChild?.id || ''
+  if (!isSameAvatarDraft(state.avatarEditor, 'child', nextChildId)) {
+    clearAvatarEditorDraft({ scope: 'child', childId: nextChildId })
+  }
   render()
 }
 
@@ -1538,6 +1565,7 @@ function closeChildModal() {
   state.childModalOpen = false
   state.editingChild = null
   state.childAccountDraftEnabled = false
+  clearAvatarEditorDraft({ scope: 'child' })
   render()
 }
 
@@ -1604,28 +1632,27 @@ function openAccountModal() {
     nickname: state.user?.nickname || state.accountDraft?.nickname || '',
   }
   state.accountModalOpen = true
+  if (!isSameAvatarDraft(state.avatarEditor, 'account')) {
+    clearAvatarEditorDraft({ scope: 'account' })
+  }
   render()
 }
 
 function closeAccountModal(event) {
   if (event?.target?.closest?.('[data-account-modal]') && event.target.dataset.action !== 'close-account-modal') return
   state.accountModalOpen = false
+  clearAvatarEditorDraft({ scope: 'account' })
   render()
 }
 
 async function handleAccountSubmit(event) {
   event.preventDefault()
   const formData = new FormData(event.currentTarget)
-  const avatarFile = formData.get('avatarFile')
   const payload = {
     nickname: String(formData.get('nickname') || '').trim(),
   }
   if (!payload.nickname) {
     toast('请填写昵称')
-    return
-  }
-  if (avatarFile instanceof File && avatarFile.size > AVATAR_MAX_BYTES) {
-    toast('头像照片不能超过 1M')
     return
   }
   persistAccountDraft(payload)
@@ -1638,14 +1665,6 @@ async function handleAccountSubmit(event) {
   }
   try {
     state.user = await api.updateProfile(payload)
-    if (avatarFile instanceof File && avatarFile.size > 0) {
-      const avatarPayload = await api.uploadProfileAvatar(avatarFile)
-      state.user = {
-        ...state.user,
-        avatarUrl: avatarPayload?.avatarUrl || state.user?.avatarUrl || '',
-      }
-      await loadAccountAvatarImage()
-    }
     persistAccountDraft({
       nickname: state.user?.nickname || payload.nickname,
     })
@@ -1678,9 +1697,237 @@ function handleAvatarFilePreview(event) {
     toast('头像照片不能超过 1M')
     return
   }
-  const preview = document.querySelector(`[data-avatar-preview="${input.dataset.avatarFile}"]`)
-  if (!preview) return
-  preview.innerHTML = `<img src="${URL.createObjectURL(file)}" alt="头像预览" />`
+  openAvatarEditor(input.dataset.avatarFile || '', input.dataset.childId || '', file)
+    .catch((error) => toast(error.message || '头像读取失败'))
+    .finally(() => {
+      input.value = ''
+    })
+}
+
+async function openAvatarEditor(scope, childId = '', file = null) {
+  if (!scope) return
+  const nextFile = file instanceof File ? file : null
+  if (!nextFile && !getAvatarPreviewUrl(scope, childId)) {
+    toast('请选择头像照片')
+    return
+  }
+  if (state.avatarEditor.sourceObjectUrl) {
+    URL.revokeObjectURL(state.avatarEditor.sourceObjectUrl)
+  }
+  if (state.avatarEditor.processedPreviewUrl) {
+    URL.revokeObjectURL(state.avatarEditor.processedPreviewUrl)
+  }
+  const editor = createEmptyAvatarEditor()
+  editor.open = true
+  editor.scope = scope
+  editor.childId = String(childId || '')
+  editor.fileName = nextFile?.name || ''
+  editor.sourceObjectUrl = nextFile ? URL.createObjectURL(nextFile) : getAvatarPreviewUrl(scope, childId)
+  try {
+    editor.image = await loadImageFromUrl(editor.sourceObjectUrl)
+  } catch (error) {
+    if (nextFile && editor.sourceObjectUrl) {
+      URL.revokeObjectURL(editor.sourceObjectUrl)
+    }
+    throw error
+  }
+  editor.naturalWidth = editor.image.naturalWidth
+  editor.naturalHeight = editor.image.naturalHeight
+  state.avatarEditor = editor
+  state.accountModalOpen = scope === 'account' ? true : state.accountModalOpen
+  state.childModalOpen = scope === 'child' ? true : state.childModalOpen
+  render()
+}
+
+function closeAvatarEditor() {
+  clearAvatarEditorDraft({
+    scope: state.avatarEditor?.scope || '',
+    childId: state.avatarEditor?.childId || '',
+    keepProcessedDraft: Boolean(state.avatarEditor?.processedFile),
+  })
+  render()
+}
+
+function resetAvatarEditorTransform() {
+  state.avatarEditor.zoom = 1
+  state.avatarEditor.offsetX = 0
+  state.avatarEditor.offsetY = 0
+  render()
+}
+
+function changeAvatarZoom(delta) {
+  state.avatarEditor.zoom = Math.min(3, Math.max(1, Number((state.avatarEditor.zoom + delta).toFixed(2))))
+  render()
+}
+
+async function saveAvatarEditor() {
+  const editor = state.avatarEditor
+  if (!editor?.image) {
+    toast('请选择头像照片')
+    return
+  }
+  const file = await renderAvatarEditorToFile(editor)
+  if (!file) {
+    toast('头像处理失败')
+    return
+  }
+  const scope = editor.scope
+  if (scope === 'account') {
+    await submitAvatarFileForAccount(file)
+  } else if (scope === 'child') {
+    if (editor.childId) {
+      await submitAvatarFileForChild(editor.childId, file)
+    } else {
+      setPendingChildAvatar(file, editor)
+    }
+  }
+}
+
+function startAvatarEditorDrag(event) {
+  const editor = state.avatarEditor
+  if (!editor?.open) return
+  event.preventDefault()
+  const handle = event.currentTarget
+  const target = handle.closest('[data-avatar-editor-body]')
+  if (!target) return
+  editor.dragging = true
+  editor.dragStartX = event.clientX
+  editor.dragStartY = event.clientY
+  editor.dragOriginX = editor.offsetX
+  editor.dragOriginY = editor.offsetY
+  handle.setPointerCapture?.(event.pointerId)
+  const image = target.querySelector('[data-avatar-editor-image]')
+  const onMove = (moveEvent) => {
+    if (!editor.dragging) return
+    const scale = editor.zoom || 1
+    editor.offsetX = editor.dragOriginX + (moveEvent.clientX - editor.dragStartX)
+    editor.offsetY = editor.dragOriginY + (moveEvent.clientY - editor.dragStartY)
+    if (image) {
+      image.style.transform = `translate(-50%, -50%) translate(${editor.offsetX}px, ${editor.offsetY}px) scale(${editor.zoom || 1})`
+    }
+  }
+  const onUp = () => {
+    editor.dragging = false
+    handle.releasePointerCapture?.(event.pointerId)
+    window.removeEventListener('pointermove', onMove)
+    window.removeEventListener('pointerup', onUp)
+    render()
+  }
+  window.addEventListener('pointermove', onMove)
+  window.addEventListener('pointerup', onUp, { once: true })
+}
+
+function loadImageFromUrl(url) {
+  return new Promise((resolve, reject) => {
+    const image = new Image()
+    image.onload = () => resolve(image)
+    image.onerror = () => reject(new Error('头像读取失败'))
+    image.src = url
+  })
+}
+
+async function renderAvatarEditorToFile(editor) {
+  const canvas = document.createElement('canvas')
+  canvas.width = 320
+  canvas.height = 320
+  const ctx = canvas.getContext('2d')
+  if (!ctx) return null
+  ctx.fillStyle = '#ffffff'
+  ctx.fillRect(0, 0, canvas.width, canvas.height)
+  const baseScale = Math.max(canvas.width / editor.naturalWidth, canvas.height / editor.naturalHeight)
+  const scale = baseScale * (editor.zoom || 1)
+  const drawWidth = editor.naturalWidth * scale
+  const drawHeight = editor.naturalHeight * scale
+  const stageSize = document.querySelector('[data-avatar-editor-handle]')?.getBoundingClientRect?.().width || 260
+  const previewScale = canvas.width / Math.max(1, stageSize)
+  const centerX = canvas.width / 2 + (editor.offsetX || 0) * previewScale
+  const centerY = canvas.height / 2 + (editor.offsetY || 0) * previewScale
+  const drawX = centerX - drawWidth / 2
+  const drawY = centerY - drawHeight / 2
+  ctx.drawImage(editor.image, drawX, drawY, drawWidth, drawHeight)
+  return await new Promise((resolve) => {
+    canvas.toBlob((blob) => {
+      if (!blob) {
+        resolve(null)
+        return
+      }
+      resolve(new File([blob], editor.fileName || 'avatar.jpg', { type: 'image/jpeg' }))
+    }, 'image/jpeg', 0.92)
+  })
+}
+
+function setPendingChildAvatar(file, editor) {
+  const previewUrl = URL.createObjectURL(file)
+  clearAvatarEditorDraft({
+    scope: 'child',
+    childId: editor.childId || '',
+    keepProcessedDraft: false,
+  })
+  state.avatarEditor = {
+    ...createEmptyAvatarEditor(),
+    scope: 'child',
+    childId: editor.childId || '',
+    processedFile: file,
+    processedPreviewUrl: previewUrl,
+  }
+  state.childModalOpen = true
+  toast('头像已调整，保存档案后生效')
+  render()
+}
+
+async function submitAvatarFileForAccount(file) {
+  if (state.offline) {
+    const nextPreviewUrl = URL.createObjectURL(file)
+    replaceObjectUrl('account', nextPreviewUrl)
+    clearAvatarEditorDraft({ scope: 'account' })
+    toast('演示：头像已更换')
+    render()
+    return
+  }
+  try {
+    const avatarPayload = await api.uploadProfileAvatar(file)
+    state.user = {
+      ...(state.user || {}),
+      avatarUrl: avatarPayload?.avatarUrl || state.user?.avatarUrl || '',
+    }
+    await loadAccountAvatarImage()
+    clearAvatarEditorDraft({ scope: 'account' })
+    toast('头像已更换')
+    render()
+  } catch (error) {
+    toast(error.message)
+  }
+}
+
+async function submitAvatarFileForChild(childId, file) {
+  if (!childId) {
+    toast('请选择孩子')
+    return
+  }
+  if (state.offline) {
+    const nextPreviewUrl = URL.createObjectURL(file)
+    replaceObjectUrl(`child:${childId}`, nextPreviewUrl)
+    clearAvatarEditorDraft({ scope: 'child', childId })
+    toast('演示：头像已更换')
+    render()
+    return
+  }
+  try {
+    const avatarPayload = await api.uploadChildAvatar(childId, file)
+    const nextUrl = avatarPayload?.avatarUrl || ''
+    state.children = state.children.map((child) => String(child.id) === String(childId)
+      ? { ...child, avatarUrl: nextUrl }
+      : child)
+    if (state.selectedChild && String(state.selectedChild.id) === String(childId)) {
+      state.selectedChild = { ...state.selectedChild, avatarUrl: nextUrl }
+    }
+    await loadInitialData(false, { skipStarterData: true })
+    clearAvatarEditorDraft({ scope: 'child', childId })
+    toast('头像已更换')
+    render()
+  } catch (error) {
+    toast(error.message)
+  }
 }
 
 function goRewardStore() {
@@ -2039,7 +2286,8 @@ async function handleChildSubmit(event) {
   event.preventDefault()
   const formData = new FormData(event.currentTarget)
   const childId = String(formData.get('childId') || '').trim()
-  const avatarFile = formData.get('avatarFile')
+  const pendingAvatarFile = isSameAvatarDraft(state.avatarEditor, 'child', childId) ? state.avatarEditor.processedFile : null
+  const pendingAvatarPreviewUrl = isSameAvatarDraft(state.avatarEditor, 'child', childId) ? state.avatarEditor.processedPreviewUrl : ''
   const payload = {
     nickname: String(formData.get('nickname') || '').trim(),
     birthday: nullableDate(formData.get('birthday')),
@@ -2057,7 +2305,7 @@ async function handleChildSubmit(event) {
     toast('请填写孩子账号和密码')
     return
   }
-  if (avatarFile instanceof File && avatarFile.size > AVATAR_MAX_BYTES) {
+  if (pendingAvatarFile instanceof File && pendingAvatarFile.size > AVATAR_MAX_BYTES) {
     toast('头像照片不能超过 1M')
     return
   }
@@ -2067,6 +2315,10 @@ async function handleChildSubmit(event) {
       ...payload,
       status: 'ACTIVE',
     }
+    if (pendingAvatarPreviewUrl) {
+      replaceObjectUrl(`child:${nextChild.id}`, pendingAvatarPreviewUrl)
+      state.avatarEditor = createEmptyAvatarEditor()
+    }
     state.children = childId
       ? state.children.map((child) => String(child.id) === childId ? nextChild : child)
       : [...state.children, nextChild]
@@ -2075,6 +2327,7 @@ async function handleChildSubmit(event) {
     state.childModalOpen = false
     state.editingChild = null
     state.childAccountDraftEnabled = false
+    clearAvatarEditorDraft({ scope: 'child' })
     toast(childId ? '演示：孩子档案已修改' : '演示：孩子档案已创建')
     render()
     return
@@ -2083,8 +2336,8 @@ async function handleChildSubmit(event) {
     let savedChild = childId
       ? await api.updateChild(childId, payload)
       : await api.createChild(payload)
-    if (avatarFile instanceof File && avatarFile.size > 0) {
-      const avatarPayload = await api.uploadChildAvatar(savedChild.id, avatarFile)
+    if (pendingAvatarFile instanceof File && pendingAvatarFile.size > 0) {
+      const avatarPayload = await api.uploadChildAvatar(savedChild.id, pendingAvatarFile)
       savedChild = {
         ...savedChild,
         avatarUrl: avatarPayload?.avatarUrl || savedChild.avatarUrl || '',
@@ -2094,6 +2347,7 @@ async function handleChildSubmit(event) {
     state.childModalOpen = false
     state.editingChild = null
     state.childAccountDraftEnabled = false
+    clearAvatarEditorDraft({ scope: 'child' })
     await loadInitialData(false)
     toast(childId ? '孩子档案已修改' : '孩子档案已创建')
   } catch (error) {
