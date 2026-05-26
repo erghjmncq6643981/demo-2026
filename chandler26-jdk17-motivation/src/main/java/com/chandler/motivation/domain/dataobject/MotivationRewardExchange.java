@@ -3,6 +3,7 @@ package com.chandler.motivation.domain.dataobject;
 import com.baomidou.mybatisplus.annotation.IdType;
 import com.baomidou.mybatisplus.annotation.TableId;
 import com.baomidou.mybatisplus.annotation.TableName;
+import java.time.LocalDate;
 import java.time.LocalDateTime;
 import lombok.Data;
 
@@ -20,6 +21,7 @@ public class MotivationRewardExchange {
     private Integer requiredPointsSnapshot;
     private String status;
     private String fulfillmentStatus;
+    private String branchStatus;
     private Long requestedByUserId;
     private Long reviewedByUserId;
     private Long fulfillmentUpdatedByUserId;
@@ -27,6 +29,9 @@ public class MotivationRewardExchange {
     private LocalDateTime requestedAt;
     private LocalDateTime reviewedAt;
     private LocalDateTime fulfillmentUpdatedAt;
+    private LocalDate expectedArrivalDate;
+    private LocalDate scheduleStartDate;
+    private LocalDate scheduleEndDate;
     private LocalDateTime completedAt;
     private Long confirmedByUserId;
     private LocalDateTime confirmedAt;

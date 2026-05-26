@@ -14,6 +14,7 @@ import com.chandler.motivation.domain.dto.reward.RewardFulfillmentRequest;
 import com.chandler.motivation.domain.mapper.MotivationRewardExchangeMapper;
 import com.chandler.motivation.support.MotivationConstants;
 import com.chandler.motivation.support.MotivationEnums;
+import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.util.List;
 import java.util.Map;
@@ -70,6 +71,7 @@ public class MotivationRewardExchangeService extends ServiceImpl<MotivationRewar
         exchange.setRequiredPointType(paymentPlan.requiredPointType());
         exchange.setRequiredPointsSnapshot(reward.getRequiredPoints());
         exchange.setFulfillmentStatus(MotivationEnums.RewardFulfillmentStatus.PENDING.code());
+        exchange.setBranchStatus(MotivationEnums.RewardBranchStatus.PENDING.code());
         exchange.setRemark(request.getRemark());
         exchange.setRequestedByUserId(userId);
         exchange.setRequestedAt(LocalDateTime.now());
@@ -99,6 +101,7 @@ public class MotivationRewardExchangeService extends ServiceImpl<MotivationRewar
         MotivationPointLedger ledger = ensureRewardPointsDeducted(exchange, reward, userId);
         exchange.setStatus(MotivationEnums.RewardExchangeStatus.APPROVED.code());
         exchange.setFulfillmentStatus(MotivationEnums.RewardFulfillmentStatus.PENDING.code());
+        exchange.setBranchStatus(MotivationEnums.RewardBranchStatus.PENDING.code());
         exchange.setReviewedByUserId(userId);
         exchange.setReviewedAt(LocalDateTime.now());
         exchange.setDeductedLedgerId(ledger.getId());
@@ -138,10 +141,15 @@ public class MotivationRewardExchangeService extends ServiceImpl<MotivationRewar
                 && !MotivationEnums.codeEquals(MotivationEnums.RewardExchangeStatus.COMPLETED, exchange.getStatus())) {
             throw new MotivationException("REWARD_EXCHANGE_NOT_APPROVED", "只有已通过兑换可以更新礼物状态");
         }
-        String fulfillmentStatus = normalizeFulfillmentStatus(request == null ? null : request.getFulfillmentStatus(), false);
+        MotivationReward reward = rewardService.getById(exchange.getRewardId());
+        String fulfillmentType = reward == null ? null : reward.getFulfillmentType();
+        String branchStatus = normalizeBranchStatus(resolveRequestedBranchStatus(request, fulfillmentType), fulfillmentType);
+        String fulfillmentStatus = deriveFulfillmentStatus(branchStatus);
+        exchange.setBranchStatus(branchStatus);
         exchange.setFulfillmentStatus(fulfillmentStatus);
         exchange.setFulfillmentUpdatedByUserId(userId);
         exchange.setFulfillmentUpdatedAt(LocalDateTime.now());
+        applyFulfillmentDates(exchange, request);
         if (MotivationEnums.codeEquals(MotivationEnums.RewardFulfillmentStatus.COMPLETED, fulfillmentStatus)) {
             exchange.setCompletedAt(LocalDateTime.now());
         }
@@ -151,9 +159,9 @@ public class MotivationRewardExchangeService extends ServiceImpl<MotivationRewar
         updateById(exchange);
         systemLogService.recordBusiness(userId, exchange.getChildId(), MotivationEnums.LogType.REWARD,
                 "更新礼物状态", "把奖励「" + exchange.getRewardNameSnapshot() + "」的状态改成了 "
-                        + MotivationEnums.descriptionOf(MotivationEnums.RewardFulfillmentStatus.class,
-                        fulfillmentStatus,
-                        MotivationEnums.RewardFulfillmentStatus.PENDING));
+                        + MotivationEnums.descriptionOf(MotivationEnums.RewardBranchStatus.class,
+                        branchStatus,
+                        MotivationEnums.RewardBranchStatus.PENDING));
         return exchange;
     }
 
@@ -166,6 +174,7 @@ public class MotivationRewardExchangeService extends ServiceImpl<MotivationRewar
         }
         exchange.setStatus(MotivationEnums.RewardExchangeStatus.COMPLETED.code());
         exchange.setFulfillmentStatus(MotivationEnums.RewardFulfillmentStatus.CONFIRMED.code());
+        exchange.setBranchStatus(MotivationEnums.RewardBranchStatus.COMPLETED.code());
         exchange.setConfirmedByUserId(userId);
         exchange.setConfirmedAt(LocalDateTime.now());
         exchange.setCompletedAt(LocalDateTime.now());
@@ -200,17 +209,107 @@ public class MotivationRewardExchangeService extends ServiceImpl<MotivationRewar
         return exchange;
     }
 
-    private String normalizeFulfillmentStatus(String fulfillmentStatus, boolean allowConfirmed) {
-        String normalized = fulfillmentStatus == null ? "" : fulfillmentStatus.trim().toUpperCase();
-        if (allowConfirmed && MotivationEnums.codeEquals(MotivationEnums.RewardFulfillmentStatus.CONFIRMED, normalized)) {
-            return normalized;
+    private String normalizeBranchStatus(String branchStatus, String fulfillmentType) {
+        String normalized = branchStatus == null ? "" : branchStatus.trim().toUpperCase();
+        MotivationEnums.RewardBranchStatus resolved = MotivationEnums.fromCode(
+                MotivationEnums.RewardBranchStatus.class,
+                normalized,
+                MotivationEnums.RewardBranchStatus.PENDING);
+        if (resolved == MotivationEnums.RewardBranchStatus.PENDING) {
+            return resolved.code();
         }
-        if (MotivationEnums.codeEquals(MotivationEnums.RewardFulfillmentStatus.SCHEDULED, normalized)
-                || MotivationEnums.codeEquals(MotivationEnums.RewardFulfillmentStatus.IN_PROGRESS, normalized)
-                || MotivationEnums.codeEquals(MotivationEnums.RewardFulfillmentStatus.COMPLETED, normalized)) {
-            return normalized;
+        if (MotivationEnums.codeEquals(MotivationEnums.RewardFulfillmentType.PARENT_PURCHASE, fulfillmentType)
+                && (resolved == MotivationEnums.RewardBranchStatus.PURCHASE_ORDERED
+                || resolved == MotivationEnums.RewardBranchStatus.PURCHASE_SHIPPING
+                || resolved == MotivationEnums.RewardBranchStatus.PURCHASE_ARRIVED
+                || resolved == MotivationEnums.RewardBranchStatus.COMPLETED)) {
+            return resolved.code();
         }
-        return MotivationEnums.RewardFulfillmentStatus.PENDING.code();
+        if (MotivationEnums.codeEquals(MotivationEnums.RewardFulfillmentType.PARENT_FULFILL, fulfillmentType)
+                && (resolved == MotivationEnums.RewardBranchStatus.SCHEDULED
+                || resolved == MotivationEnums.RewardBranchStatus.IN_PROGRESS
+                || resolved == MotivationEnums.RewardBranchStatus.COMPLETED)) {
+            return resolved.code();
+        }
+        if (MotivationEnums.codeEquals(MotivationEnums.RewardFulfillmentType.PARENT_EXECUTE, fulfillmentType)
+                && (resolved == MotivationEnums.RewardBranchStatus.IN_PROGRESS
+                || resolved == MotivationEnums.RewardBranchStatus.COMPLETED)) {
+            return resolved.code();
+        }
+        if (MotivationEnums.codeEquals(MotivationEnums.RewardFulfillmentType.INVENTORY_DEDUCT, fulfillmentType)
+                && resolved == MotivationEnums.RewardBranchStatus.COMPLETED) {
+            return resolved.code();
+        }
+        throw new MotivationException("REWARD_BRANCH_STATUS_INVALID", "当前奖励类型不支持该履约状态");
+    }
+
+    private String resolveRequestedBranchStatus(RewardFulfillmentRequest request, String fulfillmentType) {
+        if (request == null) {
+            return MotivationEnums.RewardBranchStatus.PENDING.code();
+        }
+        if (StringUtils.hasText(request.getBranchStatus())) {
+            return request.getBranchStatus();
+        }
+        String status = request.getFulfillmentStatus();
+        if (!StringUtils.hasText(status)) {
+            return MotivationEnums.RewardBranchStatus.PENDING.code();
+        }
+        MotivationEnums.RewardFulfillmentStatus fulfillmentStatus = MotivationEnums.fromCode(
+                MotivationEnums.RewardFulfillmentStatus.class,
+                status,
+                MotivationEnums.RewardFulfillmentStatus.PENDING);
+        if (fulfillmentStatus == MotivationEnums.RewardFulfillmentStatus.COMPLETED
+                && MotivationEnums.codeEquals(MotivationEnums.RewardFulfillmentType.PARENT_PURCHASE, fulfillmentType)) {
+            return MotivationEnums.RewardBranchStatus.PURCHASE_ARRIVED.code();
+        }
+        if (fulfillmentStatus == MotivationEnums.RewardFulfillmentStatus.IN_PROGRESS
+                && MotivationEnums.codeEquals(MotivationEnums.RewardFulfillmentType.PARENT_PURCHASE, fulfillmentType)) {
+            return MotivationEnums.RewardBranchStatus.PURCHASE_SHIPPING.code();
+        }
+        if (fulfillmentStatus == MotivationEnums.RewardFulfillmentStatus.SCHEDULED) {
+            return MotivationEnums.RewardBranchStatus.SCHEDULED.code();
+        }
+        if (fulfillmentStatus == MotivationEnums.RewardFulfillmentStatus.IN_PROGRESS) {
+            return MotivationEnums.RewardBranchStatus.IN_PROGRESS.code();
+        }
+        if (fulfillmentStatus == MotivationEnums.RewardFulfillmentStatus.COMPLETED) {
+            return MotivationEnums.RewardBranchStatus.COMPLETED.code();
+        }
+        return MotivationEnums.RewardBranchStatus.PENDING.code();
+    }
+
+    private String deriveFulfillmentStatus(String branchStatus) {
+        if (MotivationEnums.codeEquals(MotivationEnums.RewardBranchStatus.SCHEDULED, branchStatus)) {
+            return MotivationEnums.RewardFulfillmentStatus.SCHEDULED.code();
+        }
+        if (MotivationEnums.codeEquals(MotivationEnums.RewardBranchStatus.COMPLETED, branchStatus)
+                || MotivationEnums.codeEquals(MotivationEnums.RewardBranchStatus.PURCHASE_ARRIVED, branchStatus)) {
+            return MotivationEnums.RewardFulfillmentStatus.COMPLETED.code();
+        }
+        if (MotivationEnums.codeEquals(MotivationEnums.RewardBranchStatus.PENDING, branchStatus)) {
+            return MotivationEnums.RewardFulfillmentStatus.PENDING.code();
+        }
+        return MotivationEnums.RewardFulfillmentStatus.IN_PROGRESS.code();
+    }
+
+    private void applyFulfillmentDates(MotivationRewardExchange exchange, RewardFulfillmentRequest request) {
+        if (request == null) {
+            return;
+        }
+        if (request.getExpectedArrivalDate() != null) {
+            exchange.setExpectedArrivalDate(request.getExpectedArrivalDate());
+        }
+        LocalDate startDate = request.getScheduleStartDate();
+        LocalDate endDate = request.getScheduleEndDate();
+        if (startDate != null && endDate != null && endDate.isBefore(startDate)) {
+            throw new MotivationException("REWARD_SCHEDULE_RANGE_INVALID", "奖励日程结束时间不能早于开始时间");
+        }
+        if (startDate != null) {
+            exchange.setScheduleStartDate(startDate);
+        }
+        if (endDate != null) {
+            exchange.setScheduleEndDate(endDate);
+        }
     }
 
     private MotivationPointLedger ensureRewardPointsDeducted(MotivationRewardExchange exchange,

@@ -1,9 +1,20 @@
 import { renderCalendar } from '/src/features/motivation/calendar.js'
-import { clamp, escapeHtml, formatDate, fulfillmentStatusName, pointIcon, pointName, statusName } from '/src/shared/text.js'
+import {
+  branchStatusName,
+  clamp,
+  escapeHtml,
+  formatDate,
+  fulfillmentStatusName,
+  pointIcon,
+  pointName,
+  rewardMainFlowName,
+  statusName,
+} from '/src/shared/text.js'
 
 const navItems = [
   ['profile', '个人信息'],
   ['calendar', '任务日历'],
+  ['reward-calendar', '奖励日历'],
   ['store', '奖励商店'],
 ]
 
@@ -58,9 +69,8 @@ function profileSubnavItems(state) {
   return [
     ['home', '首页'],
     ['account', '账号信息'],
-    ['children', '孩子档案'],
-    ['goals', '成长目标'],
-    ['tasks', '任务管理'],
+    ['children', '宝贝档案'],
+    ['growth', '宝贝成长'],
     ['rewards', '奖励管理'],
     ['currencies', '币值管理'],
     ['system-config', '系统配置'],
@@ -327,7 +337,7 @@ function renderRegisterModal(state) {
     <div class="modal-backdrop">
       <section class="modal narrow register-modal">
         <div class="modal-head">
-          <div><h2>注册账号</h2><p>创建家长账号后开始配置孩子档案。</p></div>
+          <div><h2>注册账号</h2><p>创建家长账号后开始配置宝贝档案。</p></div>
           <button class="icon-btn" type="button" data-action="close-register-modal">×</button>
         </div>
         <form class="modal-form" data-form="register">
@@ -354,7 +364,7 @@ function renderSidebar(state) {
         <div class="brand-mark">★</div>
         <div>
           <strong class="rainbow-title brand-title">${Array.from('宝贝激励助手').map((char) => `<span>${char}</span>`).join('')}</strong>
-          <span>${escapeHtml(state.selectedChild?.nickname || '未选择孩子')}</span>
+          <span>${escapeHtml(state.selectedChild?.nickname || '未选择宝贝')}</span>
         </div>
       </div>
       <nav class="side-nav">
@@ -374,19 +384,19 @@ function renderSidebar(state) {
 
 function renderWorkspaceHeader(state) {
   const profileTitles = {
-    home: isChildUser(state) ? ['个人信息', '查看今日进度、积分余额和成长记录。'] : ['个人信息', '家庭成员、孩子档案和积分概览。'],
+    home: isChildUser(state) ? ['个人信息', '查看今日进度、积分余额和成长记录。'] : ['个人信息', '家庭成员、宝贝档案和积分概览。'],
     account: ['账号信息', '查看与修改当前登录账号。'],
     'system-config': ['系统配置', '调整任务日历日期大小和颜色。'],
-    children: ['孩子档案', '维护孩子资料、状态和家庭档案。'],
-    goals: ['成长目标', '管理目标方向，并承载每日、每周和每月任务。'],
-    tasks: ['任务管理', '用列表筛选任务，新增或修改任务规则。'],
+    children: ['宝贝档案', '维护宝贝资料、状态和家庭档案。'],
+    growth: ['宝贝成长', '管理成长目标和每日、每周、每月任务。'],
     rewards: ['奖励管理', '维护奖励库存、颜色、积分要求和审核规则。'],
     currencies: ['币值管理', '配置星星、红花、皇冠的图标、颜色和比例。'],
   }
   const titles = {
     profile: profileTitles[profileSubView(state)] || profileTitles.home,
     calendar: ['任务日历', 'Notion 风格月视图，展示任务计划和完成记录。'],
-    store: ['奖励商店', '孩子可以用星星、红花或皇冠兑换奖励。'],
+    'reward-calendar': ['奖励日历', '查看奖励兑换、购买、运输和日程实现进度。'],
+    store: ['奖励商店', '宝贝可以用星星、红花或皇冠兑换奖励。'],
   }
   const [title, subtitle] = titles[state.currentView] || titles.profile
   return `
@@ -425,6 +435,7 @@ function renderProfileSubnav(state) {
 function renderCurrentView(state, actions) {
   if (state.currentView === 'profile') return renderProfileView(state)
   if (state.currentView === 'calendar') return renderCalendarView(state, actions)
+  if (state.currentView === 'reward-calendar') return renderRewardCalendarView(state, actions)
   if (state.currentView === 'store') return renderStoreView(state)
   return renderProfileView(state)
 }
@@ -441,20 +452,11 @@ function renderProfileView(state) {
       </div>
     `
   }
-  if (activeSubView === 'goals') {
-    return `
-      <div class="view-grid">
-        <section class="panel panel-pad wide">
-          ${renderGoalList(state)}
-        </section>
-      </div>
-    `
-  }
-  if (activeSubView === 'tasks') {
+  if (activeSubView === 'growth') {
     return `
       <div class="view-grid">
         <div class="wide">
-          ${renderTaskManageView(state)}
+          ${renderGrowthManageView(state)}
         </div>
       </div>
     `
@@ -500,10 +502,10 @@ function renderProfileView(state) {
       <div class="view-grid">
         <section class="panel panel-pad wide">
           <div class="section-inline-head">
-            <h2>${childUser ? '我的档案' : '孩子档案'}</h2>
-            ${childUser ? '' : '<button class="btn primary" type="button" data-action="open-child-modal">新增孩子</button>'}
+            <h2>${childUser ? '我的档案' : '宝贝档案'}</h2>
+            ${childUser ? '' : '<button class="btn primary" type="button" data-action="open-child-modal">新增宝贝</button>'}
           </div>
-          <div class="empty compact-empty">${childUser ? '当前孩子账号还没有绑定孩子档案，请联系家长。' : '还没有孩子档案，先新增一个孩子再开始记录吧。'}</div>
+          <div class="empty compact-empty">${childUser ? '当前宝贝账号还没有绑定宝贝档案，请联系家长。' : '还没有宝贝档案，先新增一个宝贝再开始记录吧。'}</div>
         </section>
       </div>
     `
@@ -512,9 +514,9 @@ function renderProfileView(state) {
     <div class="view-grid">
       <section class="panel panel-pad">
         <div class="profile-card">
-          ${renderAvatarImage(state.avatarObjectUrls?.children?.[state.selectedChild?.id] || '', state.selectedChild?.nickname || '孩', 'avatar')}
+          ${renderAvatarImage(state.avatarObjectUrls?.children?.[state.selectedChild?.id] || '', state.selectedChild?.nickname || '宝', 'avatar')}
           <div>
-            <h2>${escapeHtml(state.selectedChild?.nickname || '未选择孩子')}</h2>
+            <h2>${escapeHtml(state.selectedChild?.nickname || '未选择宝贝')}</h2>
             <p>${escapeHtml(state.selectedChild?.remark || '暂无备注')}</p>
           </div>
         </div>
@@ -551,7 +553,7 @@ function renderAccountSummary(state) {
       </section>
       <section class="activity-log-panel">
         <div class="section-inline-head">
-          <h2>孩子成长日志</h2>
+          <h2>宝贝成长日志</h2>
           <span>${(state.activityLogs || []).length} 条</span>
         </div>
         ${renderChildActivityLogs(state)}
@@ -573,13 +575,13 @@ function renderChildActivityLogs(state) {
             <small>${escapeHtml(formatActivityTime(log.createTime))}</small>
           </div>
         </article>
-      `).join('') || '<div class="empty compact-empty">暂无孩子活动日志</div>'}
+      `).join('') || '<div class="empty compact-empty">暂无宝贝活动日志</div>'}
     </div>
   `
 }
 
 function activityLogTitle(log) {
-  return log.childNickname ? `${log.childNickname}宝贝` : '孩子动态'
+  return log.childNickname ? `${log.childNickname}宝贝` : '宝贝动态'
 }
 
 function activityLogDetail(log) {
@@ -587,7 +589,8 @@ function activityLogDetail(log) {
   if (!detail) return '记录了一次成长活动'
   return detail
     .replace(/^用户「([^」]+)」于\s*\d{4}-\d{2}-\d{2}\s+\d{2}:\d{2}:\d{2}\s*/, '')
-    .replace(/^孩子「\d+」的/, '孩子的')
+    .replace(/^孩子「\d+」的/, '宝贝的')
+    .replaceAll('孩子', '宝贝')
 }
 
 function formatActivityTime(value) {
@@ -689,10 +692,10 @@ function renderChildList(state) {
   const expanded = Boolean(state.filterAdvanced?.child)
   return `
     <div class="section-inline-head">
-      <h2>孩子档案</h2>
+      <h2>宝贝档案</h2>
       <div class="section-actions">
         <span>${children.length} 个</span>
-        <button class="btn primary" type="button" data-action="open-child-modal">新增孩子</button>
+        <button class="btn primary" type="button" data-action="open-child-modal">新增宝贝</button>
       </div>
     </div>
     ${renderManagementFilterBar({
@@ -707,9 +710,9 @@ function renderChildList(state) {
     })}
     <div class="table-card">
       <div class="table-head child-table">
-        <span>孩子</span><span>性别</span><span>生日</span><span>状态</span><span>操作</span>
+        <span>宝贝</span><span>性别</span><span>生日</span><span>状态</span><span>操作</span>
       </div>
-      ${children.map((child) => renderChildRow(state, child, state.selectedChildId)).join('') || '<div class="empty">暂无孩子档案</div>'}
+      ${children.map((child) => renderChildRow(state, child, state.selectedChildId)).join('') || '<div class="empty">暂无宝贝档案</div>'}
     </div>
   `
 }
@@ -720,7 +723,7 @@ function renderChildRow(state, child, selectedChildId) {
   return `
     <div class="table-row child-table">
       <div class="task-name-cell">
-        ${renderAvatarImage(avatarSrc, child.nickname || '孩', 'child-mini', `child-row-${child.id}`)}
+        ${renderAvatarImage(avatarSrc, child.nickname || '宝', 'child-mini', `child-row-${child.id}`)}
         <div><strong>${escapeHtml(child.nickname)}</strong><small>${escapeHtml(child.remark || '暂无备注')}</small></div>
       </div>
       <span>${genderLabel(child.gender)}</span>
@@ -728,9 +731,20 @@ function renderChildRow(state, child, selectedChildId) {
       <span>${statusName(child.status)}</span>
       <div class="row-actions task-row-actions">
         <button class="small-btn child-watch-btn ${selected ? 'active' : ''}" type="button" data-action="select-child" data-child-id="${child.id}" ${selected ? 'disabled' : ''}>${selected ? '观察中' : '查看'}</button>
-        <button class="row-icon-btn" type="button" data-action="edit-child" data-child-id="${child.id}" aria-label="修改孩子档案" title="修改孩子档案">${renderActionIcon('edit')}</button>
-        <button class="row-icon-btn danger" type="button" data-action="delete-child" data-child-id="${child.id}" aria-label="删除孩子档案" title="删除孩子档案">${renderActionIcon('delete')}</button>
+        <button class="row-icon-btn" type="button" data-action="edit-child" data-child-id="${child.id}" aria-label="修改宝贝档案" title="修改宝贝档案">${renderActionIcon('edit')}</button>
+        <button class="row-icon-btn danger" type="button" data-action="delete-child" data-child-id="${child.id}" aria-label="删除宝贝档案" title="删除宝贝档案">${renderActionIcon('delete')}</button>
       </div>
+    </div>
+  `
+}
+
+function renderGrowthManageView(state) {
+  return `
+    <div class="growth-workspace">
+      <section class="panel panel-pad">
+        ${renderGoalList(state)}
+      </section>
+      ${renderTaskManageView(state)}
     </div>
   `
 }
@@ -931,14 +945,33 @@ function renderTaskTimeBlocks(task, schedule, periodType) {
 function renderCalendarView(state, actions) {
   const calendarEvents = buildCalendarDisplayEvents(state)
   state.calendarDisplayEvents = calendarEvents
+  const eventKind = state.calendarEventKind || 'tasks'
   return `
     <section class="panel">
       ${renderCalendar({
         monthDate: state.monthDate,
-        events: calendarEvents.filter((event) => event.kind === (state.calendarEventKind || 'tasks')),
+        events: calendarEvents.filter((event) => event.kind === eventKind),
         viewMode: state.calendarViewMode || 'month',
-        eventKind: state.calendarEventKind || 'tasks',
+        eventKind,
         systemConfig: state.systemConfig || {},
+      })}
+    </section>
+  `
+}
+
+function renderRewardCalendarView(state, actions) {
+  const calendarEvents = normalizeRewardCalendarEvents(state.exchanges || [], state.rewards || [])
+  state.calendarDisplayEvents = calendarEvents
+  return `
+    <section class="panel">
+      ${renderCalendar({
+        monthDate: state.monthDate,
+        events: calendarEvents,
+        viewMode: state.calendarViewMode || 'month',
+        eventKind: 'rewards',
+        systemConfig: state.systemConfig || {},
+        titleLabel: '奖励日历',
+        showKindToolbar: false,
       })}
     </section>
   `
@@ -1004,62 +1037,116 @@ function normalizePointCalendarEvents(ledger, tasks = []) {
 }
 
 function normalizeRewardCalendarEvents(exchanges, rewards = []) {
-  return exchanges.map((exchange) => {
-    const reward = rewards.find((item) => String(item.id) === String(exchange.rewardId)
-      || String(item.name || '') === String(exchange.rewardNameSnapshot || ''))
-    const date = formatDateValue(exchange.confirmedAt || exchange.completedAt || exchange.fulfillmentUpdatedAt || exchange.reviewedAt || exchange.requestedAt || exchange.createTime)
-    const status = exchange.status || 'REQUESTED'
-    const fulfillmentStatus = exchange.fulfillmentStatus || 'PENDING'
-    const colorMap = {
-      REQUESTED: exchange.rewardColorSnapshot || '#ff9f43',
-      APPROVED: '#6c63ff',
-      COMPLETED: '#22c55e',
-      REJECTED: '#ef4444',
-    }
-    const stateLabel = status === 'APPROVED' ? fulfillmentStatusName(fulfillmentStatus) : statusName(status)
-    return {
-      kind: 'rewards',
-      kindLabel: '奖励',
-      uid: `reward-${exchange.id || `${date}-${exchange.rewardNameSnapshot || 'exchange'}`}`,
-      date,
-      title: `${exchange.rewardIconSnapshot || '🎁'} ${exchange.rewardNameSnapshot || '奖励兑换'}`,
-      rewardName: exchange.rewardNameSnapshot || '奖励兑换',
-      rewardDetail: exchange.remark || `${exchange.requiredPointsSnapshot || 0} ${pointName(exchange.requiredPointType)}兑换`,
-      rewardDescription: reward?.description || exchange.remark || '',
-      requiredPointType: exchange.requiredPointType,
-      requiredPoints: exchange.requiredPointsSnapshot || 0,
-      rewardIcon: exchange.rewardIconSnapshot || '🎁',
-      rewardColor: exchange.rewardColorSnapshot || '#ff9f43',
-      rewardStateLabel: stateLabel,
-      subtitle: `${exchange.requiredPointsSnapshot || 0} ${pointName(exchange.requiredPointType)} · ${stateLabel}`,
-      status,
-      fulfillmentStatus,
-      statusLabel: stateLabel,
-      color: colorMap[status] || exchange.rewardColorSnapshot || '#ff9f43',
-      note: status === 'REQUESTED'
-        ? '孩子已提交兑换申请，等待父母确认。'
-        : status === 'APPROVED'
-          ? `这张礼物兑换券当前为「${fulfillmentStatusName(fulfillmentStatus)}」。`
-        : status === 'COMPLETED'
-          ? '这条奖励兑换已经完成。'
-          : '这条奖励兑换未通过。',
-    }
+  return exchanges.flatMap((exchange) => expandRewardExchangeEvents(exchange, rewards))
+}
+
+function expandRewardExchangeEvents(exchange, rewards = []) {
+  const reward = rewards.find((item) => String(item.id) === String(exchange.rewardId)
+    || String(item.name || '') === String(exchange.rewardNameSnapshot || ''))
+  const status = exchange.status || 'REQUESTED'
+  const fulfillmentStatus = exchange.fulfillmentStatus || 'PENDING'
+  const branchStatus = exchange.branchStatus || 'PENDING'
+  const fulfillmentType = exchange.fulfillmentType || reward?.fulfillmentType || 'INVENTORY_DEDUCT'
+  const colorMap = {
+    REQUESTED: exchange.rewardColorSnapshot || '#ff9f43',
+    APPROVED: exchange.rewardColorSnapshot || '#6c63ff',
+    COMPLETED: '#22c55e',
+    REJECTED: '#ef4444',
+  }
+  const stateLabel = rewardMainFlowName(status, fulfillmentStatus)
+  const branchLabel = status === 'APPROVED' ? branchStatusName(branchStatus) : ''
+  const baseEvent = (date, phase = 'current', subtitle = '') => ({
+    ...exchange,
+    kind: 'rewards',
+    kindLabel: '奖励',
+    uid: `reward-${exchange.id || `${date}-${exchange.rewardNameSnapshot || 'exchange'}`}-${phase}-${date}`,
+    date,
+    phase,
+    title: `${exchange.rewardIconSnapshot || '🎁'} ${exchange.rewardNameSnapshot || '奖励兑换'}`,
+    exchangeId: exchange.id,
+    rewardId: exchange.rewardId,
+    rewardName: exchange.rewardNameSnapshot || '奖励兑换',
+    rewardDetail: exchange.remark || `${exchange.requiredPointsSnapshot || 0} ${pointName(exchange.requiredPointType)}兑换`,
+    rewardDescription: reward?.description || exchange.remark || '',
+    requiredPointType: exchange.requiredPointType,
+    requiredPoints: exchange.requiredPointsSnapshot || 0,
+    rewardIcon: exchange.rewardIconSnapshot || '🎁',
+    rewardColor: exchange.rewardColorSnapshot || '#ff9f43',
+    rewardStateLabel: stateLabel,
+    mainFlowLabel: stateLabel,
+    branchFlowLabel: branchLabel,
+    subtitle: subtitle || `${stateLabel}${branchLabel ? ` · ${branchLabel}` : ''}`,
+    status,
+    fulfillmentStatus,
+    branchStatus,
+    fulfillmentType,
+    expectedArrivalDate: exchange.expectedArrivalDate || '',
+    scheduleStartDate: exchange.scheduleStartDate || '',
+    scheduleEndDate: exchange.scheduleEndDate || '',
+    statusLabel: stateLabel,
+    color: colorMap[status] || exchange.rewardColorSnapshot || '#ff9f43',
+    note: status === 'REQUESTED'
+      ? '宝贝已提交兑换申请，等待父母确认。'
+      : status === 'APPROVED'
+        ? `主流程：${stateLabel}${branchLabel ? `；分支：${branchLabel}` : ''}`
+      : status === 'COMPLETED'
+        ? '这条奖励兑换已经完成。'
+        : '这条奖励兑换未通过。',
   })
+  if (status === 'REQUESTED') {
+    return [baseEvent(formatDateValue(exchange.requestedAt || exchange.createTime), 'request')]
+  }
+  if (status === 'REJECTED') {
+    return [baseEvent(formatDateValue(exchange.reviewedAt || exchange.requestedAt || exchange.createTime), 'reject')]
+  }
+  if (status === 'COMPLETED' || fulfillmentStatus === 'CONFIRMED') {
+    return [baseEvent(formatDateValue(exchange.confirmedAt || exchange.completedAt || exchange.fulfillmentUpdatedAt || exchange.reviewedAt || exchange.requestedAt), 'confirm')]
+  }
+  if (fulfillmentType === 'PARENT_FULFILL' && (exchange.scheduleStartDate || exchange.scheduleEndDate)) {
+    return expandDateRange(exchange.scheduleStartDate || exchange.scheduleEndDate, exchange.scheduleEndDate || exchange.scheduleStartDate)
+      .map((date) => baseEvent(date, 'schedule', `${stateLabel} · ${branchLabel || '奖励日程'}`))
+  }
+  if (fulfillmentType === 'PARENT_PURCHASE' && branchStatus === 'PURCHASE_SHIPPING' && exchange.expectedArrivalDate) {
+    return [baseEvent(formatDateValue(exchange.expectedArrivalDate), 'arrival', `${branchLabel} · 预计到达`)]
+  }
+  return [baseEvent(formatDateValue(exchange.fulfillmentUpdatedAt || exchange.reviewedAt || exchange.requestedAt || exchange.createTime), 'fulfillment')]
+}
+
+function expandDateRange(startDate, endDate) {
+  const start = dateFromKey(startDate)
+  const end = dateFromKey(endDate) || start
+  if (!start || !end) return []
+  const safeEnd = end < start ? start : end
+  const dates = []
+  const cursor = new Date(start)
+  while (cursor <= safeEnd && dates.length < 45) {
+    dates.push(formatDate(cursor))
+    cursor.setDate(cursor.getDate() + 1)
+  }
+  return dates
+}
+
+function dateFromKey(value) {
+  const key = formatDateValue(value)
+  if (!key) return null
+  const date = new Date(`${key}T00:00:00`)
+  return Number.isNaN(date.getTime()) ? null : date
 }
 
 function renderCalendarDayModal(state) {
   if (!state.calendarDayModalOpen || !state.selectedCalendarDateKey) return ''
   const events = calendarEventsForDate(state, state.selectedCalendarDateKey)
   const visibleEvents = filterCalendarEventsByKind(state, events)
-  const summary = renderCalendarDaySummary(state.calendarEventKind || 'tasks', visibleEvents)
-  const canQuickCreate = isManagementUser(state) && (state.calendarEventKind || 'tasks') === 'tasks'
+  const activeKind = state.currentView === 'reward-calendar' ? 'rewards' : (state.calendarEventKind || 'tasks')
+  const summary = renderCalendarDaySummary(activeKind, visibleEvents)
+  const canQuickCreate = isManagementUser(state) && activeKind === 'tasks'
   return `
     <div class="modal-backdrop calendar-layer calendar-day-layer">
       <section class="modal calendar-modal calendar-day-modal">
         <div class="modal-head">
           <div>
             <h2>${escapeHtml(formatCalendarDateLabel(state.selectedCalendarDateKey))}</h2>
-            <p>${state.calendarEventKind === 'tasks' ? '点开任务可以查看说明并打卡。' : state.calendarEventKind === 'points' ? '点开记录查看图标数量。' : '点开奖励查看兑换内容。'}</p>
+            <p>${activeKind === 'tasks' ? '点开任务可以查看说明并打卡。' : activeKind === 'points' ? '点开记录查看图标数量。' : '点开奖励查看兑换内容和履约进度。'}</p>
           </div>
           <button class="icon-btn" type="button" data-action="close-calendar-day-modal">×</button>
         </div>
@@ -1085,6 +1172,7 @@ function renderCalendarEventModal(state) {
   const isReward = event.kind === 'rewards'
   const approved = event.status === 'APPROVED'
   const canCheckIn = isTask && !approved
+  const canManageReward = isReward && isManagementUser(state)
   return `
     <div class="modal-backdrop calendar-layer calendar-event-layer">
       <section class="modal calendar-modal narrow calendar-event-modal">
@@ -1110,6 +1198,7 @@ function renderCalendarEventModal(state) {
                 ? renderLimitedPointIcons(pointIcon(event.requiredPointType), event.requiredPoints, pointTypeColor(event.requiredPointType), 12)
                 : renderTaskRewardIcons(event, scoreCount, 'calendar large')}
           </div>
+          ${isReward ? renderRewardFlowDetail(event, canManageReward) : ''}
           ${event.note && !isPoint && !isReward ? `<div class="calendar-detail-note">
             ${escapeHtml(event.note)}
           </div>` : ''}
@@ -1152,6 +1241,64 @@ function renderCalendarStatusScore(event, count, density = '') {
   const completed = event.status === 'APPROVED'
   const color = completed ? event.pointColor : '#cbd5e1'
   return renderScoreIcons(event.pointType, count, color, `${density} ${completed ? '' : 'muted'}`.trim())
+}
+
+function renderRewardFlowDetail(event, canManageReward) {
+  const branchMeta = rewardBranchDateMeta(event)
+  return `
+    <div class="reward-flow-detail">
+      <div class="reward-flow-card">
+        <span>主流程</span>
+        <strong>${escapeHtml(event.mainFlowLabel || rewardMainFlowName(event.status, event.fulfillmentStatus))}</strong>
+      </div>
+      <div class="reward-flow-card">
+        <span>分支流程</span>
+        <strong>${escapeHtml(event.branchFlowLabel || branchStatusName(event.branchStatus))}</strong>
+      </div>
+      ${branchMeta ? `<div class="reward-flow-card wide">
+        <span>${escapeHtml(branchMeta.label)}</span>
+        <strong>${escapeHtml(branchMeta.value)}</strong>
+      </div>` : ''}
+      ${event.rewardDescription ? `<div class="reward-flow-card wide reward-description-card">
+        <span>奖励描述</span>
+        <p>${escapeHtml(event.rewardDescription)}</p>
+      </div>` : ''}
+      ${canManageReward ? renderRewardCalendarManageActions(event) : ''}
+    </div>
+  `
+}
+
+function renderRewardCalendarManageActions(event) {
+  if (event.status === 'REQUESTED') {
+    return `
+      <div class="reward-flow-card wide reward-calendar-actions">
+        <span>父母操作</span>
+        <div class="reward-flow-controls">
+          <button class="small-btn primary-lite" type="button" data-action="approve-exchange" data-exchange-id="${event.exchangeId || event.id}">通过</button>
+          <button class="small-btn danger" type="button" data-action="reject-exchange" data-exchange-id="${event.exchangeId || event.id}">拒绝</button>
+        </div>
+      </div>
+    `
+  }
+  if (event.status === 'APPROVED') {
+    return `
+      <div class="reward-flow-card wide reward-calendar-actions">
+        <span>父母维护</span>
+        ${renderFulfillmentControls(event)}
+      </div>
+    `
+  }
+  return ''
+}
+
+function rewardBranchDateMeta(event) {
+  if (event.fulfillmentType === 'PARENT_PURCHASE' && event.expectedArrivalDate) {
+    return { label: '预计到达', value: event.expectedArrivalDate }
+  }
+  if (event.fulfillmentType === 'PARENT_FULFILL' && (event.scheduleStartDate || event.scheduleEndDate)) {
+    return { label: '奖励日程', value: dateRange(event.scheduleStartDate, event.scheduleEndDate) }
+  }
+  return null
 }
 
 function renderPointChangeIcons(event, density = '') {
@@ -1410,20 +1557,23 @@ function renderExchangeTodo(state) {
         <span>${todos.length} 条</span>
       </div>
       <div class="todo-list">
-        ${visibleTodos.map((exchange) => `
+        ${visibleTodos.map((exchange) => {
+          const reward = findRewardForExchange(exchange, state.rewards || [])
+          const enrichedExchange = { ...exchange, fulfillmentType: exchange.fulfillmentType || reward?.fulfillmentType || 'INVENTORY_DEDUCT' }
+          return `
           <div class="todo-item">
             <span class="reward-mini" style="--reward-color:${exchange.rewardColorSnapshot || '#6c63ff'}">${escapeHtml(exchange.rewardIconSnapshot || '🎁')}</span>
             <div>
               <strong>${escapeHtml(exchange.rewardNameSnapshot || '奖励兑换')}</strong>
-              <small>${exchange.requiredPointsSnapshot || 0} ${pointIcon(exchange.requiredPointType)} · ${exchange.status === 'REQUESTED' ? '待确认' : fulfillmentStatusName(exchange.fulfillmentStatus)}</small>
+              <small>${exchange.requiredPointsSnapshot || 0} ${pointIcon(exchange.requiredPointType)} · ${exchange.status === 'REQUESTED' ? '待确认' : `${fulfillmentStatusName(exchange.fulfillmentStatus)} · ${branchStatusName(exchange.branchStatus)}`}</small>
             </div>
             <div class="row-actions">
               ${exchange.status === 'REQUESTED'
                 ? `<button class="small-btn primary-lite" type="button" data-action="approve-exchange" data-exchange-id="${exchange.id}">通过</button><button class="small-btn danger" type="button" data-action="reject-exchange" data-exchange-id="${exchange.id}">拒绝</button>`
-                : renderFulfillmentActions(exchange)}
+                : renderFulfillmentControls(enrichedExchange)}
             </div>
           </div>
-        `).join('') || '<div class="empty compact-empty">暂无兑换待办</div>'}
+        `}).join('') || '<div class="empty compact-empty">暂无兑换待办</div>'}
         ${todos.length > 3 ? `<button class="todo-more-btn" type="button" data-action="toggle-reward-todo">${expanded ? '收起' : `更多 ${todos.length - 3} 条`}</button>` : ''}
       </div>
     </section>
@@ -1517,16 +1667,45 @@ function renderRewardTickets(state) {
   `
 }
 
-function renderFulfillmentActions(exchange) {
-  const status = exchange.fulfillmentStatus || 'PENDING'
-  const options = [
-    ['SCHEDULED', '加入日程'],
-    ['IN_PROGRESS', '待实现'],
-    ['COMPLETED', '已实现'],
-  ]
-  return options.map(([value, label]) => `
-    <button class="small-btn ${status === value ? 'primary-lite' : ''}" type="button" data-action="update-fulfillment" data-exchange-id="${exchange.id}" data-fulfillment-status="${value}">${label}</button>
-  `).join('') + `<button class="small-btn" type="button" data-action="confirm-reward-ticket" data-exchange-id="${exchange.id}">确认</button>`
+function renderFulfillmentControls(exchange) {
+  const branchStatus = exchange.branchStatus || 'PENDING'
+  const fulfillmentType = exchange.fulfillmentType || 'INVENTORY_DEDUCT'
+  if (fulfillmentType === 'PARENT_PURCHASE') {
+    return `
+      <div class="reward-flow-controls">
+        <label class="flow-date-field"><span>预计到达</span><input type="date" name="expectedArrivalDate" value="${escapeHtml(exchange.expectedArrivalDate || '')}" /></label>
+        <button class="small-btn ${branchStatus === 'PURCHASE_ORDERED' ? 'primary-lite' : ''}" type="button" data-action="update-fulfillment" data-exchange-id="${exchange.exchangeId || exchange.id}" data-branch-status="PURCHASE_ORDERED">已下单</button>
+        <button class="small-btn ${branchStatus === 'PURCHASE_SHIPPING' ? 'primary-lite' : ''}" type="button" data-action="update-fulfillment" data-exchange-id="${exchange.exchangeId || exchange.id}" data-branch-status="PURCHASE_SHIPPING">运输中</button>
+        <button class="small-btn ${branchStatus === 'PURCHASE_ARRIVED' ? 'primary-lite' : ''}" type="button" data-action="update-fulfillment" data-exchange-id="${exchange.exchangeId || exchange.id}" data-branch-status="PURCHASE_ARRIVED">已到货</button>
+      </div>
+    `
+  }
+  if (fulfillmentType === 'PARENT_FULFILL') {
+    return `
+      <div class="reward-flow-controls schedule-flow-controls">
+        <label class="flow-date-field"><span>开始</span><input type="date" name="scheduleStartDate" value="${escapeHtml(exchange.scheduleStartDate || '')}" /></label>
+        <label class="flow-date-field"><span>结束</span><input type="date" name="scheduleEndDate" value="${escapeHtml(exchange.scheduleEndDate || '')}" /></label>
+        <button class="small-btn ${branchStatus === 'SCHEDULED' ? 'primary-lite' : ''}" type="button" data-action="update-fulfillment" data-exchange-id="${exchange.exchangeId || exchange.id}" data-branch-status="SCHEDULED">加入日程</button>
+        <button class="small-btn ${branchStatus === 'IN_PROGRESS' ? 'primary-lite' : ''}" type="button" data-action="update-fulfillment" data-exchange-id="${exchange.exchangeId || exchange.id}" data-branch-status="IN_PROGRESS">进行中</button>
+        <button class="small-btn ${branchStatus === 'COMPLETED' ? 'primary-lite' : ''}" type="button" data-action="update-fulfillment" data-exchange-id="${exchange.exchangeId || exchange.id}" data-branch-status="COMPLETED">已完成</button>
+      </div>
+    `
+  }
+  const options = fulfillmentType === 'PARENT_EXECUTE'
+    ? [['IN_PROGRESS', '处理中'], ['COMPLETED', '已完成']]
+    : [['COMPLETED', '已完成']]
+  return `
+    <div class="reward-flow-controls compact-flow-controls">
+      ${options.map(([value, label]) => `
+        <button class="small-btn ${branchStatus === value ? 'primary-lite' : ''}" type="button" data-action="update-fulfillment" data-exchange-id="${exchange.exchangeId || exchange.id}" data-branch-status="${value}">${label}</button>
+      `).join('')}
+    </div>
+  `
+}
+
+function findRewardForExchange(exchange, rewards = []) {
+  return rewards.find((reward) => String(reward.id) === String(exchange.rewardId)
+    || String(reward.name || '') === String(exchange.rewardNameSnapshot || ''))
 }
 
 function fulfillmentTypeName(type) {
@@ -1588,7 +1767,7 @@ function renderTaskModal(state) {
           <label><span>任务名称</span><input name="name" value="${escapeHtml(task.name || '')}" placeholder="${draftDate ? '例如：当天阅读任务' : '例如：晨读 20 分钟'}" /></label>
           <label><span>所属目标</span>${renderSelect('goalId', task.goalId || state.goals[0]?.id || '', state.goals.map((goal) => [goal.id, goal.name]))}</label>
           <label><span>任务分类</span>${renderSelect('taskCategory', schedule.category || 'HABIT', [['STUDY', '学习'], ['LIFE', '生活'], ['SPORT', '运动'], ['HABIT', '习惯']])}</label>
-          <label class="wide"><span>说明</span><input name="description" value="${escapeHtml(task.description || '')}" placeholder="给孩子看的简短说明" /></label>
+          <label class="wide"><span>说明</span><input name="description" value="${escapeHtml(task.description || '')}" placeholder="给宝贝看的简短说明" /></label>
           <div class="schedule-type-row wide">
             <div>
               <div class="schedule-title">任务类型</div>
@@ -1797,7 +1976,7 @@ function renderChildModal(state) {
     <div class="modal-backdrop">
       <section class="modal">
         <div class="modal-head">
-          <div><h2>${child.id ? '修改孩子档案' : '新增孩子档案'}</h2><p>维护孩子昵称、生日和备注。</p></div>
+          <div><h2>${child.id ? '修改宝贝档案' : '新增宝贝档案'}</h2><p>维护宝贝昵称、生日和备注。</p></div>
           <button class="icon-btn" type="button" data-action="close-child-modal">×</button>
         </div>
         <form class="modal-form" data-form="child" autocomplete="off">
@@ -1805,21 +1984,21 @@ function renderChildModal(state) {
           <div class="account-summary-card wide">
             ${renderAvatarUploadControl({
               src: childAvatarSrc,
-              fallback: child.nickname || '孩',
+              fallback: child.nickname || '宝',
               scope: 'child',
               childId: child.id || '',
               previewKey: 'child',
             })}
             <div class="account-summary-copy">
-              <strong>${escapeHtml(child.nickname || '未命名孩子')}</strong>
+              <strong>${escapeHtml(child.nickname || '未命名宝贝')}</strong>
               <span>${escapeHtml(child.remark || '点击头像更换照片')}</span>
               <small>照片会调整并压缩后存入数据库</small>
             </div>
           </div>
-          <label><span>孩子昵称</span><input name="nickname" value="${escapeHtml(child.nickname || '')}" placeholder="例如：小星" /></label>
+          <label><span>宝贝昵称</span><input name="nickname" value="${escapeHtml(child.nickname || '')}" placeholder="例如：小星" /></label>
           <label><span>性别</span>${renderSelect('gender', child.gender || 'UNKNOWN', [['UNKNOWN', '未设置'], ['MALE', '男孩'], ['FEMALE', '女孩']])}</label>
           ${renderChineseDatePicker('birthday', child.birthday || '')}
-          <label class="wide"><span>备注</span><input name="remark" value="${escapeHtml(child.remark || '')}" placeholder="孩子偏好、阶段目标等" /></label>
+          <label class="wide"><span>备注</span><input name="remark" value="${escapeHtml(child.remark || '')}" placeholder="宝贝偏好、阶段目标等" /></label>
           <label class="switch-field wide">
             <input type="checkbox" name="createChildAccount" value="true" ${createAccount ? 'checked' : ''} />
             <span>创建子账户</span>
@@ -1987,7 +2166,7 @@ function renderPointCurrencyModal(state) {
     <div class="modal-backdrop">
       <section class="modal">
         <div class="modal-head">
-          <div><h2>${currency.id ? '修改币值' : '新增币值'}</h2><p>配置孩子看到的积分图标、颜色和兑换比例。</p></div>
+          <div><h2>${currency.id ? '修改币值' : '新增币值'}</h2><p>配置宝贝看到的积分图标、颜色和兑换比例。</p></div>
           <button class="icon-btn" type="button" data-action="close-currency-modal">×</button>
         </div>
         <form class="modal-form" data-form="point-currency">
@@ -2144,8 +2323,8 @@ function calendarEventStatusText(event) {
   }
   if (event.kind === 'rewards') {
     return event.status === 'APPROVED'
-      ? fulfillmentStatusName(event.fulfillmentStatus)
-      : event.status === 'REQUESTED' ? '待确认' : statusName(event.status)
+      ? `${rewardMainFlowName(event.status, event.fulfillmentStatus)} · ${branchStatusName(event.branchStatus)}`
+      : rewardMainFlowName(event.status, event.fulfillmentStatus)
   }
   if (event.status === 'APPROVED') {
     return `已完成 +${event.scoreAwarded || event.basePoints || 0} ${pointName(event.pointType)}`
@@ -2156,6 +2335,9 @@ function calendarEventStatusText(event) {
 }
 
 function filterCalendarEventsByKind(state, events) {
+  if (state.currentView === 'reward-calendar') {
+    return events.filter((event) => event.kind === 'rewards')
+  }
   const kind = state.calendarEventKind || 'tasks'
   return events.filter((event) => event.kind === kind)
 }

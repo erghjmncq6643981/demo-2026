@@ -158,6 +158,19 @@ public final class MotivationConstants {
         }
     }
 
+    public static final class RewardBranchStatus {
+        public static final String PENDING = MotivationEnums.RewardBranchStatus.PENDING.code();
+        public static final String PURCHASE_ORDERED = MotivationEnums.RewardBranchStatus.PURCHASE_ORDERED.code();
+        public static final String PURCHASE_SHIPPING = MotivationEnums.RewardBranchStatus.PURCHASE_SHIPPING.code();
+        public static final String PURCHASE_ARRIVED = MotivationEnums.RewardBranchStatus.PURCHASE_ARRIVED.code();
+        public static final String SCHEDULED = MotivationEnums.RewardBranchStatus.SCHEDULED.code();
+        public static final String IN_PROGRESS = MotivationEnums.RewardBranchStatus.IN_PROGRESS.code();
+        public static final String COMPLETED = MotivationEnums.RewardBranchStatus.COMPLETED.code();
+
+        private RewardBranchStatus() {
+        }
+    }
+
     public static final class RewardExchangeStatus {
         public static final String REQUESTED = MotivationEnums.RewardExchangeStatus.REQUESTED.code();
         public static final String APPROVED = MotivationEnums.RewardExchangeStatus.APPROVED.code();

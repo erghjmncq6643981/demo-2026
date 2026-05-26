@@ -337,6 +337,36 @@ public final class MotivationEnums {
         }
     }
 
+    public enum RewardBranchStatus implements DescribedEnum {
+        PENDING("PENDING", "待处理"),
+        PURCHASE_ORDERED("PURCHASE_ORDERED", "家长已下单"),
+        PURCHASE_SHIPPING("PURCHASE_SHIPPING", "奖励运输中"),
+        PURCHASE_ARRIVED("PURCHASE_ARRIVED", "奖励已到货"),
+        SCHEDULED("SCHEDULED", "已加入日程"),
+        IN_PROGRESS("IN_PROGRESS", "奖励进行中"),
+        COMPLETED("COMPLETED", "已完成");
+
+        @EnumValue
+        private final String code;
+        private final String description;
+
+        RewardBranchStatus(String code, String description) {
+            this.code = code;
+            this.description = description;
+        }
+
+        @Override
+        @JsonValue
+        public String code() {
+            return code;
+        }
+
+        @Override
+        public String description() {
+            return description;
+        }
+    }
+
     public enum RewardExchangeStatus implements DescribedEnum {
         REQUESTED("REQUESTED", "待确认"),
         APPROVED("APPROVED", "已通过"),

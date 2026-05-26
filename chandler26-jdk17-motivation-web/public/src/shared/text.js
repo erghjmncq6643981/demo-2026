@@ -64,13 +64,35 @@ export function statusName(status) {
 
 export function fulfillmentStatusName(status) {
   const names = {
-    PENDING: '待实现',
-    SCHEDULED: '已加入日程',
-    IN_PROGRESS: '待实现',
-    COMPLETED: '已实现',
-    CONFIRMED: '已确认',
+    PENDING: '待履约',
+    SCHEDULED: '履约中',
+    IN_PROGRESS: '履约中',
+    COMPLETED: '待宝贝确认',
+    CONFIRMED: '宝贝已确认',
   }
-  return names[status] || '待实现'
+  return names[status] || '待履约'
+}
+
+export function branchStatusName(status) {
+  const names = {
+    PENDING: '待处理',
+    PURCHASE_ORDERED: '家长已下单',
+    PURCHASE_SHIPPING: '奖励运输中',
+    PURCHASE_ARRIVED: '奖励已到货',
+    SCHEDULED: '已加入日程',
+    IN_PROGRESS: '奖励进行中',
+    COMPLETED: '已完成',
+  }
+  return names[status] || '待处理'
+}
+
+export function rewardMainFlowName(exchangeStatus, fulfillmentStatus) {
+  if (exchangeStatus === 'REQUESTED') return '宝贝已申请'
+  if (exchangeStatus === 'REJECTED') return '家长已拒绝'
+  if (exchangeStatus === 'COMPLETED' || fulfillmentStatus === 'CONFIRMED') return '宝贝已确认'
+  if (exchangeStatus === 'APPROVED' && fulfillmentStatus === 'COMPLETED') return '等待宝贝确认'
+  if (exchangeStatus === 'APPROVED') return '家长已确认，履约中'
+  return statusName(exchangeStatus)
 }
 
 export function clamp(value, min, max) {

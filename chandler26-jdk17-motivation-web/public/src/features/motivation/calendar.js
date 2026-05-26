@@ -2,7 +2,15 @@ import { escapeHtml, formatDate, monthTitle, pointIcon, statusName } from '/src/
 
 const weekLabels = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun']
 
-export function renderCalendar({ monthDate, events, viewMode = 'month', eventKind = 'tasks', systemConfig = {} }) {
+export function renderCalendar({
+  monthDate,
+  events,
+  viewMode = 'month',
+  eventKind = 'tasks',
+  systemConfig = {},
+  titleLabel = '任务日历',
+  showKindToolbar = true,
+}) {
   const isWeekView = viewMode === 'week'
   const dateSize = clampNumber(systemConfig.calendarDateSize, 14, 28, 20)
   const dateColor = isHexColor(systemConfig.calendarDateColor) ? systemConfig.calendarDateColor : '#1f2937'
@@ -36,7 +44,7 @@ export function renderCalendar({ monthDate, events, viewMode = 'month', eventKin
       <div class="calendar-header">
         <div class="calendar-title">
           <strong>${isWeekView ? weekTitle(monthDate) : monthTitle(monthDate)}</strong>
-          <span>任务日历 / Notion 风格${isWeekView ? '周' : '月'}视图</span>
+          <span>${escapeHtml(titleLabel)} / Notion 风格${isWeekView ? '周' : '月'}视图</span>
         </div>
         <div class="nav">
           <button class="icon-btn" type="button" data-action="calendar-prev" aria-label="${isWeekView ? '上一周' : '上个月'}">‹</button>
@@ -49,11 +57,11 @@ export function renderCalendar({ monthDate, events, viewMode = 'month', eventKin
           <button class="btn ${isWeekView ? '' : 'primary'}" type="button" data-calendar-view-mode="month">月视图</button>
           <button class="btn ${isWeekView ? 'primary' : ''}" type="button" data-calendar-view-mode="week">周视图</button>
         </div>
-        <div class="calendar-toolbar-group calendar-kind-group">
+        ${showKindToolbar ? `<div class="calendar-toolbar-group calendar-kind-group">
           <button class="btn ${eventKind === 'tasks' ? 'primary' : ''}" type="button" data-calendar-event-kind="tasks">任务</button>
           <button class="btn ${eventKind === 'points' ? 'primary' : ''}" type="button" data-calendar-event-kind="points">积分</button>
           <button class="btn ${eventKind === 'rewards' ? 'primary' : ''}" type="button" data-calendar-event-kind="rewards">奖励</button>
-        </div>
+        </div>` : ''}
       </div>
       <div class="calendar-grid ${isWeekView ? 'week-view' : ''}">
         ${weekLabels.map((label) => `<div class="dow">${label}</div>`).join('')}

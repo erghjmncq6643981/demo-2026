@@ -165,9 +165,9 @@ export const demoState = {
     { id: 503, pointType: 'STAR', changeAmount: -80, sourceName: '积木礼物', reason: '奖励兑换扣减', eventTime: `${formatDate(today)}T20:00:00` },
   ],
   exchanges: [
-    { id: 601, rewardNameSnapshot: '积木礼物', rewardIconSnapshot: '🎁', rewardColorSnapshot: '#ff9f43', requiredPointType: 'STAR', requiredPointsSnapshot: 80, status: 'REQUESTED', fulfillmentStatus: 'PENDING', requestedAt: `${formatDate(today)}T20:00:00` },
-    { id: 602, rewardNameSnapshot: '周末冰淇淋', rewardIconSnapshot: '🍦', rewardColorSnapshot: '#34c759', requiredPointType: 'FLOWER', requiredPointsSnapshot: 40, status: 'APPROVED', fulfillmentStatus: 'COMPLETED', requestedAt: `${formatDate(today)}T10:00:00`, reviewedAt: `${formatDate(today)}T10:10:00`, fulfillmentUpdatedAt: `${formatDate(today)}T10:20:00` },
-    { id: 603, rewardNameSnapshot: '皇冠特权', rewardIconSnapshot: '♛', rewardColorSnapshot: '#6c63ff', requiredPointType: 'CROWN', requiredPointsSnapshot: 1, status: 'COMPLETED', fulfillmentStatus: 'CONFIRMED', requestedAt: `${formatDate(today)}T09:00:00`, reviewedAt: `${formatDate(today)}T09:05:00`, confirmedAt: `${formatDate(today)}T09:30:00` },
+    { id: 601, rewardId: 401, rewardNameSnapshot: '积木礼物', rewardIconSnapshot: '🎁', rewardColorSnapshot: '#ff9f43', requiredPointType: 'STAR', requiredPointsSnapshot: 80, status: 'REQUESTED', fulfillmentStatus: 'PENDING', branchStatus: 'PENDING', requestedAt: `${formatDate(today)}T20:00:00` },
+    { id: 602, rewardId: 402, rewardNameSnapshot: '周末冰淇淋', rewardIconSnapshot: '🍦', rewardColorSnapshot: '#34c759', requiredPointType: 'FLOWER', requiredPointsSnapshot: 40, status: 'APPROVED', fulfillmentStatus: 'IN_PROGRESS', branchStatus: 'IN_PROGRESS', requestedAt: `${formatDate(today)}T10:00:00`, reviewedAt: `${formatDate(today)}T10:10:00`, fulfillmentUpdatedAt: `${formatDate(today)}T10:20:00` },
+    { id: 603, rewardId: 403, rewardNameSnapshot: '皇冠特权', rewardIconSnapshot: '♛', rewardColorSnapshot: '#6c63ff', requiredPointType: 'CROWN', requiredPointsSnapshot: 1, status: 'APPROVED', fulfillmentStatus: 'SCHEDULED', branchStatus: 'SCHEDULED', scheduleStartDate: formatDate(today), scheduleEndDate: formatDate(new Date(today.getFullYear(), today.getMonth(), today.getDate() + 2)), requestedAt: `${formatDate(today)}T09:00:00`, reviewedAt: `${formatDate(today)}T09:05:00`, fulfillmentUpdatedAt: `${formatDate(today)}T09:30:00` },
   ],
   calendarEvents: [],
 }

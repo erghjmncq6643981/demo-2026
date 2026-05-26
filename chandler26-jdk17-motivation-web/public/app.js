@@ -1,7 +1,7 @@
 import { api, getToken, setToken } from '/src/shared/api.js'
 import { buildDemoCalendar, demoState } from '/src/features/motivation/demo-data.js'
 import { renderApp } from '/src/features/motivation/render.js'
-import { formatDate, fulfillmentStatusName, pointName } from '/src/shared/text.js'
+import { branchStatusName, formatDate, pointName } from '/src/shared/text.js'
 
 const SIDEBAR_KEY = 'motivation.sidebarCollapsed'
 const ACCOUNT_DRAFT_KEY = 'motivation.accountDraft'
@@ -498,7 +498,7 @@ function bindEvents() {
     button.addEventListener('click', () => handleRewardExchangeReview(button.dataset.exchangeId, false))
   })
   document.querySelectorAll('[data-action="update-fulfillment"]').forEach((button) => {
-    button.addEventListener('click', () => handleRewardFulfillmentUpdate(button.dataset.exchangeId, button.dataset.fulfillmentStatus))
+    button.addEventListener('click', () => handleRewardFulfillmentUpdate(button.dataset.exchangeId, button.dataset.branchStatus, button))
   })
   document.querySelectorAll('[data-action="confirm-reward-ticket"]').forEach((button) => {
     button.addEventListener('click', () => handleRewardTicketConfirm(button.dataset.exchangeId))
@@ -1014,7 +1014,7 @@ async function loadInitialData(showToast = false, options = {}) {
         return
       }
       if (isChildUser()) {
-        if (showToast) toast('当前孩子账号还没有绑定孩子档案')
+        if (showToast) toast('当前宝贝账号还没有绑定宝贝档案')
         render()
         return
       }
@@ -1150,7 +1150,7 @@ async function ensureStarterData() {
     await api.createChild({
       nickname: '小星',
       gender: 'UNKNOWN',
-      remark: '1.0 默认孩子档案',
+      remark: '1.0 默认宝贝档案',
     })
     children = await api.children()
   }
@@ -1346,6 +1346,8 @@ async function handleExchangeReward(rewardId, paymentPointType = '') {
           requiredPointsSnapshot: reward.requiredPoints,
           status: 'REQUESTED',
           fulfillmentStatus: 'PENDING',
+          branchStatus: 'PENDING',
+          fulfillmentType: reward.fulfillmentType || 'INVENTORY_DEDUCT',
           requestedAt: new Date().toISOString(),
           remark: '演示兑换申请',
         },
@@ -1385,7 +1387,7 @@ async function handleRewardExchangeReview(exchangeId, approved) {
     action: async () => {
       if (state.offline) {
         state.exchanges = state.exchanges.map((item) => String(item.id) === String(exchangeId)
-          ? { ...item, status: approved ? 'APPROVED' : 'REJECTED', fulfillmentStatus: approved ? 'PENDING' : item.fulfillmentStatus, reviewedAt: new Date().toISOString() }
+          ? { ...item, status: approved ? 'APPROVED' : 'REJECTED', fulfillmentStatus: approved ? 'PENDING' : item.fulfillmentStatus, branchStatus: approved ? 'PENDING' : item.branchStatus, reviewedAt: new Date().toISOString() }
           : item)
         if (!approved) {
           state.balances = upsertBalance(state.balances, exchange.requiredPointType, Number(exchange.requiredPointsSnapshot || 0))
@@ -1405,10 +1407,17 @@ async function handleRewardExchangeReview(exchangeId, approved) {
   render()
 }
 
-async function handleRewardFulfillmentUpdate(exchangeId, fulfillmentStatus = 'PENDING') {
+async function handleRewardFulfillmentUpdate(exchangeId, branchStatus = 'PENDING', sourceButton = null) {
   const exchange = state.exchanges.find((item) => String(item.id) === String(exchangeId))
   if (!exchange) return
-  const label = fulfillmentStatusName(fulfillmentStatus)
+  const label = branchStatusName(branchStatus)
+  const payload = {
+    branchStatus,
+    expectedArrivalDate: readClosestInputValue(sourceButton, 'expectedArrivalDate'),
+    scheduleStartDate: readClosestInputValue(sourceButton, 'scheduleStartDate'),
+    scheduleEndDate: readClosestInputValue(sourceButton, 'scheduleEndDate'),
+    remark: `更新为${label}`,
+  }
   state.confirmDialog = {
     title: '更新礼物状态',
     message: `把「${exchange.rewardNameSnapshot}」更新为「${label}」？`,
@@ -1419,20 +1428,36 @@ async function handleRewardFulfillmentUpdate(exchangeId, fulfillmentStatus = 'PE
         state.exchanges = state.exchanges.map((item) => String(item.id) === String(exchangeId)
           ? {
               ...item,
-              fulfillmentStatus,
+              branchStatus,
+              fulfillmentStatus: deriveFulfillmentStatus(branchStatus),
+              expectedArrivalDate: payload.expectedArrivalDate || item.expectedArrivalDate,
+              scheduleStartDate: payload.scheduleStartDate || item.scheduleStartDate,
+              scheduleEndDate: payload.scheduleEndDate || item.scheduleEndDate,
               fulfillmentUpdatedAt: new Date().toISOString(),
-              completedAt: fulfillmentStatus === 'COMPLETED' ? new Date().toISOString() : item.completedAt,
+              completedAt: deriveFulfillmentStatus(branchStatus) === 'COMPLETED' ? new Date().toISOString() : item.completedAt,
             }
           : item)
         toast(`演示：已更新为${label}`)
         return
       }
-      await api.updateRewardFulfillment(exchangeId, { fulfillmentStatus, remark: `更新为${label}` })
+      await api.updateRewardFulfillment(exchangeId, payload)
       await loadCoreData()
       toast(`已更新为${label}`)
     },
   }
   render()
+}
+
+function readClosestInputValue(sourceButton, name) {
+  if (!sourceButton || !name) return ''
+  return sourceButton.closest('.reward-flow-controls, .todo-item, .calendar-detail')?.querySelector(`[name="${name}"]`)?.value || ''
+}
+
+function deriveFulfillmentStatus(branchStatus) {
+  if (branchStatus === 'SCHEDULED') return 'SCHEDULED'
+  if (branchStatus === 'PURCHASE_ARRIVED' || branchStatus === 'COMPLETED') return 'COMPLETED'
+  if (branchStatus === 'PENDING') return 'PENDING'
+  return 'IN_PROGRESS'
 }
 
 async function handleRewardTicketConfirm(exchangeId) {
@@ -1450,7 +1475,7 @@ async function handleRewardTicketConfirm(exchangeId) {
     action: async () => {
       if (state.offline) {
         state.exchanges = state.exchanges.map((item) => String(item.id) === String(exchangeId)
-          ? { ...item, status: 'COMPLETED', fulfillmentStatus: 'CONFIRMED', confirmedAt: new Date().toISOString(), completedAt: new Date().toISOString() }
+          ? { ...item, status: 'COMPLETED', fulfillmentStatus: 'CONFIRMED', branchStatus: 'COMPLETED', confirmedAt: new Date().toISOString(), completedAt: new Date().toISOString() }
           : item)
         toast('演示：礼物券已确认')
         return
@@ -1707,7 +1732,7 @@ function closeChildModal() {
 
 function openGoalModal(goalId = null) {
   if (!state.selectedChildId) {
-    toast('请先新增孩子档案')
+    toast('请先新增宝贝档案')
     return
   }
   state.editingGoal = goalId ? state.goals.find((goal) => String(goal.id) === String(goalId)) || null : null
@@ -1723,7 +1748,7 @@ function closeGoalModal() {
 
 function openPointAdjustModal() {
   if (!state.selectedChildId) {
-    toast('请先新增孩子档案')
+    toast('请先新增宝贝档案')
     return
   }
   state.pointAdjustModalOpen = true
@@ -1737,7 +1762,7 @@ function closePointAdjustModal() {
 
 function openBalanceModal(pointType = 'STAR') {
   if (!state.selectedChildId) {
-    toast('请先新增孩子档案')
+    toast('请先新增宝贝档案')
     return
   }
   state.selectedBalancePointType = pointType || 'STAR'
@@ -2037,7 +2062,7 @@ async function submitAvatarFileForAccount(file) {
 
 async function submitAvatarFileForChild(childId, file) {
   if (!childId) {
-    toast('请选择孩子')
+    toast('请选择宝贝')
     return
   }
   if (state.offline) {
@@ -2076,7 +2101,7 @@ function goRewardStore() {
 
 function openTaskModal(taskId = null, options = {}) {
   if (!state.selectedChildId) {
-    toast('请先新增孩子档案')
+    toast('请先新增宝贝档案')
     return
   }
   if (!state.goals.length) {
@@ -2098,7 +2123,7 @@ function closeTaskModal() {
 
 function openRewardModal(rewardId = null) {
   if (!state.selectedChildId) {
-    toast('请先新增孩子档案')
+    toast('请先新增宝贝档案')
     return
   }
   state.editingReward = rewardId ? state.rewards.find((reward) => String(reward.id) === String(rewardId)) || null : null
@@ -2183,7 +2208,7 @@ function syncCheckInRewardDom() {
 
 function openPointCurrencyModal(currencyId = null) {
   if (!state.selectedChildId) {
-    toast('请先新增孩子档案')
+    toast('请先新增宝贝档案')
     return
   }
   state.editingPointCurrency = currencyId ? state.pointCurrencies.find((currency) => String(currency.id) === String(currencyId)) || null : null
@@ -2238,14 +2263,14 @@ function isManagementUser() {
 }
 
 function normalizeViewForRole(view) {
-  return ['profile', 'calendar', 'store'].includes(view) ? view : 'profile'
+  return ['profile', 'calendar', 'reward-calendar', 'store'].includes(view) ? view : 'profile'
 }
 
 function normalizeProfileSubViewForRole(subView) {
   if (!isManagementUser()) {
     return 'home'
   }
-  return ['home', 'account', 'children', 'goals', 'tasks', 'rewards', 'currencies', 'system-config'].includes(subView) ? subView : 'home'
+  return ['home', 'account', 'children', 'growth', 'rewards', 'currencies', 'system-config'].includes(subView) ? subView : 'home'
 }
 
 function applyRoleLanding() {
@@ -2434,11 +2459,11 @@ async function handleChildSubmit(event) {
     childPassword: String(formData.get('childPassword') || '').trim(),
   }
   if (!payload.nickname) {
-    toast('请填写孩子昵称')
+    toast('请填写宝贝昵称')
     return
   }
   if (payload.createChildAccount && (!payload.childUsername || !payload.childPassword)) {
-    toast('请填写孩子账号和密码')
+    toast('请填写宝贝账号和密码')
     return
   }
   if (pendingAvatarFile instanceof File && pendingAvatarFile.size > AVATAR_MAX_BYTES) {
@@ -2464,7 +2489,7 @@ async function handleChildSubmit(event) {
     state.editingChild = null
     state.childAccountDraftEnabled = false
     clearAvatarEditorDraft({ scope: 'child' })
-    toast(childId ? '演示：孩子档案已修改' : '演示：孩子档案已创建')
+    toast(childId ? '演示：宝贝档案已修改' : '演示：宝贝档案已创建')
     render()
     return
   }
@@ -2485,7 +2510,7 @@ async function handleChildSubmit(event) {
     state.childAccountDraftEnabled = false
     clearAvatarEditorDraft({ scope: 'child' })
     await loadInitialData(false)
-    toast(childId ? '孩子档案已修改' : '孩子档案已创建')
+    toast(childId ? '宝贝档案已修改' : '宝贝档案已创建')
   } catch (error) {
     toast(error.message)
     render()
@@ -2512,7 +2537,7 @@ async function handleGoalSubmit(event) {
     return
   }
   if (!payload.childId) {
-    toast('请先选择孩子档案')
+    toast('请先选择宝贝档案')
     return
   }
   if (state.offline) {
@@ -2660,7 +2685,7 @@ function readControlValue(selector) {
 function getDeleteTarget(type, id) {
   const targetMap = {
     child: {
-      label: '孩子档案',
+      label: '宝贝档案',
       item: state.children.find((child) => String(child.id) === String(id)),
       name: (item) => item.nickname,
     },
@@ -2706,7 +2731,7 @@ async function deleteResource(type, id) {
       state.selectedChild = null
     }
     await loadInitialData(false, { skipStarterData: true })
-    toast('孩子档案已删除')
+    toast('宝贝档案已删除')
     return
   }
   if (type === 'goal') {
