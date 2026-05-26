@@ -58,12 +58,12 @@ function profileSubnavItems(state) {
   return [
     ['home', '首页'],
     ['account', '账号信息'],
-    ['system-config', '系统配置'],
     ['children', '孩子档案'],
     ['goals', '成长目标'],
     ['tasks', '任务管理'],
     ['rewards', '奖励管理'],
     ['currencies', '币值管理'],
+    ['system-config', '系统配置'],
   ]
 }
 
@@ -92,8 +92,56 @@ function renderAvatarUploadControl({ src, fallback, scope, childId = '', preview
     <label class="avatar-change-button" title="点击更换头像" aria-label="点击更换头像">
       ${renderAvatarImage(src, fallback, 'account-avatar-preview', previewKey)}
       <input class="avatar-file-input" type="file" accept="image/*" data-avatar-file="${escapeHtml(scope)}" data-child-id="${escapeHtml(childId)}" />
-      <span class="avatar-change-mask">更换</span>
+      <span class="avatar-change-mask" aria-hidden="true">📷</span>
     </label>
+  `
+}
+
+function parseDateKey(value) {
+  const match = String(value || '').match(/^(\d{4})-(\d{2})-(\d{2})/)
+  if (!match) return null
+  const date = new Date(Number(match[1]), Number(match[2]) - 1, Number(match[3]))
+  return Number.isNaN(date.getTime()) ? null : date
+}
+
+function monthKey(date) {
+  const value = date instanceof Date ? date : new Date()
+  return `${value.getFullYear()}-${String(value.getMonth() + 1).padStart(2, '0')}`
+}
+
+function chineseDateLabel(value) {
+  const date = parseDateKey(value)
+  if (!date) return '请选择生日'
+  return `${date.getFullYear()}年${date.getMonth() + 1}月${date.getDate()}日`
+}
+
+function renderChineseDatePicker(name, value) {
+  const selectedDate = parseDateKey(value)
+  const currentMonth = monthKey(selectedDate || new Date())
+  return `
+    <div class="date-picker-field" data-date-picker data-current-month="${escapeHtml(currentMonth)}" data-selected-date="${escapeHtml(value || '')}">
+      <span class="field-label">生日</span>
+      <input type="hidden" name="${escapeHtml(name)}" value="${escapeHtml(value || '')}" data-date-picker-input />
+      <button class="date-picker-trigger" type="button" data-action="toggle-date-picker" aria-label="选择生日">
+        <span data-date-picker-label class="${value ? '' : 'placeholder'}">${escapeHtml(chineseDateLabel(value))}</span>
+        <span class="date-picker-icon" aria-hidden="true">日</span>
+      </button>
+      <div class="date-picker-popover">
+        <div class="date-picker-head">
+          <button class="date-picker-nav" type="button" data-action="date-picker-prev" aria-label="上个月">‹</button>
+          <strong data-date-picker-title>${escapeHtml(currentMonth.replace('-', '年'))}月</strong>
+          <button class="date-picker-nav" type="button" data-action="date-picker-next" aria-label="下个月">›</button>
+        </div>
+        <div class="date-picker-weekdays">
+          ${['一', '二', '三', '四', '五', '六', '日'].map((day) => `<span>${day}</span>`).join('')}
+        </div>
+        <div class="date-picker-grid" data-date-picker-grid></div>
+        <div class="date-picker-foot">
+          <button class="small-btn" type="button" data-action="date-picker-clear">清空</button>
+          <button class="small-btn primary-lite" type="button" data-action="date-picker-today">今天</button>
+        </div>
+      </div>
+    </div>
   `
 }
 
@@ -484,28 +532,73 @@ function renderProfileView(state) {
 
 function renderAccountSummary(state) {
   const user = state.user || {}
+  const avatarSrc = state.avatarObjectUrls?.account || ''
   return `
-    <div class="section-inline-head">
-      <h2>账号信息</h2>
-      <div class="section-actions">
-        <button class="btn primary" type="button" data-action="open-account-modal">修改账号信息</button>
-      </div>
-    </div>
-    <div class="account-summary-grid">
-      <article class="info-card">
-        <span>账号</span>
-        <strong>${escapeHtml(user.username || '未设置')}</strong>
-      </article>
-      <article class="info-card">
-        <span>昵称</span>
-        <strong>${escapeHtml(user.nickname || '未设置')}</strong>
-      </article>
-      <article class="info-card">
-        <span>头像</span>
-        <strong class="avatar-status">${state.avatarObjectUrls?.account ? renderAvatarImage(state.avatarObjectUrls.account, '账', 'avatar-status', 'account-summary') : escapeHtml(user.avatarUrl ? '已设置' : '未设置')}</strong>
-      </article>
+    <div class="account-simple-layout">
+      <section class="account-simple-card">
+        ${renderAvatarUploadControl({
+          src: avatarSrc,
+          fallback: user.nickname || user.username || '账',
+          scope: 'account',
+          previewKey: 'account-summary',
+        })}
+        <div class="account-simple-copy">
+          <span>当前账号</span>
+          <strong>${escapeHtml(user.nickname || user.username || '未命名账号')}</strong>
+          <p>${escapeHtml(user.username || '未设置账号')}</p>
+        </div>
+        <button class="small-btn primary-lite" type="button" data-action="open-account-modal">修改</button>
+      </section>
+      <section class="activity-log-panel">
+        <div class="section-inline-head">
+          <h2>孩子成长日志</h2>
+          <span>${(state.activityLogs || []).length} 条</span>
+        </div>
+        ${renderChildActivityLogs(state)}
+      </section>
     </div>
   `
+}
+
+function renderChildActivityLogs(state) {
+  const logs = state.activityLogs || []
+  return `
+    <div class="activity-timeline">
+      ${logs.map((log) => `
+        <article class="activity-item">
+          <span class="activity-dot ${escapeHtml(String(log.logType || '').toLowerCase())}"></span>
+          <div>
+            <strong>${escapeHtml(activityLogTitle(log))}</strong>
+            <p>${escapeHtml(activityLogDetail(log))}</p>
+            <small>${escapeHtml(formatActivityTime(log.createTime))}</small>
+          </div>
+        </article>
+      `).join('') || '<div class="empty compact-empty">暂无孩子活动日志</div>'}
+    </div>
+  `
+}
+
+function activityLogTitle(log) {
+  return log.childNickname ? `${log.childNickname}宝贝` : '孩子动态'
+}
+
+function activityLogDetail(log) {
+  const detail = String(log.detail || log.title || '').trim()
+  if (!detail) return '记录了一次成长活动'
+  return detail
+    .replace(/^用户「([^」]+)」于\s*\d{4}-\d{2}-\d{2}\s+\d{2}:\d{2}:\d{2}\s*/, '')
+    .replace(/^孩子「\d+」的/, '孩子的')
+}
+
+function formatActivityTime(value) {
+  if (!value) return ''
+  const date = new Date(value)
+  if (Number.isNaN(date.getTime())) return String(value).replace('T', ' ').slice(0, 16)
+  const month = String(date.getMonth() + 1).padStart(2, '0')
+  const day = String(date.getDate()).padStart(2, '0')
+  const hour = String(date.getHours()).padStart(2, '0')
+  const minute = String(date.getMinutes()).padStart(2, '0')
+  return `${month}-${day} ${hour}:${minute}`
 }
 
 function renderSystemConfigView(state) {
@@ -634,7 +727,7 @@ function renderChildRow(state, child, selectedChildId) {
       <span>${escapeHtml(child.birthday || '未设置')}</span>
       <span>${statusName(child.status)}</span>
       <div class="row-actions task-row-actions">
-        <button class="small-btn" type="button" data-action="select-child" data-child-id="${child.id}" ${selected ? 'disabled' : ''}>${selected ? '当前' : '选择'}</button>
+        <button class="small-btn child-watch-btn ${selected ? 'active' : ''}" type="button" data-action="select-child" data-child-id="${child.id}" ${selected ? 'disabled' : ''}>${selected ? '观察中' : '查看'}</button>
         <button class="row-icon-btn" type="button" data-action="edit-child" data-child-id="${child.id}" aria-label="修改孩子档案" title="修改孩子档案">${renderActionIcon('edit')}</button>
         <button class="row-icon-btn danger" type="button" data-action="delete-child" data-child-id="${child.id}" aria-label="删除孩子档案" title="删除孩子档案">${renderActionIcon('delete')}</button>
       </div>
@@ -1725,7 +1818,7 @@ function renderChildModal(state) {
           </div>
           <label><span>孩子昵称</span><input name="nickname" value="${escapeHtml(child.nickname || '')}" placeholder="例如：小星" /></label>
           <label><span>性别</span>${renderSelect('gender', child.gender || 'UNKNOWN', [['UNKNOWN', '未设置'], ['MALE', '男孩'], ['FEMALE', '女孩']])}</label>
-          <label><span>生日</span><input type="date" name="birthday" value="${escapeHtml(child.birthday || '')}" /></label>
+          ${renderChineseDatePicker('birthday', child.birthday || '')}
           <label class="wide"><span>备注</span><input name="remark" value="${escapeHtml(child.remark || '')}" placeholder="孩子偏好、阶段目标等" /></label>
           <label class="switch-field wide">
             <input type="checkbox" name="createChildAccount" value="true" ${createAccount ? 'checked' : ''} />

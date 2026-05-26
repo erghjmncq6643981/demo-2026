@@ -23,6 +23,7 @@ public final class MotivationConstants {
         public static final int MIN_LIMIT = 1;
         public static final int LEDGER_MAX_LIMIT = 200;
         public static final int REWARD_EXCHANGE_MAX_LIMIT = 100;
+        public static final int ACTIVITY_LOG_MAX_LIMIT = 50;
 
         private Pagination() {
         }

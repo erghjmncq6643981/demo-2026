@@ -105,6 +105,14 @@ export const api = {
     formData.append('file', file)
     return requestForm('/auth/profile/avatar', formData)
   },
+  childActivityLogs: (childId = '', limit = 20) => {
+    const params = new URLSearchParams()
+    if (childId) {
+      params.set('childId', childId)
+    }
+    params.set('limit', String(limit))
+    return request(`/activity-logs/children?${params.toString()}`)
+  },
   avatarBlob: (avatarUrl) => requestBlob(avatarUrl),
   children: () => request('/children'),
   createChild: (body) => request('/children', { method: 'POST', body }),

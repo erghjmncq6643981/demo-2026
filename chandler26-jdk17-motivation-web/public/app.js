@@ -112,6 +112,7 @@ const state = {
   },
   pointExchangeRule: demoState.pointExchangeRule || { starWeight: 1, flowerWeight: 10, crownWeight: 100 },
   pointCurrencies: normalizePointCurrencies(demoState.pointCurrencies, demoState.pointExchangeRule),
+  activityLogs: [],
   connectionMessage: '正在尝试连接后端...',
   toast: '',
 }
@@ -450,6 +451,7 @@ function bindEvents() {
       if (childPassword) childPassword.value = ''
     }
   })
+  bindDatePickers()
   bindTaskModalControls()
   bindPointExchangePreview()
   document.querySelectorAll('[data-action="close-confirm-modal"]').forEach((button) => {
@@ -670,6 +672,138 @@ function bindBlockDragSelection(containerSelector, inputSelector) {
       customSelection = false
     })
   })
+}
+
+let datePickerOutsideBound = false
+
+function bindDatePickers() {
+  document.querySelectorAll('[data-date-picker]').forEach((picker) => {
+    renderDatePickerMonth(picker)
+    picker.querySelector('[data-action="toggle-date-picker"]')?.addEventListener('click', (event) => {
+      event.preventDefault()
+      event.stopPropagation()
+      const open = !picker.classList.contains('open')
+      closeDatePickers()
+      picker.classList.toggle('open', open)
+    })
+    picker.querySelector('[data-action="date-picker-prev"]')?.addEventListener('click', (event) => {
+      event.preventDefault()
+      stepDatePickerMonth(picker, -1)
+    })
+    picker.querySelector('[data-action="date-picker-next"]')?.addEventListener('click', (event) => {
+      event.preventDefault()
+      stepDatePickerMonth(picker, 1)
+    })
+    picker.querySelector('[data-action="date-picker-today"]')?.addEventListener('click', (event) => {
+      event.preventDefault()
+      const today = formatDate(new Date())
+      setDatePickerMonth(picker, dateFromDateKey(today) || new Date())
+      setDatePickerValue(picker, today)
+      picker.classList.remove('open')
+    })
+    picker.querySelector('[data-action="date-picker-clear"]')?.addEventListener('click', (event) => {
+      event.preventDefault()
+      setDatePickerValue(picker, '')
+      picker.classList.remove('open')
+    })
+  })
+  if (!datePickerOutsideBound) {
+    document.addEventListener('click', (event) => {
+      if (!event.target.closest('[data-date-picker]')) {
+        closeDatePickers()
+      }
+    })
+    datePickerOutsideBound = true
+  }
+}
+
+function closeDatePickers() {
+  document.querySelectorAll('[data-date-picker].open').forEach((picker) => {
+    picker.classList.remove('open')
+  })
+}
+
+function renderDatePickerMonth(picker) {
+  const grid = picker.querySelector('[data-date-picker-grid]')
+  const title = picker.querySelector('[data-date-picker-title]')
+  if (!grid) return
+  const monthDate = monthFromKey(picker.dataset.currentMonth) || new Date()
+  const selectedKey = String(picker.dataset.selectedDate || '')
+  const todayKey = formatDate(new Date())
+  const year = monthDate.getFullYear()
+  const month = monthDate.getMonth()
+  if (title) {
+    title.textContent = `${year}年${month + 1}月`
+  }
+  const firstDay = new Date(year, month, 1)
+  const daysInMonth = new Date(year, month + 1, 0).getDate()
+  const leadingBlanks = (firstDay.getDay() + 6) % 7
+  const cells = []
+  for (let index = 0; index < leadingBlanks; index += 1) {
+    cells.push('<span class="date-picker-day blank" aria-hidden="true"></span>')
+  }
+  for (let day = 1; day <= daysInMonth; day += 1) {
+    const key = formatDate(new Date(year, month, day))
+    const classes = ['date-picker-day']
+    if (key === selectedKey) classes.push('selected')
+    if (key === todayKey) classes.push('today')
+    cells.push(`<button class="${classes.join(' ')}" type="button" data-date-picker-day="${key}">${day}</button>`)
+  }
+  grid.innerHTML = cells.join('')
+  grid.querySelectorAll('[data-date-picker-day]').forEach((button) => {
+    button.addEventListener('click', (event) => {
+      event.preventDefault()
+      setDatePickerValue(picker, button.dataset.datePickerDay || '')
+      picker.classList.remove('open')
+    })
+  })
+}
+
+function stepDatePickerMonth(picker, delta) {
+  const current = monthFromKey(picker.dataset.currentMonth) || new Date()
+  setDatePickerMonth(picker, new Date(current.getFullYear(), current.getMonth() + delta, 1))
+}
+
+function setDatePickerMonth(picker, date) {
+  picker.dataset.currentMonth = `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}`
+  renderDatePickerMonth(picker)
+}
+
+function setDatePickerValue(picker, dateKey) {
+  const date = dateFromDateKey(dateKey)
+  const normalized = date ? formatDate(date) : ''
+  const input = picker.querySelector('[data-date-picker-input]')
+  const label = picker.querySelector('[data-date-picker-label]')
+  picker.dataset.selectedDate = normalized
+  if (input) {
+    input.value = normalized
+    input.dispatchEvent(new Event('change', { bubbles: true }))
+  }
+  if (label) {
+    label.textContent = formatChineseDateLabel(normalized)
+    label.classList.toggle('placeholder', !normalized)
+  }
+  renderDatePickerMonth(picker)
+}
+
+function dateFromDateKey(value) {
+  const match = String(value || '').match(/^(\d{4})-(\d{2})-(\d{2})$/)
+  if (!match) return null
+  const date = new Date(Number(match[1]), Number(match[2]) - 1, Number(match[3]))
+  return Number.isNaN(date.getTime()) ? null : date
+}
+
+function monthFromKey(value) {
+  const match = String(value || '').match(/^(\d{4})-(\d{2})$/)
+  if (!match) return null
+  const date = new Date(Number(match[1]), Number(match[2]) - 1, 1)
+  return Number.isNaN(date.getTime()) ? null : date
+}
+
+function formatChineseDateLabel(dateKey) {
+  const date = dateFromDateKey(dateKey)
+  if (!date) return '请选择生日'
+  return `${date.getFullYear()}年${date.getMonth() + 1}月${date.getDate()}日`
 }
 
 function bindPointExchangePreview() {
@@ -903,13 +1037,14 @@ async function loadCoreData() {
   if (!childId || state.offline) {
     return
   }
-  const [goals, tasks, summary, ledger, rewards, exchanges] = await Promise.all([
+  const [goals, tasks, summary, ledger, rewards, exchanges, activityLogs] = await Promise.all([
     api.goals(childId),
     api.tasks(childId),
     api.pointSummary(childId),
     api.ledger(childId),
     api.rewards(childId),
     api.rewardExchanges(childId),
+    api.childActivityLogs(childId, 20).catch(() => []),
   ])
   state.goals = goals
   state.tasks = tasks
@@ -920,6 +1055,7 @@ async function loadCoreData() {
   state.ledger = ledger
   state.rewards = rewards
   state.exchanges = exchanges
+  state.activityLogs = activityLogs
 }
 
 async function loadAvatarImages() {
@@ -2109,7 +2245,7 @@ function normalizeProfileSubViewForRole(subView) {
   if (!isManagementUser()) {
     return 'home'
   }
-  return ['home', 'account', 'system-config', 'children', 'goals', 'tasks', 'rewards', 'currencies'].includes(subView) ? subView : 'home'
+  return ['home', 'account', 'children', 'goals', 'tasks', 'rewards', 'currencies', 'system-config'].includes(subView) ? subView : 'home'
 }
 
 function applyRoleLanding() {
@@ -2630,6 +2766,7 @@ function resetChildScopedData() {
   state.ledger = []
   state.rewards = []
   state.exchanges = []
+  state.activityLogs = []
   state.pointCurrencies = normalizePointCurrencies([], state.pointExchangeRule)
   state.calendarEvents = []
   state.calendarDayModalOpen = false
