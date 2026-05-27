@@ -2250,6 +2250,9 @@ input[type="color"] { padding: 4px; }
   background: rgba(21, 27, 47, 0.38);
   backdrop-filter: blur(10px);
 }
+.checkin-layer {
+  z-index: 28;
+}
 .modal {
   width: min(720px, 100%);
   max-height: min(760px, calc(100vh - 36px));
@@ -2401,8 +2404,8 @@ input[type="color"] { padding: 4px; }
 }
 .checkin-reward-panel {
   display: grid;
-  gap: 10px;
-  padding: 12px;
+  gap: 14px;
+  padding: 14px;
   border: 1px solid color-mix(in srgb, var(--point-color) 18%, #ffffff);
   border-radius: 16px;
   background: color-mix(in srgb, var(--point-color) 7%, #ffffff);
@@ -2413,34 +2416,59 @@ input[type="color"] { padding: 4px; }
   justify-content: space-between;
   gap: 12px;
 }
-.checkin-reward-stepper {
+.checkin-reward-head strong {
+  display: block;
+  margin-top: 3px;
+  color: #1f2937;
+  font-size: 15px;
+  font-weight: 950;
+}
+.checkin-reward-head > span {
+  display: inline-flex;
+  align-items: baseline;
+  gap: 3px;
+  padding: 6px 10px;
+  border: 1px solid color-mix(in srgb, var(--point-color) 16%, #ffffff);
+  border-radius: 999px;
+  color: #64748b;
+  background: #fff;
+  font-size: 12px;
+  font-weight: 900;
+}
+.checkin-reward-head > span b {
+  color: color-mix(in srgb, var(--point-color) 78%, #111827);
+  font-size: 16px;
+}
+.checkin-reward-row {
+  display: grid;
+  grid-template-columns: 38px minmax(0, 1fr) 38px;
+  align-items: center;
+  gap: 10px;
+}
+.checkin-reward-adjust {
+  width: 38px;
+  height: 38px;
   display: inline-flex;
   align-items: center;
-  gap: 7px;
-  padding: 5px;
-  border: 1px solid color-mix(in srgb, var(--point-color) 18%, #ffffff);
-  border-radius: 14px;
+  justify-content: center;
+  border: 1px solid color-mix(in srgb, var(--point-color) 24%, #ffffff);
+  border-radius: 12px;
+  color: color-mix(in srgb, var(--point-color) 80%, #111827);
   background: #fff;
-}
-.checkin-reward-stepper .icon-btn {
-  width: 32px;
-  height: 32px;
-  border-radius: 10px;
-  color: color-mix(in srgb, var(--point-color) 76%, #111827);
-  font-size: 20px;
+  font-size: 23px;
   font-weight: 900;
-  box-shadow: none;
+  line-height: 1;
+  box-shadow: 0 8px 16px color-mix(in srgb, var(--point-color) 10%, transparent);
 }
-.checkin-reward-stepper span {
-  min-width: 34px;
-  color: color-mix(in srgb, var(--point-color) 78%, #111827);
-  font-size: 18px;
-  font-weight: 950;
-  text-align: center;
+.checkin-reward-adjust:hover {
+  border-color: color-mix(in srgb, var(--point-color) 42%, #ffffff);
+  background: color-mix(in srgb, var(--point-color) 9%, #ffffff);
+  transform: translateY(-1px);
 }
 .checkin-reward-grid {
   display: grid;
-  grid-template-columns: repeat(8, minmax(0, 1fr));
+  grid-template-columns: repeat(auto-fit, minmax(30px, 34px));
+  justify-content: center;
   gap: 8px;
   touch-action: none;
   user-select: none;

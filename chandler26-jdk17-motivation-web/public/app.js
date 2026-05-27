@@ -1,7 +1,7 @@
 import { api, getToken, setToken } from '/src/shared/api.js'
 import { buildDemoCalendar, demoState } from '/src/features/motivation/demo-data.js'
 import { renderApp } from '/src/features/motivation/render.js'
-import { branchStatusName, formatDate, pointName } from '/src/shared/text.js'
+import { branchStatusName, clamp, formatDate, pointName } from '/src/shared/text.js'
 
 const SIDEBAR_KEY = 'motivation.sidebarCollapsed'
 const ACCOUNT_DRAFT_KEY = 'motivation.accountDraft'
@@ -235,6 +235,12 @@ function normalizeSystemConfig(config = {}) {
 
 function normalizeCalendarViewMode(viewMode) {
   return String(viewMode || '').toLowerCase() === 'week' ? 'week' : 'month'
+}
+
+function formatDateValue(value) {
+  if (!value) return ''
+  if (value instanceof Date) return formatDate(value)
+  return String(value).slice(0, 10)
 }
 
 function normalizeConfigColor(value, fallback) {
@@ -1450,8 +1456,12 @@ async function handleTaskCheckInSubmit(event) {
 }
 
 function getTaskMeta(taskId, taskDate = state.todayKey) {
+  const dateKey = formatDateValue(taskDate) || state.todayKey
   const task = state.tasks.find((item) => String(item.id) === String(taskId))
-  const event = state.calendarEvents.find((item) => String(item.taskId) === String(taskId) && formatDateValue(item.taskDate) === taskDate)
+  const event = state.calendarEvents.find((item) => (
+    String(item.taskId) === String(taskId)
+    && formatDateValue(item.taskDate || item.date) === dateKey
+  ))
   return task || event || null
 }
 
@@ -2381,12 +2391,16 @@ function closeRewardTicketModal() {
 }
 
 function openTaskCheckInModal(taskId, taskDate = state.todayKey) {
-  const taskMeta = getTaskMeta(taskId, taskDate)
+  const normalizedTaskDate = formatDateValue(taskDate) || state.selectedCalendarDateKey || state.todayKey
+  const taskMeta = getTaskMeta(taskId, normalizedTaskDate)
   if (!taskMeta) return
   const basePoints = Math.max(1, Number(taskMeta.basePoints || 1))
   state.selectedCheckInTaskId = taskId
-  state.selectedCheckInTaskDate = taskDate || state.todayKey
+  state.selectedCheckInTaskDate = normalizedTaskDate
   state.selectedCheckInRewardCount = basePoints
+  state.calendarDayModalOpen = false
+  state.calendarEventModalOpen = false
+  state.selectedCalendarEventId = ''
   state.taskCheckInModalOpen = true
   render()
 }

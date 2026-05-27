@@ -1469,7 +1469,7 @@ function renderTaskCheckInModal(state) {
   const selectedCount = clamp(Number(state.selectedCheckInRewardCount || basePoints), 1, basePoints)
   const activeIconCount = basePoints
   return `
-    <div class="modal-backdrop">
+    <div class="modal-backdrop checkin-layer">
       <section class="modal narrow checkin-modal">
         <div class="modal-head">
           <div><h2>任务打卡</h2><p>${escapeHtml(taskMeta.name || taskMeta.taskName || '任务')}</p></div>
