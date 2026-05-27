@@ -481,6 +481,31 @@ public final class MotivationEnums {
         }
     }
 
+    public enum ActivityLogCategory implements DescribedEnum {
+        GROWTH("GROWTH", "宝贝成长日志"),
+        OPERATION("OPERATION", "操作日志");
+
+        @EnumValue
+        private final String code;
+        private final String description;
+
+        ActivityLogCategory(String code, String description) {
+            this.code = code;
+            this.description = description;
+        }
+
+        @Override
+        @JsonValue
+        public String code() {
+            return code;
+        }
+
+        @Override
+        public String description() {
+            return description;
+        }
+    }
+
     public enum ExchangeLimitType implements DescribedEnum {
         UNLIMITED("UNLIMITED", "不限"),
         DAILY("DAILY", "每日"),

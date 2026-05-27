@@ -7,6 +7,8 @@ const SIDEBAR_KEY = 'motivation.sidebarCollapsed'
 const ACCOUNT_DRAFT_KEY = 'motivation.accountDraft'
 const SYSTEM_CONFIG_KEY = 'motivation.systemConfig'
 const AVATAR_MAX_BYTES = 1024 * 1024
+const ACTIVITY_LOG_PAGE_SIZE = 5
+const LEDGER_PAGE_SIZE = 5
 const SYSTEM_CONFIG_FIELDS = ['calendarDateSize', 'calendarDateColor', 'calendarTodayColor', 'taskCalendarViewMode', 'rewardCalendarViewMode']
 const DEFAULT_CURRENCIES = [
   { pointType: 'STAR', name: '星星', icon: '★', color: '#f59e0b', exchangeWeight: 1, status: 'ACTIVE', sortNo: 1 },
@@ -125,6 +127,11 @@ const state = {
   pointExchangeRule: demoState.pointExchangeRule || { starWeight: 1, flowerWeight: 10, crownWeight: 100 },
   pointCurrencies: normalizePointCurrencies(demoState.pointCurrencies, demoState.pointExchangeRule),
   activityLogs: [],
+  growthActivityLogPage: createEmptyPage('GROWTH', ACTIVITY_LOG_PAGE_SIZE),
+  operationLogPage: createEmptyPage('OPERATION', ACTIVITY_LOG_PAGE_SIZE),
+  growthLogPageNo: 1,
+  operationLogPageNo: 1,
+  ledgerPageNo: 1,
   connectionMessage: '正在尝试连接后端...',
   toast: '',
 }
@@ -349,6 +356,31 @@ const actions = {
 const app = document.querySelector('#app')
 let navigationDelegatedBound = false
 
+function createEmptyPage(category, pageSize = ACTIVITY_LOG_PAGE_SIZE) {
+  return {
+    category,
+    pageNo: 1,
+    pageSize,
+    total: 0,
+    hasMore: false,
+    records: [],
+  }
+}
+
+function normalizePage(page, category, pageSize = ACTIVITY_LOG_PAGE_SIZE) {
+  if (!page || !Array.isArray(page.records)) {
+    return createEmptyPage(category, pageSize)
+  }
+  return {
+    category: page.category || category,
+    pageNo: Math.max(1, Number(page.pageNo || 1)),
+    pageSize: Math.max(1, Number(page.pageSize || pageSize)),
+    total: Math.max(0, Number(page.total || 0)),
+    hasMore: Boolean(page.hasMore),
+    records: page.records,
+  }
+}
+
 function render() {
   app.innerHTML = renderApp(state, actions)
   bindEvents()
@@ -398,6 +430,14 @@ function bindEvents() {
       state.profileSubView = normalizeProfileSubViewForRole(button.dataset.profileSubview || 'home')
       render()
     })
+  })
+  document.querySelectorAll('[data-activity-log-page]').forEach((button) => {
+    button.addEventListener('click', () => {
+      void changeActivityLogPage(button.dataset.logCategory || 'GROWTH', Number(button.dataset.activityLogPage || 1))
+    })
+  })
+  document.querySelectorAll('[data-ledger-page]').forEach((button) => {
+    button.addEventListener('click', () => setLedgerPage(Number(button.dataset.ledgerPage || 1)))
   })
   document.querySelectorAll('[data-growth-subview]').forEach((button) => {
     button.addEventListener('click', () => {
@@ -767,20 +807,21 @@ function initLoginCarousel() {
   window.clearInterval(initLoginCarousel.timer)
   initLoginCarousel.timer = window.setInterval(() => {
     if (!state.user && !state.loginCarouselPinned && !state.registerModalOpen) {
-      setLoginCarouselIndex((Number(state.loginCarouselIndex || 0) + 1) % 3, false)
+      setLoginCarouselIndex(Number(state.loginCarouselIndex || 0) + 1, false)
     }
   }, 3200)
 }
 
 function setLoginCarouselIndex(index, pinned = false) {
-  state.loginCarouselIndex = ((Number(index) % 3) + 3) % 3
+  const count = loginCarouselCount()
+  state.loginCarouselIndex = ((Number(index) % count) + count) % count
   state.loginCarouselPinned = pinned
   updateLoginCarousel()
 }
 
 function stepLoginCarousel(delta) {
   state.loginCarouselPinned = false
-  setLoginCarouselIndex((Number(state.loginCarouselIndex || 0) + delta) % 3, false)
+  setLoginCarouselIndex(Number(state.loginCarouselIndex || 0) + delta, false)
 }
 
 function updateLoginCarousel() {
@@ -792,6 +833,10 @@ function updateLoginCarousel() {
     const isActive = Number(button.dataset.loginCarouselNav || 0) === activeIndex
     button.classList.toggle('active', isActive)
   })
+}
+
+function loginCarouselCount() {
+  return document.querySelectorAll('[data-login-carousel-nav]').length || 1
 }
 
 function bindTaskModalControls() {
@@ -1187,6 +1232,7 @@ async function loadInitialData(showToast = false, options = {}) {
     state.selectedChild = children.find((child) => String(child.id) === String(state.selectedChildId)) || children[0] || null
     state.selectedChildId = state.selectedChild?.id || null
     if (state.selectedChildId && String(preferredChildId || '') !== String(state.selectedChildId)) {
+      resetPagedPanelState()
       void savePreferences({ selectedChildId: String(state.selectedChildId) }, { silent: true }).catch(() => {})
     }
     if (!state.selectedChildId) {
@@ -1220,14 +1266,17 @@ async function loadCoreData() {
   if (!childId || state.offline) {
     return
   }
-  const [goals, tasks, summary, ledger, rewards, exchanges, activityLogs] = await Promise.all([
+  const [goals, tasks, summary, ledger, rewards, exchanges, growthLogPage, operationLogPage] = await Promise.all([
     api.goals(childId),
     api.tasks(childId),
     api.pointSummary(childId),
     api.ledger(childId),
     api.rewards(childId),
     api.rewardExchanges(childId),
-    api.childActivityLogs(childId, 20).catch(() => []),
+    api.childActivityLogPage(childId, { category: 'GROWTH', pageNo: state.growthLogPageNo, pageSize: ACTIVITY_LOG_PAGE_SIZE })
+      .catch(() => createEmptyPage('GROWTH', ACTIVITY_LOG_PAGE_SIZE)),
+    api.childActivityLogPage(childId, { category: 'OPERATION', pageNo: state.operationLogPageNo, pageSize: ACTIVITY_LOG_PAGE_SIZE })
+      .catch(() => createEmptyPage('OPERATION', ACTIVITY_LOG_PAGE_SIZE)),
   ])
   state.goals = goals
   state.tasks = tasks
@@ -1238,7 +1287,48 @@ async function loadCoreData() {
   state.ledger = ledger
   state.rewards = rewards
   state.exchanges = exchanges
-  state.activityLogs = activityLogs
+  state.growthActivityLogPage = normalizePage(growthLogPage, 'GROWTH', ACTIVITY_LOG_PAGE_SIZE)
+  state.operationLogPage = normalizePage(operationLogPage, 'OPERATION', ACTIVITY_LOG_PAGE_SIZE)
+  state.activityLogs = state.growthActivityLogPage.records
+}
+
+async function loadActivityLogPages() {
+  const childId = state.selectedChildId
+  if (!childId || state.offline) return
+  const [growthLogPage, operationLogPage] = await Promise.all([
+    api.childActivityLogPage(childId, { category: 'GROWTH', pageNo: state.growthLogPageNo, pageSize: ACTIVITY_LOG_PAGE_SIZE }),
+    api.childActivityLogPage(childId, { category: 'OPERATION', pageNo: state.operationLogPageNo, pageSize: ACTIVITY_LOG_PAGE_SIZE }),
+  ])
+  state.growthActivityLogPage = normalizePage(growthLogPage, 'GROWTH', ACTIVITY_LOG_PAGE_SIZE)
+  state.operationLogPage = normalizePage(operationLogPage, 'OPERATION', ACTIVITY_LOG_PAGE_SIZE)
+  state.activityLogs = state.growthActivityLogPage.records
+}
+
+async function changeActivityLogPage(category, pageNo) {
+  const normalizedCategory = String(category || 'GROWTH').toUpperCase() === 'OPERATION' ? 'OPERATION' : 'GROWTH'
+  const nextPage = Math.max(1, Number(pageNo || 1))
+  if (normalizedCategory === 'OPERATION') {
+    state.operationLogPageNo = nextPage
+  } else {
+    state.growthLogPageNo = nextPage
+  }
+  try {
+    await loadActivityLogPages()
+    render()
+  } catch (error) {
+    toast(error.message)
+  }
+}
+
+function setLedgerPage(pageNo) {
+  state.ledgerPageNo = Math.max(1, Number(pageNo || 1))
+  render()
+}
+
+function resetPagedPanelState() {
+  state.growthLogPageNo = 1
+  state.operationLogPageNo = 1
+  state.ledgerPageNo = 1
 }
 
 async function loadAvatarImages() {
@@ -1302,6 +1392,7 @@ async function selectChild(childId) {
   if (!child) return
   state.selectedChild = child
   state.selectedChildId = child.id
+  resetPagedPanelState()
   if (state.offline) {
     state.calendarEvents = buildDemoCalendar(state.tasks, state.monthDate)
     render()
@@ -3092,6 +3183,9 @@ function resetChildScopedData() {
   state.rewards = []
   state.exchanges = []
   state.activityLogs = []
+  state.growthActivityLogPage = createEmptyPage('GROWTH', ACTIVITY_LOG_PAGE_SIZE)
+  state.operationLogPage = createEmptyPage('OPERATION', ACTIVITY_LOG_PAGE_SIZE)
+  resetPagedPanelState()
   state.pointCurrencies = normalizePointCurrencies([], state.pointExchangeRule)
   state.calendarEvents = []
   state.calendarDayModalOpen = false

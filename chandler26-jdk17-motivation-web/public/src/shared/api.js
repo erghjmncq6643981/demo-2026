@@ -115,6 +115,16 @@ export const api = {
     params.set('limit', String(limit))
     return request(`/activity-logs/children?${params.toString()}`)
   },
+  childActivityLogPage: (childId = '', options = {}) => {
+    const params = new URLSearchParams()
+    if (childId) {
+      params.set('childId', childId)
+    }
+    params.set('category', options.category || 'GROWTH')
+    params.set('pageNo', String(options.pageNo || 1))
+    params.set('pageSize', String(options.pageSize || 5))
+    return request(`/activity-logs/children/page?${params.toString()}`)
+  },
   avatarBlob: (avatarUrl) => requestBlob(avatarUrl),
   children: () => request('/children'),
   createChild: (body) => request('/children', { method: 'POST', body }),

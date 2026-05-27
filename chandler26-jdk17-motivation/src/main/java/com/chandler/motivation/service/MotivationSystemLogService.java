@@ -5,6 +5,7 @@ import com.baomidou.mybatisplus.extension.service.impl.ServiceImpl;
 import com.chandler.motivation.domain.dataobject.MotivationChild;
 import com.chandler.motivation.domain.dataobject.MotivationSystemLog;
 import com.chandler.motivation.domain.dataobject.MotivationUser;
+import com.chandler.motivation.domain.dto.log.ActivityLogPageResponse;
 import com.chandler.motivation.domain.dto.log.ChildActivityLogResponse;
 import com.chandler.motivation.domain.mapper.MotivationChildMapper;
 import com.chandler.motivation.domain.mapper.MotivationSystemLogMapper;
@@ -32,6 +33,17 @@ public class MotivationSystemLogService extends ServiceImpl<MotivationSystemLogM
 
     private static final String DEFAULT_OPERATOR = "系统";
     private static final DateTimeFormatter BUSINESS_TIME_FORMATTER = DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm:ss");
+    private static final List<String> GROWTH_LOG_TITLES = List.of(
+            "提交任务打卡",
+            "完成任务",
+            "审核通过任务",
+            "审核拒绝任务",
+            "申请兑换奖励",
+            "兑换奖励",
+            "确认奖励兑换",
+            "拒绝奖励兑换",
+            "确认礼物兑换券");
+    private static final List<String> LOW_LEVEL_POINT_LOG_TITLES = List.of("增加积分", "扣减积分");
 
     private final MotivationUserMapper userMapper;
     private final MotivationChildMapper childMapper;
@@ -82,27 +94,48 @@ public class MotivationSystemLogService extends ServiceImpl<MotivationSystemLogM
      * 查询当前账号可见孩子的成长活动日志。
      */
     public List<ChildActivityLogResponse> listChildActivities(List<Long> childIds, int limit) {
+        return pageChildActivities(childIds, null, 1, limit).getRecords();
+    }
+
+    /**
+     * 分页查询当前账号可见孩子的业务日志，并按面向宝贝成长或家长操作进行归类。
+     */
+    public ActivityLogPageResponse pageChildActivities(List<Long> childIds,
+                                                       MotivationEnums.ActivityLogCategory category,
+                                                       int pageNo,
+                                                       int pageSize) {
+        ActivityLogPageResponse response = new ActivityLogPageResponse();
+        MotivationEnums.ActivityLogCategory resolvedCategory = category == null
+                ? null
+                : category;
+        int resolvedPageNo = Math.max(1, pageNo);
+        int resolvedPageSize = Math.max(MotivationConstants.Pagination.MIN_LIMIT,
+                Math.min(pageSize, MotivationConstants.Pagination.ACTIVITY_LOG_MAX_LIMIT));
+        response.setCategory(resolvedCategory == null ? "ALL" : resolvedCategory.code());
+        response.setPageNo(resolvedPageNo);
+        response.setPageSize(resolvedPageSize);
+
         if (childIds == null || childIds.isEmpty()) {
-            return Collections.emptyList();
+            return response;
         }
         List<Long> visibleChildIds = childIds.stream()
                 .filter(Objects::nonNull)
                 .distinct()
                 .toList();
         if (visibleChildIds.isEmpty()) {
-            return Collections.emptyList();
+            return response;
         }
-        int resolvedLimit = Math.max(MotivationConstants.Pagination.MIN_LIMIT,
-                Math.min(limit, MotivationConstants.Pagination.ACTIVITY_LOG_MAX_LIMIT));
-        List<MotivationSystemLog> logs = list(new LambdaQueryWrapper<MotivationSystemLog>()
-                .in(MotivationSystemLog::getChildId, visibleChildIds)
-                .eq(MotivationSystemLog::getSource, MotivationEnums.LogSource.BUSINESS.code())
+        int offset = (resolvedPageNo - 1) * resolvedPageSize;
+        long total = count(childActivityWrapper(visibleChildIds, resolvedCategory));
+        List<MotivationSystemLog> logs = list(childActivityWrapper(visibleChildIds, resolvedCategory)
                 .orderByDesc(MotivationSystemLog::getUpdateTime)
                 .orderByDesc(MotivationSystemLog::getCreateTime)
                 .orderByDesc(MotivationSystemLog::getId)
-                .last("limit " + resolvedLimit));
+                .last("limit " + offset + "," + resolvedPageSize));
+        response.setTotal(total);
+        response.setHasMore(offset + logs.size() < total);
         if (logs.isEmpty()) {
-            return Collections.emptyList();
+            return response;
         }
         Set<Long> loggedChildIds = logs.stream()
                 .map(MotivationSystemLog::getChildId)
@@ -112,9 +145,24 @@ public class MotivationSystemLogService extends ServiceImpl<MotivationSystemLogM
                 ? Collections.emptyMap()
                 : childMapper.selectBatchIds(loggedChildIds).stream()
                 .collect(Collectors.toMap(MotivationChild::getId, Function.identity(), (left, right) -> left));
-        return logs.stream()
+        response.setRecords(logs.stream()
                 .map((item) -> toActivityResponse(item, childMap.get(item.getChildId())))
-                .toList();
+                .toList());
+        return response;
+    }
+
+    private LambdaQueryWrapper<MotivationSystemLog> childActivityWrapper(List<Long> childIds,
+                                                                         MotivationEnums.ActivityLogCategory category) {
+        LambdaQueryWrapper<MotivationSystemLog> wrapper = new LambdaQueryWrapper<MotivationSystemLog>()
+                .in(MotivationSystemLog::getChildId, childIds)
+                .eq(MotivationSystemLog::getSource, MotivationEnums.LogSource.BUSINESS.code());
+        if (category == MotivationEnums.ActivityLogCategory.GROWTH) {
+            wrapper.in(MotivationSystemLog::getTitle, GROWTH_LOG_TITLES);
+        } else if (category == MotivationEnums.ActivityLogCategory.OPERATION) {
+            wrapper.notIn(MotivationSystemLog::getTitle, GROWTH_LOG_TITLES)
+                    .notIn(MotivationSystemLog::getTitle, LOW_LEVEL_POINT_LOG_TITLES);
+        }
+        return wrapper;
     }
 
     private void saveLog(Long userId,

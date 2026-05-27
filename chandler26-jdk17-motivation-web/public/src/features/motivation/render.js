@@ -579,9 +579,7 @@ function renderProfileView(state) {
           ${renderAccountSummary(state)}
         </section>
         ${isManagementUser(state) ? `<section class="panel panel-pad wide">${renderChildList(state)}</section>` : ''}
-        <section class="panel panel-pad wide">
-          ${renderAccountActivityLogsPanel(state)}
-        </section>
+        ${renderAccountActivityLogsPanel(state)}
       </div>
     `
   }
@@ -673,19 +671,32 @@ function renderAccountSummary(state) {
 }
 
 function renderAccountActivityLogsPanel(state) {
+  const growthPage = state.growthActivityLogPage || { records: state.activityLogs || [], total: (state.activityLogs || []).length, pageNo: 1, pageSize: 5 }
+  const operationPage = state.operationLogPage || { records: [], total: 0, pageNo: 1, pageSize: 5 }
   return `
-    <section class="activity-log-panel">
+    ${renderActivityLogSection('宝贝成长日志', '任务完成、目标达成、兑换奖励等成长事件', growthPage, 'GROWTH', '暂无宝贝成长日志')}
+    ${renderActivityLogSection('操作日志', '档案、任务、奖励、日程和配置维护记录', operationPage, 'OPERATION', '暂无操作日志')}
+  `
+}
+
+function renderActivityLogSection(title, subtitle, page, category, emptyLabel) {
+  const records = page.records || []
+  return `
+    <section class="panel panel-pad wide activity-log-panel">
       <div class="section-inline-head">
-        <h2>宝贝成长日志</h2>
-        <span>${(state.activityLogs || []).length} 条</span>
+        <div>
+          <h2>${escapeHtml(title)}</h2>
+          <p>${escapeHtml(subtitle)}</p>
+        </div>
+        <span>${Number(page.total || 0)} 条</span>
       </div>
-      ${renderChildActivityLogs(state)}
+      ${renderChildActivityLogs(records, emptyLabel)}
+      ${renderActivityPager(page, category)}
     </section>
   `
 }
 
-function renderChildActivityLogs(state) {
-  const logs = state.activityLogs || []
+function renderChildActivityLogs(logs, emptyLabel = '暂无宝贝活动日志') {
   return `
     <div class="activity-timeline">
       ${logs.map((log) => `
@@ -697,13 +708,32 @@ function renderChildActivityLogs(state) {
             <small>${escapeHtml(formatActivityTime(log.createTime))}</small>
           </div>
         </article>
-      `).join('') || '<div class="empty compact-empty">暂无宝贝活动日志</div>'}
+      `).join('') || `<div class="empty compact-empty">${escapeHtml(emptyLabel)}</div>`}
+    </div>
+  `
+}
+
+function renderActivityPager(page, category) {
+  const total = Number(page.total || 0)
+  const pageSize = Math.max(1, Number(page.pageSize || 5))
+  const pageNo = Math.max(1, Number(page.pageNo || 1))
+  const totalPages = Math.max(1, Math.ceil(total / pageSize))
+  if (total <= pageSize) return ''
+  return `
+    <div class="mini-pager">
+      <span>第 ${pageNo} / ${totalPages} 页</span>
+      <div>
+        <button class="small-btn" type="button" data-log-category="${escapeHtml(category)}" data-activity-log-page="${pageNo - 1}" ${pageNo <= 1 ? 'disabled' : ''}>上一页</button>
+        <button class="small-btn primary-lite" type="button" data-log-category="${escapeHtml(category)}" data-activity-log-page="${pageNo + 1}" ${pageNo >= totalPages ? 'disabled' : ''}>下一页</button>
+      </div>
     </div>
   `
 }
 
 function activityLogTitle(log) {
-  return log.childNickname ? `${log.childNickname}宝贝` : '宝贝动态'
+  const subject = log.childNickname ? `${log.childNickname}宝贝` : '宝贝动态'
+  const title = String(log.title || '').trim()
+  return title ? `${subject} · ${title}` : subject
 }
 
 function activityLogDetail(log) {
@@ -2147,13 +2177,19 @@ function fulfillmentTypeName(type) {
 }
 
 function renderLedger(state) {
+  const allItems = state.ledger || []
+  const pageSize = 5
+  const totalPages = Math.max(1, Math.ceil(allItems.length / pageSize))
+  const pageNo = clamp(Number(state.ledgerPageNo || 1), 1, totalPages)
+  const startIndex = (pageNo - 1) * pageSize
+  const visibleItems = allItems.slice(startIndex, startIndex + pageSize)
   return `
     <div class="section-inline-head">
       <h2>积分流水</h2>
-      <span>${state.ledger.length} 条</span>
+      <span>${allItems.length} 条</span>
     </div>
     <div class="timeline">
-      ${state.ledger.map((item) => `
+      ${visibleItems.map((item) => `
         <div class="timeline-item">
           <div class="timeline-dot ${item.changeAmount >= 0 ? 'positive' : 'negative'}"></div>
           <div>
@@ -2163,6 +2199,15 @@ function renderLedger(state) {
         </div>
       `).join('') || '<div class="empty">暂无流水</div>'}
     </div>
+    ${allItems.length > pageSize ? `
+      <div class="mini-pager">
+        <span>第 ${pageNo} / ${totalPages} 页</span>
+        <div>
+          <button class="small-btn" type="button" data-ledger-page="${pageNo - 1}" ${pageNo <= 1 ? 'disabled' : ''}>上一页</button>
+          <button class="small-btn primary-lite" type="button" data-ledger-page="${pageNo + 1}" ${pageNo >= totalPages ? 'disabled' : ''}>下一页</button>
+        </div>
+      </div>
+    ` : ''}
   `
 }
 

@@ -2,11 +2,13 @@ package com.chandler.motivation.controller;
 
 import com.chandler.motivation.common.result.ApiResponse;
 import com.chandler.motivation.domain.dataobject.MotivationChild;
+import com.chandler.motivation.domain.dto.log.ActivityLogPageResponse;
 import com.chandler.motivation.domain.dto.log.ChildActivityLogResponse;
 import com.chandler.motivation.service.AuthService;
 import com.chandler.motivation.service.MotivationChildService;
 import com.chandler.motivation.service.MotivationSystemLogService;
 import com.chandler.motivation.support.MotivationConstants;
+import com.chandler.motivation.support.MotivationEnums;
 import java.util.List;
 import lombok.RequiredArgsConstructor;
 import org.springframework.web.bind.annotation.GetMapping;
@@ -31,6 +33,21 @@ public class ActivityLogController {
         List<Long> childIds = resolveVisibleChildIds(childId, userId);
         return ApiResponse.ok(systemLogService.listChildActivities(childIds,
                 Math.min(limit, MotivationConstants.Pagination.ACTIVITY_LOG_MAX_LIMIT)));
+    }
+
+    @GetMapping("/children/page")
+    public ApiResponse<ActivityLogPageResponse> childActivitiesPage(
+            @RequestParam(required = false) Long childId,
+            @RequestParam(defaultValue = "GROWTH") String category,
+            @RequestParam(defaultValue = "1") int pageNo,
+            @RequestParam(defaultValue = "5") int pageSize) {
+        Long userId = authService.requireUser().getId();
+        List<Long> childIds = resolveVisibleChildIds(childId, userId);
+        MotivationEnums.ActivityLogCategory resolvedCategory = MotivationEnums.fromCode(
+                MotivationEnums.ActivityLogCategory.class,
+                category,
+                MotivationEnums.ActivityLogCategory.GROWTH);
+        return ApiResponse.ok(systemLogService.pageChildActivities(childIds, resolvedCategory, pageNo, pageSize));
     }
 
     private List<Long> resolveVisibleChildIds(Long childId, Long userId) {
