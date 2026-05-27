@@ -993,7 +993,7 @@ function renderCalendarView(state, actions) {
       ${renderCalendar({
         monthDate: state.monthDate,
         events: calendarEvents.filter((event) => event.kind === eventKind),
-        viewMode: state.calendarViewMode || 'month',
+        viewMode: state.taskCalendarViewMode || state.systemConfig?.taskCalendarViewMode || state.calendarViewMode || 'month',
         eventKind,
         systemConfig: state.systemConfig || {},
       })}
@@ -1009,7 +1009,7 @@ function renderRewardCalendarView(state, actions) {
       ${renderCalendar({
         monthDate: state.monthDate,
         events: calendarEvents,
-        viewMode: state.calendarViewMode || 'month',
+        viewMode: state.rewardCalendarViewMode || state.systemConfig?.rewardCalendarViewMode || state.calendarViewMode || 'month',
         eventKind: 'rewards',
         systemConfig: state.systemConfig || {},
         titleLabel: '奖励日历',
@@ -1481,22 +1481,25 @@ function renderTaskCheckInModal(state) {
           </div>
           <div class="checkin-reward-panel wide" style="--point-color:${escapeHtml(pointColor)}">
             <div class="checkin-reward-head">
-              <div class="field-label">奖励</div>
-              <div class="checkin-reward-stepper">
-                <button class="icon-btn" type="button" data-action="decrease-checkin-reward" aria-label="减少奖励数量">−</button>
-                <span data-checkin-reward-count data-total="${basePoints}">${selectedCount}</span>
-                <button class="icon-btn" type="button" data-action="increase-checkin-reward" aria-label="增加奖励数量">+</button>
+              <div>
+                <div class="field-label">奖励</div>
+                <strong>你的奖励预览</strong>
               </div>
+              <span><b data-checkin-reward-count data-total="${basePoints}">${selectedCount}</b> / ${basePoints}</span>
             </div>
-            <div class="checkin-reward-grid">
-              ${Array.from({ length: activeIconCount }, (_, index) => {
-                const number = index + 1
-                return `
-                  <button class="checkin-reward-icon ${number <= selectedCount ? 'active' : ''}" type="button" data-action="select-checkin-reward" data-reward-index="${number}" aria-label="选择 ${number} 个奖励">
-                    ${pointIcon(pointType)}
-                  </button>
-                `
-              }).join('')}
+            <div class="checkin-reward-row">
+              <button class="checkin-reward-adjust" type="button" data-action="decrease-checkin-reward" aria-label="减少奖励数量">−</button>
+              <div class="checkin-reward-grid" aria-label="奖励图标预览">
+                ${Array.from({ length: activeIconCount }, (_, index) => {
+                  const number = index + 1
+                  return `
+                    <button class="checkin-reward-icon ${number <= selectedCount ? 'active' : ''}" type="button" data-action="select-checkin-reward" data-reward-index="${number}" aria-label="选择 ${number} 个奖励">
+                      ${pointIcon(pointType)}
+                    </button>
+                  `
+                }).join('')}
+              </div>
+              <button class="checkin-reward-adjust" type="button" data-action="increase-checkin-reward" aria-label="增加奖励数量">+</button>
             </div>
           </div>
           <div class="modal-actions wide">
@@ -2056,16 +2059,18 @@ function renderTaskModal(state) {
   if (!state.taskModalOpen) return ''
   const draftDate = state.taskDraftDate || ''
   const draftDay = draftDate ? Number(String(draftDate).slice(8, 10)) : 0
-  const task = state.editingTask || (draftDay ? { periodType: 'MONTHLY', scheduleJson: JSON.stringify({ type: 'MONTHLY', category: 'HABIT', days: [draftDay], requiredCount: 1 }) } : {})
+  const quickDailyMode = Boolean(draftDate && !state.editingTask)
+  const task = state.editingTask || (quickDailyMode ? { periodType: 'DAILY', scheduleJson: JSON.stringify({ type: 'DAILY', category: 'HABIT', hours: [], requiredCount: 1 }) } : {})
   const schedule = parseSchedule(task.scheduleJson)
   const periodType = task.periodType || schedule.type || 'DAILY'
   const startHour = Number(schedule.timeRange?.startHour ?? schedule.startHour ?? 6)
   const endHour = Number(schedule.timeRange?.endHour ?? schedule.endHour ?? 22)
-  const isEditingTask = Boolean(task.id || draftDay)
+  const isEditingTask = Boolean(task.id)
   const dailyHours = getDailyHours(schedule, startHour, endHour, isEditingTask)
   const selectedDays = Array.isArray(schedule.days) ? schedule.days.map(Number) : []
   const requiredCount = Number(schedule.requiredCount ?? schedule.timesPerWeek ?? 1)
-  const pointType = task.pointType || 'STAR'
+  const taskPointTypeOptions = quickDailyMode ? pointTypeOptions.filter(([value]) => value !== 'CROWN') : pointTypeOptions
+  const pointType = taskPointTypeOptions.some(([value]) => value === task.pointType) ? task.pointType : 'STAR'
   const pointColor = task.pointColor || '#ffd84d'
   const basePoints = Number(task.basePoints || 1)
   const requireApproval = Number(task.requireApproval) === 1 || task.requireApproval === true
@@ -2073,7 +2078,7 @@ function renderTaskModal(state) {
     <div class="modal-backdrop">
       <section class="modal">
         <div class="modal-head">
-          <div><h2>${task.id ? '修改任务' : '新增任务'}</h2><p>设置周期、可完成时间、任务次数和奖励。</p></div>
+          <div><h2>${task.id ? '修改任务' : quickDailyMode ? '新增当日任务' : '新增任务'}</h2><p>设置可完成时间、任务次数和奖励。</p></div>
           <button class="icon-btn" type="button" data-action="close-task-modal">×</button>
         </div>
         <form class="modal-form" data-form="task">
@@ -2081,15 +2086,16 @@ function renderTaskModal(state) {
           <label><span>任务名称</span><input name="name" value="${escapeHtml(task.name || '')}" placeholder="${draftDate ? '例如：当天阅读任务' : '例如：晨读 20 分钟'}" /></label>
           <label><span>所属目标</span>${renderSelect('goalId', task.goalId || state.goals[0]?.id || '', state.goals.map((goal) => [goal.id, goal.name]))}</label>
           <label><span>任务分类</span>${renderSelect('taskCategory', schedule.category || 'HABIT', [['STUDY', '学习'], ['LIFE', '生活'], ['SPORT', '运动'], ['HABIT', '习惯']])}</label>
+          ${quickDailyMode ? '<input type="hidden" name="periodType" value="DAILY" />' : ''}
           <div class="schedule-type-row wide">
-            <div>
+            ${quickDailyMode ? '' : `<div>
               <div class="schedule-title">任务类型</div>
               <div class="segmented">
                 ${[['DAILY', '每日'], ['WEEKLY', '每周'], ['MONTHLY', '每月']].map(([value, label]) => `
                   <label><input type="radio" name="periodType" value="${value}" data-schedule-mode ${periodType === value ? 'checked' : ''} /> <span>${label}</span></label>
                 `).join('')}
               </div>
-            </div>
+            </div>`}
             <label><span>色彩</span><input type="color" name="taskColor" value="${escapeHtml(task.taskColor || '#30d5ff')}" /></label>
           </div>
           <div class="schedule-panel wide ${periodType === 'DAILY' ? '' : 'hidden'}" data-schedule-panel="DAILY">
@@ -2111,7 +2117,7 @@ function renderTaskModal(state) {
           </div>
           <div class="point-config wide">
             <div class="field-label">奖励类型</div>
-            ${renderPointTypePicker(pointType)}
+            ${renderPointTypePicker(pointType, taskPointTypeOptions)}
           </div>
           <label><span>奖励数量</span><input type="number" min="1" max="99" name="basePoints" value="${escapeHtml(basePoints)}" /></label>
           <label><span>奖励颜色</span><input type="color" name="pointColor" value="${escapeHtml(pointColor)}" title="选择奖励图标颜色" /></label>
@@ -2190,10 +2196,10 @@ function renderMonthDayPicker(selectedDays, taskColor = '#30d5ff') {
   `
 }
 
-function renderPointTypePicker(selectedPointType) {
+function renderPointTypePicker(selectedPointType, options = pointTypeOptions) {
   return `
     <div class="point-type-picker">
-      ${pointTypeOptions.map(([value, label]) => `
+      ${options.map(([value, label]) => `
         <label class="point-type-choice" title="${escapeHtml(label)}">
           <input type="radio" name="pointType" value="${value}" ${selectedPointType === value ? 'checked' : ''} />
           <span><b>${pointIcon(value)}</b>${escapeHtml(label)}</span>

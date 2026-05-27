@@ -100,6 +100,8 @@ export const api = {
   login: (body) => request('/auth/login', { method: 'POST', body }),
   profile: () => request('/auth/profile'),
   updateProfile: (body) => request('/auth/profile', { method: 'PUT', body }),
+  preferences: () => request('/preferences'),
+  savePreferences: (body) => request('/preferences', { method: 'PUT', body }),
   uploadProfileAvatar: (file) => {
     const formData = new FormData()
     formData.append('file', file)

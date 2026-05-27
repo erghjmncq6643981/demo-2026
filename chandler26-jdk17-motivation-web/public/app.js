@@ -7,6 +7,7 @@ const SIDEBAR_KEY = 'motivation.sidebarCollapsed'
 const ACCOUNT_DRAFT_KEY = 'motivation.accountDraft'
 const SYSTEM_CONFIG_KEY = 'motivation.systemConfig'
 const AVATAR_MAX_BYTES = 1024 * 1024
+const SYSTEM_CONFIG_FIELDS = ['calendarDateSize', 'calendarDateColor', 'calendarTodayColor', 'taskCalendarViewMode', 'rewardCalendarViewMode']
 const DEFAULT_CURRENCIES = [
   { pointType: 'STAR', name: '星星', icon: '★', color: '#f59e0b', exchangeWeight: 1, status: 'ACTIVE', sortNo: 1 },
   { pointType: 'FLOWER', name: '红花', icon: '✿', color: '#ec4899', exchangeWeight: 10, status: 'ACTIVE', sortNo: 2 },
@@ -18,8 +19,11 @@ const defaultSystemConfig = {
   calendarDateSize: 20,
   calendarDateColor: '#1f2937',
   calendarTodayColor: '#4338ca',
+  taskCalendarViewMode: 'month',
+  rewardCalendarViewMode: 'month',
 }
 const storedSystemConfig = readSystemConfigFromStorage()
+const initialSystemConfig = normalizeSystemConfig(storedSystemConfig)
 
 const state = {
   ...structuredClone(demoState),
@@ -38,9 +42,11 @@ const state = {
     children: {},
   },
   avatarEditor: createEmptyAvatarEditor(),
-  systemConfig: { ...defaultSystemConfig, ...storedSystemConfig },
+  systemConfig: initialSystemConfig,
   sidebarCollapsed: initialSidebarCollapsed,
-  calendarViewMode: 'month',
+  calendarViewMode: initialSystemConfig.taskCalendarViewMode,
+  taskCalendarViewMode: initialSystemConfig.taskCalendarViewMode,
+  rewardCalendarViewMode: initialSystemConfig.rewardCalendarViewMode,
   calendarEventKind: 'tasks',
   shouldFocusToday: false,
   taskModalOpen: false,
@@ -207,8 +213,89 @@ function clearAvatarEditorDraft(options = {}) {
 }
 
 function persistSystemConfig(config) {
-  localStorage.setItem(SYSTEM_CONFIG_KEY, JSON.stringify(config))
-  state.systemConfig = { ...defaultSystemConfig, ...config }
+  const normalized = normalizeSystemConfig(config)
+  localStorage.setItem(SYSTEM_CONFIG_KEY, JSON.stringify(normalized))
+  state.systemConfig = normalized
+  state.taskCalendarViewMode = normalized.taskCalendarViewMode
+  state.rewardCalendarViewMode = normalized.rewardCalendarViewMode
+  state.calendarViewMode = getActiveCalendarViewMode()
+}
+
+function normalizeSystemConfig(config = {}) {
+  const dateSize = Math.min(28, Math.max(14, Number(config.calendarDateSize || defaultSystemConfig.calendarDateSize)))
+  return {
+    ...defaultSystemConfig,
+    calendarDateSize: Number.isFinite(dateSize) ? dateSize : defaultSystemConfig.calendarDateSize,
+    calendarDateColor: normalizeConfigColor(config.calendarDateColor, defaultSystemConfig.calendarDateColor),
+    calendarTodayColor: normalizeConfigColor(config.calendarTodayColor, defaultSystemConfig.calendarTodayColor),
+    taskCalendarViewMode: normalizeCalendarViewMode(config.taskCalendarViewMode || config.calendarViewMode || defaultSystemConfig.taskCalendarViewMode),
+    rewardCalendarViewMode: normalizeCalendarViewMode(config.rewardCalendarViewMode || config.calendarViewMode || defaultSystemConfig.rewardCalendarViewMode),
+  }
+}
+
+function normalizeCalendarViewMode(viewMode) {
+  return String(viewMode || '').toLowerCase() === 'week' ? 'week' : 'month'
+}
+
+function normalizeConfigColor(value, fallback) {
+  return /^#[0-9a-fA-F]{6}$/.test(String(value || '')) ? String(value) : fallback
+}
+
+function getActiveCalendarViewMode() {
+  if (state?.currentView === 'reward-calendar') {
+    return normalizeCalendarViewMode(state.rewardCalendarViewMode || state.systemConfig?.rewardCalendarViewMode)
+  }
+  return normalizeCalendarViewMode(state.taskCalendarViewMode || state.systemConfig?.taskCalendarViewMode)
+}
+
+function applyBackendPreferences(preferences = {}) {
+  if (!preferences || typeof preferences !== 'object') return
+  persistSystemConfig({ ...state.systemConfig, ...preferences })
+  if (preferences.selectedChildId) {
+    state.selectedChildId = String(preferences.selectedChildId)
+  }
+}
+
+function preferencePayload(preferences = {}) {
+  return Object.entries(preferences).reduce((payload, [key, value]) => {
+    if (value === undefined) return payload
+    payload[key] = value === null ? '' : String(value)
+    return payload
+  }, {})
+}
+
+function systemConfigPayload(config = state.systemConfig) {
+  return SYSTEM_CONFIG_FIELDS.reduce((payload, key) => {
+    payload[key] = config[key]
+    return payload
+  }, {})
+}
+
+async function savePreferences(preferences = {}, options = {}) {
+  const payload = preferencePayload(preferences)
+  if (!Object.keys(payload).length) {
+    return state.systemConfig
+  }
+  const configPatch = Object.fromEntries(Object.entries(payload).filter(([key]) => SYSTEM_CONFIG_FIELDS.includes(key)))
+  if (Object.keys(configPatch).length) {
+    persistSystemConfig({ ...state.systemConfig, ...configPatch })
+  }
+  if (payload.selectedChildId !== undefined) {
+    state.selectedChildId = payload.selectedChildId || null
+  }
+  if (state.offline || !state.user) {
+    return state.systemConfig
+  }
+  try {
+    const saved = await api.savePreferences(payload)
+    applyBackendPreferences(saved || {})
+    return saved
+  } catch (error) {
+    if (!options.silent) {
+      toast(error.message)
+    }
+    throw error
+  }
 }
 
 const actions = {
@@ -217,7 +304,7 @@ const actions = {
     render()
   },
   previousMonth() {
-    if (state.calendarViewMode === 'week') {
+    if (getActiveCalendarViewMode() === 'week') {
       state.monthDate = addDays(state.monthDate, -7)
     } else {
       state.monthDate = new Date(state.monthDate.getFullYear(), state.monthDate.getMonth() - 1, 1)
@@ -225,7 +312,7 @@ const actions = {
     void loadCalendar()
   },
   nextMonth() {
-    if (state.calendarViewMode === 'week') {
+    if (getActiveCalendarViewMode() === 'week') {
       state.monthDate = addDays(state.monthDate, 7)
     } else {
       state.monthDate = new Date(state.monthDate.getFullYear(), state.monthDate.getMonth() + 1, 1)
@@ -239,8 +326,13 @@ const actions = {
     void loadCalendar()
   },
   setCalendarViewMode(viewMode) {
-    state.calendarViewMode = viewMode === 'week' ? 'week' : 'month'
+    const normalized = normalizeCalendarViewMode(viewMode)
+    const key = state.currentView === 'reward-calendar' ? 'rewardCalendarViewMode' : 'taskCalendarViewMode'
+    state[key] = normalized
+    state.calendarViewMode = normalized
+    persistSystemConfig({ ...state.systemConfig, [key]: normalized })
     render()
+    void savePreferences({ [key]: normalized }, { silent: true }).catch(() => {})
   },
   setCalendarEventKind(eventKind) {
     state.calendarEventKind = ['tasks', 'points'].includes(eventKind) ? eventKind : 'tasks'
@@ -1073,14 +1165,19 @@ async function loadInitialData(showToast = false, options = {}) {
     }
     state.user = user
     state.offline = false
+    applyBackendPreferences(await api.preferences().catch(() => ({})))
     state.currentView = normalizeViewForRole(state.currentView || 'profile')
     state.profileSubView = normalizeProfileSubViewForRole(state.profileSubView || 'home')
     state.connectionMessage = '已连接后端 1.0 API'
     const children = await api.children()
     state.children = children
     await loadAvatarImages()
+    const preferredChildId = state.selectedChildId
     state.selectedChild = children.find((child) => String(child.id) === String(state.selectedChildId)) || children[0] || null
     state.selectedChildId = state.selectedChild?.id || null
+    if (state.selectedChildId && String(preferredChildId || '') !== String(state.selectedChildId)) {
+      void savePreferences({ selectedChildId: String(state.selectedChildId) }, { silent: true }).catch(() => {})
+    }
     if (!state.selectedChildId) {
       resetChildScopedData()
       if (options.skipStarterData) {
@@ -1200,6 +1297,7 @@ async function selectChild(childId) {
     return
   }
   try {
+    await savePreferences({ selectedChildId: String(child.id) }, { silent: true }).catch(() => {})
     await Promise.all([loadCoreData(), loadCalendar()])
     toast(`已切换到 ${child.nickname}`)
   } catch (error) {
@@ -1944,16 +2042,23 @@ async function handleAccountSubmit(event) {
   }
 }
 
-function handleSystemConfigSubmit(event) {
+async function handleSystemConfigSubmit(event) {
   event.preventDefault()
   const formData = new FormData(event.currentTarget)
   const payload = {
     calendarDateSize: Math.min(28, Math.max(14, Number(formData.get('calendarDateSize') || defaultSystemConfig.calendarDateSize))),
     calendarDateColor: normalizeColor(formData.get('calendarDateColor'), defaultSystemConfig.calendarDateColor),
+    taskCalendarViewMode: state.taskCalendarViewMode || state.systemConfig?.taskCalendarViewMode || 'month',
+    rewardCalendarViewMode: state.rewardCalendarViewMode || state.systemConfig?.rewardCalendarViewMode || 'month',
   }
   persistSystemConfig(payload)
-  toast('系统配置已保存')
-  render()
+  try {
+    await savePreferences(systemConfigPayload(payload))
+    toast('系统配置已保存')
+    render()
+  } catch {
+    render()
+  }
 }
 
 function handleAvatarFilePreview(event) {
@@ -2654,6 +2759,7 @@ async function handleChildSubmit(event) {
       }
     }
     state.selectedChildId = savedChild.id
+    await savePreferences({ selectedChildId: String(savedChild.id) }, { silent: true }).catch(() => {})
     state.childModalOpen = false
     state.editingChild = null
     state.childAccountDraftEnabled = false
