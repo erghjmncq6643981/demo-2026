@@ -672,6 +672,7 @@ function bindEvents() {
   })
   document.querySelectorAll('[data-action="open-calendar-event"]').forEach((button) => {
     button.addEventListener('click', (event) => {
+      if (event.target instanceof Element && event.target.closest('[data-action="complete-task"]')) return
       event.stopPropagation()
       openCalendarEventModal(button.dataset.calendarEventId || button.dataset.taskId, button.dataset.taskDate)
     })
@@ -727,7 +728,11 @@ function bindEvents() {
     })
   })
   document.querySelectorAll('[data-action="complete-task"]').forEach((button) => {
-    button.addEventListener('click', () => openTaskCheckInModal(button.dataset.taskId, button.dataset.taskDate))
+    button.addEventListener('click', (event) => {
+      event.preventDefault()
+      event.stopPropagation()
+      openTaskCheckInModal(button.dataset.taskId, button.dataset.taskDate)
+    })
   })
   document.querySelector('[data-action="read-child-password"]')?.addEventListener('click', (event) => {
     void readChildPassword(event.currentTarget.dataset.childId)
@@ -1414,7 +1419,8 @@ async function handleCompleteTask(taskId, taskDate = state.todayKey) {
   const basePoints = Math.max(1, Number(taskMeta.basePoints || 1))
   const selectedCount = Math.max(1, Math.min(Number(state.selectedCheckInRewardCount || basePoints), basePoints))
   const completionProgress = Math.max(1, Math.round((selectedCount / basePoints) * 100))
-  const submittedStatus = isChildUser() || Number(taskMeta.requireApproval) === 1 || taskMeta.requireApproval === true
+  const approvalRequired = Number(taskMeta.requireApproval) === 1 || taskMeta.requireApproval === true
+  const submittedStatus = isChildUser() && approvalRequired
   if (state.offline) {
     state.calendarEvents = state.calendarEvents.map((event) => (
       String(event.taskId) === String(taskId) && event.taskDate === taskDate
@@ -1511,6 +1517,7 @@ async function handleExchangeReward(rewardId, paymentPointType = '') {
     toast(rewardPaymentHint(reward, state.balances, state.pointExchangeRule))
     return
   }
+  const exchangeNeedsApproval = isChildUser() && (Number(reward.requireApproval) === 1 || reward.requireApproval === true)
   try {
     if (state.offline) {
       state.balances = upsertBalance(state.balances, option.pointType, -option.payAmount)
@@ -1527,11 +1534,12 @@ async function handleExchangeReward(rewardId, paymentPointType = '') {
           rewardIconSnapshot: reward.rewardIcon,
           requiredPointType: reward.requiredPointType,
           requiredPointsSnapshot: reward.requiredPoints,
-          status: 'REQUESTED',
+          status: exchangeNeedsApproval ? 'REQUESTED' : 'APPROVED',
           fulfillmentStatus: 'PENDING',
           branchStatus: 'PENDING',
           fulfillmentType: reward.fulfillmentType || 'INVENTORY_DEDUCT',
           requestedAt: new Date().toISOString(),
+          reviewedAt: exchangeNeedsApproval ? null : new Date().toISOString(),
           remark: '演示兑换申请',
         },
         ...state.exchanges,
@@ -1552,7 +1560,7 @@ async function handleExchangeReward(rewardId, paymentPointType = '') {
       state.rewardExchangeSuccess = null
       render()
     }, 3200)
-    toast(`获得一个${reward.name}奖励的兑换券`)
+    toast(exchangeNeedsApproval ? `已提交${reward.name}兑换申请` : `获得一个${reward.name}奖励的兑换券`)
     render()
   } catch (error) {
     toast(error.message)

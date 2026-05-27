@@ -1325,8 +1325,14 @@ function renderCalendarLogItem(event) {
   const scoreCount = Number(event.scoreAwarded || event.basePoints || 1)
   const isPoint = event.kind === 'points'
   const isReward = event.kind === 'rewards'
+  const canCheckIn = event.kind === 'tasks' && event.status !== 'APPROVED'
+  const taskDate = formatDateValue(event.date || event.taskDate)
+  const canOpenDetail = event.kind !== 'tasks'
+  const openDetailAttrs = canOpenDetail
+    ? `role="button" tabindex="0" data-action="open-calendar-event" data-calendar-event-id="${escapeHtml(event.uid)}" data-task-id="${escapeHtml(event.taskId || '')}" data-task-date="${escapeHtml(taskDate)}"`
+    : ''
   return `
-    <button class="calendar-log-item" type="button" data-action="open-calendar-event" data-calendar-event-id="${escapeHtml(event.uid)}" data-task-id="${escapeHtml(event.taskId || '')}" data-task-date="${escapeHtml(event.date)}">
+    <article class="calendar-log-item ${canOpenDetail ? '' : 'calendar-log-item-static'}" ${openDetailAttrs}>
       <span class="${isReward ? 'reward-mini' : 'task-dot'}" style="${isReward ? `--reward-color:${event.rewardColor || event.color || '#ff9f43'}` : `--task-color:${event.color || '#6c63ff'}`}">${isReward ? escapeHtml(event.rewardIcon || '🎁') : ''}</span>
       <div class="calendar-log-main">
         <strong>${escapeHtml(event.title)}</strong>
@@ -1340,9 +1346,11 @@ function renderCalendarLogItem(event) {
             : renderCalendarStatusScore(event, scoreCount, 'log')}
       </div>
       ${event.kind === 'tasks'
-        ? `<span class="calendar-log-action ${event.status === 'APPROVED' ? 'done' : ''}">${event.status === 'APPROVED' ? '已完成' : '打卡'}</span>`
+        ? canCheckIn
+          ? `<button class="calendar-log-action calendar-log-action-btn" type="button" data-action="complete-task" data-task-id="${escapeHtml(event.taskId || '')}" data-task-date="${escapeHtml(taskDate)}">打卡</button>`
+          : '<span class="calendar-log-action done">已完成</span>'
         : ''}
-    </button>
+    </article>
   `
 }
 
@@ -2256,10 +2264,17 @@ function renderCurrencyAmount(meta, amount, className = '') {
 function renderPointCostSummary(pointType, amount, state, className = '') {
   const currencies = getPointCurrencies(state)
   const meta = currencyMeta(pointType || 'STAR', currencies)
+  const safeAmount = Math.max(0, Number(amount || 0))
   return `
-    <div class="point-cost-summary ${escapeHtml(className)}" style="--point-color:${escapeHtml(meta.color)}">
-      ${renderCurrencyAmount(meta, amount, 'cost-amount')}
-      ${renderLimitedPointIcons(meta.icon, amount, meta.color, 9)}
+    <div class="point-cost-summary ${escapeHtml(className)}" style="--point-color:${escapeHtml(meta.color)}" aria-label="兑换消耗 ${safeAmount} 个 ${escapeHtml(meta.name)}">
+      <div class="point-cost-label">兑换消耗</div>
+      <div class="point-cost-main">
+        <strong>${safeAmount}</strong>
+        <span>个</span>
+        <b>${escapeHtml(meta.icon || '★')}</b>
+      </div>
+      <small>${escapeHtml(meta.name)}</small>
+      ${renderLimitedPointIcons(meta.icon, safeAmount, meta.color, 9)}
     </div>
   `
 }

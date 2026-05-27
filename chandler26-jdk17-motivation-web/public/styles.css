@@ -1372,8 +1372,13 @@ input[type="color"] { padding: 4px; }
   border-radius: 15px;
   color: var(--text);
   background: linear-gradient(180deg, #fff, #fbfdff);
+  font: inherit;
   text-align: left;
+  cursor: pointer;
   box-shadow: 0 8px 18px rgba(88, 101, 146, 0.05);
+}
+.calendar-log-item-static {
+  cursor: default;
 }
 .calendar-log-main,
 .calendar-log-score {
@@ -1407,12 +1412,20 @@ input[type="color"] { padding: 4px; }
   display: inline-flex;
   align-items: center;
   justify-content: center;
+  border: 0;
   border-radius: 10px;
   color: #fff;
   background: linear-gradient(135deg, #6c63ff, #42c6ff);
   font-size: 12px;
   font-weight: 900;
   white-space: nowrap;
+}
+.calendar-log-action-btn {
+  cursor: pointer;
+  box-shadow: 0 8px 18px rgba(66, 198, 255, 0.16);
+}
+.calendar-log-action-btn:hover {
+  transform: translateY(-1px);
 }
 .calendar-log-action.done {
   color: #047857;
@@ -2774,8 +2787,50 @@ input[type="color"] { padding: 4px; }
   justify-items: center;
   gap: 8px;
 }
-.point-cost-summary.calendar-cost .currency-amount strong {
-  font-size: 30px;
+.point-cost-summary.calendar-cost {
+  width: 100%;
+  gap: 10px;
+}
+.point-cost-label {
+  padding: 5px 12px;
+  border-radius: 999px;
+  color: color-mix(in srgb, var(--point-color) 78%, #111827);
+  background: color-mix(in srgb, var(--point-color) 12%, #ffffff);
+  font-size: 13px;
+  font-weight: 950;
+}
+.point-cost-main {
+  min-width: min(260px, 100%);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  padding: 8px 18px;
+  border: 1px solid color-mix(in srgb, var(--point-color) 18%, #ffffff);
+  border-radius: 18px;
+  background: color-mix(in srgb, var(--point-color) 7%, #ffffff);
+}
+.point-cost-main strong {
+  color: var(--text);
+  font-size: 42px;
+  font-weight: 950;
+  line-height: 1;
+}
+.point-cost-main span {
+  color: var(--muted);
+  font-size: 15px;
+  font-weight: 950;
+}
+.point-cost-main b {
+  color: var(--point-color);
+  font-size: 46px;
+  font-weight: 950;
+  line-height: 1;
+}
+.point-cost-summary small {
+  color: var(--muted);
+  font-size: 12px;
+  font-weight: 900;
 }
 .reward-exchange-hint {
   margin: 0 18px 14px;

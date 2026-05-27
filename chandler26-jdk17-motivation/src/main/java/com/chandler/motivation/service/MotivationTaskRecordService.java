@@ -102,8 +102,12 @@ public class MotivationTaskRecordService extends ServiceImpl<MotivationTaskRecor
         }
 
         MotivationTaskRecord record = existing == null ? new MotivationTaskRecord() : existing;
+        MotivationUser operator = authService.requireUser();
+        boolean childSubmitted = MotivationEnums.codeEquals(MotivationEnums.UserType.CHILD, operator.getUserType());
+        boolean requiresApproval = childSubmitted
+                && Integer.valueOf(MotivationConstants.Flag.YES).equals(task.getRequireApproval());
         applyTaskSnapshot(record, task, taskDate);
-        record.setSourceType(MotivationEnums.UserType.CHILD.code());
+        record.setSourceType(operator.getUserType());
         record.setSubmittedByUserId(userId);
         record.setSubmittedAt(LocalDateTime.now());
         record.setCompletionProgress(resolveProgress(request == null ? null : request.getCompletionProgress()));
@@ -111,9 +115,7 @@ public class MotivationTaskRecordService extends ServiceImpl<MotivationTaskRecor
         record.setDeleted(MotivationConstants.Flag.NO);
 
         int scoreAwarded = calculateScore(task.getBasePoints(), record.getCompletionProgress());
-        MotivationUser operator = authService.requireUser();
-        boolean childSubmitted = MotivationEnums.codeEquals(MotivationEnums.UserType.CHILD, operator.getUserType());
-        if (childSubmitted || Integer.valueOf(MotivationConstants.Flag.YES).equals(task.getRequireApproval())) {
+        if (requiresApproval) {
             record.setStatus(MotivationEnums.TaskStatus.SUBMITTED.code());
             record.setScoreAwarded(MotivationConstants.Schedule.EMPTY_PROGRESS);
             record.setReviewedByUserId(null);

@@ -6,6 +6,7 @@ import com.chandler.motivation.common.exception.MotivationException;
 import com.chandler.motivation.domain.dataobject.MotivationPointLedger;
 import com.chandler.motivation.domain.dataobject.MotivationReward;
 import com.chandler.motivation.domain.dataobject.MotivationRewardExchange;
+import com.chandler.motivation.domain.dataobject.MotivationUser;
 import com.chandler.motivation.domain.dto.points.PointExchangeRuleResponse;
 import com.chandler.motivation.domain.dto.reward.RewardExchangeConfirmRequest;
 import com.chandler.motivation.domain.dto.reward.RewardExchangeRequest;
@@ -35,6 +36,7 @@ public class MotivationRewardExchangeService extends ServiceImpl<MotivationRewar
     private final MotivationSystemLogService systemLogService;
     private final MotivationChildService childService;
     private final MotivationPointExchangeRuleService pointExchangeRuleService;
+    private final AuthService authService;
 
     private static final Set<String> POINT_TYPES = Set.of(
             MotivationEnums.PointType.STAR.code(),
@@ -62,6 +64,10 @@ public class MotivationRewardExchangeService extends ServiceImpl<MotivationRewar
         MotivationReward reward = rewardService.requireActiveReward(request.getRewardId(), userId);
         validateStock(reward);
         PaymentPlan paymentPlan = buildPaymentPlan(reward, request.getPaymentPointType(), userId);
+        MotivationUser operator = authService.requireUser();
+        boolean childSubmitted = MotivationEnums.codeEquals(MotivationEnums.UserType.CHILD, operator.getUserType());
+        boolean requiresApproval = childSubmitted
+                && Integer.valueOf(MotivationConstants.Flag.YES).equals(reward.getRequireApproval());
         MotivationRewardExchange exchange = new MotivationRewardExchange();
         exchange.setRewardId(reward.getId());
         exchange.setChildId(reward.getChildId());
@@ -75,14 +81,24 @@ public class MotivationRewardExchangeService extends ServiceImpl<MotivationRewar
         exchange.setRemark(request.getRemark());
         exchange.setRequestedByUserId(userId);
         exchange.setRequestedAt(LocalDateTime.now());
-
-        exchange.setStatus(MotivationEnums.RewardExchangeStatus.REQUESTED.code());
+        if (requiresApproval) {
+            exchange.setStatus(MotivationEnums.RewardExchangeStatus.REQUESTED.code());
+        } else {
+            exchange.setStatus(MotivationEnums.RewardExchangeStatus.APPROVED.code());
+            exchange.setReviewedByUserId(userId);
+            exchange.setReviewedAt(LocalDateTime.now());
+        }
         save(exchange);
         MotivationPointLedger ledger = deductRewardPoints(exchange, paymentPlan, userId);
         exchange.setDeductedLedgerId(ledger.getId());
         updateById(exchange);
+        if (!requiresApproval) {
+            decreaseStock(reward);
+        }
         systemLogService.recordBusiness(userId, reward.getChildId(), MotivationEnums.LogType.REWARD,
-                "申请兑换奖励", "申请兑换了奖励「" + reward.getName() + "」");
+                requiresApproval ? "申请兑换奖励" : "兑换奖励",
+                (requiresApproval ? "申请兑换了奖励「" : "兑换了奖励「") + reward.getName() + "」"
+                        + (requiresApproval ? "，等待家长确认" : "，已直接通过"));
         return exchange;
     }
 
