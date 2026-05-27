@@ -1,6 +1,7 @@
 package com.chandler.motivation.domain.dataobject;
 
 import com.baomidou.mybatisplus.annotation.IdType;
+import com.baomidou.mybatisplus.annotation.TableField;
 import com.baomidou.mybatisplus.annotation.TableId;
 import com.baomidou.mybatisplus.annotation.TableName;
 import java.time.LocalDateTime;
@@ -18,5 +19,6 @@ public class MotivationChildPointBalance {
     private Integer spentTotal;
     private Integer version;
     private LocalDateTime createTime;
+    @TableField(update = "CURRENT_TIMESTAMP")
     private LocalDateTime updateTime;
 }

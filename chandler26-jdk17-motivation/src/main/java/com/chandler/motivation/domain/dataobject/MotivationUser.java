@@ -30,5 +30,6 @@ public class MotivationUser {
     private LocalDateTime lastLoginTime;
     private Integer deleted;
     private LocalDateTime createTime;
+    @TableField(update = "CURRENT_TIMESTAMP")
     private LocalDateTime updateTime;
 }

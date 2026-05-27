@@ -19,6 +19,7 @@ import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.util.List;
 import java.util.Map;
+import java.util.Objects;
 import java.util.Set;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
@@ -160,6 +161,7 @@ public class MotivationRewardExchangeService extends ServiceImpl<MotivationRewar
         MotivationReward reward = rewardService.getById(exchange.getRewardId());
         String fulfillmentType = reward == null ? null : reward.getFulfillmentType();
         String branchStatus = normalizeBranchStatus(resolveRequestedBranchStatus(request, fulfillmentType), fulfillmentType);
+        validateScheduleChangeAllowed(exchange, request, branchStatus, fulfillmentType);
         String fulfillmentStatus = deriveFulfillmentStatus(branchStatus);
         exchange.setBranchStatus(branchStatus);
         exchange.setFulfillmentStatus(fulfillmentStatus);
@@ -325,6 +327,31 @@ public class MotivationRewardExchangeService extends ServiceImpl<MotivationRewar
         }
         if (endDate != null) {
             exchange.setScheduleEndDate(endDate);
+        }
+    }
+
+    private void validateScheduleChangeAllowed(MotivationRewardExchange exchange,
+                                               RewardFulfillmentRequest request,
+                                               String nextBranchStatus,
+                                               String fulfillmentType) {
+        if (!MotivationEnums.codeEquals(MotivationEnums.RewardFulfillmentType.PARENT_FULFILL, fulfillmentType)) {
+            return;
+        }
+        String currentBranchStatus = exchange.getBranchStatus();
+        boolean scheduleLocked = MotivationEnums.codeEquals(MotivationEnums.RewardBranchStatus.IN_PROGRESS, currentBranchStatus)
+                || MotivationEnums.codeEquals(MotivationEnums.RewardBranchStatus.COMPLETED, currentBranchStatus);
+        if (!scheduleLocked) {
+            return;
+        }
+        if (MotivationEnums.codeEquals(MotivationEnums.RewardBranchStatus.SCHEDULED, nextBranchStatus)) {
+            throw new MotivationException("REWARD_SCHEDULE_LOCKED", "奖励已进入进行中，不能修改日程");
+        }
+        if (request != null
+                && ((request.getScheduleStartDate() != null
+                && !Objects.equals(request.getScheduleStartDate(), exchange.getScheduleStartDate()))
+                || (request.getScheduleEndDate() != null
+                && !Objects.equals(request.getScheduleEndDate(), exchange.getScheduleEndDate())))) {
+            throw new MotivationException("REWARD_SCHEDULE_LOCKED", "奖励已进入进行中，不能修改日程");
         }
     }
 

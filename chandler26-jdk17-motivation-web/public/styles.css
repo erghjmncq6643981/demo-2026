@@ -925,6 +925,18 @@ input[type="color"] { padding: 4px; }
   border-radius: 10px;
   font-size: 12px;
 }
+.flow-locked-note {
+  min-height: 32px;
+  display: inline-flex;
+  align-items: center;
+  padding: 0 10px;
+  border: 1px solid rgba(148, 163, 184, 0.22);
+  border-radius: 10px;
+  color: var(--muted);
+  background: rgba(148, 163, 184, 0.08);
+  font-size: 12px;
+  font-weight: 900;
+}
 .flow-date-field {
   display: grid;
   gap: 5px;

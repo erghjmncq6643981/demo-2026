@@ -139,7 +139,8 @@ public class AuthService {
         }
         LambdaUpdateWrapper<MotivationUser> updateWrapper = new LambdaUpdateWrapper<MotivationUser>()
                 .eq(MotivationUser::getId, user.getId())
-                .set(MotivationUser::getNickname, nickname);
+                .set(MotivationUser::getNickname, nickname)
+                .set(MotivationUser::getUpdateTime, LocalDateTime.now());
         userMapper.update(null, updateWrapper);
         MotivationUser latest = findByUsername(user.getUsername());
         log.info("用户「{}」更新了账号资料", latest.getNickname());
@@ -188,7 +189,8 @@ public class AuthService {
                 .eq(MotivationUser::getId, user.getId())
                 .set(MotivationUser::getAvatarData, compressedAvatar.data())
                 .set(MotivationUser::getAvatarContentType, compressedAvatar.contentType())
-                .set(MotivationUser::getAvatarUrl, avatarUrl);
+                .set(MotivationUser::getAvatarUrl, avatarUrl)
+                .set(MotivationUser::getUpdateTime, LocalDateTime.now());
         userMapper.update(null, updateWrapper);
         systemLogService.recordBusiness(user.getId(), null, MotivationEnums.LogType.SYSTEM,
                 "更新账号头像", "用户「" + user.getNickname() + "」更新了账号头像");

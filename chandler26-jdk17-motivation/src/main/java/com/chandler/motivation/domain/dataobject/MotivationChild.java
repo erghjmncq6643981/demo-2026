@@ -29,6 +29,7 @@ public class MotivationChild {
     private Integer deleted;
     private Long createdByUserId;
     private LocalDateTime createTime;
+    @TableField(update = "CURRENT_TIMESTAMP")
     private LocalDateTime updateTime;
     @TableField(exist = false)
     private Long childAccountUserId;

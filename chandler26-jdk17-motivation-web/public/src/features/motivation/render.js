@@ -1967,12 +1967,16 @@ function renderFulfillmentControls(exchange, contextDate = '') {
     `
   }
   if (fulfillmentType === 'PARENT_FULFILL') {
+    const scheduleLocked = branchStatus === 'IN_PROGRESS' || branchStatus === 'COMPLETED'
+    const scheduleButtonLabel = branchStatus === 'SCHEDULED' ? '修改日程' : '加入日程'
     return `
       <div class="reward-flow-controls schedule-flow-controls">
-        ${renderChineseDatePicker('scheduleStartDate', defaults.scheduleStartDate, { label: '开始日期', placeholder: '请选择开始日期', ariaLabel: '选择开始日期' })}
-        ${renderChineseDatePicker('scheduleEndDate', defaults.scheduleEndDate, { label: '结束日期', placeholder: '请选择结束日期', ariaLabel: '选择结束日期' })}
-        ${renderFulfillmentRemarkField('例如：周六带宝贝去野生动物园', exchange.remark || '')}
-        <button class="small-btn ${branchStatus === 'SCHEDULED' ? 'primary-lite' : ''}" type="button" data-action="update-fulfillment" data-exchange-id="${exchange.exchangeId || exchange.id}" data-branch-status="SCHEDULED">加入日程</button>
+        ${scheduleLocked
+          ? '<div class="flow-locked-note">奖励已进入进行中，日程不可修改</div>'
+          : `${renderChineseDatePicker('scheduleStartDate', defaults.scheduleStartDate, { label: '开始日期', placeholder: '请选择开始日期', ariaLabel: '选择开始日期' })}
+            ${renderChineseDatePicker('scheduleEndDate', defaults.scheduleEndDate, { label: '结束日期', placeholder: '请选择结束日期', ariaLabel: '选择结束日期' })}
+            ${renderFulfillmentRemarkField('例如：周六带宝贝去野生动物园', exchange.remark || '')}
+            <button class="small-btn ${branchStatus === 'SCHEDULED' ? 'primary-lite' : ''}" type="button" data-action="update-fulfillment" data-exchange-id="${exchange.exchangeId || exchange.id}" data-branch-status="SCHEDULED">${scheduleButtonLabel}</button>`}
         <button class="small-btn ${branchStatus === 'IN_PROGRESS' ? 'primary-lite' : ''}" type="button" data-action="update-fulfillment" data-exchange-id="${exchange.exchangeId || exchange.id}" data-branch-status="IN_PROGRESS">进行中</button>
         <button class="small-btn ${branchStatus === 'COMPLETED' ? 'primary-lite' : ''}" type="button" data-action="update-fulfillment" data-exchange-id="${exchange.exchangeId || exchange.id}" data-branch-status="COMPLETED">已实现</button>
       </div>

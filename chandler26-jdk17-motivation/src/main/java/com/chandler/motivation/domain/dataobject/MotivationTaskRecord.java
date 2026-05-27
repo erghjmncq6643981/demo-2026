@@ -1,6 +1,7 @@
 package com.chandler.motivation.domain.dataobject;
 
 import com.baomidou.mybatisplus.annotation.IdType;
+import com.baomidou.mybatisplus.annotation.TableField;
 import com.baomidou.mybatisplus.annotation.TableId;
 import com.baomidou.mybatisplus.annotation.TableName;
 import java.time.LocalDate;
@@ -35,5 +36,6 @@ public class MotivationTaskRecord {
     private String attachmentJson;
     private Integer deleted;
     private LocalDateTime createTime;
+    @TableField(update = "CURRENT_TIMESTAMP")
     private LocalDateTime updateTime;
 }
