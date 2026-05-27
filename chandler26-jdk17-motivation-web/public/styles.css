@@ -87,6 +87,9 @@ button svg { pointer-events: none; }
   min-width: calc(33.3333% - 9.33px);
   min-height: clamp(184px, 36vw, 260px);
   height: clamp(184px, 36vw, 260px);
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
   padding: 14px;
   border: 1px solid rgba(255,255,255,0.76);
   border-radius: 20px;
@@ -135,7 +138,7 @@ button svg { pointer-events: none; }
   display: flex;
   align-items: center;
   gap: 8px;
-  margin-bottom: 12px;
+  margin-bottom: 2px;
 }
 .shot-bar span {
   width: 10px;
@@ -144,6 +147,16 @@ button svg { pointer-events: none; }
   background: linear-gradient(135deg, #ff6b9d, #42c6ff);
 }
 .shot-bar b { font-size: 13px; }
+.shot-bar em {
+  margin-left: auto;
+  padding: 4px 8px;
+  border-radius: 999px;
+  color: #0f766e;
+  background: rgba(20, 184, 166, 0.12);
+  font-size: 11px;
+  font-style: normal;
+  font-weight: 900;
+}
 .shot-list { display: grid; gap: 9px; }
 .shot-list div,
 .shot-rewards div {
@@ -206,6 +219,229 @@ button svg { pointer-events: none; }
   border-radius: 11px;
   background: linear-gradient(135deg, #ff9f43, #ff6b9d);
   font-style: normal;
+}
+.shot-profile-card,
+.shot-ticket-card,
+.shot-reward-brief,
+.shot-schedule-card,
+.shot-checkin-card {
+  border: 1px solid var(--line);
+  border-radius: 14px;
+  background: #fff;
+  box-shadow: 0 10px 22px rgba(80, 97, 153, 0.08);
+}
+.shot-profile-card {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 10px;
+  padding: 10px;
+}
+.shot-avatar {
+  width: 34px;
+  height: 34px;
+  display: grid;
+  place-items: center;
+  border-radius: 12px;
+  color: #fff;
+  background: linear-gradient(135deg, #ff6b9d, #6c63ff);
+  font-size: 16px;
+  font-weight: 900;
+}
+.shot-profile-card strong,
+.shot-ticket-card strong,
+.shot-reward-brief strong,
+.shot-schedule-card strong {
+  display: block;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: 12px;
+}
+.shot-profile-card small,
+.shot-ticket-card small,
+.shot-reward-brief small,
+.shot-schedule-card p {
+  color: var(--muted);
+  font-size: 11px;
+  line-height: 1.35;
+}
+.shot-status {
+  padding: 5px 8px;
+  border-radius: 999px;
+  color: #4338ca;
+  background: rgba(79, 70, 229, 0.1);
+  font-size: 10px;
+  font-weight: 900;
+}
+.shot-balance-grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 8px;
+}
+.shot-balance-grid span {
+  min-height: 48px;
+  display: grid;
+  place-items: center;
+  gap: 2px;
+  padding: 8px;
+  border-radius: 14px;
+  background: rgba(248, 251, 255, 0.96);
+  border: 1px solid var(--line);
+}
+.shot-balance-grid b {
+  font-size: 17px;
+}
+.shot-balance-grid i {
+  color: var(--currency-color);
+  font-style: normal;
+  font-size: 16px;
+}
+.shot-ticket-card,
+.shot-reward-brief {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  align-items: center;
+  gap: 10px;
+  padding: 10px;
+}
+.shot-ticket-card em,
+.shot-reward-brief em {
+  width: 34px;
+  height: 34px;
+  display: grid;
+  place-items: center;
+  border-radius: 12px;
+  background: linear-gradient(135deg, #ff9f43, #ff6b9d);
+  font-style: normal;
+}
+.shot-mode-tabs {
+  display: flex;
+  justify-content: flex-end;
+  gap: 6px;
+}
+.shot-mode-tabs span {
+  padding: 4px 8px;
+  border-radius: 999px;
+  color: var(--muted);
+  background: rgba(255,255,255,0.72);
+  border: 1px solid var(--line);
+  font-size: 10px;
+  font-weight: 900;
+}
+.shot-mode-tabs span.active {
+  color: #fff;
+  background: linear-gradient(135deg, #6c63ff, #06b6d4);
+  border-color: transparent;
+}
+.shot-task-calendar {
+  display: grid;
+  grid-template-columns: repeat(7, minmax(0, 1fr));
+  gap: 5px;
+}
+.shot-task-calendar span {
+  min-height: 38px;
+  display: grid;
+  align-content: start;
+  gap: 3px;
+  padding: 5px;
+  border: 1px solid var(--line);
+  border-radius: 11px;
+  background: #fff;
+  overflow: hidden;
+}
+.shot-task-calendar b {
+  color: var(--muted);
+  font-size: 10px;
+  line-height: 1;
+}
+.shot-task-calendar i {
+  min-width: 0;
+  padding: 2px 3px;
+  border-radius: 5px;
+  color: #fff;
+  background: var(--task-color);
+  font-size: 9px;
+  font-style: normal;
+  font-weight: 900;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.shot-task-calendar span.today {
+  border-color: rgba(255, 92, 138, 0.48);
+  box-shadow: inset 0 0 0 1px rgba(255, 92, 138, 0.22);
+}
+.shot-checkin-card {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 10px;
+}
+.shot-checkin-card .shot-checkin-pill {
+  border: 0;
+  border-radius: 999px;
+  padding: 6px 10px;
+  color: #fff;
+  background: linear-gradient(135deg, #22c55e, #06b6d4);
+  font-size: 11px;
+  font-weight: 900;
+}
+.shot-checkin-card > span:not(.shot-checkin-pill) {
+  color: var(--muted);
+  font-size: 11px;
+  font-weight: 800;
+}
+.shot-checkin-card strong {
+  color: #f59e0b;
+  letter-spacing: 0;
+  white-space: nowrap;
+}
+.shot-flow-line {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 6px;
+}
+.shot-flow-line span {
+  min-height: 38px;
+  display: grid;
+  place-items: center;
+  padding: 5px;
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  background: #fff;
+  color: var(--muted);
+  font-size: 10px;
+  font-weight: 900;
+  text-align: center;
+}
+.shot-flow-line span.done {
+  color: #047857;
+  background: rgba(34, 197, 94, 0.12);
+  border-color: rgba(34, 197, 94, 0.2);
+}
+.shot-flow-line span.active {
+  color: #4338ca;
+  background: rgba(79, 70, 229, 0.12);
+  border-color: rgba(79, 70, 229, 0.22);
+}
+.shot-schedule-card {
+  padding: 10px;
+}
+.shot-schedule-card div {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+.shot-schedule-card span {
+  color: #f97316;
+  font-size: 12px;
+  font-weight: 900;
+}
+.shot-schedule-card p {
+  margin: 6px 0 0;
 }
 .login-panel {
   width: 100%;
@@ -3253,6 +3489,9 @@ input[type="color"] { padding: 4px; }
     flex-basis: calc(33.3333% - 6px);
     width: calc(33.3333% - 6px);
     min-width: calc(33.3333% - 6px);
+    min-height: 226px;
+    height: 226px;
+    gap: 8px;
     padding: 12px;
     border-radius: 16px;
   }
@@ -3275,6 +3514,49 @@ input[type="color"] { padding: 4px; }
   .shot-rewards div {
     min-height: 30px;
     padding: 6px;
+  }
+  .shot-profile-card,
+  .shot-ticket-card,
+  .shot-reward-brief,
+  .shot-schedule-card,
+  .shot-checkin-card {
+    border-radius: 12px;
+  }
+  .shot-profile-card,
+  .shot-ticket-card,
+  .shot-reward-brief {
+    padding: 8px;
+  }
+  .shot-avatar,
+  .shot-ticket-card em,
+  .shot-reward-brief em {
+    width: 30px;
+    height: 30px;
+  }
+  .shot-balance-grid {
+    gap: 6px;
+  }
+  .shot-balance-grid span {
+    min-height: 40px;
+    padding: 6px;
+  }
+  .shot-task-calendar {
+    gap: 4px;
+  }
+  .shot-task-calendar span {
+    min-height: 31px;
+    border-radius: 9px;
+    padding: 4px;
+  }
+  .shot-flow-line span {
+    min-height: 32px;
+    border-radius: 10px;
+  }
+  .shot-schedule-card {
+    padding: 8px;
+  }
+  .shot-schedule-card p {
+    margin-top: 4px;
   }
   .shot-rewards em {
     width: 28px;

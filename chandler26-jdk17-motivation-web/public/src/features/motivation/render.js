@@ -252,7 +252,9 @@ export function renderApp(state, actions) {
 }
 
 function renderLoginPage(state) {
-  const activeIndex = Number(state.loginCarouselIndex || 0)
+  const slideTypes = loginCarouselSlideTypes()
+  const slideCount = slideTypes.length
+  const activeIndex = ((Number(state.loginCarouselIndex || 0) % slideCount) + slideCount) % slideCount
   return `
     <main class="login-page">
       <section class="login-showcase" aria-label="系统能力概览">
@@ -264,12 +266,12 @@ function renderLoginPage(state) {
         </div>
         <div class="login-carousel" data-login-carousel aria-label="核心功能预览">
           <button class="carousel-arrow left" type="button" data-action="login-carousel-prev" aria-label="上一张">‹</button>
-          <div class="login-showcase-grid" style="--carousel-index:${activeIndex}">
-            ${renderLoginCarouselSlides(activeIndex)}
+          <div class="login-showcase-grid" style="--carousel-index:${activeIndex}; --carousel-count:${slideCount}">
+            ${renderLoginCarouselSlides(slideTypes)}
           </div>
           <button class="carousel-arrow right" type="button" data-action="login-carousel-next" aria-label="下一张">›</button>
           <div class="carousel-dots">
-            ${[0, 1, 2].map((index) => `
+            ${slideTypes.map((_, index) => `
               <button class="${activeIndex === index ? 'active' : ''}" type="button" data-login-carousel-nav="${index}" aria-label="第 ${index + 1} 张"></button>
             `).join('')}
           </div>
@@ -303,40 +305,137 @@ function renderLoginPage(state) {
   `
 }
 
-function renderLoginCarouselSlides() {
-  const slides = ['store', 'task', 'calendar']
+function loginCarouselSlideTypes() {
+  return ['profile', 'growth', 'task-management', 'task-calendar', 'reward-store', 'reward-flow']
+}
+
+function renderLoginCarouselSlides(slides = loginCarouselSlideTypes()) {
   return slides.map((type) => renderLoginShot(type)).join('')
 }
 
 function renderLoginShot(type) {
-  if (type === 'task') {
+  if (type === 'profile') {
     return `
-      <article class="login-shot task-shot">
-        <div class="shot-bar"><span></span><b>任务管理</b></div>
-        <div class="shot-list">
-          <div><i style="--task-color:#ff5c8a"></i><strong>晨读</strong><span>★★★</span></div>
-          <div><i style="--task-color:#34c759"></i><strong>整理书包</strong><span>✿✿</span></div>
-          <div><i style="--task-color:#6c63ff"></i><strong>练字作业</strong><span>♛</span></div>
+      <article class="login-shot profile-shot">
+        <div class="shot-bar"><span></span><b>个人信息</b></div>
+        <div class="shot-profile-card">
+          <div class="shot-avatar">多</div>
+          <div>
+            <strong>钱多多</strong>
+            <small>观察中 · 今日很棒</small>
+          </div>
+          <span class="shot-status">成长日志</span>
+        </div>
+        <div class="shot-balance-grid">
+          <span><b>128</b><i style="--currency-color:#f59e0b">${pointIcon('STAR')}</i></span>
+          <span><b>12</b><i style="--currency-color:#ec4899">${pointIcon('FLOWER')}</i></span>
+          <span><b>3</b><i style="--currency-color:#7c3aed">${pointIcon('CROWN')}</i></span>
+        </div>
+        <div class="shot-ticket-card">
+          <em>🎁</em>
+          <div><strong>礼物兑换券</strong><small>积木礼物 · 待确认</small></div>
         </div>
       </article>
     `
   }
-  if (type === 'calendar') {
+  if (type === 'growth') {
     return `
-      <article class="login-shot calendar-shot">
-        <div class="shot-bar"><span></span><b>任务日历</b></div>
-        <div class="shot-calendar">
-          ${Array.from({ length: 21 }, (_, index) => `<span class="${[2, 4, 8, 13, 18].includes(index) ? 'active' : ''}">${index + 1}</span>`).join('')}
+      <article class="login-shot growth-shot">
+        <div class="shot-bar"><span></span><b>宝贝成长</b></div>
+        <div class="shot-goal-focus">
+          <em>🎯</em>
+          <div><strong>星星大作战</strong><small>晨读、收纳、运动一起养成</small></div>
+          <span>72%</span>
+        </div>
+        <div class="shot-goal-bars">
+          <span style="--goal-color:#ff5c8a; --goal-progress:82%"><b>阅读</b><i></i></span>
+          <span style="--goal-color:#22c55e; --goal-progress:64%"><b>习惯</b><i></i></span>
+          <span style="--goal-color:#06b6d4; --goal-progress:55%"><b>运动</b><i></i></span>
+        </div>
+        <div class="shot-log-card"><strong>宝贝成长日志</strong><small>刚刚完成晨读打卡</small></div>
+      </article>
+    `
+  }
+  if (type === 'task-management') {
+    return `
+      <article class="login-shot task-shot">
+        <div class="shot-bar"><span></span><b>任务管理</b></div>
+        <div class="shot-list">
+          <div><i style="--task-color:#ff5c8a"></i><strong>晨读 20 分钟</strong><span>${pointIcon('STAR')}${pointIcon('STAR')}${pointIcon('STAR')}</span></div>
+          <div><i style="--task-color:#34c759"></i><strong>整理书包</strong><span>${pointIcon('FLOWER')}${pointIcon('FLOWER')}</span></div>
+          <div><i style="--task-color:#6c63ff"></i><strong>练字作业</strong><span>${pointIcon('STAR')}${pointIcon('STAR')}</span></div>
+        </div>
+        <div class="shot-time-blocks">
+          ${['一', '二', '三', '四', '五', '六', '日'].map((day) => `<span class="${['一', '四', '五'].includes(day) ? 'active' : ''}">${day}</span>`).join('')}
+        </div>
+      </article>
+    `
+  }
+  if (type === 'task-calendar') {
+    const days = [
+      ['', '', '1', '2', '3', '4', '5'],
+      ['6', '7', '8', '9', '10', '11', '12'],
+    ]
+    return `
+      <article class="login-shot task-calendar-shot">
+        <div class="shot-bar"><span></span><b>任务日历</b><em>今天</em></div>
+        <div class="shot-mode-tabs">
+          <span class="active">任务</span><span>积分</span>
+        </div>
+        <div class="shot-task-calendar">
+          ${days.flat().map((day) => `
+            <span class="${day === '9' ? 'today' : ''} ${['3', '7', '9', '11'].includes(day) ? 'has-task' : ''}">
+              <b>${day}</b>
+              ${day === '3' ? '<i style="--task-color:#ff5c8a">晨读</i>' : ''}
+              ${day === '7' ? '<i style="--task-color:#06b6d4">跳绳</i>' : ''}
+              ${day === '9' ? '<i style="--task-color:#22c55e">练字</i>' : ''}
+              ${day === '11' ? '<i style="--task-color:#f97316">整理</i>' : ''}
+            </span>
+          `).join('')}
+        </div>
+        <div class="shot-checkin-card">
+          <span class="shot-checkin-pill">打卡</span>
+          <span>奖励预览</span>
+          <strong>${pointIcon('STAR')}${pointIcon('STAR')}${pointIcon('STAR')}${pointIcon('STAR')}</strong>
+        </div>
+      </article>
+    `
+  }
+  if (type === 'reward-store') {
+    return `
+      <article class="login-shot store-shot">
+        <div class="shot-bar"><span></span><b>奖励商店</b></div>
+        <div class="shot-store-grid">
+          <span><em>🍦</em><strong>小甜点</strong><small>2 ${pointIcon('FLOWER')}</small></span>
+          <span><em>🧩</em><strong>积木礼物</strong><small>80 ${pointIcon('STAR')}</small></span>
+          <span><em>🎮</em><strong>亲子游戏</strong><small>1 ${pointIcon('CROWN')}</small></span>
+          <span><em>🎟️</em><strong>兑换券</strong><small>待确认</small></span>
+        </div>
+        <div class="shot-exchange-strip">
+          <b>余额足够</b><span>一键兑换，自动生成礼物券</span>
         </div>
       </article>
     `
   }
   return `
-    <article class="login-shot store-shot">
-      <div class="shot-bar"><span></span><b>奖励商店</b></div>
-      <div class="shot-rewards">
-        <div><em>🎁</em><strong>积木礼物</strong><small>80 ★</small></div>
-        <div><em>🍦</em><strong>冰淇淋</strong><small>40 ✿</small></div>
+    <article class="login-shot reward-flow-shot">
+      <div class="shot-bar"><span></span><b>奖励日历</b></div>
+      <div class="shot-reward-brief">
+        <em>🎟️</em>
+        <div>
+          <strong>积木礼物</strong>
+          <small><b>80</b> ${pointIcon('STAR')} · 家长购买</small>
+        </div>
+      </div>
+      <div class="shot-flow-line">
+        <span class="done">确认</span>
+        <span class="done">下单</span>
+        <span class="active">运输</span>
+        <span>宝贝确认</span>
+      </div>
+      <div class="shot-schedule-card">
+        <div><strong>预计到达</strong><span>3 天后</span></div>
+        <p>奖励会出现在日历中，宝贝可以随时关注进度。</p>
       </div>
     </article>
   `
