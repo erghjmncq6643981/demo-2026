@@ -1,6 +1,5 @@
 import { bindAppEvents, exposeDebugGlobals } from '/src/app/events.js'
 import { createElements } from '/src/app/elements.js'
-import { providerCatalog } from '/src/app/config.js'
 import { createInitialState } from '/src/app/state.js'
 import { createAppServices } from '/src/app/services.js'
 import { createAppShell } from '/src/app/shell.js'
@@ -22,6 +21,7 @@ import {
   tagLabel,
 } from '/src/shared/vocabulary.js'
 import { createWordbookTransferFeature } from '/src/features/wordbook/transfer.js'
+import { createWordbookArticleFeature } from '/src/features/wordbook/article.js'
 import { createProfileFeature } from '/src/features/profile/profile.js'
 import { createSpeechFeature } from '/src/features/speech/speech.js'
 import { createStudyFeature } from '/src/features/study/study.js'
@@ -32,6 +32,7 @@ const elements = createElements()
 let profileFeature
 let studyFeature
 let reviewFeature
+let articleFeature
 const services = createAppServices({ state, elements })
 const {
   request,
@@ -47,6 +48,7 @@ const {
 const profile = createFeatureFacade(() => profileFeature)
 const studyFacade = createFeatureFacade(() => studyFeature)
 const review = createFeatureFacade(() => reviewFeature)
+const article = createFeatureFacade(() => articleFeature)
 
 const speechFeature = createSpeechFeature({
   state,
@@ -66,6 +68,17 @@ const {
   saveSpeechPreferences,
   initSpeechSettings,
 } = speechFeature
+
+articleFeature = createWordbookArticleFeature({
+  state,
+  elements,
+  request,
+  setLoading,
+  toast,
+  logEvent,
+  confirmAction,
+  speakSentence,
+})
 
 const {
   updateAuthView,
@@ -94,10 +107,15 @@ const {
   loadSystemLogs: profile.loadSystemLogs,
   loadDueReviews: review.loadDueReviews,
   loadWordbookEntries: profile.loadWordbookEntries,
+  loadArticleWords: article.loadArticleWords,
+  loadArticleHistory: article.loadArticleHistory,
   renderProfileMetrics: profile.renderProfileMetrics,
   renderActivityHeatmap: profile.renderActivityHeatmap,
   renderWordbooks: profile.renderWordbooks,
   renderWordbookEntries: profile.renderWordbookEntries,
+  renderArticleWords: article.renderArticleWords,
+  renderArticleHistory: article.renderArticleHistory,
+  renderArticleResult: article.renderArticleResult,
   renderModelConfigs: profile.renderModelConfigs,
   renderAgentConfigs: profile.renderAgentConfigs,
   renderLearningAgentOptions: profile.renderLearningAgentOptions,
@@ -213,7 +231,6 @@ profileFeature = createProfileFeature({
   confirmAction,
   confirmDelete,
   setConnection,
-  providerCatalog,
   normalizeDefinitions,
   normalizeExamples,
   renderMarkdown,
@@ -245,6 +262,7 @@ if (elements.buildVersion) elements.buildVersion.textContent = `build ${state.bu
 initSpeechSettings()
 
 setSystemLogRenderer(profile.renderSystemLogs)
+article.setWordbookTab(state.activeWordbookTab, { skipLoad: true })
 
 bindAppEvents({
   state,
@@ -278,6 +296,17 @@ bindAppEvents({
   saveAccountSecurity: profile.saveAccountSecurity,
   updateAccountPasswordStrength: profile.updateAccountPasswordStrength,
   loadWordbookEntries: profile.loadWordbookEntries,
+  setWordbookTab: article.setWordbookTab,
+  changeArticleWordbook: article.changeArticleWordbook,
+  loadArticleWords: article.loadArticleWords,
+  loadArticleHistory: article.loadArticleHistory,
+  renderArticleWords: article.renderArticleWords,
+  renderArticleHistory: article.renderArticleHistory,
+  clearArticleSelection: article.clearArticleSelection,
+  openArticleStudyModal: article.openArticleStudyModal,
+  closeArticleStudyModal: article.closeArticleStudyModal,
+  generateArticlePreview: article.generateArticlePreview,
+  saveArticleStudy: article.saveArticleStudy,
   openWordbookModal: profile.openWordbookModal,
   closeWordbookModal: profile.closeWordbookModal,
   createWordbook: profile.createWordbook,

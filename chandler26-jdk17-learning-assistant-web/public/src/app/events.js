@@ -34,6 +34,17 @@ export function bindAppEvents(ctx) {
     saveAccountSecurity,
     updateAccountPasswordStrength,
     loadWordbookEntries,
+    setWordbookTab,
+    changeArticleWordbook,
+    loadArticleWords,
+    loadArticleHistory,
+    renderArticleWords,
+    renderArticleHistory,
+    clearArticleSelection,
+    openArticleStudyModal,
+    closeArticleStudyModal,
+    generateArticlePreview,
+    saveArticleStudy,
     openWordbookModal,
     closeWordbookModal,
     createWordbook,
@@ -154,6 +165,33 @@ elements.wordPrefixInput?.addEventListener('input', () => {
   state.wordPrefixFilter = elements.wordPrefixInput.value.trim()
   renderWordbookEntries()
 })
+document.querySelectorAll('.wordbook-tab').forEach((button) => {
+  button.addEventListener('click', () => setWordbookTab(button.dataset.wordbookTab))
+})
+elements.articleWordbookSelect?.addEventListener('change', () => changeArticleWordbook(elements.articleWordbookSelect.value))
+elements.articleStatusFilter?.addEventListener('change', loadArticleWords)
+elements.articlePrefixInput?.addEventListener('input', () => {
+  state.articlePrefixFilter = elements.articlePrefixInput.value.trim()
+  renderArticleWords()
+})
+elements.articleReloadWordsBtn?.addEventListener('click', () => {
+  loadArticleWords()
+  loadArticleHistory()
+})
+elements.articleReloadHistoryBtn?.addEventListener('click', loadArticleHistory)
+elements.articleHistorySearchInput?.addEventListener('input', () => {
+  state.articleHistoryFilter = elements.articleHistorySearchInput.value.trim()
+  renderArticleHistory()
+})
+elements.articleClearSelectionBtn?.addEventListener('click', clearArticleSelection)
+elements.articleGenerateBtn?.addEventListener('click', openArticleStudyModal)
+elements.closeArticleStudyModalBtn?.addEventListener('click', closeArticleStudyModal)
+elements.cancelArticleStudyBtn?.addEventListener('click', closeArticleStudyModal)
+elements.articleStudyModal?.addEventListener('click', (event) => {
+  if (event.target === elements.articleStudyModal) closeArticleStudyModal()
+})
+elements.articlePreviewGenerateBtn?.addEventListener('click', () => generateArticlePreview({ forceRefresh: true }))
+elements.saveArticleStudyBtn?.addEventListener('click', saveArticleStudy)
 elements.reloadSystemLogsBtn.addEventListener('click', loadSystemLogs)
 elements.clearLogBtn.addEventListener('click', clearLogs)
 elements.studyForm.addEventListener('submit', (event) => {

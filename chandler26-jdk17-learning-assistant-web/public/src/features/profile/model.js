@@ -4,7 +4,7 @@ import { escapeHtml } from '/src/shared/text.js'
 import { providerDefaults, renderModelSelect, renderProviderSelect } from '/src/features/profile/provider.js'
 
 export function createModelProfileFeature(ctx) {
-  const { state, elements, request, setLoading, toast, logEvent, confirmAction, confirmDelete, providerCatalog } = ctx
+  const { state, elements, request, setLoading, toast, logEvent, confirmAction, confirmDelete } = ctx
 
   function loadModelConfigs() {
     if (state.preview) {
@@ -25,31 +25,38 @@ export function createModelProfileFeature(ctx) {
   }
 
   function renderStudyModelOptions() {
-    if (!elements.studyModelSelect) return
-    elements.studyModelSelect.innerHTML = ''
+    const selects = [elements.studyModelSelect, elements.articleModelSelect].filter(Boolean)
+    if (!selects.length) return
+    selects.forEach((select) => {
+      select.innerHTML = ''
+    })
     const enabled = state.modelConfigs.filter((item) => item.enabled)
     if (!enabled.length) {
-      elements.studyModelSelect.innerHTML = '<option value="">默认模型</option>'
+      selects.forEach((select) => {
+        select.innerHTML = '<option value="">请先配置模型</option>'
+      })
       return
     }
-    for (const item of enabled) {
-      const option = document.createElement('option')
-      option.value = String(item.id)
-      option.textContent = `${item.name} · ${item.modelName}${item.isDefault ? ' · 默认' : ''}`
-      elements.studyModelSelect.appendChild(option)
-    }
     const preferred = enabled.find((item) => item.isDefault) || enabled[0]
-    elements.studyModelSelect.value = String(preferred.id)
+    for (const select of selects) {
+      for (const item of enabled) {
+        const option = document.createElement('option')
+        option.value = String(item.id)
+        option.textContent = `${item.name} · ${item.modelName}${item.isDefault ? ' · 默认' : ''}`
+        select.appendChild(option)
+      }
+      select.value = String(preferred.id)
+    }
   }
 
   function renderProviderOptions(selectedProvider = '') {
-    renderProviderSelect(elements.modelProviderInput, providerCatalog, selectedProvider)
+    return renderProviderSelect(elements.modelProviderInput, state.modelConfigs, selectedProvider)
   }
 
   function syncModelProviderDefaults(options = {}) {
-    const provider = elements.modelProviderInput.value || 'deepseek'
-    const config = providerDefaults(providerCatalog, provider)
-    renderModelSelect(elements.modelModelNameInput, providerCatalog, provider, options)
+    const provider = elements.modelProviderInput.value || renderProviderOptions()
+    const config = providerDefaults(state.modelConfigs, provider)
+    renderModelSelect(elements.modelModelNameInput, state.modelConfigs, provider, options)
     if (!options.keepValues) {
       elements.modelBaseUrlInput.value = config.baseUrl || ''
       elements.modelChatPathInput.value = config.chatPath || '/chat/completions'
@@ -118,13 +125,10 @@ export function createModelProfileFeature(ctx) {
   function editModelConfig(id) {
     const item = state.modelConfigs.find((model) => sameId(model.id, id))
     if (!item) return
-    renderProviderOptions(item.provider || 'deepseek')
+    renderProviderOptions(item.provider || '')
     state.currentModelEditId = item.id
     elements.modelNameInput.value = item.name || ''
     elements.modelProviderInput.value = item.provider || ''
-    if (!providerCatalog[elements.modelProviderInput.value]) {
-      renderProviderOptions(elements.modelProviderInput.value || 'deepseek')
-    }
     syncModelProviderDefaults({ keepValues: true, keepUnknownModel: true, modelName: item.modelName || '' })
     elements.modelModelNameInput.value = item.modelName || ''
     elements.modelBaseUrlInput.value = item.baseUrl || ''
@@ -139,9 +143,9 @@ export function createModelProfileFeature(ctx) {
 
   function resetModelForm(options = {}) {
     state.currentModelEditId = null
-    renderProviderOptions('deepseek')
+    const provider = renderProviderOptions('')
     elements.modelNameInput.value = ''
-    elements.modelProviderInput.value = 'deepseek'
+    elements.modelProviderInput.value = provider
     syncModelProviderDefaults()
     elements.modelApiKeyInput.value = ''
     elements.modelApiKeyInput.placeholder = 'API KEY'

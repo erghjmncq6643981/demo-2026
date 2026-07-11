@@ -6,15 +6,13 @@ import com.baomidou.mybatisplus.annotation.TableName;
 import io.swagger.v3.oas.annotations.media.Schema;
 import lombok.Data;
 
-import java.time.LocalDateTime;
-
 /**
  * AI 提示词模板。
  */
 @Data
 @TableName("ai_prompt_template")
 @Schema(name = "AI 提示词模板")
-public class AiPromptTemplate {
+public class AiPromptTemplate extends BaseEntity {
 
     @TableId(value = "id", type = IdType.ASSIGN_ID)
     private Long id;
@@ -44,10 +42,4 @@ public class AiPromptTemplate {
     private Boolean enabled;
 
     private Integer sequence;
-
-    private Boolean deleted;
-
-    private LocalDateTime createTime;
-
-    private LocalDateTime updateTime;
 }

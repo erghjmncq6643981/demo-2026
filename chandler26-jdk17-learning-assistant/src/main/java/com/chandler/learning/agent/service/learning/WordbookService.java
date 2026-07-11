@@ -15,6 +15,9 @@ import com.chandler.learning.agent.domain.dto.learning.WordbookEntryUpdateReques
 import com.chandler.learning.agent.domain.dto.learning.WordbookResponse;
 import com.chandler.learning.agent.domain.dto.learning.WordbookSaveRequest;
 import com.chandler.learning.agent.domain.dto.vocabulary.VocabularyStudyRequest;
+import com.chandler.learning.agent.domain.enums.ReviewResult;
+import com.chandler.learning.agent.domain.enums.ReviewStatus;
+import com.chandler.learning.agent.domain.enums.SystemLogType;
 import com.chandler.learning.agent.domain.entity.learning.LearningReviewRecord;
 import com.chandler.learning.agent.domain.entity.learning.LearningWordbook;
 import com.chandler.learning.agent.domain.entity.learning.LearningWordbookEntry;
@@ -45,7 +48,7 @@ import java.util.Objects;
 /**
  * 单词本与复习计划服务。
  * <p>
- * 负责词书管理、词条状态、学习笔记，以及基于艾宾浩斯间隔的复习排期。
+ * 负责单词本管理、词条状态、学习笔记，以及基于艾宾浩斯间隔的复习排期。
  */
 @Slf4j
 @Service
@@ -73,17 +76,10 @@ public class WordbookService {
         }
 
         LocalDateTime now = LocalDateTime.now();
-        LearningWordbook wordbook = new LearningWordbook();
-        wordbook.setUserId(userId);
-        wordbook.setName("默认词书");
-        wordbook.setDescription("自动创建的英语词汇学习词书");
-        wordbook.setIsDefault(true);
-        wordbook.setDeleted(false);
-        wordbook.setCreateTime(now);
-        wordbook.setUpdateTime(now);
+        LearningWordbook wordbook = LearningWordbook.createDefault(userId, now);
         wordbookMapper.insert(wordbook);
-        systemLogService.record(userId, "wordbook", "创建默认词书", wordbook.getName());
-        log.info("用户「{}」创建了默认词书「{}」", userDisplayNameService.userName(userId), wordbook.getName());
+        systemLogService.record(userId, SystemLogType.WORDBOOK, "创建默认单词本", wordbook.getName());
+        log.info("用户「{}」创建了默认单词本「{}」", userDisplayNameService.userName(userId), wordbook.getName());
         return wordbook;
     }
 
@@ -105,17 +101,11 @@ public class WordbookService {
             clearDefault(userId);
         }
 
-        LearningWordbook wordbook = new LearningWordbook();
-        wordbook.setUserId(userId);
-        wordbook.setName(request.getName().trim());
-        wordbook.setDescription(trimToNull(request.getDescription()));
-        wordbook.setIsDefault(Boolean.TRUE.equals(request.getIsDefault()));
-        wordbook.setDeleted(false);
-        wordbook.setCreateTime(now);
-        wordbook.setUpdateTime(now);
+        LearningWordbook wordbook = LearningWordbook.create(userId, request.getName().trim(),
+                trimToNull(request.getDescription()), Boolean.TRUE.equals(request.getIsDefault()), now);
         wordbookMapper.insert(wordbook);
-        systemLogService.record(userId, "wordbook", "创建词书", wordbook.getName());
-        log.info("用户「{}」创建了词书「{}」，是否设为默认：{}",
+        systemLogService.record(userId, SystemLogType.WORDBOOK, "创建单词本", wordbook.getName());
+        log.info("用户「{}」创建了单词本「{}」，是否设为默认：{}",
                 userDisplayNameService.userName(userId),
                 wordbook.getName(),
                 wordbook.getIsDefault());
@@ -127,13 +117,11 @@ public class WordbookService {
         if (Boolean.TRUE.equals(request.getIsDefault())) {
             clearDefault(userId);
         }
-        wordbook.setName(request.getName().trim());
-        wordbook.setDescription(trimToNull(request.getDescription()));
-        wordbook.setIsDefault(Boolean.TRUE.equals(request.getIsDefault()));
-        wordbook.setUpdateTime(LocalDateTime.now());
+        wordbook.updateProfile(request.getName().trim(), trimToNull(request.getDescription()),
+                Boolean.TRUE.equals(request.getIsDefault()), LocalDateTime.now());
         wordbookMapper.updateById(wordbook);
-        systemLogService.record(userId, "wordbook", "更新词书", wordbook.getName());
-        log.info("用户「{}」更新了词书「{}」，是否设为默认：{}",
+        systemLogService.record(userId, SystemLogType.WORDBOOK, "更新单词本", wordbook.getName());
+        log.info("用户「{}」更新了单词本「{}」，是否设为默认：{}",
                 userDisplayNameService.userName(userId),
                 wordbook.getName(),
                 wordbook.getIsDefault());
@@ -152,9 +140,7 @@ public class WordbookService {
                     "单词本中还有单词，不能删除");
         }
         LocalDateTime now = LocalDateTime.now();
-        wordbook.setDeleted(true);
-        wordbook.setIsDefault(false);
-        wordbook.setUpdateTime(now);
+        wordbook.markDeleted(now);
         wordbookMapper.updateById(wordbook);
 
         LearningWordbookEntry updateEntry = new LearningWordbookEntry();
@@ -171,13 +157,12 @@ public class WordbookService {
                 .orderByAsc(LearningWordbook::getCreateTime)
                 .last(LearningConstants.SQL_LIMIT_ONE));
         if (nextDefault != null) {
-            nextDefault.setIsDefault(true);
-            nextDefault.setUpdateTime(now);
+            nextDefault.changeDefault(true, now);
             wordbookMapper.updateById(nextDefault);
         }
-        systemLogService.record(userId, "wordbook", "删除词书", wordbook.getName());
-        log.info("用户「{}」删除了词书「{}」", userDisplayNameService.userName(userId), wordbook.getName());
-        log.debug("词书删除后重新选择默认词书 userId={} deletedWordbookId={} nextDefaultId={}",
+        systemLogService.record(userId, SystemLogType.WORDBOOK, "删除单词本", wordbook.getName());
+        log.info("用户「{}」删除了单词本「{}」", userDisplayNameService.userName(userId), wordbook.getName());
+        log.debug("单词本删除后重新选择默认单词本 userId={} deletedWordbookId={} nextDefaultId={}",
                 userId, wordbookId, nextDefault == null ? null : nextDefault.getId());
     }
 
@@ -191,49 +176,21 @@ public class WordbookService {
         boolean copy = Boolean.TRUE.equals(request.getCopy());
         LocalDateTime now = LocalDateTime.now();
         if (copy) {
-            LearningWordbookEntry clone = new LearningWordbookEntry();
-            clone.setUserId(userId);
-            clone.setWordbookId(targetWordbook.getId());
-            clone.setVocabularyId(source.getVocabularyId());
-            clone.setTerm(source.getTerm());
-            clone.setNormalizedTerm(source.getNormalizedTerm());
-            clone.setNote(source.getNote());
-            clone.setSnapshotRawContent(source.getSnapshotRawContent());
-            clone.setSnapshotParsedJson(source.getSnapshotParsedJson());
-            clone.setSnapshotTagsJson(source.getSnapshotTagsJson());
-            clone.setSnapshotRelationsJson(source.getSnapshotRelationsJson());
-            clone.setSnapshotProvider(source.getSnapshotProvider());
-            clone.setSnapshotModelName(source.getSnapshotModelName());
-            clone.setSnapshotSessionId(source.getSnapshotSessionId());
-            clone.setSnapshotTime(source.getSnapshotTime());
-            clone.setStatus(source.getStatus());
-            clone.setReviewStage(source.getReviewStage());
-            clone.setMasteryScore(source.getMasteryScore());
-            clone.setFirstReviewTime(source.getFirstReviewTime());
-            clone.setLastReviewTime(source.getLastReviewTime());
-            clone.setNextReviewTime(source.getNextReviewTime());
-            clone.setDueCount(source.getDueCount());
-            clone.setReviewCount(source.getReviewCount());
-            clone.setCorrectCount(source.getCorrectCount());
-            clone.setWrongCount(source.getWrongCount());
-            clone.setDeleted(false);
-            clone.setCreateTime(now);
-            clone.setUpdateTime(now);
+            LearningWordbookEntry clone = source.copyTo(targetWordbook.getId(), now);
             entryMapper.insert(clone);
-            systemLogService.record(userId, "wordbook", "复制词条",
+            systemLogService.record(userId, SystemLogType.WORDBOOK, "复制词条",
                     source.getNormalizedTerm() + " -> " + targetWordbook.getName());
-            log.info("用户「{}」把单词「{}」复制到了词书「{}」",
+            log.info("用户「{}」把单词「{}」复制到了单词本「{}」",
                     userDisplayNameService.userName(userId),
                     source.getNormalizedTerm(),
                     targetWordbook.getName());
             return toEntryResponse(clone);
         }
-        source.setWordbookId(targetWordbook.getId());
-        source.setUpdateTime(now);
+        source.moveTo(targetWordbook.getId(), now);
         entryMapper.updateById(source);
-        systemLogService.record(userId, "wordbook", "移动词条",
+        systemLogService.record(userId, SystemLogType.WORDBOOK, "移动词条",
                 source.getNormalizedTerm() + " -> " + targetWordbook.getName());
-        log.info("用户「{}」把单词「{}」移动到了词书「{}」",
+        log.info("用户「{}」把单词「{}」移动到了单词本「{}」",
                 userDisplayNameService.userName(userId),
                 source.getNormalizedTerm(),
                 targetWordbook.getName());
@@ -314,27 +271,25 @@ public class WordbookService {
             LocalDateTime now = LocalDateTime.now();
             EnglishVocabularyStudyRecord vocabulary = findVocabulary(normalizedTerm);
             if (Boolean.TRUE.equals(existing.getDeleted())) {
-                existing.setDeleted(false);
-                existing.setNote(trimToNull(request.getNote()));
+                existing.restore(trimToNull(request.getNote()), now);
                 if (vocabulary != null) {
                     applyVocabularySnapshot(existing, vocabulary, now);
                 }
-                existing.setUpdateTime(now);
                 entryMapper.updateById(existing);
-                systemLogService.record(userId, "wordbook", "恢复词条", existing.getNormalizedTerm());
-                log.info("用户「{}」把单词「{}」重新加入到词书「{}」中",
+                systemLogService.record(userId, SystemLogType.WORDBOOK, "恢复词条", existing.getNormalizedTerm());
+                log.info("用户「{}」把单词「{}」重新加入到单词本「{}」中",
                         userDisplayNameService.userName(userId),
                         existing.getNormalizedTerm(),
                         wordbook.getName());
             } else if (refreshSnapshotIfVocabularyChanged(existing, vocabulary, now)) {
                 entryMapper.updateById(existing);
-                systemLogService.record(userId, "wordbook", "刷新词条学习卡", existing.getNormalizedTerm());
-                log.info("用户「{}」把单词「{}」在词书「{}」中的学习卡更新为最新 AI 结果",
+                systemLogService.record(userId, SystemLogType.WORDBOOK, "刷新词条学习卡", existing.getNormalizedTerm());
+                log.info("用户「{}」把单词「{}」在单词本「{}」中的学习卡更新为最新 AI 结果",
                         userDisplayNameService.userName(userId),
                         existing.getNormalizedTerm(),
                         wordbook.getName());
             }
-            log.debug("词书中已存在单词 userId={} wordbookId={} term={}", userId, wordbook.getId(), normalizedTerm);
+            log.debug("单词本中已存在单词 userId={} wordbookId={} term={}", userId, wordbook.getId(), normalizedTerm);
             return toEntryResponse(existing);
         }
 
@@ -352,28 +307,12 @@ public class WordbookService {
         }
 
         LocalDateTime now = LocalDateTime.now();
-        LearningWordbookEntry entry = new LearningWordbookEntry();
-        entry.setUserId(userId);
-        entry.setWordbookId(wordbook.getId());
-        entry.setVocabularyId(vocabulary.getId());
-        entry.setTerm(vocabulary.getTerm());
-        entry.setNormalizedTerm(vocabulary.getNormalizedTerm());
-        entry.setNote(trimToNull(request.getNote()));
+        LearningWordbookEntry entry = LearningWordbookEntry.createNew(userId, wordbook.getId(),
+                vocabulary, trimToNull(request.getNote()), now);
         applyVocabularySnapshot(entry, vocabulary, now);
-        entry.setStatus(LearningConstants.Review.STATUS_VAGUE);
-        entry.setReviewStage(LearningConstants.Review.INITIAL_STAGE);
-        entry.setMasteryScore(LearningConstants.Review.INITIAL_MASTERY);
-        entry.setNextReviewTime(now);
-        entry.setDueCount(LearningConstants.Review.INITIAL_STAGE);
-        entry.setReviewCount(LearningConstants.Review.INITIAL_STAGE);
-        entry.setCorrectCount(LearningConstants.Review.INITIAL_STAGE);
-        entry.setWrongCount(LearningConstants.Review.INITIAL_STAGE);
-        entry.setDeleted(false);
-        entry.setCreateTime(now);
-        entry.setUpdateTime(now);
         entryMapper.insert(entry);
-        systemLogService.record(userId, "wordbook", "加入单词本", entry.getNormalizedTerm());
-        log.info("用户「{}」把单词「{}」添加到词书「{}」中",
+        systemLogService.record(userId, SystemLogType.WORDBOOK, "加入单词本", entry.getNormalizedTerm());
+        log.info("用户「{}」把单词「{}」添加到单词本「{}」中",
                 userDisplayNameService.userName(userId),
                 entry.getNormalizedTerm(),
                 wordbook.getName());
@@ -409,8 +348,7 @@ public class WordbookService {
                 .orderByAsc(LearningWordbookEntry::getNextReviewTime)
                 .orderByDesc(LearningWordbookEntry::getCreateTime));
         for (LearningWordbookEntry entry : entries) {
-            entry.setDueCount(nullToZero(entry.getDueCount()) + LearningConstants.SEQUENCE_STEP);
-            entry.setUpdateTime(LocalDateTime.now());
+            entry.markDue(LocalDateTime.now());
             entryMapper.updateById(entry);
         }
         log.debug("待复习词条已查询 userId={} wordbookId={} count={}",
@@ -421,7 +359,7 @@ public class WordbookService {
     }
 
     /**
-     * 在没有到期任务时，为用户从当前词书中重新挑选一组词条作为本轮复习队列。
+     * 在没有到期任务时，为用户从当前单词本中重新挑选一组词条作为本轮复习队列。
      * <p>
      * 该动作只返回任务列表，不修改正式复习排期；只有提交复习结果时才更新下一次复习时间。
      */
@@ -439,9 +377,9 @@ public class WordbookService {
                 .orderByAsc(LearningWordbookEntry::getNextReviewTime)
                 .orderByDesc(LearningWordbookEntry::getCreateTime)
                 .last("LIMIT " + resolvedLimit));
-        systemLogService.record(userId, "review", "重新生成复习任务",
+        systemLogService.record(userId, SystemLogType.REVIEW, "重新生成复习任务",
                 wordbook.getName() + "，共 " + entries.size() + " 个单词");
-        log.info("用户「{}」重新生成了词书「{}」的复习任务，共 {} 个单词",
+        log.info("用户「{}」重新生成了单词本「{}」的复习任务，共 {} 个单词",
                 userDisplayNameService.userName(userId),
                 wordbook.getName(),
                 entries.size());
@@ -463,7 +401,7 @@ public class WordbookService {
         }
         entry.setUpdateTime(LocalDateTime.now());
         entryMapper.updateById(entry);
-        systemLogService.record(userId, "wordbook", "更新词条", entry.getNormalizedTerm());
+        systemLogService.record(userId, SystemLogType.WORDBOOK, "更新词条", entry.getNormalizedTerm());
         log.info("用户「{}」更新了单词「{}」，当前熟练程度为「{}」，是否修改笔记：{}",
                 userDisplayNameService.userName(userId),
                 entry.getNormalizedTerm(),
@@ -474,11 +412,10 @@ public class WordbookService {
 
     public void deleteEntry(Long userId, Long entryId) {
         LearningWordbookEntry entry = requireEntry(userId, entryId);
-        entry.setDeleted(true);
-        entry.setUpdateTime(LocalDateTime.now());
+        entry.markDeleted(LocalDateTime.now());
         entryMapper.updateById(entry);
-        systemLogService.record(userId, "wordbook", "删除词条", entry.getNormalizedTerm());
-        log.info("用户「{}」从词书中删除了单词「{}」",
+        systemLogService.record(userId, SystemLogType.WORDBOOK, "删除词条", entry.getNormalizedTerm());
+        log.info("用户「{}」从单词本中删除了单词「{}」",
                 userDisplayNameService.userName(userId),
                 entry.getNormalizedTerm());
     }
@@ -491,44 +428,14 @@ public class WordbookService {
         if (entry == null || Boolean.TRUE.equals(entry.getDeleted()) || !entry.getUserId().equals(userId)) {
             throw LearningAssistantException.notFound(
                     LearningConstants.ErrorCode.ENTRY_NOT_FOUND,
-                    "词书词条不存在: " + entryId);
+                    "单词本词条不存在: " + entryId);
         }
-        String result = normalizeResult(request.getResult());
+        ReviewResult result = ReviewResult.of(request.getResult());
         LocalDateTime now = LocalDateTime.now();
 
-        int stageBefore = nullToZero(entry.getReviewStage());
-        int masteryBefore = nullToZero(entry.getMasteryScore());
-        int stageAfter;
-        int masteryAfter;
-        boolean remembered = LearningConstants.Review.RESULT_REMEMBERED.equals(result);
-        boolean vague = LearningConstants.Review.RESULT_VAGUE.equals(result);
-        if (remembered) {
-            stageAfter = Math.min(stageBefore + LearningConstants.SEQUENCE_STEP, LearningConstants.Review.INTERVAL_DAYS.length - LearningConstants.SEQUENCE_STEP);
-            masteryAfter = Math.min(LearningConstants.Review.MAX_MASTERY, masteryBefore + LearningConstants.Review.REMEMBERED_MASTERY_DELTA);
-            entry.setCorrectCount(nullToZero(entry.getCorrectCount()) + LearningConstants.SEQUENCE_STEP);
-            entry.setStatus(LearningConstants.Review.STATUS_FAMILIAR);
-        } else if (vague) {
-            stageAfter = Math.max(LearningConstants.FIRST_SEQUENCE, stageBefore);
-            masteryAfter = Math.max(LearningConstants.Review.MIN_MASTERY,
-                    Math.min(LearningConstants.Review.MAX_MASTERY, masteryBefore + LearningConstants.Review.VAGUE_MASTERY_DELTA));
-            entry.setStatus(LearningConstants.Review.STATUS_VAGUE);
-        } else {
-            stageAfter = LearningConstants.Review.INITIAL_STAGE;
-            masteryAfter = Math.max(LearningConstants.Review.MIN_MASTERY, masteryBefore - LearningConstants.Review.FORGOTTEN_MASTERY_DELTA);
-            entry.setWrongCount(nullToZero(entry.getWrongCount()) + LearningConstants.SEQUENCE_STEP);
-            entry.setStatus(LearningConstants.Review.STATUS_FORGOTTEN);
-        }
-
-        LocalDateTime nextReviewTime = nextReviewTime(now, stageAfter, remembered, vague);
-        if (entry.getFirstReviewTime() == null) {
-            entry.setFirstReviewTime(now);
-        }
-        entry.setLastReviewTime(now);
-        entry.setNextReviewTime(nextReviewTime);
-        entry.setReviewStage(stageAfter);
-        entry.setMasteryScore(masteryAfter);
-        entry.setReviewCount(nullToZero(entry.getReviewCount()) + LearningConstants.SEQUENCE_STEP);
-        entry.setUpdateTime(now);
+        ReviewResult.ReviewOutcome outcome = result.apply(entry);
+        LocalDateTime nextReviewTime = nextReviewTime(now, outcome.stageAfter(), result.remembered(), result.vague());
+        entry.completeReview(now, nextReviewTime, outcome.stageAfter(), outcome.masteryAfter(), now);
         entryMapper.updateById(entry);
 
         LearningReviewRecord record = new LearningReviewRecord();
@@ -537,12 +444,12 @@ public class WordbookService {
         record.setEntryId(entry.getId());
         record.setVocabularyId(entry.getVocabularyId());
         record.setNormalizedTerm(entry.getNormalizedTerm());
-        record.setResult(result);
+        record.setResult(result.getCode());
         record.setScore(request.getScore());
-        record.setReviewStageBefore(stageBefore);
-        record.setReviewStageAfter(stageAfter);
-        record.setMasteryBefore(masteryBefore);
-        record.setMasteryAfter(masteryAfter);
+        record.setReviewStageBefore(outcome.stageBefore());
+        record.setReviewStageAfter(outcome.stageAfter());
+        record.setMasteryBefore(outcome.masteryBefore());
+        record.setMasteryAfter(outcome.masteryAfter());
         record.setNextReviewTime(nextReviewTime);
         record.setDurationSeconds(request.getDurationSeconds());
         record.setCreateTime(now);
@@ -551,19 +458,20 @@ public class WordbookService {
         ReviewSubmitResponse response = new ReviewSubmitResponse();
         response.setEntryId(entry.getId());
         response.setNormalizedTerm(entry.getNormalizedTerm());
-        response.setReviewStage(stageAfter);
-        response.setMasteryScore(masteryAfter);
+        response.setReviewStage(outcome.stageAfter());
+        response.setMasteryScore(outcome.masteryAfter());
         response.setNextReviewTime(nextReviewTime);
-        systemLogService.record(userId, "review", "提交复习结果", entry.getNormalizedTerm() + " -> " + result);
+        systemLogService.record(userId, SystemLogType.REVIEW, "提交复习结果", entry.getNormalizedTerm() + " -> " + result.getCode());
         log.info("用户「{}」完成了单词「{}」的复习，结果是「{}」，熟练度从 {} 提升到 {}，下次复习时间为 {}",
                 userDisplayNameService.userName(userId),
                 entry.getNormalizedTerm(),
-                resultLabel(result),
-                masteryBefore,
-                masteryAfter,
+                result.getLabel(),
+                outcome.masteryBefore(),
+                outcome.masteryAfter(),
                 nextReviewTime);
         log.debug("复习排期已更新 userId={} entryId={} result={} stage={}=>{} mastery={}=>{} nextReviewTime={}",
-                userId, entryId, result, stageBefore, stageAfter, masteryBefore, masteryAfter, nextReviewTime);
+                userId, entryId, result.getCode(), outcome.stageBefore(), outcome.stageAfter(),
+                outcome.masteryBefore(), outcome.masteryAfter(), nextReviewTime);
         return response;
     }
 
@@ -612,16 +520,11 @@ public class WordbookService {
     }
 
     private void applyVocabularySnapshot(LearningWordbookEntry entry, EnglishVocabularyStudyRecord vocabulary, LocalDateTime now) {
-        entry.setSnapshotRawContent(vocabulary.getRawContent());
-        entry.setSnapshotParsedJson(vocabulary.getParsedJson());
-        entry.setSnapshotTagsJson(writeJson(vocabularyInsightService.listTags(vocabulary.getId()),
-                "词书词条标签快照序列化失败"));
-        entry.setSnapshotRelationsJson(writeJson(vocabularyInsightService.listRelations(vocabulary.getNormalizedTerm()),
-                "词书词条关联词快照序列化失败"));
-        entry.setSnapshotProvider(vocabulary.getProvider());
-        entry.setSnapshotModelName(vocabulary.getModelName());
-        entry.setSnapshotSessionId(vocabulary.getSessionId());
-        entry.setSnapshotTime(now);
+        String tagsJson = writeJson(vocabularyInsightService.listTags(vocabulary.getId()),
+                "单词本词条标签快照序列化失败");
+        String relationsJson = writeJson(vocabularyInsightService.listRelations(vocabulary.getNormalizedTerm()),
+                "单词本词条关联词快照序列化失败");
+        entry.applyVocabularySnapshot(vocabulary, now, tagsJson, relationsJson);
     }
 
     private boolean refreshSnapshotIfVocabularyChanged(LearningWordbookEntry entry,
@@ -638,15 +541,13 @@ public class WordbookService {
             return false;
         }
         applyVocabularySnapshot(entry, vocabulary, now);
-        entry.setTerm(vocabulary.getTerm());
-        entry.setVocabularyId(vocabulary.getId());
-        entry.setUpdateTime(now);
+        entry.refreshVocabularyIdentity(vocabulary, now);
         return true;
     }
 
     private Object readEntryParsed(LearningWordbookEntry entry) {
         if (StringUtils.hasText(entry.getSnapshotParsedJson())) {
-            Object parsed = readJson(entry.getSnapshotParsedJson(), Object.class, "词书词条个人结构化 JSON 快照读取失败", entry);
+            Object parsed = readJson(entry.getSnapshotParsedJson(), Object.class, "单词本词条个人结构化 JSON 快照读取失败", entry);
             if (parsed != null) {
                 return parsed;
             }
@@ -657,7 +558,7 @@ public class WordbookService {
     private List<VocabularyTagResponse> readEntryTags(LearningWordbookEntry entry) {
         if (StringUtils.hasText(entry.getSnapshotTagsJson())) {
             List<VocabularyTagResponse> tags = readJsonList(entry.getSnapshotTagsJson(), VocabularyTagResponse.class,
-                    "词书词条标签快照读取失败", entry);
+                    "单词本词条标签快照读取失败", entry);
             if (tags != null) {
                 return tags;
             }
@@ -668,7 +569,7 @@ public class WordbookService {
     private List<VocabularyRelationResponse> readEntryRelations(LearningWordbookEntry entry) {
         if (StringUtils.hasText(entry.getSnapshotRelationsJson())) {
             List<VocabularyRelationResponse> relations = readJsonList(entry.getSnapshotRelationsJson(), VocabularyRelationResponse.class,
-                    "词书词条关联词快照读取失败", entry);
+                    "单词本词条关联词快照读取失败", entry);
             if (relations != null) {
                 return vocabularyInsightService.enrichRelationPhonetics(entry.getVocabularyId(), relations);
             }
@@ -719,7 +620,7 @@ public class WordbookService {
         try {
             return objectMapper.readValue(record.getParsedJson(), Object.class);
         } catch (Exception ex) {
-            log.warn("词书词条结构化 JSON 读取失败 vocabularyId={} term={} error={}",
+            log.warn("单词本词条结构化 JSON 读取失败 vocabularyId={} term={} error={}",
                     vocabularyId,
                     record.getNormalizedTerm(),
                     ex.getMessage());
@@ -732,7 +633,7 @@ public class WordbookService {
         if (wordbook == null || Boolean.TRUE.equals(wordbook.getDeleted()) || !wordbook.getUserId().equals(userId)) {
             throw LearningAssistantException.notFound(
                     LearningConstants.ErrorCode.WORDBOOK_NOT_FOUND,
-                    "词书不存在: " + wordbookId);
+                    "单词本不存在: " + wordbookId);
         }
         return wordbook;
     }
@@ -742,7 +643,7 @@ public class WordbookService {
         if (entry == null || Boolean.TRUE.equals(entry.getDeleted()) || !entry.getUserId().equals(userId)) {
             throw LearningAssistantException.notFound(
                     LearningConstants.ErrorCode.ENTRY_NOT_FOUND,
-                    "词书词条不存在: " + entryId);
+                    "单词本词条不存在: " + entryId);
         }
         return entry;
     }
@@ -759,8 +660,7 @@ public class WordbookService {
                 .eq(LearningWordbook::getIsDefault, true)
                 .eq(LearningWordbook::getDeleted, false));
         for (LearningWordbook item : defaults) {
-            item.setIsDefault(false);
-            item.setUpdateTime(LocalDateTime.now());
+            item.changeDefault(false, LocalDateTime.now());
             wordbookMapper.updateById(item);
         }
     }
@@ -804,35 +704,12 @@ public class WordbookService {
         return avoidSleepWindow(current);
     }
 
-    private String normalizeResult(String result) {
-        String normalized = result == null ? "" : result.trim().toLowerCase(Locale.ROOT);
-        if (List.of(LearningConstants.Review.RESULT_REMEMBERED,
-                LearningConstants.Review.RESULT_VAGUE,
-                LearningConstants.Review.RESULT_FORGOTTEN).contains(normalized)) {
-            return normalized;
-        }
-        return LearningConstants.Review.RESULT_FORGOTTEN;
-    }
-
     private String normalizeStatus(String status) {
-        String normalized = status == null ? "" : status.trim().toLowerCase(Locale.ROOT);
-        if (List.of(LearningConstants.Review.STATUS_FAMILIAR,
-                LearningConstants.Review.STATUS_FORGOTTEN,
-                LearningConstants.Review.STATUS_VAGUE).contains(normalized)) {
-            return normalized;
-        }
-        return LearningConstants.Review.STATUS_VAGUE;
+        return ReviewStatus.of(status).getCode();
     }
 
     private String inferStatus(LearningWordbookEntry entry) {
-        int mastery = nullToZero(entry.getMasteryScore());
-        if (mastery >= LearningConstants.Review.FAMILIAR_MASTERY_THRESHOLD) {
-            return LearningConstants.Review.STATUS_FAMILIAR;
-        }
-        if (nullToZero(entry.getWrongCount()) > nullToZero(entry.getCorrectCount())) {
-            return LearningConstants.Review.STATUS_FORGOTTEN;
-        }
-        return LearningConstants.Review.STATUS_VAGUE;
+        return ReviewStatus.infer(entry.getMasteryScore(), entry.getWrongCount(), entry.getCorrectCount()).getCode();
     }
 
     private String normalize(String term) {
@@ -847,23 +724,7 @@ public class WordbookService {
         return value == null ? 0 : value;
     }
 
-    private String resultLabel(String result) {
-        return switch (result) {
-            case LearningConstants.Review.RESULT_REMEMBERED -> "记住了";
-            case LearningConstants.Review.RESULT_VAGUE -> "有点模糊";
-            default -> "忘记了";
-        };
-    }
-
     private String statusLabel(String status) {
-        return switch (status) {
-            case LearningConstants.Review.STATUS_FAMILIAR -> "熟悉";
-            case LearningConstants.Review.STATUS_FORGOTTEN -> "遗忘";
-            default -> "模糊";
-        };
-    }
-
-    private boolean sameId(Long left, Long right) {
-        return Objects.equals(left, right);
+        return ReviewStatus.of(status).getLabel();
     }
 }

@@ -4,6 +4,8 @@ import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import com.chandler.learning.agent.domain.dto.learning.SystemLogRequest;
 import com.chandler.learning.agent.domain.dto.learning.SystemLogResponse;
 import com.chandler.learning.agent.domain.entity.learning.LearningSystemLog;
+import com.chandler.learning.agent.domain.enums.SystemLogSource;
+import com.chandler.learning.agent.domain.enums.SystemLogType;
 import com.chandler.learning.agent.mapper.learning.LearningSystemLogMapper;
 import com.chandler.learning.agent.security.LearningUserPrincipal;
 import com.chandler.learning.agent.support.LearningConstants;
@@ -29,12 +31,16 @@ public class SystemLogService {
 
     private final LearningSystemLogMapper systemLogMapper;
 
+    public void record(Long userId, SystemLogType type, String title, String detail) {
+        record(userId, type.getCode(), title, detail);
+    }
+
     public void record(Long userId, String type, String title, String detail) {
         SystemLogRequest request = new SystemLogRequest();
-        request.setType(type);
+        request.setType(SystemLogType.of(type).getCode());
         request.setTitle(title);
         request.setDetail(detail);
-        request.setSource(LearningConstants.SystemLog.SOURCE_SERVER);
+        request.setSource(SystemLogSource.SERVER.getCode());
         create(userId, request);
     }
 
@@ -45,10 +51,10 @@ public class SystemLogService {
         }
         LearningSystemLog entity = new LearningSystemLog();
         entity.setUserId(resolvedUserId);
-        entity.setLogType(trimOrDefault(request.getType(), LearningConstants.SystemLog.DEFAULT_TYPE));
+        entity.setLogType(SystemLogType.of(request.getType()).getCode());
         entity.setTitle(trimOrDefault(request.getTitle(), LearningConstants.SystemLog.DEFAULT_TITLE));
         entity.setDetail(trimToNull(request.getDetail()));
-        entity.setSource(trimOrDefault(request.getSource(), LearningConstants.SystemLog.SOURCE_CLIENT));
+        entity.setSource(SystemLogSource.of(request.getSource()).getCode());
         entity.setBusinessType(trimToNull(request.getBusinessType()));
         entity.setBusinessId(trimToNull(request.getBusinessId()));
         entity.setCreateTime(LocalDateTime.now());

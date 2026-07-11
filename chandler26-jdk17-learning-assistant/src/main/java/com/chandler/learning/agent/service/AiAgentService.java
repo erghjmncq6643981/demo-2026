@@ -3,8 +3,11 @@ package com.chandler.learning.agent.service;
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import com.chandler.learning.agent.domain.dto.AgentSaveRequest;
 import com.chandler.learning.agent.domain.entity.AiAgent;
+import com.chandler.learning.agent.domain.enums.AiAgentType;
+import com.chandler.learning.agent.domain.enums.SystemLogType;
 import com.chandler.learning.agent.exception.LearningAssistantException;
 import com.chandler.learning.agent.mapper.AiAgentMapper;
+import com.chandler.learning.agent.service.learning.SystemLogService;
 import com.chandler.learning.agent.service.learning.UserDisplayNameService;
 import com.chandler.learning.agent.support.LearningConstants;
 import lombok.RequiredArgsConstructor;
@@ -25,6 +28,7 @@ import java.util.List;
 public class AiAgentService {
 
     private final AiAgentMapper agentMapper;
+    private final SystemLogService systemLogService;
     private final UserDisplayNameService userDisplayNameService;
 
     public AiAgent getByCode(String code) {
@@ -39,8 +43,9 @@ public class AiAgentService {
     }
 
     public List<AiAgent> list(String type, boolean enabledOnly) {
+        String normalizedType = StringUtils.hasText(type) ? AiAgentType.of(type).getCode() : null;
         return agentMapper.selectList(new LambdaQueryWrapper<AiAgent>()
-                .eq(StringUtils.hasText(type), AiAgent::getType, type)
+                .eq(StringUtils.hasText(normalizedType), AiAgent::getType, normalizedType)
                 .eq(AiAgent::getDeleted, false)
                 .eq(enabledOnly, AiAgent::getEnabled, true)
                 .orderByAsc(AiAgent::getSequence));
@@ -61,6 +66,7 @@ public class AiAgentService {
         agent.setCreateTime(LocalDateTime.now());
         agent.setUpdateTime(LocalDateTime.now());
         agentMapper.insert(agent);
+        systemLogService.record(null, SystemLogType.AGENT, "创建 Agent", agent.getName());
         log.info("用户「{}」创建了 Agent「{}」", userDisplayNameService.currentUserName(), agent.getName());
         return agent.getId();
     }
@@ -82,16 +88,17 @@ public class AiAgentService {
         copy(request, agent);
         agent.setUpdateTime(LocalDateTime.now());
         agentMapper.updateById(agent);
+        systemLogService.record(null, SystemLogType.AGENT, "更新 Agent", agent.getName());
         log.info("用户「{}」更新了 Agent「{}」", userDisplayNameService.currentUserName(), agent.getName());
     }
 
     public void updateEnabled(Long id, boolean enabled) {
-        AiAgent agent = new AiAgent();
-        agent.setId(id);
+        AiAgent agent = requireAgent(id);
         agent.setEnabled(enabled);
         agent.setUpdateTime(LocalDateTime.now());
         agentMapper.updateById(agent);
-        log.info("用户「{}」{}了 Agent#{}", userDisplayNameService.currentUserName(), enabled ? "启用" : "停用", id);
+        systemLogService.record(null, SystemLogType.AGENT, enabled ? "启用 Agent" : "停用 Agent", agent.getName());
+        log.info("用户「{}」{}了 Agent「{}」", userDisplayNameService.currentUserName(), enabled ? "启用" : "停用", agent.getName());
     }
 
     @Transactional(rollbackFor = Exception.class)
@@ -103,12 +110,12 @@ public class AiAgentService {
                     LearningConstants.ErrorCode.AGENT_LAST_NOT_DELETABLE,
                     "最后一个学习 Agent 不能删除");
         }
-        AiAgent agent = new AiAgent();
-        agent.setId(id);
+        AiAgent agent = requireAgent(id);
         agent.setDeleted(true);
         agent.setUpdateTime(LocalDateTime.now());
         agentMapper.updateById(agent);
-        log.info("用户「{}」删除了 Agent#{}", userDisplayNameService.currentUserName(), id);
+        systemLogService.record(null, SystemLogType.AGENT, "删除 Agent", agent.getName());
+        log.info("用户「{}」删除了 Agent「{}」", userDisplayNameService.currentUserName(), agent.getName());
     }
 
     @Transactional(rollbackFor = Exception.class)
@@ -139,6 +146,7 @@ public class AiAgentService {
         clone.setCreateTime(LocalDateTime.now());
         clone.setUpdateTime(LocalDateTime.now());
         agentMapper.insert(clone);
+        systemLogService.record(null, SystemLogType.AGENT, "复制 Agent", source.getName());
         log.info("用户「{}」复制了 Agent「{}」", userDisplayNameService.currentUserName(), source.getName());
         return clone.getId();
     }
@@ -146,7 +154,7 @@ public class AiAgentService {
     private void copy(AgentSaveRequest request, AiAgent agent) {
         agent.setName(request.getName());
         agent.setCode(request.getCode());
-        agent.setType(StringUtils.hasText(request.getType()) ? request.getType() : LearningConstants.DEFAULT_AGENT_TYPE);
+        agent.setType(AiAgentType.of(request.getType()).getCode());
         agent.setIcon(request.getIcon());
         agent.setDescription(request.getDescription());
         agent.setSystemPrompt(request.getSystemPrompt());
@@ -158,5 +166,15 @@ public class AiAgentService {
         agent.setMaxTokens(request.getMaxTokens());
         agent.setPresetCommands(request.getPresetCommands());
         agent.setSequence(request.getSequence() == null ? LearningConstants.DEFAULT_SEQUENCE : request.getSequence());
+    }
+
+    private AiAgent requireAgent(Long id) {
+        AiAgent agent = agentMapper.selectById(id);
+        if (agent == null || Boolean.TRUE.equals(agent.getDeleted())) {
+            throw LearningAssistantException.notFound(
+                    LearningConstants.ErrorCode.AGENT_NOT_FOUND,
+                    "Agent 不存在: " + id);
+        }
+        return agent;
     }
 }

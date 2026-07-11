@@ -1,5 +1,6 @@
 package com.chandler.learning.agent.domain.dto;
 
+import com.chandler.learning.agent.domain.enums.AiAgentType;
 import com.chandler.learning.agent.support.LearningConstants;
 import io.swagger.v3.oas.annotations.media.Schema;
 import jakarta.validation.constraints.NotBlank;
@@ -18,7 +19,8 @@ public class AgentSaveRequest {
     @NotBlank(message = "Agent 编码不能为空")
     private String code;
 
-    private String type = LearningConstants.DEFAULT_AGENT_TYPE;
+    @Schema(description = "Agent 类型：chat-对话，analysis-分析，assistant-助手")
+    private String type = AiAgentType.CHAT.getCode();
 
     private String icon;
 

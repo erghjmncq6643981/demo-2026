@@ -6,6 +6,7 @@ import com.chandler.learning.agent.domain.dto.learning.AuthResponse;
 import com.chandler.learning.agent.domain.dto.learning.UserProfileResponse;
 import com.chandler.learning.agent.domain.dto.learning.UserProfileUpdateRequest;
 import com.chandler.learning.agent.domain.entity.learning.LearningUser;
+import com.chandler.learning.agent.domain.enums.SystemLogType;
 import com.chandler.learning.agent.exception.LearningAssistantException;
 import com.chandler.learning.agent.mapper.learning.LearningUserMapper;
 import com.chandler.learning.agent.security.JwtClaims;
@@ -64,7 +65,7 @@ public class AuthService {
         user.setUpdateTime(now);
         userMapper.insert(user);
         wordbookService.ensureDefaultWordbook(user.getId());
-        systemLogService.record(user.getId(), "auth", "注册成功", username);
+        systemLogService.record(user.getId(), SystemLogType.AUTH, "注册成功", username);
         log.info("用户「{}」完成注册，账号为「{}」", userDisplayNameService.displayName(user), username);
         return createLoginResponse(user);
     }
@@ -85,7 +86,7 @@ public class AuthService {
                     "用户名或密码错误");
         }
         wordbookService.ensureDefaultWordbook(user.getId());
-        systemLogService.record(user.getId(), "auth", "登录成功", username);
+        systemLogService.record(user.getId(), SystemLogType.AUTH, "登录成功", username);
         log.info("用户「{}」登录成功", userDisplayNameService.displayName(user));
         return createLoginResponse(user);
     }
@@ -134,7 +135,7 @@ public class AuthService {
         if (changed) {
             user.setUpdateTime(LocalDateTime.now());
             userMapper.updateById(user);
-            systemLogService.record(user.getId(), "auth", "更新账户信息", user.getUsername());
+            systemLogService.record(user.getId(), SystemLogType.AUTH, "更新账户信息", user.getUsername());
             log.info("用户「{}」更新了账户信息，是否修改密码：{}",
                     userDisplayNameService.displayName(user),
                     StringUtils.hasText(resolvedRequest.getNewPassword()));

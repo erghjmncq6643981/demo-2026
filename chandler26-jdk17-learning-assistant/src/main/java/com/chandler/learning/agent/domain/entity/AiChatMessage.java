@@ -6,15 +6,13 @@ import com.baomidou.mybatisplus.annotation.TableName;
 import io.swagger.v3.oas.annotations.media.Schema;
 import lombok.Data;
 
-import java.time.LocalDateTime;
-
 /**
  * AI 对话消息。
  */
 @Data
 @TableName("ai_chat_message")
 @Schema(name = "AI 对话消息")
-public class AiChatMessage {
+public class AiChatMessage extends BaseEntity {
 
     @TableId(value = "id", type = IdType.ASSIGN_ID)
     private Long id;
@@ -35,6 +33,4 @@ public class AiChatMessage {
     private String modelName;
 
     private Integer sequence;
-
-    private LocalDateTime createTime;
 }

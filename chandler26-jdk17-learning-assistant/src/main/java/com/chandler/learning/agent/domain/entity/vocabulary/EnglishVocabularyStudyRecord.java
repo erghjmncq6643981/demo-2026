@@ -3,6 +3,7 @@ package com.chandler.learning.agent.domain.entity.vocabulary;
 import com.baomidou.mybatisplus.annotation.IdType;
 import com.baomidou.mybatisplus.annotation.TableId;
 import com.baomidou.mybatisplus.annotation.TableName;
+import com.chandler.learning.agent.domain.entity.BaseEntity;
 import io.swagger.v3.oas.annotations.media.Schema;
 import lombok.Data;
 
@@ -14,7 +15,7 @@ import java.time.LocalDateTime;
 @Data
 @TableName("english_vocabulary_study_record")
 @Schema(name = "英语词汇学习记录")
-public class EnglishVocabularyStudyRecord {
+public class EnglishVocabularyStudyRecord extends BaseEntity {
 
     @TableId(value = "id", type = IdType.ASSIGN_ID)
     private Long id;
@@ -44,8 +45,4 @@ public class EnglishVocabularyStudyRecord {
     private Integer lookupCount;
 
     private LocalDateTime lastLookupTime;
-
-    private LocalDateTime createTime;
-
-    private LocalDateTime updateTime;
 }

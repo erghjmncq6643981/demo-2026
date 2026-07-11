@@ -6,15 +6,13 @@ import com.baomidou.mybatisplus.annotation.TableName;
 import io.swagger.v3.oas.annotations.media.Schema;
 import lombok.Data;
 
-import java.time.LocalDateTime;
-
 /**
  * AI Agent 配置。
  */
 @Data
 @TableName("ai_agent")
 @Schema(name = "AI Agent")
-public class AiAgent {
+public class AiAgent extends BaseEntity {
 
     @TableId(value = "id", type = IdType.ASSIGN_ID)
     @Schema(description = "主键")
@@ -64,13 +62,4 @@ public class AiAgent {
 
     @Schema(description = "排序")
     private Integer sequence;
-
-    @Schema(description = "是否删除")
-    private Boolean deleted;
-
-    @Schema(description = "创建时间")
-    private LocalDateTime createTime;
-
-    @Schema(description = "更新时间")
-    private LocalDateTime updateTime;
 }

@@ -14,6 +14,9 @@ export function loadPreviewData(ctx) {
     renderTemplateConfigs,
     renderWordbooks,
     renderWordbookEntries,
+    renderArticleWords,
+    renderArticleHistory,
+    renderArticleResult,
     renderReviewQueue,
     renderRecord,
     renderActivityHeatmap,
@@ -29,16 +32,16 @@ export function loadPreviewData(ctx) {
     emailMasked: 'er****@163.com',
   }
   state.wordbooks = [
-    { id: 1, name: '默认词书', description: '日常学习沉淀', isDefault: true, entryCount: 18, dueCount: 3 },
+    { id: 1, name: '默认单词本', description: '日常学习沉淀', isDefault: true, entryCount: 18, dueCount: 3 },
     { id: 2, name: 'CET-4 高频词', description: '考试核心词', isDefault: false, entryCount: 64, dueCount: 9 },
   ]
   state.modelConfigs = [
     {
       id: 101,
-      name: 'DeepSeek 默认',
-      provider: 'deepseek',
-      modelName: 'deepseek-chat',
-      baseUrl: 'https://api.deepseek.com',
+      name: '数据库默认模型',
+      provider: 'demo-provider',
+      modelName: 'demo-chat',
+      baseUrl: 'https://model-provider.example',
       chatPath: '/chat/completions',
       apiKeyMasked: 'sk-****2101',
       enabled: true,
@@ -47,11 +50,11 @@ export function loadPreviewData(ctx) {
     },
     {
       id: 102,
-      name: 'Kimi 备用',
-      provider: 'kimi',
-      modelName: 'moonshot-v1-8k',
-      baseUrl: 'https://api.moonshot.cn',
-      chatPath: '/v1/chat/completions',
+      name: '数据库备用模型',
+      provider: 'demo-backup',
+      modelName: 'demo-chat-backup',
+      baseUrl: 'https://backup-provider.example',
+      chatPath: '/chat/completions',
       apiKeyMasked: 'sk-****wdBD',
       enabled: false,
       isDefault: false,
@@ -69,13 +72,31 @@ export function loadPreviewData(ctx) {
       systemPrompt: '你是英语词汇学习助手，只输出适合结构化解析的学习内容。',
       concisePrompt: '围绕当前词汇继续解释，保持简洁准确。',
       welcomeMessage: '输入一个英语单词，我会生成学习卡片。',
-      modelProvider: 'deepseek',
-      modelName: 'deepseek-chat',
+      modelProvider: 'demo-provider',
+      modelName: 'demo-chat',
       temperature: 0.2,
       maxTokens: 1800,
       presetCommands: '[{"label":"举例","prompt":"再给我 3 个真实语境例句"}]',
       enabled: true,
       sequence: 1,
+    },
+    {
+      id: 202,
+      name: '英语文章学习 Agent',
+      code: 'english_article',
+      type: 'chat',
+      icon: 'EA',
+      description: '基于单词本词汇生成英语学习文章、语法点和练习题。',
+      systemPrompt: '你是英语文章学习助手，只输出合法 JSON。',
+      concisePrompt: '围绕当前文章继续解释，保持结构化。',
+      welcomeMessage: '选择一组单词，我会生成学习文章。',
+      modelProvider: 'demo-provider',
+      modelName: 'demo-chat',
+      temperature: 0.65,
+      maxTokens: 6000,
+      presetCommands: '[{"label":"语法","prompt":"讲解文章语法点"}]',
+      enabled: true,
+      sequence: 2,
     },
   ]
   state.promptTemplates = [
@@ -107,6 +128,25 @@ export function loadPreviewData(ctx) {
       publicTemplate: true,
       sequence: 2,
     },
+    {
+      id: 1101,
+      name: '英语文章学习 JSON',
+      code: 'english_vocab_article_json',
+      type: 'user',
+      tags: '英语,文章,词汇,语法,JSON',
+      content: '请基于以下词汇生成英语文章学习材料。词汇 JSON：{{words}}。文章字数范围：{{word_count_range}}。难度：{{difficulty}}。用户备注：{{remark}}。只输出合法 JSON。',
+      variables: JSON.stringify([
+        { name: 'words', label: '所选词汇 JSON', required: true },
+        { name: 'word_count_range', label: '字数范围', required: true },
+        { name: 'difficulty', label: '难度', required: true },
+        { name: 'remark', label: '备注', required: true },
+      ]),
+      description: '生成可解析入库的英语文章学习材料',
+      exampleInput: '{"words":[{"term":"abandon"}]}',
+      exampleOutput: '{"title":"A Difficult Decision","article":"..."}',
+      publicTemplate: true,
+      sequence: 3,
+    },
   ]
   syncCurrentWordbookId(state, elements, state.currentWordbookId || '1')
   state.wordbookEntries = [
@@ -119,6 +159,50 @@ export function loadPreviewData(ctx) {
     parsed: previewParsed(entry.term),
   }))
   state.previewReviewEntries = state.reviewEntries.slice()
+  state.articleEntries = state.wordbookEntries.slice()
+  state.selectedArticleEntryIds = state.wordbookEntries.slice(0, 3).map((entry) => String(entry.id))
+  state.articleRecords = [
+    {
+      id: 'preview-article',
+      wordbookId: '1',
+      selectedWords: state.wordbookEntries.slice(0, 3).map((entry) => ({
+        entryId: entry.id,
+        term: entry.term,
+        normalizedTerm: entry.normalizedTerm,
+        status: entry.status,
+        partOfSpeech: 'meaning',
+        meaning: previewParsed(entry.term).definitions?.[0]?.meaning || '核心含义',
+      })),
+      wordCountRange: '300-500',
+      difficulty: 'medium',
+      remark: '偏日常语境，重点解释转折句式。',
+      cacheHit: true,
+      provider: 'preview',
+      modelName: 'mock-article',
+      sessionId: 'preview',
+      updateTime: new Date().toISOString(),
+      parsed: {
+        title: 'A Difficult Decision',
+        article: 'Mia had to abandon an old plan, but she decided to maintain her confidence. When she saw the contrast between fear and action, she chose to move forward step by step.',
+        translation: '米娅不得不放弃一个旧计划，但她决定保持自信。当她看见恐惧和行动之间的差别时，她选择一步一步向前走。',
+        vocabulary_focus: [
+          { word: 'abandon', meaning: '放弃', usage: 'abandon a plan', sentence: 'She abandoned the old plan.', translation: '她放弃了旧计划。' },
+          { word: 'maintain', meaning: '保持', usage: 'maintain confidence', sentence: 'She maintained her confidence.', translation: '她保持了自信。' },
+        ],
+        grammar_points: [
+          {
+            title: 'When 引导时间状语从句',
+            explanation: 'when 可以连接两个动作，表示“当……时”。',
+            examples: [{ sentence: 'When she saw the contrast, she moved forward.', translation: '当她看到差别时，她向前走。' }],
+          },
+        ],
+        key_points: ['文章把词汇放进连续语境。', '注意 but 和 when 连接的逻辑。'],
+        practice: [{ question: 'What did Mia maintain?', answer: 'Her confidence.', explanation: '第二句给出答案。' }],
+        study_tips: ['先朗读英文，再对照中文。', '用每个目标词造一个自己的句子。'],
+      },
+    },
+  ]
+  state.currentArticleRecord = state.articleRecords[0]
   state.activity = createPreviewActivity()
   updateAuthView()
   renderModelConfigs()
@@ -129,6 +213,9 @@ export function loadPreviewData(ctx) {
   renderLearningConfigSummary?.()
   renderWordbooks()
   renderWordbookEntries()
+  renderArticleWords?.()
+  renderArticleHistory?.()
+  renderArticleResult?.(state.currentArticleRecord)
   renderReviewQueue(state.reviewEntries)
   renderRecord(previewRecord())
   renderActivityHeatmap()

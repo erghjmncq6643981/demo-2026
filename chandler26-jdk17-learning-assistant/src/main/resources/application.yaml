@@ -40,30 +40,3 @@ learning:
     jwt-issuer: ${LEARNING_JWT_ISSUER:learning-assistant}
     jwt-expire-days: ${LEARNING_JWT_EXPIRE_DAYS:30}
     api-key-secret: ${LEARNING_API_KEY_SECRET:dev-learning-assistant-api-key-secret-change-me}
-  ai:
-    default-provider: deepseek
-    providers:
-      deepseek:
-        enabled: true
-        base-url: https://api.deepseek.com
-        chat-path: /chat/completions
-        api-key: ${DEEPSEEK_API_KEY:}
-        default-model: deepseek-chat
-      kimi:
-        enabled: true
-        base-url: https://api.moonshot.cn
-        chat-path: /v1/chat/completions
-        api-key: ${KIMI_API_KEY:}
-        default-model: moonshot-v1-8k
-      doubao:
-        enabled: false
-        base-url: ${DOUBAO_BASE_URL:}
-        chat-path: /chat/completions
-        api-key: ${DOUBAO_API_KEY:}
-        default-model: ${DOUBAO_MODEL:}
-      yuanbao:
-        enabled: false
-        base-url: ${YUANBAO_BASE_URL:}
-        chat-path: /chat/completions
-        api-key: ${YUANBAO_API_KEY:}
-        default-model: ${YUANBAO_MODEL:}

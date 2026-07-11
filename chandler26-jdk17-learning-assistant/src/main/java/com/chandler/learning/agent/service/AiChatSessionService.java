@@ -6,6 +6,8 @@ import com.chandler.learning.agent.domain.dto.ChatSessionResponse;
 import com.chandler.learning.agent.domain.entity.AiChatMessage;
 import com.chandler.learning.agent.domain.entity.AiChatSession;
 import com.chandler.learning.agent.domain.entity.learning.LearningUser;
+import com.chandler.learning.agent.domain.enums.ChatMessageRole;
+import com.chandler.learning.agent.domain.enums.LearningScene;
 import com.chandler.learning.agent.exception.LearningAssistantException;
 import com.chandler.learning.agent.mapper.AiChatMessageMapper;
 import com.chandler.learning.agent.mapper.AiChatSessionMapper;
@@ -108,12 +110,12 @@ public class AiChatSessionService {
     }
 
     public void addUserMessage(Long sessionId, String content) {
-        addMessage(sessionId, LearningConstants.ChatSession.ROLE_USER, content, null, null, null, null);
+        addMessage(sessionId, ChatMessageRole.USER.getCode(), content, null, null, null, null);
     }
 
     public void addAssistantMessage(Long sessionId, String content, Integer tokenCount,
                                     Long costTime, String modelProvider, String modelName) {
-        addMessage(sessionId, LearningConstants.ChatSession.ROLE_ASSISTANT, content, tokenCount, costTime, modelProvider, modelName);
+        addMessage(sessionId, ChatMessageRole.ASSISTANT.getCode(), content, tokenCount, costTime, modelProvider, modelName);
     }
 
     public List<ChatSessionResponse> listSessions(Long userId, String agentCode, String businessType,
@@ -290,7 +292,7 @@ public class AiChatSessionService {
         if (StringUtils.hasText(agentCode)) {
             return agentCode.trim();
         }
-        return LearningConstants.ChatSession.SCENE_ENGLISH_VOCABULARY;
+        return LearningScene.ENGLISH_VOCABULARY.getCode();
     }
 
     private String toJson(Map<String, Object> variables) {

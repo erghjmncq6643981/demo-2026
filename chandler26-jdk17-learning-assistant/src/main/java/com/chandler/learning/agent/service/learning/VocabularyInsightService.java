@@ -6,6 +6,10 @@ import com.chandler.learning.agent.domain.dto.learning.VocabularyTagResponse;
 import com.chandler.learning.agent.domain.entity.learning.LearningVocabularyRelation;
 import com.chandler.learning.agent.domain.entity.learning.LearningVocabularyTag;
 import com.chandler.learning.agent.domain.entity.vocabulary.EnglishVocabularyStudyRecord;
+import com.chandler.learning.agent.domain.enums.VocabularyDifficulty;
+import com.chandler.learning.agent.domain.enums.VocabularyMatchType;
+import com.chandler.learning.agent.domain.enums.VocabularyRelationType;
+import com.chandler.learning.agent.domain.enums.VocabularyTagType;
 import com.chandler.learning.agent.mapper.learning.LearningVocabularyRelationMapper;
 import com.chandler.learning.agent.mapper.learning.LearningVocabularyTagMapper;
 import com.chandler.learning.agent.mapper.vocabulary.EnglishVocabularyStudyRecordMapper;
@@ -47,19 +51,17 @@ public class VocabularyInsightService {
             return;
         }
 
-        tagMapper.delete(new LambdaQueryWrapper<LearningVocabularyTag>()
-                .eq(LearningVocabularyTag::getVocabularyId, record.getId()));
-        relationMapper.delete(new LambdaQueryWrapper<LearningVocabularyRelation>()
-                .eq(LearningVocabularyRelation::getVocabularyId, record.getId()));
+        tagMapper.physicalDeleteByVocabularyId(record.getId());
+        relationMapper.physicalDeleteByVocabularyId(record.getId());
 
         LocalDateTime now = LocalDateTime.now();
         Map<String, LearningVocabularyTag> tags = new LinkedHashMap<>();
         collectPartOfSpeechTags(root, record, tags, now);
         collectMeaningTopicTags(root, record, tags, now);
-        collectArrayTags(root, record, tags, now, "collocations", LearningConstants.VocabularyInsight.RELATION_TYPE_COLLOCATION, LearningConstants.VocabularyInsight.TAG_WEIGHT_COLLOCATION);
-        collectArrayTags(root, record, tags, now, "word_family", "word_family", LearningConstants.VocabularyInsight.TAG_WEIGHT_WORD_FAMILY);
-        collectArrayTags(root, record, tags, now, "wordFamily", "word_family", LearningConstants.VocabularyInsight.TAG_WEIGHT_WORD_FAMILY);
-        addTag(tags, record, LearningConstants.VocabularyInsight.TAG_TYPE_DIFFICULTY, inferDifficulty(root, record), inferDifficulty(root, record),
+        collectArrayTags(root, record, tags, now, "collocations", VocabularyTagType.COLLOCATION.getCode(), LearningConstants.VocabularyInsight.TAG_WEIGHT_COLLOCATION);
+        collectArrayTags(root, record, tags, now, "word_family", VocabularyTagType.WORD_FAMILY.getCode(), LearningConstants.VocabularyInsight.TAG_WEIGHT_WORD_FAMILY);
+        collectArrayTags(root, record, tags, now, "wordFamily", VocabularyTagType.WORD_FAMILY.getCode(), LearningConstants.VocabularyInsight.TAG_WEIGHT_WORD_FAMILY);
+        addTag(tags, record, VocabularyTagType.DIFFICULTY.getCode(), inferDifficulty(root, record), inferDifficulty(root, record),
                 LearningConstants.VocabularyInsight.TAG_WEIGHT_DIFFICULTY, now);
 
         tags.values().forEach(tagMapper::insert);
@@ -124,9 +126,9 @@ public class VocabularyInsightService {
             return;
         }
         for (JsonNode item : iterable(definitions)) {
-            String pos = firstText(item, LearningConstants.VocabularyInsight.TAG_TYPE_PART_OF_SPEECH, "partOfSpeech", "pos", "type", "word_class");
+            String pos = firstText(item, VocabularyTagType.PART_OF_SPEECH.getCode(), "partOfSpeech", "pos", "type", "word_class");
             if (StringUtils.hasText(pos)) {
-                addTag(tags, record, LearningConstants.VocabularyInsight.TAG_TYPE_PART_OF_SPEECH, normalizeValue(pos), pos,
+                addTag(tags, record, VocabularyTagType.PART_OF_SPEECH.getCode(), normalizeValue(pos), pos,
                         LearningConstants.VocabularyInsight.TAG_WEIGHT_PART_OF_SPEECH, now);
             }
         }
@@ -147,7 +149,7 @@ public class VocabularyInsightService {
         String memory = firstText(root, "memory_tips", "memoryTips", "tips", "memory");
         topics.addAll(inferTopics(memory));
         for (String topic : topics) {
-            addTag(tags, record, LearningConstants.VocabularyInsight.TAG_TYPE_MEANING_TOPIC, topic, topic,
+            addTag(tags, record, VocabularyTagType.MEANING_TOPIC.getCode(), topic, topic,
                     LearningConstants.VocabularyInsight.TAG_WEIGHT_MEANING_TOPIC, now);
         }
     }
@@ -169,17 +171,17 @@ public class VocabularyInsightService {
     private List<LearningVocabularyRelation> collectRelations(JsonNode root, EnglishVocabularyStudyRecord record,
                                                               LocalDateTime now) {
         Map<String, LearningVocabularyRelation> relations = new LinkedHashMap<>();
-        collectArrayRelations(root, record, relations, now, "synonyms", LearningConstants.VocabularyInsight.RELATION_TYPE_SYNONYM, LearningConstants.VocabularyInsight.RELATION_SCORE_SYNONYM);
-        collectArrayRelations(root, record, relations, now, "antonyms", LearningConstants.VocabularyInsight.RELATION_TYPE_ANTONYM, LearningConstants.VocabularyInsight.RELATION_SCORE_ANTONYM);
-        collectArrayRelations(root, record, relations, now, "word_family", LearningConstants.VocabularyInsight.RELATION_TYPE_WORD_FAMILY, LearningConstants.VocabularyInsight.RELATION_SCORE_WORD_FAMILY);
-        collectArrayRelations(root, record, relations, now, "wordFamily", LearningConstants.VocabularyInsight.RELATION_TYPE_WORD_FAMILY, LearningConstants.VocabularyInsight.RELATION_SCORE_WORD_FAMILY);
+        collectArrayRelations(root, record, relations, now, "synonyms", VocabularyRelationType.SYNONYM, LearningConstants.VocabularyInsight.RELATION_SCORE_SYNONYM);
+        collectArrayRelations(root, record, relations, now, "antonyms", VocabularyRelationType.ANTONYM, LearningConstants.VocabularyInsight.RELATION_SCORE_ANTONYM);
+        collectArrayRelations(root, record, relations, now, "word_family", VocabularyRelationType.WORD_FAMILY, LearningConstants.VocabularyInsight.RELATION_SCORE_WORD_FAMILY);
+        collectArrayRelations(root, record, relations, now, "wordFamily", VocabularyRelationType.WORD_FAMILY, LearningConstants.VocabularyInsight.RELATION_SCORE_WORD_FAMILY);
 
         return relations.values().stream().limit(LearningConstants.VocabularyInsight.MAX_RELATIONS).toList();
     }
 
     private void collectArrayRelations(JsonNode root, EnglishVocabularyStudyRecord record,
                                        Map<String, LearningVocabularyRelation> relations,
-                                       LocalDateTime now, String field, String relationType, int score) {
+                                       LocalDateTime now, String field, VocabularyRelationType relationType, int score) {
         JsonNode node = root.get(field);
         if (node == null) {
             return;
@@ -188,10 +190,10 @@ public class VocabularyInsightService {
             String text = readableText(item);
             if (StringUtils.hasText(text)) {
                 addRelation(relations, record, text, relationType, relationValue(item, relationType), score, now,
-                        firstText(item, LearningConstants.VocabularyInsight.TAG_TYPE_PART_OF_SPEECH, "partOfSpeech", "pos", "type", "word_class"),
+                        firstText(item, VocabularyTagType.PART_OF_SPEECH.getCode(), "partOfSpeech", "pos", "type", "word_class"),
                         firstText(item, "meaning", "meaning_cn", "meaningCn", "translation", "translation_cn", "cn", "definition"),
-                        StringUtils.hasText(firstText(item, "word", "term", "phrase", LearningConstants.VocabularyInsight.RELATION_TYPE_COLLOCATION, "text", "value", "name"))
-                                ? LearningConstants.VocabularyInsight.MATCH_TYPE_PARSED_OBJECT : LearningConstants.VocabularyInsight.MATCH_TYPE_PARSED_TEXT,
+                        StringUtils.hasText(firstText(item, "word", "term", "phrase", VocabularyRelationType.COLLOCATION.getCode(), "text", "value", "name"))
+                                ? VocabularyMatchType.PARSED_OBJECT.getCode() : VocabularyMatchType.PARSED_TEXT.getCode(),
                         StringUtils.hasText(firstText(item, "meaning", "meaning_cn", "meaningCn", "translation", "translation_cn", "cn", "definition")) ? score : null);
             }
         }
@@ -219,12 +221,7 @@ public class VocabularyInsightService {
     }
 
     private void addRelation(Map<String, LearningVocabularyRelation> relations, EnglishVocabularyStudyRecord record,
-                             String relatedTerm, String relationType, String relationValue, int score, LocalDateTime now) {
-        addRelation(relations, record, relatedTerm, relationType, relationValue, score, now, "", "", "", null);
-    }
-
-    private void addRelation(Map<String, LearningVocabularyRelation> relations, EnglishVocabularyStudyRecord record,
-                             String relatedTerm, String relationType, String relationValue, int score, LocalDateTime now,
+                             String relatedTerm, VocabularyRelationType relationType, String relationValue, int score, LocalDateTime now,
                              String parsedPartOfSpeech, String parsedMeaning, String parsedMatchType, Integer parsedMatchScore) {
         String normalizedRelated = normalizeTerm(cleanRelationText(relatedTerm));
         if (!StringUtils.hasText(normalizedRelated) || normalizedRelated.equals(record.getNormalizedTerm())) {
@@ -232,13 +229,13 @@ public class VocabularyInsightService {
         }
         EnglishVocabularyStudyRecord relatedRecord = findVocabulary(normalizedRelated);
         CoreMeaning coreMeaning = extractCoreMeaning(relatedRecord);
-        String key = relationType + ":" + normalizedRelated;
+        String key = relationType.getCode() + ":" + normalizedRelated;
         LearningVocabularyRelation relation = new LearningVocabularyRelation();
         relation.setVocabularyId(record.getId());
         relation.setRelatedVocabularyId(relatedRecord == null ? null : relatedRecord.getId());
         relation.setNormalizedTerm(record.getNormalizedTerm());
         relation.setRelatedTerm(limit(normalizedRelated, LearningConstants.VocabularyInsight.TAG_VALUE_MAX_LENGTH));
-        relation.setRelationType(relationType);
+        relation.setRelationType(relationType.getCode());
         relation.setRelationValue(limit(relationValue, LearningConstants.VocabularyInsight.TAG_VALUE_MAX_LENGTH));
         relation.setRelatedPartOfSpeech(limit(firstNonBlank(parsedPartOfSpeech, coreMeaning.partOfSpeech()),
                 LearningConstants.VocabularyInsight.PART_OF_SPEECH_MAX_LENGTH));
@@ -297,12 +294,12 @@ public class VocabularyInsightService {
         }
         int length = record.getNormalizedTerm() == null ? 0 : record.getNormalizedTerm().length();
         if (definitionCount >= LearningConstants.VocabularyInsight.HARD_DEFINITION_COUNT || length >= LearningConstants.VocabularyInsight.HARD_WORD_LENGTH) {
-            return "hard";
+            return VocabularyDifficulty.HARD.getCode();
         }
         if (definitionCount >= LearningConstants.VocabularyInsight.MEDIUM_DEFINITION_COUNT || length >= LearningConstants.VocabularyInsight.MEDIUM_WORD_LENGTH) {
-            return "medium";
+            return VocabularyDifficulty.MEDIUM.getCode();
         }
-        return "easy";
+        return VocabularyDifficulty.EASY.getCode();
     }
 
     private JsonNode firstExisting(JsonNode node, String... keys) {
@@ -332,12 +329,12 @@ public class VocabularyInsightService {
         return "";
     }
 
-    private String relationValue(JsonNode item, String relationType) {
+    private String relationValue(JsonNode item, VocabularyRelationType relationType) {
         String value = firstText(item, "relation", "relation_value", "relationValue", "note", "reason");
         if (StringUtils.hasText(value)) {
             return value;
         }
-        if (LearningConstants.VocabularyInsight.RELATION_TYPE_COLLOCATION.equals(relationType)) {
+        if (relationType == VocabularyRelationType.COLLOCATION) {
             return firstText(item, "meaning", "meaning_cn", "meaningCn", "translation", "translation_cn", "cn", "definition");
         }
         return "";
@@ -352,9 +349,7 @@ public class VocabularyInsightService {
     }
 
     private boolean isVisibleRelationType(String relationType) {
-        return LearningConstants.VocabularyInsight.RELATION_TYPE_SYNONYM.equals(relationType)
-                || LearningConstants.VocabularyInsight.RELATION_TYPE_ANTONYM.equals(relationType)
-                || LearningConstants.VocabularyInsight.RELATION_TYPE_WORD_FAMILY.equals(relationType);
+        return VocabularyRelationType.of(relationType).isVisibleInRelatedWords();
     }
 
     private Iterable<JsonNode> iterable(JsonNode node) {
@@ -383,7 +378,7 @@ public class VocabularyInsightService {
             return node.asText("");
         }
         if (node.isObject()) {
-            for (String key : List.of("word", "term", "phrase", LearningConstants.VocabularyInsight.RELATION_TYPE_COLLOCATION, "text", "value", "name", "meaning")) {
+            for (String key : List.of("word", "term", "phrase", VocabularyRelationType.COLLOCATION.getCode(), "text", "value", "name", "meaning")) {
                 String text = firstText(node, key);
                 if (StringUtils.hasText(text)) {
                     return text;
@@ -425,7 +420,7 @@ public class VocabularyInsightService {
                 return CoreMeaning.empty();
             }
             for (JsonNode item : iterable(definitions)) {
-                String partOfSpeech = firstText(item, LearningConstants.VocabularyInsight.TAG_TYPE_PART_OF_SPEECH, "partOfSpeech", "pos", "type", "word_class");
+                String partOfSpeech = firstText(item, VocabularyTagType.PART_OF_SPEECH.getCode(), "partOfSpeech", "pos", "type", "word_class");
                 String meaning = firstText(item, "meaning", "meaning_cn", "meaningCn", "translation", "translation_cn", "cn", "chinese", "definition_cn", "definitionCn");
                 if (!StringUtils.hasText(meaning)) {
                     meaning = firstText(item, "english", "meaning_en", "meaningEn", "definition", "definition_en", "definitionEn", "en");
@@ -450,16 +445,17 @@ public class VocabularyInsightService {
     }
 
     private String resolveMatchType(String parsedMatchType, EnglishVocabularyStudyRecord relatedRecord, String parsedMeaning) {
-        if (StringUtils.hasText(parsedMatchType) && !LearningConstants.VocabularyInsight.MATCH_TYPE_PARSED_TEXT.equals(parsedMatchType)) {
-            return parsedMatchType;
+        VocabularyMatchType parsedType = VocabularyMatchType.of(parsedMatchType);
+        if (StringUtils.hasText(parsedMatchType) && parsedType != VocabularyMatchType.PARSED_TEXT) {
+            return parsedType.getCode();
         }
         if (relatedRecord != null) {
-            return LearningConstants.VocabularyInsight.MATCH_TYPE_CACHED_EXACT;
+            return VocabularyMatchType.CACHED_EXACT.getCode();
         }
         if (StringUtils.hasText(parsedMeaning)) {
-            return LearningConstants.VocabularyInsight.MATCH_TYPE_PARSED_OBJECT;
+            return VocabularyMatchType.PARSED_OBJECT.getCode();
         }
-        return StringUtils.hasText(parsedMatchType) ? parsedMatchType : LearningConstants.VocabularyInsight.MATCH_TYPE_PARSED_TEXT;
+        return StringUtils.hasText(parsedMatchType) ? parsedType.getCode() : VocabularyMatchType.PARSED_TEXT.getCode();
     }
 
     private String normalizeTerm(String value) {
@@ -552,19 +548,7 @@ public class VocabularyInsightService {
     }
 
     private List<String> relationFields(String relationType) {
-        if (LearningConstants.VocabularyInsight.RELATION_TYPE_SYNONYM.equals(relationType)) {
-            return List.of("synonyms");
-        }
-        if (LearningConstants.VocabularyInsight.RELATION_TYPE_ANTONYM.equals(relationType)) {
-            return List.of("antonyms");
-        }
-        if (LearningConstants.VocabularyInsight.RELATION_TYPE_WORD_FAMILY.equals(relationType)) {
-            return List.of("word_family", "wordFamily");
-        }
-        if (LearningConstants.VocabularyInsight.RELATION_TYPE_COLLOCATION.equals(relationType)) {
-            return List.of("collocations");
-        }
-        return List.of("synonyms", "antonyms", "word_family", "wordFamily", "collocations");
+        return VocabularyRelationType.of(relationType).getJsonFields();
     }
 
     private Phonetic firstPhonetic(Phonetic preferred, Phonetic fallback) {

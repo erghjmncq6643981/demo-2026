@@ -6,12 +6,26 @@ export function formatDateTime(value) {
 }
 
 export function readErrorMessage(text) {
-  if (!text) return ''
+  return readErrorPayload(text).message
+}
+
+export function readErrorPayload(text, status = null) {
+  if (!text) return { message: '', errorCode: '', status, raw: '' }
   try {
     const payload = JSON.parse(text)
-    return payload.message || payload.error || text
+    if (payload && typeof payload === 'object') {
+      const nestedError = payload.error && typeof payload.error === 'object' ? payload.error : null
+      const message = payload.message || nestedError?.message || payload.error || text
+      return {
+        message: String(message || ''),
+        errorCode: payload.errorCode || nestedError?.code || '',
+        status,
+        raw: payload,
+      }
+    }
+    return { message: String(payload || text), errorCode: '', status, raw: payload }
   } catch {
-    return text
+    return { message: text, errorCode: '', status, raw: text }
   }
 }
 

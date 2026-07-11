@@ -1,0 +1,9 @@
+${AnsiColor.YELLOW}
+    ▐             ▐ ▝▜
+ ▄▖ ▐▗▖  ▄▖ ▗▗▖  ▄▟  ▐   ▄▖  ▖▄
+▐▘▝ ▐▘▐ ▝ ▐ ▐▘▐ ▐▘▜  ▐  ▐▘▐  ▛ ▘
+▐   ▐ ▐ ▗▀▜ ▐ ▐ ▐ ▐  ▐  ▐▀▀  ▌
+▝▙▞ ▐ ▐ ▝▄▜ ▐ ▐ ▝▙█  ▝▄ ▝▙▞  ▌
+${AnsiColor.BRIGHT_BLUE}
+::: (architecture infrastructure) :::
+

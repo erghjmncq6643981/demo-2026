@@ -262,44 +262,89 @@
           </section>
 
           <section class="view" id="wordbookView">
-            <section class="review-header panel">
-              <div>
-                <p class="eyebrow">Wordbook</p>
-                <h3>单词本</h3>
-                <p>选择一个词表后查看单词，按熟悉、遗忘、模糊筛选，也可以编辑笔记或从词表中删除。</p>
-              </div>
-              <div class="wordbook-tools">
-                <label class="compact-field">
-                  单词本
-                  <select id="wordbookSelect"></select>
-                </label>
-                <label class="compact-field">
-                  状态筛选
-                  <select id="wordStatusFilter">
-                    <option value="">全部状态</option>
-                    <option value="familiar">熟悉</option>
-                    <option value="vague">模糊</option>
-                    <option value="forgotten">遗忘</option>
-                  </select>
-                </label>
-                <button class="primary-button compact-primary" id="reloadWordbookViewBtn" type="button">刷新单词</button>
-              </div>
+            <nav class="wordbook-tabs" aria-label="单词本功能">
+              <button class="wordbook-tab active" type="button" data-wordbook-tab="wordbookWordsPanel">单词列表</button>
+              <button class="wordbook-tab" type="button" data-wordbook-tab="articleStudyPanel">文章学习</button>
+            </nav>
+
+            <section class="wordbook-tab-panel active" id="wordbookWordsPanel">
+              <section class="review-header panel">
+                <div>
+                  <p class="eyebrow">Wordbook</p>
+                  <h3>单词本</h3>
+                  <p>选择一个单词本后查看单词，按熟悉、遗忘、模糊筛选，也可以编辑笔记或从单词本中删除。</p>
+                </div>
+                <div class="wordbook-tools">
+                  <label class="compact-field">
+                    单词本
+                    <select id="wordbookSelect"></select>
+                  </label>
+                  <label class="compact-field">
+                    状态筛选
+                    <select id="wordStatusFilter">
+                      <option value="">全部状态</option>
+                      <option value="familiar">熟悉</option>
+                      <option value="vague">模糊</option>
+                      <option value="forgotten">遗忘</option>
+                    </select>
+                  </label>
+                  <button class="primary-button compact-primary" id="reloadWordbookViewBtn" type="button">刷新单词</button>
+                </div>
+              </section>
+
+              <section class="wordbook-layout">
+                <section class="panel">
+                  <div class="panel-heading wordbook-list-heading">
+                    <h3>单词列表</h3>
+                    <label class="entry-prefix-field">
+                      <span class="sr-only">前缀匹配</span>
+                      <input id="wordPrefixInput" autocomplete="off" placeholder="前缀匹配" />
+                    </label>
+                  </div>
+                  <div id="wordbookEntryList" class="entry-list empty">暂无单词</div>
+                </section>
+                <section class="panel wordbook-focus-panel">
+                  <div class="panel-heading"><h3>单词详情</h3></div>
+                  <div id="wordbookFocus" class="empty">选择单词后查看详情和笔记</div>
+                </section>
+              </section>
             </section>
 
-            <section class="wordbook-layout">
-              <section class="panel">
-                <div class="panel-heading wordbook-list-heading">
-                  <h3>单词列表</h3>
-                  <label class="entry-prefix-field">
-                    <span class="sr-only">前缀匹配</span>
-                    <input id="wordPrefixInput" autocomplete="off" placeholder="前缀匹配" />
-                  </label>
-                </div>
-                <div id="wordbookEntryList" class="entry-list empty">暂无单词</div>
+            <section class="wordbook-tab-panel" id="articleStudyPanel">
+              <section class="panel article-study-toolbar">
+                <label class="compact-field">
+                  单词本
+                  <select id="articleWordbookSelect"></select>
+                </label>
+                <button class="primary-button compact-primary" id="articleGenerateBtn" type="button">文章生成</button>
               </section>
-              <section class="panel wordbook-focus-panel">
-                <div class="panel-heading"><h3>单词详情</h3></div>
-                <div id="wordbookFocus" class="empty">选择单词后查看详情和笔记</div>
+
+              <section class="article-study-layout">
+                <section class="panel article-history-panel">
+                  <div class="panel-heading">
+                    <div>
+                      <p class="eyebrow">Recent</p>
+                      <h3>近期学习的文章</h3>
+                    </div>
+                    <button class="secondary-button compact" id="articleReloadHistoryBtn" type="button">刷新</button>
+                  </div>
+                  <label class="entry-prefix-field article-history-search">
+                    <span class="sr-only">搜索文章</span>
+                    <input id="articleHistorySearchInput" autocomplete="off" placeholder="搜索标题、词汇或备注" />
+                  </label>
+                  <div id="articleHistoryList" class="article-history-list empty">暂无文章记录</div>
+                </section>
+
+                <section class="panel article-result-panel">
+                  <div class="panel-heading">
+                    <div>
+                      <p class="eyebrow">Article</p>
+                      <h3>文章主体</h3>
+                    </div>
+                    <span class="mini-pill" id="articleResultBadge">等待生成</span>
+                  </div>
+                  <div id="articleResult" class="article-result empty">选择或生成一篇文章后开始学习</div>
+                </section>
               </section>
             </section>
           </section>
@@ -443,13 +488,15 @@
           <label>模型名称<input id="modelNameInput" placeholder="例如：DeepSeek 默认" /></label>
           <label>
             供应商
-            <select id="modelProviderInput"></select>
+            <input id="modelProviderInput" list="modelProviderOptions" placeholder="例如：deepseek" />
+            <datalist id="modelProviderOptions"></datalist>
           </label>
           <label>
             模型明细
-            <select id="modelModelNameInput"></select>
+            <input id="modelModelNameInput" list="modelNameOptions" placeholder="例如：provider-chat" />
+            <datalist id="modelNameOptions"></datalist>
           </label>
-          <label>Base URL<input id="modelBaseUrlInput" placeholder="例如：https://api.deepseek.com" /></label>
+          <label>Base URL<input id="modelBaseUrlInput" placeholder="例如：https://api.provider.example" /></label>
           <label>Chat Path<input id="modelChatPathInput" placeholder="/chat/completions" /></label>
           <label>API KEY<input id="modelApiKeyInput" type="password" placeholder="API KEY" /></label>
           <label>顺序<input id="modelSequenceInput" type="number" min="0" value="0" /></label>
@@ -487,11 +534,13 @@
           <label>图标<input id="agentIconInput" placeholder="✦" /></label>
           <label>
             模型供应商
-            <select id="agentModelProviderInput"></select>
+            <input id="agentModelProviderInput" list="agentModelProviderOptions" placeholder="从数据库模型配置中选择" />
+            <datalist id="agentModelProviderOptions"></datalist>
           </label>
           <label>
             模型名称
-            <select id="agentModelNameInput"></select>
+            <input id="agentModelNameInput" list="agentModelNameOptions" placeholder="从数据库模型配置中选择" />
+            <datalist id="agentModelNameOptions"></datalist>
           </label>
           <label>排序<input id="agentSequenceInput" type="number" min="0" value="0" /></label>
           <label>温度<input id="agentTemperatureInput" type="number" min="0" max="2" step="0.1" /></label>
@@ -695,6 +744,88 @@
         </div>
         <div class="modal-actions">
           <button class="primary-button compact-primary" id="createWordbookBtn" type="button">保存单词本</button>
+        </div>
+      </div>
+    </section>
+    <section class="modal-backdrop hidden" id="articleStudyModal" aria-modal="true" role="dialog">
+      <div class="config-modal article-study-modal" data-modal-scroll>
+        <div class="panel-heading">
+          <div>
+            <p class="eyebrow">Article Study</p>
+            <h3>生成学习文章</h3>
+          </div>
+          <button class="icon-button" id="closeArticleStudyModalBtn" type="button" title="关闭">×</button>
+        </div>
+
+        <section class="article-modal-section article-modal-words">
+          <div class="panel-heading compact-heading">
+            <div>
+              <h3>词汇选择</h3>
+              <span class="mini-pill" id="articleSelectedCount">已选 0</span>
+            </div>
+            <div class="article-filter-actions">
+              <label class="entry-prefix-field">
+                <span class="sr-only">前缀匹配</span>
+                <input id="articlePrefixInput" autocomplete="off" placeholder="前缀匹配" />
+              </label>
+              <label class="entry-prefix-field">
+                <span class="sr-only">状态筛选</span>
+                <select id="articleStatusFilter">
+                  <option value="">全部状态</option>
+                  <option value="familiar">熟悉</option>
+                  <option value="vague">模糊</option>
+                  <option value="forgotten">遗忘</option>
+                </select>
+              </label>
+              <button class="secondary-button compact" id="articleReloadWordsBtn" type="button">刷新词汇</button>
+              <button class="secondary-button compact" id="articleClearSelectionBtn" type="button">清空选择</button>
+            </div>
+          </div>
+          <div id="articleWordGrid" class="article-word-grid empty">暂无单词</div>
+        </section>
+
+        <section class="article-modal-section article-modal-settings">
+          <label class="compact-field small-field article-range-field">
+            字数
+            <select id="articleWordCountSelect">
+              <option value="150-200">150-200</option>
+              <option value="300-500" selected>300-500</option>
+              <option value="500-700">500-700</option>
+              <option value="800-1000">800-1000</option>
+            </select>
+          </label>
+          <label class="compact-field small-field article-range-field">
+            难度
+            <select id="articleDifficultySelect">
+              <option value="easy">基础</option>
+              <option value="medium" selected>适中</option>
+              <option value="hard">挑战</option>
+            </select>
+          </label>
+          <label class="compact-field">
+            AI 模型
+            <select id="articleModelSelect" aria-label="AI 模型"></select>
+          </label>
+          <button class="primary-button compact-primary" id="articlePreviewGenerateBtn" type="button">生成预览</button>
+          <label class="article-remark-field">
+            备注
+            <textarea id="articleRemarkInput" rows="2" placeholder="例如：偏商务语境；多解释定语从句；文章语气轻松一些"></textarea>
+          </label>
+        </section>
+
+        <section class="article-modal-section article-modal-preview">
+          <div class="panel-heading compact-heading">
+            <div>
+              <h3>文章预览</h3>
+              <span class="mini-pill" id="articleModalPreviewBadge">等待生成</span>
+            </div>
+          </div>
+          <div id="articleModalPreview" class="article-result empty">选择词汇并生成预览后，可保存到文章主体中继续学习</div>
+        </section>
+
+        <div class="modal-actions">
+          <button class="secondary-button" id="cancelArticleStudyBtn" type="button">取消</button>
+          <button class="primary-button" id="saveArticleStudyBtn" type="button" disabled>保存</button>
         </div>
       </div>
     </section>

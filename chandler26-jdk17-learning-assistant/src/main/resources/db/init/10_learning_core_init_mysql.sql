@@ -1,4 +1,4 @@
--- 学习助手用户、词书、标签、关联词、复习与偏好初始化脚本。
+-- 学习助手用户、单词本、标签、关联词、复习与偏好初始化脚本。
 -- 适用于全新数据库初始化；依赖 00_ai_agent_init_mysql.sql 和 english_vocabulary_study_record_mysql.sql。
 
 CREATE TABLE IF NOT EXISTS learning_user (
@@ -32,29 +32,29 @@ CREATE TABLE IF NOT EXISTS learning_user_token (
 CREATE TABLE IF NOT EXISTS learning_wordbook (
     id BIGINT NOT NULL COMMENT '主键',
     user_id BIGINT NOT NULL COMMENT '用户 ID',
-    name VARCHAR(64) NOT NULL COMMENT '词书名称',
-    description VARCHAR(255) DEFAULT NULL COMMENT '词书描述',
-    is_default TINYINT(1) NOT NULL DEFAULT 0 COMMENT '是否默认词书',
+    name VARCHAR(64) NOT NULL COMMENT '单词本名称',
+    description VARCHAR(255) DEFAULT NULL COMMENT '单词本描述',
+    is_default TINYINT(1) NOT NULL DEFAULT 0 COMMENT '是否默认单词本',
     deleted TINYINT(1) NOT NULL DEFAULT 0 COMMENT '是否删除',
     create_time DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP COMMENT '创建时间',
     update_time DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP COMMENT '更新时间',
     PRIMARY KEY (id),
     KEY idx_learning_wordbook_user (user_id, deleted, update_time),
     KEY idx_learning_wordbook_default (user_id, is_default)
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci COMMENT='学习词书';
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci COMMENT='学习单词本';
 
 CREATE TABLE IF NOT EXISTS learning_wordbook_entry (
     id BIGINT NOT NULL COMMENT '主键',
     user_id BIGINT NOT NULL COMMENT '用户 ID',
-    wordbook_id BIGINT NOT NULL COMMENT '词书 ID',
+    wordbook_id BIGINT NOT NULL COMMENT '单词本 ID',
     vocabulary_id BIGINT NOT NULL COMMENT '词汇缓存 ID',
     term VARCHAR(128) NOT NULL COMMENT '展示单词或短语',
     normalized_term VARCHAR(128) NOT NULL COMMENT '归一化单词或短语',
     note TEXT DEFAULT NULL COMMENT 'Markdown 笔记',
-    snapshot_raw_content MEDIUMTEXT DEFAULT NULL COMMENT '加入词书时的 AI 原始回复快照',
-    snapshot_parsed_json JSON DEFAULT NULL COMMENT '加入词书时解析出的 JSON 快照',
-    snapshot_tags_json JSON DEFAULT NULL COMMENT '加入词书时的标签快照',
-    snapshot_relations_json JSON DEFAULT NULL COMMENT '加入词书时的关联词快照',
+    snapshot_raw_content MEDIUMTEXT DEFAULT NULL COMMENT '加入单词本时的 AI 原始回复快照',
+    snapshot_parsed_json JSON DEFAULT NULL COMMENT '加入单词本时解析出的 JSON 快照',
+    snapshot_tags_json JSON DEFAULT NULL COMMENT '加入单词本时的标签快照',
+    snapshot_relations_json JSON DEFAULT NULL COMMENT '加入单词本时的关联词快照',
     snapshot_provider VARCHAR(50) DEFAULT NULL COMMENT '快照使用的模型供应商',
     snapshot_model_name VARCHAR(100) DEFAULT NULL COMMENT '快照使用的模型名称',
     snapshot_session_id BIGINT DEFAULT NULL COMMENT '快照关联的 AI 会话 ID',
@@ -77,7 +77,7 @@ CREATE TABLE IF NOT EXISTS learning_wordbook_entry (
     KEY idx_learning_wordbook_entry_user_due (user_id, deleted, next_review_time),
     KEY idx_learning_wordbook_entry_vocabulary (vocabulary_id),
     KEY idx_learning_wordbook_entry_status (wordbook_id, status, deleted)
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci COMMENT='词书词条与复习状态';
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci COMMENT='单词本词条与复习状态';
 
 CREATE TABLE IF NOT EXISTS learning_vocabulary_tag (
     id BIGINT NOT NULL COMMENT '主键',
@@ -122,8 +122,8 @@ CREATE TABLE IF NOT EXISTS learning_vocabulary_relation (
 CREATE TABLE IF NOT EXISTS learning_review_record (
     id BIGINT NOT NULL COMMENT '主键',
     user_id BIGINT NOT NULL COMMENT '用户 ID',
-    wordbook_id BIGINT NOT NULL COMMENT '词书 ID',
-    entry_id BIGINT NOT NULL COMMENT '词书词条 ID',
+    wordbook_id BIGINT NOT NULL COMMENT '单词本 ID',
+    entry_id BIGINT NOT NULL COMMENT '单词本词条 ID',
     vocabulary_id BIGINT NOT NULL COMMENT '词汇缓存 ID',
     normalized_term VARCHAR(128) NOT NULL COMMENT '归一化单词或短语',
     result VARCHAR(20) NOT NULL COMMENT '复习结果：remembered、vague、forgotten',

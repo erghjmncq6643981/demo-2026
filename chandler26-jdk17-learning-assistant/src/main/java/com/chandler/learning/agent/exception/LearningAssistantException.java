@@ -33,6 +33,11 @@ public class LearningAssistantException extends RuntimeException {
         return new LearningAssistantException(HttpStatus.NOT_FOUND, errorCode, message, message, null);
     }
 
+    public static LearningAssistantException externalService(String errorCode, String message, Throwable cause) {
+        String debugMessage = cause == null ? message : cause.getMessage();
+        return new LearningAssistantException(HttpStatus.BAD_GATEWAY, errorCode, message, debugMessage, cause);
+    }
+
     public static LearningAssistantException system(String errorCode, String message, Throwable cause) {
         String debugMessage = cause == null ? message : cause.getMessage();
         return new LearningAssistantException(HttpStatus.INTERNAL_SERVER_ERROR, errorCode, message, debugMessage, cause);

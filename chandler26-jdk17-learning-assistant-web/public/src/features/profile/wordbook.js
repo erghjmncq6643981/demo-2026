@@ -52,19 +52,21 @@ export function createWordbookProfileFeature(ctx) {
         return loadWordbookEntries()
       })
       .catch((error) => {
-        logEvent('error', '词书加载失败', error.message)
-        toast(`词书加载失败：${error.message}`)
+        logEvent('error', '单词本加载失败', error.message)
+        toast(`单词本加载失败：${error.message}`)
       })
   }
 
   function renderWordbooks() {
     elements.wordbookSelect.innerHTML = ''
     elements.reviewWordbookSelect.innerHTML = ''
+    if (elements.articleWordbookSelect) elements.articleWordbookSelect.innerHTML = ''
     if (!state.wordbooks.length) {
-      elements.wordbookSelect.innerHTML = '<option value="">暂无词书</option>'
-      elements.reviewWordbookSelect.innerHTML = '<option value="">暂无词书</option>'
+      elements.wordbookSelect.innerHTML = '<option value="">暂无单词本</option>'
+      elements.reviewWordbookSelect.innerHTML = '<option value="">暂无单词本</option>'
+      if (elements.articleWordbookSelect) elements.articleWordbookSelect.innerHTML = '<option value="">暂无单词本</option>'
       elements.wordbookCards.className = 'wordbook-cards empty'
-      elements.wordbookCards.textContent = state.token ? '暂无词书' : '登录后查看词书'
+      elements.wordbookCards.textContent = state.token ? '暂无单词本' : '登录后查看单词本'
       renderProfileMetrics()
       return
     }
@@ -77,9 +79,11 @@ export function createWordbookProfileFeature(ctx) {
       option.textContent = `${wordbook.name} · ${wordbook.entryCount || 0}词 · ${wordbook.dueCount || 0}待复习`
       elements.wordbookSelect.appendChild(option)
       elements.reviewWordbookSelect.appendChild(option.cloneNode(true))
+      if (elements.articleWordbookSelect) elements.articleWordbookSelect.appendChild(option.cloneNode(true))
     }
     elements.wordbookSelect.value = String(state.currentWordbookId)
     elements.reviewWordbookSelect.value = String(state.currentWordbookId)
+    if (elements.articleWordbookSelect) elements.articleWordbookSelect.value = String(state.currentWordbookId)
 
     elements.wordbookCards.className = 'wordbook-cards'
     elements.wordbookCards.innerHTML = state.wordbooks
@@ -88,12 +92,12 @@ export function createWordbookProfileFeature(ctx) {
           <div class="wordbook-card ${sameId(item.id, state.currentWordbookId) ? 'active' : ''}">
             <button class="wordbook-main" type="button" data-wordbook-id="${escapeHtml(item.id)}">
               <strong>${escapeHtml(item.name)}</strong>
-              <span>${escapeHtml(item.description || (item.isDefault ? '默认词书' : '自定义词书'))}</span>
+              <span>${escapeHtml(item.description || (item.isDefault ? '默认单词本' : '自定义单词本'))}</span>
               <small>${item.isDefault ? '默认 · ' : ''}${item.entryCount || 0} 个单词 · ${item.dueCount || 0} 个待复习</small>
             </button>
             <div class="row-actions">
-              <button class="icon-action-button" type="button" data-wordbook-edit="${escapeHtml(item.id)}" title="编辑词书" aria-label="编辑词书">✎</button>
-              <button class="danger-icon-button" type="button" data-wordbook-delete="${escapeHtml(item.id)}" title="删除词书">×</button>
+              <button class="icon-action-button" type="button" data-wordbook-edit="${escapeHtml(item.id)}" title="编辑单词本" aria-label="编辑单词本">✎</button>
+              <button class="danger-icon-button" type="button" data-wordbook-delete="${escapeHtml(item.id)}" title="删除单词本">×</button>
             </div>
           </div>
         `,
@@ -113,18 +117,21 @@ export function createWordbookProfileFeature(ctx) {
 
   async function changeWordbook(wordbookId) {
     syncCurrentWordbookId(state, elements, wordbookId)
+    state.selectedArticleEntryIds = []
+    state.currentArticleRecord = null
+    state.articleRecords = []
     renderWordbooks()
-      await Promise.allSettled([loadWordbookEntries(), loadDueReviewsFromCtx()])
-    logEvent('wordbook', '切换词书', currentWordbookName())
+    await Promise.allSettled([loadWordbookEntries(), loadDueReviewsFromCtx()])
+    logEvent('wordbook', '切换单词本', currentWordbookName())
   }
 
   function openWordbookModal(id = null) {
     if (id) {
       fillWordbookForm(id)
-      elements.wordbookModalTitle.textContent = '编辑词书'
+      elements.wordbookModalTitle.textContent = '编辑单词本'
     } else {
       resetWordbookForm({ keepModalOpen: true })
-      elements.wordbookModalTitle.textContent = '新增词书'
+      elements.wordbookModalTitle.textContent = '新增单词本'
     }
     showModal(elements.wordbookModal)
   }
@@ -136,7 +143,7 @@ export function createWordbookProfileFeature(ctx) {
   async function createWordbook() {
     const name = elements.newWordbookInput.value.trim()
     if (!name) {
-      toast('请输入新词书名称')
+      toast('请输入新单词本名称')
       return
     }
     if (!state.token) {
@@ -162,7 +169,7 @@ export function createWordbookProfileFeature(ctx) {
         resetWordbookForm()
         closeWordbookModal()
         renderWordbooks()
-        toast('设计预览：词表已保存')
+        toast('设计预览：单词本已保存')
         return
       }
       const path = state.currentWordbookEditId ? `/api/v1/learning/wordbooks/${state.currentWordbookEditId}` : '/api/v1/learning/wordbooks'
@@ -172,11 +179,11 @@ export function createWordbookProfileFeature(ctx) {
       closeWordbookModal()
       syncCurrentWordbookId(state, elements, wordbook.id)
       await loadWordbooks()
-      logEvent('wordbook', method === 'PUT' ? '更新词表' : '创建词表', name)
-      toast('词表已保存')
+      logEvent('wordbook', method === 'PUT' ? '更新单词本' : '创建单词本', name)
+      toast('单词本已保存')
     } catch (error) {
-      logEvent('error', '保存词表失败', error.message)
-      toast(`保存词表失败：${error.message}`)
+      logEvent('error', '保存单词本失败', error.message)
+      toast(`保存单词本失败：${error.message}`)
     } finally {
       setLoading(false)
     }
@@ -205,14 +212,14 @@ export function createWordbookProfileFeature(ctx) {
     const wordbook = state.wordbooks.find((item) => sameId(item.id, id))
     if (!wordbook) return
     const confirmed = await confirmDelete({
-      title: '删除词书',
-      message: `确认删除词书「${wordbook.name}」？词书中的单词也会从该词书移除。`,
+      title: '删除单词本',
+      message: `确认删除单词本「${wordbook.name}」？单词本中存在单词时后端会拒绝删除。`,
     })
     if (!confirmed) return
     if (state.preview) {
       state.wordbooks = state.wordbooks.filter((item) => !sameId(item.id, id))
       if (!state.wordbooks.length) {
-        state.wordbooks = [{ id: 1, name: '默认词书', description: '日常学习沉淀', isDefault: true, entryCount: 0, dueCount: 0 }]
+        state.wordbooks = [{ id: 1, name: '默认单词本', description: '日常学习沉淀', isDefault: true, entryCount: 0, dueCount: 0 }]
       }
       const fallback = state.wordbooks.find((item) => item.isDefault) || state.wordbooks[0]
       fallback.isDefault = true
@@ -220,7 +227,7 @@ export function createWordbookProfileFeature(ctx) {
       renderWordbooks()
       renderWordbookEntries()
       renderActivityHeatmap()
-      toast('设计预览：词书已删除')
+      toast('设计预览：单词本已删除')
       return
     }
     try {
@@ -229,10 +236,10 @@ export function createWordbookProfileFeature(ctx) {
         syncCurrentWordbookId(state, elements, null)
       }
       await Promise.allSettled([loadWordbooks(), loadDueReviewsFromCtx(), loadActivity()])
-      toast('词书已删除')
+      toast('单词本已删除')
     } catch (error) {
-      logEvent('error', '删除词书失败', error.message)
-      toast(`删除词书失败：${error.message}`)
+      logEvent('error', '删除单词本失败', error.message)
+      toast(`删除单词本失败：${error.message}`)
     }
   }
 
@@ -289,7 +296,7 @@ export function createWordbookProfileFeature(ctx) {
     const term = entry?.term || entry?.normalizedTerm || '当前单词'
     const confirmed = await confirmDelete({
       title: '删除单词',
-      message: `确认从词书中删除「${term}」？删除后这个单词的笔记和复习计划会从当前词书移除。`,
+      message: `确认从单词本中删除「${term}」？删除后这个单词的笔记和复习计划会从当前单词本移除。`,
     })
     if (!confirmed) return
     if (state.preview) {
@@ -298,14 +305,14 @@ export function createWordbookProfileFeature(ctx) {
       state.selectedEntry = null
       renderWordbookEntries()
       ctx.renderReviewQueue(state.reviewEntries)
-      toast('设计预览：已从词表删除')
+      toast('设计预览：已从单词本删除')
       return
     }
     try {
       await request(`/api/v1/learning/wordbook-entries/${encodeURIComponent(entryId)}`, { method: 'DELETE' })
       await Promise.allSettled([loadWordbooks(), loadWordbookEntries(), loadDueReviewsFromCtx()])
       await loadActivity()
-      toast('已从词表删除')
+      toast('已从单词本删除')
     } catch (error) {
       logEvent('error', '删除词条失败', error.message)
       toast(`删除词条失败：${error.message}`)
@@ -319,7 +326,7 @@ export function createWordbookProfileFeature(ctx) {
     const entries = prefix ? statusFiltered.filter((entry) => entryMatchesPrefix(entry, prefix)) : statusFiltered
     if (!entries.length) {
       elements.wordbookEntryList.className = 'entry-list empty'
-      elements.wordbookEntryList.textContent = prefix ? '没有匹配前缀的单词' : state.token ? '当前词书还没有单词' : '登录后查看单词本'
+      elements.wordbookEntryList.textContent = prefix ? '没有匹配前缀的单词' : state.token ? '当前单词本还没有单词' : '登录后查看单词本'
       state.selectedEntry = null
       renderWordbookFocus(null)
       ctx.renderNotes(null)
@@ -377,7 +384,7 @@ export function createWordbookProfileFeature(ctx) {
   }
 
   function currentWordbookName(wordbookId = state.currentWordbookId) {
-    return state.wordbooks.find((item) => sameId(item.id, wordbookId))?.name || '所选词书'
+    return state.wordbooks.find((item) => sameId(item.id, wordbookId))?.name || '所选单词本'
   }
 
   return {

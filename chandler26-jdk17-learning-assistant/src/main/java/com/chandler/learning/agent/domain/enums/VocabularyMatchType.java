@@ -1,0 +1,36 @@
+package com.chandler.learning.agent.domain.enums;
+
+import cn.hutool.core.util.StrUtil;
+import com.chandler.learning.agent.support.LearningConstants;
+import lombok.Getter;
+
+import java.util.Arrays;
+
+/**
+ * 词汇匹配来源。
+ */
+@Getter
+public enum VocabularyMatchType {
+
+    EXACT(LearningConstants.VocabularyInsight.MATCH_TYPE_EXACT, "精确匹配"),
+    FUZZY(LearningConstants.VocabularyInsight.MATCH_TYPE_FUZZY, "模糊匹配"),
+    PARSED_TEXT(LearningConstants.VocabularyInsight.MATCH_TYPE_PARSED_TEXT, "AI 文本解析"),
+    PARSED_OBJECT(LearningConstants.VocabularyInsight.MATCH_TYPE_PARSED_OBJECT, "AI 对象解析"),
+    CACHED_EXACT(LearningConstants.VocabularyInsight.MATCH_TYPE_CACHED_EXACT, "缓存精确匹配");
+
+    private final String code;
+    private final String label;
+
+    VocabularyMatchType(String code, String label) {
+        this.code = code;
+        this.label = label;
+    }
+
+    public static VocabularyMatchType of(String code) {
+        String normalized = StrUtil.blankToDefault(code, PARSED_TEXT.code).trim().toLowerCase();
+        return Arrays.stream(values())
+                .filter(type -> type.code.equals(normalized))
+                .findFirst()
+                .orElse(PARSED_TEXT);
+    }
+}

@@ -568,6 +568,59 @@ textarea:focus {
   overflow: hidden;
 }
 
+.wordbook-tabs {
+  display: flex;
+  gap: 8px;
+  min-width: 0;
+  overflow-x: auto;
+  overscroll-behavior-x: contain;
+  padding: 6px;
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  background: rgba(15, 23, 42, 0.88);
+  box-shadow: 0 12px 32px rgba(2, 6, 23, 0.18);
+  scrollbar-width: thin;
+  scrollbar-color: rgba(129, 140, 248, 0.46) transparent;
+}
+
+.wordbook-tab {
+  flex: 0 0 auto;
+  min-height: 38px;
+  padding: 0 14px;
+  border: 1px solid transparent;
+  border-radius: 10px;
+  background: transparent;
+  color: var(--muted);
+  cursor: pointer;
+  font-size: 12px;
+  font-weight: 850;
+}
+
+.wordbook-tab.active {
+  border-color: rgba(129, 140, 248, 0.52);
+  background: rgba(129, 140, 248, 0.18);
+  color: var(--text);
+}
+
+.wordbook-tab-panel {
+  display: none;
+  min-width: 0;
+  min-height: 0;
+}
+
+.wordbook-tab-panel.active {
+  display: grid;
+  gap: 18px;
+  min-width: 0;
+  min-height: 0;
+}
+
+#articleStudyPanel.wordbook-tab-panel.active {
+  grid-template-rows: auto minmax(0, 1fr);
+  align-content: start;
+  overflow: hidden;
+}
+
 #reviewView.view.active {
   grid-template-rows: auto minmax(0, 1fr);
   overflow: hidden;
@@ -632,7 +685,43 @@ textarea:focus {
   overflow: hidden;
 }
 
+.article-study-toolbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  min-height: 0;
+  padding: 10px 12px;
+}
+
+.article-study-toolbar .compact-field {
+  width: min(300px, 100%);
+  grid-template-columns: auto minmax(180px, 1fr);
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 0;
+}
+
+.article-study-toolbar .primary-button {
+  min-width: 140px;
+}
+
+.article-study-layout {
+  display: grid;
+  grid-template-columns: minmax(280px, 320px) minmax(0, 1fr);
+  gap: 18px;
+  min-height: 0;
+  overflow: hidden;
+}
+
 .wordbook-layout > .panel {
+  display: grid;
+  min-height: 0;
+  grid-template-rows: auto minmax(0, 1fr);
+  overflow: hidden;
+}
+
+.article-study-layout > .panel {
   display: grid;
   min-height: 0;
   grid-template-rows: auto minmax(0, 1fr);
@@ -645,6 +734,344 @@ textarea:focus {
   overflow: auto;
   overscroll-behavior: contain;
   padding-right: 4px;
+}
+
+.article-action-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  align-items: center;
+}
+
+.article-remark-field {
+  display: grid;
+  gap: 6px;
+}
+
+.article-remark-field textarea {
+  min-height: 76px;
+  resize: vertical;
+}
+
+.article-filter-actions {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 8px;
+  width: min(100%, 460px);
+}
+
+.article-history-search {
+  display: grid;
+  gap: 6px;
+  margin-bottom: 10px;
+}
+
+.article-word-grid,
+.article-history-list {
+  display: grid;
+  gap: 10px;
+}
+
+.article-word-grid {
+  grid-template-columns: repeat(auto-fill, minmax(180px, 1fr));
+  align-content: start;
+  min-height: 0;
+  max-height: 100%;
+  overflow: auto;
+  overscroll-behavior: contain;
+  padding-right: 4px;
+}
+
+.article-word-card {
+  display: grid;
+  gap: 8px;
+  min-height: 132px;
+  padding: 12px;
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  background: rgba(255, 255, 255, 0.04);
+  color: var(--text);
+  text-align: left;
+  cursor: pointer;
+}
+
+.article-word-card.selected {
+  border-color: rgba(125, 211, 168, 0.6);
+  background: rgba(125, 211, 168, 0.1);
+}
+
+.article-word-topline {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.article-word-card strong {
+  font-size: 18px;
+  line-height: 1.1;
+  overflow-wrap: anywhere;
+}
+
+.article-word-card p,
+.article-word-card small {
+  margin: 0;
+  color: var(--muted);
+  overflow-wrap: anywhere;
+}
+
+.selection-dot {
+  justify-self: end;
+  width: 12px;
+  height: 12px;
+  border: 2px solid rgba(148, 163, 184, 0.72);
+  border-radius: 999px;
+  background: transparent;
+}
+
+.article-word-card.selected .selection-dot {
+  border-color: rgba(125, 211, 168, 0.92);
+  background: rgba(125, 211, 168, 0.92);
+}
+
+.article-result {
+  min-height: 0;
+  overflow: auto;
+  overscroll-behavior: contain;
+  padding-right: 4px;
+}
+
+.article-result-preview {
+  max-height: clamp(220px, 44vh, 460px);
+}
+
+.article-result-error {
+  border: 1px solid rgba(251, 113, 133, 0.36);
+  border-radius: 10px;
+  padding: 12px;
+  background: rgba(251, 113, 133, 0.08);
+  line-height: 1.6;
+}
+
+.article-error-content {
+  display: grid;
+  gap: 8px;
+}
+
+.article-error-content strong {
+  color: var(--danger);
+  font-size: 15px;
+}
+
+.article-error-content p,
+.article-error-content small,
+.article-error-content span {
+  margin: 0;
+  overflow-wrap: anywhere;
+}
+
+.article-error-content p {
+  color: var(--text);
+  font-weight: 800;
+}
+
+.article-error-content small {
+  color: var(--muted);
+}
+
+.article-error-content span {
+  color: var(--danger);
+  font-size: 12px;
+  font-weight: 850;
+}
+
+.article-learning-card {
+  display: grid;
+  gap: 14px;
+}
+
+.article-learning-card-preview {
+  gap: 12px;
+}
+
+.article-learning-head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.article-learning-head h4 {
+  margin: 4px 0 6px;
+  font-size: 32px;
+  line-height: 1.12;
+}
+
+.article-learning-head span {
+  color: var(--muted);
+}
+
+.article-section {
+  display: grid;
+  gap: 10px;
+}
+
+.article-section h5 {
+  margin: 0;
+  font-size: 14px;
+}
+
+.article-paragraph,
+.article-translation {
+  margin: 0;
+  line-height: 1.7;
+  overflow-wrap: anywhere;
+}
+
+.article-mini-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(180px, 1fr));
+  gap: 10px;
+}
+
+.article-mini-card,
+.article-info-block {
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  padding: 12px;
+  background: rgba(255, 255, 255, 0.035);
+}
+
+.article-mini-card strong,
+.article-info-block strong {
+  display: block;
+  margin-bottom: 6px;
+}
+
+.article-mini-card p,
+.article-info-block p,
+.article-mini-card small,
+.article-info-block small {
+  display: block;
+  margin: 0;
+  color: var(--muted);
+  line-height: 1.6;
+  overflow-wrap: anywhere;
+}
+
+.article-stack {
+  display: grid;
+  gap: 10px;
+}
+
+.article-point-list {
+  margin: 0;
+  padding-left: 18px;
+  color: var(--muted);
+}
+
+.article-history-panel {
+  min-height: 0;
+  grid-template-rows: auto auto minmax(0, 1fr);
+}
+
+.article-result-panel {
+  min-height: 0;
+  grid-template-rows: auto minmax(0, 1fr);
+}
+
+.article-history-list {
+  min-height: 0;
+  overflow: auto;
+  overscroll-behavior: contain;
+  padding-right: 4px;
+}
+
+.article-history-item {
+  display: grid;
+  gap: 6px;
+  width: 100%;
+  padding: 12px;
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  background: rgba(255, 255, 255, 0.035);
+  color: var(--text);
+  text-align: left;
+  cursor: pointer;
+}
+
+.article-history-item.active {
+  border-color: rgba(129, 140, 248, 0.58);
+  background: var(--accent-soft);
+}
+
+.article-history-item strong {
+  overflow-wrap: anywhere;
+}
+
+.article-history-item span,
+.article-history-item small {
+  color: var(--muted);
+}
+
+.article-study-modal {
+  width: min(1120px, calc(100vw - 32px));
+  max-height: min(92vh, calc(100dvh - 32px));
+  display: grid;
+  align-content: start;
+  gap: 14px;
+  overflow: auto;
+  overscroll-behavior: contain;
+}
+
+.article-modal-section {
+  display: grid;
+  gap: 10px;
+  padding: 14px;
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  background: rgba(15, 23, 42, 0.5);
+}
+
+.article-modal-words {
+  min-height: 0;
+}
+
+.article-modal-words .article-word-grid {
+  max-height: clamp(150px, 24vh, 220px);
+}
+
+.article-modal-settings {
+  grid-template-columns: minmax(110px, 0.8fr) minmax(110px, 0.8fr) minmax(220px, 1.6fr) minmax(120px, 0.8fr);
+  align-items: end;
+}
+
+.article-modal-settings .compact-field,
+.article-modal-settings .compact-field.small-field {
+  width: 100%;
+}
+
+.article-modal-settings .article-remark-field {
+  grid-column: 1 / -1;
+}
+
+.article-modal-preview {
+  min-height: 0;
+  overflow: visible;
+}
+
+.article-modal-preview .article-result {
+  max-height: clamp(220px, 34vh, 420px);
+}
+
+.article-study-modal .modal-actions {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(120px, 160px));
+  justify-content: end;
+}
+
+.article-study-modal .modal-actions button {
+  width: 100%;
 }
 
 .dashboard-grid,
@@ -1951,7 +2378,7 @@ input[type="range"] {
   position: fixed;
   right: 20px;
   bottom: 20px;
-  z-index: 30;
+  z-index: 80;
   max-width: min(420px, calc(100vw - 40px));
   padding: 12px 14px;
   border: 1px solid var(--line);
@@ -2317,6 +2744,7 @@ input[type="range"] {
   .content-grid,
   .review-layout,
   .agent-config-grid,
+  .article-study-layout,
   .wordbook-layout,
   .login-screen {
     grid-template-columns: 1fr;
@@ -2392,12 +2820,14 @@ input[type="range"] {
   }
 
   .wordbook-layout,
+  .article-study-layout,
   .review-layout {
     min-height: auto;
     overflow: visible;
   }
 
   .wordbook-layout > .panel,
+  .article-study-layout > .panel,
   .review-layout > .panel {
     max-height: none;
     overflow: visible;
@@ -2405,6 +2835,9 @@ input[type="range"] {
 
   #wordbookEntryList,
   #wordbookFocus,
+  .article-word-grid,
+  .article-result,
+  .article-history-list,
   #reviewFocus,
   #reviewNote {
     overflow: visible;
@@ -2419,6 +2852,10 @@ input[type="range"] {
   #reviewFocus,
   #reviewNote {
     max-height: none;
+  }
+
+  .article-study-layout {
+    grid-template-columns: 1fr;
   }
 }
 
@@ -2451,6 +2888,7 @@ input[type="range"] {
   .topbar-actions,
   .review-start-controls,
   .wordbook-tools,
+  .article-study-tools,
   .word-main,
   .review-header {
     align-items: stretch;
@@ -2508,6 +2946,17 @@ input[type="range"] {
   }
 
   .profile-tab {
+    min-height: 34px;
+    padding: 0 12px;
+    font-size: 12px;
+  }
+
+  .wordbook-tabs {
+    margin: 0 -2px;
+    border-radius: 10px;
+  }
+
+  .wordbook-tab {
     min-height: 34px;
     padding: 0 12px;
     font-size: 12px;
@@ -2595,6 +3044,100 @@ input[type="range"] {
   .compact-field.small-field,
   .entry-prefix-field {
     width: 100%;
+  }
+
+  .article-filter-actions {
+    grid-template-columns: 1fr;
+    width: 100%;
+  }
+
+  .article-study-toolbar {
+    flex-direction: row;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 8px;
+  }
+
+  .article-study-toolbar .compact-field,
+  .article-study-toolbar .primary-button {
+    width: 100%;
+  }
+
+  .article-study-toolbar .compact-field {
+    flex: 1 1 220px;
+    grid-template-columns: auto minmax(0, 1fr);
+    gap: 6px;
+  }
+
+  .article-study-toolbar .primary-button {
+    flex: 0 0 auto;
+    width: auto;
+    min-width: 128px;
+  }
+
+  .article-modal-settings {
+    grid-template-columns: 1fr;
+  }
+
+  .article-study-modal .modal-actions {
+    grid-template-columns: 1fr;
+    justify-content: stretch;
+  }
+
+  .article-word-grid,
+  .article-mini-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .article-modal-words .article-word-grid {
+    max-height: clamp(260px, 38dvh, 380px);
+    overflow: auto;
+    overscroll-behavior: contain;
+    padding-right: 4px;
+  }
+
+  .article-learning-head {
+    align-items: stretch;
+    flex-direction: column;
+  }
+
+  .article-learning-head h4 {
+    font-size: 24px;
+  }
+
+  .article-word-card {
+    position: relative;
+    min-height: clamp(146px, 36vw, 180px);
+    align-content: start;
+    gap: 10px;
+    padding: 15px 16px 18px;
+  }
+
+  .article-word-topline {
+    align-items: flex-start;
+  }
+
+  .article-word-card strong {
+    font-size: clamp(20px, 6vw, 24px);
+    line-height: 1.15;
+  }
+
+  .article-word-card p {
+    padding-right: 18px;
+    line-height: 1.55;
+  }
+
+  .article-word-card small {
+    flex: 0 0 auto;
+    white-space: nowrap;
+  }
+
+  .article-word-card .selection-dot {
+    position: absolute;
+    right: 14px;
+    bottom: 14px;
+    width: 16px;
+    height: 16px;
   }
 
   .search-card,

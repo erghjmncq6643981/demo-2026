@@ -3,8 +3,11 @@ package com.chandler.learning.agent.service;
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import com.chandler.learning.agent.domain.dto.PromptTemplateSaveRequest;
 import com.chandler.learning.agent.domain.entity.AiPromptTemplate;
+import com.chandler.learning.agent.domain.enums.PromptTemplateType;
+import com.chandler.learning.agent.domain.enums.SystemLogType;
 import com.chandler.learning.agent.exception.LearningAssistantException;
 import com.chandler.learning.agent.mapper.AiPromptTemplateMapper;
+import com.chandler.learning.agent.service.learning.SystemLogService;
 import com.chandler.learning.agent.service.learning.UserDisplayNameService;
 import com.chandler.learning.agent.support.LearningConstants;
 import com.chandler.learning.agent.support.PromptRenderer;
@@ -28,6 +31,7 @@ public class AiPromptTemplateService {
 
     private final AiPromptTemplateMapper templateMapper;
     private final PromptRenderer promptRenderer;
+    private final SystemLogService systemLogService;
     private final UserDisplayNameService userDisplayNameService;
 
     public AiPromptTemplate getByCode(String code) {
@@ -42,8 +46,9 @@ public class AiPromptTemplateService {
     }
 
     public List<AiPromptTemplate> list(String type, boolean enabledOnly) {
+        String normalizedType = StringUtils.hasText(type) ? PromptTemplateType.of(type).getCode() : null;
         return templateMapper.selectList(new LambdaQueryWrapper<AiPromptTemplate>()
-                .eq(StringUtils.hasText(type), AiPromptTemplate::getType, type)
+                .eq(StringUtils.hasText(normalizedType), AiPromptTemplate::getType, normalizedType)
                 .eq(AiPromptTemplate::getDeleted, false)
                 .eq(enabledOnly, AiPromptTemplate::getEnabled, true)
                 .orderByAsc(AiPromptTemplate::getSequence));
@@ -63,6 +68,7 @@ public class AiPromptTemplateService {
         template.setCreateTime(LocalDateTime.now());
         template.setUpdateTime(LocalDateTime.now());
         templateMapper.insert(template);
+        systemLogService.record(null, SystemLogType.AGENT, "创建提示词模板", template.getName());
         log.info("用户「{}」创建了提示词模板「{}」", userDisplayNameService.currentUserName(), template.getName());
         return template.getId();
     }
@@ -83,6 +89,7 @@ public class AiPromptTemplateService {
         copy(request, template);
         template.setUpdateTime(LocalDateTime.now());
         templateMapper.updateById(template);
+        systemLogService.record(null, SystemLogType.AGENT, "更新提示词模板", template.getName());
         log.info("用户「{}」更新了提示词模板「{}」", userDisplayNameService.currentUserName(), template.getName());
     }
 
@@ -104,6 +111,7 @@ public class AiPromptTemplateService {
         template.setDeleted(true);
         template.setUpdateTime(LocalDateTime.now());
         templateMapper.updateById(template);
+        systemLogService.record(null, SystemLogType.AGENT, "删除提示词模板", template.getName());
         log.info("用户「{}」删除了提示词模板「{}」", userDisplayNameService.currentUserName(), template.getName());
     }
 
@@ -136,6 +144,7 @@ public class AiPromptTemplateService {
         clone.setCreateTime(LocalDateTime.now());
         clone.setUpdateTime(LocalDateTime.now());
         templateMapper.insert(clone);
+        systemLogService.record(null, SystemLogType.AGENT, "复制提示词模板", source.getName());
         log.info("用户「{}」复制了提示词模板「{}」", userDisplayNameService.currentUserName(), source.getName());
         return clone.getId();
     }
@@ -158,7 +167,7 @@ public class AiPromptTemplateService {
     private void copy(PromptTemplateSaveRequest request, AiPromptTemplate template) {
         template.setName(request.getName());
         template.setCode(request.getCode());
-        template.setType(StringUtils.hasText(request.getType()) ? request.getType() : LearningConstants.DEFAULT_TEMPLATE_TYPE);
+        template.setType(PromptTemplateType.of(request.getType()).getCode());
         template.setTags(request.getTags());
         template.setContent(request.getContent());
         template.setVariables(request.getVariables());

@@ -4,6 +4,8 @@ import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import com.chandler.learning.agent.domain.dto.learning.SpeechPreferenceRequest;
 import com.chandler.learning.agent.domain.dto.learning.SpeechPreferenceResponse;
 import com.chandler.learning.agent.domain.entity.learning.LearningUserPreference;
+import com.chandler.learning.agent.domain.enums.SpeechVoiceType;
+import com.chandler.learning.agent.domain.enums.SystemLogType;
 import com.chandler.learning.agent.mapper.learning.LearningUserPreferenceMapper;
 import com.chandler.learning.agent.support.LearningConstants;
 import lombok.RequiredArgsConstructor;
@@ -43,7 +45,7 @@ public class UserPreferenceService {
 
         String voiceType = resolvedRequest.getVoiceType() == null
                 ? valueOrDefault(preferences, LearningConstants.UserPreference.KEY_SPEECH_VOICE_TYPE,
-                LearningConstants.UserPreference.VOICE_TYPE_US)
+                SpeechVoiceType.US.getCode())
                 : normalizeVoiceType(resolvedRequest.getVoiceType());
         String sentenceVoiceName = resolvedRequest.getSentenceVoiceName() == null
                 ? valueOrDefault(preferences, LearningConstants.UserPreference.KEY_SPEECH_SENTENCE_VOICE_NAME, "")
@@ -66,7 +68,7 @@ public class UserPreferenceService {
         upsert(userId, LearningConstants.UserPreference.KEY_SPEECH_SENTENCE_RATE, formatNumber(sentenceRate));
         upsert(userId, LearningConstants.UserPreference.KEY_SPEECH_SENTENCE_PITCH, formatNumber(sentencePitch));
 
-        systemLogService.record(userId, "preference", "更新发音设置",
+        systemLogService.record(userId, SystemLogType.PREFERENCE, "更新发音设置",
                 "默认发音 " + voiceType + "，句子语速 " + formatNumber(sentenceRate)
                         + "，句子音调 " + formatNumber(sentencePitch));
         log.info("用户「{}」更新了句子朗读设置：默认发音={}，句子音色={}，语速={}，音调={}",
@@ -88,7 +90,7 @@ public class UserPreferenceService {
         SpeechPreferenceResponse response = new SpeechPreferenceResponse();
         response.setVoiceType(normalizeVoiceType(valueOrDefault(preferences,
                 LearningConstants.UserPreference.KEY_SPEECH_VOICE_TYPE,
-                LearningConstants.UserPreference.VOICE_TYPE_US)));
+                SpeechVoiceType.US.getCode())));
         response.setSentenceVoiceName(valueOrDefault(preferences,
                 LearningConstants.UserPreference.KEY_SPEECH_SENTENCE_VOICE_NAME, ""));
         response.setSentenceRate(clamp(numberOrDefault(preferences,
@@ -136,10 +138,7 @@ public class UserPreferenceService {
     }
 
     private String normalizeVoiceType(String value) {
-        String normalized = value == null ? "" : value.trim().toLowerCase(Locale.ROOT);
-        return LearningConstants.UserPreference.VOICE_TYPE_UK.equals(normalized)
-                ? LearningConstants.UserPreference.VOICE_TYPE_UK
-                : LearningConstants.UserPreference.VOICE_TYPE_US;
+        return SpeechVoiceType.of(value).getCode();
     }
 
     private String valueOrDefault(Map<String, String> preferences, String key, String fallback) {

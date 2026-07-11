@@ -3,28 +3,87 @@ package com.chandler.learning.agent.domain.entity.learning;
 import com.baomidou.mybatisplus.annotation.IdType;
 import com.baomidou.mybatisplus.annotation.TableId;
 import com.baomidou.mybatisplus.annotation.TableName;
+import com.chandler.learning.agent.domain.entity.BaseEntity;
+import com.chandler.learning.agent.support.LearningConstants;
+import io.swagger.v3.oas.annotations.media.Schema;
 import lombok.Data;
 
 import java.time.LocalDateTime;
 
+/**
+ * 单词本 DO。
+ * <p>
+ * 管理用户自己的学习分组，默认单词本用于兜底承接新增词条。
+ */
 @Data
 @TableName("learning_wordbook")
-public class LearningWordbook {
+public class LearningWordbook extends BaseEntity {
 
     @TableId(value = "id", type = IdType.ASSIGN_ID)
+    @Schema(description = "主键")
     private Long id;
 
+    @Schema(description = "所属用户 ID")
     private Long userId;
 
+    @Schema(description = "单词本名称")
     private String name;
 
+    @Schema(description = "单词本描述")
     private String description;
 
+    @Schema(description = "是否默认单词本")
     private Boolean isDefault;
 
-    private Boolean deleted;
+    /**
+     * 创建用户默认单词本，保证新用户有一个可直接加入词条的兜底分组。
+     */
+    public static LearningWordbook createDefault(Long userId, LocalDateTime now) {
+        return create(userId, LearningConstants.Wordbook.DEFAULT_NAME,
+                LearningConstants.Wordbook.DEFAULT_DESCRIPTION, true, now);
+    }
 
-    private LocalDateTime createTime;
+    /**
+     * 创建普通单词本。
+     */
+    public static LearningWordbook create(Long userId, String name, String description,
+                                          boolean defaultWordbook, LocalDateTime now) {
+        LearningWordbook wordbook = new LearningWordbook();
+        wordbook.setUserId(userId);
+        wordbook.updateProfile(name, description, defaultWordbook, now);
+        wordbook.setDeleted(false);
+        wordbook.setCreateTime(now);
+        return wordbook;
+    }
 
-    private LocalDateTime updateTime;
+    /**
+     * 更新单词本基础资料。
+     */
+    public void updateProfile(String name, String description, boolean defaultWordbook, LocalDateTime now) {
+        setName(name);
+        setDescription(description);
+        setIsDefault(defaultWordbook);
+        touch(now);
+    }
+
+    /**
+     * 标记删除，同时取消默认单词本身份。
+     */
+    public void markDeleted(LocalDateTime now) {
+        setDeleted(true);
+        setIsDefault(false);
+        touch(now);
+    }
+
+    /**
+     * 切换默认单词本状态。
+     */
+    public void changeDefault(boolean defaultWordbook, LocalDateTime now) {
+        setIsDefault(defaultWordbook);
+        touch(now);
+    }
+
+    private void touch(LocalDateTime now) {
+        setUpdateTime(now);
+    }
 }

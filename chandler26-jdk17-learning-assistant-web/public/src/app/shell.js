@@ -19,10 +19,15 @@ export function createAppShell(ctx) {
     loadSystemLogs,
     loadDueReviews,
     loadWordbookEntries,
+    loadArticleWords,
+    loadArticleHistory,
     renderProfileMetrics,
     renderActivityHeatmap,
     renderWordbooks,
     renderWordbookEntries,
+    renderArticleWords,
+    renderArticleHistory,
+    renderArticleResult,
     renderModelConfigs,
     renderAgentConfigs,
     renderLearningAgentOptions,
@@ -101,7 +106,14 @@ export function createAppShell(ctx) {
       logEvent('navigation', `进入${title}`)
     }
     if (viewId === 'reviewView' && !options.skipReviewReload) loadDueReviews()
-    if (viewId === 'wordbookView') loadWordbookEntries()
+    if (viewId === 'wordbookView') {
+      if (state.activeWordbookTab === 'articleStudyPanel') {
+        loadArticleWords?.()
+        loadArticleHistory?.()
+      } else {
+        loadWordbookEntries()
+      }
+    }
     if (window.matchMedia('(max-width: 1100px)').matches) {
       setSidebarCollapsed(true)
     }
@@ -162,6 +174,10 @@ export function createAppShell(ctx) {
     state.user = null
     state.wordbooks = []
     state.wordbookEntries = []
+    state.articleEntries = []
+    state.articleRecords = []
+    state.selectedArticleEntryIds = []
+    state.currentArticleRecord = null
     state.reviewEntries = []
     state.previewReviewEntries = []
     state.modelConfigs = []
@@ -186,6 +202,9 @@ export function createAppShell(ctx) {
     syncCurrentWordbookId(state, elements, null, { persist: false })
     renderWordbooks()
     renderWordbookEntries()
+    renderArticleWords?.()
+    renderArticleHistory?.()
+    renderArticleResult?.(null)
     renderModelConfigs()
     renderTemplateOptions()
     renderReviewQueue([])
@@ -208,6 +227,9 @@ export function createAppShell(ctx) {
     }
     await Promise.allSettled([loadAgents(), loadWordbooks(), loadModelConfigs(), loadPromptTemplates(), loadSpeechPreferences(), loadActivity(), loadSystemLogs()])
     await Promise.allSettled([loadDueReviews(), loadWordbookEntries()])
+    if (state.activeWordbookTab === 'articleStudyPanel') {
+      await Promise.allSettled([loadArticleWords?.(), loadArticleHistory?.()])
+    }
   }
 
   function loadPreviewData() {
@@ -223,6 +245,9 @@ export function createAppShell(ctx) {
       renderTemplateConfigs,
       renderWordbooks,
       renderWordbookEntries,
+      renderArticleWords,
+      renderArticleHistory,
+      renderArticleResult,
       renderReviewQueue,
       renderRecord,
       renderActivityHeatmap,

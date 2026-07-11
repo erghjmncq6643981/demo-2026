@@ -4,7 +4,7 @@ import { escapeHtml } from '/src/shared/text.js'
 import { renderModelSelect, renderProviderSelect } from '/src/features/profile/provider.js'
 
 export function createAgentProfileFeature(ctx) {
-  const { state, elements, request, setLoading, toast, logEvent, confirmAction, confirmDelete, setConnection, providerCatalog, renderLearningConfigSummary } = ctx
+  const { state, elements, request, setLoading, toast, logEvent, confirmAction, confirmDelete, setConnection, renderLearningConfigSummary } = ctx
 
   function loadAgents() {
     if (state.preview) {
@@ -58,13 +58,13 @@ export function createAgentProfileFeature(ctx) {
   }
 
   function renderAgentProviderOptions(selectedProvider = '') {
-    renderProviderSelect(elements.agentModelProviderInput, providerCatalog, selectedProvider)
+    return renderProviderSelect(elements.agentModelProviderInput, state.modelConfigs, selectedProvider)
   }
 
   function syncAgentModelProviderDefaults(options = {}) {
     if (!elements.agentModelProviderInput || !elements.agentModelNameInput) return
-    const provider = elements.agentModelProviderInput.value || 'deepseek'
-    renderModelSelect(elements.agentModelNameInput, providerCatalog, provider, options)
+    const provider = elements.agentModelProviderInput.value || renderAgentProviderOptions()
+    renderModelSelect(elements.agentModelNameInput, state.modelConfigs, provider, options)
   }
 
   function renderAgentConfigs() {
@@ -136,9 +136,9 @@ export function createAgentProfileFeature(ctx) {
     elements.agentCodeInput.value = agent?.code || ''
     elements.agentTypeInput.value = agent?.type || 'chat'
     elements.agentIconInput.value = agent?.icon || ''
-    renderAgentProviderOptions(agent?.modelProvider || 'deepseek')
+    renderAgentProviderOptions(agent?.modelProvider || '')
     syncAgentModelProviderDefaults({ keepUnknownModel: true, modelName: agent?.modelName || '' })
-    elements.agentModelProviderInput.value = agent?.modelProvider || 'deepseek'
+    elements.agentModelProviderInput.value = agent?.modelProvider || elements.agentModelProviderInput.value || ''
     syncAgentModelProviderDefaults({ keepUnknownModel: true, modelName: agent?.modelName || '' })
     elements.agentModelNameInput.value = agent?.modelName || ''
     elements.agentSequenceInput.value = agent?.sequence ?? 0
@@ -153,13 +153,13 @@ export function createAgentProfileFeature(ctx) {
 
   function resetAgentForm(options = {}) {
     state.currentAgentEditId = null
-    renderAgentProviderOptions('deepseek')
+    const provider = renderAgentProviderOptions('')
     syncAgentModelProviderDefaults()
     elements.agentNameInput.value = ''
     elements.agentCodeInput.value = ''
     elements.agentTypeInput.value = 'chat'
     elements.agentIconInput.value = ''
-    elements.agentModelProviderInput.value = 'deepseek'
+    elements.agentModelProviderInput.value = provider
     syncAgentModelProviderDefaults()
     elements.agentSequenceInput.value = '0'
     elements.agentTemperatureInput.value = ''

@@ -1,16 +1,16 @@
 package com.chandler.learning.agent.service;
 
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
-import com.chandler.learning.agent.config.AiModelProperties;
-import com.chandler.learning.agent.config.AiModelProperties.ProviderConfig;
 import com.chandler.learning.agent.domain.dto.AiModelConfigResponse;
 import com.chandler.learning.agent.domain.dto.AiModelConfigSaveRequest;
 import com.chandler.learning.agent.domain.entity.AiModelConfig;
+import com.chandler.learning.agent.domain.enums.SystemLogType;
 import com.chandler.learning.agent.exception.LearningAssistantException;
 import com.chandler.learning.agent.mapper.AiModelConfigMapper;
 import com.chandler.learning.agent.security.ApiKeyCryptoService;
 import com.chandler.learning.agent.service.learning.SystemLogService;
 import com.chandler.learning.agent.service.learning.UserDisplayNameService;
+import com.chandler.learning.agent.support.AiModelConnectionConfig;
 import com.chandler.learning.agent.support.LearningConstants;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -31,7 +31,6 @@ import java.util.List;
 public class AiModelConfigService {
 
     private final AiModelConfigMapper modelConfigMapper;
-    private final AiModelProperties modelProperties;
     private final ApiKeyCryptoService apiKeyCryptoService;
     private final SystemLogService systemLogService;
     private final UserDisplayNameService userDisplayNameService;
@@ -88,7 +87,7 @@ public class AiModelConfigService {
             clearDefault(null);
         }
         modelConfigMapper.insert(config);
-        systemLogService.record(null, "ai_model", "创建模型配置", config.getName());
+        systemLogService.record(null, SystemLogType.AI_MODEL, "创建模型配置", config.getName());
         log.info("用户「{}」新增了 AI 模型「{}」，供应商「{}」，明细模型「{}」，状态为「{}」，优先级为 {}",
                 userDisplayNameService.currentUserName(),
                 config.getName(),
@@ -112,7 +111,7 @@ public class AiModelConfigService {
             clearDefault(id);
         }
         modelConfigMapper.updateById(config);
-        systemLogService.record(null, "ai_model", "更新模型配置", config.getName());
+        systemLogService.record(null, SystemLogType.AI_MODEL, "更新模型配置", config.getName());
         log.info("用户「{}」更新了 AI 模型「{}」，供应商「{}」，明细模型「{}」，状态为「{}」，优先级为 {}",
                 userDisplayNameService.currentUserName(),
                 config.getName(),
@@ -133,7 +132,7 @@ public class AiModelConfigService {
         config.setEnabled(enabled);
         config.setUpdateTime(LocalDateTime.now());
         modelConfigMapper.updateById(config);
-        systemLogService.record(null, "ai_model", enabled ? "启用模型配置" : "停用模型配置", config.getName());
+        systemLogService.record(null, SystemLogType.AI_MODEL, enabled ? "启用模型配置" : "停用模型配置", config.getName());
         log.info("用户「{}」{}了 AI 模型「{}」",
                 userDisplayNameService.currentUserName(),
                 enabled ? "启用" : "停用",
@@ -154,7 +153,7 @@ public class AiModelConfigService {
             clearDefault(id);
         }
         modelConfigMapper.updateById(config);
-        systemLogService.record(null, "ai_model", "更新模型优先级", config.getName());
+        systemLogService.record(null, SystemLogType.AI_MODEL, "更新模型优先级", config.getName());
         log.info("用户「{}」把 AI 模型「{}」的优先级调整为 {}，是否默认模型：{}",
                 userDisplayNameService.currentUserName(),
                 config.getName(),
@@ -170,7 +169,7 @@ public class AiModelConfigService {
         config.setDeleted(true);
         config.setUpdateTime(LocalDateTime.now());
         modelConfigMapper.updateById(config);
-        systemLogService.record(null, "ai_model", "删除模型配置", config.getName());
+        systemLogService.record(null, SystemLogType.AI_MODEL, "删除模型配置", config.getName());
         log.info("用户「{}」删除了 AI 模型「{}」，供应商「{}」，明细模型「{}」",
                 userDisplayNameService.currentUserName(),
                 config.getName(),
@@ -178,36 +177,32 @@ public class AiModelConfigService {
                 config.getModelName());
     }
 
-    public ProviderConfig resolveProviderConfig(String provider) {
+    public AiModelConnectionConfig resolveProviderConfig(String provider) {
         AiModelConfig config = findEnabledByProvider(provider);
         if (config != null) {
-            return toProviderConfig(config);
+            return toConnectionConfig(config);
         }
-        return modelProperties.getProvider(provider);
+        return null;
     }
 
-    public ProviderConfig resolveProviderConfig(Long modelConfigId) {
+    public AiModelConnectionConfig resolveProviderConfig(Long modelConfigId) {
         AiModelConfig config = getById(modelConfigId);
         if (config == null) {
             throw LearningAssistantException.notFound(
                     LearningConstants.ErrorCode.MODEL_CONFIG_NOT_FOUND,
                     "模型配置不存在: " + modelConfigId);
         }
-        return toProviderConfig(config);
+        return toConnectionConfig(config);
     }
 
     public String resolveDefaultProvider() {
         AiModelConfig config = getDefaultEnabled();
-        return config == null ? modelProperties.getDefaultProvider() : config.getProvider();
+        return config == null ? null : config.getProvider();
     }
 
     public String resolveDefaultModel(String provider) {
         AiModelConfig config = findEnabledByProvider(provider);
-        if (config != null) {
-            return config.getModelName();
-        }
-        ProviderConfig providerConfig = modelProperties.getProvider(provider);
-        return providerConfig == null ? null : providerConfig.getDefaultModel();
+        return config == null ? null : config.getModelName();
     }
 
     private AiModelConfig findEnabledByProvider(String provider) {
@@ -223,15 +218,15 @@ public class AiModelConfigService {
                 .last(LearningConstants.SQL_LIMIT_ONE));
     }
 
-    private ProviderConfig toProviderConfig(AiModelConfig config) {
+    private AiModelConnectionConfig toConnectionConfig(AiModelConfig config) {
         encryptLegacyApiKey(config);
-        ProviderConfig providerConfig = new ProviderConfig();
-        providerConfig.setEnabled(config.getEnabled());
-        providerConfig.setApiKey(apiKeyCryptoService.decrypt(config.getApiKey()));
-        providerConfig.setBaseUrl(config.getBaseUrl());
-        providerConfig.setChatPath(config.getChatPath());
-        providerConfig.setDefaultModel(config.getModelName());
-        return providerConfig;
+        AiModelConnectionConfig connectionConfig = new AiModelConnectionConfig();
+        connectionConfig.setEnabled(config.getEnabled());
+        connectionConfig.setApiKey(apiKeyCryptoService.decrypt(config.getApiKey()));
+        connectionConfig.setBaseUrl(config.getBaseUrl());
+        connectionConfig.setChatPath(config.getChatPath());
+        connectionConfig.setModelName(config.getModelName());
+        return connectionConfig;
     }
 
     private void copy(AiModelConfigSaveRequest request, AiModelConfig config, boolean create) {

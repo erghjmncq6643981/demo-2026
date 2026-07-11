@@ -13,13 +13,41 @@ public final class LearningConstants {
     public static final int ZERO = 0;
     public static final String SQL_LIMIT_ONE = "LIMIT 1";
     public static final String DEFAULT_CHAT_PATH = "/chat/completions";
-    public static final String DEFAULT_AGENT_TYPE = "chat";
-    public static final String DEFAULT_TEMPLATE_TYPE = "user";
+    public static final String DEFAULT_AGENT_TYPE = Agent.TYPE_CHAT;
+    public static final String DEFAULT_TEMPLATE_TYPE = PromptTemplate.TYPE_USER;
     public static final String VOCABULARY_AGENT_CODE = "english_vocabulary";
     public static final String VOCABULARY_TEMPLATE_CODE = "english_vocab_card_json";
+    public static final String ARTICLE_AGENT_CODE = "english_article";
+    public static final String ARTICLE_TEMPLATE_CODE = "english_vocab_article_json";
     public static final int DEFAULT_JWT_EXPIRE_DAYS = 30;
 
     private LearningConstants() {
+    }
+
+    public static final class Audit {
+        public static final long SYSTEM_USER_ID = 0L;
+        public static final int INITIAL_VERSION = 0;
+
+        private Audit() {
+        }
+    }
+
+    public static final class Agent {
+        public static final String TYPE_CHAT = "chat";
+        public static final String TYPE_ANALYSIS = "analysis";
+        public static final String TYPE_ASSISTANT = "assistant";
+
+        private Agent() {
+        }
+    }
+
+    public static final class PromptTemplate {
+        public static final String TYPE_SYSTEM = "system";
+        public static final String TYPE_USER = "user";
+        public static final String TYPE_ANALYSIS = "analysis";
+
+        private PromptTemplate() {
+        }
     }
 
     public static final class Auth {
@@ -77,6 +105,7 @@ public final class LearningConstants {
 
     public static final class ChatSession {
         public static final int MAX_HISTORY_SIZE = 20;
+        public static final String ROLE_SYSTEM = "system";
         public static final String ROLE_USER = "user";
         public static final String ROLE_ASSISTANT = "assistant";
         public static final String BUSINESS_TYPE_LEARNING = "learning";
@@ -96,7 +125,17 @@ public final class LearningConstants {
         public static final String DEFAULT_LIMIT_PARAM = "80";
         public static final int MIN_LIMIT = 1;
         public static final int MAX_LIMIT = 200;
-        public static final String DEFAULT_TYPE = "system";
+        public static final String TYPE_SYSTEM = "system";
+        public static final String TYPE_AUTH = "auth";
+        public static final String TYPE_AI = "ai";
+        public static final String TYPE_AI_MODEL = "ai_model";
+        public static final String TYPE_CACHE = "cache";
+        public static final String TYPE_REVIEW = "review";
+        public static final String TYPE_WORDBOOK = "wordbook";
+        public static final String TYPE_AGENT = "agent";
+        public static final String TYPE_PREFERENCE = "preference";
+        public static final String TYPE_ERROR = "error";
+        public static final String DEFAULT_TYPE = TYPE_SYSTEM;
         public static final String DEFAULT_TITLE = "系统日志";
         public static final String SOURCE_CLIENT = "client";
         public static final String SOURCE_SERVER = "server";
@@ -176,6 +215,11 @@ public final class LearningConstants {
         public static final String MATCH_TYPE_PARSED_TEXT = "parsed_text";
         public static final String MATCH_TYPE_PARSED_OBJECT = "parsed_object";
         public static final String MATCH_TYPE_CACHED_EXACT = "cached_exact";
+        public static final String MATCH_TYPE_EXACT = "exact";
+        public static final String MATCH_TYPE_FUZZY = "fuzzy";
+        public static final String DIFFICULTY_EASY = "easy";
+        public static final String DIFFICULTY_MEDIUM = "medium";
+        public static final String DIFFICULTY_HARD = "hard";
         public static final String SOURCE_PARSED_JSON = "parsed_json";
 
         private VocabularyInsight() {
@@ -212,6 +256,27 @@ public final class LearningConstants {
         }
     }
 
+    public static final class Wordbook {
+        public static final String DEFAULT_NAME = "默认单词本";
+        public static final String DEFAULT_DESCRIPTION = "自动创建的英语词汇学习单词本";
+
+        private Wordbook() {
+        }
+    }
+
+    public static final class Article {
+        public static final int MIN_SELECTED_WORDS = 1;
+        public static final int MAX_SELECTED_WORDS = 20;
+        public static final int DEFAULT_HISTORY_LIMIT = 10;
+        public static final String DEFAULT_HISTORY_LIMIT_PARAM = "10";
+        public static final int MIN_HISTORY_LIMIT = 1;
+        public static final int MAX_HISTORY_LIMIT = 50;
+        public static final int DEFAULT_LOOKUP_COUNT = 1;
+
+        private Article() {
+        }
+    }
+
     public static final class Activity {
         public static final int MIN_DAYS = 7;
         public static final int MAX_DAYS = 366;
@@ -237,12 +302,16 @@ public final class LearningConstants {
         public static final String API_KEY_REQUIRED = "API_KEY_REQUIRED";
         public static final String API_KEY_CRYPTO_FAILED = "API_KEY_CRYPTO_FAILED";
         public static final String API_KEY_CIPHER_INVALID = "API_KEY_CIPHER_INVALID";
+        public static final String SYSTEM_UNEXPECTED = "SYSTEM_UNEXPECTED";
+        public static final String EXTERNAL_SERVICE_CALL_FAILED = "EXTERNAL_SERVICE_CALL_FAILED";
         public static final String MODEL_CONFIG_NOT_FOUND = "MODEL_CONFIG_NOT_FOUND";
         public static final String AI_PROVIDER_MISSING = "AI_PROVIDER_MISSING";
         public static final String AI_PROVIDER_DISABLED = "AI_PROVIDER_DISABLED";
         public static final String AI_PROVIDER_API_KEY_MISSING = "AI_PROVIDER_API_KEY_MISSING";
         public static final String AI_PROVIDER_BASE_URL_MISSING = "AI_PROVIDER_BASE_URL_MISSING";
         public static final String AI_MODEL_NAME_MISSING = "AI_MODEL_NAME_MISSING";
+        public static final String AI_MODEL_CALL_FAILED = "AI_MODEL_CALL_FAILED";
+        public static final String AI_MODEL_BALANCE_INSUFFICIENT = "AI_MODEL_BALANCE_INSUFFICIENT";
         public static final String AI_RESPONSE_PARSE_FAILED = "AI_RESPONSE_PARSE_FAILED";
         public static final String AGENT_NOT_FOUND = "AGENT_NOT_FOUND";
         public static final String AGENT_DISABLED = "AGENT_DISABLED";
@@ -258,6 +327,10 @@ public final class LearningConstants {
         public static final String WORDBOOK_NOT_EMPTY = "WORDBOOK_NOT_EMPTY";
         public static final String WORDBOOK_TRANSFER_INVALID = "WORDBOOK_TRANSFER_INVALID";
         public static final String ENTRY_NOT_FOUND = "ENTRY_NOT_FOUND";
+        public static final String ARTICLE_WORDS_EMPTY = "ARTICLE_WORDS_EMPTY";
+        public static final String ARTICLE_WORD_LIMIT_EXCEEDED = "ARTICLE_WORD_LIMIT_EXCEEDED";
+        public static final String ARTICLE_WORDS_INVALID = "ARTICLE_WORDS_INVALID";
+        public static final String ARTICLE_RECORD_NOT_FOUND = "ARTICLE_RECORD_NOT_FOUND";
         public static final String AGENT_LAST_NOT_DELETABLE = "AGENT_LAST_NOT_DELETABLE";
         public static final String HASH_FAILED = "HASH_FAILED";
 

@@ -1,4 +1,4 @@
-import { readErrorMessage } from '/src/shared/text.js'
+import { readErrorPayload } from '/src/shared/text.js'
 import { hideModal, showModal } from '/src/shared/modal.js'
 
 export function createAppServices({ state, elements }) {
@@ -20,7 +20,12 @@ export function createAppServices({ state, elements }) {
     const response = await fetch(apiUrl(path), { headers, ...options })
     if (!response.ok) {
       const text = await response.text()
-      throw new Error(readErrorMessage(text) || `HTTP ${response.status}`)
+      const errorPayload = readErrorPayload(text, response.status)
+      const error = new Error(errorPayload.message || `HTTP ${response.status}`)
+      error.errorCode = errorPayload.errorCode
+      error.status = response.status
+      error.payload = errorPayload.raw
+      throw error
     }
     const text = await response.text()
     if (!text) return null
@@ -39,6 +44,8 @@ export function createAppServices({ state, elements }) {
       elements.studyRegenerateBtn,
       elements.chatBtn,
       elements.addToWordbookBtn,
+      elements.articleGenerateBtn,
+      elements.articlePreviewGenerateBtn,
       elements.createWordbookBtn,
       elements.saveAgentBtn,
       elements.saveSpeechBtn,

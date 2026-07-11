@@ -233,9 +233,10 @@ export function logTypeLabel(type) {
       cache: '缓存',
       chat: '追问',
       error: '错误',
+      article: '文章',
       navigation: '导航',
       review: '复习',
-      wordbook: '词书',
+      wordbook: '单词本',
     }[type] || '系统'
   )
 }

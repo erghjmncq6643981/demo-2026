@@ -40,6 +40,7 @@ export function resolveSelectedWordbookId(state, elements, options = {}) {
     state.currentWordbookId,
     elements?.wordbookSelect?.value,
     elements?.reviewWordbookSelect?.value,
+    elements?.articleWordbookSelect?.value,
     localStorage.getItem('learning.wordbookId'),
   ]
   const selected = candidates
@@ -66,6 +67,9 @@ export function syncCurrentWordbookId(state, elements, wordbookId, options = {})
   }
   if (elements?.reviewWordbookSelect) {
     elements.reviewWordbookSelect.value = normalized
+  }
+  if (elements?.articleWordbookSelect) {
+    elements.articleWordbookSelect.value = normalized
   }
 
   return state.currentWordbookId

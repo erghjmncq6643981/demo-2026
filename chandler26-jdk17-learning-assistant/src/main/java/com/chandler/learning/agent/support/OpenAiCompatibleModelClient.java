@@ -1,7 +1,5 @@
 package com.chandler.learning.agent.support;
 
-import com.chandler.learning.agent.config.AiModelProperties;
-import com.chandler.learning.agent.config.AiModelProperties.ProviderConfig;
 import com.chandler.learning.agent.domain.dto.ChatMessageParam;
 import com.chandler.learning.agent.domain.dto.ModelChatRequest;
 import com.chandler.learning.agent.domain.dto.ModelChatResponse;
@@ -16,6 +14,8 @@ import org.springframework.http.HttpHeaders;
 import org.springframework.http.MediaType;
 import org.springframework.stereotype.Component;
 import org.springframework.util.StringUtils;
+import org.springframework.web.client.ResourceAccessException;
+import org.springframework.web.client.RestClientResponseException;
 import org.springframework.web.client.RestTemplate;
 
 import java.util.HashMap;
@@ -33,7 +33,6 @@ import java.util.Map;
 public class OpenAiCompatibleModelClient implements AiModelClient {
 
     private final RestTemplate restTemplate;
-    private final AiModelProperties properties;
     private final AiModelConfigService modelConfigService;
     private final ObjectMapper objectMapper;
 
@@ -41,12 +40,17 @@ public class OpenAiCompatibleModelClient implements AiModelClient {
     public ModelChatResponse chat(ModelChatRequest request) {
         String provider = StringUtils.hasText(request.getProvider())
                 ? request.getProvider()
-                : properties.getDefaultProvider();
-        ProviderConfig providerConfig = resolveProviderConfig(request, provider);
+                : modelConfigService.resolveDefaultProvider();
+        if (!StringUtils.hasText(provider)) {
+            throw LearningAssistantException.badRequest(
+                    LearningConstants.ErrorCode.MODEL_CONFIG_NOT_FOUND,
+                    "未配置可用 AI 模型，请先在个人信息 - Agent管理 - 模型管理中新增并启用模型");
+        }
+        AiModelConnectionConfig providerConfig = resolveProviderConfig(request, provider);
         if (providerConfig == null) {
             throw LearningAssistantException.badRequest(
                     LearningConstants.ErrorCode.AI_PROVIDER_MISSING,
-                    "未配置 AI 供应商: " + provider);
+                    "数据库中未找到可用 AI 模型配置: " + provider);
         }
         if (!Boolean.TRUE.equals(providerConfig.getEnabled())) {
             throw LearningAssistantException.badRequest(
@@ -66,7 +70,7 @@ public class OpenAiCompatibleModelClient implements AiModelClient {
 
         String model = StringUtils.hasText(request.getModel())
                 ? request.getModel()
-                : providerConfig.getDefaultModel();
+                : providerConfig.getModelName();
         if (!StringUtils.hasText(model)) {
             throw LearningAssistantException.badRequest(
                     LearningConstants.ErrorCode.AI_MODEL_NAME_MISSING,
@@ -94,7 +98,7 @@ public class OpenAiCompatibleModelClient implements AiModelClient {
                 model,
                 url,
                 request.getMessages() == null ? LearningConstants.ModelClient.EMPTY_SIZE : request.getMessages().size());
-        String responseBody = restTemplate.postForObject(url, new HttpEntity<>(payload, headers), String.class);
+        String responseBody = callModel(url, payload, headers, provider, model, startTime);
         log.debug("模型 HTTP 响应 provider={} model={} cost={}ms bodySize={}",
                 provider,
                 model,
@@ -103,7 +107,40 @@ public class OpenAiCompatibleModelClient implements AiModelClient {
         return parseResponse(responseBody);
     }
 
-    private ProviderConfig resolveProviderConfig(ModelChatRequest request, String provider) {
+    /**
+     * 调用外部模型接口，并把供应商 HTTP 错误转换为业务可读的学习助手异常。
+     */
+    private String callModel(String url, Map<String, Object> payload, HttpHeaders headers,
+                             String provider, String model, long startTime) {
+        try {
+            return restTemplate.postForObject(url, new HttpEntity<>(payload, headers), String.class);
+        } catch (RestClientResponseException ex) {
+            String upstreamMessage = readUpstreamMessage(ex.getResponseBodyAsString());
+            String message = buildModelCallErrorMessage(provider, model, ex.getStatusCode().value(), upstreamMessage);
+            log.debug("模型 HTTP 调用失败 provider={} model={} status={} cost={}ms upstreamBody={}",
+                    provider,
+                    model,
+                    ex.getStatusCode().value(),
+                    System.currentTimeMillis() - startTime,
+                    ex.getResponseBodyAsString());
+            throw LearningAssistantException.externalService(
+                    resolveModelCallErrorCode(upstreamMessage),
+                    message,
+                    ex);
+        } catch (ResourceAccessException ex) {
+            log.debug("模型 HTTP 网络异常 provider={} model={} cost={}ms error={}",
+                    provider,
+                    model,
+                    System.currentTimeMillis() - startTime,
+                    ex.getMessage());
+            throw LearningAssistantException.externalService(
+                    LearningConstants.ErrorCode.AI_MODEL_CALL_FAILED,
+                    "AI 模型连接失败，请稍后重试或切换可用模型",
+                    ex);
+        }
+    }
+
+    private AiModelConnectionConfig resolveProviderConfig(ModelChatRequest request, String provider) {
         if (request.getModelConfigId() != null) {
             return modelConfigService.resolveProviderConfig(request.getModelConfigId());
         }
@@ -121,7 +158,7 @@ public class OpenAiCompatibleModelClient implements AiModelClient {
                 .toList();
     }
 
-    private String buildUrl(ProviderConfig providerConfig) {
+    private String buildUrl(AiModelConnectionConfig providerConfig) {
         String baseUrl = providerConfig.getBaseUrl();
         String chatPath = StringUtils.hasText(providerConfig.getChatPath())
                 ? providerConfig.getChatPath()
@@ -177,5 +214,46 @@ public class OpenAiCompatibleModelClient implements AiModelClient {
     private Integer readInt(JsonNode node, String fieldName) {
         JsonNode value = node.path(fieldName);
         return value.isMissingNode() || value.isNull() ? null : value.asInt();
+    }
+
+    private String readUpstreamMessage(String responseBody) {
+        if (!StringUtils.hasText(responseBody)) {
+            return null;
+        }
+        try {
+            JsonNode root = objectMapper.readTree(responseBody);
+            String message = root.path("error").path("message").asText(null);
+            if (StringUtils.hasText(message)) {
+                return message;
+            }
+            message = root.path("message").asText(null);
+            return StringUtils.hasText(message) ? message : responseBody;
+        } catch (Exception ex) {
+            return responseBody;
+        }
+    }
+
+    private String buildModelCallErrorMessage(String provider, String model, int statusCode, String upstreamMessage) {
+        if (isInsufficientBalance(upstreamMessage)) {
+            return "AI 模型余额不足，请在「个人信息 - Agent管理」切换可用模型，或检查供应商账户余额";
+        }
+        String reason = StringUtils.hasText(upstreamMessage) ? "，原因：" + upstreamMessage : "";
+        return "AI 模型调用失败（" + provider + " / " + model + "，HTTP " + statusCode + "）" + reason;
+    }
+
+    private String resolveModelCallErrorCode(String upstreamMessage) {
+        return isInsufficientBalance(upstreamMessage)
+                ? LearningConstants.ErrorCode.AI_MODEL_BALANCE_INSUFFICIENT
+                : LearningConstants.ErrorCode.AI_MODEL_CALL_FAILED;
+    }
+
+    private boolean isInsufficientBalance(String upstreamMessage) {
+        if (!StringUtils.hasText(upstreamMessage)) {
+            return false;
+        }
+        String normalized = upstreamMessage.toLowerCase();
+        return normalized.contains("insufficient balance")
+                || normalized.contains("insufficient_balance")
+                || normalized.contains("余额不足");
     }
 }

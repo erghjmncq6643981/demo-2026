@@ -1,6 +1,8 @@
 package com.chandler.learning.agent.domain.dto;
 
+import com.chandler.learning.agent.domain.enums.PromptTemplateType;
 import com.chandler.learning.agent.support.LearningConstants;
+import io.swagger.v3.oas.annotations.media.Schema;
 import jakarta.validation.constraints.NotBlank;
 import lombok.Data;
 
@@ -16,7 +18,8 @@ public class PromptTemplateSaveRequest {
     @NotBlank(message = "模板编码不能为空")
     private String code;
 
-    private String type = LearningConstants.DEFAULT_TEMPLATE_TYPE;
+    @Schema(description = "模板类型：system-系统提示词，user-用户提示词，analysis-分析提示词")
+    private String type = PromptTemplateType.USER.getCode();
 
     private String tags;
 

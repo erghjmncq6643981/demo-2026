@@ -7,6 +7,9 @@ import com.chandler.learning.agent.domain.dto.vocabulary.VocabularyBestMatchResp
 import com.chandler.learning.agent.domain.dto.vocabulary.VocabularyStudyRequest;
 import com.chandler.learning.agent.domain.dto.vocabulary.VocabularyStudyResponse;
 import com.chandler.learning.agent.domain.entity.vocabulary.EnglishVocabularyStudyRecord;
+import com.chandler.learning.agent.domain.enums.LearningScene;
+import com.chandler.learning.agent.domain.enums.SystemLogType;
+import com.chandler.learning.agent.domain.enums.VocabularyMatchType;
 import com.chandler.learning.agent.exception.LearningAssistantException;
 import com.chandler.learning.agent.mapper.vocabulary.EnglishVocabularyStudyRecordMapper;
 import com.chandler.learning.agent.service.AiChatService;
@@ -61,7 +64,7 @@ public class EnglishVocabularyStudyService {
         if (existing != null && !forceRefresh) {
             touch(existing);
             vocabularyInsightService.syncInsights(existing);
-            systemLogService.record(null, "cache", "读取词汇缓存", normalizedTerm);
+            systemLogService.record(null, SystemLogType.CACHE, "读取词汇缓存", normalizedTerm);
             log.debug("词汇缓存命中 term={} recordId={} lookupCount={}",
                     normalizedTerm,
                     existing.getId(),
@@ -100,7 +103,7 @@ public class EnglishVocabularyStudyService {
         }
 
         vocabularyInsightService.syncInsights(record);
-        systemLogService.record(null, "ai", "AI 生成词汇卡片", normalizedTerm);
+        systemLogService.record(null, SystemLogType.AI, "AI 生成词汇卡片", normalizedTerm);
         log.info("用户「{}」使用「{} / {}」生成了单词「{}」的学习卡片，是否刷新缓存：{}",
                 userDisplayNameService.currentUserName(),
                 record.getProvider(),
@@ -127,7 +130,8 @@ public class EnglishVocabularyStudyService {
         EnglishVocabularyStudyRecord exact = findByNormalizedTerm(normalizedTerm);
         if (exact != null) {
             log.debug("词汇最匹配查询命中精确结果 query={} recordId={}", normalizedTerm, exact.getId());
-            return toBestMatchResponse(normalizedTerm, exact, LearningConstants.Vocabulary.EXACT_MATCH_SCORE, "exact");
+            return toBestMatchResponse(normalizedTerm, exact, LearningConstants.Vocabulary.EXACT_MATCH_SCORE,
+                    VocabularyMatchType.EXACT.getCode());
         }
 
         List<EnglishVocabularyStudyRecord> candidates = recordMapper.selectList(new LambdaQueryWrapper<EnglishVocabularyStudyRecord>()
@@ -140,7 +144,8 @@ public class EnglishVocabularyStudyService {
                         .thenComparing(candidate -> candidate.record().getLookupCount() == null
                                 ? LearningConstants.ZERO
                                 : candidate.record().getLookupCount()))
-                .map(candidate -> toBestMatchResponse(normalizedTerm, candidate.record(), candidate.score(), "fuzzy"))
+                .map(candidate -> toBestMatchResponse(normalizedTerm, candidate.record(), candidate.score(),
+                        VocabularyMatchType.FUZZY.getCode()))
                 .orElse(null);
         log.debug("词汇最匹配查询使用模糊匹配 query={} found={} candidates={}",
                 normalizedTerm,
@@ -162,8 +167,8 @@ public class EnglishVocabularyStudyService {
         chatRequest.setModelConfigId(request.getModelConfigId());
         chatRequest.setTitle("Vocabulary - " + normalizedTerm);
         chatRequest.setBusinessType(LearningConstants.ChatSession.BUSINESS_TYPE_LEARNING);
-        chatRequest.setBusinessId(LearningConstants.ChatSession.SCENE_ENGLISH_VOCABULARY);
-        chatRequest.setSceneCode(LearningConstants.ChatSession.SCENE_ENGLISH_VOCABULARY);
+        chatRequest.setBusinessId(LearningScene.ENGLISH_VOCABULARY.getCode());
+        chatRequest.setSceneCode(LearningScene.ENGLISH_VOCABULARY.getCode());
         chatRequest.setMessage("请生成英语词汇「" + normalizedTerm + "」的结构化学习卡片。");
         chatRequest.setVariables(variables);
         return aiChatService.chat(chatRequest);

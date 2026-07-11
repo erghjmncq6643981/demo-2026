@@ -8,7 +8,7 @@ public class WordbookSaveRequest {
 
     private Long id;
 
-    @NotBlank(message = "词书名称不能为空")
+    @NotBlank(message = "单词本名称不能为空")
     private String name;
 
     private String description;

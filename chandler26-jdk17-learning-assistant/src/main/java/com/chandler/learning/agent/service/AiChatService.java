@@ -1,7 +1,5 @@
 package com.chandler.learning.agent.service;
 
-import com.chandler.learning.agent.config.AiModelProperties;
-import com.chandler.learning.agent.config.AiModelProperties.ProviderConfig;
 import com.chandler.learning.agent.domain.dto.AgentChatRequest;
 import com.chandler.learning.agent.domain.dto.AgentChatResponse;
 import com.chandler.learning.agent.domain.dto.ChatMessageParam;
@@ -12,6 +10,8 @@ import com.chandler.learning.agent.domain.entity.AiChatMessage;
 import com.chandler.learning.agent.domain.entity.AiChatSession;
 import com.chandler.learning.agent.domain.entity.AiModelCallRecord;
 import com.chandler.learning.agent.domain.entity.AiModelConfig;
+import com.chandler.learning.agent.domain.enums.ChatMessageRole;
+import com.chandler.learning.agent.domain.enums.LearningScene;
 import com.chandler.learning.agent.exception.LearningAssistantException;
 import com.chandler.learning.agent.mapper.AiModelCallRecordMapper;
 import com.chandler.learning.agent.service.learning.UserDisplayNameService;
@@ -46,7 +46,6 @@ public class AiChatService {
     private final AiChatSessionService chatSessionService;
     private final AiModelConfigService modelConfigService;
     private final AiModelClient aiModelClient;
-    private final AiModelProperties modelProperties;
     private final PromptRenderer promptRenderer;
     private final AiModelCallRecordMapper callRecordMapper;
     private final ObjectMapper objectMapper;
@@ -60,7 +59,7 @@ public class AiChatService {
         List<ChatMessageParam> messages = buildMessages(agent, request, session);
         chatSessionService.addUserMessage(session.getId(), buildUserMessage(request));
 
-        AiModelConfig selectedModelConfig = request.getModelConfigId() == null ? null : modelConfigService.getById(request.getModelConfigId());
+        AiModelConfig selectedModelConfig = resolveSelectedModelConfig(request.getModelConfigId());
         String provider = resolveProvider(agent, selectedModelConfig);
         String modelName = resolveModelName(agent, provider, selectedModelConfig);
         ModelChatRequest modelRequest = new ModelChatRequest();
@@ -172,17 +171,16 @@ public class AiChatService {
                 ? agent.getSystemPrompt()
                 : agent.getConcisePrompt();
         if (StringUtils.hasText(systemPrompt)) {
-            messages.add(new ChatMessageParam("system", promptRenderer.render(systemPrompt, variables)));
+            messages.add(new ChatMessageParam(ChatMessageRole.SYSTEM.getCode(), promptRenderer.render(systemPrompt, variables)));
         }
 
         for (AiChatMessage message : history) {
-            if (LearningConstants.ChatSession.ROLE_USER.equals(message.getRole())
-                    || LearningConstants.ChatSession.ROLE_ASSISTANT.equals(message.getRole())) {
+            if (ChatMessageRole.conversational(message.getRole())) {
                 messages.add(new ChatMessageParam(message.getRole(), message.getContent()));
             }
         }
 
-        messages.add(new ChatMessageParam(LearningConstants.ChatSession.ROLE_USER, buildUserMessage(request)));
+        messages.add(new ChatMessageParam(ChatMessageRole.USER.getCode(), buildUserMessage(request)));
         return messages;
     }
 
@@ -206,9 +204,13 @@ public class AiChatService {
         if (StringUtils.hasText(agent.getModelProvider())) {
             return agent.getModelProvider();
         }
-        return StringUtils.hasText(modelConfigService.resolveDefaultProvider())
-                ? modelConfigService.resolveDefaultProvider()
-                : modelProperties.getDefaultProvider();
+        String defaultProvider = modelConfigService.resolveDefaultProvider();
+        if (StringUtils.hasText(defaultProvider)) {
+            return defaultProvider;
+        }
+        throw LearningAssistantException.badRequest(
+                LearningConstants.ErrorCode.MODEL_CONFIG_NOT_FOUND,
+                "未配置可用 AI 模型，请先在个人信息 - Agent管理 - 模型管理中新增并启用模型");
     }
 
     private String resolveModelName(AiAgent agent, String provider, AiModelConfig selectedModelConfig) {
@@ -219,14 +221,25 @@ public class AiChatService {
             return agent.getModelName();
         }
         String configuredModel = modelConfigService.resolveDefaultModel(provider);
-        return StringUtils.hasText(configuredModel)
-                ? configuredModel
-                : fallbackModelName(provider);
+        if (StringUtils.hasText(configuredModel)) {
+            return configuredModel;
+        }
+        throw LearningAssistantException.badRequest(
+                LearningConstants.ErrorCode.AI_MODEL_NAME_MISSING,
+                "未找到可用的 AI 模型明细，请先在个人信息 - Agent管理 - 模型管理中维护模型名称");
     }
 
-    private String fallbackModelName(String provider) {
-        ProviderConfig providerConfig = modelProperties.getProvider(provider);
-        return providerConfig == null ? null : providerConfig.getDefaultModel();
+    private AiModelConfig resolveSelectedModelConfig(Long modelConfigId) {
+        if (modelConfigId == null) {
+            return null;
+        }
+        AiModelConfig selectedModelConfig = modelConfigService.getById(modelConfigId);
+        if (selectedModelConfig == null) {
+            throw LearningAssistantException.notFound(
+                    LearningConstants.ErrorCode.MODEL_CONFIG_NOT_FOUND,
+                    "模型配置不存在: " + modelConfigId);
+        }
+        return selectedModelConfig;
     }
 
     private AiModelCallRecord buildCallRecord(Long sessionId, AiAgent agent, ModelChatRequest request) {
@@ -281,14 +294,15 @@ public class AiChatService {
     }
 
     private String sceneDisplayTitle(String sceneCode, String businessType, String businessId, String agentName, long startTime) {
-        if (LearningConstants.ChatSession.SCENE_ENGLISH_VOCABULARY.equals(sceneCode)) {
-            return LearningConstants.ChatSession.SCENE_TITLE_ENGLISH_VOCABULARY;
+        if (StringUtils.hasText(sceneCode)) {
+            LearningScene scene = LearningScene.of(sceneCode);
+            if (scene.getCode().equals(sceneCode.trim())) {
+                return scene.getTitle();
+            }
+            return sceneCode.trim();
         }
         if (StringUtils.hasText(businessType) && StringUtils.hasText(businessId)) {
             return businessType + "-" + businessId;
-        }
-        if (StringUtils.hasText(sceneCode)) {
-            return sceneCode;
         }
         return agentName + "-" + startTime;
     }

@@ -33,14 +33,14 @@ import java.util.List;
 @RestController
 @RequiredArgsConstructor
 @RequestMapping("/api/v1/learning")
-@Tag(name = "词书与复习")
+@Tag(name = "单词本与复习")
 public class WordbookController {
 
     private final AuthService authService;
     private final WordbookService wordbookService;
 
     @GetMapping("/wordbooks")
-    @Operation(summary = "我的词书列表")
+    @Operation(summary = "我的单词本列表")
     public List<WordbookResponse> listWordbooks(
             @RequestHeader(value = "Authorization", required = false) String authorization) {
         LearningUser user = authService.requireUser(authorization);
@@ -48,7 +48,7 @@ public class WordbookController {
     }
 
     @PostMapping("/wordbooks")
-    @Operation(summary = "创建词书")
+    @Operation(summary = "创建单词本")
     public WordbookResponse createWordbook(
             @RequestHeader(value = "Authorization", required = false) String authorization,
             @Valid @RequestBody WordbookSaveRequest request) {
@@ -57,7 +57,7 @@ public class WordbookController {
     }
 
     @PutMapping("/wordbooks/{wordbookId}")
-    @Operation(summary = "更新词书")
+    @Operation(summary = "更新单词本")
     public WordbookResponse updateWordbook(
             @RequestHeader(value = "Authorization", required = false) String authorization,
             @PathVariable Long wordbookId,
@@ -67,7 +67,7 @@ public class WordbookController {
     }
 
     @DeleteMapping("/wordbooks/{wordbookId}")
-    @Operation(summary = "删除词书")
+    @Operation(summary = "删除单词本")
     public void deleteWordbook(
             @RequestHeader(value = "Authorization", required = false) String authorization,
             @PathVariable Long wordbookId) {
@@ -85,7 +85,7 @@ public class WordbookController {
     }
 
     @GetMapping("/wordbooks/{wordbookId}/entries")
-    @Operation(summary = "词书词条列表")
+    @Operation(summary = "单词本词条列表")
     public List<WordbookEntryResponse> listEntries(
             @RequestHeader(value = "Authorization", required = false) String authorization,
             @PathVariable Long wordbookId,
@@ -96,7 +96,7 @@ public class WordbookController {
     }
 
     @PostMapping("/wordbooks/{wordbookId}/entries")
-    @Operation(summary = "加入词书")
+    @Operation(summary = "加入单词本")
     public WordbookEntryResponse addEntry(
             @RequestHeader(value = "Authorization", required = false) String authorization,
             @PathVariable Long wordbookId,
@@ -106,7 +106,7 @@ public class WordbookController {
     }
 
     @PutMapping("/wordbook-entries/{entryId}")
-    @Operation(summary = "更新词书词条笔记或状态")
+    @Operation(summary = "更新单词本词条笔记或状态")
     public WordbookEntryResponse updateEntry(
             @RequestHeader(value = "Authorization", required = false) String authorization,
             @PathVariable Long entryId,
@@ -116,7 +116,7 @@ public class WordbookController {
     }
 
     @DeleteMapping("/wordbook-entries/{entryId}")
-    @Operation(summary = "删除词书词条")
+    @Operation(summary = "删除单词本词条")
     public void deleteEntry(
             @RequestHeader(value = "Authorization", required = false) String authorization,
             @PathVariable Long entryId) {
@@ -125,7 +125,7 @@ public class WordbookController {
     }
 
     @PostMapping("/wordbook-entries/{entryId}/transfer")
-    @Operation(summary = "复制或移动词条到其它词书")
+    @Operation(summary = "复制或移动词条到其它单词本")
     public WordbookEntryResponse transferEntry(
             @RequestHeader(value = "Authorization", required = false) String authorization,
             @PathVariable Long entryId,

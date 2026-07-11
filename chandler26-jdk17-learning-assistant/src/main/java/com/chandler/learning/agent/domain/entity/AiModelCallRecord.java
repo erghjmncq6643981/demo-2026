@@ -6,15 +6,13 @@ import com.baomidou.mybatisplus.annotation.TableName;
 import io.swagger.v3.oas.annotations.media.Schema;
 import lombok.Data;
 
-import java.time.LocalDateTime;
-
 /**
  * AI 模型调用记录。
  */
 @Data
 @TableName("ai_model_call_record")
 @Schema(name = "AI 模型调用记录")
-public class AiModelCallRecord {
+public class AiModelCallRecord extends BaseEntity {
 
     @TableId(value = "id", type = IdType.ASSIGN_ID)
     private Long id;
@@ -42,6 +40,4 @@ public class AiModelCallRecord {
     private Integer totalTokens;
 
     private Long latencyMs;
-
-    private LocalDateTime createTime;
 }
