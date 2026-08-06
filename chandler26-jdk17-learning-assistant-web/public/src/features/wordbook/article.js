@@ -408,12 +408,8 @@ export function createWordbookArticleFeature(ctx) {
           <button class="icon-button" type="button" data-article-speak title="播放文章">▶</button>
         </header>
         <section class="article-section">
-          <h5>英文文章</h5>
-          ${article ? renderParagraphs(article, 'article-paragraph') : '<div class="empty">暂无英文文章</div>'}
-        </section>
-        <section class="article-section">
-          <h5>中文译文</h5>
-          ${translation ? renderParagraphs(translation, 'article-translation') : '<div class="empty">暂无中文译文</div>'}
+          <h5>双语正文</h5>
+          ${renderBilingualArticle(article, translation)}
         </section>
         ${renderVocabularyFocus(vocabularyFocus)}
         ${renderGrammarPoints(grammarPoints)}
@@ -578,13 +574,42 @@ export function createWordbookArticleFeature(ctx) {
     `
   }
 
-  function renderParagraphs(text, className) {
-    return String(text || '')
-      .split(/\n+/)
+  function renderBilingualArticle(article, translation) {
+    const englishLines = splitArticleLines(article, 'en')
+    const chineseLines = splitArticleLines(translation, 'zh')
+    const lineCount = Math.max(englishLines.length, chineseLines.length)
+    if (!lineCount) {
+      return '<div class="empty">暂无文章内容</div>'
+    }
+    return `
+      <div class="article-bilingual-lines">
+        ${Array.from({ length: lineCount })
+          .map((_, index) => {
+            const english = englishLines[index] || ''
+            const chinese = chineseLines[index] || ''
+            return `
+              <div class="article-bilingual-pair">
+                ${english ? `<p class="article-line-en">${escapeHtml(english)}</p>` : ''}
+                ${chinese ? `<p class="article-line-zh">${escapeHtml(chinese)}</p>` : ''}
+              </div>
+            `
+          })
+          .join('')}
+      </div>
+    `
+  }
+
+  function splitArticleLines(text, language) {
+    const normalized = String(text || '')
+      .replace(/\s+/g, ' ')
+      .trim()
+    if (!normalized) return []
+    const pattern = language === 'zh'
+      ? /[^。！？!?]+[。！？!?]+|[^。！？!?]+$/g
+      : /[^.!?]+[.!?]+(?:["')\]]+)?|[^.!?]+$/g
+    return (normalized.match(pattern) || [normalized])
       .map((line) => line.trim())
       .filter(Boolean)
-      .map((line) => `<p class="${className}">${escapeHtml(line)}</p>`)
-      .join('')
   }
 
   function pruneSelectedArticleEntries() {

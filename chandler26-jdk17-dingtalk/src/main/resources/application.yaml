@@ -35,3 +35,9 @@ springdoc:
 sinopec:
   mock:
     secret-key: ec4ba0eca73db0986a7c0cc47da2dacd
+app:
+  appKey: dingva1c6prbsrbzkpjw
+  appSecret: SEqPvGRVpIc6OPY4bL1ZjBfDUUHD2zTtbbHn2e0O_WzXyjg4Shch6zO3TTgfiOoZ
+
+robot:
+  code: dingva1c6prbsrbzkpjw

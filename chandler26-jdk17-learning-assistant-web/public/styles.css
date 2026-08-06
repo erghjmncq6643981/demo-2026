@@ -928,6 +928,36 @@ textarea:focus {
   overflow-wrap: anywhere;
 }
 
+.article-bilingual-lines {
+  display: grid;
+  gap: 14px;
+}
+
+.article-bilingual-pair {
+  display: grid;
+  gap: 6px;
+}
+
+.article-line-en,
+.article-line-zh {
+  margin: 0;
+  overflow-wrap: anywhere;
+}
+
+.article-line-en {
+  color: var(--text);
+  font-size: 18px;
+  font-weight: 780;
+  line-height: 1.65;
+}
+
+.article-line-zh {
+  color: var(--muted);
+  font-size: 15px;
+  font-weight: 680;
+  line-height: 1.65;
+}
+
 .article-mini-grid {
   display: grid;
   grid-template-columns: repeat(auto-fill, minmax(180px, 1fr));

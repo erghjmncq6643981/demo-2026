@@ -110,10 +110,12 @@ public class SinopecMockController {
     @GetMapping("/sinopec/mock/received")
     @Operation(description = "查询中石化模拟接口已收到的请求")
     public Map<String, Object> received(@RequestParam(value = "action", required = false) String action,
-                                        @RequestParam(value = "orderNo", required = false) String orderNo) {
+                                        @RequestParam(value = "orderNo", required = false) String orderNo,
+                                        @RequestParam(value = "demandNo", required = false) String demandNo) {
         List<SinopecRecord> result = records.stream()
                 .filter(record -> StringUtils.isBlank(action) || StringUtils.equalsIgnoreCase(action, record.getAction()))
                 .filter(record -> StringUtils.isBlank(orderNo) || StringUtils.equals(orderNo, record.getOrderNo()))
+                .filter(record -> StringUtils.isBlank(demandNo) || StringUtils.equals(demandNo, record.getDemandNo()))
                 .toList();
         return success(result);
     }
@@ -159,9 +161,13 @@ public class SinopecMockController {
         String result = callbackResponse(successful, errMsg);
         record.setResponseBody(result);
 
-        log.info("收到中石化模拟接口请求, id={}, mode={}, action={}, orderNo={}, qty={}, codeCount={}, secretKeyValid={}, forceFail={}",
-                record.getId(), record.getRequestMode(), record.getAction(), record.getOrderNo(), record.getQty(),
+        log.info("收到中石化模拟接口请求, id={}, mode={}, action={}, orderNo={}, demandNo={}, qty={}, codeCount={}, secretKeyValid={}, forceFail={}",
+                record.getId(), record.getRequestMode(), record.getAction(), record.getOrderNo(), record.getDemandNo(), record.getQty(),
                 record.getCodeCount(), record.isSecretKeyValid(), record.isForceFail());
+        String requestJson = JSON_MODE.equals(record.getRequestMode()) ? record.getRawBody() : record.getRawData();
+        if (StringUtils.isNotBlank(requestJson)) {
+            log.info("中石化模拟接口请求JSON:\n{}", prettyJson(requestJson));
+        }
         if (soapResponse) {
             return ResponseEntity.ok()
                     .contentType(MediaType.TEXT_XML)
@@ -189,6 +195,7 @@ public class SinopecMockController {
                 .forceFail(forceFail(request))
                 .mockFailMessage(mockFailMessage(request))
                 .orderNo(text(dataNode, "orderNo"))
+                .demandNo(text(dataNode, "demandNo"))
                 .qty(integer(dataNode, "qty"))
                 .codeCount(codes.size())
                 .codes(codes)
@@ -207,6 +214,14 @@ public class SinopecMockController {
         } catch (Exception e) {
             log.warn("中石化模拟接口data解析失败, data={}", data, e);
             return null;
+        }
+    }
+
+    private String prettyJson(String json) {
+        try {
+            return objectMapper.writerWithDefaultPrettyPrinter().writeValueAsString(objectMapper.readTree(json));
+        } catch (Exception e) {
+            return json;
         }
     }
 
@@ -437,6 +452,7 @@ public class SinopecMockController {
         private boolean forceFail;
         private String mockFailMessage;
         private String orderNo;
+        private String demandNo;
         private Integer qty;
         private Integer codeCount;
         private List<String> codes;
