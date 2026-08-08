@@ -34,7 +34,6 @@ export function bindAppEvents(ctx) {
     saveAccountSecurity,
     updateAccountPasswordStrength,
     loadWordbookEntries,
-    setWordbookTab,
     changeArticleWordbook,
     loadArticleWords,
     loadArticleHistory,
@@ -164,9 +163,6 @@ elements.wordStatusFilter.addEventListener('change', loadWordbookEntries)
 elements.wordPrefixInput?.addEventListener('input', () => {
   state.wordPrefixFilter = elements.wordPrefixInput.value.trim()
   renderWordbookEntries()
-})
-document.querySelectorAll('.wordbook-tab').forEach((button) => {
-  button.addEventListener('click', () => setWordbookTab(button.dataset.wordbookTab))
 })
 elements.articleWordbookSelect?.addEventListener('change', () => changeArticleWordbook(elements.articleWordbookSelect.value))
 elements.articleStatusFilter?.addEventListener('change', loadArticleWords)

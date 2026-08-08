@@ -65,8 +65,12 @@
               <small>词表与掌握状态</small>
             </button>
             <button class="nav-item" type="button" data-view="studyView">
-              <span>学习</span>
+              <span>卡片学习</span>
               <small>查词与 AI 卡片</small>
+            </button>
+            <button class="nav-item" type="button" data-view="articleStudyView">
+              <span>文章学习</span>
+              <small>选词生成阅读材料</small>
             </button>
             <button class="nav-item" type="button" data-view="reviewView">
               <span>复习</span>
@@ -262,12 +266,7 @@
           </section>
 
           <section class="view" id="wordbookView">
-            <nav class="wordbook-tabs" aria-label="单词本功能">
-              <button class="wordbook-tab active" type="button" data-wordbook-tab="wordbookWordsPanel">单词列表</button>
-              <button class="wordbook-tab" type="button" data-wordbook-tab="articleStudyPanel">文章学习</button>
-            </nav>
-
-            <section class="wordbook-tab-panel active" id="wordbookWordsPanel">
+            <section class="wordbook-view-content" id="wordbookWordsPanel">
               <section class="review-header panel">
                 <div>
                   <p class="eyebrow">Wordbook</p>
@@ -309,42 +308,42 @@
                 </section>
               </section>
             </section>
+          </section>
 
-            <section class="wordbook-tab-panel" id="articleStudyPanel">
-              <section class="panel article-study-toolbar">
-                <label class="compact-field">
-                  单词本
-                  <select id="articleWordbookSelect"></select>
+          <section class="view" id="articleStudyView">
+            <section class="panel article-study-toolbar">
+              <label class="compact-field">
+                单词本
+                <select id="articleWordbookSelect"></select>
+              </label>
+              <button class="primary-button compact-primary" id="articleGenerateBtn" type="button">文章生成</button>
+            </section>
+
+            <section class="article-study-layout">
+              <section class="panel article-history-panel">
+                <div class="panel-heading">
+                  <div>
+                    <p class="eyebrow">Recent</p>
+                    <h3>近期学习的文章</h3>
+                  </div>
+                  <button class="secondary-button compact" id="articleReloadHistoryBtn" type="button">刷新</button>
+                </div>
+                <label class="entry-prefix-field article-history-search">
+                  <span class="sr-only">搜索文章</span>
+                  <input id="articleHistorySearchInput" autocomplete="off" placeholder="搜索标题、词汇或备注" />
                 </label>
-                <button class="primary-button compact-primary" id="articleGenerateBtn" type="button">文章生成</button>
+                <div id="articleHistoryList" class="article-history-list empty">暂无文章记录</div>
               </section>
 
-              <section class="article-study-layout">
-                <section class="panel article-history-panel">
-                  <div class="panel-heading">
-                    <div>
-                      <p class="eyebrow">Recent</p>
-                      <h3>近期学习的文章</h3>
-                    </div>
-                    <button class="secondary-button compact" id="articleReloadHistoryBtn" type="button">刷新</button>
+              <section class="panel article-result-panel">
+                <div class="panel-heading">
+                  <div>
+                    <p class="eyebrow">Article</p>
+                    <h3>文章主体</h3>
                   </div>
-                  <label class="entry-prefix-field article-history-search">
-                    <span class="sr-only">搜索文章</span>
-                    <input id="articleHistorySearchInput" autocomplete="off" placeholder="搜索标题、词汇或备注" />
-                  </label>
-                  <div id="articleHistoryList" class="article-history-list empty">暂无文章记录</div>
-                </section>
-
-                <section class="panel article-result-panel">
-                  <div class="panel-heading">
-                    <div>
-                      <p class="eyebrow">Article</p>
-                      <h3>文章主体</h3>
-                    </div>
-                    <span class="mini-pill" id="articleResultBadge">等待生成</span>
-                  </div>
-                  <div id="articleResult" class="article-result empty">选择或生成一篇文章后开始学习</div>
-                </section>
+                  <span class="mini-pill" id="articleResultBadge">等待生成</span>
+                </div>
+                <div id="articleResult" class="article-result empty">选择或生成一篇文章后开始学习</div>
               </section>
             </section>
           </section>

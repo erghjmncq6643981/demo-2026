@@ -32,7 +32,6 @@ export function createInitialState() {
     currentTransferEntryId: null,
     selectedEntry: null,
     wordPrefixFilter: '',
-    activeWordbookTab: localStorage.getItem('learning.wordbookTab') || 'wordbookWordsPanel',
     articleEntries: [],
     articleRecords: [],
     selectedArticleEntryIds: [],

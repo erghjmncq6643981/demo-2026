@@ -106,13 +106,10 @@ export function createAppShell(ctx) {
       logEvent('navigation', `进入${title}`)
     }
     if (viewId === 'reviewView' && !options.skipReviewReload) loadDueReviews()
-    if (viewId === 'wordbookView') {
-      if (state.activeWordbookTab === 'articleStudyPanel') {
-        loadArticleWords?.()
-        loadArticleHistory?.()
-      } else {
-        loadWordbookEntries()
-      }
+    if (viewId === 'wordbookView') loadWordbookEntries()
+    if (viewId === 'articleStudyView') {
+      loadArticleWords?.()
+      loadArticleHistory?.()
     }
     if (window.matchMedia('(max-width: 1100px)').matches) {
       setSidebarCollapsed(true)
@@ -227,7 +224,7 @@ export function createAppShell(ctx) {
     }
     await Promise.allSettled([loadAgents(), loadWordbooks(), loadModelConfigs(), loadPromptTemplates(), loadSpeechPreferences(), loadActivity(), loadSystemLogs()])
     await Promise.allSettled([loadDueReviews(), loadWordbookEntries()])
-    if (state.activeWordbookTab === 'articleStudyPanel') {
+    if (state.activeView === 'articleStudyView') {
       await Promise.allSettled([loadArticleWords?.(), loadArticleHistory?.()])
     }
   }

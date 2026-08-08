@@ -564,58 +564,20 @@ textarea:focus {
 }
 
 #wordbookView.view.active {
-  grid-template-rows: auto minmax(0, 1fr);
+  grid-template-rows: minmax(0, 1fr);
   overflow: hidden;
 }
 
-.wordbook-tabs {
-  display: flex;
-  gap: 8px;
-  min-width: 0;
-  overflow-x: auto;
-  overscroll-behavior-x: contain;
-  padding: 6px;
-  border: 1px solid var(--line);
-  border-radius: 12px;
-  background: rgba(15, 23, 42, 0.88);
-  box-shadow: 0 12px 32px rgba(2, 6, 23, 0.18);
-  scrollbar-width: thin;
-  scrollbar-color: rgba(129, 140, 248, 0.46) transparent;
-}
-
-.wordbook-tab {
-  flex: 0 0 auto;
-  min-height: 38px;
-  padding: 0 14px;
-  border: 1px solid transparent;
-  border-radius: 10px;
-  background: transparent;
-  color: var(--muted);
-  cursor: pointer;
-  font-size: 12px;
-  font-weight: 850;
-}
-
-.wordbook-tab.active {
-  border-color: rgba(129, 140, 248, 0.52);
-  background: rgba(129, 140, 248, 0.18);
-  color: var(--text);
-}
-
-.wordbook-tab-panel {
-  display: none;
-  min-width: 0;
-  min-height: 0;
-}
-
-.wordbook-tab-panel.active {
+.wordbook-view-content {
   display: grid;
+  grid-template-rows: auto minmax(0, 1fr);
   gap: 18px;
   min-width: 0;
   min-height: 0;
+  overflow: hidden;
 }
 
-#articleStudyPanel.wordbook-tab-panel.active {
+#articleStudyView.view.active {
   grid-template-rows: auto minmax(0, 1fr);
   align-content: start;
   overflow: hidden;
@@ -690,7 +652,6 @@ textarea:focus {
   align-items: center;
   justify-content: space-between;
   gap: 12px;
-  min-height: 0;
   padding: 10px 12px;
 }
 
@@ -2836,6 +2797,11 @@ input[type="range"] {
   }
 
   #wordbookView.view.active {
+    grid-template-rows: auto;
+    overflow: auto;
+  }
+
+  #articleStudyView.view.active {
     grid-template-rows: auto auto;
     overflow: auto;
   }
@@ -2981,15 +2947,9 @@ input[type="range"] {
     font-size: 12px;
   }
 
-  .wordbook-tabs {
-    margin: 0 -2px;
-    border-radius: 10px;
-  }
-
-  .wordbook-tab {
-    min-height: 34px;
-    padding: 0 12px;
-    font-size: 12px;
+  .wordbook-view-content {
+    grid-template-rows: auto auto;
+    overflow: visible;
   }
 
   .profile-sections {

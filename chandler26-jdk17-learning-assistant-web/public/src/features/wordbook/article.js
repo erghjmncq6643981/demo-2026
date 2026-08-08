@@ -20,22 +20,6 @@ export function createWordbookArticleFeature(ctx) {
     speakSentence,
   } = ctx
 
-  function setWordbookTab(tabId, options = {}) {
-    const fallback = document.getElementById(tabId) ? tabId : 'wordbookWordsPanel'
-    state.activeWordbookTab = fallback
-    localStorage.setItem('learning.wordbookTab', fallback)
-    document.querySelectorAll('.wordbook-tab').forEach((button) => {
-      const active = button.dataset.wordbookTab === fallback
-      button.classList.toggle('active', active)
-      if (active) button.scrollIntoView({ behavior: 'smooth', block: 'nearest', inline: 'nearest' })
-    })
-    document.querySelectorAll('.wordbook-tab-panel').forEach((panel) => panel.classList.toggle('active', panel.id === fallback))
-    if (fallback === 'articleStudyPanel' && !options.skipLoad) {
-      loadArticleWords()
-      loadArticleHistory()
-    }
-  }
-
   async function changeArticleWordbook(wordbookId) {
     syncCurrentWordbookId(state, elements, wordbookId)
     state.selectedArticleEntryIds = []
@@ -697,7 +681,6 @@ export function createWordbookArticleFeature(ctx) {
   }
 
   return {
-    setWordbookTab,
     changeArticleWordbook,
     loadArticleWords,
     loadArticleHistory,

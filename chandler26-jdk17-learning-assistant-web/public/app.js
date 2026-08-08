@@ -262,8 +262,6 @@ if (elements.buildVersion) elements.buildVersion.textContent = `build ${state.bu
 initSpeechSettings()
 
 setSystemLogRenderer(profile.renderSystemLogs)
-article.setWordbookTab(state.activeWordbookTab, { skipLoad: true })
-
 bindAppEvents({
   state,
   elements,
@@ -296,7 +294,6 @@ bindAppEvents({
   saveAccountSecurity: profile.saveAccountSecurity,
   updateAccountPasswordStrength: profile.updateAccountPasswordStrength,
   loadWordbookEntries: profile.loadWordbookEntries,
-  setWordbookTab: article.setWordbookTab,
   changeArticleWordbook: article.changeArticleWordbook,
   loadArticleWords: article.loadArticleWords,
   loadArticleHistory: article.loadArticleHistory,
