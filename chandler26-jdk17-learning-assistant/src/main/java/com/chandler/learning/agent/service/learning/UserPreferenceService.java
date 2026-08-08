@@ -34,10 +34,16 @@ public class UserPreferenceService {
     private final SystemLogService systemLogService;
     private final UserDisplayNameService userDisplayNameService;
 
+    /**
+     * 查询 {@code getSpeechPreferences} 相关业务。
+     */
     public SpeechPreferenceResponse getSpeechPreferences(Long userId) {
         return toSpeechResponse(loadPreferences(userId));
     }
 
+    /**
+     * 创建或保存 {@code saveSpeechPreferences} 相关业务。
+     */
     @Transactional(rollbackFor = Exception.class)
     public SpeechPreferenceResponse saveSpeechPreferences(Long userId, SpeechPreferenceRequest request) {
         Map<String, String> preferences = loadPreferences(userId);
@@ -86,6 +92,9 @@ public class UserPreferenceService {
         return response;
     }
 
+    /**
+     * 转换 {@code toSpeechResponse} 相关业务。
+     */
     private SpeechPreferenceResponse toSpeechResponse(Map<String, String> preferences) {
         SpeechPreferenceResponse response = new SpeechPreferenceResponse();
         response.setVoiceType(normalizeVoiceType(valueOrDefault(preferences,
@@ -106,6 +115,9 @@ public class UserPreferenceService {
         return response;
     }
 
+    /**
+     * 查询 {@code loadPreferences} 相关业务。
+     */
     private Map<String, String> loadPreferences(Long userId) {
         List<LearningUserPreference> preferences = preferenceMapper.selectList(new LambdaQueryWrapper<LearningUserPreference>()
                 .eq(LearningUserPreference::getUserId, userId));
@@ -116,6 +128,9 @@ public class UserPreferenceService {
         return result;
     }
 
+    /**
+     * 处理 {@code upsert} 相关业务。
+     */
     private void upsert(Long userId, String key, String value) {
         LearningUserPreference preference = preferenceMapper.selectOne(new LambdaQueryWrapper<LearningUserPreference>()
                 .eq(LearningUserPreference::getUserId, userId)
@@ -137,15 +152,24 @@ public class UserPreferenceService {
         preferenceMapper.updateById(preference);
     }
 
+    /**
+     * 处理 {@code normalizeVoiceType} 相关业务。
+     */
     private String normalizeVoiceType(String value) {
         return SpeechVoiceType.of(value).getCode();
     }
 
+    /**
+     * 处理 {@code valueOrDefault} 相关业务。
+     */
     private String valueOrDefault(Map<String, String> preferences, String key, String fallback) {
         String value = preferences.get(key);
         return value == null ? fallback : value;
     }
 
+    /**
+     * 处理 {@code numberOrDefault} 相关业务。
+     */
     private double numberOrDefault(Map<String, String> preferences, String key, double fallback) {
         try {
             return Double.parseDouble(valueOrDefault(preferences, key, String.valueOf(fallback)));
@@ -154,14 +178,23 @@ public class UserPreferenceService {
         }
     }
 
+    /**
+     * 处理 {@code clamp} 相关业务。
+     */
     private double clamp(double value, double min, double max) {
         return Math.max(min, Math.min(max, value));
     }
 
+    /**
+     * 处理 {@code trimToEmpty} 相关业务。
+     */
     private String trimToEmpty(String value) {
         return StringUtils.hasText(value) ? value.trim() : "";
     }
 
+    /**
+     * 处理 {@code formatNumber} 相关业务。
+     */
     private String formatNumber(double value) {
         return String.format(Locale.ROOT, "%.2f", value);
     }

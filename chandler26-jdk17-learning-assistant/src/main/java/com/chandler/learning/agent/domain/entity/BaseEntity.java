@@ -17,27 +17,45 @@ import java.time.LocalDateTime;
 @Data
 public abstract class BaseEntity {
 
+    /**
+     * 创建人用户 ID；系统初始化或匿名上下文使用 0。
+     */
     @Schema(description = "创建人用户 ID；系统初始化或匿名上下文使用 0")
     @TableField(fill = FieldFill.INSERT)
     private Long createBy;
 
+    /**
+     * 创建时间。
+     */
     @Schema(description = "创建时间")
     @TableField(fill = FieldFill.INSERT)
     private LocalDateTime createTime;
 
+    /**
+     * 更新人用户 ID；系统初始化或匿名上下文使用 0。
+     */
     @Schema(description = "更新人用户 ID；系统初始化或匿名上下文使用 0")
     @TableField(fill = FieldFill.INSERT_UPDATE)
     private Long updateBy;
 
+    /**
+     * 更新时间。
+     */
     @Schema(description = "更新时间")
     @TableField(fill = FieldFill.INSERT_UPDATE)
     private LocalDateTime updateTime;
 
+    /**
+     * 逻辑删除标记：false-正常，true-已删除。
+     */
     @Schema(description = "逻辑删除标记：false-正常，true-已删除")
     @TableLogic
     @TableField(fill = FieldFill.INSERT)
     private Boolean deleted;
 
+    /**
+     * 乐观锁版本号。
+     */
     @Schema(description = "乐观锁版本号")
     @Version
     @TableField(fill = FieldFill.INSERT)

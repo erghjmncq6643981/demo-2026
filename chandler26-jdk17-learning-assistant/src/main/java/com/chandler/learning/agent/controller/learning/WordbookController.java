@@ -30,6 +30,9 @@ import org.springframework.web.bind.annotation.RestController;
 
 import java.util.List;
 
+/**
+ * WordbookController 类。
+ */
 @RestController
 @RequiredArgsConstructor
 @RequestMapping("/api/v1/learning")
@@ -39,6 +42,9 @@ public class WordbookController {
     private final AuthService authService;
     private final WordbookService wordbookService;
 
+    /**
+     * 查询 {@code listWordbooks} 相关业务。
+     */
     @GetMapping("/wordbooks")
     @Operation(summary = "我的单词本列表")
     public List<WordbookResponse> listWordbooks(
@@ -47,6 +53,9 @@ public class WordbookController {
         return wordbookService.listWordbooks(user.getId());
     }
 
+    /**
+     * 创建或保存 {@code createWordbook} 相关业务。
+     */
     @PostMapping("/wordbooks")
     @Operation(summary = "创建单词本")
     public WordbookResponse createWordbook(
@@ -56,6 +65,9 @@ public class WordbookController {
         return wordbookService.createWordbook(user.getId(), request);
     }
 
+    /**
+     * 更新 {@code updateWordbook} 相关业务。
+     */
     @PutMapping("/wordbooks/{wordbookId}")
     @Operation(summary = "更新单词本")
     public WordbookResponse updateWordbook(
@@ -66,6 +78,9 @@ public class WordbookController {
         return wordbookService.updateWordbook(user.getId(), wordbookId, request);
     }
 
+    /**
+     * 更新 {@code deleteWordbook} 相关业务。
+     */
     @DeleteMapping("/wordbooks/{wordbookId}")
     @Operation(summary = "删除单词本")
     public void deleteWordbook(
@@ -75,6 +90,9 @@ public class WordbookController {
         wordbookService.deleteWordbook(user.getId(), wordbookId);
     }
 
+    /**
+     * 处理 {@code activity} 相关业务。
+     */
     @GetMapping("/activity")
     @Operation(summary = "学习活跃图")
     public LearningActivityResponse activity(
@@ -84,6 +102,9 @@ public class WordbookController {
         return wordbookService.activity(user.getId(), days == null ? 180 : days);
     }
 
+    /**
+     * 查询 {@code listEntries} 相关业务。
+     */
     @GetMapping("/wordbooks/{wordbookId}/entries")
     @Operation(summary = "单词本词条列表")
     public List<WordbookEntryResponse> listEntries(
@@ -95,6 +116,9 @@ public class WordbookController {
         return wordbookService.listEntries(user.getId(), wordbookId, Boolean.TRUE.equals(dueOnly), status);
     }
 
+    /**
+     * 创建或保存 {@code addEntry} 相关业务。
+     */
     @PostMapping("/wordbooks/{wordbookId}/entries")
     @Operation(summary = "加入单词本")
     public WordbookEntryResponse addEntry(
@@ -105,6 +129,9 @@ public class WordbookController {
         return wordbookService.addEntry(user.getId(), wordbookId, request);
     }
 
+    /**
+     * 更新 {@code updateEntry} 相关业务。
+     */
     @PutMapping("/wordbook-entries/{entryId}")
     @Operation(summary = "更新单词本词条笔记或状态")
     public WordbookEntryResponse updateEntry(
@@ -115,6 +142,9 @@ public class WordbookController {
         return wordbookService.updateEntry(user.getId(), entryId, request);
     }
 
+    /**
+     * 更新 {@code deleteEntry} 相关业务。
+     */
     @DeleteMapping("/wordbook-entries/{entryId}")
     @Operation(summary = "删除单词本词条")
     public void deleteEntry(
@@ -124,6 +154,9 @@ public class WordbookController {
         wordbookService.deleteEntry(user.getId(), entryId);
     }
 
+    /**
+     * 处理 {@code transferEntry} 相关业务。
+     */
     @PostMapping("/wordbook-entries/{entryId}/transfer")
     @Operation(summary = "复制或移动词条到其它单词本")
     public WordbookEntryResponse transferEntry(
@@ -134,6 +167,9 @@ public class WordbookController {
         return wordbookService.transferEntry(user.getId(), entryId, request);
     }
 
+    /**
+     * 处理 {@code dueEntries} 相关业务。
+     */
     @GetMapping("/reviews/due")
     @Operation(summary = "待复习词条")
     public List<WordbookEntryResponse> dueEntries(
@@ -143,6 +179,9 @@ public class WordbookController {
         return wordbookService.listDueEntries(user.getId(), wordbookId);
     }
 
+    /**
+     * 处理 {@code restartReviews} 相关业务。
+     */
     @GetMapping("/reviews/restart")
     @Operation(summary = "重新生成本轮复习任务")
     public List<WordbookEntryResponse> restartReviews(
@@ -153,6 +192,9 @@ public class WordbookController {
         return wordbookService.listRestartReviewEntries(user.getId(), wordbookId, limit);
     }
 
+    /**
+     * 处理 {@code submitReview} 相关业务。
+     */
     @PostMapping("/reviews/{entryId}")
     @Operation(summary = "提交复习结果")
     public ReviewSubmitResponse submitReview(

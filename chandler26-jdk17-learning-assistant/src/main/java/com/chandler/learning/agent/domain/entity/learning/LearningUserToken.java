@@ -16,19 +16,34 @@ import java.time.LocalDateTime;
 @TableName("learning_user_token")
 public class LearningUserToken extends BaseEntity {
 
+    /**
+     * 主键。
+     */
     @TableId(value = "id", type = IdType.ASSIGN_ID)
     @Schema(description = "主键")
     private Long id;
 
+    /**
+     * 用户 ID。
+     */
     @Schema(description = "用户 ID")
     private Long userId;
 
+    /**
+     * 访问令牌 SHA-256 哈希。
+     */
     @Schema(description = "访问令牌 SHA-256 哈希")
     private String tokenHash;
 
+    /**
+     * 令牌过期时间。
+     */
     @Schema(description = "令牌过期时间")
     private LocalDateTime expiredTime;
 
+    /**
+     * 是否已主动注销。
+     */
     @Schema(description = "是否已主动注销")
     private Boolean revoked;
 }

@@ -24,6 +24,9 @@ public enum PromptTemplateType {
         this.label = label;
     }
 
+    /**
+     * 处理 {@code of} 相关业务。
+     */
     public static PromptTemplateType of(String code) {
         String normalized = StrUtil.blankToDefault(code, USER.code).trim().toLowerCase();
         return Arrays.stream(values())

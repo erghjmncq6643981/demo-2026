@@ -17,6 +17,9 @@ import org.springframework.context.annotation.Configuration;
 @Configuration
 public class SpringDocConfig {
 
+    /**
+     * 处理 {@code apiInfo} 相关业务。
+     */
     @Bean
     public OpenAPI apiInfo() {
         return new OpenAPI()

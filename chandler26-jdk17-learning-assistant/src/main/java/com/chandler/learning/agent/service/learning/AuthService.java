@@ -46,6 +46,9 @@ public class AuthService {
     private final UserDisplayNameService userDisplayNameService;
     private final SecureRandom secureRandom = new SecureRandom();
 
+    /**
+     * 创建或保存 {@code register} 相关业务。
+     */
     public AuthResponse register(AuthRequest request) {
         String username = normalizeUsername(request.getUsername());
         LearningUser existing = findByUsername(username);
@@ -70,6 +73,9 @@ public class AuthService {
         return createLoginResponse(user);
     }
 
+    /**
+     * 处理 {@code login} 相关业务。
+     */
     public AuthResponse login(AuthRequest request) {
         String username = normalizeUsername(request.getUsername());
         LearningUser user = findByUsername(username);
@@ -91,10 +97,16 @@ public class AuthService {
         return createLoginResponse(user);
     }
 
+    /**
+     * 处理 {@code me} 相关业务。
+     */
     public UserProfileResponse me(String authorization) {
         return toProfile(requireUser(authorization));
     }
 
+    /**
+     * 更新 {@code updateProfile} 相关业务。
+     */
     public UserProfileResponse updateProfile(String authorization, UserProfileUpdateRequest request) {
         LearningUser user = requireUser(authorization);
         UserProfileUpdateRequest resolvedRequest = request == null ? new UserProfileUpdateRequest() : request;
@@ -143,12 +155,18 @@ public class AuthService {
         return toProfile(user);
     }
 
+    /**
+     * 更新 {@code logout} 相关业务。
+     */
     public void logout(String authorization) {
         LearningUser user = currentSecurityUser();
         SecurityContextHolder.clearContext();
         log.info("用户「{}」退出登录", userDisplayNameService.displayName(user));
     }
 
+    /**
+     * 处理 {@code requireUser} 相关业务。
+     */
     public LearningUser requireUser(String authorization) {
         LearningUser contextUser = currentSecurityUser();
         if (contextUser != null) {
@@ -177,6 +195,9 @@ public class AuthService {
         return user;
     }
 
+    /**
+     * 创建或保存 {@code createLoginResponse} 相关业务。
+     */
     private AuthResponse createLoginResponse(LearningUser user) {
         String rawToken = jwtTokenService.createToken(user.getId(), user.getUsername());
         JwtClaims claims = jwtTokenService.parse(rawToken);
@@ -199,6 +220,9 @@ public class AuthService {
         return response;
     }
 
+    /**
+     * 处理 {@code currentSecurityUser} 相关业务。
+     */
     private LearningUser currentSecurityUser() {
         Authentication authentication = SecurityContextHolder.getContext().getAuthentication();
         if (authentication == null || !authentication.isAuthenticated()) {
@@ -211,12 +235,18 @@ public class AuthService {
         return null;
     }
 
+    /**
+     * 查询 {@code findByUsername} 相关业务。
+     */
     private LearningUser findByUsername(String username) {
         return userMapper.selectOne(new LambdaQueryWrapper<LearningUser>()
                 .eq(LearningUser::getUsername, username)
                 .last(LearningConstants.SQL_LIMIT_ONE));
     }
 
+    /**
+     * 转换 {@code toProfile} 相关业务。
+     */
     private UserProfileResponse toProfile(LearningUser user) {
         UserProfileResponse response = new UserProfileResponse();
         response.setId(user.getId());
@@ -227,6 +257,9 @@ public class AuthService {
         return response;
     }
 
+    /**
+     * 处理 {@code maskPhone} 相关业务。
+     */
     private String maskPhone(String phone) {
         if (!StringUtils.hasText(phone)) {
             return "";
@@ -240,6 +273,9 @@ public class AuthService {
                 + value.substring(value.length() - LearningConstants.Auth.PHONE_MASK_SUFFIX_LENGTH);
     }
 
+    /**
+     * 处理 {@code maskEmail} 相关业务。
+     */
     private String maskEmail(String email) {
         if (!StringUtils.hasText(email)) {
             return "";
@@ -259,6 +295,9 @@ public class AuthService {
                 + domain;
     }
 
+    /**
+     * 处理 {@code normalizePhone} 相关业务。
+     */
     private String normalizePhone(String phone) {
         String value = phone == null ? "" : phone.trim();
         if (!StringUtils.hasText(value)) {
@@ -272,6 +311,9 @@ public class AuthService {
         return value;
     }
 
+    /**
+     * 处理 {@code normalizeEmail} 相关业务。
+     */
     private String normalizeEmail(String email) {
         String value = email == null ? "" : email.trim();
         if (!StringUtils.hasText(value)) {
@@ -285,17 +327,26 @@ public class AuthService {
         return value;
     }
 
+    /**
+     * 判断 {@code hashPassword} 相关业务。
+     */
     private String hashPassword(String password) {
         String salt = randomHex(LearningConstants.Auth.PASSWORD_SALT_BYTES);
         return PASSWORD_PREFIX + salt + "$" + sha256(salt + LearningConstants.Auth.PASSWORD_HASH_SEPARATOR + password);
     }
 
+    /**
+     * 处理 {@code randomHex} 相关业务。
+     */
     private String randomHex(int byteLength) {
         byte[] bytes = new byte[byteLength];
         secureRandom.nextBytes(bytes);
         return HexFormat.of().formatHex(bytes);
     }
 
+    /**
+     * 处理 {@code verifyPassword} 相关业务。
+     */
     private boolean verifyPassword(String password, String passwordHash) {
         if (!StringUtils.hasText(passwordHash) || !passwordHash.startsWith(PASSWORD_PREFIX)) {
             return false;
@@ -309,6 +360,9 @@ public class AuthService {
                         .getBytes(StandardCharsets.UTF_8));
     }
 
+    /**
+     * 处理 {@code sha256} 相关业务。
+     */
     private String sha256(String value) {
         try {
             MessageDigest digest = MessageDigest.getInstance("SHA-256");
@@ -321,10 +375,16 @@ public class AuthService {
         }
     }
 
+    /**
+     * 处理 {@code normalizeUsername} 相关业务。
+     */
     private String normalizeUsername(String username) {
         return username == null ? "" : username.trim().toLowerCase();
     }
 
+    /**
+     * 处理 {@code resolveToken} 相关业务。
+     */
     private String resolveToken(String authorization) {
         if (!StringUtils.hasText(authorization)) {
             return "";

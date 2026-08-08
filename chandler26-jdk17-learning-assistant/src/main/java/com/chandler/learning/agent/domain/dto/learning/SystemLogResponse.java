@@ -4,6 +4,9 @@ import lombok.Data;
 
 import java.time.LocalDateTime;
 
+/**
+ * SystemLogResponse 类。
+ */
 @Data
 public class SystemLogResponse {
 

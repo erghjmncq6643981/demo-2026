@@ -16,28 +16,52 @@ import java.time.LocalDateTime;
 @TableName("learning_user")
 public class LearningUser extends BaseEntity {
 
+    /**
+     * 主键。
+     */
     @TableId(value = "id", type = IdType.ASSIGN_ID)
     @Schema(description = "主键")
     private Long id;
 
+    /**
+     * 登录账号。
+     */
     @Schema(description = "登录账号")
     private String username;
 
+    /**
+     * 展示昵称。
+     */
     @Schema(description = "展示昵称")
     private String nickname;
 
+    /**
+     * 手机号，数据库保存明文，接口输出由后端脱敏。
+     */
     @Schema(description = "手机号，数据库保存明文，接口输出由后端脱敏")
     private String phone;
 
+    /**
+     * 联系邮箱，接口输出由后端脱敏。
+     */
     @Schema(description = "联系邮箱，接口输出由后端脱敏")
     private String email;
 
+    /**
+     * 密码哈希，格式包含算法、盐和摘要。
+     */
     @Schema(description = "密码哈希，格式包含算法、盐和摘要")
     private String passwordHash;
 
+    /**
+     * 账户是否启用。
+     */
     @Schema(description = "账户是否启用")
     private Boolean enabled;
 
+    /**
+     * 最近登录时间。
+     */
     @Schema(description = "最近登录时间")
     private LocalDateTime lastLoginTime;
 }

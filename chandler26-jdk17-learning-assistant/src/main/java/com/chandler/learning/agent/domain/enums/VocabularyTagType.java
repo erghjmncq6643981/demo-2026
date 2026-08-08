@@ -26,6 +26,9 @@ public enum VocabularyTagType {
         this.label = label;
     }
 
+    /**
+     * 处理 {@code of} 相关业务。
+     */
     public static VocabularyTagType of(String code) {
         String normalized = StrUtil.blankToDefault(code, MEANING_TOPIC.code).trim().toLowerCase();
         return Arrays.stream(values())

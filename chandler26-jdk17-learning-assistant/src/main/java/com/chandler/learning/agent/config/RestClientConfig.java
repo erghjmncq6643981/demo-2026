@@ -11,6 +11,9 @@ import org.springframework.web.client.RestTemplate;
 @Configuration
 public class RestClientConfig {
 
+    /**
+     * 处理 {@code restTemplate} 相关业务。
+     */
     @Bean
     public RestTemplate restTemplate(RestTemplateBuilder builder) {
         return builder.build();

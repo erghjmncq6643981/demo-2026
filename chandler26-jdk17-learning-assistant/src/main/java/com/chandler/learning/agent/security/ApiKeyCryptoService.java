@@ -28,6 +28,9 @@ public class ApiKeyCryptoService {
     private final LearningSecurityProperties properties;
     private final SecureRandom secureRandom = new SecureRandom();
 
+    /**
+     * 处理 {@code encrypt} 相关业务。
+     */
     public String encrypt(String plainText) {
         if (!StringUtils.hasText(plainText)) {
             return plainText;
@@ -51,6 +54,9 @@ public class ApiKeyCryptoService {
         }
     }
 
+    /**
+     * 处理 {@code decrypt} 相关业务。
+     */
     public String decrypt(String storedValue) {
         if (!StringUtils.hasText(storedValue)) {
             return storedValue;
@@ -79,14 +85,23 @@ public class ApiKeyCryptoService {
         }
     }
 
+    /**
+     * 处理 {@code mask} 相关业务。
+     */
     public String mask(String storedValue) {
         return maskPlain(decrypt(storedValue));
     }
 
+    /**
+     * 判断 {@code isEncrypted} 相关业务。
+     */
     public boolean isEncrypted(String storedValue) {
         return StringUtils.hasText(storedValue) && storedValue.startsWith(LearningConstants.Crypto.API_KEY_PREFIX);
     }
 
+    /**
+     * 处理 {@code keySpec} 相关业务。
+     */
     private SecretKeySpec keySpec() {
         try {
             MessageDigest digest = MessageDigest.getInstance("SHA-256");
@@ -100,6 +115,9 @@ public class ApiKeyCryptoService {
         }
     }
 
+    /**
+     * 处理 {@code maskPlain} 相关业务。
+     */
     private String maskPlain(String apiKey) {
         if (!StringUtils.hasText(apiKey)) {
             return "";
@@ -112,6 +130,9 @@ public class ApiKeyCryptoService {
                 + apiKey.substring(apiKey.length() - LearningConstants.Crypto.API_KEY_MASK_SUFFIX_LENGTH);
     }
 
+    /**
+     * 处理 {@code fingerprint} 相关业务。
+     */
     public String fingerprint(String storedValue) {
         String plainText = decrypt(storedValue);
         if (!StringUtils.hasText(plainText)) {

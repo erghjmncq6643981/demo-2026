@@ -65,6 +65,9 @@ public class WordbookService {
     private final UserDisplayNameService userDisplayNameService;
     private final ObjectMapper objectMapper;
 
+    /**
+     * 创建或保存 {@code ensureDefaultWordbook} 相关业务。
+     */
     public LearningWordbook ensureDefaultWordbook(Long userId) {
         LearningWordbook existing = wordbookMapper.selectOne(new LambdaQueryWrapper<LearningWordbook>()
                 .eq(LearningWordbook::getUserId, userId)
@@ -83,6 +86,9 @@ public class WordbookService {
         return wordbook;
     }
 
+    /**
+     * 查询 {@code listWordbooks} 相关业务。
+     */
     public List<WordbookResponse> listWordbooks(Long userId) {
         ensureDefaultWordbook(userId);
         return wordbookMapper.selectList(new LambdaQueryWrapper<LearningWordbook>()
@@ -95,6 +101,9 @@ public class WordbookService {
                 .toList();
     }
 
+    /**
+     * 创建或保存 {@code createWordbook} 相关业务。
+     */
     public WordbookResponse createWordbook(Long userId, WordbookSaveRequest request) {
         LocalDateTime now = LocalDateTime.now();
         if (Boolean.TRUE.equals(request.getIsDefault())) {
@@ -112,6 +121,9 @@ public class WordbookService {
         return toWordbookResponse(wordbook);
     }
 
+    /**
+     * 更新 {@code updateWordbook} 相关业务。
+     */
     public WordbookResponse updateWordbook(Long userId, Long wordbookId, WordbookSaveRequest request) {
         LearningWordbook wordbook = requireWordbook(userId, wordbookId);
         if (Boolean.TRUE.equals(request.getIsDefault())) {
@@ -128,6 +140,9 @@ public class WordbookService {
         return toWordbookResponse(wordbook);
     }
 
+    /**
+     * 更新 {@code deleteWordbook} 相关业务。
+     */
     public void deleteWordbook(Long userId, Long wordbookId) {
         LearningWordbook wordbook = requireWordbook(userId, wordbookId);
         long entryCount = entryMapper.selectCount(new LambdaQueryWrapper<LearningWordbookEntry>()
@@ -166,6 +181,9 @@ public class WordbookService {
                 userId, wordbookId, nextDefault == null ? null : nextDefault.getId());
     }
 
+    /**
+     * 处理 {@code transferEntry} 相关业务。
+     */
     @Transactional(rollbackFor = Exception.class)
     public WordbookEntryResponse transferEntry(Long userId, Long entryId, WordbookEntryTransferRequest request) {
         LearningWordbookEntry source = requireEntry(userId, entryId);
@@ -197,6 +215,9 @@ public class WordbookService {
         return toEntryResponse(source);
     }
 
+    /**
+     * 处理 {@code activity} 相关业务。
+     */
     public LearningActivityResponse activity(Long userId, int days) {
         int resolvedDays = Math.max(LearningConstants.Activity.MIN_DAYS, Math.min(days, LearningConstants.Activity.MAX_DAYS));
         LocalDate endDate = LocalDate.now();
@@ -254,6 +275,9 @@ public class WordbookService {
         return response;
     }
 
+    /**
+     * 创建或保存 {@code addEntry} 相关业务。
+     */
     public WordbookEntryResponse addEntry(Long userId, Long wordbookId, AddWordbookEntryRequest request) {
         LearningWordbook wordbook = requireWordbook(userId, wordbookId);
         String normalizedTerm = normalize(request.getTerm());
@@ -319,10 +343,16 @@ public class WordbookService {
         return toEntryResponse(entry);
     }
 
+    /**
+     * 查询 {@code listEntries} 相关业务。
+     */
     public List<WordbookEntryResponse> listEntries(Long userId, Long wordbookId, boolean dueOnly) {
         return listEntries(userId, wordbookId, dueOnly, null);
     }
 
+    /**
+     * 查询 {@code listEntries} 相关业务。
+     */
     public List<WordbookEntryResponse> listEntries(Long userId, Long wordbookId, boolean dueOnly, String status) {
         requireWordbook(userId, wordbookId);
         LambdaQueryWrapper<LearningWordbookEntry> wrapper = new LambdaQueryWrapper<LearningWordbookEntry>()
@@ -338,6 +368,9 @@ public class WordbookService {
                 .toList();
     }
 
+    /**
+     * 查询 {@code listDueEntries} 相关业务。
+     */
     public List<WordbookEntryResponse> listDueEntries(Long userId, Long wordbookId) {
         Long resolvedWordbookId = wordbookId == null ? ensureDefaultWordbook(userId).getId() : wordbookId;
         List<LearningWordbookEntry> entries = entryMapper.selectList(new LambdaQueryWrapper<LearningWordbookEntry>()
@@ -391,6 +424,9 @@ public class WordbookService {
         return entries.stream().map(this::toEntryResponse).toList();
     }
 
+    /**
+     * 更新 {@code updateEntry} 相关业务。
+     */
     public WordbookEntryResponse updateEntry(Long userId, Long entryId, WordbookEntryUpdateRequest request) {
         LearningWordbookEntry entry = requireEntry(userId, entryId);
         if (request.getNote() != null) {
@@ -410,6 +446,9 @@ public class WordbookService {
         return toEntryResponse(entry);
     }
 
+    /**
+     * 更新 {@code deleteEntry} 相关业务。
+     */
     public void deleteEntry(Long userId, Long entryId) {
         LearningWordbookEntry entry = requireEntry(userId, entryId);
         entry.markDeleted(LocalDateTime.now());
@@ -475,6 +514,9 @@ public class WordbookService {
         return response;
     }
 
+    /**
+     * 转换 {@code toWordbookResponse} 相关业务。
+     */
     private WordbookResponse toWordbookResponse(LearningWordbook wordbook) {
         WordbookResponse response = new WordbookResponse();
         response.setId(wordbook.getId());
@@ -492,6 +534,9 @@ public class WordbookService {
         return response;
     }
 
+    /**
+     * 转换 {@code toEntryResponse} 相关业务。
+     */
     private WordbookEntryResponse toEntryResponse(LearningWordbookEntry entry) {
         WordbookEntryResponse response = new WordbookEntryResponse();
         response.setId(entry.getId());
@@ -519,6 +564,9 @@ public class WordbookService {
         return response;
     }
 
+    /**
+     * 更新 {@code applyVocabularySnapshot} 相关业务。
+     */
     private void applyVocabularySnapshot(LearningWordbookEntry entry, EnglishVocabularyStudyRecord vocabulary, LocalDateTime now) {
         String tagsJson = writeJson(vocabularyInsightService.listTags(vocabulary.getId()),
                 "单词本词条标签快照序列化失败");
@@ -527,6 +575,9 @@ public class WordbookService {
         entry.applyVocabularySnapshot(vocabulary, now, tagsJson, relationsJson);
     }
 
+    /**
+     * 处理 {@code refreshSnapshotIfVocabularyChanged} 相关业务。
+     */
     private boolean refreshSnapshotIfVocabularyChanged(LearningWordbookEntry entry,
                                                        EnglishVocabularyStudyRecord vocabulary,
                                                        LocalDateTime now) {
@@ -545,6 +596,9 @@ public class WordbookService {
         return true;
     }
 
+    /**
+     * 查询 {@code readEntryParsed} 相关业务。
+     */
     private Object readEntryParsed(LearningWordbookEntry entry) {
         if (StringUtils.hasText(entry.getSnapshotParsedJson())) {
             Object parsed = readJson(entry.getSnapshotParsedJson(), Object.class, "单词本词条个人结构化 JSON 快照读取失败", entry);
@@ -555,6 +609,9 @@ public class WordbookService {
         return readParsed(entry.getVocabularyId());
     }
 
+    /**
+     * 查询 {@code readEntryTags} 相关业务。
+     */
     private List<VocabularyTagResponse> readEntryTags(LearningWordbookEntry entry) {
         if (StringUtils.hasText(entry.getSnapshotTagsJson())) {
             List<VocabularyTagResponse> tags = readJsonList(entry.getSnapshotTagsJson(), VocabularyTagResponse.class,
@@ -566,6 +623,9 @@ public class WordbookService {
         return vocabularyInsightService.listTags(entry.getVocabularyId());
     }
 
+    /**
+     * 查询 {@code readEntryRelations} 相关业务。
+     */
     private List<VocabularyRelationResponse> readEntryRelations(LearningWordbookEntry entry) {
         if (StringUtils.hasText(entry.getSnapshotRelationsJson())) {
             List<VocabularyRelationResponse> relations = readJsonList(entry.getSnapshotRelationsJson(), VocabularyRelationResponse.class,
@@ -577,6 +637,9 @@ public class WordbookService {
         return vocabularyInsightService.listRelations(entry.getNormalizedTerm());
     }
 
+    /**
+     * 处理 {@code writeJson} 相关业务。
+     */
     private String writeJson(Object value, String errorMessage) {
         try {
             return objectMapper.writeValueAsString(value);
@@ -586,6 +649,9 @@ public class WordbookService {
         }
     }
 
+    /**
+     * 查询 {@code readJson} 相关业务。
+     */
     private <T> T readJson(String json, Class<T> valueType, String errorMessage, LearningWordbookEntry entry) {
         try {
             return objectMapper.readValue(json, valueType);
@@ -599,6 +665,9 @@ public class WordbookService {
         }
     }
 
+    /**
+     * 查询 {@code readJsonList} 相关业务。
+     */
     private <T> List<T> readJsonList(String json, Class<T> elementType, String errorMessage, LearningWordbookEntry entry) {
         try {
             return objectMapper.readValue(json, objectMapper.getTypeFactory().constructCollectionType(List.class, elementType));
@@ -612,6 +681,9 @@ public class WordbookService {
         }
     }
 
+    /**
+     * 查询 {@code readParsed} 相关业务。
+     */
     private Object readParsed(Long vocabularyId) {
         EnglishVocabularyStudyRecord record = vocabularyMapper.selectById(vocabularyId);
         if (record == null || !StringUtils.hasText(record.getParsedJson())) {
@@ -628,6 +700,9 @@ public class WordbookService {
         }
     }
 
+    /**
+     * 处理 {@code requireWordbook} 相关业务。
+     */
     private LearningWordbook requireWordbook(Long userId, Long wordbookId) {
         LearningWordbook wordbook = wordbookMapper.selectById(wordbookId);
         if (wordbook == null || Boolean.TRUE.equals(wordbook.getDeleted()) || !wordbook.getUserId().equals(userId)) {
@@ -638,6 +713,9 @@ public class WordbookService {
         return wordbook;
     }
 
+    /**
+     * 处理 {@code requireEntry} 相关业务。
+     */
     private LearningWordbookEntry requireEntry(Long userId, Long entryId) {
         LearningWordbookEntry entry = entryMapper.selectById(entryId);
         if (entry == null || Boolean.TRUE.equals(entry.getDeleted()) || !entry.getUserId().equals(userId)) {
@@ -648,12 +726,18 @@ public class WordbookService {
         return entry;
     }
 
+    /**
+     * 查询 {@code findVocabulary} 相关业务。
+     */
     private EnglishVocabularyStudyRecord findVocabulary(String normalizedTerm) {
         return vocabularyMapper.selectOne(new LambdaQueryWrapper<EnglishVocabularyStudyRecord>()
                 .eq(EnglishVocabularyStudyRecord::getNormalizedTerm, normalizedTerm)
                 .last(LearningConstants.SQL_LIMIT_ONE));
     }
 
+    /**
+     * 更新 {@code clearDefault} 相关业务。
+     */
     private void clearDefault(Long userId) {
         List<LearningWordbook> defaults = wordbookMapper.selectList(new LambdaQueryWrapper<LearningWordbook>()
                 .eq(LearningWordbook::getUserId, userId)
@@ -665,6 +749,9 @@ public class WordbookService {
         }
     }
 
+    /**
+     * 处理 {@code nextReviewTime} 相关业务。
+     */
     private LocalDateTime nextReviewTime(LocalDateTime now, int stage, boolean remembered, boolean vague) {
         LocalDateTime baseTime = avoidSleepWindow(now);
         if (vague) {
@@ -704,26 +791,44 @@ public class WordbookService {
         return avoidSleepWindow(current);
     }
 
+    /**
+     * 处理 {@code normalizeStatus} 相关业务。
+     */
     private String normalizeStatus(String status) {
         return ReviewStatus.of(status).getCode();
     }
 
+    /**
+     * 处理 {@code inferStatus} 相关业务。
+     */
     private String inferStatus(LearningWordbookEntry entry) {
         return ReviewStatus.infer(entry.getMasteryScore(), entry.getWrongCount(), entry.getCorrectCount()).getCode();
     }
 
+    /**
+     * 处理 {@code normalize} 相关业务。
+     */
     private String normalize(String term) {
         return term == null ? "" : term.trim().replaceAll("\\s+", " ").toLowerCase(Locale.ROOT);
     }
 
+    /**
+     * 处理 {@code trimToNull} 相关业务。
+     */
     private String trimToNull(String value) {
         return StringUtils.hasText(value) ? value.trim() : null;
     }
 
+    /**
+     * 处理 {@code nullToZero} 相关业务。
+     */
     private int nullToZero(Integer value) {
         return value == null ? 0 : value;
     }
 
+    /**
+     * 处理 {@code statusLabel} 相关业务。
+     */
     private String statusLabel(String status) {
         return ReviewStatus.of(status).getLabel();
     }

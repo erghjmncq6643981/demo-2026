@@ -4,6 +4,9 @@ import lombok.Data;
 
 import java.util.List;
 
+/**
+ * LearningActivityResponse 类。
+ */
 @Data
 public class LearningActivityResponse {
 

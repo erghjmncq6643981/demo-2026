@@ -15,6 +15,9 @@ import org.springframework.web.bind.annotation.RequestHeader;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
 
+/**
+ * UserPreferenceController 类。
+ */
 @RestController
 @RequiredArgsConstructor
 @RequestMapping("/api/v1/learning/preferences")
@@ -24,6 +27,9 @@ public class UserPreferenceController {
     private final AuthService authService;
     private final UserPreferenceService userPreferenceService;
 
+    /**
+     * 查询 {@code getSpeechPreferences} 相关业务。
+     */
     @GetMapping("/speech")
     @Operation(summary = "获取发音偏好")
     public SpeechPreferenceResponse getSpeechPreferences(
@@ -32,6 +38,9 @@ public class UserPreferenceController {
         return userPreferenceService.getSpeechPreferences(user.getId());
     }
 
+    /**
+     * 创建或保存 {@code saveSpeechPreferences} 相关业务。
+     */
     @PutMapping("/speech")
     @Operation(summary = "保存发音偏好")
     public SpeechPreferenceResponse saveSpeechPreferences(

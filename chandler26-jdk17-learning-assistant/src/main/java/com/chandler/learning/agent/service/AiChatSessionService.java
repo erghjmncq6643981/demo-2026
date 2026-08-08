@@ -35,6 +35,9 @@ public class AiChatSessionService {
     private final AiChatMessageMapper messageMapper;
     private final ObjectMapper objectMapper;
 
+    /**
+     * 创建或保存 {@code createSession} 相关业务。
+     */
     public AiChatSession createSession(Long userId, String agentCode, String title, String businessType,
                                        String businessId, String sceneCode, Map<String, Object> variables) {
         Long resolvedUserId = userId == null ? currentUserId() : userId;
@@ -78,6 +81,9 @@ public class AiChatSessionService {
         return session;
     }
 
+    /**
+     * 查询 {@code getSession} 相关业务。
+     */
     public AiChatSession getSession(Long sessionId) {
         if (sessionId == null) {
             return null;
@@ -88,6 +94,9 @@ public class AiChatSessionService {
                 .last(LearningConstants.SQL_LIMIT_ONE));
     }
 
+    /**
+     * 查询 {@code getOwnedSession} 相关业务。
+     */
     public AiChatSession getOwnedSession(Long userId, Long sessionId) {
         if (userId == null || sessionId == null) {
             return null;
@@ -99,6 +108,9 @@ public class AiChatSessionService {
                 .last(LearningConstants.SQL_LIMIT_ONE));
     }
 
+    /**
+     * 查询 {@code getHistory} 相关业务。
+     */
     public List<AiChatMessage> getHistory(Long sessionId) {
         return messageMapper.selectList(new LambdaQueryWrapper<AiChatMessage>()
                 .eq(AiChatMessage::getSessionId, sessionId)
@@ -109,15 +121,24 @@ public class AiChatSessionService {
                 .toList();
     }
 
+    /**
+     * 创建或保存 {@code addUserMessage} 相关业务。
+     */
     public void addUserMessage(Long sessionId, String content) {
         addMessage(sessionId, ChatMessageRole.USER.getCode(), content, null, null, null, null);
     }
 
+    /**
+     * 创建或保存 {@code addAssistantMessage} 相关业务。
+     */
     public void addAssistantMessage(Long sessionId, String content, Integer tokenCount,
                                     Long costTime, String modelProvider, String modelName) {
         addMessage(sessionId, ChatMessageRole.ASSISTANT.getCode(), content, tokenCount, costTime, modelProvider, modelName);
     }
 
+    /**
+     * 查询 {@code listSessions} 相关业务。
+     */
     public List<ChatSessionResponse> listSessions(Long userId, String agentCode, String businessType,
                                                   String businessId, String sceneCode) {
         Long resolvedUserId = userId == null ? currentUserId() : userId;
@@ -137,11 +158,17 @@ public class AiChatSessionService {
                 .toList();
     }
 
+    /**
+     * 查询 {@code detail} 相关业务。
+     */
     public ChatSessionResponse detail(Long sessionId) {
         AiChatSession session = getOwnedSession(currentUserId(), sessionId);
         return session == null ? null : toSessionResponse(session);
     }
 
+    /**
+     * 查询 {@code listMessages} 相关业务。
+     */
     public List<ChatMessageResponse> listMessages(Long sessionId) {
         Long userId = currentUserId();
         if (userId == null || getOwnedSession(userId, sessionId) == null) {
@@ -157,6 +184,9 @@ public class AiChatSessionService {
                 .toList();
     }
 
+    /**
+     * 更新 {@code updateTitle} 相关业务。
+     */
     public void updateTitle(Long sessionId, String title) {
         Long userId = currentUserId();
         if (userId == null || getOwnedSession(userId, sessionId) == null) {
@@ -171,6 +201,9 @@ public class AiChatSessionService {
         sessionMapper.updateById(session);
     }
 
+    /**
+     * 更新 {@code delete} 相关业务。
+     */
     public void delete(Long sessionId) {
         Long userId = currentUserId();
         if (userId == null || getOwnedSession(userId, sessionId) == null) {
@@ -185,6 +218,9 @@ public class AiChatSessionService {
         sessionMapper.updateById(session);
     }
 
+    /**
+     * 创建或保存 {@code addMessage} 相关业务。
+     */
     private void addMessage(Long sessionId, String role, String content, Integer tokenCount,
                             Long costTime, String modelProvider, String modelName) {
         if (sessionId == null) {
@@ -209,6 +245,9 @@ public class AiChatSessionService {
         sessionMapper.updateById(session);
     }
 
+    /**
+     * 查询 {@code getNextSequence} 相关业务。
+     */
     private int getNextSequence(Long sessionId) {
         AiChatMessage last = messageMapper.selectOne(new LambdaQueryWrapper<AiChatMessage>()
                 .eq(AiChatMessage::getSessionId, sessionId)
@@ -219,6 +258,9 @@ public class AiChatSessionService {
                 : last.getSequence() + LearningConstants.SEQUENCE_STEP;
     }
 
+    /**
+     * 转换 {@code toSessionResponse} 相关业务。
+     */
     private ChatSessionResponse toSessionResponse(AiChatSession session) {
         ChatSessionResponse response = new ChatSessionResponse();
         response.setId(session.getId());
@@ -235,6 +277,9 @@ public class AiChatSessionService {
         return response;
     }
 
+    /**
+     * 转换 {@code toMessageResponse} 相关业务。
+     */
     private ChatMessageResponse toMessageResponse(AiChatMessage message) {
         ChatMessageResponse response = new ChatMessageResponse();
         response.setId(message.getId());
@@ -250,6 +295,9 @@ public class AiChatSessionService {
         return response;
     }
 
+    /**
+     * 处理 {@code currentUserId} 相关业务。
+     */
     public Long currentUserId() {
         Authentication authentication = SecurityContextHolder.getContext().getAuthentication();
         if (authentication == null || !authentication.isAuthenticated()) {
@@ -262,6 +310,9 @@ public class AiChatSessionService {
         return null;
     }
 
+    /**
+     * 查询 {@code getLatestActiveSession} 相关业务。
+     */
     private AiChatSession getLatestActiveSession(Long userId, String sceneCode) {
         if (userId == null || !StringUtils.hasText(sceneCode)) {
             return null;
@@ -274,6 +325,9 @@ public class AiChatSessionService {
                 .last(LearningConstants.SQL_LIMIT_ONE));
     }
 
+    /**
+     * 处理 {@code resolveSceneCode} 相关业务。
+     */
     private String resolveSceneCode(String sceneCode, String businessType, String businessId, String agentCode) {
         if (StringUtils.hasText(sceneCode)) {
             return sceneCode.trim();
@@ -295,6 +349,9 @@ public class AiChatSessionService {
         return LearningScene.ENGLISH_VOCABULARY.getCode();
     }
 
+    /**
+     * 转换 {@code toJson} 相关业务。
+     */
     private String toJson(Map<String, Object> variables) {
         try {
             return objectMapper.writeValueAsString(variables);

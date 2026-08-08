@@ -36,6 +36,9 @@ public class OpenAiCompatibleModelClient implements AiModelClient {
     private final AiModelConfigService modelConfigService;
     private final ObjectMapper objectMapper;
 
+    /**
+     * 处理 {@code chat} 相关业务。
+     */
     @Override
     public ModelChatResponse chat(ModelChatRequest request) {
         String provider = StringUtils.hasText(request.getProvider())
@@ -140,6 +143,9 @@ public class OpenAiCompatibleModelClient implements AiModelClient {
         }
     }
 
+    /**
+     * 处理 {@code resolveProviderConfig} 相关业务。
+     */
     private AiModelConnectionConfig resolveProviderConfig(ModelChatRequest request, String provider) {
         if (request.getModelConfigId() != null) {
             return modelConfigService.resolveProviderConfig(request.getModelConfigId());
@@ -147,6 +153,9 @@ public class OpenAiCompatibleModelClient implements AiModelClient {
         return modelConfigService.resolveProviderConfig(provider);
     }
 
+    /**
+     * 转换 {@code toMessagePayload} 相关业务。
+     */
     private List<Map<String, String>> toMessagePayload(List<ChatMessageParam> messages) {
         return messages.stream()
                 .map(message -> {
@@ -158,6 +167,9 @@ public class OpenAiCompatibleModelClient implements AiModelClient {
                 .toList();
     }
 
+    /**
+     * 处理 {@code buildUrl} 相关业务。
+     */
     private String buildUrl(AiModelConnectionConfig providerConfig) {
         String baseUrl = providerConfig.getBaseUrl();
         String chatPath = StringUtils.hasText(providerConfig.getChatPath())
@@ -172,6 +184,9 @@ public class OpenAiCompatibleModelClient implements AiModelClient {
         return baseUrl + chatPath;
     }
 
+    /**
+     * 处理 {@code parseResponse} 相关业务。
+     */
     private ModelChatResponse parseResponse(String responseBody) {
         try {
             JsonNode root = objectMapper.readTree(responseBody);
@@ -211,11 +226,17 @@ public class OpenAiCompatibleModelClient implements AiModelClient {
         }
     }
 
+    /**
+     * 查询 {@code readInt} 相关业务。
+     */
     private Integer readInt(JsonNode node, String fieldName) {
         JsonNode value = node.path(fieldName);
         return value.isMissingNode() || value.isNull() ? null : value.asInt();
     }
 
+    /**
+     * 查询 {@code readUpstreamMessage} 相关业务。
+     */
     private String readUpstreamMessage(String responseBody) {
         if (!StringUtils.hasText(responseBody)) {
             return null;
@@ -233,6 +254,9 @@ public class OpenAiCompatibleModelClient implements AiModelClient {
         }
     }
 
+    /**
+     * 处理 {@code buildModelCallErrorMessage} 相关业务。
+     */
     private String buildModelCallErrorMessage(String provider, String model, int statusCode, String upstreamMessage) {
         if (isInsufficientBalance(upstreamMessage)) {
             return "AI 模型余额不足，请在「个人信息 - Agent管理」切换可用模型，或检查供应商账户余额";
@@ -241,12 +265,18 @@ public class OpenAiCompatibleModelClient implements AiModelClient {
         return "AI 模型调用失败（" + provider + " / " + model + "，HTTP " + statusCode + "）" + reason;
     }
 
+    /**
+     * 处理 {@code resolveModelCallErrorCode} 相关业务。
+     */
     private String resolveModelCallErrorCode(String upstreamMessage) {
         return isInsufficientBalance(upstreamMessage)
                 ? LearningConstants.ErrorCode.AI_MODEL_BALANCE_INSUFFICIENT
                 : LearningConstants.ErrorCode.AI_MODEL_CALL_FAILED;
     }
 
+    /**
+     * 判断 {@code isInsufficientBalance} 相关业务。
+     */
     private boolean isInsufficientBalance(String upstreamMessage) {
         if (!StringUtils.hasText(upstreamMessage)) {
             return false;

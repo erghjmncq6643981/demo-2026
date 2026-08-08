@@ -3,6 +3,9 @@ package com.chandler.learning.agent.domain.dto.learning;
 import jakarta.validation.constraints.NotBlank;
 import lombok.Data;
 
+/**
+ * WordbookSaveRequest 类。
+ */
 @Data
 public class WordbookSaveRequest {
 

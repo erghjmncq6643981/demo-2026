@@ -21,35 +21,59 @@ public final class LearningConstants {
     public static final String ARTICLE_TEMPLATE_CODE = "english_vocab_article_json";
     public static final int DEFAULT_JWT_EXPIRE_DAYS = 30;
 
+    /**
+     * 处理 {@code LearningConstants} 相关业务。
+     */
     private LearningConstants() {
     }
 
+    /**
+     * Audit 类。
+     */
     public static final class Audit {
         public static final long SYSTEM_USER_ID = 0L;
         public static final int INITIAL_VERSION = 0;
 
+        /**
+         * 处理 {@code Audit} 相关业务。
+         */
         private Audit() {
         }
     }
 
+    /**
+     * Agent 类。
+     */
     public static final class Agent {
         public static final String TYPE_CHAT = "chat";
         public static final String TYPE_ANALYSIS = "analysis";
         public static final String TYPE_ASSISTANT = "assistant";
 
+        /**
+         * 处理 {@code Agent} 相关业务。
+         */
         private Agent() {
         }
     }
 
+    /**
+     * PromptTemplate 类。
+     */
     public static final class PromptTemplate {
         public static final String TYPE_SYSTEM = "system";
         public static final String TYPE_USER = "user";
         public static final String TYPE_ANALYSIS = "analysis";
 
+        /**
+         * 处理 {@code PromptTemplate} 相关业务。
+         */
         private PromptTemplate() {
         }
     }
 
+    /**
+     * Auth 类。
+     */
     public static final class Auth {
         public static final String BEARER_PREFIX = "Bearer ";
         public static final int PASSWORD_MIN_LENGTH = 6;
@@ -67,19 +91,31 @@ public final class LearningConstants {
         public static final int EMAIL_MASK_VISIBLE_PREFIX_LENGTH = 2;
         public static final String CONTACT_MASK = "****";
 
+        /**
+         * 处理 {@code Auth} 相关业务。
+         */
         private Auth() {
         }
     }
 
+    /**
+     * Jwt 类。
+     */
     public static final class Jwt {
         public static final int TOKEN_PART_COUNT = 3;
         public static final int SIGNATURE_PART_INDEX = 2;
         public static final long SECONDS_PER_DAY = 86_400L;
 
+        /**
+         * 处理 {@code Jwt} 相关业务。
+         */
         private Jwt() {
         }
     }
 
+    /**
+     * Crypto 类。
+     */
     public static final class Crypto {
         public static final String API_KEY_PREFIX = "enc:v1:";
         public static final String API_KEY_CIPHER = "AES/GCM/NoPadding";
@@ -91,18 +127,30 @@ public final class LearningConstants {
         public static final int API_KEY_MASK_SUFFIX_LENGTH = 4;
         public static final int API_KEY_FINGERPRINT_LENGTH = 16;
 
+        /**
+         * 处理 {@code Crypto} 相关业务。
+         */
         private Crypto() {
         }
     }
 
+    /**
+     * ModelClient 类。
+     */
     public static final class ModelClient {
         public static final int EMPTY_SIZE = 0;
         public static final int FIRST_CHOICE_INDEX = 0;
 
+        /**
+         * 处理 {@code ModelClient} 相关业务。
+         */
         private ModelClient() {
         }
     }
 
+    /**
+     * ChatSession 类。
+     */
     public static final class ChatSession {
         public static final int MAX_HISTORY_SIZE = 20;
         public static final String ROLE_SYSTEM = "system";
@@ -116,10 +164,16 @@ public final class LearningConstants {
         public static final String SCENE_WRITING = "writing";
         public static final String SCENE_TITLE_ENGLISH_VOCABULARY = "英语词汇学习";
 
+        /**
+         * 处理 {@code ChatSession} 相关业务。
+         */
         private ChatSession() {
         }
     }
 
+    /**
+     * SystemLog 类。
+     */
     public static final class SystemLog {
         public static final int DEFAULT_LIMIT = 80;
         public static final String DEFAULT_LIMIT_PARAM = "80";
@@ -140,10 +194,16 @@ public final class LearningConstants {
         public static final String SOURCE_CLIENT = "client";
         public static final String SOURCE_SERVER = "server";
 
+        /**
+         * 处理 {@code SystemLog} 相关业务。
+         */
         private SystemLog() {
         }
     }
 
+    /**
+     * UserPreference 类。
+     */
     public static final class UserPreference {
         public static final String KEY_SPEECH_VOICE_TYPE = "speech.voice_type";
         public static final String KEY_SPEECH_SENTENCE_VOICE_NAME = "speech.sentence_voice_name";
@@ -158,10 +218,16 @@ public final class LearningConstants {
         public static final double SENTENCE_PITCH_MIN = 0.8D;
         public static final double SENTENCE_PITCH_MAX = 1.2D;
 
+        /**
+         * 处理 {@code UserPreference} 相关业务。
+         */
         private UserPreference() {
         }
     }
 
+    /**
+     * Vocabulary 类。
+     */
     public static final class Vocabulary {
         public static final int DEFAULT_LOOKUP_COUNT = 1;
         public static final int EXACT_MATCH_SCORE = 100;
@@ -178,10 +244,16 @@ public final class LearningConstants {
         public static final int EDIT_DISTANCE_SAME_COST = 0;
         public static final int EDIT_DISTANCE_REPLACE_COST = 1;
 
+        /**
+         * 处理 {@code Vocabulary} 相关业务。
+         */
         private Vocabulary() {
         }
     }
 
+    /**
+     * VocabularyInsight 类。
+     */
     public static final class VocabularyInsight {
         public static final int MAX_RELATIONS = 80;
         public static final int VISIBLE_RELATION_LIMIT = 24;
@@ -222,10 +294,16 @@ public final class LearningConstants {
         public static final String DIFFICULTY_HARD = "hard";
         public static final String SOURCE_PARSED_JSON = "parsed_json";
 
+        /**
+         * 处理 {@code VocabularyInsight} 相关业务。
+         */
         private VocabularyInsight() {
         }
     }
 
+    /**
+     * Review 类。
+     */
     public static final class Review {
         public static final String STATUS_FAMILIAR = "familiar";
         public static final String STATUS_FORGOTTEN = "forgotten";
@@ -252,18 +330,30 @@ public final class LearningConstants {
         public static final int RESTART_MAX_LIMIT = 100;
         public static final int[] INTERVAL_DAYS = {0, 1, 2, 4, 7, 15, 30, 60};
 
+        /**
+         * 处理 {@code Review} 相关业务。
+         */
         private Review() {
         }
     }
 
+    /**
+     * Wordbook 类。
+     */
     public static final class Wordbook {
         public static final String DEFAULT_NAME = "默认单词本";
         public static final String DEFAULT_DESCRIPTION = "自动创建的英语词汇学习单词本";
 
+        /**
+         * 处理 {@code Wordbook} 相关业务。
+         */
         private Wordbook() {
         }
     }
 
+    /**
+     * Article 类。
+     */
     public static final class Article {
         public static final int MIN_SELECTED_WORDS = 1;
         public static final int MAX_SELECTED_WORDS = 20;
@@ -273,18 +363,30 @@ public final class LearningConstants {
         public static final int MAX_HISTORY_LIMIT = 50;
         public static final int DEFAULT_LOOKUP_COUNT = 1;
 
+        /**
+         * 处理 {@code Article} 相关业务。
+         */
         private Article() {
         }
     }
 
+    /**
+     * Activity 类。
+     */
     public static final class Activity {
         public static final int MIN_DAYS = 7;
         public static final int MAX_DAYS = 366;
 
+        /**
+         * 处理 {@code Activity} 相关业务。
+         */
         private Activity() {
         }
     }
 
+    /**
+     * ErrorCode 类。
+     */
     public static final class ErrorCode {
         public static final String AUTH_REQUIRED = "AUTH_REQUIRED";
         public static final String AUTH_EXPIRED = "AUTH_EXPIRED";
@@ -334,6 +436,9 @@ public final class LearningConstants {
         public static final String AGENT_LAST_NOT_DELETABLE = "AGENT_LAST_NOT_DELETABLE";
         public static final String HASH_FAILED = "HASH_FAILED";
 
+        /**
+         * 处理 {@code ErrorCode} 相关业务。
+         */
         private ErrorCode() {
         }
     }

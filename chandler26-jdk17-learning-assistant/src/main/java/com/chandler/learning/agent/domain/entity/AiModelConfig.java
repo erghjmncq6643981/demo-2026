@@ -14,24 +14,54 @@ import lombok.Data;
 @Schema(name = "AI 模型配置")
 public class AiModelConfig extends BaseEntity {
 
+    /**
+     * id 属性。
+     */
     @TableId(value = "id", type = IdType.ASSIGN_ID)
     private Long id;
 
+    /**
+     * name 属性。
+     */
     private String name;
 
+    /**
+     * provider 属性。
+     */
     private String provider;
 
+    /**
+     * modelName 属性。
+     */
     private String modelName;
 
+    /**
+     * baseUrl 属性。
+     */
     private String baseUrl;
 
+    /**
+     * chatPath 属性。
+     */
     private String chatPath;
 
+    /**
+     * apiKey 属性。
+     */
     private String apiKey;
 
+    /**
+     * enabled 属性。
+     */
     private Boolean enabled;
 
+    /**
+     * isDefault 属性。
+     */
     private Boolean isDefault;
 
+    /**
+     * sequence 属性。
+     */
     private Integer sequence;
 }

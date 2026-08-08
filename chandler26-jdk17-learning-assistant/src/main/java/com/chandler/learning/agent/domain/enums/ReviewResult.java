@@ -16,6 +16,9 @@ import java.util.Arrays;
 public enum ReviewResult {
 
     REMEMBERED(LearningConstants.Review.RESULT_REMEMBERED, "记住了", ReviewStatus.FAMILIAR) {
+        /**
+         * 更新 {@code apply} 相关业务。
+         */
         @Override
         public ReviewOutcome apply(LearningWordbookEntry entry) {
             int stageBefore = entry.reviewStage();
@@ -30,6 +33,9 @@ public enum ReviewResult {
     },
 
     VAGUE(LearningConstants.Review.RESULT_VAGUE, "有点模糊", ReviewStatus.VAGUE) {
+        /**
+         * 更新 {@code apply} 相关业务。
+         */
         @Override
         public ReviewOutcome apply(LearningWordbookEntry entry) {
             int stageBefore = entry.reviewStage();
@@ -44,6 +50,9 @@ public enum ReviewResult {
     },
 
     FORGOTTEN(LearningConstants.Review.RESULT_FORGOTTEN, "忘记了", ReviewStatus.FORGOTTEN) {
+        /**
+         * 更新 {@code apply} 相关业务。
+         */
         @Override
         public ReviewOutcome apply(LearningWordbookEntry entry) {
             int stageBefore = entry.reviewStage();
@@ -66,8 +75,14 @@ public enum ReviewResult {
         this.status = status;
     }
 
+    /**
+     * 更新 {@code apply} 相关业务。
+     */
     public abstract ReviewOutcome apply(LearningWordbookEntry entry);
 
+    /**
+     * 处理 {@code of} 相关业务。
+     */
     public static ReviewResult of(String code) {
         String normalized = StrUtil.blankToDefault(code, FORGOTTEN.code).trim().toLowerCase();
         return Arrays.stream(values())
@@ -76,10 +91,16 @@ public enum ReviewResult {
                 .orElse(FORGOTTEN);
     }
 
+    /**
+     * 判断 {@code remembered} 相关业务。
+     */
     public boolean remembered() {
         return this == REMEMBERED;
     }
 
+    /**
+     * 判断 {@code vague} 相关业务。
+     */
     public boolean vague() {
         return this == VAGUE;
     }

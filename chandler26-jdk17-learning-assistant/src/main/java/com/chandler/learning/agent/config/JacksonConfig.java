@@ -11,6 +11,9 @@ import org.springframework.context.annotation.Configuration;
 @Configuration
 public class JacksonConfig {
 
+    /**
+     * 处理 {@code longToStringCustomizer} 相关业务。
+     */
     @Bean
     public Jackson2ObjectMapperBuilderCustomizer longToStringCustomizer() {
         return builder -> builder

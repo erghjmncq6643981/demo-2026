@@ -30,30 +30,45 @@ public class AiPromptTemplateController {
         return templateService.list(type, Boolean.TRUE.equals(enabledOnly));
     }
 
+    /**
+     * 查询 {@code detailByCode} 相关业务。
+     */
     @GetMapping("/code/{code}")
     @Operation(summary = "根据编码查询模板")
     public AiPromptTemplate detailByCode(@PathVariable String code) {
         return templateService.getByCode(code);
     }
 
+    /**
+     * 创建或保存 {@code create} 相关业务。
+     */
     @PostMapping
     @Operation(summary = "创建模板")
     public Long create(@Valid @RequestBody PromptTemplateSaveRequest request) {
         return templateService.create(request);
     }
 
+    /**
+     * 更新 {@code update} 相关业务。
+     */
     @PutMapping("/{id}")
     @Operation(summary = "更新模板")
     public void update(@PathVariable Long id, @Valid @RequestBody PromptTemplateSaveRequest request) {
         templateService.update(id, request);
     }
 
+    /**
+     * 更新 {@code delete} 相关业务。
+     */
     @DeleteMapping("/{id}")
     @Operation(summary = "删除模板")
     public void delete(@PathVariable Long id) {
         templateService.delete(id);
     }
 
+    /**
+     * 更新 {@code clone} 相关业务。
+     */
     @PostMapping("/{id}/clone")
     @Operation(summary = "复制模板")
     public Long clone(@PathVariable Long id) {

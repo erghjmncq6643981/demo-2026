@@ -7,15 +7,24 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 
 import java.util.Map;
 
+/**
+ * JsonSupport 类。
+ */
 final class JsonSupport {
 
     private static final ObjectMapper OBJECT_MAPPER = new ObjectMapper();
     private static final TypeReference<Map<String, Object>> MAP_TYPE = new TypeReference<>() {
     };
 
+    /**
+     * 处理 {@code JsonSupport} 相关业务。
+     */
     private JsonSupport() {
     }
 
+    /**
+     * 转换 {@code toJson} 相关业务。
+     */
     static String toJson(Object value) {
         try {
             return OBJECT_MAPPER.writeValueAsString(value);
@@ -27,6 +36,9 @@ final class JsonSupport {
         }
     }
 
+    /**
+     * 处理 {@code fromJson} 相关业务。
+     */
     static Map<String, Object> fromJson(String value) {
         try {
             return OBJECT_MAPPER.readValue(value, MAP_TYPE);

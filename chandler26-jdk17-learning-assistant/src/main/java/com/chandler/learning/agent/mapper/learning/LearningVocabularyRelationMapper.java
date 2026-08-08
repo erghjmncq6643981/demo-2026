@@ -6,6 +6,9 @@ import org.apache.ibatis.annotations.Delete;
 import org.apache.ibatis.annotations.Mapper;
 import org.apache.ibatis.annotations.Param;
 
+/**
+ * LearningVocabularyRelationMapper 类。
+ */
 @Mapper
 public interface LearningVocabularyRelationMapper extends BaseMapper<LearningVocabularyRelation> {
 

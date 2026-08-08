@@ -34,6 +34,9 @@ public enum VocabularyRelationType {
         this.jsonFields = jsonFields;
     }
 
+    /**
+     * 处理 {@code of} 相关业务。
+     */
     public static VocabularyRelationType of(String code) {
         String normalized = StrUtil.blankToDefault(code, TAG_OVERLAP.code).trim().toLowerCase();
         return Arrays.stream(values())

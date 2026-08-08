@@ -19,19 +19,34 @@ import java.time.LocalDateTime;
 @TableName("learning_wordbook")
 public class LearningWordbook extends BaseEntity {
 
+    /**
+     * 主键。
+     */
     @TableId(value = "id", type = IdType.ASSIGN_ID)
     @Schema(description = "主键")
     private Long id;
 
+    /**
+     * 所属用户 ID。
+     */
     @Schema(description = "所属用户 ID")
     private Long userId;
 
+    /**
+     * 单词本名称。
+     */
     @Schema(description = "单词本名称")
     private String name;
 
+    /**
+     * 单词本描述。
+     */
     @Schema(description = "单词本描述")
     private String description;
 
+    /**
+     * 是否默认单词本。
+     */
     @Schema(description = "是否默认单词本")
     private Boolean isDefault;
 
@@ -83,6 +98,9 @@ public class LearningWordbook extends BaseEntity {
         touch(now);
     }
 
+    /**
+     * 更新 {@code touch} 相关业务。
+     */
     private void touch(LocalDateTime now) {
         setUpdateTime(now);
     }

@@ -21,18 +21,27 @@ public class EnglishVocabularyStudyController {
 
     private final EnglishVocabularyStudyService vocabularyStudyService;
 
+    /**
+     * 处理 {@code study} 相关业务。
+     */
     @PostMapping("/study")
     @Operation(summary = "查询或生成词汇学习结果")
     public VocabularyStudyResponse study(@Valid @RequestBody VocabularyStudyRequest request) {
         return vocabularyStudyService.study(request);
     }
 
+    /**
+     * 处理 {@code bestMatch} 相关业务。
+     */
     @GetMapping("/{term}/best-match")
     @Operation(summary = "查询用户输入的最接近词汇缓存")
     public VocabularyBestMatchResponse bestMatch(@PathVariable String term) {
         return vocabularyStudyService.bestMatch(term);
     }
 
+    /**
+     * 查询 {@code detail} 相关业务。
+     */
     @GetMapping("/{term}")
     @Operation(summary = "查询词汇学习缓存")
     public VocabularyStudyResponse detail(@PathVariable String term) {

@@ -6,6 +6,9 @@ import org.apache.ibatis.annotations.Delete;
 import org.apache.ibatis.annotations.Mapper;
 import org.apache.ibatis.annotations.Param;
 
+/**
+ * LearningVocabularyTagMapper 类。
+ */
 @Mapper
 public interface LearningVocabularyTagMapper extends BaseMapper<LearningVocabularyTag> {
 

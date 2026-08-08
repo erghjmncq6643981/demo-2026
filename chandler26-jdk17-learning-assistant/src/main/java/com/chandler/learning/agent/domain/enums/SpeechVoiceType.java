@@ -23,6 +23,9 @@ public enum SpeechVoiceType {
         this.label = label;
     }
 
+    /**
+     * 处理 {@code of} 相关业务。
+     */
     public static SpeechVoiceType of(String code) {
         String normalized = StrUtil.blankToDefault(code, US.code).trim().toLowerCase();
         return Arrays.stream(values())

@@ -5,6 +5,9 @@ import lombok.Data;
 import org.springframework.boot.context.properties.ConfigurationProperties;
 import org.springframework.stereotype.Component;
 
+/**
+ * LearningSecurityProperties 类。
+ */
 @Data
 @Component
 @ConfigurationProperties(prefix = "learning.security")

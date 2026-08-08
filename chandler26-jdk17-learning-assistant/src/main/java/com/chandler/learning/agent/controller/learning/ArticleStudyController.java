@@ -21,6 +21,9 @@ import org.springframework.web.bind.annotation.RestController;
 
 import java.util.List;
 
+/**
+ * ArticleStudyController 类。
+ */
 @RestController
 @RequiredArgsConstructor
 @RequestMapping("/api/v1/learning/articles")
@@ -30,6 +33,9 @@ public class ArticleStudyController {
     private final AuthService authService;
     private final ArticleStudyService articleStudyService;
 
+    /**
+     * 处理 {@code study} 相关业务。
+     */
     @PostMapping("/study")
     @Operation(summary = "基于单词本词汇生成文章学习材料")
     public ArticleStudyResponse study(
@@ -39,6 +45,9 @@ public class ArticleStudyController {
         return articleStudyService.study(user.getId(), request);
     }
 
+    /**
+     * 查询 {@code listRecords} 相关业务。
+     */
     @GetMapping
     @Operation(summary = "文章学习历史记录")
     public List<ArticleStudyResponse> listRecords(
@@ -49,6 +58,9 @@ public class ArticleStudyController {
         return articleStudyService.listRecords(user.getId(), wordbookId, limit);
     }
 
+    /**
+     * 查询 {@code detail} 相关业务。
+     */
     @GetMapping("/{recordId}")
     @Operation(summary = "文章学习记录详情")
     public ArticleStudyResponse detail(

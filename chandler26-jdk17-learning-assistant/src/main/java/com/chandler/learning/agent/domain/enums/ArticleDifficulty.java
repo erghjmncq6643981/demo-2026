@@ -29,6 +29,9 @@ public enum ArticleDifficulty {
         this.prompt = prompt;
     }
 
+    /**
+     * 处理 {@code of} 相关业务。
+     */
     public static ArticleDifficulty of(String code) {
         String normalized = StrUtil.blankToDefault(code, MEDIUM.code).trim().toLowerCase();
         return Arrays.stream(values())

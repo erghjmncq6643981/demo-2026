@@ -4,6 +4,9 @@ import com.baomidou.mybatisplus.core.mapper.BaseMapper;
 import com.chandler.learning.agent.domain.entity.vocabulary.EnglishVocabularyStudyRecord;
 import org.apache.ibatis.annotations.Mapper;
 
+/**
+ * EnglishVocabularyStudyRecordMapper 类。
+ */
 @Mapper
 public interface EnglishVocabularyStudyRecordMapper extends BaseMapper<EnglishVocabularyStudyRecord> {
 }

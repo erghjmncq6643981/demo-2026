@@ -28,6 +28,9 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
     private final JwtTokenService jwtTokenService;
     private final LearningUserMapper userMapper;
 
+    /**
+     * 处理 {@code doFilterInternal} 相关业务。
+     */
     @Override
     protected void doFilterInternal(HttpServletRequest request, HttpServletResponse response, FilterChain filterChain)
             throws ServletException, IOException {
@@ -52,6 +55,9 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
         filterChain.doFilter(request, response);
     }
 
+    /**
+     * 处理 {@code resolveToken} 相关业务。
+     */
     private String resolveToken(String authorization) {
         if (!StringUtils.hasText(authorization)) {
             return "";

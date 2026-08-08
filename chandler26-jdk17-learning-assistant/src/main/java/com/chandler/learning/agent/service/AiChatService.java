@@ -51,6 +51,9 @@ public class AiChatService {
     private final ObjectMapper objectMapper;
     private final UserDisplayNameService userDisplayNameService;
 
+    /**
+     * 处理 {@code chat} 相关业务。
+     */
     public AgentChatResponse chat(AgentChatRequest request) {
         long startTime = System.currentTimeMillis();
         AiAgent agent = getEnabledAgent(request.getAgentCode());
@@ -123,6 +126,9 @@ public class AiChatService {
         }
     }
 
+    /**
+     * 查询 {@code getEnabledAgent} 相关业务。
+     */
     private AiAgent getEnabledAgent(String agentCode) {
         AiAgent agent = agentService.getByCode(agentCode);
         if (agent == null) {
@@ -138,6 +144,9 @@ public class AiChatService {
         return agent;
     }
 
+    /**
+     * 处理 {@code resolveSession} 相关业务。
+     */
     private AiChatSession resolveSession(AiAgent agent, AgentChatRequest request, long startTime) {
         Long userId = chatSessionService.currentUserId();
         if (request.getSessionId() != null) {
@@ -157,6 +166,9 @@ public class AiChatService {
                 request.getBusinessId(), request.getSceneCode(), request.getVariables());
     }
 
+    /**
+     * 处理 {@code buildMessages} 相关业务。
+     */
     private List<ChatMessageParam> buildMessages(AiAgent agent, AgentChatRequest request, AiChatSession session) {
         List<ChatMessageParam> messages = new ArrayList<>();
         Map<String, Object> variables = readSessionVariables(session);
@@ -197,6 +209,9 @@ public class AiChatService {
         return userMessage.toString();
     }
 
+    /**
+     * 处理 {@code resolveProvider} 相关业务。
+     */
     private String resolveProvider(AiAgent agent, AiModelConfig selectedModelConfig) {
         if (selectedModelConfig != null) {
             return selectedModelConfig.getProvider();
@@ -213,6 +228,9 @@ public class AiChatService {
                 "未配置可用 AI 模型，请先在个人信息 - Agent管理 - 模型管理中新增并启用模型");
     }
 
+    /**
+     * 处理 {@code resolveModelName} 相关业务。
+     */
     private String resolveModelName(AiAgent agent, String provider, AiModelConfig selectedModelConfig) {
         if (selectedModelConfig != null) {
             return selectedModelConfig.getModelName();
@@ -229,6 +247,9 @@ public class AiChatService {
                 "未找到可用的 AI 模型明细，请先在个人信息 - Agent管理 - 模型管理中维护模型名称");
     }
 
+    /**
+     * 处理 {@code resolveSelectedModelConfig} 相关业务。
+     */
     private AiModelConfig resolveSelectedModelConfig(Long modelConfigId) {
         if (modelConfigId == null) {
             return null;
@@ -242,6 +263,9 @@ public class AiChatService {
         return selectedModelConfig;
     }
 
+    /**
+     * 处理 {@code buildCallRecord} 相关业务。
+     */
     private AiModelCallRecord buildCallRecord(Long sessionId, AiAgent agent, ModelChatRequest request) {
         AiModelCallRecord record = new AiModelCallRecord();
         record.setSessionId(sessionId);
@@ -253,6 +277,9 @@ public class AiChatService {
         return record;
     }
 
+    /**
+     * 创建或保存 {@code saveSuccessRecord} 相关业务。
+     */
     private void saveSuccessRecord(AiModelCallRecord record, ModelChatResponse response, long costTime) {
         record.setResponseJson(response.getResponseJson());
         record.setSuccess(true);
@@ -263,6 +290,9 @@ public class AiChatService {
         callRecordMapper.insert(record);
     }
 
+    /**
+     * 创建或保存 {@code saveFailedRecord} 相关业务。
+     */
     private void saveFailedRecord(AiModelCallRecord record, RuntimeException ex, long costTime) {
         record.setSuccess(false);
         record.setErrorMessage(ex.getMessage());
@@ -270,6 +300,9 @@ public class AiChatService {
         callRecordMapper.insert(record);
     }
 
+    /**
+     * 转换 {@code toJson} 相关业务。
+     */
     private String toJson(Object value) {
         try {
             return objectMapper.writeValueAsString(value);
@@ -281,6 +314,9 @@ public class AiChatService {
         }
     }
 
+    /**
+     * 查询 {@code readSessionVariables} 相关业务。
+     */
     private Map<String, Object> readSessionVariables(AiChatSession session) {
         if (session == null || !StringUtils.hasText(session.getVariablesJson())) {
             return new HashMap<>();
@@ -293,6 +329,9 @@ public class AiChatService {
         }
     }
 
+    /**
+     * 处理 {@code sceneDisplayTitle} 相关业务。
+     */
     private String sceneDisplayTitle(String sceneCode, String businessType, String businessId, String agentName, long startTime) {
         if (StringUtils.hasText(sceneCode)) {
             LearningScene scene = LearningScene.of(sceneCode);

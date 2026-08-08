@@ -51,6 +51,9 @@ public class EnglishVocabularyStudyService {
     private final SystemLogService systemLogService;
     private final UserDisplayNameService userDisplayNameService;
 
+    /**
+     * 处理 {@code study} 相关业务。
+     */
     public VocabularyStudyResponse study(VocabularyStudyRequest request) {
         String normalizedTerm = normalize(request.getTerm());
         if (!StringUtils.hasText(normalizedTerm)) {
@@ -115,6 +118,9 @@ public class EnglishVocabularyStudyService {
         return toResponse(record, false);
     }
 
+    /**
+     * 查询 {@code detail} 相关业务。
+     */
     public VocabularyStudyResponse detail(String term) {
         String normalizedTerm = normalize(term);
         EnglishVocabularyStudyRecord record = findByNormalizedTerm(normalizedTerm);
@@ -122,6 +128,9 @@ public class EnglishVocabularyStudyService {
         return record == null ? null : toResponse(record, true);
     }
 
+    /**
+     * 处理 {@code bestMatch} 相关业务。
+     */
     public VocabularyBestMatchResponse bestMatch(String term) {
         String normalizedTerm = normalize(term);
         if (!StringUtils.hasText(normalizedTerm)) {
@@ -174,6 +183,9 @@ public class EnglishVocabularyStudyService {
         return aiChatService.chat(chatRequest);
     }
 
+    /**
+     * 查询 {@code findByNormalizedTerm} 相关业务。
+     */
     private EnglishVocabularyStudyRecord findByNormalizedTerm(String normalizedTerm) {
         if (!StringUtils.hasText(normalizedTerm)) {
             return null;
@@ -183,6 +195,9 @@ public class EnglishVocabularyStudyService {
                 .last(LearningConstants.SQL_LIMIT_ONE));
     }
 
+    /**
+     * 更新 {@code touch} 相关业务。
+     */
     private void touch(EnglishVocabularyStudyRecord record) {
         record.setLookupCount(record.getLookupCount() == null
                 ? LearningConstants.Vocabulary.DEFAULT_LOOKUP_COUNT
@@ -192,6 +207,9 @@ public class EnglishVocabularyStudyService {
         recordMapper.updateById(record);
     }
 
+    /**
+     * 转换 {@code toResponse} 相关业务。
+     */
     private VocabularyStudyResponse toResponse(EnglishVocabularyStudyRecord record, boolean cacheHit) {
         VocabularyStudyResponse response = new VocabularyStudyResponse();
         response.setId(record.getId());
@@ -213,6 +231,9 @@ public class EnglishVocabularyStudyService {
         return response;
     }
 
+    /**
+     * 转换 {@code toBestMatchResponse} 相关业务。
+     */
     private VocabularyBestMatchResponse toBestMatchResponse(String query, EnglishVocabularyStudyRecord record,
                                                             int matchScore, String matchType) {
         VocabularyInsightService.CoreMeaning coreMeaning = vocabularyInsightService.extractCoreMeaning(record);
@@ -228,6 +249,9 @@ public class EnglishVocabularyStudyService {
         return response;
     }
 
+    /**
+     * 查询 {@code readParsed} 相关业务。
+     */
     private Object readParsed(EnglishVocabularyStudyRecord record) {
         if (!StringUtils.hasText(record.getParsedJson())) {
             return null;
@@ -270,10 +294,16 @@ public class EnglishVocabularyStudyService {
         }
     }
 
+    /**
+     * 处理 {@code normalize} 相关业务。
+     */
     private String normalize(String term) {
         return term == null ? "" : term.trim().replaceAll("\\s+", " ").toLowerCase();
     }
 
+    /**
+     * 处理 {@code matchScore} 相关业务。
+     */
     private int matchScore(String query, String candidate) {
         if (!StringUtils.hasText(query) || !StringUtils.hasText(candidate)) {
             return LearningConstants.Vocabulary.MIN_MATCH_SCORE;
@@ -300,6 +330,9 @@ public class EnglishVocabularyStudyService {
         return Math.min(score, LearningConstants.Vocabulary.FUZZY_MATCH_MAX_SCORE);
     }
 
+    /**
+     * 处理 {@code levenshtein} 相关业务。
+     */
     private int levenshtein(String left, String right) {
         int[] previous = new int[right.length() + LearningConstants.Vocabulary.EDIT_DISTANCE_INSERT_DELETE_COST];
         int[] current = new int[right.length() + LearningConstants.Vocabulary.EDIT_DISTANCE_INSERT_DELETE_COST];
@@ -325,6 +358,9 @@ public class EnglishVocabularyStudyService {
         return previous[right.length()];
     }
 
+    /**
+     * 处理 {@code commonPrefixLength} 相关业务。
+     */
     private int commonPrefixLength(String left, String right) {
         int length = Math.min(left.length(), right.length());
         int index = LearningConstants.ZERO;
@@ -334,14 +370,26 @@ public class EnglishVocabularyStudyService {
         return index;
     }
 
+    /**
+     * 处理 {@code resolveAgentCode} 相关业务。
+     */
     private String resolveAgentCode(VocabularyStudyRequest request) {
         return StringUtils.hasText(request.getAgentCode()) ? request.getAgentCode() : LearningConstants.VOCABULARY_AGENT_CODE;
     }
 
+    /**
+     * 处理 {@code resolveTemplateCode} 相关业务。
+     */
     private String resolveTemplateCode(VocabularyStudyRequest request) {
         return StringUtils.hasText(request.getTemplateCode()) ? request.getTemplateCode() : LearningConstants.VOCABULARY_TEMPLATE_CODE;
     }
 
+    /**
+     * MatchCandidate 类。
+     */
+    /**
+     * 处理 {@code MatchCandidate} 相关业务。
+     */
     private record MatchCandidate(EnglishVocabularyStudyRecord record, int score) {
     }
 }

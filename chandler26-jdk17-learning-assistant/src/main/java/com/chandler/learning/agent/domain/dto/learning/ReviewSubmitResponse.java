@@ -4,6 +4,9 @@ import lombok.Data;
 
 import java.time.LocalDateTime;
 
+/**
+ * ReviewSubmitResponse 类。
+ */
 @Data
 public class ReviewSubmitResponse {
 

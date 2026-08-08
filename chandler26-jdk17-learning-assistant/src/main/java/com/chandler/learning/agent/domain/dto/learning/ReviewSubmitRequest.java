@@ -2,6 +2,9 @@ package com.chandler.learning.agent.domain.dto.learning;
 
 import lombok.Data;
 
+/**
+ * ReviewSubmitRequest 类。
+ */
 @Data
 public class ReviewSubmitRequest {
 

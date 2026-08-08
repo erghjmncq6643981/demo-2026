@@ -2,6 +2,9 @@ package com.chandler.learning.agent.domain.dto.learning;
 
 import lombok.Data;
 
+/**
+ * SpeechPreferenceRequest 类。
+ */
 @Data
 public class SpeechPreferenceRequest {
 

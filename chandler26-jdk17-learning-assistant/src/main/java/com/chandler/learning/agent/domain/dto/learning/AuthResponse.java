@@ -4,6 +4,9 @@ import lombok.Data;
 
 import java.time.LocalDateTime;
 
+/**
+ * AuthResponse 类。
+ */
 @Data
 public class AuthResponse {
 

@@ -31,6 +31,9 @@ public enum SystemLogType {
         this.label = label;
     }
 
+    /**
+     * 处理 {@code of} 相关业务。
+     */
     public static SystemLogType of(String code) {
         String normalized = StrUtil.blankToDefault(code, SYSTEM.code).trim().toLowerCase();
         return Arrays.stream(values())

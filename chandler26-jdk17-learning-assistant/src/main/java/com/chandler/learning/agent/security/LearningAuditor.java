@@ -13,6 +13,9 @@ import org.springframework.stereotype.Component;
 @Component
 public class LearningAuditor {
 
+    /**
+     * 处理 {@code currentUserId} 相关业务。
+     */
     public Long currentUserId() {
         Authentication authentication = SecurityContextHolder.getContext().getAuthentication();
         if (authentication == null) {

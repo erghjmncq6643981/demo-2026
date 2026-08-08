@@ -19,6 +19,9 @@ public class PromptRenderer {
 
     private final ObjectMapper objectMapper;
 
+    /**
+     * 处理 {@code render} 相关业务。
+     */
     public String render(String template, Map<String, Object> variables) {
         if (template == null || variables == null || variables.isEmpty()) {
             return template;
@@ -32,6 +35,9 @@ public class PromptRenderer {
         });
     }
 
+    /**
+     * 转换 {@code toJson} 相关业务。
+     */
     private String toJson(Object value) {
         try {
             return objectMapper.writeValueAsString(value);

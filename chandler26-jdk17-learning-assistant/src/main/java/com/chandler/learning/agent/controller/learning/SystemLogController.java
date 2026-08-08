@@ -20,6 +20,9 @@ import org.springframework.web.bind.annotation.RestController;
 
 import java.util.List;
 
+/**
+ * SystemLogController 类。
+ */
 @RestController
 @RequiredArgsConstructor
 @RequestMapping("/api/v1/learning/system-logs")
@@ -29,6 +32,9 @@ public class SystemLogController {
     private final AuthService authService;
     private final SystemLogService systemLogService;
 
+    /**
+     * 查询 {@code list} 相关业务。
+     */
     @GetMapping
     @Operation(summary = "系统日志列表")
     public List<SystemLogResponse> list(
@@ -38,6 +44,9 @@ public class SystemLogController {
         return systemLogService.list(user.getId(), limit == null ? LearningConstants.SystemLog.DEFAULT_LIMIT : limit);
     }
 
+    /**
+     * 创建或保存 {@code create} 相关业务。
+     */
     @PostMapping
     @Operation(summary = "写入系统日志")
     public SystemLogResponse create(

@@ -18,11 +18,17 @@ public class UserDisplayNameService {
 
     private final LearningUserMapper userMapper;
 
+    /**
+     * 处理 {@code currentUserName} 相关业务。
+     */
     public String currentUserName() {
         LearningUser currentUser = currentUser();
         return currentUser == null ? "系统" : displayName(currentUser);
     }
 
+    /**
+     * 处理 {@code userName} 相关业务。
+     */
     public String userName(Long userId) {
         if (userId == null) {
             return currentUserName();
@@ -35,6 +41,9 @@ public class UserDisplayNameService {
         return user == null ? "用户#" + userId : displayName(user);
     }
 
+    /**
+     * 处理 {@code displayName} 相关业务。
+     */
     public String displayName(LearningUser user) {
         if (user == null) {
             return "系统";
@@ -48,6 +57,9 @@ public class UserDisplayNameService {
         return "用户#" + user.getId();
     }
 
+    /**
+     * 处理 {@code currentUser} 相关业务。
+     */
     private LearningUser currentUser() {
         Authentication authentication = SecurityContextHolder.getContext().getAuthentication();
         if (authentication == null || !authentication.isAuthenticated()) {

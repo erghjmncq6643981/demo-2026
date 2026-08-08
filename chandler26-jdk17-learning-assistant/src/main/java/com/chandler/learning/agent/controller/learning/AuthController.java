@@ -17,6 +17,9 @@ import org.springframework.web.bind.annotation.RequestHeader;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
 
+/**
+ * AuthController 类。
+ */
 @RestController
 @RequiredArgsConstructor
 @RequestMapping("/api/v1/learning/auth")
@@ -25,12 +28,18 @@ public class AuthController {
 
     private final AuthService authService;
 
+    /**
+     * 创建或保存 {@code register} 相关业务。
+     */
     @PostMapping("/register")
     @Operation(summary = "注册学习用户")
     public AuthResponse register(@Valid @RequestBody AuthRequest request) {
         return authService.register(request);
     }
 
+    /**
+     * 处理 {@code login} 相关业务。
+     */
     @PostMapping("/login")
     @Operation(summary = "登录学习用户")
     public AuthResponse login(@Valid @RequestBody AuthRequest request) {
@@ -43,6 +52,9 @@ public class AuthController {
         return authService.me(authorization);
     }
 
+    /**
+     * 更新 {@code updateProfile} 相关业务。
+     */
     @PutMapping("/me")
     @Operation(summary = "更新当前登录用户")
     public UserProfileResponse updateProfile(
