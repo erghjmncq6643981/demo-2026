@@ -1,3 +1,8 @@
 config/application-local.yaml
 .run/
 logs/dev/
+
+# Local presentation generation artifacts
+/.codex-pptx-build/
+/毕业论文中期检查-智能学习助手/
+*.pptx.inspect.ndjson
