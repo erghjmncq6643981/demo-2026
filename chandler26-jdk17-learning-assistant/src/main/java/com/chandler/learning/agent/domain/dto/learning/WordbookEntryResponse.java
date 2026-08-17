@@ -17,6 +17,10 @@ public class WordbookEntryResponse {
 
     private Long vocabularyId;
 
+    private Long progressId;
+
+    private Long catalogEntryId;
+
     private String term;
 
     private String normalizedTerm;
@@ -50,6 +54,12 @@ public class WordbookEntryResponse {
     private Long snapshotSessionId;
 
     private LocalDateTime snapshotTime;
+
+    private String cardStatus;
+
+    private String cardErrorMessage;
+
+    private LocalDateTime cardGeneratedTime;
 
     private List<VocabularyTagResponse> tags;
 

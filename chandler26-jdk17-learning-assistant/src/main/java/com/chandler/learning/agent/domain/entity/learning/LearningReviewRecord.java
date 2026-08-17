@@ -47,6 +47,32 @@ public class LearningReviewRecord extends BaseEntity {
     @Schema(description = "公共词汇缓存 ID")
     private Long vocabularyId;
 
+    /** 用户跨词本逐词进度 ID。 */
+    private Long wordProgressId;
+
+    private Long planId;
+
+    private Long unitId;
+
+    /** meaning_choice、copy_typing 或 meaning_spelling。 */
+    private String assessmentType;
+
+    private String questionJson;
+
+    private String answerText;
+
+    private String correctAnswer;
+
+    private String checkResult;
+
+    private Double typingAccuracy;
+
+    private Integer hintLevel;
+
+    private Integer attemptCount;
+
+    private Long durationMillis;
+
     /**
      * 归一化单词或短语。
      */

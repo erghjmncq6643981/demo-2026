@@ -19,6 +19,9 @@ public final class LearningConstants {
     public static final String VOCABULARY_TEMPLATE_CODE = "english_vocab_card_json";
     public static final String ARTICLE_AGENT_CODE = "english_article";
     public static final String ARTICLE_TEMPLATE_CODE = "english_vocab_article_json";
+    public static final String VOCABULARY_PLAN_AGENT_CODE = "english_vocabulary_plan";
+    public static final String VOCABULARY_PLAN_TEMPLATE_CODE = "english_vocab_scene_unit_json";
+    public static final String VOCABULARY_BATCH_TEMPLATE_CODE = "english_vocab_cards_batch_json";
     public static final int DEFAULT_JWT_EXPIRE_DAYS = 30;
 
     /**
@@ -159,6 +162,7 @@ public final class LearningConstants {
         public static final String BUSINESS_TYPE_LEARNING = "learning";
         public static final String SCENE_ENGLISH_VOCABULARY = "english_vocabulary";
         public static final String SCENE_ENGLISH_ARTICLE = "english_article";
+        public static final String SCENE_ENGLISH_VOCABULARY_PLAN = "english_vocabulary_plan";
         public static final String SCENE_MATH = "math";
         public static final String SCENE_PINYIN = "pinyin";
         public static final String SCENE_WRITING = "writing";
@@ -188,6 +192,8 @@ public final class LearningConstants {
         public static final String TYPE_WORDBOOK = "wordbook";
         public static final String TYPE_AGENT = "agent";
         public static final String TYPE_PREFERENCE = "preference";
+        public static final String TYPE_VOCABULARY_IMPORT = "vocabulary_import";
+        public static final String TYPE_LEARNING_PLAN = "learning_plan";
         public static final String TYPE_ERROR = "error";
         public static final String DEFAULT_TYPE = TYPE_SYSTEM;
         public static final String DEFAULT_TITLE = "系统日志";
@@ -371,6 +377,96 @@ public final class LearningConstants {
     }
 
     /**
+     * 词表导入规则。
+     */
+    public static final class VocabularyImport {
+        public static final String FORMAT_MARKDOWN = "markdown";
+        public static final String STATUS_PARSING = "parsing";
+        public static final String STATUS_REVIEWING = "reviewing";
+        public static final String STATUS_PUBLISHED = "published";
+        public static final String STATUS_FAILED = "failed";
+        public static final String VERSION_STATUS_REVIEWING = "reviewing";
+        public static final String VERSION_STATUS_PUBLISHED = "published";
+        public static final String CATALOG_STATUS_DRAFT = "draft";
+        public static final String CATALOG_STATUS_PUBLISHED = "published";
+        public static final String VISIBILITY_PRIVATE = "private";
+        public static final String REVIEW_NOT_REQUIRED = "not_required";
+        public static final String REVIEW_PENDING = "pending";
+        public static final String REVIEW_CONFIRMED = "confirmed";
+        public static final String WARNING_SUSPICIOUS_SPLIT = "suspicious_split";
+        public static final int DEFAULT_PAGE = 1;
+        public static final int DEFAULT_PAGE_SIZE = 100;
+        public static final int MAX_PAGE_SIZE = 500;
+
+        private VocabularyImport() {
+        }
+    }
+
+    /**
+     * 场景化学习计划规则。日期只做建议，不参与接口限流或状态校验。
+     */
+    public static final class ScenePlan {
+        public static final String STATUS_ACTIVE = "active";
+        public static final String STATUS_COMPLETED = "completed";
+        public static final String STATUS_PAUSED = "paused";
+        public static final String UNIT_READY = "ready";
+        public static final String UNIT_IN_PROGRESS = "in_progress";
+        public static final String UNIT_COMPLETED = "completed";
+        public static final String TIER_CORE = "core";
+        public static final String TIER_EXTENDED = "extended";
+        public static final String TIER_SUPPLEMENTARY = "supplementary";
+        public static final String TIER_REVIEW = "review";
+        public static final String MASTERY_RECOGNITION = "recognition";
+        public static final String MASTERY_SPELLING = "spelling";
+        public static final String PROGRESS_UNSEEN = "unseen";
+        public static final String PROGRESS_EXPOSED = "exposed";
+        public static final String PROGRESS_LEARNING = "learning";
+        public static final String PROGRESS_REVIEWING = "reviewing";
+        public static final String PROGRESS_MASTERED = "mastered";
+        public static final String ASSESSMENT_MEANING_CHOICE = "meaning_choice";
+        public static final String ASSESSMENT_COPY_TYPING = "copy_typing";
+        public static final String ASSESSMENT_MEANING_SPELLING = "meaning_spelling";
+        public static final String CHECK_CORRECT = "correct";
+        public static final String CHECK_INCORRECT = "incorrect";
+        public static final int CANDIDATE_WORD_LIMIT = 80;
+        public static final int MIN_CORE_WORDS = 8;
+        public static final int MAX_CORE_WORDS = 20;
+        public static final int RECOGNITION_PASS_SCORE = 70;
+        public static final int SPELLING_PASS_SCORE = 70;
+
+        private ScenePlan() {
+        }
+    }
+
+    /**
+     * AI 词卡按需批量生成规则。
+     */
+    public static final class VocabularyCard {
+        public static final String STATUS_MISSING = "missing";
+        public static final String STATUS_QUEUED = "queued";
+        public static final String STATUS_GENERATING = "generating";
+        public static final String STATUS_READY = "ready";
+        public static final String STATUS_FAILED = "failed";
+        public static final String STATUS_NOT_REQUIRED = "not_required";
+        public static final String JOB_PENDING = "pending";
+        public static final String JOB_RUNNING = "running";
+        public static final String JOB_COMPLETED = "completed";
+        public static final String JOB_PARTIAL_FAILED = "partial_failed";
+        public static final String JOB_FAILED = "failed";
+        public static final String ITEM_PENDING = "pending";
+        public static final String ITEM_GENERATING = "generating";
+        public static final String ITEM_COMPLETED = "completed";
+        public static final String ITEM_FAILED = "failed";
+        public static final String ITEM_CACHE_HIT = "cache_hit";
+        public static final int DEFAULT_BATCH_SIZE = 15;
+        public static final int MIN_BATCH_SIZE = 10;
+        public static final int MAX_BATCH_SIZE = 20;
+
+        private VocabularyCard() {
+        }
+    }
+
+    /**
      * Activity 类。
      */
     public static final class Activity {
@@ -435,6 +531,19 @@ public final class LearningConstants {
         public static final String ARTICLE_RECORD_NOT_FOUND = "ARTICLE_RECORD_NOT_FOUND";
         public static final String AGENT_LAST_NOT_DELETABLE = "AGENT_LAST_NOT_DELETABLE";
         public static final String HASH_FAILED = "HASH_FAILED";
+        public static final String VOCABULARY_IMPORT_INVALID = "VOCABULARY_IMPORT_INVALID";
+        public static final String VOCABULARY_IMPORT_NOT_FOUND = "VOCABULARY_IMPORT_NOT_FOUND";
+        public static final String VOCABULARY_IMPORT_NOT_REVIEWED = "VOCABULARY_IMPORT_NOT_REVIEWED";
+        public static final String VOCABULARY_IMPORT_ALREADY_PUBLISHED = "VOCABULARY_IMPORT_ALREADY_PUBLISHED";
+        public static final String VOCABULARY_CATALOG_NOT_FOUND = "VOCABULARY_CATALOG_NOT_FOUND";
+        public static final String LEARNING_PLAN_NOT_FOUND = "LEARNING_PLAN_NOT_FOUND";
+        public static final String LEARNING_PLAN_COMPLETED = "LEARNING_PLAN_COMPLETED";
+        public static final String LEARNING_PLAN_UNIT_NOT_FOUND = "LEARNING_PLAN_UNIT_NOT_FOUND";
+        public static final String LEARNING_PLAN_UNIT_ACTIVE = "LEARNING_PLAN_UNIT_ACTIVE";
+        public static final String LEARNING_PLAN_UNIT_INCOMPLETE = "LEARNING_PLAN_UNIT_INCOMPLETE";
+        public static final String LEARNING_PLAN_NO_WORDS = "LEARNING_PLAN_NO_WORDS";
+        public static final String LEARNING_SCENE_PARSE_FAILED = "LEARNING_SCENE_PARSE_FAILED";
+        public static final String LEARNING_ASSESSMENT_INVALID = "LEARNING_ASSESSMENT_INVALID";
 
         /**
          * 处理 {@code ErrorCode} 相关业务。

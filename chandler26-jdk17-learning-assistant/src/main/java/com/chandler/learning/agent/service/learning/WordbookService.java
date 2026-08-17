@@ -287,10 +287,7 @@ public class WordbookService {
                     "单词不能为空");
         }
 
-        LearningWordbookEntry existing = entryMapper.selectOne(new LambdaQueryWrapper<LearningWordbookEntry>()
-                .eq(LearningWordbookEntry::getWordbookId, wordbook.getId())
-                .eq(LearningWordbookEntry::getNormalizedTerm, normalizedTerm)
-                .last(LearningConstants.SQL_LIMIT_ONE));
+        LearningWordbookEntry existing = entryMapper.selectIncludingDeleted(wordbook.getId(), normalizedTerm);
         if (existing != null) {
             LocalDateTime now = LocalDateTime.now();
             EnglishVocabularyStudyRecord vocabulary = findVocabulary(normalizedTerm);
@@ -299,6 +296,7 @@ public class WordbookService {
                 if (vocabulary != null) {
                     applyVocabularySnapshot(existing, vocabulary, now);
                 }
+                entryMapper.restoreDeletedById(existing.getId());
                 entryMapper.updateById(existing);
                 systemLogService.record(userId, SystemLogType.WORDBOOK, "恢复词条", existing.getNormalizedTerm());
                 log.info("用户「{}」把单词「{}」重新加入到单词本「{}」中",
@@ -482,6 +480,18 @@ public class WordbookService {
         record.setWordbookId(entry.getWordbookId());
         record.setEntryId(entry.getId());
         record.setVocabularyId(entry.getVocabularyId());
+        record.setWordProgressId(request.getWordProgressId() == null ? entry.getProgressId() : request.getWordProgressId());
+        record.setPlanId(request.getPlanId());
+        record.setUnitId(request.getUnitId());
+        record.setAssessmentType(request.getAssessmentType());
+        record.setQuestionJson(request.getQuestionJson());
+        record.setAnswerText(request.getAnswerText());
+        record.setCorrectAnswer(request.getCorrectAnswer());
+        record.setCheckResult(request.getCheckResult());
+        record.setTypingAccuracy(request.getTypingAccuracy());
+        record.setHintLevel(request.getHintLevel());
+        record.setAttemptCount(request.getAttemptCount());
+        record.setDurationMillis(request.getDurationMillis());
         record.setNormalizedTerm(entry.getNormalizedTerm());
         record.setResult(result.getCode());
         record.setScore(request.getScore());
@@ -515,6 +525,21 @@ public class WordbookService {
     }
 
     /**
+     * 将公共 AI 词卡冻结到导入词条的个人快照中，后续公共缓存刷新不会覆盖个人学习详情。
+     */
+    public void attachVocabularyCard(Long userId, Long entryId, EnglishVocabularyStudyRecord vocabulary) {
+        LearningWordbookEntry entry = requireEntry(userId, entryId);
+        applyVocabularySnapshot(entry, vocabulary, LocalDateTime.now());
+        entry.setVocabularyId(vocabulary.getId());
+        entry.setTerm(vocabulary.getTerm());
+        entry.setNormalizedTerm(vocabulary.getNormalizedTerm());
+        entry.setUpdateTime(LocalDateTime.now());
+        entryMapper.updateById(entry);
+        log.debug("个人词条已写入 AI 词卡快照 userId={} entryId={} vocabularyId={}",
+                userId, entryId, vocabulary.getId());
+    }
+
+    /**
      * 转换 {@code toWordbookResponse} 相关业务。
      */
     private WordbookResponse toWordbookResponse(LearningWordbook wordbook) {
@@ -542,6 +567,8 @@ public class WordbookService {
         response.setId(entry.getId());
         response.setWordbookId(entry.getWordbookId());
         response.setVocabularyId(entry.getVocabularyId());
+        response.setProgressId(entry.getProgressId());
+        response.setCatalogEntryId(entry.getCatalogEntryId());
         response.setTerm(entry.getTerm());
         response.setNormalizedTerm(entry.getNormalizedTerm());
         response.setNote(entry.getNote());
@@ -559,6 +586,9 @@ public class WordbookService {
         response.setSnapshotModelName(entry.getSnapshotModelName());
         response.setSnapshotSessionId(entry.getSnapshotSessionId());
         response.setSnapshotTime(entry.getSnapshotTime());
+        response.setCardStatus(entry.getCardStatus());
+        response.setCardErrorMessage(entry.getCardErrorMessage());
+        response.setCardGeneratedTime(entry.getCardGeneratedTime());
         response.setTags(readEntryTags(entry));
         response.setRelations(readEntryRelations(entry));
         return response;

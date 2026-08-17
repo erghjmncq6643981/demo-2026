@@ -39,6 +39,12 @@ public class LearningWordbookEntry extends BaseEntity {
     @Schema(description = "词条所在单词本 ID")
     private Long wordbookId;
 
+    /** 用户跨词本共享的逐词进度 ID。 */
+    private Long progressId;
+
+    /** 导入词表词条 ID。 */
+    private Long catalogEntryId;
+
     /**
      * 公共英语词汇学习缓存 ID。
      */
@@ -110,6 +116,13 @@ public class LearningWordbookEntry extends BaseEntity {
      */
     @Schema(description = "快照生成时间")
     private LocalDateTime snapshotTime;
+
+    /** 词卡状态：missing、queued、generating、ready、failed、not_required。 */
+    private String cardStatus;
+
+    private String cardErrorMessage;
+
+    private LocalDateTime cardGeneratedTime;
 
     /**
      * 熟练状态：familiar-熟悉，forgotten-遗忘，vague-模糊。
@@ -183,6 +196,8 @@ public class LearningWordbookEntry extends BaseEntity {
         entry.setTerm(vocabulary.getTerm());
         entry.setNormalizedTerm(vocabulary.getNormalizedTerm());
         entry.setNote(note);
+        entry.setCardStatus(LearningConstants.VocabularyCard.STATUS_READY);
+        entry.setCardGeneratedTime(now);
         entry.applyVocabularySnapshot(vocabulary, now, null, null);
         entry.setStatus(LearningConstants.Review.STATUS_VAGUE);
         entry.setReviewStage(LearningConstants.Review.INITIAL_STAGE);
@@ -199,12 +214,44 @@ public class LearningWordbookEntry extends BaseEntity {
     }
 
     /**
+     * 创建仅包含导入音标和释义的个人词条，AI 词卡稍后按场景需要生成。
+     */
+    public static LearningWordbookEntry createImported(Long userId, Long wordbookId, Long progressId,
+                                                        Long catalogEntryId, String term, String normalizedTerm,
+                                                        String basicSnapshotJson, LocalDateTime now) {
+        LearningWordbookEntry entry = new LearningWordbookEntry();
+        entry.setUserId(userId);
+        entry.setWordbookId(wordbookId);
+        entry.setProgressId(progressId);
+        entry.setCatalogEntryId(catalogEntryId);
+        entry.setTerm(term);
+        entry.setNormalizedTerm(normalizedTerm);
+        entry.setSnapshotParsedJson(basicSnapshotJson);
+        entry.setSnapshotTime(now);
+        entry.setCardStatus(LearningConstants.VocabularyCard.STATUS_NOT_REQUIRED);
+        entry.setStatus(LearningConstants.Review.STATUS_VAGUE);
+        entry.setReviewStage(LearningConstants.Review.INITIAL_STAGE);
+        entry.setMasteryScore(LearningConstants.Review.INITIAL_MASTERY);
+        entry.setNextReviewTime(now);
+        entry.setDueCount(LearningConstants.ZERO);
+        entry.setReviewCount(LearningConstants.ZERO);
+        entry.setCorrectCount(LearningConstants.ZERO);
+        entry.setWrongCount(LearningConstants.ZERO);
+        entry.setDeleted(false);
+        entry.setCreateTime(now);
+        entry.setUpdateTime(now);
+        return entry;
+    }
+
+    /**
      * 更新 {@code copyTo} 相关业务。
      */
     public LearningWordbookEntry copyTo(Long targetWordbookId, LocalDateTime now) {
         LearningWordbookEntry clone = new LearningWordbookEntry();
         clone.setUserId(userId);
         clone.setWordbookId(targetWordbookId);
+        clone.setProgressId(progressId);
+        clone.setCatalogEntryId(catalogEntryId);
         clone.setVocabularyId(vocabularyId);
         clone.setTerm(term);
         clone.setNormalizedTerm(normalizedTerm);
@@ -217,6 +264,9 @@ public class LearningWordbookEntry extends BaseEntity {
         clone.setSnapshotModelName(snapshotModelName);
         clone.setSnapshotSessionId(snapshotSessionId);
         clone.setSnapshotTime(snapshotTime);
+        clone.setCardStatus(cardStatus);
+        clone.setCardErrorMessage(cardErrorMessage);
+        clone.setCardGeneratedTime(cardGeneratedTime);
         clone.setStatus(status);
         clone.setReviewStage(reviewStage);
         clone.setMasteryScore(masteryScore);
@@ -271,6 +321,9 @@ public class LearningWordbookEntry extends BaseEntity {
         setSnapshotModelName(vocabulary.getModelName());
         setSnapshotSessionId(vocabulary.getSessionId());
         setSnapshotTime(now);
+        setCardStatus(LearningConstants.VocabularyCard.STATUS_READY);
+        setCardErrorMessage(null);
+        setCardGeneratedTime(now);
     }
 
     /**

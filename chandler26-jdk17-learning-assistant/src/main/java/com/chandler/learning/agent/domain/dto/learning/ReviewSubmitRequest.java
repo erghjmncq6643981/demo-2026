@@ -13,4 +13,28 @@ public class ReviewSubmitRequest {
     private Integer score;
 
     private Integer durationSeconds;
+
+    private Long wordProgressId;
+
+    private Long planId;
+
+    private Long unitId;
+
+    private String assessmentType;
+
+    private String questionJson;
+
+    private String answerText;
+
+    private String correctAnswer;
+
+    private String checkResult;
+
+    private Double typingAccuracy;
+
+    private Integer hintLevel;
+
+    private Integer attemptCount;
+
+    private Long durationMillis;
 }

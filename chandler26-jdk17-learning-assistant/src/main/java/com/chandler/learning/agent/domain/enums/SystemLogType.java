@@ -21,6 +21,8 @@ public enum SystemLogType {
     WORDBOOK(LearningConstants.SystemLog.TYPE_WORDBOOK, "单词本"),
     AGENT(LearningConstants.SystemLog.TYPE_AGENT, "Agent"),
     PREFERENCE(LearningConstants.SystemLog.TYPE_PREFERENCE, "偏好设置"),
+    VOCABULARY_IMPORT(LearningConstants.SystemLog.TYPE_VOCABULARY_IMPORT, "词表导入"),
+    LEARNING_PLAN(LearningConstants.SystemLog.TYPE_LEARNING_PLAN, "学习计划"),
     ERROR(LearningConstants.SystemLog.TYPE_ERROR, "异常");
 
     private final String code;

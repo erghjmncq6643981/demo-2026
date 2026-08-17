@@ -40,6 +40,12 @@ public class LearningArticleStudyRecord extends BaseEntity {
     @Schema(description = "记录所属单词本 ID")
     private Long wordbookId;
 
+    /** 可选的来源场景计划 ID。 */
+    private Long planId;
+
+    /** 可选的来源场景单元 ID。 */
+    private Long planUnitId;
+
     /**
      * 生成文章时选择的词汇摘要 JSON。
      */
