@@ -50,6 +50,7 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.util.StringUtils;
 
+import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.util.ArrayList;
 import java.util.HashMap;
@@ -144,7 +145,7 @@ public class LearningPlanService {
                 userDisplayNameService.userName(userId), catalog.getName(), plan.getName(), totalWords);
         if (LearningConstants.ScenePlan.STATUS_ACTIVE.equals(plan.getStatus())
                 && !Boolean.FALSE.equals(request.getGenerateFirstUnit())) {
-            generateNextUnit(userId, plan.getId(), request.getModelConfigId());
+            generateNextUnit(userId, plan.getId(), request.getModelConfigId(), null);
         }
         return detail(userId, plan.getId());
     }
@@ -172,7 +173,7 @@ public class LearningPlanService {
                     plan.setStatus(LearningConstants.ScenePlan.STATUS_ACTIVE);
                     if (plan.getCurrentUnitId() == null) {
                         try {
-                            generateNextUnit(userId, planId, request.getModelConfigId());
+                            generateNextUnit(userId, planId, request.getModelConfigId(), null);
                         } catch (Exception e) {
                             log.warn("启动计划生成首个场景失败：{}", e.getMessage());
                         }
@@ -235,24 +236,19 @@ public class LearningPlanService {
     }
 
     /**
-     * 在当前单元完成后手动触发下一个单元。每天可重复执行，不做配额限制。
+     * 手动生成后续场景。允许当前场景未完成时提前生成，每天可重复执行，不做配额限制。
      */
     @Transactional(rollbackFor = Exception.class)
-    public LearningPlanUnitResponse generateNextUnit(Long userId, Long planId, Long modelConfigId) {
+    public LearningPlanUnitResponse generateNextUnit(Long userId, Long planId, Long modelConfigId,
+                                                     LocalDate recommendedDate) {
         LearningPlan plan = requirePlan(userId, planId);
         if (LearningConstants.ScenePlan.STATUS_COMPLETED.equals(plan.getStatus())) {
             throw LearningAssistantException.badRequest(
                     LearningConstants.ErrorCode.LEARNING_PLAN_COMPLETED,
                     "学习计划已经完成");
         }
-        LearningPlanUnit active = findActiveUnit(plan.getId());
-        if (active != null) {
-            throw LearningAssistantException.badRequest(
-                    LearningConstants.ErrorCode.LEARNING_PLAN_UNIT_ACTIVE,
-                    "请先完成当前场景“" + active.getTitle() + "”再生成下一个");
-        }
 
-        java.time.LocalDate today = java.time.LocalDate.now();
+        LocalDate today = LocalDate.now();
         if (plan.getStartTime() != null && today.isBefore(plan.getStartTime().toLocalDate())) {
             throw LearningAssistantException.badRequest(
                     LearningConstants.ErrorCode.LEARNING_PLAN_STATE_ERROR,
@@ -266,14 +262,17 @@ public class LearningPlanService {
 
         List<VocabularyCatalogEntry> candidates = nextCandidates(plan);
         if (candidates.isEmpty()) {
-            plan.setStatus(LearningConstants.ScenePlan.STATUS_COMPLETED);
-            plan.setCurrentUnitId(null);
-            plan.setUpdateTime(LocalDateTime.now());
-            planMapper.updateById(plan);
+            if (hasIncompleteUnit(plan.getId())) {
+                throw LearningAssistantException.badRequest(
+                        LearningConstants.ErrorCode.LEARNING_PLAN_STATE_ERROR,
+                        "词表中的词已经全部安排到场景中，请完成已生成的待学习场景");
+            }
+            markPlanCompleted(plan);
             throw LearningAssistantException.badRequest(
                     LearningConstants.ErrorCode.LEARNING_PLAN_COMPLETED,
                     "词表中的词已经全部安排到场景中");
         }
+        LocalDate resolvedRecommendedDate = resolveRecommendedDate(plan, recommendedDate, today);
         int unitNo = nextUnitNo(plan.getId());
         AgentChatResponse aiResponse = generateScene(plan, unitNo, candidates, modelConfigId);
         JsonNode scene = parseScene(aiResponse.getContent());
@@ -286,14 +285,17 @@ public class LearningPlanService {
         unit.setTitle(requiredText(scene, "title"));
         unit.setScenarioType(text(scene, "scenario_type", "scenarioType"));
         unit.setSummary(text(scene, "summary", "description"));
-        unit.setStatus(LearningConstants.ScenePlan.UNIT_IN_PROGRESS);
+        boolean startImmediately = plan.getCurrentUnitId() == null && !resolvedRecommendedDate.isAfter(today);
+        unit.setStatus(startImmediately
+                ? LearningConstants.ScenePlan.UNIT_IN_PROGRESS
+                : LearningConstants.ScenePlan.UNIT_READY);
         unit.setCoreWordCount(LearningConstants.ZERO);
         unit.setExtendedWordCount(LearningConstants.ZERO);
         unit.setSupplementaryWordCount(LearningConstants.ZERO);
         unit.setCompletedCoreCount(LearningConstants.ZERO);
         unit.setGeneratedTime(now);
-        unit.setStartedTime(now);
-        unit.setRecommendedDate(java.time.LocalDate.now());
+        unit.setStartedTime(startImmediately ? now : null);
+        unit.setRecommendedDate(resolvedRecommendedDate);
         unit.setDeleted(false);
         unit.setCreateTime(now);
         unit.setUpdateTime(now);
@@ -346,8 +348,10 @@ public class LearningPlanService {
                 tier = LearningConstants.ScenePlan.TIER_REVIEW;
                 firstLearning = false;
             }
-            LearningWordProgress progress = progressService.recordSceneExposure(
-                    userId, term, requirement, tier, plan.getId(), unit.getId());
+            LearningWordProgress progress = startImmediately
+                    ? progressService.recordSceneExposure(
+                            userId, term, requirement, tier, plan.getId(), unit.getId())
+                    : progressService.getOrCreate(userId, term, requirement);
             LearningWordbookEntry wordbookEntry = ensureWordbookEntry(plan, source, progress, term, normalizedTerm, tier, now);
 
             JsonNode question = node(word, "meaning_question", "meaningQuestion", "assessment");
@@ -395,7 +399,9 @@ public class LearningPlanService {
         unit.setSceneMaterialId(material.getId());
         unit.setUpdateTime(now);
         unitMapper.updateById(unit);
-        plan.setCurrentUnitId(unit.getId());
+        if (startImmediately) {
+            plan.setCurrentUnitId(unit.getId());
+        }
         plan.setAiSessionId(aiResponse.getSessionId());
         plan.setUpdateTime(now);
         planMapper.updateById(plan);
@@ -406,6 +412,52 @@ public class LearningPlanService {
                 userDisplayNameService.userName(userId), plan.getName(), unitNo, unit.getTitle(),
                 coreCount, extendedCount, supplementaryCount);
         return toUnitResponse(unit);
+    }
+
+    /**
+     * 在多个已生成场景之间切换当前学习单元。
+     */
+    @Transactional(rollbackFor = Exception.class)
+    public LearningPlanResponse startUnit(Long userId, Long planId, Long unitId) {
+        LearningPlan plan = requirePlan(userId, planId);
+        if (!LearningConstants.ScenePlan.STATUS_ACTIVE.equals(plan.getStatus())) {
+            throw LearningAssistantException.badRequest(
+                    LearningConstants.ErrorCode.LEARNING_PLAN_STATE_ERROR,
+                    "只有学习中的计划可以开始场景");
+        }
+        LearningPlanUnit unit = requireUnit(plan, unitId);
+        if (LearningConstants.ScenePlan.UNIT_COMPLETED.equals(unit.getStatus())) {
+            return detail(userId, planId);
+        }
+        LocalDateTime now = LocalDateTime.now();
+        boolean firstStart = unit.getStartedTime() == null;
+        if (plan.getCurrentUnitId() != null && !Objects.equals(plan.getCurrentUnitId(), unitId)) {
+            LearningPlanUnit current = unitMapper.selectById(plan.getCurrentUnitId());
+            if (current != null && LearningConstants.ScenePlan.UNIT_IN_PROGRESS.equals(current.getStatus())) {
+                current.setStatus(LearningConstants.ScenePlan.UNIT_READY);
+                current.setUpdateTime(now);
+                unitMapper.updateById(current);
+            }
+        }
+        unit.setStatus(LearningConstants.ScenePlan.UNIT_IN_PROGRESS);
+        if (firstStart) {
+            unitEntryMapper.selectList(new LambdaQueryWrapper<LearningPlanUnitEntry>()
+                            .eq(LearningPlanUnitEntry::getUnitId, unit.getId())
+                            .eq(LearningPlanUnitEntry::getDeleted, false))
+                    .forEach(entry -> progressService.recordSceneExposure(
+                            userId, entry.getTerm(), entry.getMasteryRequirement(), entry.getTier(), planId, unitId));
+            unit.setStartedTime(now);
+        }
+        unit.setUpdateTime(now);
+        unitMapper.updateById(unit);
+        plan.setCurrentUnitId(unit.getId());
+        plan.setUpdateTime(now);
+        planMapper.updateById(plan);
+        systemLogService.record(userId, SystemLogType.LEARNING_PLAN, "切换场景学习单元",
+                plan.getName() + " / " + unit.getTitle());
+        log.info("用户「{}」开始学习计划「{}」中的场景「{}」",
+                userDisplayNameService.userName(userId), plan.getName(), unit.getTitle());
+        return detail(userId, planId);
     }
 
     /**
@@ -517,8 +569,19 @@ public class LearningPlanService {
                     .eq(LearningPlanUnitEntry::getDeleted, false)).intValue();
             plan.setLearnedCoreWords(value(plan.getLearnedCoreWords()) + newlyLearned);
             plan.setCompletedUnitCount(value(plan.getCompletedUnitCount()) + LearningConstants.SEQUENCE_STEP);
-            plan.setCurrentUnitId(null);
-            if (nextCandidates(plan).isEmpty()) {
+            if (Objects.equals(plan.getCurrentUnitId(), unit.getId()) || plan.getCurrentUnitId() == null) {
+                LearningPlanUnit nextUnit = findNextIncompleteUnit(plan.getId(), unit.getId());
+                plan.setCurrentUnitId(nextUnit == null ? null : nextUnit.getId());
+                if (nextUnit != null && !LearningConstants.ScenePlan.UNIT_IN_PROGRESS.equals(nextUnit.getStatus())) {
+                    nextUnit.setStatus(LearningConstants.ScenePlan.UNIT_IN_PROGRESS);
+                    if (nextUnit.getStartedTime() == null) {
+                        nextUnit.setStartedTime(now);
+                    }
+                    nextUnit.setUpdateTime(now);
+                    unitMapper.updateById(nextUnit);
+                }
+            }
+            if (nextCandidates(plan).isEmpty() && !hasIncompleteUnit(plan.getId())) {
                 plan.setStatus(LearningConstants.ScenePlan.STATUS_COMPLETED);
             }
             plan.setUpdateTime(now);
@@ -618,10 +681,10 @@ public class LearningPlanService {
                 .toList();
         int targetWordCount = 8;
         if (plan.getEndTime() != null) {
-            java.time.LocalDate today = java.time.LocalDate.now();
-            java.time.LocalDate planStart = plan.getStartTime() != null ? plan.getStartTime().toLocalDate() : today;
-            java.time.LocalDate planEnd = plan.getEndTime().toLocalDate();
-            java.time.LocalDate startForRemaining = today.isAfter(planStart) ? today : planStart;
+            LocalDate today = LocalDate.now();
+            LocalDate planStart = plan.getStartTime() != null ? plan.getStartTime().toLocalDate() : today;
+            LocalDate planEnd = plan.getEndTime().toLocalDate();
+            LocalDate startForRemaining = today.isAfter(planStart) ? today : planStart;
             
             long remainingDays = java.time.temporal.ChronoUnit.DAYS.between(startForRemaining, planEnd) + 1;
             if (remainingDays > 0) {
@@ -835,8 +898,7 @@ public class LearningPlanService {
         response.setCompletedUnitCount(plan.getCompletedUnitCount());
         response.setCurrentUnitId(plan.getCurrentUnitId());
         response.setAiSessionId(plan.getAiSessionId());
-        response.setCanGenerateNext(LearningConstants.ScenePlan.STATUS_ACTIVE.equals(plan.getStatus())
-                && plan.getCurrentUnitId() == null);
+        response.setCanGenerateNext(LearningConstants.ScenePlan.STATUS_ACTIVE.equals(plan.getStatus()));
         response.setUnits(includeUnits
                 ? unitMapper.selectList(new LambdaQueryWrapper<LearningPlanUnit>()
                                 .eq(LearningPlanUnit::getPlanId, plan.getId())
@@ -973,13 +1035,43 @@ public class LearningPlanService {
         return unit;
     }
 
-    private LearningPlanUnit findActiveUnit(Long planId) {
+    private LocalDate resolveRecommendedDate(LearningPlan plan, LocalDate requested, LocalDate today) {
+        LocalDate resolved = requested == null ? today : requested;
+        if (plan.getStartTime() != null && resolved.isBefore(plan.getStartTime().toLocalDate())) {
+            throw LearningAssistantException.badRequest(
+                    LearningConstants.ErrorCode.LEARNING_PLAN_STATE_ERROR,
+                    "场景日期不能早于学习计划开始日期");
+        }
+        if (plan.getEndTime() != null && resolved.isAfter(plan.getEndTime().toLocalDate())) {
+            throw LearningAssistantException.badRequest(
+                    LearningConstants.ErrorCode.LEARNING_PLAN_STATE_ERROR,
+                    "场景日期不能晚于学习计划结束日期");
+        }
+        return resolved;
+    }
+
+    private LearningPlanUnit findNextIncompleteUnit(Long planId, Long excludedUnitId) {
         return unitMapper.selectOne(new LambdaQueryWrapper<LearningPlanUnit>()
                 .eq(LearningPlanUnit::getPlanId, planId)
-                .in(LearningPlanUnit::getStatus,
-                        List.of(LearningConstants.ScenePlan.UNIT_READY, LearningConstants.ScenePlan.UNIT_IN_PROGRESS))
+                .ne(excludedUnitId != null, LearningPlanUnit::getId, excludedUnitId)
+                .ne(LearningPlanUnit::getStatus, LearningConstants.ScenePlan.UNIT_COMPLETED)
                 .eq(LearningPlanUnit::getDeleted, false)
+                .orderByAsc(LearningPlanUnit::getUnitNo)
                 .last(LearningConstants.SQL_LIMIT_ONE));
+    }
+
+    private boolean hasIncompleteUnit(Long planId) {
+        return unitMapper.selectCount(new LambdaQueryWrapper<LearningPlanUnit>()
+                .eq(LearningPlanUnit::getPlanId, planId)
+                .ne(LearningPlanUnit::getStatus, LearningConstants.ScenePlan.UNIT_COMPLETED)
+                .eq(LearningPlanUnit::getDeleted, false)) > LearningConstants.ZERO;
+    }
+
+    private void markPlanCompleted(LearningPlan plan) {
+        plan.setStatus(LearningConstants.ScenePlan.STATUS_COMPLETED);
+        plan.setCurrentUnitId(null);
+        plan.setUpdateTime(LocalDateTime.now());
+        planMapper.updateById(plan);
     }
 
     private int nextUnitNo(Long planId) {
@@ -1279,7 +1371,7 @@ public class LearningPlanService {
         // 如果未开始的计划首次启动，且当前无生成单元，则自动生成第一个单元
         if (plan.getCurrentUnitId() == null) {
             try {
-                generateNextUnit(userId, planId, null);
+                generateNextUnit(userId, planId, null, null);
             } catch (Exception e) {
                 log.warn("启动计划生成首个场景失败：{}", e.getMessage());
             }

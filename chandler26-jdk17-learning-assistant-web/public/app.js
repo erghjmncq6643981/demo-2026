@@ -338,6 +338,7 @@ bindAppEvents({
   publishVocabularyImport: scenePlan.publishVocabularyImport,
   openScenePlanModal: scenePlan.openScenePlanModal,
   closeScenePlanModal: scenePlan.closeScenePlanModal,
+  closeSceneVocabularyPreview: scenePlan.closeSceneVocabularyPreview,
   createScenePlan: scenePlan.createScenePlan,
   pauseScenePlan: scenePlan.pausePlan,
   resumeScenePlan: scenePlan.resumePlan,

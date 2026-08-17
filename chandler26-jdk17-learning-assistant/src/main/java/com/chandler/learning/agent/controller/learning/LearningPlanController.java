@@ -27,6 +27,8 @@ import org.springframework.web.bind.annotation.RequestHeader;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
 
+import java.time.LocalDate;
+
 import java.util.List;
 
 /**
@@ -112,7 +114,18 @@ public class LearningPlanController {
             @RequestBody(required = false) LearningPlanNextUnitRequest request) {
         LearningUser user = authService.requireUser(authorization);
         Long modelConfigId = request == null ? null : request.getModelConfigId();
-        return learningPlanService.generateNextUnit(user.getId(), planId, modelConfigId);
+        LocalDate recommendedDate = request == null ? null : request.getRecommendedDate();
+        return learningPlanService.generateNextUnit(user.getId(), planId, modelConfigId, recommendedDate);
+    }
+
+    @PostMapping("/{planId}/units/{unitId}/start")
+    @Operation(summary = "开始或切换到已生成的场景单元")
+    public LearningPlanResponse startUnit(
+            @RequestHeader(value = "Authorization", required = false) String authorization,
+            @PathVariable Long planId,
+            @PathVariable Long unitId) {
+        LearningUser user = authService.requireUser(authorization);
+        return learningPlanService.startUnit(user.getId(), planId, unitId);
     }
 
     @PostMapping("/{planId}/units/{unitId}/assessments")

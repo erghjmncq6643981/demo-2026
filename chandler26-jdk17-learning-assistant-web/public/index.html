@@ -656,6 +656,20 @@
     </main>
 
     <div class="toast" id="toast"></div>
+    <section class="modal-backdrop hidden" id="sceneVocabularyPreviewModal" aria-modal="true" role="dialog" aria-labelledby="sceneVocabularyPreviewTitle">
+      <div class="config-modal small-modal scene-vocabulary-preview-modal" data-modal-scroll>
+        <div class="panel-heading">
+          <div>
+            <p class="eyebrow">Vocabulary Preview</p>
+            <h3 id="sceneVocabularyPreviewTitle">待挑战词汇</h3>
+          </div>
+          <button class="icon-button" id="closeSceneVocabularyPreviewBtn" type="button" title="关闭" aria-label="关闭">×</button>
+        </div>
+        <p class="scene-vocabulary-preview-summary" id="sceneVocabularyPreviewSummary">选择日历日期或场景查看词汇</p>
+        <div class="scene-vocabulary-preview-list empty" id="sceneVocabularyPreviewList">暂无待挑战词汇</div>
+      </div>
+    </section>
+
     <section class="modal-backdrop hidden" id="vocabularyImportModal" aria-modal="true" role="dialog">
       <div class="config-modal vocabulary-import-modal" data-modal-scroll>
         <div class="panel-heading">

@@ -49,6 +49,7 @@ export function bindAppEvents(ctx) {
     publishVocabularyImport,
     openScenePlanModal,
     closeScenePlanModal,
+    closeSceneVocabularyPreview,
     createScenePlan,
     changeScenePlanCatalog,
     completeCurrentUnit,
@@ -237,6 +238,10 @@ elements.publishVocabularyImportBtn?.addEventListener('click', publishVocabulary
 elements.closeScenePlanModalBtn?.addEventListener('click', closeScenePlanModal)
 elements.scenePlanModal?.addEventListener('click', (event) => {
   if (event.target === elements.scenePlanModal) closeScenePlanModal()
+})
+elements.closeSceneVocabularyPreviewBtn?.addEventListener('click', closeSceneVocabularyPreview)
+elements.sceneVocabularyPreviewModal?.addEventListener('click', (event) => {
+  if (event.target === elements.sceneVocabularyPreviewModal) closeSceneVocabularyPreview()
 })
 elements.createScenePlanBtn?.addEventListener('click', createScenePlan)
 elements.scenePlanPauseBtn?.addEventListener('click', pauseScenePlan)
