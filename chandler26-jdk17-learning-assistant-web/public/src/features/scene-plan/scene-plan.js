@@ -881,7 +881,12 @@ export function createScenePlanFeature(ctx) {
           if (state.preview) {
             toast('设计预览：生成下一个场景')
           } else {
-            await generateNextUnit()
+            const modelConfigId = elements.scenePlanModelSelect?.value || null
+            // Call API directly — do NOT use generateNextUnit() which has a canGenerateNext guard
+            await request(`/api/v1/learning/plans/${encodeURIComponent(plan.id)}/units/next`, {
+              method: 'POST',
+              body: JSON.stringify({ modelConfigId: modelConfigId || null }),
+            })
           }
           await loadSceneData({ planId: plan.id })
           toast('场景生成成功')
