@@ -52,12 +52,16 @@
 - 服务端系统日志：注册/登录、模型配置、Agent、单词本、词条、复习、AI 生成和缓存命中均持久化到 MySQL。
 - 模型 API Key 加密存储：数据库保存 AES-GCM 密文，服务端调用模型前解密使用，前端只展示脱敏值。
 - 复习页支持 qwerty-learner 风格跟敲：卡片置顶、按字母输入、错误抖动和提示音、完成后展示例句弹窗和喝彩效果。
+- Markdown 公共词本导入：支持自考、四级、六级、雅思来源类型，按表头解析并忽略重复 `No.` 列；疑似断词可集中筛选、逐条手工修改或批量采用建议。
+- 场景化学习计划：从公共词本创建个人计划，学习目标交给 AI 判断每个词达到“认识”还是“会拼写”。
+- 词汇大挑战：支持天、周、月学习量预览，按场景单元学习文章、核心词和大量场景相关名词，再完成含义选择、跟敲和按含义拼写检查。
+- 逐词学习记录：认读和拼写分别记录得分、阶段、下次复习时间、正确/错误次数，并与个人单词本快照及复习记录关联。
+- 缺失词卡按场景批量生成：先过滤无需词卡和公共缓存已命中的词，只对缺失项按 10 到 20 个一批调用 AI，并支持失败项重试。
 - 后端 DO 统一继承 `BaseEntity`，包含创建人、创建时间、更新人、更新时间、逻辑删除和乐观锁版本号。
-- 有限取值通过枚举收敛：复习状态/结果、会话角色、学习场景、日志类型/来源、Agent 类型、Prompt 类型、词汇标签、词汇关系、匹配来源、发音口音等。
+- 有限取值通过枚举收敛：复习状态/结果、会话角色、学习场景、AI 调用场景、日志类型/来源、Agent 类型、Prompt 类型、词汇标签、词汇关系、匹配来源、发音口音等。
 
 暂未实现：
 
-- 批量导入词表。
 - 完整测验题生成与错题本。
 - 更精细的间隔重复算法参数配置。
 - Flyway/Liquibase 自动迁移。
@@ -111,10 +115,10 @@ AI Provider API
 
 登录后：
 
-- 左侧导航：个人信息、单词本、学习、复习。
+- 左侧导航：个人信息、单词本、词汇大挑战、卡片学习、文章学习、复习。
 - 顶部区域：当前功能标题、导航显示/隐藏、刷新 Agent。
 - 个人信息：
-  - 子导航：账户、单词本、Agent 管理、系统日志、AI 会话。
+  - 子导航：账户、单词本、学习计划、Agent 管理、系统日志、AI 会话。
   - 账户概览：展示昵称、账号、单词本数、单词数、待复习数；支持弹窗修改昵称和密码。
   - 学习活跃图：参考 GitHub contribution heatmap，根据学习量和复习量展示近一段时间活跃度。
   - 单词本数量、单词数量、待复习数量。
@@ -171,7 +175,7 @@ AI Provider API
 - 学习任务居中，单词卡片是页面视觉焦点。
 - 克制的面板、轻量阴影、圆角控制在 12px 左右。
 - 使用清晰的学习状态标签，而不是复杂后台表格。
-- 导航简洁，主功能只保留个人信息、单词本、学习、复习。
+- 导航简洁，场景计划集中在“词汇大挑战”，查词学习保留为“卡片学习”。
 
 ### 4.3 前端文件
 
@@ -551,7 +555,38 @@ PUT  /api/v1/learning/preferences/speech
 0, 1, 2, 4, 7, 15, 30, 60 天
 ```
 
-### 6.6 后端企业化约束
+### 6.6 公共词本与词汇大挑战
+
+公共词本与个人单词本边界：
+
+- `vocabulary_catalog` / `vocabulary_catalog_version` / `vocabulary_catalog_entry` 保存公开、可复用的来源词表和审核结果。
+- 导入和发布公共词本时不批量写入个人单词本，也不立即生成 AI 词卡。
+- 创建学习计划时自动使用用户默认个人单词本承载核心词的个人学习卡快照和复习记录；公共词表自身不会被个人学习状态污染。
+
+学习计划闭环：
+
+```text
+个人信息 / 单词本管理导入 Markdown
+  -> 选择自考、四级、六级或雅思来源
+  -> 集中审核疑似断词并发布公共词本
+  -> 个人信息 / 学习计划选择公共词本并填写学习目标
+  -> AI 生成 8 到 20 个语义相关核心词的场景单元
+  -> 阅读场景文章和未知词语境标注
+  -> 浏览更多场景相关名词，可按需提升为核心词
+  -> 先看只含单词的挑战清单
+  -> 所有核心词完成含义四选一
+  -> 要求会拼写的词继续完成跟敲和按含义拼写
+  -> 写入逐词进度和检查记录
+  -> 完成场景后由学习者手动生成下一场景，不设置每日数量上限
+```
+
+成本控制：
+
+- 场景生成复用计划对应的 `ai_chat_session`，不为每次请求重复创建会话。
+- `learning_word_progress.card_status` 先区分 `not_required`、`ready` 和 `missing`。
+- 词卡任务只处理核心词及复习词中的缓存缺失项，默认每批 15 个；公共缓存命中直接写回个人快照。
+
+### 6.7 后端企业化约束
 
 基础 DO：
 
@@ -563,7 +598,8 @@ PUT  /api/v1/learning/preferences/speech
 枚举化：
 
 - 有限值统一放入 `domain/enums`，数据库仍保存稳定 code。
-- 已枚举：`AiAgentType`、`PromptTemplateType`、`ChatMessageRole`、`LearningScene`、`ReviewStatus`、`ReviewResult`、`ArticleDifficulty`、`ArticleWordCountRange`、`SpeechVoiceType`、`SystemLogType`、`SystemLogSource`、`VocabularyTagType`、`VocabularyRelationType`、`VocabularyDifficulty`、`VocabularyMatchType`。
+- 已枚举：`AiAgentType`、`AiInvocationScene`、`PromptTemplateType`、`ChatMessageRole`、`LearningScene`、`ReviewStatus`、`ReviewResult`、`ArticleDifficulty`、`ArticleWordCountRange`、`SpeechVoiceType`、`SystemLogType`、`SystemLogSource`、`VocabularyTagType`、`VocabularyRelationType`、`VocabularyDifficulty`、`VocabularyMatchType`。
+- `LearningScene` 定义用户复用 AI 会话的学习边界；`AiInvocationScene` 定义单次模型调用的具体任务、是否要求结构化响应及最低根字段契约。
 
 充血对象：
 
@@ -589,6 +625,7 @@ src/main/resources/db/init/10_learning_core_init_mysql.sql
 src/main/resources/db/91_learning_operational_patch_mysql.sql
 src/main/resources/db/92_learning_base_entity_audit_patch_mysql.sql
 src/main/resources/db/93_learning_article_study_mysql.sql
+src/main/resources/db/init/30_vocabulary_scene_plan_init_mysql.sql
 ```
 
 已有库补丁建议顺序：
@@ -598,22 +635,27 @@ src/main/resources/db/90_learning_schema_patch_mysql.sql
 src/main/resources/db/91_learning_operational_patch_mysql.sql
 src/main/resources/db/92_learning_base_entity_audit_patch_mysql.sql
 src/main/resources/db/93_learning_article_study_mysql.sql
+src/main/resources/db/94_vocabulary_scene_plan_mysql.sql
+src/main/resources/db/95_ai_invocation_scene_mysql.sql
 ```
 
 脚本职责：
 
 - `00_ai_agent_init_mysql.sql`：AI Agent、Prompt 模板、AI 会话、消息、调用记录、模型配置。
+- `30_vocabulary_scene_plan_init_mysql.sql`：公共词本导入、学习计划、场景材料、逐词进度、检查记录和批量词卡任务。
 - `05_english_vocabulary_study_record_init_mysql.sql`：公共英语词汇学习缓存。
 - `10_learning_core_init_mysql.sql`：用户、单词本、词条快照、标签、关联词、复习记录、用户偏好。
 - `90_learning_schema_patch_mysql.sql`：旧会话表补 `user_id`、`scene_code`。
 - `91_learning_operational_patch_mysql.sql`：系统日志、模型配置、用户偏好等运营增强表，使用 `CREATE TABLE IF NOT EXISTS`，新库也可执行。
 - `92_learning_base_entity_audit_patch_mysql.sql`：给所有 DO 对应表补齐 `BaseEntity` 审计字段、逻辑删除、乐观锁版本号和必要索引。
 - `93_learning_article_study_mysql.sql`：文章学习记录表，以及英语文章学习 Agent / Prompt 模板初始化。
+- `94_vocabulary_scene_plan_mysql.sql`：已有库增加公共词本导入、学习计划、场景材料、逐词进度、检查记录和批量词卡任务。
+- `95_ai_invocation_scene_mysql.sql`：已有库给模型调用记录增加 AI 调用场景编码和查询索引。
 
 说明：
 
 - 旧的零散 SQL 文件仍保留作为历史比对，不再作为主执行入口。
-- 已有库如果已经执行到 `92`，本次只需要继续执行 `93_learning_article_study_mysql.sql`。
+- 已有库如果已经执行到 `92`，继续按顺序执行 `93_learning_article_study_mysql.sql`、`94_vocabulary_scene_plan_mysql.sql` 和 `95_ai_invocation_scene_mysql.sql`。
 - `92` 是幂等脚本，可重复执行；如果表或字段已经存在会自动跳过。
 - 模型 API Key 仍只保存 AES-GCM 密文，禁止在 SQL、源码或文档中写入真实密钥。
 
@@ -657,6 +699,24 @@ src/main/resources/db/93_learning_article_study_mysql.sql
 | `deleted` | 是否删除 |
 | `create_time` | 创建时间 |
 | `update_time` | 更新时间 |
+
+#### `ai_model_call_record`
+
+| 字段 | 说明 |
+| --- | --- |
+| `id` | 主键 |
+| `session_id` | AI 会话 ID |
+| `agent_code` | Agent 编码 |
+| `invocation_scene_code` | AI 调用场景编码，例如 `vocabulary_card_batch`、`vocabulary_scene_unit` |
+| `provider` | 模型供应商 |
+| `model_name` | 模型名称 |
+| `request_json` | 不含 Authorization 的模型请求，用于还原 Prompt 与上下文 |
+| `response_json` | 供应商原始响应，用于按场景抽样验收 |
+| `success` | 模型传输和 envelope 解析是否成功，不等同于业务响应契约通过 |
+| `error_message` | 调用失败原因 |
+| `prompt_tokens` / `completion_tokens` / `total_tokens` | Token 用量 |
+| `latency_ms` | 调用耗时，毫秒 |
+| `create_time` | 创建时间 |
 
 #### `ai_model_config`
 
@@ -960,9 +1020,10 @@ src/main/resources/db/93_learning_article_study_mysql.sql
 
 未登录时展示独立登录界面。登录表单只保留账号、密码、登录和注册操作，后端地址等调试配置不暴露在登录主路径。
 
-登录后分为四个功能区：
+登录后分为六个功能区：
 
-- `个人信息`：子导航包含账户、单词本、Agent 管理、系统日志、AI 会话；AI 会话展示模型返回 Raw JSON。
+- `个人信息`：子导航包含账户、单词本、学习计划、Agent 管理、系统日志、AI 会话；AI 会话展示模型返回 Raw JSON。
+- `词汇大挑战`：选择学习计划，按天、周、月预览建议学习量；进入场景文章、核心词、词汇清单和检查流程。
 - `个人信息 / 账户`：支持编辑昵称和密码，并展示基于学习量、复习量生成的 GitHub 风格活跃图。
 - `个人信息 / 单词本`：参考 Agent 管理中的模型管理方式，采用列表、刷新、新增弹窗、编辑弹窗、单个删除；不提供清空按钮。
 - `个人信息 / Agent 管理`：模型配置采用列表和新增/编辑弹窗，列表操作只提供图标编辑和单个删除；默认和状态只在弹窗中修改，不提供清空按钮。
@@ -1071,7 +1132,6 @@ http://127.0.0.1:5173
 
 ## 11. 后续迭代
 
-- 增加批量导入词表。
 - 增加测验题和错题本。
 - 增加复习算法配置，例如不同单词本不同间隔策略。
 - 对数据库中的模型 API Key 接入更完整的密钥管理服务或定期轮换机制。

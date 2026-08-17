@@ -31,6 +31,11 @@ public class AiModelCallRecord extends BaseEntity {
     private String agentCode;
 
     /**
+     * 本次调用的具体业务场景编码。
+     */
+    private String invocationSceneCode;
+
+    /**
      * provider 属性。
      */
     private String provider;

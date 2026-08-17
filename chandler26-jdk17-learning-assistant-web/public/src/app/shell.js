@@ -21,6 +21,8 @@ export function createAppShell(ctx) {
     loadWordbookEntries,
     loadArticleWords,
     loadArticleHistory,
+    loadSceneData,
+    clearSceneData,
     renderProfileMetrics,
     renderActivityHeatmap,
     renderWordbooks,
@@ -111,6 +113,7 @@ export function createAppShell(ctx) {
       loadArticleWords?.()
       loadArticleHistory?.()
     }
+    if (viewId === 'scenePlanView') loadSceneData?.()
     if (window.matchMedia('(max-width: 1100px)').matches) {
       setSidebarCollapsed(true)
     }
@@ -193,6 +196,7 @@ export function createAppShell(ctx) {
     state.reviewWrongCount = 0
     state.pendingReviewEntryId = null
     state.activity = null
+    clearSceneData?.()
     localStorage.removeItem('learning.token')
     localStorage.removeItem('learning.user')
     localStorage.removeItem('learning.wordbookId')
@@ -224,13 +228,14 @@ export function createAppShell(ctx) {
     }
     await Promise.allSettled([loadAgents(), loadWordbooks(), loadModelConfigs(), loadPromptTemplates(), loadSpeechPreferences(), loadActivity(), loadSystemLogs()])
     await Promise.allSettled([loadDueReviews(), loadWordbookEntries()])
+    await Promise.allSettled([loadSceneData?.()])
     if (state.activeView === 'articleStudyView') {
       await Promise.allSettled([loadArticleWords?.(), loadArticleHistory?.()])
     }
   }
 
   function loadPreviewData() {
-    return loadPreviewFixture({
+    const result = loadPreviewFixture({
       state,
       elements,
       updateAuthView,
@@ -250,6 +255,8 @@ export function createAppShell(ctx) {
       renderActivityHeatmap,
       logEvent,
     })
+    loadSceneData?.()
+    return result
   }
 
   return {

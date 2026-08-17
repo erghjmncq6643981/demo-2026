@@ -26,6 +26,13 @@ const ASSESSMENT_LABELS = {
   meaning_spelling: '含义拼写',
 }
 
+const SOURCE_LABELS = {
+  self_study: '自考',
+  cet4: '四级',
+  cet6: '六级',
+  ielts: '雅思',
+}
+
 function asArray(value) {
   return Array.isArray(value) ? value : []
 }
@@ -37,6 +44,258 @@ function number(value) {
 
 function escapeRegExp(value) {
   return String(value).replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
+}
+
+function previewWords() {
+  const core = [
+    ['declutter', '/diːˈklʌtər/', '清理不需要的物品', 'spelling'],
+    ['laundry', '/ˈlɔːndri/', '待洗或洗好的衣物', 'recognition'],
+    ['vacuum', '/ˈvækjuːm/', '用吸尘器清洁', 'spelling'],
+    ['shelf', '/ʃelf/', '架子', 'recognition'],
+    ['drawer', '/drɔːr/', '抽屉', 'recognition'],
+    ['organize', '/ˈɔːrɡənaɪz/', '整理，使有条理', 'spelling'],
+    ['dust', '/dʌst/', '擦去灰尘', 'recognition'],
+    ['donate', '/ˈdoʊneɪt/', '捐赠', 'spelling'],
+  ].map(([term, phonetic, meaning, masteryRequirement], index) => ({
+    id: index + 1,
+    wordbookEntryId: index + 1,
+    term,
+    normalizedTerm: term,
+    phonetic,
+    meaning,
+    contextMeaning: meaning,
+    tier: 'core',
+    masteryRequirement,
+    firstLearning: true,
+    learningState: 'learning',
+    cardStatus: index < 3 ? 'ready' : 'missing',
+    passedAssessments: [],
+    acceptedSpellings: [term],
+    assessment: {
+      prompt: `请选择“${term}”在周末大扫除场景中的含义`,
+      options: [meaning, '预订旅行行程', '准备一顿晚餐', '参加课堂讨论'],
+      correct_answer: meaning,
+    },
+  }))
+  const relatedTerms = [
+    ['T-shirt', '短袖 T 恤'], ['hoodie', '连帽衫'], ['blouse', '女式衬衫'], ['sweater', '毛衣'],
+    ['jeans', '牛仔裤'], ['shorts', '短裤'], ['skirt', '裙子'], ['jacket', '夹克'],
+    ['coat', '外套'], ['dress', '连衣裙'], ['wardrobe', '衣柜'], ['hanger', '衣架'],
+  ]
+  return [
+    ...core,
+    ...relatedTerms.map(([term, meaning], index) => ({
+      id: 100 + index,
+      term,
+      normalizedTerm: term.toLowerCase(),
+      meaning,
+      contextMeaning: meaning,
+      tier: index < 8 ? 'extended' : 'supplementary',
+      masteryRequirement: 'recognition',
+      firstLearning: false,
+      cardStatus: 'not_required',
+      passedAssessments: [],
+    })),
+  ]
+}
+
+function createPreviewCookingUnit(planId, unitNo) {
+  const definitions = [
+    ['chop', '/tʃɑːp/', '切碎', 'spelling'],
+    ['ingredient', '/ɪnˈɡriːdiənt/', '食材，原料', 'recognition'],
+    ['whisk', '/wɪsk/', '搅打', 'spelling'],
+    ['skillet', '/ˈskɪlɪt/', '平底煎锅', 'recognition'],
+    ['simmer', '/ˈsɪmər/', '用小火慢煮', 'recognition'],
+    ['season', '/ˈsiːzən/', '给食物调味', 'spelling'],
+    ['dough', '/doʊ/', '面团', 'recognition'],
+    ['garnish', '/ˈɡɑːrnɪʃ/', '给菜肴加装饰配料', 'spelling'],
+  ]
+  const coreWords = definitions.map(([term, phonetic, meaning, masteryRequirement], index) => ({
+    id: unitNo * 1000 + index + 1,
+    wordbookEntryId: unitNo * 1000 + index + 1,
+    term,
+    normalizedTerm: term,
+    phonetic,
+    meaning,
+    contextMeaning: meaning,
+    tier: 'core',
+    masteryRequirement,
+    firstLearning: true,
+    learningState: 'learning',
+    cardStatus: 'missing',
+    passedAssessments: [],
+    acceptedSpellings: [term],
+    assessment: {
+      prompt: `请选择“${term}”在周末烹饪课场景中的含义`,
+      options: [meaning, '整理旅行行李', '清洁卧室家具', '参加工作会议'],
+      correct_answer: meaning,
+    },
+  }))
+  const kitchenNouns = [
+    ['spatula', '锅铲'], ['ladle', '长柄勺'], ['colander', '滤盆'], ['cutting board', '砧板'],
+    ['apron', '围裙'], ['oven mitt', '隔热手套'], ['saucepan', '深平底锅'], ['measuring cup', '量杯'],
+    ['peeler', '削皮器'], ['grater', '刨丝器'], ['rolling pin', '擀面杖'], ['pantry', '食品储藏柜'],
+  ].map(([term, meaning], index) => ({
+    id: unitNo * 1000 + 100 + index,
+    term,
+    normalizedTerm: term,
+    meaning,
+    contextMeaning: meaning,
+    tier: index < 8 ? 'extended' : 'supplementary',
+    masteryRequirement: 'recognition',
+    firstLearning: false,
+    cardStatus: 'not_required',
+    passedAssessments: [],
+  }))
+  return {
+    id: planId * 100 + unitNo,
+    planId,
+    unitNo,
+    title: '周末烹饪课',
+    scenarioType: 'Cooking & Kitchen',
+    summary: '跟随食谱准备食材、使用厨具并完成一道家常菜。',
+    status: 'in_progress',
+    coreWordCount: coreWords.length,
+    extendedWordCount: 8,
+    supplementaryWordCount: 4,
+    completedCoreCount: 0,
+    recommendedDate: new Date().toISOString().slice(0, 10),
+    learningText: 'At the cooking class, Leo checked every ingredient before he began. He used a sharp knife to chop the vegetables and a whisk to mix the eggs. While the sauce simmered in a skillet, he learned to season the dough carefully. At the end, he used fresh herbs to garnish the finished dish.',
+    translation: '在烹饪课上，利奥开始前检查了每一种食材。他用锋利的刀切碎蔬菜，用打蛋器搅打鸡蛋。酱汁在平底锅里慢煮时，他学习了如何给面团调味。最后，他用新鲜香草装饰完成的菜肴。',
+    words: [...coreWords, ...kitchenNouns],
+  }
+}
+
+function createPreviewPlan(options = {}) {
+  const catalog = options.catalog || {
+    catalogId: 1,
+    catalogVersionId: 1,
+    catalogName: '自考英语（二）全部词汇',
+    totalCount: 5087,
+  }
+  const planId = options.id || 1
+  const today = new Date().toISOString().slice(0, 10)
+  const unit = {
+    id: planId * 100 + 1,
+    planId,
+    unitNo: 1,
+    title: '周末大扫除',
+    scenarioType: 'Home & Cleaning',
+    summary: '整理衣柜、清洁房间，并处理不再需要的衣物。',
+    status: 'in_progress',
+    coreWordCount: 8,
+    extendedWordCount: 8,
+    supplementaryWordCount: 4,
+    completedCoreCount: 0,
+    recommendedDate: today,
+    learningText: 'On Saturday morning, Mia decided to declutter her bedroom. She sorted the laundry, dusted each shelf, and used the vacuum under the bed. Then she opened every drawer to organize her clothes. She kept the items she often wore and packed the rest to donate.',
+    translation: '周六早上，米娅决定清理卧室。她整理了衣物，擦拭每层架子，并用吸尘器清理床底。随后，她打开每个抽屉整理衣服，留下常穿的衣物，其余打包捐赠。',
+    words: previewWords(),
+  }
+  return {
+    id: planId,
+    catalogId: catalog.catalogId,
+    catalogVersionId: catalog.catalogVersionId,
+    wordbookId: 1,
+    name: options.name || '自考英语（二）场景突破',
+    learningPurpose: options.learningPurpose || '三个月后参加自考英语（二），高频动词需要会拼写，其余词汇达到阅读中能识别。',
+    status: 'active',
+    totalCatalogWords: number(catalog.totalCount) || 5087,
+    learnedCoreWords: options.learnedCoreWords ?? 120,
+    completedUnitCount: options.completedUnitCount ?? 6,
+    currentUnitId: unit.id,
+    canGenerateNext: false,
+    units: [unit],
+  }
+}
+
+function previewCatalog() {
+  return {
+    catalogId: 1,
+    catalogVersionId: 1,
+    catalogName: '自考英语（二）全部词汇',
+    sourceType: 'self_study',
+    learningPurpose: '自考英语（二）考试大纲词汇',
+    status: 'published',
+    totalCount: 5087,
+    publishedTime: new Date().toISOString(),
+  }
+}
+
+function splitMarkdownRow(line) {
+  let value = String(line || '').trim()
+  if (value.startsWith('|')) value = value.slice(1)
+  if (value.endsWith('|')) value = value.slice(0, -1)
+  return value.split(/(?<!\\)\|/).map((cell) => cell.trim().replace(/\\\|/g, '|'))
+}
+
+function cleanMarkdownCell(value) {
+  const trimmed = String(value || '').trim()
+  return trimmed.startsWith('`') && trimmed.endsWith('`') ? trimmed.slice(1, -1).trim() : trimmed
+}
+
+function suggestedSplitCorrection(term) {
+  const tokens = String(term || '').trim().split(/\s+/)
+  for (let index = 0; index < tokens.length; index += 1) {
+    const token = tokens[index]
+    if (!/^[a-z]$/i.test(token)) continue
+    if (index === tokens.length - 1 && index > 0 && (tokens[index - 1].match(/[a-z]/gi) || []).length >= 4) {
+      return [...tokens.slice(0, index - 1), `${tokens[index - 1]}${token}`].join(' ')
+    }
+    if (index < tokens.length - 1 && !/^[ai]$/i.test(token) && (tokens[index + 1].match(/[a-z]/gi) || []).length >= 4) {
+      return [...tokens.slice(0, index), `${token}${tokens[index + 1]}`, ...tokens.slice(index + 2)].join(' ')
+    }
+  }
+  return term
+}
+
+function parsePreviewMarkdown(markdown) {
+  const lines = String(markdown || '').replace(/\r\n?/g, '\n').split('\n')
+  let columns = null
+  const items = []
+  for (const line of lines) {
+    if (!line.includes('|')) continue
+    const cells = splitMarkdownRow(line)
+    if (!columns) {
+      const names = cells.map((cell) => cleanMarkdownCell(cell).toLowerCase())
+      const candidate = {
+        order: names.indexOf('序号'),
+        word: names.indexOf('word'),
+        phonetic: names.indexOf('音标'),
+        definition: names.indexOf('释义'),
+      }
+      if (Object.values(candidate).every((index) => index >= 0)) columns = candidate
+      continue
+    }
+    if (cells.every((cell) => /^:?-{3,}:?$/.test(cell))) continue
+    const originalTerm = cleanMarkdownCell(cells[columns.word])
+    const orderText = cleanMarkdownCell(cells[columns.order])
+    if (!originalTerm && !orderText) continue
+    const sourceOrder = Number(orderText)
+    if (!Number.isInteger(sourceOrder)) throw new Error(`词表序号不是有效整数：${orderText}`)
+    if (!originalTerm) throw new Error(`序号 ${sourceOrder} 的 Word 为空`)
+    const suggestedTerm = suggestedSplitCorrection(originalTerm)
+    const suspicious = suggestedTerm !== originalTerm
+    items.push({
+      id: items.length + 1,
+      sourceOrder,
+      originalTerm,
+      suggestedTerm,
+      approvedTerm: null,
+      effectiveTerm: originalTerm,
+      phonetic: cleanMarkdownCell(cells[columns.phonetic]),
+      definition: cleanMarkdownCell(cells[columns.definition]),
+      suspicious,
+      reviewStatus: suspicious ? 'pending' : 'not_required',
+      warnings: suspicious ? ['疑似断词'] : [],
+    })
+  }
+  if (!columns) throw new Error('未找到包含“序号、Word、音标、释义”的 Markdown 表头')
+  if (!items.length) throw new Error('Markdown 表格中没有可导入词条')
+  const orders = new Set()
+  const duplicate = items.find((item) => orders.has(item.sourceOrder) || !orders.add(item.sourceOrder))
+  if (duplicate) throw new Error(`词表序号重复：${duplicate.sourceOrder}`)
+  return items
 }
 
 export function createScenePlanFeature(ctx) {
@@ -76,7 +335,12 @@ export function createScenePlanFeature(ctx) {
   function activeUnit(plan = state.currentLearningPlan) {
     if (!plan) return null
     const units = asArray(plan.units)
-    return units.find((unit) => sameId(unit.id, plan.currentUnitId)) || units.at(-1) || null
+    if (plan.currentUnitId != null) {
+      return units.find((unit) => sameId(unit.id, plan.currentUnitId))
+        || [...units].reverse().find((unit) => unit.status !== 'completed')
+        || null
+    }
+    return [...units].reverse().find((unit) => unit.status !== 'completed') || null
   }
 
   function currentSceneWord(unit = activeUnit()) {
@@ -131,13 +395,20 @@ export function createScenePlanFeature(ctx) {
       )
     }
 
-    const publishedImports = asArray(state.vocabularyImports).filter((item) => item.status === 'published')
     renderSelectOptions(
       elements.sceneCatalogSelect,
-      publishedImports.map((item) => ({ ...item, id: item.catalogVersionId })),
+      asArray(state.publicVocabularyCatalogs).map((item) => ({ ...item, id: item.catalogVersionId })),
       elements.sceneCatalogSelect?.value,
-      (item) => `${item.catalogName} · ${item.totalCount || 0}词`,
-      '请先发布词表',
+      (item) => `${item.catalogName} · ${SOURCE_LABELS[item.sourceType] || item.sourceType || '公共'} · ${item.totalCount || 0}词`,
+      '请先导入并发布公共词本',
+    )
+
+    renderSelectOptions(
+      elements.scenePlanSelect,
+      asArray(state.learningPlans),
+      state.currentLearningPlan?.id || elements.scenePlanSelect?.value,
+      (item) => `${item.name} · ${number(item.learnedCoreWords)}/${number(item.totalCatalogWords)}词`,
+      '暂无学习计划',
     )
 
     const enabledModels = asArray(state.modelConfigs).filter((item) => item.enabled)
@@ -156,7 +427,29 @@ export function createScenePlanFeature(ctx) {
 
   async function loadSceneData(options = {}) {
     if (state.preview) {
-      renderSourceOptions()
+      if (!state.publicVocabularyCatalogs.length) state.publicVocabularyCatalogs = [previewCatalog()]
+      if (!state.vocabularyImports.length) {
+        const catalog = state.publicVocabularyCatalogs[0]
+        state.vocabularyImports = [{
+          jobId: 1,
+          ...catalog,
+          status: 'published',
+          fileName: '自学考试(二)全部词汇5087_正序版.md',
+          warningCount: 3,
+          reviewedWarningCount: 3,
+          pendingWarningCount: 0,
+          items: [],
+          filteredTotal: 0,
+          page: 1,
+          pageSize: state.vocabularyImportPageSize,
+        }]
+      }
+      if (!state.learningPlans.length) state.learningPlans = [createPreviewPlan({ catalog: state.publicVocabularyCatalogs[0] })]
+      const selectedPlanId = options.planId || state.currentLearningPlan?.id || state.learningPlans[0]?.id
+      state.currentLearningPlan = state.learningPlans.find((plan) => sameId(plan.id, selectedPlanId)) || state.learningPlans[0] || null
+      if (state.currentLearningPlan && state.currentSceneWordId == null) {
+        state.currentSceneWordId = activeUnit(state.currentLearningPlan)?.words?.find((word) => word.tier === 'core')?.id || null
+      }
       renderSceneView()
       return
     }
@@ -166,16 +459,18 @@ export function createScenePlanFeature(ctx) {
     }
     const selectedPlanId = options.planId || state.currentLearningPlan?.id
     try {
-      const [imports, plans] = await Promise.all([
+      const [imports, publicCatalogs, plans] = await Promise.all([
         request('/api/v1/vocabulary-imports'),
+        request('/api/v1/vocabulary-imports/public'),
         request('/api/v1/learning/plans'),
       ])
       state.vocabularyImports = asArray(imports)
+      state.publicVocabularyCatalogs = asArray(publicCatalogs)
       state.learningPlans = asArray(plans)
       renderSourceOptions()
       renderPlanList()
       renderImportList()
-      const visiblePlans = plansForWordbook()
+      const visiblePlans = asArray(state.learningPlans)
       const planId = visiblePlans.some((plan) => sameId(plan.id, selectedPlanId))
         ? selectedPlanId
         : visiblePlans[0]?.id
@@ -193,6 +488,7 @@ export function createScenePlanFeature(ctx) {
 
   function clearSceneData() {
     state.vocabularyImports = []
+    state.publicVocabularyCatalogs = []
     state.currentVocabularyImport = null
     state.learningPlans = []
     state.currentLearningPlan = null
@@ -200,11 +496,6 @@ export function createScenePlanFeature(ctx) {
     state.sceneCardJob = null
     assessmentFeedback = null
     renderSceneView()
-  }
-
-  function plansForWordbook() {
-    const wordbookId = activeWordbookId()
-    return asArray(state.learningPlans).filter((plan) => !wordbookId || sameId(plan.wordbookId, wordbookId))
   }
 
   function renderSceneView() {
@@ -215,16 +506,23 @@ export function createScenePlanFeature(ctx) {
   }
 
   function renderPlanList() {
-    if (!elements.scenePlanList) return
-    const plans = plansForWordbook()
+    const plans = asArray(state.learningPlans)
     elements.scenePlanCount.textContent = String(plans.length)
+    renderSelectOptions(
+      elements.scenePlanSelect,
+      plans,
+      state.currentLearningPlan?.id,
+      (item) => `${item.name} · ${number(item.learnedCoreWords)}/${number(item.totalCatalogWords)}词`,
+      '暂无学习计划',
+    )
     if (!plans.length) {
       elements.scenePlanList.className = 'scene-plan-list empty'
-      elements.scenePlanList.textContent = '当前单词本暂无学习计划'
+      elements.scenePlanList.textContent = '暂无学习计划'
+      elements.profileLearningPlanList.className = 'profile-learning-plan-list empty'
+      elements.profileLearningPlanList.textContent = '暂无学习计划'
       return
     }
-    elements.scenePlanList.className = 'scene-plan-list'
-    elements.scenePlanList.innerHTML = plans
+    const cards = plans
       .map((plan) => `
         <button class="scene-plan-item ${sameId(plan.id, state.currentLearningPlan?.id) ? 'active' : ''}" type="button" data-scene-plan-id="${escapeHtml(plan.id)}">
           <span class="scene-item-topline">
@@ -236,9 +534,32 @@ export function createScenePlanFeature(ctx) {
         </button>
       `)
       .join('')
-    elements.scenePlanList.querySelectorAll('[data-scene-plan-id]').forEach((button) => {
-      button.addEventListener('click', () => selectPlan(button.dataset.scenePlanId))
-    })
+    elements.scenePlanList.className = 'scene-plan-list'
+    elements.scenePlanList.innerHTML = cards
+    elements.profileLearningPlanList.className = 'profile-learning-plan-list'
+    elements.profileLearningPlanList.innerHTML = plans.map((plan) => `
+      <article class="profile-learning-plan-card">
+        <div>
+          <span class="mini-pill">${escapeHtml(PLAN_STATUS_LABELS[plan.status] || plan.status || '学习中')}</span>
+          <h4>${escapeHtml(plan.name)}</h4>
+          <p>${escapeHtml(plan.learningPurpose || '未填写学习目标')}</p>
+        </div>
+        <div class="profile-plan-progress">
+          <strong>${number(plan.learnedCoreWords)} / ${number(plan.totalCatalogWords)}</strong>
+          <span>已掌握词汇 · ${number(plan.completedUnitCount)} 个场景</span>
+          <button class="secondary-button compact" type="button" data-open-scene-plan="${escapeHtml(plan.id)}">进入挑战</button>
+        </div>
+      </article>
+    `).join('')
+    for (const container of [elements.scenePlanList, elements.profileLearningPlanList]) {
+      container.querySelectorAll('[data-scene-plan-id], [data-open-scene-plan]').forEach((button) => {
+        button.addEventListener('click', async () => {
+          const planId = button.dataset.scenePlanId || button.dataset.openScenePlan
+          await changeSelectedPlan(planId)
+          if (button.dataset.openScenePlan) document.querySelector('[data-view="scenePlanView"]')?.click()
+        })
+      })
+    }
   }
 
   function renderImportList() {
@@ -257,7 +578,7 @@ export function createScenePlanFeature(ctx) {
             <strong>${escapeHtml(item.catalogName)}</strong>
             <small>${escapeHtml(IMPORT_STATUS_LABELS[item.status] || item.status)}</small>
           </span>
-          <span>${number(item.totalCount)} 词 · ${number(item.pendingWarningCount)} 个待确认</span>
+          <span>${escapeHtml(SOURCE_LABELS[item.sourceType] || item.sourceType || '公共词本')} · ${number(item.totalCount)} 词 · ${number(item.pendingWarningCount)} 个待确认</span>
         </button>
       `)
       .join('')
@@ -278,6 +599,7 @@ export function createScenePlanFeature(ctx) {
       const coreWords = asArray(unit?.words).filter((word) => word.tier === 'core')
       const firstIncomplete = coreWords.find((word) => !isWordComplete(word)) || coreWords[0]
       state.currentSceneWordId = firstIncomplete?.id || null
+      state.sceneChallengeStage = options.keepStage ? state.sceneChallengeStage : 'overview'
       assessmentFeedback = null
       renderPlanList()
       renderCurrentScene()
@@ -288,9 +610,159 @@ export function createScenePlanFeature(ctx) {
     }
   }
 
+  function changeSelectedPlan(planId) {
+    if (!planId || sameId(planId, state.currentLearningPlan?.id)) {
+      if (elements.scenePlanSelect && planId) elements.scenePlanSelect.value = String(planId)
+      return Promise.resolve()
+    }
+    return selectPlan(planId)
+  }
+
+  function addDays(date, count) {
+    const result = new Date(date)
+    result.setDate(result.getDate() + count)
+    return result
+  }
+
+  function dateKey(date) {
+    return date.toISOString().slice(0, 10)
+  }
+
+  function formatCalendarDate(date, withMonth = false) {
+    return withMonth
+      ? `${date.getMonth() + 1}月${date.getDate()}日`
+      : `${date.getDate()}日`
+  }
+
+  function renderCalendar(plan) {
+    if (!elements.sceneCalendar) return
+    if (!plan) {
+      elements.sceneCalendar.className = 'scene-calendar empty'
+      elements.sceneCalendar.textContent = '选择计划后查看学习日历'
+      return
+    }
+    const range = state.sceneCalendarRange || 'week'
+    const today = new Date()
+    today.setHours(12, 0, 0, 0)
+    const currentUnit = activeUnit(plan)
+    const currentCount = number(currentUnit?.coreWordCount) || 8
+    let dates = []
+    if (range === 'day') {
+      dates = [today]
+    } else if (range === 'month') {
+      const firstDay = new Date(today.getFullYear(), today.getMonth(), 1, 12)
+      const totalDays = new Date(today.getFullYear(), today.getMonth() + 1, 0).getDate()
+      dates = Array.from({ length: totalDays }, (_, index) => addDays(firstDay, index))
+    } else {
+      dates = Array.from({ length: 7 }, (_, index) => addDays(today, index))
+    }
+    const todayKey = dateKey(today)
+    const remainingWords = Math.max(0, number(plan.totalCatalogWords) - number(plan.learnedCoreWords))
+    const totalScheduled = dates.reduce((sum, date) => sum + (dateKey(date) < todayKey ? 0 : currentCount), 0)
+    elements.sceneCalendar.className = `scene-calendar ${range}`
+    elements.sceneCalendar.innerHTML = `
+      <div class="scene-calendar-summary">
+        <span><strong>${Math.min(remainingWords, totalScheduled)}</strong> 个建议学习词</span>
+        <small>按场景单元预估，仅用于规划；学完后可继续手动生成场景</small>
+      </div>
+      <div class="scene-calendar-grid">
+        ${dates.map((date) => {
+          const key = dateKey(date)
+          const isToday = key === todayKey
+          const isPast = key < todayKey
+          const count = isPast ? 0 : Math.min(currentCount, remainingWords)
+          return `
+            <div class="scene-calendar-day ${isToday ? 'today' : ''} ${isPast ? 'past' : ''}">
+              <span>${range === 'day' ? '今天' : formatCalendarDate(date, range === 'week')}</span>
+              <strong>${count}</strong>
+              <small>${isPast ? '已完成' : isToday ? '当前场景' : '建议词汇'}</small>
+            </div>
+          `
+        }).join('')}
+      </div>
+    `
+    document.querySelectorAll('[data-calendar-range]').forEach((button) => {
+      button.classList.toggle('active', button.dataset.calendarRange === range)
+    })
+  }
+
+  function renderChallengeWords(coreWords) {
+    elements.sceneChallengeWordCount.textContent = `${coreWords.length} 词`
+    elements.sceneChallengeWords.className = coreWords.length ? 'scene-challenge-words' : 'scene-challenge-words empty'
+    elements.sceneChallengeWords.innerHTML = coreWords.length
+      ? coreWords.map((word, index) => `<span><small>${index + 1}</small>${escapeHtml(word.term)}</span>`).join('')
+      : '暂无挑战词汇'
+  }
+
+  function applySceneStage(stage) {
+    state.sceneChallengeStage = stage
+    const hasPlan = Boolean(state.currentLearningPlan && activeUnit())
+    const inLearning = hasPlan && stage !== 'overview'
+    elements.scenePlanOverview.classList.toggle('hidden', inLearning)
+    elements.sceneLearningStage.classList.toggle('hidden', !inLearning)
+    const showReading = stage === 'learning'
+    elements.sceneLearningStage.querySelector('.scene-unit-header')?.classList.toggle('hidden', false)
+    elements.sceneLearningStage.querySelector('.scene-reading-panel')?.classList.toggle('hidden', !showReading)
+    elements.sceneLearningStage.querySelector('.scene-core-panel')?.classList.toggle('hidden', !showReading)
+    elements.sceneLearningStage.querySelector('.scene-related-panel')?.classList.toggle('hidden', !showReading)
+    elements.sceneChallengeStage.classList.toggle('hidden', stage !== 'challenge')
+    elements.sceneAssessmentPanel.classList.toggle('hidden', stage !== 'assessment')
+  }
+
+  function startLearning() {
+    if (!state.currentLearningPlan || !activeUnit()) return
+    applySceneStage('learning')
+    elements.sceneLearningStage.scrollIntoView({ behavior: 'smooth', block: 'start' })
+  }
+
+  function showChallengeWords() {
+    const unit = activeUnit()
+    if (!unit) return
+    renderChallengeWords(asArray(unit.words).filter((word) => word.tier === 'core'))
+    applySceneStage('challenge')
+    elements.sceneChallengeStage.scrollIntoView({ behavior: 'smooth', block: 'start' })
+  }
+
+  function startChallenge() {
+    const unit = activeUnit()
+    const coreWords = asArray(unit?.words).filter((word) => word.tier === 'core')
+    if (!coreWords.length) return
+    const firstIncomplete = coreWords.find((word) => !isWordComplete(word)) || coreWords[0]
+    state.currentSceneWordId = firstIncomplete.id
+    state.sceneAssessmentStartedAt = Date.now()
+    assessmentFeedback = null
+    applySceneStage('assessment')
+    renderAssessment(unit)
+    elements.sceneAssessmentPanel.scrollIntoView({ behavior: 'smooth', block: 'start' })
+  }
+
+  function backToReading() {
+    applySceneStage('learning')
+  }
+
+  function backToPlanOverview() {
+    applySceneStage('overview')
+  }
+
+  function changeCalendarRange(range) {
+    if (!['day', 'week', 'month'].includes(range)) return
+    state.sceneCalendarRange = range
+    renderCalendar(state.currentLearningPlan)
+  }
+
   function renderCurrentScene() {
     const plan = state.currentLearningPlan
     const unit = activeUnit(plan)
+    elements.sceneOverviewTitle.textContent = plan?.name || '选择学习计划'
+    elements.sceneOverviewSummary.textContent = plan?.learningPurpose || '通过日历了解近期学习量，再开始当前场景。'
+    elements.sceneOverviewProgress.textContent = plan
+      ? `${number(plan.learnedCoreWords)} / ${number(plan.totalCatalogWords)} 词`
+      : '0 / 0 词'
+    elements.sceneStartLearningBtn.disabled = !unit
+    elements.sceneStartLearningBtn.classList.toggle('hidden', !unit)
+    elements.sceneOverviewNextUnitBtn.classList.toggle('hidden', !plan?.canGenerateNext || Boolean(unit))
+    renderCalendar(plan)
+    applySceneStage(state.sceneChallengeStage || 'overview')
     if (!plan || !unit) {
       elements.sceneUnitEyebrow.textContent = plan ? 'Ready for next scene' : 'Current Scene'
       elements.sceneUnitTitle.textContent = plan ? '可以生成下一个场景' : '选择一个学习计划'
@@ -311,6 +783,7 @@ export function createScenePlanFeature(ctx) {
       elements.sceneGenerateCardsBtn.classList.add('hidden')
       elements.sceneCompleteUnitBtn.classList.add('hidden')
       elements.sceneNextUnitBtn.classList.toggle('hidden', !plan?.canGenerateNext)
+      renderChallengeWords([])
       return
     }
 
@@ -323,11 +796,12 @@ export function createScenePlanFeature(ctx) {
     elements.sceneUnitSummary.textContent = unit.summary || plan.learningPurpose || '通过当前场景学习相关词汇'
     elements.sceneUnitProgress.textContent = `${number(unit.completedCoreCount)} / ${number(unit.coreWordCount)}`
     elements.sceneGenerateCardsBtn.classList.toggle('hidden', !missingCards)
-    elements.sceneCompleteUnitBtn.classList.toggle('hidden', unit.status === 'completed')
+    elements.sceneCompleteUnitBtn.classList.toggle('hidden', number(unit.completedCoreCount) < number(unit.coreWordCount))
     elements.sceneNextUnitBtn.classList.toggle('hidden', !plan.canGenerateNext)
     renderLearningText(unit, coreWords)
     renderCoreWords(coreWords)
     renderRelatedWords(unit)
+    renderChallengeWords(coreWords)
     renderAssessment(unit)
   }
 
@@ -445,6 +919,26 @@ export function createScenePlanFeature(ctx) {
   }
 
   function renderAssessment(unit) {
+    const coreWords = asArray(unit?.words).filter((item) => item.tier === 'core')
+    const completedWords = coreWords.filter(isWordComplete)
+    if (coreWords.length && completedWords.length === coreWords.length) {
+      elements.sceneAssessmentStage.textContent = `${coreWords.length} / ${coreWords.length}`
+      elements.sceneAssessment.className = 'scene-assessment'
+      elements.sceneAssessment.innerHTML = `
+        <div class="scene-assessment-complete scene-unit-complete">
+          <span class="scene-check-mark">✓</span>
+          <strong>本轮 ${coreWords.length} 个词已全部通过</strong>
+          <p>含义识别和要求掌握的拼写项目已写入学习记录。</p>
+          <div class="scene-complete-actions">
+            <button class="secondary-button compact" type="button" data-return-reading>回看场景</button>
+            <button class="primary-button compact-primary" type="button" data-finish-challenge>完成本场景</button>
+          </div>
+        </div>
+      `
+      elements.sceneAssessment.querySelector('[data-return-reading]')?.addEventListener('click', backToReading)
+      elements.sceneAssessment.querySelector('[data-finish-challenge]')?.addEventListener('click', completeCurrentUnit)
+      return
+    }
     const word = currentSceneWord(unit)
     if (!word) {
       elements.sceneAssessment.className = 'scene-assessment empty'
@@ -454,8 +948,9 @@ export function createScenePlanFeature(ctx) {
     }
     const type = nextAssessment(word)
     const passedCount = asArray(word.passedAssessments).filter((item) => requiredAssessments(word).includes(item)).length
+    const wordIndex = coreWords.findIndex((item) => sameId(item.id, word.id)) + 1
     elements.sceneAssessmentStage.textContent = type
-      ? `${passedCount + 1} / ${requiredAssessments(word).length}`
+      ? `第 ${wordIndex}/${coreWords.length} 词 · ${passedCount + 1}/${requiredAssessments(word).length}`
       : '已通过'
     elements.sceneAssessment.className = 'scene-assessment'
     if (!type) {
@@ -541,16 +1036,43 @@ export function createScenePlanFeature(ctx) {
     if (!plan || !unit || !word || !type || !answer) return
     const startedAt = state.sceneAssessmentStartedAt || Date.now()
     try {
-      const result = await request(`/api/v1/learning/plans/${encodeURIComponent(plan.id)}/units/${encodeURIComponent(unit.id)}/assessments`, {
-        method: 'POST',
-        body: JSON.stringify({
-          unitEntryId: word.id,
-          assessmentType: type,
-          answer,
-          attemptCount: 1,
-          durationMillis: Math.max(0, Date.now() - startedAt),
-        }),
-      })
+      let result
+      if (state.preview) {
+        const normalizedAnswer = String(answer).trim().toLowerCase()
+        const correctAnswer = type === 'meaning_choice'
+          ? word.assessment?.correct_answer || word.contextMeaning || word.meaning
+          : word.term
+        const accepted = type === 'meaning_choice'
+          ? [correctAnswer]
+          : asArray(word.acceptedSpellings).length ? word.acceptedSpellings : [word.term]
+        const correct = accepted.some((value) => String(value).trim().toLowerCase() === normalizedAnswer)
+        if (correct) {
+          word.passedAssessments = [...new Set([...asArray(word.passedAssessments), type])]
+          word.learningState = isWordComplete(word) ? 'learned' : 'learning'
+          word.recognitionScore = type === 'meaning_choice' ? 100 : number(word.recognitionScore)
+          word.spellingScore = type !== 'meaning_choice' ? 100 : number(word.spellingScore)
+        }
+        unit.completedCoreCount = asArray(unit.words).filter((item) => item.tier === 'core' && isWordComplete(item)).length
+        result = {
+          correct,
+          correctAnswer,
+          learningState: word.learningState,
+          recognitionScore: word.recognitionScore,
+          spellingScore: word.spellingScore,
+          completedCoreCount: unit.completedCoreCount,
+        }
+      } else {
+        result = await request(`/api/v1/learning/plans/${encodeURIComponent(plan.id)}/units/${encodeURIComponent(unit.id)}/assessments`, {
+          method: 'POST',
+          body: JSON.stringify({
+            unitEntryId: word.id,
+            assessmentType: type,
+            answer,
+            attemptCount: 1,
+            durationMillis: Math.max(0, Date.now() - startedAt),
+          }),
+        })
+      }
       word.learningState = result.learningState
       word.recognitionScore = result.recognitionScore
       word.spellingScore = result.spellingScore
@@ -579,10 +1101,25 @@ export function createScenePlanFeature(ctx) {
     const unit = activeUnit(plan)
     if (!plan || !unit) return
     try {
-      await request(`/api/v1/learning/plans/${encodeURIComponent(plan.id)}/units/${encodeURIComponent(unit.id)}/entries/${encodeURIComponent(entryId)}/promote`, {
-        method: 'POST',
-      })
-      await selectPlan(plan.id, { quiet: true })
+      if (state.preview) {
+        const word = asArray(unit.words).find((item) => sameId(item.id, entryId))
+        if (word) {
+          word.tier = 'core'
+          word.firstLearning = true
+          word.assessment ||= {
+            prompt: `请选择“${word.term}”在当前场景中的含义`,
+            options: [word.contextMeaning || word.meaning, '预订旅行行程', '准备一顿晚餐', '参加课堂讨论'],
+            correct_answer: word.contextMeaning || word.meaning,
+          }
+          unit.coreWordCount = number(unit.coreWordCount) + 1
+        }
+        renderCurrentScene()
+      } else {
+        await request(`/api/v1/learning/plans/${encodeURIComponent(plan.id)}/units/${encodeURIComponent(unit.id)}/entries/${encodeURIComponent(entryId)}/promote`, {
+          method: 'POST',
+        })
+        await selectPlan(plan.id, { quiet: true, keepStage: true })
+      }
       toast('已加入核心词，本场景检查会包含该词')
     } catch (error) {
       logEvent('error', '场景词提升失败', error.message)
@@ -602,11 +1139,21 @@ export function createScenePlanFeature(ctx) {
     if (!confirmed) return
     setButtonLoading(elements.sceneCompleteUnitBtn, true, '提交中...')
     try {
-      const updated = await request(`/api/v1/learning/plans/${encodeURIComponent(plan.id)}/units/${encodeURIComponent(unit.id)}/complete`, {
-        method: 'POST',
-      })
+      const updated = state.preview
+        ? (() => {
+            unit.status = 'completed'
+            plan.learnedCoreWords = number(plan.learnedCoreWords) + number(unit.completedCoreCount)
+            plan.completedUnitCount = number(plan.completedUnitCount) + 1
+            plan.currentUnitId = null
+            plan.canGenerateNext = number(plan.learnedCoreWords) < number(plan.totalCatalogWords)
+            return plan
+          })()
+        : await request(`/api/v1/learning/plans/${encodeURIComponent(plan.id)}/units/${encodeURIComponent(unit.id)}/complete`, {
+            method: 'POST',
+          })
       state.currentLearningPlan = updated
-      state.learningPlans = state.learningPlans.map((item) => sameId(item.id, updated.id) ? { ...item, ...updated, units: [] } : item)
+      state.learningPlans = state.learningPlans.map((item) => sameId(item.id, updated.id) ? { ...item, ...updated } : item)
+      state.sceneChallengeStage = 'overview'
       renderPlanList()
       renderCurrentScene()
       logEvent('learning', '完成场景学习', `${plan.name} / ${unit.title}`)
@@ -630,12 +1177,22 @@ export function createScenePlanFeature(ctx) {
     if (!confirmed) return
     setButtonLoading(elements.sceneNextUnitBtn, true, '生成中...')
     try {
-      const modelConfigId = elements.scenePlanModelSelect?.value || null
-      await request(`/api/v1/learning/plans/${encodeURIComponent(plan.id)}/units/next`, {
-        method: 'POST',
-        body: JSON.stringify({ modelConfigId: modelConfigId ? Number(modelConfigId) : null }),
-      })
-      await selectPlan(plan.id, { quiet: true })
+      if (state.preview) {
+        const generated = createPreviewCookingUnit(plan.id, asArray(plan.units).length + 1)
+        plan.units.push(generated)
+        plan.currentUnitId = generated.id
+        plan.canGenerateNext = false
+        state.currentSceneWordId = generated.words.find((word) => word.tier === 'core')?.id || null
+        state.sceneChallengeStage = 'learning'
+        renderSceneView()
+      } else {
+        const modelConfigId = elements.scenePlanModelSelect?.value || null
+        await request(`/api/v1/learning/plans/${encodeURIComponent(plan.id)}/units/next`, {
+          method: 'POST',
+          body: JSON.stringify({ modelConfigId: modelConfigId ? Number(modelConfigId) : null }),
+        })
+        await selectPlan(plan.id, { quiet: true, keepStage: true })
+      }
       toast('新场景已生成')
     } catch (error) {
       logEvent('error', '生成下一场景失败', error.message)
@@ -651,6 +1208,14 @@ export function createScenePlanFeature(ctx) {
     if (!plan || !unit) return
     setButtonLoading(elements.sceneGenerateCardsBtn, true, '生成中...')
     try {
+      if (state.preview) {
+        const targets = asArray(unit.words).filter((word) => ['core', 'review'].includes(word.tier) && ['missing', 'failed'].includes(word.cardStatus))
+        targets.forEach((word) => { word.cardStatus = 'ready' })
+        state.sceneCardJob = { jobId: Date.now(), unitId: unit.id, successCount: targets.length, failedCount: 0 }
+        renderCurrentScene()
+        toast(`词卡任务完成：成功 ${targets.length}，失败 0`)
+        return
+      }
       const retry = state.sceneCardJob
         && sameId(state.sceneCardJob.unitId, unit.id)
         && number(state.sceneCardJob.failedCount) > 0
@@ -680,6 +1245,7 @@ export function createScenePlanFeature(ctx) {
     elements.vocabularyImportFile.value = ''
     elements.vocabularyImportName.value = ''
     elements.vocabularyImportPurpose.value = ''
+    elements.vocabularyImportSourceType.value = 'self_study'
     elements.vocabularyReviewSection.classList.add('hidden')
     showModal(elements.vocabularyImportModal)
   }
@@ -691,6 +1257,7 @@ export function createScenePlanFeature(ctx) {
   async function startVocabularyImport() {
     const file = elements.vocabularyImportFile.files?.[0]
     const catalogName = elements.vocabularyImportName.value.trim()
+    const sourceType = elements.vocabularyImportSourceType.value
     if (!file) {
       toast('请选择 Markdown 文件')
       return
@@ -702,19 +1269,47 @@ export function createScenePlanFeature(ctx) {
     setButtonLoading(elements.startVocabularyImportBtn, true, '解析中...')
     try {
       const content = await file.text()
-      const result = await request('/api/v1/vocabulary-imports/markdown', {
-        method: 'POST',
-        body: JSON.stringify({
+      let result
+      if (state.preview) {
+        const allItems = parsePreviewMarkdown(content)
+        const warningCount = allItems.filter((item) => item.suspicious).length
+        result = {
+          jobId: Date.now(),
+          catalogId: Date.now(),
+          catalogVersionId: Date.now(),
           catalogName,
+          sourceType,
           learningPurpose: elements.vocabularyImportPurpose.value.trim(),
           fileName: file.name,
-          content,
-        }),
-      })
+          status: 'reviewing',
+          totalCount: allItems.length,
+          warningCount,
+          reviewedWarningCount: 0,
+          pendingWarningCount: warningCount,
+          page: 1,
+          pageSize: state.vocabularyImportPageSize,
+          filteredTotal: allItems.length,
+          items: allItems,
+          _allItems: allItems,
+          createTime: new Date().toISOString(),
+        }
+        state.vocabularyImports.unshift(result)
+      } else {
+        result = await request('/api/v1/vocabulary-imports/markdown', {
+          method: 'POST',
+          body: JSON.stringify({
+            catalogName,
+            sourceType,
+            learningPurpose: elements.vocabularyImportPurpose.value.trim(),
+            fileName: file.name,
+            content,
+          }),
+        })
+      }
       state.currentVocabularyImport = result
       state.vocabularyImportPage = 1
       elements.vocabularyReviewSection.classList.remove('hidden')
-      renderImportReview()
+      await loadImportReview(result.jobId)
       await reloadImportHistory()
       logEvent('vocabulary', '导入 Markdown 词表', `${catalogName} · ${number(result.totalCount)} 词`)
       toast(`已解析 ${number(result.totalCount)} 个词，请确认疑似断词后发布`)
@@ -749,7 +1344,33 @@ export function createScenePlanFeature(ctx) {
   }
 
   async function loadImportReview(jobId = state.currentVocabularyImport?.jobId) {
-    if (!jobId || state.preview) return
+    if (!jobId) return
+    if (state.preview) {
+      const source = asArray(state.vocabularyImports).find((item) => sameId(item.jobId, jobId)) || state.currentVocabularyImport
+      if (!source) return
+      const allItems = asArray(source._allItems).length ? source._allItems : asArray(source.items)
+      const keyword = elements.vocabularyImportKeyword.value.trim().toLowerCase()
+      const warningOnly = Boolean(elements.vocabularyWarningOnly.checked)
+      const filtered = allItems.filter((item) => {
+        if (warningOnly && !item.suspicious) return false
+        const haystack = `${item.originalTerm || ''} ${item.approvedTerm || ''} ${item.definition || ''}`.toLowerCase()
+        return !keyword || haystack.includes(keyword)
+      })
+      const pageSize = number(state.vocabularyImportPageSize) || 100
+      const pages = Math.max(1, Math.ceil(filtered.length / pageSize))
+      state.vocabularyImportPage = Math.min(Math.max(1, number(state.vocabularyImportPage) || 1), pages)
+      const start = (state.vocabularyImportPage - 1) * pageSize
+      source.page = state.vocabularyImportPage
+      source.pageSize = pageSize
+      source.filteredTotal = filtered.length
+      source.items = filtered.slice(start, start + pageSize)
+      source.pendingWarningCount = allItems.filter((item) => item.suspicious && item.reviewStatus !== 'confirmed').length
+      source.reviewedWarningCount = allItems.filter((item) => item.suspicious && item.reviewStatus === 'confirmed').length
+      state.currentVocabularyImport = source
+      renderImportReview()
+      renderImportList()
+      return
+    }
     try {
       const params = new URLSearchParams({
         warningOnly: String(Boolean(elements.vocabularyWarningOnly.checked)),
@@ -774,7 +1395,7 @@ export function createScenePlanFeature(ctx) {
     elements.vocabularyWarningSummary.textContent = `${number(current.pendingWarningCount)} 个待确认`
     elements.vocabularyWarningSummary.classList.toggle('ok', number(current.pendingWarningCount) === 0)
     elements.publishVocabularyImportBtn.disabled = published || number(current.pendingWarningCount) > 0
-    elements.publishVocabularyImportBtn.textContent = published ? '已发布' : '发布并导入单词本'
+    elements.publishVocabularyImportBtn.textContent = published ? '已发布' : '发布公共词本'
     elements.vocabularyBatchConfirmBtn.disabled = published || number(current.pendingWarningCount) === 0
     const items = asArray(current.items)
     elements.vocabularyReviewRows.innerHTML = items.length
@@ -811,10 +1432,19 @@ export function createScenePlanFeature(ctx) {
     const approvedTerm = input?.value.trim()
     if (!current || !approvedTerm) return
     try {
-      await request(`/api/v1/vocabulary-imports/${encodeURIComponent(current.jobId)}/entries/${encodeURIComponent(entryId)}`, {
-        method: 'PUT',
-        body: JSON.stringify({ approvedTerm }),
-      })
+      if (state.preview) {
+        const item = asArray(current._allItems).find((entry) => sameId(entry.id, entryId))
+        if (item) {
+          item.approvedTerm = approvedTerm
+          item.effectiveTerm = approvedTerm
+          item.reviewStatus = 'confirmed'
+        }
+      } else {
+        await request(`/api/v1/vocabulary-imports/${encodeURIComponent(current.jobId)}/entries/${encodeURIComponent(entryId)}`, {
+          method: 'PUT',
+          body: JSON.stringify({ approvedTerm }),
+        })
+      }
       await loadImportReview()
       await reloadImportHistory()
       toast('修正已确认')
@@ -834,10 +1464,18 @@ export function createScenePlanFeature(ctx) {
     })
     if (!confirmed) return
     try {
-      await request(`/api/v1/vocabulary-imports/${encodeURIComponent(current.jobId)}/warnings/confirm`, {
-        method: 'POST',
-        body: JSON.stringify({ applySuggested: true }),
-      })
+      if (state.preview) {
+        asArray(current._allItems).filter((item) => item.suspicious && item.reviewStatus !== 'confirmed').forEach((item) => {
+          item.approvedTerm = item.suggestedTerm || item.originalTerm
+          item.effectiveTerm = item.approvedTerm
+          item.reviewStatus = 'confirmed'
+        })
+      } else {
+        await request(`/api/v1/vocabulary-imports/${encodeURIComponent(current.jobId)}/warnings/confirm`, {
+          method: 'POST',
+          body: JSON.stringify({ applySuggested: true }),
+        })
+      }
       await loadImportReview()
       await reloadImportHistory()
       toast('已确认全部疑似断词')
@@ -849,30 +1487,44 @@ export function createScenePlanFeature(ctx) {
 
   async function publishVocabularyImport() {
     const current = state.currentVocabularyImport
-    const wordbookId = normalizeWordbookId(elements.vocabularyImportWordbook.value)
-    if (!current || !wordbookId || current.status === 'published') return
+    if (!current || current.status === 'published') return
     if (number(current.pendingWarningCount) > 0) {
       toast('请先确认所有疑似断词')
       return
     }
-    const wordbook = state.wordbooks.find((item) => sameId(item.id, wordbookId))
     const confirmed = await confirmAction({
-      title: '发布并导入单词本',
-      message: `确认发布「${current.catalogName}」并导入「${wordbook?.name || '所选单词本'}」？导入阶段不会批量生成 AI 词卡。`,
-      acceptText: '发布词表',
+      title: '发布公共词本',
+      message: `确认将「${current.catalogName}」发布为公共词本？发布后可用于新建学习计划，导入阶段不会批量生成 AI 词卡。`,
+      acceptText: '确认发布',
     })
     if (!confirmed) return
     setButtonLoading(elements.publishVocabularyImportBtn, true, '发布中...')
     try {
-      state.currentVocabularyImport = await request(`/api/v1/vocabulary-imports/${encodeURIComponent(current.jobId)}/publish`, {
-        method: 'POST',
-        body: JSON.stringify({ wordbookId: Number(wordbookId) }),
-      })
+      if (state.preview) {
+        current.status = 'published'
+        const catalog = {
+          catalogId: current.catalogId,
+          catalogVersionId: current.catalogVersionId,
+          catalogName: current.catalogName,
+          sourceType: current.sourceType,
+          learningPurpose: current.learningPurpose,
+          status: 'published',
+          totalCount: current.totalCount,
+          publishedTime: new Date().toISOString(),
+        }
+        state.publicVocabularyCatalogs = [catalog, ...state.publicVocabularyCatalogs.filter((item) => !sameId(item.catalogVersionId, catalog.catalogVersionId))]
+        state.currentVocabularyImport = current
+      } else {
+        state.currentVocabularyImport = await request(`/api/v1/vocabulary-imports/${encodeURIComponent(current.jobId)}/publish`, {
+          method: 'POST',
+          body: JSON.stringify({}),
+        })
+      }
       await Promise.allSettled([reloadImportHistory(), loadWordbooks?.()])
       renderImportReview()
       renderSourceOptions()
-      logEvent('vocabulary', '发布词表', `${current.catalogName} -> ${wordbook?.name || wordbookId}`)
-      toast('词表已发布并导入单词本，可创建场景学习计划')
+      logEvent('vocabulary', '发布公共词本', current.catalogName)
+      toast('公共词本已发布，可在学习计划中选择')
     } catch (error) {
       logEvent('error', '词表发布失败', error.message)
       toast(`词表发布失败：${error.message}`)
@@ -883,8 +1535,8 @@ export function createScenePlanFeature(ctx) {
 
   function openScenePlanModal() {
     renderSourceOptions()
-    const selected = state.vocabularyImports.find((item) => String(item.catalogVersionId) === elements.sceneCatalogSelect?.value)
-    elements.scenePlanNameInput.value = selected ? `${selected.catalogName}场景学习` : ''
+    const selected = state.publicVocabularyCatalogs.find((item) => String(item.catalogVersionId) === elements.sceneCatalogSelect?.value)
+    elements.scenePlanNameInput.value = selected ? `${selected.catalogName}学习计划` : ''
     elements.scenePlanPurposeInput.value = selected?.learningPurpose || ''
     showModal(elements.scenePlanModal)
   }
@@ -893,32 +1545,52 @@ export function createScenePlanFeature(ctx) {
     hideModal(elements.scenePlanModal)
   }
 
+  function changePlanCatalog() {
+    const selected = state.publicVocabularyCatalogs.find((item) => sameId(item.catalogVersionId, elements.sceneCatalogSelect.value))
+    if (!selected) return
+    elements.scenePlanNameInput.value = `${selected.catalogName}学习计划`
+    elements.scenePlanPurposeInput.value = selected.learningPurpose || ''
+  }
+
   async function createScenePlan() {
     const catalogVersionId = elements.sceneCatalogSelect.value
-    const wordbookId = normalizeWordbookId(elements.scenePlanWordbookSelect.value)
     const name = elements.scenePlanNameInput.value.trim()
-    if (!catalogVersionId || !wordbookId || !name) {
-      toast('请选择已发布词表和单词本，并填写计划名称')
+    const learningPurpose = elements.scenePlanPurposeInput.value.trim()
+    if (!catalogVersionId || !name || !learningPurpose) {
+      toast('请选择公共词本，并填写计划名称和学习目标')
       return
     }
     setButtonLoading(elements.createScenePlanBtn, true, '生成首个场景中...')
     try {
       const modelConfigId = elements.scenePlanModelSelect.value
-      const plan = await request('/api/v1/learning/plans', {
-        method: 'POST',
-        body: JSON.stringify({
-          catalogVersionId: Number(catalogVersionId),
-          wordbookId: Number(wordbookId),
+      let plan
+      if (state.preview) {
+        const catalog = state.publicVocabularyCatalogs.find((item) => sameId(item.catalogVersionId, catalogVersionId))
+        plan = createPreviewPlan({
+          id: Math.max(0, ...state.learningPlans.map((item) => number(item.id))) + 1,
+          catalog,
           name,
-          learningPurpose: elements.scenePlanPurposeInput.value.trim(),
-          modelConfigId: modelConfigId ? Number(modelConfigId) : null,
-          generateFirstUnit: true,
-        }),
-      })
+          learningPurpose,
+          learnedCoreWords: 0,
+          completedUnitCount: 0,
+        })
+        state.learningPlans.unshift(plan)
+      } else {
+        plan = await request('/api/v1/learning/plans', {
+          method: 'POST',
+          body: JSON.stringify({
+            catalogVersionId: Number(catalogVersionId),
+            name,
+            learningPurpose,
+            modelConfigId: modelConfigId ? Number(modelConfigId) : null,
+            generateFirstUnit: true,
+          }),
+        })
+      }
       state.currentLearningPlan = plan
       await loadSceneData({ planId: plan.id })
       closeScenePlanModal()
-      logEvent('learning', '创建场景学习计划', name)
+      logEvent('learning', '创建学习计划', name)
       toast('学习计划和首个场景已生成')
     } catch (error) {
       logEvent('error', '创建场景学习计划失败', error.message)
@@ -933,14 +1605,7 @@ export function createScenePlanFeature(ctx) {
     syncCurrentWordbookId(state, elements, wordbookId)
     elements.sceneWordbookSelect.value = wordbookId
     renderPlanList()
-    const visiblePlans = plansForWordbook()
-    if (!visiblePlans.some((plan) => sameId(plan.id, state.currentLearningPlan?.id))) {
-      if (visiblePlans[0]) selectPlan(visiblePlans[0].id, { quiet: true })
-      else {
-        state.currentLearningPlan = null
-        renderCurrentScene()
-      }
-    }
+    renderCurrentScene()
   }
 
   function changeImportSearch() {
@@ -976,6 +1641,7 @@ export function createScenePlanFeature(ctx) {
     openScenePlanModal,
     closeScenePlanModal,
     createScenePlan,
+    changePlanCatalog,
     changeSceneWordbook,
     changeImportSearch,
     previousImportPage,
@@ -983,6 +1649,13 @@ export function createScenePlanFeature(ctx) {
     completeCurrentUnit,
     generateNextUnit,
     generateCards,
+    startLearning,
+    showChallengeWords,
+    startChallenge,
+    backToReading,
+    backToPlanOverview,
+    changeCalendarRange,
+    changeSelectedPlan,
     speakCurrentScene: () => speakSentence(activeUnit()?.learningText || ''),
   }
 }

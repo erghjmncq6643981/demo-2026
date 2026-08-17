@@ -10,6 +10,7 @@ import com.chandler.learning.agent.domain.entity.AiChatMessage;
 import com.chandler.learning.agent.domain.entity.AiChatSession;
 import com.chandler.learning.agent.domain.entity.AiModelCallRecord;
 import com.chandler.learning.agent.domain.entity.AiModelConfig;
+import com.chandler.learning.agent.domain.enums.AiInvocationScene;
 import com.chandler.learning.agent.domain.enums.ChatMessageRole;
 import com.chandler.learning.agent.domain.enums.LearningScene;
 import com.chandler.learning.agent.exception.LearningAssistantException;
@@ -56,6 +57,9 @@ public class AiChatService {
      */
     public AgentChatResponse chat(AgentChatRequest request) {
         long startTime = System.currentTimeMillis();
+        AiInvocationScene invocationScene = request.getInvocationScene() == null
+                ? AiInvocationScene.GENERAL_CHAT
+                : request.getInvocationScene();
         AiAgent agent = getEnabledAgent(request.getAgentCode());
         AiChatSession session = resolveSession(agent, request, startTime);
 
@@ -66,6 +70,7 @@ public class AiChatService {
         String provider = resolveProvider(agent, selectedModelConfig);
         String modelName = resolveModelName(agent, provider, selectedModelConfig);
         ModelChatRequest modelRequest = new ModelChatRequest();
+        modelRequest.setInvocationScene(invocationScene);
         modelRequest.setProvider(provider);
         modelRequest.setModel(modelName);
         modelRequest.setModelConfigId(selectedModelConfig == null ? null : selectedModelConfig.getId());
@@ -74,14 +79,16 @@ public class AiChatService {
         modelRequest.setMessages(messages);
 
         AiModelCallRecord record = buildCallRecord(session.getId(), agent, modelRequest);
-        log.info("用户「{}」通过 Agent「{}」向模型「{} / {}」发起了一次 AI 会话，业务类型为「{}」",
+        log.info("用户「{}」通过 Agent「{}」向模型「{} / {}」发起「{}」AI 调用，业务类型为「{}」",
                 userDisplayNameService.currentUserName(),
                 agent.getName(),
                 provider,
                 modelName,
+                invocationScene.getTitle(),
                 request.getBusinessType());
-        log.debug("AI 会话开始 sessionId={} agent={} provider={} model={} messageCount={} businessType={} businessId={}",
+        log.debug("AI 会话开始 sessionId={} invocationScene={} agent={} provider={} model={} messageCount={} businessType={} businessId={}",
                 session.getId(),
+                invocationScene.getCode(),
                 agent.getCode(),
                 provider,
                 modelName,
@@ -105,6 +112,7 @@ public class AiChatService {
             AgentChatResponse response = new AgentChatResponse();
             response.setSessionId(session.getId());
             response.setAgentCode(agent.getCode());
+            response.setInvocationScene(invocationScene);
             response.setModelProvider(provider);
             response.setModelName(modelName);
             response.setContent(modelResponse.getContent());
@@ -270,6 +278,7 @@ public class AiChatService {
         AiModelCallRecord record = new AiModelCallRecord();
         record.setSessionId(sessionId);
         record.setAgentCode(agent.getCode());
+        record.setInvocationSceneCode(request.getInvocationScene().getCode());
         record.setProvider(request.getProvider());
         record.setModelName(request.getModel());
         record.setRequestJson(toJson(request));

@@ -113,6 +113,7 @@
             <nav class="profile-tabs" aria-label="个人信息子导航">
               <button class="profile-tab active" type="button" data-profile-tab="accountPanel">账户</button>
               <button class="profile-tab" type="button" data-profile-tab="profileWordbookPanel">单词本</button>
+              <button class="profile-tab" type="button" data-profile-tab="profileLearningPlanPanel">学习计划</button>
               <button class="profile-tab" type="button" data-profile-tab="agentManagePanel">Agent 管理</button>
               <button class="profile-tab" type="button" data-profile-tab="systemLogPanel">系统日志</button>
               <button class="profile-tab" type="button" data-profile-tab="aiSessionPanel">AI 会话</button>
@@ -180,10 +181,32 @@
                   </div>
                   <div class="inline-actions">
                     <button class="secondary-button compact" id="reloadWordbookEntriesBtn" type="button">刷新</button>
+                    <button class="secondary-button compact" id="openVocabularyImportBtn" type="button">导入公共词本</button>
                     <button class="primary-button compact-primary" id="openWordbookModalBtn" type="button">新增单词本</button>
                   </div>
                 </div>
                 <div id="wordbookCards" class="wordbook-cards empty">暂无词书</div>
+                <section class="profile-import-history">
+                  <div class="panel-heading compact-heading">
+                    <div>
+                      <p class="eyebrow">Public Vocabulary</p>
+                      <h3>公共词本导入记录</h3>
+                    </div>
+                  </div>
+                  <div id="sceneImportList" class="scene-import-list empty">暂无导入记录</div>
+                </section>
+              </section>
+
+              <section class="panel profile-section" id="profileLearningPlanPanel">
+                <div class="panel-heading">
+                  <div>
+                    <p class="eyebrow">Learning Plans</p>
+                    <h3>学习计划</h3>
+                    <p class="panel-description">选择公共词本并填写学习目标，AI 会据此判断单词需要认识还是会拼写。</p>
+                  </div>
+                  <button class="primary-button compact-primary" id="openProfileScenePlanModalBtn" type="button">新建学习计划</button>
+                </div>
+                <div id="profileLearningPlanList" class="profile-learning-plan-list empty">暂无学习计划</div>
               </section>
 
               <section class="panel model-panel profile-section" id="agentManagePanel">
@@ -317,13 +340,17 @@
           <section class="view" id="scenePlanView">
             <section class="panel scene-plan-toolbar">
               <label class="compact-field">
-                单词本
-                <select id="sceneWordbookSelect"></select>
+                学习计划
+                <select id="scenePlanSelect"></select>
               </label>
+              <div class="scene-range-control" role="group" aria-label="计划预览范围">
+                <button type="button" data-calendar-range="day">天</button>
+                <button class="active" type="button" data-calendar-range="week">周</button>
+                <button type="button" data-calendar-range="month">月</button>
+              </div>
               <div class="scene-toolbar-actions">
                 <button class="secondary-button compact" id="sceneReloadBtn" type="button">刷新</button>
-                <button class="secondary-button compact" id="openScenePlanModalBtn" type="button">新建计划</button>
-                <button class="primary-button compact-primary" id="openVocabularyImportBtn" type="button">导入词表</button>
+                <button class="primary-button compact-primary" id="openScenePlanModalBtn" type="button">新建计划</button>
               </div>
             </section>
 
@@ -337,89 +364,117 @@
                   <span class="mini-pill" id="scenePlanCount">0</span>
                 </div>
                 <div id="scenePlanList" class="scene-plan-list empty">暂无学习计划</div>
-
-                <div class="panel-heading compact-heading scene-import-heading">
-                  <div>
-                    <p class="eyebrow">Imports</p>
-                    <h3>词表记录</h3>
-                  </div>
-                </div>
-                <div id="sceneImportList" class="scene-import-list empty">暂无导入记录</div>
               </aside>
 
               <section class="scene-workspace">
-                <section class="panel scene-unit-header">
+                <section class="panel scene-plan-overview" id="scenePlanOverview">
                   <div>
-                    <p class="eyebrow" id="sceneUnitEyebrow">Current Scene</p>
-                    <h3 id="sceneUnitTitle">选择一个学习计划</h3>
-                    <p id="sceneUnitSummary">当前场景会显示在这里</p>
+                    <p class="eyebrow">Plan Preview</p>
+                    <h3 id="sceneOverviewTitle">选择学习计划</h3>
+                    <p id="sceneOverviewSummary">通过日历了解近期学习量，再开始当前场景。</p>
                   </div>
-                  <div class="scene-unit-actions">
-                    <span class="mini-pill" id="sceneUnitProgress">0 / 0</span>
-                    <button class="secondary-button compact hidden" id="sceneGenerateCardsBtn" type="button">补齐词卡</button>
-                    <button class="secondary-button compact hidden" id="sceneNextUnitBtn" type="button">生成下一场景</button>
-                    <button class="primary-button compact-primary hidden" id="sceneCompleteUnitBtn" type="button">完成场景</button>
+                  <div class="scene-overview-actions">
+                    <span class="mini-pill" id="sceneOverviewProgress">0 / 0 词</span>
+                    <button class="secondary-button compact hidden" id="sceneOverviewNextUnitBtn" type="button">生成下一个场景</button>
+                    <button class="primary-button compact-primary" id="sceneStartLearningBtn" type="button" disabled>开始学习</button>
                   </div>
+                  <div id="sceneCalendar" class="scene-calendar empty">选择计划后查看学习日历</div>
                 </section>
 
-                <section class="panel scene-reading-panel">
-                  <div class="panel-heading compact-heading">
-                    <h3>场景材料</h3>
-                    <button class="icon-button" id="sceneSpeakBtn" type="button" title="朗读场景材料" aria-label="朗读场景材料">▶</button>
-                  </div>
-                  <div id="sceneLearningText" class="scene-learning-text empty">暂无场景材料</div>
-                  <details class="scene-translation">
-                    <summary>中文译文</summary>
-                    <div id="sceneTranslation">暂无译文</div>
-                  </details>
-                </section>
+                <div class="scene-learning-stage hidden" id="sceneLearningStage">
+                  <section class="panel scene-unit-header">
+                    <div>
+                      <p class="eyebrow" id="sceneUnitEyebrow">Current Scene</p>
+                      <h3 id="sceneUnitTitle">选择一个学习计划</h3>
+                      <p id="sceneUnitSummary">当前场景会显示在这里</p>
+                    </div>
+                    <div class="scene-unit-actions">
+                      <span class="mini-pill" id="sceneUnitProgress">0 / 0</span>
+                      <button class="secondary-button compact hidden" id="sceneGenerateCardsBtn" type="button">补齐词卡</button>
+                      <button class="secondary-button compact hidden" id="sceneNextUnitBtn" type="button">生成下一场景</button>
+                      <button class="secondary-button compact" id="sceneBackToPlanBtn" type="button">返回计划</button>
+                      <button class="primary-button compact-primary hidden" id="sceneCompleteUnitBtn" type="button">完成场景</button>
+                    </div>
+                  </section>
 
-                <section class="scene-vocabulary-layout">
+                  <section class="panel scene-reading-panel">
+                    <div class="panel-heading compact-heading">
+                      <div>
+                        <p class="eyebrow">Context</p>
+                        <h3>场景文章</h3>
+                      </div>
+                      <button class="icon-button" id="sceneSpeakBtn" type="button" title="朗读场景文章" aria-label="朗读场景文章">▶</button>
+                    </div>
+                    <div id="sceneLearningText" class="scene-learning-text empty">暂无场景材料</div>
+                    <details class="scene-translation">
+                      <summary>查看中文译文</summary>
+                      <div id="sceneTranslation">暂无译文</div>
+                    </details>
+                  </section>
+
                   <section class="panel scene-core-panel">
                     <div class="panel-heading compact-heading">
                       <div>
                         <p class="eyebrow">Core</p>
                         <h3>核心词汇</h3>
                       </div>
-                      <span class="mini-pill" id="sceneCoreCount">0</span>
+                      <div class="inline-actions">
+                        <span class="mini-pill" id="sceneCoreCount">0</span>
+                        <button class="primary-button compact-primary" id="sceneVocabularyChallengeBtn" type="button">词汇挑战</button>
+                      </div>
                     </div>
                     <div id="sceneCoreWords" class="scene-core-words empty">暂无核心词汇</div>
                   </section>
 
-                  <section class="panel scene-assessment-panel">
+                  <section class="panel scene-challenge-stage hidden" id="sceneChallengeStage">
                     <div class="panel-heading compact-heading">
                       <div>
-                        <p class="eyebrow">Check</p>
+                        <p class="eyebrow">Vocabulary Challenge</p>
+                        <h3>本轮挑战词汇</h3>
+                      </div>
+                      <span class="mini-pill" id="sceneChallengeWordCount">0 词</span>
+                    </div>
+                    <div id="sceneChallengeWords" class="scene-challenge-words empty">暂无挑战词汇</div>
+                    <div class="scene-challenge-actions">
+                      <button class="secondary-button compact" id="sceneChallengeBackBtn" type="button">继续阅读</button>
+                      <button class="primary-button" id="sceneChallengeStartBtn" type="button">挑战开始</button>
+                    </div>
+                  </section>
+
+                  <section class="panel scene-assessment-panel hidden" id="sceneAssessmentPanel">
+                    <div class="panel-heading compact-heading">
+                      <div>
+                        <p class="eyebrow">Challenge</p>
                         <h3>词汇检查</h3>
                       </div>
                       <span class="mini-pill" id="sceneAssessmentStage">未开始</span>
                     </div>
-                    <div id="sceneAssessment" class="scene-assessment empty">选择一个核心词开始检查</div>
+                    <div id="sceneAssessment" class="scene-assessment empty">点击“挑战开始”进入词汇检查</div>
                   </section>
-                </section>
 
-                <section class="panel scene-related-panel">
-                  <div class="panel-heading compact-heading">
-                    <div>
-                      <p class="eyebrow">Related</p>
-                      <h3>场景相关词汇</h3>
+                  <section class="panel scene-related-panel">
+                    <div class="panel-heading compact-heading">
+                      <div>
+                        <p class="eyebrow">Related</p>
+                        <h3>场景相关词汇</h3>
+                      </div>
+                      <div class="scene-related-tools">
+                        <label class="entry-prefix-field">
+                          <span class="sr-only">筛选场景词汇</span>
+                          <input id="sceneRelatedFilter" autocomplete="off" placeholder="筛选单词或含义" />
+                        </label>
+                        <select id="sceneTierFilter" aria-label="词汇层级">
+                          <option value="">全部层级</option>
+                          <option value="extended">词表扩展</option>
+                          <option value="supplementary">AI 补充</option>
+                          <option value="review">复习词</option>
+                        </select>
+                        <span class="mini-pill" id="sceneRelatedCount">0</span>
+                      </div>
                     </div>
-                    <div class="scene-related-tools">
-                      <label class="entry-prefix-field">
-                        <span class="sr-only">筛选场景词汇</span>
-                        <input id="sceneRelatedFilter" autocomplete="off" placeholder="筛选单词或含义" />
-                      </label>
-                      <select id="sceneTierFilter" aria-label="词汇层级">
-                        <option value="">全部层级</option>
-                        <option value="extended">词表扩展</option>
-                        <option value="supplementary">AI 补充</option>
-                        <option value="review">复习词</option>
-                      </select>
-                      <span class="mini-pill" id="sceneRelatedCount">0</span>
-                    </div>
-                  </div>
-                  <div id="sceneRelatedWords" class="scene-related-words empty">暂无场景相关词汇</div>
-                </section>
+                    <div id="sceneRelatedWords" class="scene-related-words empty">暂无场景相关词汇</div>
+                  </section>
+                </div>
               </section>
             </section>
           </section>
@@ -601,11 +656,17 @@
         <section class="vocabulary-import-form">
           <label>Markdown 文件<input id="vocabularyImportFile" type="file" accept=".md,text/markdown,text/plain" /></label>
           <label>词表名称<input id="vocabularyImportName" placeholder="例如：自考英语（二）词汇" /></label>
-          <label>学习目的<input id="vocabularyImportPurpose" placeholder="例如：通过自考英语（二），重点掌握常用拼写" /></label>
           <label>
-            目标单词本
-            <select id="vocabularyImportWordbook"></select>
+            数据源类型
+            <select id="vocabularyImportSourceType">
+              <option value="self_study">自考</option>
+              <option value="cet4">四级</option>
+              <option value="cet6">六级</option>
+              <option value="ielts">雅思</option>
+            </select>
           </label>
+          <label>词本说明<input id="vocabularyImportPurpose" placeholder="例如：自考英语（二）考试大纲词汇" /></label>
+          <select class="hidden" id="vocabularyImportWordbook" aria-hidden="true"></select>
           <button class="primary-button compact-primary" id="startVocabularyImportBtn" type="button">解析词表</button>
         </section>
 
@@ -647,7 +708,7 @@
               <span id="vocabularyPageInfo">第 1 页</span>
               <button class="icon-action-button" id="vocabularyNextPageBtn" type="button" title="下一页" aria-label="下一页">→</button>
             </div>
-            <button class="primary-button compact-primary" id="publishVocabularyImportBtn" type="button">发布并导入单词本</button>
+            <button class="primary-button compact-primary" id="publishVocabularyImportBtn" type="button">发布公共词本</button>
           </div>
         </section>
       </div>
@@ -658,19 +719,19 @@
         <div class="panel-heading">
           <div>
             <p class="eyebrow">Learning Plan</p>
-            <h3>新建场景学习计划</h3>
+            <h3>新建学习计划</h3>
           </div>
           <button class="icon-button" id="closeScenePlanModalBtn" type="button" title="关闭" aria-label="关闭">×</button>
         </div>
         <div class="model-form-grid">
-          <label>已发布词表<select id="sceneCatalogSelect"></select></label>
-          <label>计划名称<input id="scenePlanNameInput" placeholder="例如：自考英语场景学习" /></label>
-          <label class="full-row">学习目的<textarea id="scenePlanPurposeInput" rows="3" placeholder="例如：通过自考英语（二），常用词要求会拼写"></textarea></label>
-          <label>单词本<select id="scenePlanWordbookSelect"></select></label>
+          <label>公共词本<select id="sceneCatalogSelect"></select></label>
+          <label>计划名称<input id="scenePlanNameInput" placeholder="例如：自考英语词汇冲刺" /></label>
+          <label class="full-row">学习目标<textarea id="scenePlanPurposeInput" rows="4" placeholder="例如：三个月后参加自考英语（二），高频动词需要会拼写，其余单词达到阅读中能识别"></textarea></label>
+          <select class="hidden" id="scenePlanWordbookSelect" aria-hidden="true"></select>
           <label>AI 模型<select id="scenePlanModelSelect"></select></label>
         </div>
         <div class="modal-actions">
-          <button class="primary-button compact-primary" id="createScenePlanBtn" type="button">创建并生成首个场景</button>
+          <button class="primary-button compact-primary" id="createScenePlanBtn" type="button">创建计划</button>
         </div>
       </div>
     </section>

@@ -7,6 +7,7 @@ import com.chandler.learning.agent.domain.dto.vocabulary.VocabularyBestMatchResp
 import com.chandler.learning.agent.domain.dto.vocabulary.VocabularyStudyRequest;
 import com.chandler.learning.agent.domain.dto.vocabulary.VocabularyStudyResponse;
 import com.chandler.learning.agent.domain.entity.vocabulary.EnglishVocabularyStudyRecord;
+import com.chandler.learning.agent.domain.enums.AiInvocationScene;
 import com.chandler.learning.agent.domain.enums.LearningScene;
 import com.chandler.learning.agent.domain.enums.SystemLogType;
 import com.chandler.learning.agent.domain.enums.VocabularyMatchType;
@@ -171,6 +172,7 @@ public class EnglishVocabularyStudyService {
         variables.put("term", normalizedTerm);
 
         AgentChatRequest chatRequest = new AgentChatRequest();
+        chatRequest.setInvocationScene(AiInvocationScene.VOCABULARY_CARD_SINGLE);
         chatRequest.setAgentCode(resolveAgentCode(request));
         chatRequest.setTemplateCode(resolveTemplateCode(request));
         chatRequest.setModelConfigId(request.getModelConfigId());

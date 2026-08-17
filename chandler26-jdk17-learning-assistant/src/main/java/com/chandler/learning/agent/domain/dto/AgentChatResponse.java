@@ -1,5 +1,6 @@
 package com.chandler.learning.agent.domain.dto;
 
+import com.chandler.learning.agent.domain.enums.AiInvocationScene;
 import io.swagger.v3.oas.annotations.media.Schema;
 import lombok.Data;
 
@@ -13,6 +14,8 @@ public class AgentChatResponse {
     private Long sessionId;
 
     private String agentCode;
+
+    private AiInvocationScene invocationScene;
 
     private String modelProvider;
 

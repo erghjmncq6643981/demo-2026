@@ -515,6 +515,7 @@ public final class LearningConstants {
         public static final String AI_MODEL_NAME_MISSING = "AI_MODEL_NAME_MISSING";
         public static final String AI_MODEL_CALL_FAILED = "AI_MODEL_CALL_FAILED";
         public static final String AI_MODEL_BALANCE_INSUFFICIENT = "AI_MODEL_BALANCE_INSUFFICIENT";
+        public static final String AI_INVOCATION_SCENE_INVALID = "AI_INVOCATION_SCENE_INVALID";
         public static final String AI_RESPONSE_PARSE_FAILED = "AI_RESPONSE_PARSE_FAILED";
         public static final String AGENT_NOT_FOUND = "AGENT_NOT_FOUND";
         public static final String AGENT_DISABLED = "AGENT_DISABLED";

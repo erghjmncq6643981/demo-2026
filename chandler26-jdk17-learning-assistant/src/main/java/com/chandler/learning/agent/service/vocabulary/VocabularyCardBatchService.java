@@ -13,6 +13,7 @@ import com.chandler.learning.agent.domain.entity.learning.LearningWordProgress;
 import com.chandler.learning.agent.domain.entity.vocabulary.EnglishVocabularyStudyRecord;
 import com.chandler.learning.agent.domain.entity.vocabulary.VocabularyCardGenerationJob;
 import com.chandler.learning.agent.domain.entity.vocabulary.VocabularyCardGenerationJobItem;
+import com.chandler.learning.agent.domain.enums.AiInvocationScene;
 import com.chandler.learning.agent.domain.enums.LearningScene;
 import com.chandler.learning.agent.domain.enums.SystemLogType;
 import com.chandler.learning.agent.exception.LearningAssistantException;
@@ -222,6 +223,7 @@ public class VocabularyCardBatchService {
         Map<String, Object> variables = new HashMap<>();
         variables.put("terms", terms);
         AgentChatRequest request = new AgentChatRequest();
+        request.setInvocationScene(AiInvocationScene.VOCABULARY_CARD_BATCH);
         request.setAgentCode(LearningConstants.VOCABULARY_AGENT_CODE);
         request.setTemplateCode(LearningConstants.VOCABULARY_BATCH_TEMPLATE_CODE);
         request.setTitle(LearningScene.ENGLISH_VOCABULARY.getTitle());

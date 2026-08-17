@@ -1,5 +1,6 @@
 package com.chandler.learning.agent.domain.dto;
 
+import com.chandler.learning.agent.domain.enums.AiInvocationScene;
 import lombok.Data;
 
 import java.util.List;
@@ -9,6 +10,8 @@ import java.util.List;
  */
 @Data
 public class ModelChatRequest {
+
+    private AiInvocationScene invocationScene;
 
     private String provider;
 

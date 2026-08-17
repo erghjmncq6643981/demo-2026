@@ -22,6 +22,7 @@ import {
 } from '/src/shared/vocabulary.js'
 import { createWordbookTransferFeature } from '/src/features/wordbook/transfer.js'
 import { createWordbookArticleFeature } from '/src/features/wordbook/article.js'
+import { createScenePlanFeature } from '/src/features/scene-plan/scene-plan.js'
 import { createProfileFeature } from '/src/features/profile/profile.js'
 import { createSpeechFeature } from '/src/features/speech/speech.js'
 import { createStudyFeature } from '/src/features/study/study.js'
@@ -33,6 +34,7 @@ let profileFeature
 let studyFeature
 let reviewFeature
 let articleFeature
+let scenePlanFeature
 const services = createAppServices({ state, elements })
 const {
   request,
@@ -49,6 +51,7 @@ const profile = createFeatureFacade(() => profileFeature)
 const studyFacade = createFeatureFacade(() => studyFeature)
 const review = createFeatureFacade(() => reviewFeature)
 const article = createFeatureFacade(() => articleFeature)
+const scenePlan = createFeatureFacade(() => scenePlanFeature)
 
 const speechFeature = createSpeechFeature({
   state,
@@ -80,6 +83,20 @@ articleFeature = createWordbookArticleFeature({
   speakSentence,
 })
 
+scenePlanFeature = createScenePlanFeature({
+  state,
+  elements,
+  request,
+  setLoading,
+  toast,
+  logEvent,
+  confirmAction,
+  escapeHtml,
+  sameId,
+  speakSentence,
+  loadWordbooks: profile.loadWordbooks,
+})
+
 const {
   updateAuthView,
   syncSidebarState,
@@ -109,6 +126,8 @@ const {
   loadWordbookEntries: profile.loadWordbookEntries,
   loadArticleWords: article.loadArticleWords,
   loadArticleHistory: article.loadArticleHistory,
+  loadSceneData: scenePlan.loadSceneData,
+  clearSceneData: scenePlan.clearSceneData,
   renderProfileMetrics: profile.renderProfileMetrics,
   renderActivityHeatmap: profile.renderActivityHeatmap,
   renderWordbooks: profile.renderWordbooks,
@@ -304,6 +323,32 @@ bindAppEvents({
   closeArticleStudyModal: article.closeArticleStudyModal,
   generateArticlePreview: article.generateArticlePreview,
   saveArticleStudy: article.saveArticleStudy,
+  loadSceneData: scenePlan.loadSceneData,
+  changeSceneWordbook: scenePlan.changeSceneWordbook,
+  openVocabularyImport: scenePlan.openVocabularyImport,
+  closeVocabularyImport: scenePlan.closeVocabularyImport,
+  startVocabularyImport: scenePlan.startVocabularyImport,
+  loadImportReview: scenePlan.loadImportReview,
+  changeImportSearch: scenePlan.changeImportSearch,
+  confirmAllWarnings: scenePlan.confirmAllWarnings,
+  previousImportPage: scenePlan.previousImportPage,
+  nextImportPage: scenePlan.nextImportPage,
+  publishVocabularyImport: scenePlan.publishVocabularyImport,
+  openScenePlanModal: scenePlan.openScenePlanModal,
+  closeScenePlanModal: scenePlan.closeScenePlanModal,
+  createScenePlan: scenePlan.createScenePlan,
+  changeScenePlanCatalog: scenePlan.changePlanCatalog,
+  completeCurrentUnit: scenePlan.completeCurrentUnit,
+  generateNextUnit: scenePlan.generateNextUnit,
+  generateSceneCards: scenePlan.generateCards,
+  speakCurrentScene: scenePlan.speakCurrentScene,
+  startSceneLearning: scenePlan.startLearning,
+  showSceneChallengeWords: scenePlan.showChallengeWords,
+  startSceneChallenge: scenePlan.startChallenge,
+  backToSceneReading: scenePlan.backToReading,
+  backToSceneOverview: scenePlan.backToPlanOverview,
+  changeSceneCalendarRange: scenePlan.changeCalendarRange,
+  changeSelectedScenePlan: scenePlan.changeSelectedPlan,
   openWordbookModal: profile.openWordbookModal,
   closeWordbookModal: profile.closeWordbookModal,
   createWordbook: profile.createWordbook,

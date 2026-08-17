@@ -35,6 +35,32 @@ export function bindAppEvents(ctx) {
     updateAccountPasswordStrength,
     loadWordbookEntries,
     changeArticleWordbook,
+    loadSceneData,
+    changeSceneWordbook,
+    openVocabularyImport,
+    closeVocabularyImport,
+    startVocabularyImport,
+    loadImportReview,
+    changeImportSearch,
+    confirmAllWarnings,
+    previousImportPage,
+    nextImportPage,
+    publishVocabularyImport,
+    openScenePlanModal,
+    closeScenePlanModal,
+    createScenePlan,
+    changeScenePlanCatalog,
+    completeCurrentUnit,
+    generateNextUnit,
+    generateSceneCards,
+    speakCurrentScene,
+    startSceneLearning,
+    showSceneChallengeWords,
+    startSceneChallenge,
+    backToSceneReading,
+    backToSceneOverview,
+    changeSceneCalendarRange,
+    changeSelectedScenePlan,
     loadArticleWords,
     loadArticleHistory,
     renderArticleWords,
@@ -139,6 +165,8 @@ elements.accountNewPasswordInput?.addEventListener('input', updateAccountPasswor
 elements.saveAccountProfileBtn.addEventListener('click', saveAccountProfile)
 elements.saveAccountSecurityBtn.addEventListener('click', saveAccountSecurity)
 elements.reloadWordbookEntriesBtn.addEventListener('click', loadWordbookEntries)
+elements.openVocabularyImportBtn?.addEventListener('click', openVocabularyImport)
+elements.openProfileScenePlanModalBtn?.addEventListener('click', openScenePlanModal)
 elements.reloadWordbookViewBtn.addEventListener('click', loadWordbookEntries)
 elements.openWordbookModalBtn.addEventListener('click', () => openWordbookModal())
 elements.closeWordbookModalBtn.addEventListener('click', closeWordbookModal)
@@ -179,6 +207,41 @@ elements.articleHistorySearchInput?.addEventListener('input', () => {
   state.articleHistoryFilter = elements.articleHistorySearchInput.value.trim()
   renderArticleHistory()
 })
+elements.sceneWordbookSelect?.addEventListener('change', () => changeSceneWordbook())
+elements.sceneReloadBtn?.addEventListener('click', loadSceneData)
+elements.openScenePlanModalBtn?.addEventListener('click', openScenePlanModal)
+elements.closeVocabularyImportBtn?.addEventListener('click', closeVocabularyImport)
+elements.vocabularyImportModal?.addEventListener('click', (event) => {
+  if (event.target === elements.vocabularyImportModal) closeVocabularyImport()
+})
+elements.startVocabularyImportBtn?.addEventListener('click', startVocabularyImport)
+elements.vocabularyWarningOnly?.addEventListener('change', () => loadImportReview())
+elements.vocabularyImportKeyword?.addEventListener('input', changeImportSearch)
+elements.vocabularyBatchConfirmBtn?.addEventListener('click', confirmAllWarnings)
+elements.vocabularyReloadReviewBtn?.addEventListener('click', () => loadImportReview())
+elements.vocabularyPrevPageBtn?.addEventListener('click', previousImportPage)
+elements.vocabularyNextPageBtn?.addEventListener('click', nextImportPage)
+elements.publishVocabularyImportBtn?.addEventListener('click', publishVocabularyImport)
+elements.closeScenePlanModalBtn?.addEventListener('click', closeScenePlanModal)
+elements.scenePlanModal?.addEventListener('click', (event) => {
+  if (event.target === elements.scenePlanModal) closeScenePlanModal()
+})
+elements.createScenePlanBtn?.addEventListener('click', createScenePlan)
+elements.sceneCatalogSelect?.addEventListener('change', changeScenePlanCatalog)
+elements.sceneCompleteUnitBtn?.addEventListener('click', completeCurrentUnit)
+elements.sceneNextUnitBtn?.addEventListener('click', generateNextUnit)
+elements.sceneOverviewNextUnitBtn?.addEventListener('click', generateNextUnit)
+elements.sceneGenerateCardsBtn?.addEventListener('click', generateSceneCards)
+elements.sceneSpeakBtn?.addEventListener('click', speakCurrentScene)
+elements.scenePlanSelect?.addEventListener('change', () => changeSelectedScenePlan(elements.scenePlanSelect.value))
+document.querySelectorAll('[data-calendar-range]').forEach((button) => {
+  button.addEventListener('click', () => changeSceneCalendarRange(button.dataset.calendarRange))
+})
+elements.sceneStartLearningBtn?.addEventListener('click', startSceneLearning)
+elements.sceneBackToPlanBtn?.addEventListener('click', backToSceneOverview)
+elements.sceneVocabularyChallengeBtn?.addEventListener('click', showSceneChallengeWords)
+elements.sceneChallengeBackBtn?.addEventListener('click', backToSceneReading)
+elements.sceneChallengeStartBtn?.addEventListener('click', startSceneChallenge)
 elements.articleClearSelectionBtn?.addEventListener('click', clearArticleSelection)
 elements.articleGenerateBtn?.addEventListener('click', openArticleStudyModal)
 elements.closeArticleStudyModalBtn?.addEventListener('click', closeArticleStudyModal)

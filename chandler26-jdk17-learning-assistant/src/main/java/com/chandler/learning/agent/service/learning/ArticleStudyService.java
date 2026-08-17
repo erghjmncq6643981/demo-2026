@@ -14,6 +14,7 @@ import com.chandler.learning.agent.domain.entity.learning.LearningWordbook;
 import com.chandler.learning.agent.domain.entity.learning.LearningWordbookEntry;
 import com.chandler.learning.agent.domain.enums.ArticleDifficulty;
 import com.chandler.learning.agent.domain.enums.ArticleWordCountRange;
+import com.chandler.learning.agent.domain.enums.AiInvocationScene;
 import com.chandler.learning.agent.domain.enums.LearningScene;
 import com.chandler.learning.agent.domain.enums.ReviewStatus;
 import com.chandler.learning.agent.domain.enums.SystemLogType;
@@ -188,6 +189,7 @@ public class ArticleStudyService {
         variables.put("remark", StrUtil.blankToDefault(remark, "无特别备注"));
 
         AgentChatRequest chatRequest = new AgentChatRequest();
+        chatRequest.setInvocationScene(AiInvocationScene.ARTICLE_STUDY_MATERIAL);
         chatRequest.setAgentCode(resolveAgentCode(request));
         chatRequest.setTemplateCode(resolveTemplateCode(request));
         chatRequest.setModelConfigId(request.getModelConfigId());

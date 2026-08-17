@@ -91,6 +91,7 @@ CREATE TABLE IF NOT EXISTS ai_model_call_record (
     id BIGINT NOT NULL COMMENT '主键',
     session_id BIGINT DEFAULT NULL COMMENT '会话 ID',
     agent_code VARCHAR(50) DEFAULT NULL COMMENT 'Agent 编码',
+    invocation_scene_code VARCHAR(64) NOT NULL DEFAULT 'general_chat' COMMENT 'AI 调用场景编码',
     provider VARCHAR(50) NOT NULL COMMENT '模型供应商',
     model_name VARCHAR(100) NOT NULL COMMENT '模型名称',
     request_json JSON COMMENT '请求 JSON，不包含 Authorization',
@@ -105,6 +106,7 @@ CREATE TABLE IF NOT EXISTS ai_model_call_record (
     PRIMARY KEY (id),
     KEY idx_ai_model_call_session (session_id),
     KEY idx_ai_model_call_agent (agent_code),
+    KEY idx_ai_model_call_invocation_scene (invocation_scene_code, create_time),
     KEY idx_ai_model_call_provider (provider),
     KEY idx_ai_model_call_create_time (create_time)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci COMMENT='AI 模型调用记录';

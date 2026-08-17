@@ -1,5 +1,6 @@
 package com.chandler.learning.agent.domain.dto;
 
+import com.chandler.learning.agent.domain.enums.AiInvocationScene;
 import io.swagger.v3.oas.annotations.media.Schema;
 import jakarta.validation.constraints.NotBlank;
 import lombok.Data;
@@ -30,6 +31,9 @@ public class AgentChatRequest {
 
     @Schema(description = "学习场景编码，例如 english_vocabulary")
     private String sceneCode;
+
+    @Schema(description = "本次 AI 调用的具体业务场景，未传时为 general_chat")
+    private AiInvocationScene invocationScene;
 
     @Schema(description = "指定模型配置 ID，可选")
     private Long modelConfigId;

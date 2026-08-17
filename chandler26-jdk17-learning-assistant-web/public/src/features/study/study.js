@@ -113,6 +113,7 @@ export function createStudyFeature(ctx) {
         method: 'POST',
         body: JSON.stringify({
           agentCode: elements.agentSelect.value,
+          invocationScene: 'vocabulary_follow_up',
           modelConfigId: elements.studyModelSelect.value || null,
           sessionId: state.currentSessionId,
           message,

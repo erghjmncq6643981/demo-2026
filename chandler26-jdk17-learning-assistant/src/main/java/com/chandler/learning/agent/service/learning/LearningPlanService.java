@@ -23,6 +23,7 @@ import com.chandler.learning.agent.domain.entity.learning.LearningWordbookEntry;
 import com.chandler.learning.agent.domain.entity.vocabulary.VocabularyCatalog;
 import com.chandler.learning.agent.domain.entity.vocabulary.VocabularyCatalogEntry;
 import com.chandler.learning.agent.domain.entity.vocabulary.VocabularyCatalogVersion;
+import com.chandler.learning.agent.domain.enums.AiInvocationScene;
 import com.chandler.learning.agent.domain.enums.LearningScene;
 import com.chandler.learning.agent.domain.enums.SystemLogType;
 import com.chandler.learning.agent.exception.LearningAssistantException;
@@ -530,6 +531,7 @@ public class LearningPlanService {
         variables.put("completed_scenes", completedScenes);
 
         AgentChatRequest request = new AgentChatRequest();
+        request.setInvocationScene(AiInvocationScene.VOCABULARY_SCENE_UNIT);
         request.setAgentCode(LearningConstants.VOCABULARY_PLAN_AGENT_CODE);
         request.setTemplateCode(LearningConstants.VOCABULARY_PLAN_TEMPLATE_CODE);
         request.setSessionId(plan.getAiSessionId());
