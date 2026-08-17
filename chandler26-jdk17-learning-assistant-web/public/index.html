@@ -181,7 +181,6 @@
                   </div>
                   <div class="inline-actions">
                     <button class="secondary-button compact" id="reloadWordbookEntriesBtn" type="button">刷新</button>
-                    <button class="secondary-button compact" id="openVocabularyImportBtn" type="button">导入公共词本</button>
                     <button class="primary-button compact-primary" id="openWordbookModalBtn" type="button">新增单词本</button>
                   </div>
                 </div>
@@ -191,6 +190,9 @@
                     <div>
                       <p class="eyebrow">Public Vocabulary</p>
                       <h3>公共词本导入记录</h3>
+                    </div>
+                    <div class="inline-actions">
+                      <button class="secondary-button compact" id="openVocabularyImportBtn" type="button">导入公共词本</button>
                     </div>
                   </div>
                   <div id="sceneImportList" class="scene-import-list empty">暂无导入记录</div>
@@ -372,13 +374,24 @@
                     <p class="eyebrow">Plan Preview</p>
                     <h3 id="sceneOverviewTitle">选择学习计划</h3>
                     <p id="sceneOverviewSummary">通过日历了解近期学习量，再开始当前场景。</p>
+                    <div id="scenePlanMetaBar" class="scene-plan-meta-bar hidden" style="margin-top: 8px; font-size: 13px; color: var(--text-secondary); display: flex; gap: 16px;">
+                      <span>时间：<strong id="scenePlanDatesText" style="color: var(--text-primary);">未设置</strong></span>
+                      <span>状态：<strong id="scenePlanStatusText" style="color: var(--text-primary);">-</strong></span>
+                    </div>
                   </div>
                   <div class="scene-overview-actions">
                     <span class="mini-pill" id="sceneOverviewProgress">0 / 0 词</span>
+                    <button class="secondary-button compact hidden" id="scenePlanPauseBtn" type="button">暂停</button>
+                    <button class="primary-button compact-primary hidden" id="scenePlanResumeBtn" type="button">启动/恢复</button>
+                    <button class="danger-button compact hidden" id="scenePlanCancelBtn" type="button">取消计划</button>
                     <button class="secondary-button compact hidden" id="sceneOverviewNextUnitBtn" type="button">生成下一个场景</button>
                     <button class="primary-button compact-primary" id="sceneStartLearningBtn" type="button" disabled>开始学习</button>
                   </div>
                   <div id="sceneCalendar" class="scene-calendar empty">选择计划后查看学习日历</div>
+                  <div id="sceneOverviewUnitsContainer" class="scene-overview-units-container hidden">
+                    <h4 class="section-title">场景学习计划</h4>
+                    <div id="sceneOverviewUnitsList" class="scene-overview-units-list"></div>
+                  </div>
                 </section>
 
                 <div class="scene-learning-stage hidden" id="sceneLearningStage">
@@ -654,7 +667,13 @@
         </div>
 
         <section class="vocabulary-import-form">
-          <label>Markdown 文件<input id="vocabularyImportFile" type="file" accept=".md,text/markdown,text/plain" /></label>
+          <label for="vocabularyImportFile" class="file-upload-label">
+            Markdown 文件
+            <input id="vocabularyImportFile" class="sr-only" type="file" accept=".md,text/markdown,text/plain" />
+            <div class="file-upload-trigger">
+              <span id="fileUploadPlaceholder">选择 Markdown 文件</span>
+            </div>
+          </label>
           <label>词表名称<input id="vocabularyImportName" placeholder="例如：自考英语（二）词汇" /></label>
           <label>
             数据源类型
@@ -666,8 +685,10 @@
             </select>
           </label>
           <label>词本说明<input id="vocabularyImportPurpose" placeholder="例如：自考英语（二）考试大纲词汇" /></label>
-          <select class="hidden" id="vocabularyImportWordbook" aria-hidden="true"></select>
-          <button class="primary-button compact-primary" id="startVocabularyImportBtn" type="button">解析词表</button>
+          <div class="import-form-actions">
+            <button class="primary-button compact-primary" id="startVocabularyImportBtn" type="button">解析词表</button>
+            <button class="secondary-button compact hidden" id="saveVocabularyImportMetadataBtn" type="button">保存信息</button>
+          </div>
         </section>
 
         <section class="vocabulary-review-section hidden" id="vocabularyReviewSection">
@@ -677,7 +698,7 @@
           </div>
           <div class="vocabulary-review-tools">
             <label class="switch-line compact-switch">
-              <input id="vocabularyWarningOnly" type="checkbox" checked />
+              <input id="vocabularyWarningOnly" type="checkbox" />
               <span>只看疑似断词</span>
             </label>
             <label class="entry-prefix-field">
@@ -719,7 +740,7 @@
         <div class="panel-heading">
           <div>
             <p class="eyebrow">Learning Plan</p>
-            <h3>新建学习计划</h3>
+            <h3 id="scenePlanModalTitle">新建学习计划</h3>
           </div>
           <button class="icon-button" id="closeScenePlanModalBtn" type="button" title="关闭" aria-label="关闭">×</button>
         </div>
@@ -729,6 +750,74 @@
           <label class="full-row">学习目标<textarea id="scenePlanPurposeInput" rows="4" placeholder="例如：三个月后参加自考英语（二），高频动词需要会拼写，其余单词达到阅读中能识别"></textarea></label>
           <select class="hidden" id="scenePlanWordbookSelect" aria-hidden="true"></select>
           <label>AI 模型<select id="scenePlanModelSelect"></select></label>
+          <label id="scenePlanStatusField" class="hidden">计划状态
+            <select id="scenePlanStatusSelect">
+              <option value="not_started">未开始</option>
+              <option value="active">学习中</option>
+              <option value="paused">已暂停</option>
+              <option value="cancelled">已取消</option>
+            </select>
+          </label>
+          <label>开始时间
+            <div class="datetime-picker" id="scenePlanStartTimePicker" data-placeholder="选择开始时间">
+              <input type="hidden" id="scenePlanStartTimeInput" />
+              <button class="datetime-picker-trigger" type="button">
+                <span class="datetime-picker-label placeholder">选择开始时间</span>
+                <svg class="datetime-picker-icon" viewBox="0 0 24 24"><path d="M19 4h-1V2h-2v2H8V2H6v2H5c-1.1 0-2 .9-2 2v14c0 1.1.9 2 2 2h14c1.1 0 2-.9 2-2V6c0-1.1-.9-2-2-2zm0 16H5V10h14v10zm0-12H5V6h14v2z" fill="currentColor"/></svg>
+              </button>
+              <div class="datetime-picker-popover hidden">
+                <div class="datetime-picker-header">
+                  <button class="datetime-picker-nav prev" type="button">&lt;</button>
+                  <span class="datetime-picker-title"></span>
+                  <button class="datetime-picker-nav next" type="button">&gt;</button>
+                </div>
+                <div class="datetime-picker-weekdays">
+                  <span>一</span><span>二</span><span>三</span><span>四</span><span>五</span><span>六</span><span>日</span>
+                </div>
+                <div class="datetime-picker-days"></div>
+                <div class="datetime-picker-time">
+                  <span>时间</span>
+                  <select class="datetime-picker-hour"></select>
+                  <span>:</span>
+                  <select class="datetime-picker-minute"></select>
+                </div>
+                <div class="datetime-picker-footer">
+                  <button class="secondary-button compact datetime-picker-clear" type="button">清除</button>
+                  <button class="primary-button compact-primary datetime-picker-now" type="button">现在</button>
+                </div>
+              </div>
+            </div>
+          </label>
+          <label>结束时间
+            <div class="datetime-picker" id="scenePlanEndTimePicker" data-placeholder="选择结束时间">
+              <input type="hidden" id="scenePlanEndTimeInput" />
+              <button class="datetime-picker-trigger" type="button">
+                <span class="datetime-picker-label placeholder">选择结束时间</span>
+                <svg class="datetime-picker-icon" viewBox="0 0 24 24"><path d="M19 4h-1V2h-2v2H8V2H6v2H5c-1.1 0-2 .9-2 2v14c0 1.1.9 2 2 2h14c1.1 0 2-.9 2-2V6c0-1.1-.9-2-2-2zm0 16H5V10h14v10zm0-12H5V6h14v2z" fill="currentColor"/></svg>
+              </button>
+              <div class="datetime-picker-popover hidden">
+                <div class="datetime-picker-header">
+                  <button class="datetime-picker-nav prev" type="button">&lt;</button>
+                  <span class="datetime-picker-title"></span>
+                  <button class="datetime-picker-nav next" type="button">&gt;</button>
+                </div>
+                <div class="datetime-picker-weekdays">
+                  <span>一</span><span>二</span><span>三</span><span>四</span><span>五</span><span>六</span><span>日</span>
+                </div>
+                <div class="datetime-picker-days"></div>
+                <div class="datetime-picker-time">
+                  <span>时间</span>
+                  <select class="datetime-picker-hour"></select>
+                  <span>:</span>
+                  <select class="datetime-picker-minute"></select>
+                </div>
+                <div class="datetime-picker-footer">
+                  <button class="secondary-button compact datetime-picker-clear" type="button">清除</button>
+                  <button class="primary-button compact-primary datetime-picker-now" type="button">现在</button>
+                </div>
+              </div>
+            </div>
+          </label>
         </div>
         <div class="modal-actions">
           <button class="primary-button compact-primary" id="createScenePlanBtn" type="button">创建计划</button>

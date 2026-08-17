@@ -6,6 +6,7 @@ import com.chandler.learning.agent.domain.dto.vocabulary.VocabularyImportBatchCo
 import com.chandler.learning.agent.domain.dto.vocabulary.VocabularyImportEntryResponse;
 import com.chandler.learning.agent.domain.dto.vocabulary.VocabularyImportEntryUpdateRequest;
 import com.chandler.learning.agent.domain.dto.vocabulary.VocabularyImportPublishRequest;
+import com.chandler.learning.agent.domain.dto.vocabulary.VocabularyImportMetadataUpdateRequest;
 import com.chandler.learning.agent.domain.dto.vocabulary.VocabularyImportResponse;
 import com.chandler.learning.agent.domain.dto.vocabulary.VocabularyCatalogResponse;
 import com.chandler.learning.agent.domain.dto.vocabulary.VocabularyMarkdownImportRequest;
@@ -117,8 +118,10 @@ public class VocabularyImportService {
         job.setUpdateTime(now);
         importJobMapper.insert(job);
 
+        List<VocabularyCatalogEntry> batchList = new java.util.ArrayList<>();
         for (MarkdownVocabularyParser.ParsedVocabulary item : parsed) {
             VocabularyCatalogEntry entry = new VocabularyCatalogEntry();
+            entry.setId(com.baomidou.mybatisplus.core.toolkit.IdWorker.getId());
             entry.setCatalogId(catalog.getId());
             entry.setCatalogVersionId(version.getId());
             entry.setSourceOrder(item.sourceOrder());
@@ -133,10 +136,21 @@ public class VocabularyImportService {
                     ? LearningConstants.VocabularyImport.REVIEW_PENDING
                     : LearningConstants.VocabularyImport.REVIEW_NOT_REQUIRED);
             entry.setPublished(false);
-            entry.setDeleted(false);
+            entry.setCreateBy(userId);
+            entry.setUpdateBy(userId);
             entry.setCreateTime(now);
             entry.setUpdateTime(now);
-            catalogEntryMapper.insert(entry);
+            entry.setDeleted(false);
+            entry.setVersion(LearningConstants.ZERO);
+
+            batchList.add(entry);
+            if (batchList.size() >= 500) {
+                catalogEntryMapper.insertBatch(batchList);
+                batchList.clear();
+            }
+        }
+        if (!batchList.isEmpty()) {
+            catalogEntryMapper.insertBatch(batchList);
         }
 
         systemLogService.record(userId, SystemLogType.VOCABULARY_IMPORT, "导入 Markdown 词表",
@@ -267,6 +281,46 @@ public class VocabularyImportService {
         log.info("用户「{}」批量确认了词表导入任务 {} 中的 {} 个疑似断词",
                 userDisplayNameService.userName(userId), jobId, pending.size());
         return detail(userId, jobId, true, null,
+                LearningConstants.VocabularyImport.DEFAULT_PAGE,
+                LearningConstants.VocabularyImport.DEFAULT_PAGE_SIZE);
+    }
+
+    /**
+     * 删除词表导入记录（级联软删除任务、词表、版本和词条）。
+     */
+    @Transactional(rollbackFor = Exception.class)
+    public void delete(Long userId, Long jobId) {
+        VocabularyImportJob job = requireJob(userId, jobId);
+        importJobMapper.deleteById(jobId);
+        catalogMapper.deleteById(job.getCatalogId());
+        versionMapper.deleteById(job.getCatalogVersionId());
+        catalogEntryMapper.delete(new LambdaQueryWrapper<VocabularyCatalogEntry>()
+                .eq(VocabularyCatalogEntry::getCatalogVersionId, job.getCatalogVersionId()));
+        systemLogService.record(userId, SystemLogType.VOCABULARY_IMPORT, "删除导入词表记录",
+                "任务ID: " + jobId + "，对应的公共词本及词条已软删除");
+        log.info("用户「{}」删除了词表导入历史，任务ID = {}", userDisplayNameService.userName(userId), jobId);
+    }
+
+    /**
+     * 更新未发布的词表导入任务的元数据。
+     */
+    @Transactional(rollbackFor = Exception.class)
+    public VocabularyImportResponse updateMetadata(Long userId, Long jobId, VocabularyImportMetadataUpdateRequest request) {
+        VocabularyImportJob job = requireReviewingJob(userId, jobId);
+        VocabularyCatalog catalog = requireCatalog(userId, job.getCatalogId());
+        LocalDateTime now = LocalDateTime.now();
+
+        catalog.setName(request.getCatalogName().trim());
+        catalog.setLearningPurpose(trimToNull(request.getLearningPurpose()));
+        catalog.setExamType(normalizeSourceType(request.getSourceType(), null));
+        catalog.setUpdateTime(now);
+        catalogMapper.updateById(catalog);
+
+        job.setUpdateTime(now);
+        importJobMapper.updateById(job);
+
+        log.info("用户「{}」更新了词表导入任务 {} 的元数据", userDisplayNameService.userName(userId), jobId);
+        return detail(userId, jobId, false, null,
                 LearningConstants.VocabularyImport.DEFAULT_PAGE,
                 LearningConstants.VocabularyImport.DEFAULT_PAGE_SIZE);
     }

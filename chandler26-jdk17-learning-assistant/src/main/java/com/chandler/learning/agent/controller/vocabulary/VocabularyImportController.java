@@ -4,6 +4,7 @@ import com.chandler.learning.agent.domain.dto.vocabulary.VocabularyImportBatchCo
 import com.chandler.learning.agent.domain.dto.vocabulary.VocabularyImportEntryResponse;
 import com.chandler.learning.agent.domain.dto.vocabulary.VocabularyImportEntryUpdateRequest;
 import com.chandler.learning.agent.domain.dto.vocabulary.VocabularyImportPublishRequest;
+import com.chandler.learning.agent.domain.dto.vocabulary.VocabularyImportMetadataUpdateRequest;
 import com.chandler.learning.agent.domain.dto.vocabulary.VocabularyImportResponse;
 import com.chandler.learning.agent.domain.dto.vocabulary.VocabularyCatalogResponse;
 import com.chandler.learning.agent.domain.dto.vocabulary.VocabularyMarkdownImportRequest;
@@ -15,6 +16,7 @@ import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
+import org.springframework.web.bind.annotation.DeleteMapping;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
@@ -106,5 +108,24 @@ public class VocabularyImportController {
             @Valid @RequestBody VocabularyImportPublishRequest request) {
         LearningUser user = authService.requireUser(authorization);
         return importService.publish(user.getId(), jobId, request);
+    }
+
+    @PutMapping("/{jobId}")
+    @Operation(summary = "更新词表导入元数据")
+    public VocabularyImportResponse updateMetadata(
+            @RequestHeader(value = "Authorization", required = false) String authorization,
+            @PathVariable Long jobId,
+            @Valid @RequestBody VocabularyImportMetadataUpdateRequest request) {
+        LearningUser user = authService.requireUser(authorization);
+        return importService.updateMetadata(user.getId(), jobId, request);
+    }
+
+    @DeleteMapping("/{jobId}")
+    @Operation(summary = "删除词表导入记录")
+    public void delete(
+            @RequestHeader(value = "Authorization", required = false) String authorization,
+            @PathVariable Long jobId) {
+        LearningUser user = authService.requireUser(authorization);
+        importService.delete(user.getId(), jobId);
     }
 }

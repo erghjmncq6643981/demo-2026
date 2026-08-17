@@ -40,6 +40,7 @@ export function bindAppEvents(ctx) {
     openVocabularyImport,
     closeVocabularyImport,
     startVocabularyImport,
+    saveVocabularyImportMetadata,
     loadImportReview,
     changeImportSearch,
     confirmAllWarnings,
@@ -61,6 +62,9 @@ export function bindAppEvents(ctx) {
     backToSceneOverview,
     changeSceneCalendarRange,
     changeSelectedScenePlan,
+    pauseScenePlan,
+    resumeScenePlan,
+    cancelScenePlan,
     loadArticleWords,
     loadArticleHistory,
     renderArticleWords,
@@ -215,6 +219,14 @@ elements.vocabularyImportModal?.addEventListener('click', (event) => {
   if (event.target === elements.vocabularyImportModal) closeVocabularyImport()
 })
 elements.startVocabularyImportBtn?.addEventListener('click', startVocabularyImport)
+elements.saveVocabularyImportMetadataBtn?.addEventListener('click', saveVocabularyImportMetadata)
+elements.vocabularyImportFile?.addEventListener('change', () => {
+  const file = elements.vocabularyImportFile.files?.[0]
+  const placeholder = document.getElementById('fileUploadPlaceholder')
+  if (placeholder) {
+    placeholder.textContent = file ? file.name : '选择 Markdown 文件'
+  }
+})
 elements.vocabularyWarningOnly?.addEventListener('change', () => loadImportReview())
 elements.vocabularyImportKeyword?.addEventListener('input', changeImportSearch)
 elements.vocabularyBatchConfirmBtn?.addEventListener('click', confirmAllWarnings)
@@ -227,6 +239,9 @@ elements.scenePlanModal?.addEventListener('click', (event) => {
   if (event.target === elements.scenePlanModal) closeScenePlanModal()
 })
 elements.createScenePlanBtn?.addEventListener('click', createScenePlan)
+elements.scenePlanPauseBtn?.addEventListener('click', pauseScenePlan)
+elements.scenePlanResumeBtn?.addEventListener('click', resumeScenePlan)
+elements.scenePlanCancelBtn?.addEventListener('click', cancelScenePlan)
 elements.sceneCatalogSelect?.addEventListener('change', changeScenePlanCatalog)
 elements.sceneCompleteUnitBtn?.addEventListener('click', completeCurrentUnit)
 elements.sceneNextUnitBtn?.addEventListener('click', generateNextUnit)

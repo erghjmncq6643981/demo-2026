@@ -28,6 +28,10 @@ public class LearningPlan extends BaseEntity {
 
     private String learningPurpose;
 
+    private java.time.LocalDateTime startTime;
+
+    private java.time.LocalDateTime endTime;
+
     private String status;
 
     private Integer totalCatalogWords;

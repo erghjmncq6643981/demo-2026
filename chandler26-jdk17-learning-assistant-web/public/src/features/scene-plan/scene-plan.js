@@ -1,5 +1,6 @@
 import { hideModal, showModal } from '/src/shared/modal.js'
 import { normalizeWordbookId, syncCurrentWordbookId } from '/src/shared/wordbook.js'
+import { initDatetimePicker } from '/src/shared/datetime-picker.js'
 
 const TIER_LABELS = {
   core: '核心',
@@ -9,9 +10,11 @@ const TIER_LABELS = {
 }
 
 const PLAN_STATUS_LABELS = {
+  not_started: '未开始',
   active: '学习中',
   completed: '已完成',
   paused: '已暂停',
+  cancelled: '已取消',
 }
 
 const IMPORT_STATUS_LABELS = {
@@ -547,7 +550,10 @@ export function createScenePlanFeature(ctx) {
         <div class="profile-plan-progress">
           <strong>${number(plan.learnedCoreWords)} / ${number(plan.totalCatalogWords)}</strong>
           <span>已掌握词汇 · ${number(plan.completedUnitCount)} 个场景</span>
-          <button class="secondary-button compact" type="button" data-open-scene-plan="${escapeHtml(plan.id)}">进入挑战</button>
+          <div class="plan-actions" style="display: flex; gap: 8px; align-items: center; margin-top: 10px;">
+            <button class="secondary-button compact" type="button" data-open-scene-plan="${escapeHtml(plan.id)}">进入挑战</button>
+            <button class="icon-action-button" type="button" data-scene-plan-edit="${escapeHtml(plan.id)}" title="修改计划" aria-label="修改计划">✎</button>
+          </div>
         </div>
       </article>
     `).join('')
@@ -560,6 +566,12 @@ export function createScenePlanFeature(ctx) {
         })
       })
     }
+    elements.profileLearningPlanList.querySelectorAll('[data-scene-plan-edit]').forEach((button) => {
+      button.addEventListener('click', (e) => {
+        e.stopPropagation()
+        openScenePlanModal(button.dataset.scenePlanEdit)
+      })
+    })
   }
 
   function renderImportList() {
@@ -573,17 +585,35 @@ export function createScenePlanFeature(ctx) {
     elements.sceneImportList.className = 'scene-import-list'
     elements.sceneImportList.innerHTML = imports
       .map((item) => `
-        <button class="scene-import-item" type="button" data-import-job-id="${escapeHtml(item.jobId)}">
-          <span class="scene-item-topline">
-            <strong>${escapeHtml(item.catalogName)}</strong>
-            <small>${escapeHtml(IMPORT_STATUS_LABELS[item.status] || item.status)}</small>
-          </span>
-          <span>${escapeHtml(SOURCE_LABELS[item.sourceType] || item.sourceType || '公共词本')} · ${number(item.totalCount)} 词 · ${number(item.pendingWarningCount)} 个待确认</span>
-        </button>
+        <div class="scene-import-card ${sameId(item.jobId, state.currentVocabularyImport?.jobId) ? 'active' : ''}">
+          <button class="scene-import-main" type="button" data-import-job-id="${escapeHtml(item.jobId)}">
+            <span class="scene-item-topline">
+              <strong>${escapeHtml(item.catalogName)}</strong>
+              <small class="import-status ${item.status}">${escapeHtml(IMPORT_STATUS_LABELS[item.status] || item.status)}</small>
+            </span>
+            <span>${escapeHtml(SOURCE_LABELS[item.sourceType] || item.sourceType || '公共词本')} · ${number(item.totalCount)} 词 · ${number(item.pendingWarningCount)} 个待确认</span>
+          </button>
+          <div class="row-actions">
+            <button class="icon-action-button" type="button" data-import-job-edit="${escapeHtml(item.jobId)}" title="编辑词表" aria-label="编辑词表">✎</button>
+            <button class="danger-icon-button" type="button" data-import-job-delete="${escapeHtml(item.jobId)}" title="删除导入记录">×</button>
+          </div>
+        </div>
       `)
       .join('')
     elements.sceneImportList.querySelectorAll('[data-import-job-id]').forEach((button) => {
       button.addEventListener('click', () => openImportReview(button.dataset.importJobId))
+    })
+    elements.sceneImportList.querySelectorAll('[data-import-job-edit]').forEach((button) => {
+      button.addEventListener('click', (e) => {
+        e.stopPropagation()
+        openImportReview(button.dataset.importJobEdit)
+      })
+    })
+    elements.sceneImportList.querySelectorAll('[data-import-job-delete]').forEach((button) => {
+      button.addEventListener('click', async (e) => {
+        e.stopPropagation()
+        await deleteImportJob(button.dataset.importJobDelete)
+      })
     })
   }
 
@@ -639,13 +669,12 @@ export function createScenePlanFeature(ctx) {
     if (!plan) {
       elements.sceneCalendar.className = 'scene-calendar empty'
       elements.sceneCalendar.textContent = '选择计划后查看学习日历'
+      renderOverviewUnits(null)
       return
     }
     const range = state.sceneCalendarRange || 'week'
     const today = new Date()
     today.setHours(12, 0, 0, 0)
-    const currentUnit = activeUnit(plan)
-    const currentCount = number(currentUnit?.coreWordCount) || 8
     let dates = []
     if (range === 'day') {
       dates = [today]
@@ -657,8 +686,42 @@ export function createScenePlanFeature(ctx) {
       dates = Array.from({ length: 7 }, (_, index) => addDays(today, index))
     }
     const todayKey = dateKey(today)
+
+    // Calculate suggestedDailyCount based on remaining unassigned words & days
+    const generatedCoreCount = asArray(plan.units).reduce((sum, u) => sum + number(u.coreWordCount), 0)
+    const remainingToGenerate = Math.max(0, number(plan.totalCatalogWords) - generatedCoreCount)
+    let suggestedDailyCount = 8
+    if (plan.endTime) {
+      const planStart = plan.startTime ? new Date(plan.startTime) : today
+      const planEnd = new Date(plan.endTime)
+      const startForRemaining = today > planStart ? today : planStart
+      startForRemaining.setHours(12, 0, 0, 0)
+      planEnd.setHours(12, 0, 0, 0)
+      const diffTime = planEnd.getTime() - startForRemaining.getTime()
+      const remainingDays = diffTime <= 0 ? 1 : Math.ceil(diffTime / (1000 * 3600 * 24)) + 1
+      if (remainingDays > 0) {
+        suggestedDailyCount = Math.ceil(remainingToGenerate / remainingDays)
+      }
+    } else {
+      const currentUnit = activeUnit(plan)
+      suggestedDailyCount = number(currentUnit?.coreWordCount) || 8
+    }
+    suggestedDailyCount = Math.max(8, Math.min(20, suggestedDailyCount))
+
+    let totalScheduled = 0
+    dates.forEach((date) => {
+      const key = dateKey(date)
+      if (key < todayKey) return
+      const unit = asArray(plan.units).find((u) => {
+        if (u.recommendedDate) return u.recommendedDate === key
+        if (u.generatedTime) return u.generatedTime.split('T')[0] === key
+        return false
+      })
+      totalScheduled += unit ? number(unit.coreWordCount) : suggestedDailyCount
+    })
+
     const remainingWords = Math.max(0, number(plan.totalCatalogWords) - number(plan.learnedCoreWords))
-    const totalScheduled = dates.reduce((sum, date) => sum + (dateKey(date) < todayKey ? 0 : currentCount), 0)
+
     elements.sceneCalendar.className = `scene-calendar ${range}`
     elements.sceneCalendar.innerHTML = `
       <div class="scene-calendar-summary">
@@ -670,12 +733,28 @@ export function createScenePlanFeature(ctx) {
           const key = dateKey(date)
           const isToday = key === todayKey
           const isPast = key < todayKey
-          const count = isPast ? 0 : Math.min(currentCount, remainingWords)
+          
+          const unit = asArray(plan.units).find((u) => {
+            if (u.recommendedDate) return u.recommendedDate === key
+            if (u.generatedTime) return u.generatedTime.split('T')[0] === key
+            return false
+          })
+
+          let count = 0
+          let label = '建议词汇'
+          if (unit) {
+            count = number(unit.coreWordCount)
+            label = unit.status === 'completed' ? '已完成' : '当前场景'
+          } else {
+            count = isPast ? 0 : suggestedDailyCount
+            label = isPast ? '已跳过' : (isToday ? '待生成' : '建议词汇')
+          }
+
           return `
             <div class="scene-calendar-day ${isToday ? 'today' : ''} ${isPast ? 'past' : ''}">
               <span>${range === 'day' ? '今天' : formatCalendarDate(date, range === 'week')}</span>
               <strong>${count}</strong>
-              <small>${isPast ? '已完成' : isToday ? '当前场景' : '建议词汇'}</small>
+              <small>${label}</small>
             </div>
           `
         }).join('')}
@@ -683,6 +762,135 @@ export function createScenePlanFeature(ctx) {
     `
     document.querySelectorAll('[data-calendar-range]').forEach((button) => {
       button.classList.toggle('active', button.dataset.calendarRange === range)
+    })
+    renderOverviewUnits(plan)
+  }
+
+  function renderOverviewUnits(plan) {
+    if (!elements.sceneOverviewUnitsContainer || !elements.sceneOverviewUnitsList) return
+
+    if (!plan) {
+      elements.sceneOverviewUnitsContainer.classList.add('hidden')
+      return
+    }
+
+    elements.sceneOverviewUnitsContainer.classList.remove('hidden')
+    const range = state.sceneCalendarRange || 'week'
+    const today = new Date()
+    today.setHours(12, 0, 0, 0)
+    let dates = []
+
+    if (range === 'day') {
+      dates = [today]
+    } else if (range === 'month') {
+      const firstDay = new Date(today.getFullYear(), today.getMonth(), 1, 12)
+      const totalDays = new Date(today.getFullYear(), today.getMonth() + 1, 0).getDate()
+      dates = Array.from({ length: totalDays }, (_, index) => addDays(firstDay, index))
+    } else {
+      dates = Array.from({ length: 7 }, (_, index) => addDays(today, index))
+    }
+
+    const todayKey = dateKey(today)
+
+    // Only use explicitly-set plan dates for filtering — do NOT fall back to createTime
+    const planStartKey = plan.startTime ? plan.startTime.split('T')[0] : null
+    const planEndKey = plan.endTime ? plan.endTime.split('T')[0] : null
+    const hasPlanDateRange = !!(planStartKey || planEndKey)
+
+    // Filter dates to plan range when a range is defined
+    if (hasPlanDateRange) {
+      dates = dates.filter((date) => {
+        const key = dateKey(date)
+        if (planStartKey && key < planStartKey) return false
+        if (planEndKey && key > planEndKey) return false
+        return true
+      })
+    } else {
+      // No date range: only keep dates that have a generated unit
+      dates = dates.filter((date) => {
+        const key = dateKey(date)
+        return asArray(plan.units).some((u) => {
+          if (u.recommendedDate) return u.recommendedDate === key
+          if (u.generatedTime) return u.generatedTime.split('T')[0] === key
+          return false
+        })
+      })
+    }
+
+    if (!dates.length) {
+      // Hide the container entirely when there's nothing to show
+      elements.sceneOverviewUnitsContainer.classList.add('hidden')
+      return
+    }
+    elements.sceneOverviewUnitsList.innerHTML = dates.map((date) => {
+      const key = dateKey(date)
+      const isPast = key < todayKey
+      const isToday = key === todayKey
+      
+      const unit = asArray(plan.units).find((u) => {
+        if (u.recommendedDate) return u.recommendedDate === key
+        if (u.generatedTime) return u.generatedTime.split('T')[0] === key
+        return false
+      })
+
+      return `
+        <div class="scene-overview-unit-row ${isToday ? 'today' : ''} ${isPast ? 'past' : ''}">
+          <div class="unit-date-info">
+            <span class="unit-date">${formatCalendarDate(date, true)}</span>
+            <span class="unit-status-tag ${unit ? 'generated' : 'pending'}">${unit ? (unit.status === 'completed' ? '已完成' : '已生成') : '待生成'}</span>
+          </div>
+          <div class="unit-detail-info">
+            ${unit ? `
+              <strong class="unit-title">${escapeHtml(unit.title || '场景单元')}</strong>
+              <span class="unit-words-count">${number(unit.completedCoreCount)} / ${number(unit.coreWordCount)} 词</span>
+            ` : `
+              <span class="unit-placeholder-text">暂无场景文章</span>
+            `}
+          </div>
+          <div class="unit-action-button">
+            ${unit ? `
+              <button class="primary-button compact-primary" type="button" data-action-learn="${escapeHtml(unit.id)}">
+                ${unit.status === 'completed' ? '回顾场景' : '开始学习'}
+              </button>
+            ` : `
+              <button class="secondary-button compact" type="button" data-action-generate="${escapeHtml(plan.id)}" ${plan.status !== 'active' ? 'disabled' : ''}>
+                生成场景
+              </button>
+            `}
+          </div>
+        </div>
+      `
+    }).join('')
+
+    // Bind event listeners
+    elements.sceneOverviewUnitsList.querySelectorAll('[data-action-learn]').forEach((button) => {
+      button.addEventListener('click', () => {
+        const unitId = button.dataset.actionLearn
+        if (plan) {
+          plan.currentUnitId = unitId
+          renderCurrentScene()
+          startLearning()
+        }
+      })
+    })
+
+    elements.sceneOverviewUnitsList.querySelectorAll('[data-action-generate]').forEach((button) => {
+      button.addEventListener('click', async () => {
+        setButtonLoading(button, true, '生成中...')
+        try {
+          if (state.preview) {
+            toast('设计预览：生成下一个场景')
+          } else {
+            await generateNextUnit()
+          }
+          await loadSceneData({ planId: plan.id })
+          toast('场景生成成功')
+        } catch (error) {
+          toast(`生成场景失败：${error.message}`)
+        } finally {
+          setButtonLoading(button, false)
+        }
+      })
     })
   }
 
@@ -750,6 +958,14 @@ export function createScenePlanFeature(ctx) {
     renderCalendar(state.currentLearningPlan)
   }
 
+  function formatPlanDate(dateStr) {
+    if (!dateStr) return '-'
+    const d = new Date(dateStr)
+    if (isNaN(d.getTime())) return '-'
+    const pad = (n) => String(n).padStart(2, '0')
+    return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())} ${pad(d.getHours())}:${pad(d.getMinutes())}`
+  }
+
   function renderCurrentScene() {
     const plan = state.currentLearningPlan
     const unit = activeUnit(plan)
@@ -758,9 +974,42 @@ export function createScenePlanFeature(ctx) {
     elements.sceneOverviewProgress.textContent = plan
       ? `${number(plan.learnedCoreWords)} / ${number(plan.totalCatalogWords)} 词`
       : '0 / 0 词'
-    elements.sceneStartLearningBtn.disabled = !unit
+
+    // Plan Meta Bar and Transition Buttons
+    if (plan) {
+      elements.scenePlanMetaBar.classList.remove('hidden')
+      const startStr = formatPlanDate(plan.startTime)
+      const endStr = formatPlanDate(plan.endTime)
+      elements.scenePlanDatesText.textContent = `${startStr} 至 ${endStr}`
+      elements.scenePlanStatusText.textContent = PLAN_STATUS_LABELS[plan.status] || plan.status || '-'
+
+      elements.scenePlanPauseBtn.classList.add('hidden')
+      elements.scenePlanResumeBtn.classList.add('hidden')
+      elements.scenePlanCancelBtn.classList.add('hidden')
+
+      if (plan.status === 'not_started') {
+        elements.scenePlanResumeBtn.classList.remove('hidden')
+        elements.scenePlanResumeBtn.textContent = '启动计划'
+        elements.scenePlanCancelBtn.classList.remove('hidden')
+      } else if (plan.status === 'active') {
+        elements.scenePlanPauseBtn.classList.remove('hidden')
+        elements.scenePlanCancelBtn.classList.remove('hidden')
+      } else if (plan.status === 'paused') {
+        elements.scenePlanResumeBtn.classList.remove('hidden')
+        elements.scenePlanResumeBtn.textContent = '恢复计划'
+        elements.scenePlanCancelBtn.classList.remove('hidden')
+      }
+      elements.sceneStartLearningBtn.disabled = !unit || plan.status !== 'active'
+    } else {
+      elements.scenePlanMetaBar.classList.add('hidden')
+      elements.scenePlanPauseBtn.classList.add('hidden')
+      elements.scenePlanResumeBtn.classList.add('hidden')
+      elements.scenePlanCancelBtn.classList.add('hidden')
+      elements.sceneStartLearningBtn.disabled = !unit
+    }
+
     elements.sceneStartLearningBtn.classList.toggle('hidden', !unit)
-    elements.sceneOverviewNextUnitBtn.classList.toggle('hidden', !plan?.canGenerateNext || Boolean(unit))
+    elements.sceneOverviewNextUnitBtn.classList.toggle('hidden', !plan?.canGenerateNext || Boolean(unit) || plan?.status !== 'active')
     renderCalendar(plan)
     applySceneStage(state.sceneChallengeStage || 'overview')
     if (!plan || !unit) {
@@ -782,7 +1031,7 @@ export function createScenePlanFeature(ctx) {
       elements.sceneAssessmentStage.textContent = '未开始'
       elements.sceneGenerateCardsBtn.classList.add('hidden')
       elements.sceneCompleteUnitBtn.classList.add('hidden')
-      elements.sceneNextUnitBtn.classList.toggle('hidden', !plan?.canGenerateNext)
+      elements.sceneNextUnitBtn.classList.toggle('hidden', !plan?.canGenerateNext || plan?.status !== 'active')
       renderChallengeWords([])
       return
     }
@@ -795,9 +1044,9 @@ export function createScenePlanFeature(ctx) {
     elements.sceneUnitTitle.textContent = unit.title || '未命名场景'
     elements.sceneUnitSummary.textContent = unit.summary || plan.learningPurpose || '通过当前场景学习相关词汇'
     elements.sceneUnitProgress.textContent = `${number(unit.completedCoreCount)} / ${number(unit.coreWordCount)}`
-    elements.sceneGenerateCardsBtn.classList.toggle('hidden', !missingCards)
-    elements.sceneCompleteUnitBtn.classList.toggle('hidden', number(unit.completedCoreCount) < number(unit.coreWordCount))
-    elements.sceneNextUnitBtn.classList.toggle('hidden', !plan.canGenerateNext)
+    elements.sceneGenerateCardsBtn.classList.toggle('hidden', !missingCards || plan.status !== 'active')
+    elements.sceneCompleteUnitBtn.classList.toggle('hidden', unit.status === 'completed' || number(unit.completedCoreCount) < number(unit.coreWordCount) || plan.status !== 'active')
+    elements.sceneNextUnitBtn.classList.toggle('hidden', !plan.canGenerateNext || plan.status !== 'active')
     renderLearningText(unit, coreWords)
     renderCoreWords(coreWords)
     renderRelatedWords(unit)
@@ -907,8 +1156,8 @@ export function createScenePlanFeature(ctx) {
             <p>${escapeHtml(word.contextMeaning || word.meaning || '暂无释义')}</p>
           </div>
           <div class="scene-related-side">
-            <span class="mini-pill">${escapeHtml(TIER_LABELS[word.tier] || word.tier)}</span>
-            ${['extended', 'supplementary'].includes(word.tier) ? `<button class="secondary-button compact" type="button" data-promote-word="${escapeHtml(word.id)}">加入核心</button>` : ''}
+            ${word.tier !== 'supplementary' ? `<span class="mini-pill">${escapeHtml(TIER_LABELS[word.tier] || word.tier)}</span>` : '<span></span>'}
+            ${['extended', 'supplementary'].includes(word.tier) ? `<button class="icon-action-button" type="button" data-promote-word="${escapeHtml(word.id)}" title="加入核心" aria-label="加入核心">＋</button>` : ''}
           </div>
         </article>
       `)
@@ -1189,7 +1438,7 @@ export function createScenePlanFeature(ctx) {
         const modelConfigId = elements.scenePlanModelSelect?.value || null
         await request(`/api/v1/learning/plans/${encodeURIComponent(plan.id)}/units/next`, {
           method: 'POST',
-          body: JSON.stringify({ modelConfigId: modelConfigId ? Number(modelConfigId) : null }),
+          body: JSON.stringify({ modelConfigId: modelConfigId || null }),
         })
         await selectPlan(plan.id, { quiet: true, keepStage: true })
       }
@@ -1246,6 +1495,25 @@ export function createScenePlanFeature(ctx) {
     elements.vocabularyImportName.value = ''
     elements.vocabularyImportPurpose.value = ''
     elements.vocabularyImportSourceType.value = 'self_study'
+    
+    // Enable inputs
+    elements.vocabularyImportFile.disabled = false
+    elements.vocabularyImportName.disabled = false
+    elements.vocabularyImportSourceType.disabled = false
+    elements.vocabularyImportPurpose.disabled = false
+    
+    // Reset visual file upload text
+    const placeholder = document.getElementById('fileUploadPlaceholder')
+    if (placeholder) {
+      placeholder.textContent = '选择 Markdown 文件'
+    }
+    
+    // Show/hide buttons appropriately
+    elements.startVocabularyImportBtn.classList.remove('hidden')
+    elements.saveVocabularyImportMetadataBtn.classList.add('hidden')
+    elements.startVocabularyImportBtn.disabled = false
+    elements.saveVocabularyImportMetadataBtn.disabled = false
+    
     elements.vocabularyReviewSection.classList.add('hidden')
     showModal(elements.vocabularyImportModal)
   }
@@ -1335,7 +1603,7 @@ export function createScenePlanFeature(ctx) {
 
   async function openImportReview(jobId) {
     state.vocabularyImportPage = 1
-    elements.vocabularyWarningOnly.checked = true
+    elements.vocabularyWarningOnly.checked = false
     elements.vocabularyImportKeyword.value = ''
     renderSourceOptions()
     showModal(elements.vocabularyImportModal)
@@ -1391,6 +1659,30 @@ export function createScenePlanFeature(ctx) {
     const current = state.currentVocabularyImport
     if (!current) return
     const published = current.status === 'published'
+    
+    // Populate metadata inputs
+    elements.vocabularyImportName.value = current.catalogName || ''
+    elements.vocabularyImportSourceType.value = current.sourceType || 'self_study'
+    elements.vocabularyImportPurpose.value = current.learningPurpose || ''
+    
+    // Enable/disable metadata inputs based on published status
+    elements.vocabularyImportFile.disabled = published
+    elements.vocabularyImportName.disabled = published
+    elements.vocabularyImportSourceType.disabled = published
+    elements.vocabularyImportPurpose.disabled = published
+    
+    // Update visual file upload text
+    const placeholder = document.getElementById('fileUploadPlaceholder')
+    if (placeholder) {
+      placeholder.textContent = current.fileName || '已导入文件'
+    }
+    
+    // Toggle save metadata/import buttons visibility and disabled status
+    elements.startVocabularyImportBtn.classList.toggle('hidden', current.jobId != null)
+    elements.saveVocabularyImportMetadataBtn.classList.toggle('hidden', current.jobId == null || published)
+    elements.startVocabularyImportBtn.disabled = published
+    elements.saveVocabularyImportMetadataBtn.disabled = published
+    
     elements.vocabularyImportSummary.textContent = `${number(current.totalCount)} 个词 · ${escapeHtml(current.catalogName || '')}`
     elements.vocabularyWarningSummary.textContent = `${number(current.pendingWarningCount)} 个待确认`
     elements.vocabularyWarningSummary.classList.toggle('ok', number(current.pendingWarningCount) === 0)
@@ -1533,11 +1825,107 @@ export function createScenePlanFeature(ctx) {
     }
   }
 
-  function openScenePlanModal() {
+  let startPickerInited = false
+  let endPickerInited = false
+
+  function openScenePlanModal(planId = null) {
     renderSourceOptions()
-    const selected = state.publicVocabularyCatalogs.find((item) => String(item.catalogVersionId) === elements.sceneCatalogSelect?.value)
-    elements.scenePlanNameInput.value = selected ? `${selected.catalogName}学习计划` : ''
-    elements.scenePlanPurposeInput.value = selected?.learningPurpose || ''
+    
+    const startPickerEl = document.getElementById('scenePlanStartTimePicker')
+    const endPickerEl = document.getElementById('scenePlanEndTimePicker')
+
+    if (startPickerEl && !startPickerInited) {
+      initDatetimePicker(startPickerEl)
+      startPickerInited = true
+    }
+    if (endPickerEl && !endPickerInited) {
+      initDatetimePicker(endPickerEl)
+      endPickerInited = true
+    }
+
+    state.currentPlanEditId = planId
+
+    if (planId) {
+      const plan = asArray(state.learningPlans).find((item) => sameId(item.id, planId))
+      if (!plan) return
+
+      if (elements.scenePlanModalTitle) {
+        elements.scenePlanModalTitle.textContent = '编辑学习计划'
+      }
+      elements.createScenePlanBtn.textContent = '保存修改'
+
+      if (elements.sceneCatalogSelect) {
+        elements.sceneCatalogSelect.value = String(plan.catalogVersionId || '')
+        elements.sceneCatalogSelect.disabled = true
+      }
+
+      elements.scenePlanNameInput.value = plan.name || ''
+      elements.scenePlanPurposeInput.value = plan.learningPurpose || ''
+      elements.scenePlanModelSelect.value = plan.modelConfigId || ''
+
+      if (elements.scenePlanStartTimeInput) {
+        elements.scenePlanStartTimeInput.value = plan.startTime || ''
+        const labelEl = startPickerEl?.querySelector('.datetime-picker-label')
+        if (labelEl) {
+          const val = plan.startTime
+          labelEl.textContent = val ? formatPlanDate(val) : (startPickerEl.dataset.placeholder || '选择开始时间')
+          labelEl.classList.toggle('placeholder', !val)
+        }
+      }
+      if (elements.scenePlanEndTimeInput) {
+        elements.scenePlanEndTimeInput.value = plan.endTime || ''
+        const labelEl = endPickerEl?.querySelector('.datetime-picker-label')
+        if (labelEl) {
+          const val = plan.endTime
+          labelEl.textContent = val ? formatPlanDate(val) : (endPickerEl.dataset.placeholder || '选择结束时间')
+          labelEl.classList.toggle('placeholder', !val)
+        }
+      }
+
+      if (elements.scenePlanStatusField) {
+        elements.scenePlanStatusField.classList.remove('hidden')
+      }
+      if (elements.scenePlanStatusSelect) {
+        elements.scenePlanStatusSelect.value = plan.status || 'active'
+      }
+
+    } else {
+      if (elements.scenePlanModalTitle) {
+        elements.scenePlanModalTitle.textContent = '新建学习计划'
+      }
+      elements.createScenePlanBtn.textContent = '创建计划'
+
+      if (elements.sceneCatalogSelect) {
+        elements.sceneCatalogSelect.disabled = false
+      }
+
+      const selected = state.publicVocabularyCatalogs.find((item) => String(item.catalogVersionId) === elements.sceneCatalogSelect?.value)
+      elements.scenePlanNameInput.value = selected ? `${selected.catalogName}学习计划` : ''
+      elements.scenePlanPurposeInput.value = selected?.learningPurpose || ''
+      elements.scenePlanModelSelect.value = ''
+
+      if (elements.scenePlanStartTimeInput) {
+        elements.scenePlanStartTimeInput.value = ''
+        const labelEl = startPickerEl?.querySelector('.datetime-picker-label')
+        if (labelEl) {
+          labelEl.textContent = startPickerEl.dataset.placeholder || '选择开始时间'
+          labelEl.classList.add('placeholder')
+        }
+      }
+      if (elements.scenePlanEndTimeInput) {
+        elements.scenePlanEndTimeInput.value = ''
+        const labelEl = endPickerEl?.querySelector('.datetime-picker-label')
+        if (labelEl) {
+          labelEl.textContent = endPickerEl.dataset.placeholder || '选择结束时间'
+          labelEl.classList.add('placeholder')
+        }
+      }
+
+      if (elements.scenePlanStatusField) {
+        elements.scenePlanStatusField.classList.add('hidden')
+      }
+    }
+
     showModal(elements.scenePlanModal)
   }
 
@@ -1556,11 +1944,67 @@ export function createScenePlanFeature(ctx) {
     const catalogVersionId = elements.sceneCatalogSelect.value
     const name = elements.scenePlanNameInput.value.trim()
     const learningPurpose = elements.scenePlanPurposeInput.value.trim()
-    if (!catalogVersionId || !name || !learningPurpose) {
-      toast('请选择公共词本，并填写计划名称和学习目标')
+    if (!name || !learningPurpose) {
+      toast('请填写计划名称和学习目标')
       return
     }
-    setButtonLoading(elements.createScenePlanBtn, true, '生成首个场景中...')
+    if (!state.currentPlanEditId && !catalogVersionId) {
+      toast('请选择公共词本')
+      return
+    }
+    const startTime = elements.scenePlanStartTimeInput?.value || null
+    const endTime = elements.scenePlanEndTimeInput?.value || null
+
+    if (state.currentPlanEditId) {
+      setButtonLoading(elements.createScenePlanBtn, true, '保存中...')
+      try {
+        const modelConfigId = elements.scenePlanModelSelect.value
+        const status = elements.scenePlanStatusSelect?.value || null
+        let plan
+        if (state.preview) {
+          plan = state.learningPlans.find((item) => sameId(item.id, state.currentPlanEditId))
+          if (plan) {
+            plan.name = name
+            plan.learningPurpose = learningPurpose
+            plan.startTime = startTime
+            plan.endTime = endTime
+            plan.modelConfigId = modelConfigId || null
+            if (status) plan.status = status
+          }
+        } else {
+          plan = await request(`/api/v1/learning/plans/${encodeURIComponent(state.currentPlanEditId)}`, {
+            method: 'PUT',
+            body: JSON.stringify({
+              name,
+              learningPurpose,
+              modelConfigId: modelConfigId || null,
+              startTime,
+              endTime,
+              status,
+            }),
+          })
+        }
+        if (plan) {
+          if (sameId(state.currentLearningPlan?.id, plan.id)) {
+            state.currentLearningPlan = plan
+          }
+          await loadSceneData({ planId: plan.id })
+        }
+        closeScenePlanModal()
+        toast('学习计划已更新')
+      } catch (error) {
+        logEvent('error', '更新学习计划失败', error.message)
+        toast(`更新计划失败：${error.message}`)
+      } finally {
+        setButtonLoading(elements.createScenePlanBtn, false)
+      }
+      return
+    }
+
+    const isFuture = startTime && new Date(startTime) > new Date()
+    const btnLoadingText = isFuture ? '创建中...' : '生成首个场景中...'
+
+    setButtonLoading(elements.createScenePlanBtn, true, btnLoadingText)
     try {
       const modelConfigId = elements.scenePlanModelSelect.value
       let plan
@@ -1571,6 +2015,9 @@ export function createScenePlanFeature(ctx) {
           catalog,
           name,
           learningPurpose,
+          startTime,
+          endTime,
+          status: isFuture ? 'not_started' : 'active',
           learnedCoreWords: 0,
           completedUnitCount: 0,
         })
@@ -1579,11 +2026,13 @@ export function createScenePlanFeature(ctx) {
         plan = await request('/api/v1/learning/plans', {
           method: 'POST',
           body: JSON.stringify({
-            catalogVersionId: Number(catalogVersionId),
+            catalogVersionId: catalogVersionId,
             name,
             learningPurpose,
-            modelConfigId: modelConfigId ? Number(modelConfigId) : null,
-            generateFirstUnit: true,
+            modelConfigId: modelConfigId || null,
+            generateFirstUnit: !isFuture,
+            startTime,
+            endTime,
           }),
         })
       }
@@ -1591,7 +2040,7 @@ export function createScenePlanFeature(ctx) {
       await loadSceneData({ planId: plan.id })
       closeScenePlanModal()
       logEvent('learning', '创建学习计划', name)
-      toast('学习计划和首个场景已生成')
+      toast(isFuture ? '学习计划已成功创建（未开始）' : '学习计划和首个场景已生成')
     } catch (error) {
       logEvent('error', '创建场景学习计划失败', error.message)
       toast(`创建计划失败：${error.message}`)
@@ -1626,6 +2075,130 @@ export function createScenePlanFeature(ctx) {
     loadImportReview()
   }
 
+  async function deleteImportJob(jobId) {
+    const job = asArray(state.vocabularyImports).find((item) => sameId(item.jobId, jobId))
+    if (!job) return
+    const confirmed = await confirmAction({
+      title: '删除导入记录',
+      message: `确认删除公共词表导入记录「${job.catalogName}」？删除后对应的公共词本及词条关系将被清除。`,
+    })
+    if (!confirmed) return
+    try {
+      await request(`/api/v1/vocabulary-imports/${encodeURIComponent(jobId)}`, { method: 'DELETE' })
+      toast('导入记录已删除')
+      if (sameId(state.currentVocabularyImport?.jobId, jobId)) {
+        state.currentVocabularyImport = null
+        elements.vocabularyReviewSection.classList.add('hidden')
+        closeVocabularyImport()
+      }
+      await reloadImportHistory()
+    } catch (error) {
+      logEvent('error', '删除导入记录失败', error.message)
+      toast(`删除导入记录失败：${error.message}`)
+    }
+  }
+
+  async function saveVocabularyImportMetadata() {
+    const current = state.currentVocabularyImport
+    if (!current || !current.jobId) return
+    const catalogName = elements.vocabularyImportName.value.trim()
+    const sourceType = elements.vocabularyImportSourceType.value
+    const learningPurpose = elements.vocabularyImportPurpose.value.trim()
+    if (!catalogName) {
+      toast('请输入词表名称')
+      return
+    }
+    setButtonLoading(elements.saveVocabularyImportMetadataBtn, true, '保存中...')
+    try {
+      if (state.preview) {
+        current.catalogName = catalogName
+        current.sourceType = sourceType
+        current.learningPurpose = learningPurpose
+        toast('设计预览：元数据已保存')
+      } else {
+        const result = await request(`/api/v1/vocabulary-imports/${encodeURIComponent(current.jobId)}`, {
+          method: 'PUT',
+          body: JSON.stringify({
+            catalogName,
+            sourceType,
+            learningPurpose,
+          }),
+        })
+        state.currentVocabularyImport = result
+      }
+      toast('词表信息已更新')
+      await reloadImportHistory()
+      renderImportReview()
+    } catch (error) {
+      logEvent('error', '保存词表信息失败', error.message)
+      toast(`保存词表信息失败：${error.message}`)
+    } finally {
+      setButtonLoading(elements.saveVocabularyImportMetadataBtn, false)
+    }
+  }
+
+  async function pausePlan() {
+    const plan = state.currentLearningPlan
+    if (!plan) return
+    try {
+      if (state.preview) {
+        plan.status = 'paused'
+        toast('设计预览：计划已暂停')
+      } else {
+        const result = await request(`/api/v1/learning/plans/${encodeURIComponent(plan.id)}/pause`, { method: 'POST' })
+        state.currentLearningPlan = result
+      }
+      await loadSceneData({ planId: plan.id })
+      toast('学习计划已暂停')
+    } catch (error) {
+      logEvent('error', '暂停学习计划失败', error.message)
+      toast(`暂停失败：${error.message}`)
+    }
+  }
+
+  async function resumePlan() {
+    const plan = state.currentLearningPlan
+    if (!plan) return
+    try {
+      if (state.preview) {
+        plan.status = 'active'
+        toast('设计预览：计划已启动/恢复')
+      } else {
+        const result = await request(`/api/v1/learning/plans/${encodeURIComponent(plan.id)}/resume`, { method: 'POST' })
+        state.currentLearningPlan = result
+      }
+      await loadSceneData({ planId: plan.id })
+      toast('学习计划已启动/恢复')
+    } catch (error) {
+      logEvent('error', '恢复学习计划失败', error.message)
+      toast(`恢复失败：${error.message}`)
+    }
+  }
+
+  async function cancelPlan() {
+    const plan = state.currentLearningPlan
+    if (!plan) return
+    const confirmed = await confirmAction({
+      title: '取消学习计划',
+      message: `确认取消学习计划「${plan.name}」？取消后将不能继续学习或恢复。`,
+    })
+    if (!confirmed) return
+    try {
+      if (state.preview) {
+        plan.status = 'cancelled'
+        toast('设计预览：计划已取消')
+      } else {
+        const result = await request(`/api/v1/learning/plans/${encodeURIComponent(plan.id)}/cancel`, { method: 'POST' })
+        state.currentLearningPlan = result
+      }
+      await loadSceneData({ planId: plan.id })
+      toast('学习计划已取消')
+    } catch (error) {
+      logEvent('error', '取消学习计划失败', error.message)
+      toast(`取消失败：${error.message}`)
+    }
+  }
+
   return {
     loadSceneData,
     clearSceneData,
@@ -1634,6 +2207,8 @@ export function createScenePlanFeature(ctx) {
     openVocabularyImport,
     closeVocabularyImport,
     startVocabularyImport,
+    deleteImportJob,
+    saveVocabularyImportMetadata,
     loadImportReview,
     openImportReview,
     confirmAllWarnings,
@@ -1656,6 +2231,9 @@ export function createScenePlanFeature(ctx) {
     backToPlanOverview,
     changeCalendarRange,
     changeSelectedPlan,
+    pausePlan,
+    resumePlan,
+    cancelPlan,
     speakCurrentScene: () => speakSentence(activeUnit()?.learningText || ''),
   }
 }

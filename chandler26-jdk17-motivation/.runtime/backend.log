@@ -8,34 +8,30 @@
 ::: (architecture infrastructure) :::
 
 
-2026-05-26T15:22:09.967+08:00  INFO 93175 --- [motivation-platform] [           main] com.chandler.motivation.Application      : Starting Application using Java 21.0.10 with PID 93175 (/Users/chandler/Documents/repository/github/demo-2026/chandler26-jdk17-motivation/target/classes started by chandler in /Users/chandler/Documents/repository/github/demo-2026/chandler26-jdk17-motivation)
-2026-05-26T15:22:09.968+08:00  INFO 93175 --- [motivation-platform] [           main] com.chandler.motivation.Application      : No active profile set, falling back to 1 default profile: "default"
-2026-05-26T15:22:10.674+08:00  INFO 93175 --- [motivation-platform] [           main] o.s.cloud.context.scope.GenericScope     : BeanFactory id=36e53812-4247-3865-816a-12a366caaa13
-2026-05-26T15:22:10.923+08:00  INFO 93175 --- [motivation-platform] [           main] o.s.b.w.embedded.tomcat.TomcatWebServer  : Tomcat initialized with port 17680 (http)
-2026-05-26T15:22:10.932+08:00  INFO 93175 --- [motivation-platform] [           main] o.apache.catalina.core.StandardService   : Starting service [Tomcat]
-2026-05-26T15:22:10.932+08:00  INFO 93175 --- [motivation-platform] [           main] o.apache.catalina.core.StandardEngine    : Starting Servlet engine: [Apache Tomcat/10.1.33]
-2026-05-26T15:22:10.972+08:00  INFO 93175 --- [motivation-platform] [           main] o.a.c.c.C.[Tomcat].[localhost].[/]       : Initializing Spring embedded WebApplicationContext
-2026-05-26T15:22:10.973+08:00  INFO 93175 --- [motivation-platform] [           main] w.s.c.ServletWebServerApplicationContext : Root WebApplicationContext: initialization completed in 980 ms
+2026-08-12T18:02:02.190+08:00  INFO 11872 --- [motivation-platform] [           main] com.chandler.motivation.Application      : Starting Application using Java 21.0.10 with PID 11872 (/Users/chandler/Documents/repository/github/demo-2026/chandler26-jdk17-motivation/target/classes started by chandler in /Users/chandler/Documents/repository/github/demo-2026/chandler26-jdk17-motivation)
+2026-08-12T18:02:02.191+08:00  INFO 11872 --- [motivation-platform] [           main] com.chandler.motivation.Application      : No active profile set, falling back to 1 default profile: "default"
+2026-08-12T18:02:02.915+08:00  INFO 11872 --- [motivation-platform] [           main] o.s.cloud.context.scope.GenericScope     : BeanFactory id=bc9801b1-ba85-34c8-94b5-27176116b2d2
+2026-08-12T18:02:03.147+08:00  INFO 11872 --- [motivation-platform] [           main] o.s.b.w.embedded.tomcat.TomcatWebServer  : Tomcat initialized with port 17680 (http)
+2026-08-12T18:02:03.157+08:00  INFO 11872 --- [motivation-platform] [           main] o.apache.catalina.core.StandardService   : Starting service [Tomcat]
+2026-08-12T18:02:03.157+08:00  INFO 11872 --- [motivation-platform] [           main] o.apache.catalina.core.StandardEngine    : Starting Servlet engine: [Apache Tomcat/10.1.33]
+2026-08-12T18:02:03.211+08:00  INFO 11872 --- [motivation-platform] [           main] o.a.c.c.C.[Tomcat].[localhost].[/]       : Initializing Spring embedded WebApplicationContext
+2026-08-12T18:02:03.212+08:00  INFO 11872 --- [motivation-platform] [           main] w.s.c.ServletWebServerApplicationContext : Root WebApplicationContext: initialization completed in 996 ms
  _ _   |_  _ _|_. ___ _ |    _ 
 | | |\/|_)(_| | |_\  |_)||_|_\ 
      /               |         
                         3.5.12 
-2026-05-26T15:22:11.716+08:00  INFO 93175 --- [motivation-platform] [           main] r$InitializeUserDetailsManagerConfigurer : Global AuthenticationManager configured with UserDetailsService bean with name userDetailsService
-2026-05-26T15:22:11.918+08:00  INFO 93175 --- [motivation-platform] [           main] o.s.b.a.e.web.EndpointLinksResolver      : Exposing 1 endpoint beneath base path '/actuator'
-2026-05-26T15:22:12.009+08:00  INFO 93175 --- [motivation-platform] [           main] m.e.s.MybatisPlusApplicationContextAware : Register ApplicationContext instances org.springframework.boot.web.servlet.context.AnnotationConfigServletWebServerApplicationContext@31c7528f
-2026-05-26T15:22:12.242+08:00  INFO 93175 --- [motivation-platform] [           main] o.s.b.w.embedded.tomcat.TomcatWebServer  : Tomcat started on port 17680 (http) with context path '/'
-2026-05-26T15:22:12.264+08:00  INFO 93175 --- [motivation-platform] [           main] com.chandler.motivation.Application      : Started Application in 2.537 seconds (process running for 2.746)
-2026-05-26T15:22:19.269+08:00  INFO 93175 --- [motivation-platform] [io-17680-exec-1] o.a.c.c.C.[Tomcat].[localhost].[/]       : Initializing Spring DispatcherServlet 'dispatcherServlet'
-2026-05-26T15:22:19.269+08:00  INFO 93175 --- [motivation-platform] [io-17680-exec-1] o.s.web.servlet.DispatcherServlet        : Initializing Servlet 'dispatcherServlet'
-2026-05-26T15:22:19.271+08:00  INFO 93175 --- [motivation-platform] [io-17680-exec-1] o.s.web.servlet.DispatcherServlet        : Completed initialization in 2 ms
-2026-05-26T15:22:19.360+08:00  INFO 93175 --- [motivation-platform] [io-17680-exec-2] com.alibaba.druid.pool.DruidDataSource   : {dataSource-1} inited
-2026-05-26T15:24:01.929+08:00  INFO 93175 --- [motivation-platform] [io-17680-exec-2] c.c.motivation.service.AuthService       : 孩子用户「小星」登录成功
-2026-05-26T15:24:32.093+08:00  INFO 93175 --- [motivation-platform] [io-17680-exec-9] c.c.motivation.service.AuthService       : 家长用户「呈呈妈」登录成功
-2026-05-26T15:33:33.070+08:00  INFO 93175 --- [motivation-platform] [io-17680-exec-3] c.c.motivation.service.AuthService       : 家长用户「呈呈妈」登录成功
-2026-05-26T15:33:49.062+08:00  INFO 93175 --- [motivation-platform] [io-17680-exec-6] c.c.motivation.service.AuthService       : 家长用户「呈呈妈」登录成功
-2026-05-26T15:36:15.864+08:00  INFO 93175 --- [motivation-platform] [io-17680-exec-1] c.c.motivation.service.AuthService       : 孩子用户「小星」登录成功
-2026-05-26T15:37:31.487+08:00  INFO 93175 --- [motivation-platform] [ionShutdownHook] com.alibaba.druid.pool.DruidDataSource   : {dataSource-1} closing ...
-2026-05-26T15:37:31.491+08:00  INFO 93175 --- [motivation-platform] [ionShutdownHook] com.alibaba.druid.pool.DruidDataSource   : {dataSource-1} closed
+2026-08-12T18:02:03.811+08:00  INFO 11872 --- [motivation-platform] [           main] r$InitializeUserDetailsManagerConfigurer : Global AuthenticationManager configured with UserDetailsService bean with name userDetailsService
+2026-08-12T18:02:03.959+08:00  INFO 11872 --- [motivation-platform] [           main] o.s.b.a.e.web.EndpointLinksResolver      : Exposing 1 endpoint beneath base path '/actuator'
+2026-08-12T18:02:04.032+08:00  INFO 11872 --- [motivation-platform] [           main] m.e.s.MybatisPlusApplicationContextAware : Register ApplicationContext instances org.springframework.boot.web.servlet.context.AnnotationConfigServletWebServerApplicationContext@31c7528f
+2026-08-12T18:02:04.244+08:00  INFO 11872 --- [motivation-platform] [           main] o.s.b.w.embedded.tomcat.TomcatWebServer  : Tomcat started on port 17680 (http) with context path '/'
+2026-08-12T18:02:04.259+08:00  INFO 11872 --- [motivation-platform] [           main] com.chandler.motivation.Application      : Started Application in 2.302 seconds (process running for 2.483)
+2026-08-12T18:03:13.577+08:00  INFO 11872 --- [motivation-platform] [io-17680-exec-1] o.a.c.c.C.[Tomcat].[localhost].[/]       : Initializing Spring DispatcherServlet 'dispatcherServlet'
+2026-08-12T18:03:13.577+08:00  INFO 11872 --- [motivation-platform] [io-17680-exec-1] o.s.web.servlet.DispatcherServlet        : Initializing Servlet 'dispatcherServlet'
+2026-08-12T18:03:13.592+08:00  INFO 11872 --- [motivation-platform] [io-17680-exec-1] o.s.web.servlet.DispatcherServlet        : Completed initialization in 15 ms
+2026-08-12T18:04:06.558+08:00  INFO 11872 --- [motivation-platform] [io-17680-exec-6] com.alibaba.druid.pool.DruidDataSource   : {dataSource-1} inited
+2026-08-12T18:04:06.925+08:00  INFO 11872 --- [motivation-platform] [io-17680-exec-6] c.c.motivation.service.AuthService       : 家长用户「多多妈妈」登录成功
+2026-08-13T14:21:23.514+08:00  INFO 11872 --- [motivation-platform] [ionShutdownHook] com.alibaba.druid.pool.DruidDataSource   : {dataSource-1} closing ...
+2026-08-13T14:21:23.535+08:00  INFO 11872 --- [motivation-platform] [ionShutdownHook] com.alibaba.druid.pool.DruidDataSource   : {dataSource-1} closed
 [ERROR] Failed to execute goal org.springframework.boot:spring-boot-maven-plugin:3.3.6:run (default-cli) on project chandler26-jdk17-motivation: Process terminated with exit code: 143 -> [Help 1]
 [ERROR] 
 [ERROR] To see the full stack trace of the errors, re-run Maven with the -e switch.

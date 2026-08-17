@@ -8,6 +8,7 @@ import com.chandler.learning.agent.domain.dto.learning.LearningAssessmentSubmitR
 import com.chandler.learning.agent.domain.dto.learning.LearningAssessmentSubmitResponse;
 import com.chandler.learning.agent.domain.dto.learning.LearningPlanCreateRequest;
 import com.chandler.learning.agent.domain.dto.learning.LearningPlanResponse;
+import com.chandler.learning.agent.domain.dto.learning.LearningPlanUpdateRequest;
 import com.chandler.learning.agent.domain.dto.learning.LearningPlanUnitEntryResponse;
 import com.chandler.learning.agent.domain.dto.learning.LearningPlanUnitResponse;
 import com.chandler.learning.agent.domain.dto.learning.ReviewSubmitRequest;
@@ -122,7 +123,13 @@ public class LearningPlanService {
         plan.setLearningPurpose(StringUtils.hasText(request.getLearningPurpose())
                 ? request.getLearningPurpose().trim()
                 : catalog.getLearningPurpose());
-        plan.setStatus(LearningConstants.ScenePlan.STATUS_ACTIVE);
+        plan.setStartTime(request.getStartTime());
+        plan.setEndTime(request.getEndTime());
+        if (request.getStartTime() != null && request.getStartTime().isAfter(now)) {
+            plan.setStatus(LearningConstants.ScenePlan.STATUS_NOT_STARTED);
+        } else {
+            plan.setStatus(LearningConstants.ScenePlan.STATUS_ACTIVE);
+        }
         plan.setTotalCatalogWords(totalWords);
         plan.setLearnedCoreWords(LearningConstants.ZERO);
         plan.setCompletedUnitCount(LearningConstants.ZERO);
@@ -135,10 +142,82 @@ public class LearningPlanService {
                 plan.getName() + "，词表共 " + totalWords + " 词");
         log.info("用户「{}」基于词表「{}」创建了场景学习计划「{}」，共 {} 个词",
                 userDisplayNameService.userName(userId), catalog.getName(), plan.getName(), totalWords);
-        if (!Boolean.FALSE.equals(request.getGenerateFirstUnit())) {
+        if (LearningConstants.ScenePlan.STATUS_ACTIVE.equals(plan.getStatus())
+                && !Boolean.FALSE.equals(request.getGenerateFirstUnit())) {
             generateNextUnit(userId, plan.getId(), request.getModelConfigId());
         }
         return detail(userId, plan.getId());
+    }
+
+    @Transactional(rollbackFor = Exception.class)
+    public LearningPlanResponse update(Long userId, Long planId, LearningPlanUpdateRequest request) {
+        LearningPlan plan = requirePlan(userId, planId);
+        LocalDateTime now = LocalDateTime.now();
+
+        plan.setName(request.getName().trim());
+        plan.setLearningPurpose(StringUtils.hasText(request.getLearningPurpose()) ? request.getLearningPurpose().trim() : null);
+        plan.setStartTime(request.getStartTime());
+        plan.setEndTime(request.getEndTime());
+
+        if (request.getStatus() != null) {
+            String newStatus = request.getStatus().trim();
+            if (!newStatus.equals(plan.getStatus())) {
+                if (LearningConstants.ScenePlan.STATUS_ACTIVE.equals(newStatus)) {
+                    if (!LearningConstants.ScenePlan.STATUS_PAUSED.equals(plan.getStatus())
+                            && !LearningConstants.ScenePlan.STATUS_NOT_STARTED.equals(plan.getStatus())) {
+                        throw LearningAssistantException.badRequest(
+                                LearningConstants.ErrorCode.LEARNING_PLAN_STATE_ERROR,
+                                "只有暂停或未开始的计划才可以恢复/启动");
+                    }
+                    plan.setStatus(LearningConstants.ScenePlan.STATUS_ACTIVE);
+                    if (plan.getCurrentUnitId() == null) {
+                        try {
+                            generateNextUnit(userId, planId, request.getModelConfigId());
+                        } catch (Exception e) {
+                            log.warn("启动计划生成首个场景失败：{}", e.getMessage());
+                        }
+                    }
+                } else if (LearningConstants.ScenePlan.STATUS_PAUSED.equals(newStatus)) {
+                    if (!LearningConstants.ScenePlan.STATUS_ACTIVE.equals(plan.getStatus())) {
+                        throw LearningAssistantException.badRequest(
+                                LearningConstants.ErrorCode.LEARNING_PLAN_STATE_ERROR,
+                                "只有进行中的计划才可以暂停");
+                    }
+                    plan.setStatus(LearningConstants.ScenePlan.STATUS_PAUSED);
+                } else if (LearningConstants.ScenePlan.STATUS_CANCELLED.equals(newStatus)) {
+                    if (LearningConstants.ScenePlan.STATUS_COMPLETED.equals(plan.getStatus())
+                            || LearningConstants.ScenePlan.STATUS_CANCELLED.equals(plan.getStatus())) {
+                        throw LearningAssistantException.badRequest(
+                                LearningConstants.ErrorCode.LEARNING_PLAN_STATE_ERROR,
+                                "已完成或已取消的计划无法取消");
+                    }
+                    plan.setStatus(LearningConstants.ScenePlan.STATUS_CANCELLED);
+                } else if (LearningConstants.ScenePlan.STATUS_NOT_STARTED.equals(newStatus)) {
+                    if (LearningConstants.ScenePlan.STATUS_COMPLETED.equals(plan.getStatus())
+                            || LearningConstants.ScenePlan.STATUS_CANCELLED.equals(plan.getStatus())) {
+                        throw LearningAssistantException.badRequest(
+                                LearningConstants.ErrorCode.LEARNING_PLAN_STATE_ERROR,
+                                "已完成或已取消的计划无法设为未开始");
+                    }
+                    plan.setStatus(LearningConstants.ScenePlan.STATUS_NOT_STARTED);
+                } else if (LearningConstants.ScenePlan.STATUS_COMPLETED.equals(newStatus)) {
+                    plan.setStatus(LearningConstants.ScenePlan.STATUS_COMPLETED);
+                } else {
+                    throw LearningAssistantException.badRequest(
+                            LearningConstants.ErrorCode.LEARNING_PLAN_STATE_ERROR,
+                            "无效的学习计划状态: " + newStatus);
+                }
+            }
+        }
+
+        plan.setUpdateTime(now);
+        planMapper.updateById(plan);
+
+        systemLogService.record(userId, SystemLogType.LEARNING_PLAN, "修改场景学习计划",
+                plan.getName() + "，状态: " + plan.getStatus());
+        log.info("用户「{}」修改了场景学习计划「{}」，状态 = {}",
+                userDisplayNameService.userName(userId), plan.getName(), plan.getStatus());
+        return detail(userId, planId);
     }
 
     public List<LearningPlanResponse> list(Long userId) {
@@ -173,6 +252,18 @@ public class LearningPlanService {
                     "请先完成当前场景“" + active.getTitle() + "”再生成下一个");
         }
 
+        java.time.LocalDate today = java.time.LocalDate.now();
+        if (plan.getStartTime() != null && today.isBefore(plan.getStartTime().toLocalDate())) {
+            throw LearningAssistantException.badRequest(
+                    LearningConstants.ErrorCode.LEARNING_PLAN_STATE_ERROR,
+                    "学习计划尚未开始，暂不可生成场景");
+        }
+        if (plan.getEndTime() != null && today.isAfter(plan.getEndTime().toLocalDate())) {
+            throw LearningAssistantException.badRequest(
+                    LearningConstants.ErrorCode.LEARNING_PLAN_STATE_ERROR,
+                    "学习计划已超出结束日期，不可继续生成场景");
+        }
+
         List<VocabularyCatalogEntry> candidates = nextCandidates(plan);
         if (candidates.isEmpty()) {
             plan.setStatus(LearningConstants.ScenePlan.STATUS_COMPLETED);
@@ -202,6 +293,7 @@ public class LearningPlanService {
         unit.setCompletedCoreCount(LearningConstants.ZERO);
         unit.setGeneratedTime(now);
         unit.setStartedTime(now);
+        unit.setRecommendedDate(java.time.LocalDate.now());
         unit.setDeleted(false);
         unit.setCreateTime(now);
         unit.setUpdateTime(now);
@@ -524,11 +616,41 @@ public class LearningPlanService {
                 .stream()
                 .map(LearningPlanUnit::getTitle)
                 .toList();
+        int targetWordCount = 8;
+        if (plan.getEndTime() != null) {
+            java.time.LocalDate today = java.time.LocalDate.now();
+            java.time.LocalDate planStart = plan.getStartTime() != null ? plan.getStartTime().toLocalDate() : today;
+            java.time.LocalDate planEnd = plan.getEndTime().toLocalDate();
+            java.time.LocalDate startForRemaining = today.isAfter(planStart) ? today : planStart;
+            
+            long remainingDays = java.time.temporal.ChronoUnit.DAYS.between(startForRemaining, planEnd) + 1;
+            if (remainingDays > 0) {
+                Integer generatedCoreCount = unitMapper.selectList(new LambdaQueryWrapper<LearningPlanUnit>()
+                                .eq(LearningPlanUnit::getPlanId, plan.getId())
+                                .eq(LearningPlanUnit::getDeleted, false))
+                        .stream()
+                        .mapToInt(LearningPlanUnit::getCoreWordCount)
+                        .sum();
+                int remainingToGenerate = Math.max(0, plan.getTotalCatalogWords() - generatedCoreCount);
+                targetWordCount = (int) Math.ceil((double) remainingToGenerate / remainingDays);
+            }
+        } else {
+            List<LearningPlanUnit> units = unitMapper.selectList(new LambdaQueryWrapper<LearningPlanUnit>()
+                    .eq(LearningPlanUnit::getPlanId, plan.getId())
+                    .eq(LearningPlanUnit::getDeleted, false)
+                    .orderByDesc(LearningPlanUnit::getUnitNo));
+            if (!units.isEmpty()) {
+                targetWordCount = units.get(0).getCoreWordCount();
+            }
+        }
+        targetWordCount = Math.max(8, Math.min(20, targetWordCount));
+
         Map<String, Object> variables = new HashMap<>();
         variables.put("learning_purpose", StrUtil.blankToDefault(plan.getLearningPurpose(), "综合英语词汇学习"));
         variables.put("unit_no", unitNo);
         variables.put("candidate_words", words);
         variables.put("completed_scenes", completedScenes);
+        variables.put("target_word_count", targetWordCount);
 
         AgentChatRequest request = new AgentChatRequest();
         request.setInvocationScene(AiInvocationScene.VOCABULARY_SCENE_UNIT);
@@ -705,6 +827,8 @@ public class LearningPlanService {
         response.setWordbookId(plan.getWordbookId());
         response.setName(plan.getName());
         response.setLearningPurpose(plan.getLearningPurpose());
+        response.setStartTime(plan.getStartTime());
+        response.setEndTime(plan.getEndTime());
         response.setStatus(plan.getStatus());
         response.setTotalCatalogWords(plan.getTotalCatalogWords());
         response.setLearnedCoreWords(plan.getLearnedCoreWords());
@@ -1120,6 +1244,68 @@ public class LearningPlanService {
         return LearningAssistantException.badRequest(
                 LearningConstants.ErrorCode.LEARNING_ASSESSMENT_INVALID,
                 message);
+    }
+
+    @Transactional(rollbackFor = Exception.class)
+    public LearningPlanResponse pause(Long userId, Long planId) {
+        LearningPlan plan = requirePlan(userId, planId);
+        if (!LearningConstants.ScenePlan.STATUS_ACTIVE.equals(plan.getStatus())) {
+            throw LearningAssistantException.badRequest(
+                    LearningConstants.ErrorCode.LEARNING_PLAN_STATE_ERROR,
+                    "只有进行中的计划才可以暂停");
+        }
+        plan.setStatus(LearningConstants.ScenePlan.STATUS_PAUSED);
+        plan.setUpdateTime(LocalDateTime.now());
+        planMapper.updateById(plan);
+
+        systemLogService.record(userId, SystemLogType.LEARNING_PLAN, "暂停场景学习计划", plan.getName());
+        log.info("用户「{}」暂停了场景学习计划「{}」", userDisplayNameService.userName(userId), plan.getName());
+        return detail(userId, planId);
+    }
+
+    @Transactional(rollbackFor = Exception.class)
+    public LearningPlanResponse resume(Long userId, Long planId) {
+        LearningPlan plan = requirePlan(userId, planId);
+        if (!LearningConstants.ScenePlan.STATUS_PAUSED.equals(plan.getStatus())
+                && !LearningConstants.ScenePlan.STATUS_NOT_STARTED.equals(plan.getStatus())) {
+            throw LearningAssistantException.badRequest(
+                    LearningConstants.ErrorCode.LEARNING_PLAN_STATE_ERROR,
+                    "只有暂停或未开始的计划才可以恢复/启动");
+        }
+        plan.setStatus(LearningConstants.ScenePlan.STATUS_ACTIVE);
+        plan.setUpdateTime(LocalDateTime.now());
+        planMapper.updateById(plan);
+
+        // 如果未开始的计划首次启动，且当前无生成单元，则自动生成第一个单元
+        if (plan.getCurrentUnitId() == null) {
+            try {
+                generateNextUnit(userId, planId, null);
+            } catch (Exception e) {
+                log.warn("启动计划生成首个场景失败：{}", e.getMessage());
+            }
+        }
+
+        systemLogService.record(userId, SystemLogType.LEARNING_PLAN, "恢复场景学习计划", plan.getName());
+        log.info("用户「{}」恢复了场景学习计划「{}」", userDisplayNameService.userName(userId), plan.getName());
+        return detail(userId, planId);
+    }
+
+    @Transactional(rollbackFor = Exception.class)
+    public LearningPlanResponse cancel(Long userId, Long planId) {
+        LearningPlan plan = requirePlan(userId, planId);
+        if (LearningConstants.ScenePlan.STATUS_COMPLETED.equals(plan.getStatus())
+                || LearningConstants.ScenePlan.STATUS_CANCELLED.equals(plan.getStatus())) {
+            throw LearningAssistantException.badRequest(
+                    LearningConstants.ErrorCode.LEARNING_PLAN_STATE_ERROR,
+                    "已完成或已取消的计划无法取消");
+        }
+        plan.setStatus(LearningConstants.ScenePlan.STATUS_CANCELLED);
+        plan.setUpdateTime(LocalDateTime.now());
+        planMapper.updateById(plan);
+
+        systemLogService.record(userId, SystemLogType.LEARNING_PLAN, "取消场景学习计划", plan.getName());
+        log.info("用户「{}」取消了场景学习计划「{}」", userDisplayNameService.userName(userId), plan.getName());
+        return detail(userId, planId);
     }
 
     private record CandidateWord(Integer sourceOrder, String term, String phonetic, String meaning) {

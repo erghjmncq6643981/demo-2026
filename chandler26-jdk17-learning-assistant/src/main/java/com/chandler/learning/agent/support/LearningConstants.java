@@ -411,9 +411,11 @@ public final class LearningConstants {
      * 场景化学习计划规则。日期只做建议，不参与接口限流或状态校验。
      */
     public static final class ScenePlan {
+        public static final String STATUS_NOT_STARTED = "not_started";
         public static final String STATUS_ACTIVE = "active";
         public static final String STATUS_COMPLETED = "completed";
         public static final String STATUS_PAUSED = "paused";
+        public static final String STATUS_CANCELLED = "cancelled";
         public static final String UNIT_READY = "ready";
         public static final String UNIT_IN_PROGRESS = "in_progress";
         public static final String UNIT_COMPLETED = "completed";
@@ -550,6 +552,7 @@ public final class LearningConstants {
         public static final String LEARNING_PLAN_NO_WORDS = "LEARNING_PLAN_NO_WORDS";
         public static final String LEARNING_SCENE_PARSE_FAILED = "LEARNING_SCENE_PARSE_FAILED";
         public static final String LEARNING_ASSESSMENT_INVALID = "LEARNING_ASSESSMENT_INVALID";
+        public static final String LEARNING_PLAN_STATE_ERROR = "LEARNING_PLAN_STATE_ERROR";
 
         /**
          * 处理 {@code ErrorCode} 相关业务。

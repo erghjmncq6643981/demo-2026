@@ -3,6 +3,7 @@ package com.chandler.learning.agent.controller.learning;
 import com.chandler.learning.agent.domain.dto.learning.LearningAssessmentSubmitRequest;
 import com.chandler.learning.agent.domain.dto.learning.LearningAssessmentSubmitResponse;
 import com.chandler.learning.agent.domain.dto.learning.LearningPlanCreateRequest;
+import com.chandler.learning.agent.domain.dto.learning.LearningPlanUpdateRequest;
 import com.chandler.learning.agent.domain.dto.learning.LearningPlanNextUnitRequest;
 import com.chandler.learning.agent.domain.dto.learning.LearningPlanResponse;
 import com.chandler.learning.agent.domain.dto.learning.LearningPlanUnitEntryResponse;
@@ -20,6 +21,7 @@ import lombok.RequiredArgsConstructor;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
+import org.springframework.web.bind.annotation.PutMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestHeader;
 import org.springframework.web.bind.annotation.RequestMapping;
@@ -49,6 +51,16 @@ public class LearningPlanController {
         return learningPlanService.create(user.getId(), request);
     }
 
+    @PutMapping("/{planId}")
+    @Operation(summary = "更新场景学习计划")
+    public LearningPlanResponse update(
+            @RequestHeader(value = "Authorization", required = false) String authorization,
+            @PathVariable Long planId,
+            @Valid @RequestBody LearningPlanUpdateRequest request) {
+        LearningUser user = authService.requireUser(authorization);
+        return learningPlanService.update(user.getId(), planId, request);
+    }
+
     @GetMapping
     @Operation(summary = "我的场景学习计划")
     public List<LearningPlanResponse> list(
@@ -64,6 +76,32 @@ public class LearningPlanController {
             @PathVariable Long planId) {
         LearningUser user = authService.requireUser(authorization);
         return learningPlanService.detail(user.getId(), planId);
+    }
+    @PostMapping("/{planId}/pause")
+    @Operation(summary = "暂停场景学习计划")
+    public LearningPlanResponse pause(
+            @RequestHeader(value = "Authorization", required = false) String authorization,
+            @PathVariable Long planId) {
+        LearningUser user = authService.requireUser(authorization);
+        return learningPlanService.pause(user.getId(), planId);
+    }
+
+    @PostMapping("/{planId}/resume")
+    @Operation(summary = "恢复/启动场景学习计划")
+    public LearningPlanResponse resume(
+            @RequestHeader(value = "Authorization", required = false) String authorization,
+            @PathVariable Long planId) {
+        LearningUser user = authService.requireUser(authorization);
+        return learningPlanService.resume(user.getId(), planId);
+    }
+
+    @PostMapping("/{planId}/cancel")
+    @Operation(summary = "取消场景学习计划")
+    public LearningPlanResponse cancel(
+            @RequestHeader(value = "Authorization", required = false) String authorization,
+            @PathVariable Long planId) {
+        LearningUser user = authService.requireUser(authorization);
+        return learningPlanService.cancel(user.getId(), planId);
     }
 
     @PostMapping("/{planId}/units/next")

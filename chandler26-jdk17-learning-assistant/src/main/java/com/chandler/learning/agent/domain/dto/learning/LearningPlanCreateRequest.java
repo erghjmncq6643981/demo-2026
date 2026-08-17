@@ -20,6 +20,10 @@ public class LearningPlanCreateRequest {
 
     private String learningPurpose;
 
+    private java.time.LocalDateTime startTime;
+
+    private java.time.LocalDateTime endTime;
+
     private Long modelConfigId;
 
     /** 是否在创建后立即生成首个场景，默认 true。 */
