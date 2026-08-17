@@ -390,6 +390,11 @@ public final class LearningConstants {
         public static final String CATALOG_STATUS_DRAFT = "draft";
         public static final String CATALOG_STATUS_PUBLISHED = "published";
         public static final String VISIBILITY_PRIVATE = "private";
+        public static final String VISIBILITY_PUBLIC = "public";
+        public static final String SOURCE_SELF_STUDY = "self_study";
+        public static final String SOURCE_CET4 = "cet4";
+        public static final String SOURCE_CET6 = "cet6";
+        public static final String SOURCE_IELTS = "ielts";
         public static final String REVIEW_NOT_REQUIRED = "not_required";
         public static final String REVIEW_PENDING = "pending";
         public static final String REVIEW_CONFIRMED = "confirmed";

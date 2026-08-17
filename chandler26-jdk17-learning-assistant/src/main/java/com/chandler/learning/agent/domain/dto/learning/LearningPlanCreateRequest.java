@@ -1,7 +1,6 @@
 package com.chandler.learning.agent.domain.dto.learning;
 
 import jakarta.validation.constraints.NotBlank;
-import jakarta.validation.constraints.NotNull;
 import lombok.Data;
 
 /**
@@ -10,10 +9,10 @@ import lombok.Data;
 @Data
 public class LearningPlanCreateRequest {
 
-    @NotNull(message = "词表版本不能为空")
+    @jakarta.validation.constraints.NotNull(message = "公共词本不能为空")
     private Long catalogVersionId;
 
-    @NotNull(message = "单词本不能为空")
+    /** 可选个人词本；未传时使用默认个人词本承载学习快照。 */
     private Long wordbookId;
 
     @NotBlank(message = "计划名称不能为空")

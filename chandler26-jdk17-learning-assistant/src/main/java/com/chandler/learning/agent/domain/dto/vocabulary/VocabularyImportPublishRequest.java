@@ -1,14 +1,12 @@
 package com.chandler.learning.agent.domain.dto.vocabulary;
 
-import jakarta.validation.constraints.NotNull;
 import lombok.Data;
 
 /**
- * 发布词表并导入个人单词本请求。
+ * 发布公共词本；保留可选个人词本参数以兼容旧客户端。
  */
 @Data
 public class VocabularyImportPublishRequest {
 
-    @NotNull(message = "目标单词本不能为空")
     private Long wordbookId;
 }

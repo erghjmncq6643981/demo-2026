@@ -5,6 +5,7 @@ import com.chandler.learning.agent.domain.dto.vocabulary.VocabularyImportEntryRe
 import com.chandler.learning.agent.domain.dto.vocabulary.VocabularyImportEntryUpdateRequest;
 import com.chandler.learning.agent.domain.dto.vocabulary.VocabularyImportPublishRequest;
 import com.chandler.learning.agent.domain.dto.vocabulary.VocabularyImportResponse;
+import com.chandler.learning.agent.domain.dto.vocabulary.VocabularyCatalogResponse;
 import com.chandler.learning.agent.domain.dto.vocabulary.VocabularyMarkdownImportRequest;
 import com.chandler.learning.agent.domain.entity.learning.LearningUser;
 import com.chandler.learning.agent.service.learning.AuthService;
@@ -53,6 +54,14 @@ public class VocabularyImportController {
             @RequestHeader(value = "Authorization", required = false) String authorization) {
         LearningUser user = authService.requireUser(authorization);
         return importService.list(user.getId());
+    }
+
+    @GetMapping("/public")
+    @Operation(summary = "查询已发布公共词本")
+    public List<VocabularyCatalogResponse> publicCatalogs(
+            @RequestHeader(value = "Authorization", required = false) String authorization) {
+        authService.requireUser(authorization);
+        return importService.listPublicCatalogs();
     }
 
     @GetMapping("/{jobId}")

@@ -7,6 +7,7 @@ import com.chandler.learning.agent.domain.dto.vocabulary.VocabularyImportEntryRe
 import com.chandler.learning.agent.domain.dto.vocabulary.VocabularyImportEntryUpdateRequest;
 import com.chandler.learning.agent.domain.dto.vocabulary.VocabularyImportPublishRequest;
 import com.chandler.learning.agent.domain.dto.vocabulary.VocabularyImportResponse;
+import com.chandler.learning.agent.domain.dto.vocabulary.VocabularyCatalogResponse;
 import com.chandler.learning.agent.domain.dto.vocabulary.VocabularyMarkdownImportRequest;
 import com.chandler.learning.agent.domain.entity.learning.LearningWordProgress;
 import com.chandler.learning.agent.domain.entity.learning.LearningWordbook;
@@ -70,14 +71,15 @@ public class VocabularyImportService {
     public VocabularyImportResponse importMarkdown(Long userId, VocabularyMarkdownImportRequest request) {
         List<MarkdownVocabularyParser.ParsedVocabulary> parsed = markdownParser.parse(request.getContent());
         LocalDateTime now = LocalDateTime.now();
+        String sourceType = normalizeSourceType(request.getSourceType(), request.getExamType());
 
         VocabularyCatalog catalog = new VocabularyCatalog();
         catalog.setOwnerUserId(userId);
         catalog.setName(request.getCatalogName().trim());
         catalog.setLearningPurpose(trimToNull(request.getLearningPurpose()));
-        catalog.setExamType(trimToNull(request.getExamType()));
+        catalog.setExamType(sourceType);
         catalog.setStatus(LearningConstants.VocabularyImport.CATALOG_STATUS_DRAFT);
-        catalog.setVisibility(LearningConstants.VocabularyImport.VISIBILITY_PRIVATE);
+        catalog.setVisibility(LearningConstants.VocabularyImport.VISIBILITY_PUBLIC);
         catalog.setDeleted(false);
         catalog.setCreateTime(now);
         catalog.setUpdateTime(now);
@@ -144,6 +146,18 @@ public class VocabularyImportService {
         return detail(userId, job.getId(), warningCount > 0, null,
                 LearningConstants.VocabularyImport.DEFAULT_PAGE,
                 LearningConstants.VocabularyImport.DEFAULT_PAGE_SIZE);
+    }
+
+    /** 查询已发布的公共词本，供所有学习者创建计划。 */
+    public List<VocabularyCatalogResponse> listPublicCatalogs() {
+        return catalogMapper.selectList(new LambdaQueryWrapper<VocabularyCatalog>()
+                        .eq(VocabularyCatalog::getStatus, LearningConstants.VocabularyImport.CATALOG_STATUS_PUBLISHED)
+                        .eq(VocabularyCatalog::getVisibility, LearningConstants.VocabularyImport.VISIBILITY_PUBLIC)
+                        .eq(VocabularyCatalog::getDeleted, false)
+                        .orderByDesc(VocabularyCatalog::getUpdateTime))
+                .stream()
+                .map(this::toCatalogResponse)
+                .toList();
     }
 
     /**
@@ -269,7 +283,9 @@ public class VocabularyImportService {
                     LearningConstants.ErrorCode.VOCABULARY_IMPORT_NOT_REVIEWED,
                     "仍有 " + (value(job.getWarningCount()) - value(job.getReviewedWarningCount())) + " 个疑似断词未确认");
         }
-        LearningWordbook wordbook = requireWordbook(userId, request.getWordbookId());
+        LearningWordbook wordbook = request == null || request.getWordbookId() == null
+                ? null
+                : requireWordbook(userId, request.getWordbookId());
         VocabularyCatalog catalog = requireCatalog(userId, job.getCatalogId());
         VocabularyCatalogVersion version = versionMapper.selectById(job.getCatalogVersionId());
         List<VocabularyCatalogEntry> entries = catalogEntryMapper.selectList(
@@ -277,11 +293,13 @@ public class VocabularyImportService {
                         .eq(VocabularyCatalogEntry::getCatalogVersionId, job.getCatalogVersionId())
                         .eq(VocabularyCatalogEntry::getDeleted, false)
                         .orderByAsc(VocabularyCatalogEntry::getSourceOrder));
-        Map<String, LearningWordProgress> progressByTerm = progressService.getOrCreateAll(userId,
+        Map<String, LearningWordProgress> progressByTerm = wordbook == null
+                ? Map.of()
+                : progressService.getOrCreateAll(userId,
                 entries.stream().map(VocabularyCatalogEntry::effectiveTerm).toList());
-        Map<String, LearningWordbookEntry> wordbookEntryByTerm = wordbookEntryMapper
-                .selectAllIncludingDeleted(wordbook.getId())
-                .stream()
+        Map<String, LearningWordbookEntry> wordbookEntryByTerm = wordbook == null
+                ? new LinkedHashMap<>()
+                : wordbookEntryMapper.selectAllIncludingDeleted(wordbook.getId()).stream()
                 .collect(Collectors.toMap(
                         LearningWordbookEntry::getNormalizedTerm,
                         entry -> entry,
@@ -290,33 +308,35 @@ public class VocabularyImportService {
         LocalDateTime now = LocalDateTime.now();
         int inserted = LearningConstants.ZERO;
         for (VocabularyCatalogEntry catalogEntry : entries) {
-            String term = catalogEntry.effectiveTerm();
-            String normalizedTerm = normalize(term);
-            LearningWordProgress progress = progressByTerm.get(normalizedTerm);
-            LearningWordbookEntry wordbookEntry = wordbookEntryByTerm.get(normalizedTerm);
-            if (wordbookEntry == null) {
-                wordbookEntry = LearningWordbookEntry.createImported(
-                        userId, wordbook.getId(), progress.getId(), catalogEntry.getId(), term,
-                        normalizedTerm, basicSnapshot(catalogEntry, term), now);
-                wordbookEntryMapper.insert(wordbookEntry);
-                wordbookEntryByTerm.put(normalizedTerm, wordbookEntry);
-                inserted++;
-            } else {
-                if (Boolean.TRUE.equals(wordbookEntry.getDeleted())) {
-                    wordbookEntry.restore(wordbookEntry.getNote(), now);
-                    wordbookEntryMapper.restoreDeletedById(wordbookEntry.getId());
+            if (wordbook != null) {
+                String term = catalogEntry.effectiveTerm();
+                String normalizedTerm = normalize(term);
+                LearningWordProgress progress = progressByTerm.get(normalizedTerm);
+                LearningWordbookEntry wordbookEntry = wordbookEntryByTerm.get(normalizedTerm);
+                if (wordbookEntry == null) {
+                    wordbookEntry = LearningWordbookEntry.createImported(
+                            userId, wordbook.getId(), progress.getId(), catalogEntry.getId(), term,
+                            normalizedTerm, basicSnapshot(catalogEntry, term), now);
+                    wordbookEntryMapper.insert(wordbookEntry);
+                    wordbookEntryByTerm.put(normalizedTerm, wordbookEntry);
+                    inserted++;
+                } else {
+                    if (Boolean.TRUE.equals(wordbookEntry.getDeleted())) {
+                        wordbookEntry.restore(wordbookEntry.getNote(), now);
+                        wordbookEntryMapper.restoreDeletedById(wordbookEntry.getId());
+                    }
+                    wordbookEntry.setProgressId(progress.getId());
+                    wordbookEntry.setCatalogEntryId(catalogEntry.getId());
+                    if (!StringUtils.hasText(wordbookEntry.getSnapshotParsedJson())) {
+                        wordbookEntry.setSnapshotParsedJson(basicSnapshot(catalogEntry, term));
+                        wordbookEntry.setSnapshotTime(now);
+                    }
+                    if (!StringUtils.hasText(wordbookEntry.getCardStatus())) {
+                        wordbookEntry.setCardStatus(LearningConstants.VocabularyCard.STATUS_NOT_REQUIRED);
+                    }
+                    wordbookEntry.setUpdateTime(now);
+                    wordbookEntryMapper.updateById(wordbookEntry);
                 }
-                wordbookEntry.setProgressId(progress.getId());
-                wordbookEntry.setCatalogEntryId(catalogEntry.getId());
-                if (!StringUtils.hasText(wordbookEntry.getSnapshotParsedJson())) {
-                    wordbookEntry.setSnapshotParsedJson(basicSnapshot(catalogEntry, term));
-                    wordbookEntry.setSnapshotTime(now);
-                }
-                if (!StringUtils.hasText(wordbookEntry.getCardStatus())) {
-                    wordbookEntry.setCardStatus(LearningConstants.VocabularyCard.STATUS_NOT_REQUIRED);
-                }
-                wordbookEntry.setUpdateTime(now);
-                wordbookEntryMapper.updateById(wordbookEntry);
             }
             catalogEntry.setPublished(true);
             catalogEntry.setUpdateTime(now);
@@ -336,10 +356,11 @@ public class VocabularyImportService {
         job.setUpdateTime(now);
         importJobMapper.updateById(job);
 
-        systemLogService.record(userId, SystemLogType.VOCABULARY_IMPORT, "发布词表",
-                catalog.getName() + " -> " + wordbook.getName() + "，新增 " + inserted + " 词");
-        log.info("用户「{}」发布了词表「{}」并导入单词本「{}」，词表共 {} 个词，新增 {} 个个人词条",
-                userDisplayNameService.userName(userId), catalog.getName(), wordbook.getName(), entries.size(), inserted);
+        String target = wordbook == null ? "公共词本" : "个人词本「" + wordbook.getName() + "」";
+        systemLogService.record(userId, SystemLogType.VOCABULARY_IMPORT, "发布公共词本",
+                catalog.getName() + " -> " + target + "，新增个人词条 " + inserted + " 词");
+        log.info("用户「{}」发布了公共词本「{}」，目标 {}，词表共 {} 个词，新增个人词条 {} 个",
+                userDisplayNameService.userName(userId), catalog.getName(), target, entries.size(), inserted);
         return detail(userId, jobId, false, null,
                 LearningConstants.VocabularyImport.DEFAULT_PAGE,
                 LearningConstants.VocabularyImport.DEFAULT_PAGE_SIZE);
@@ -367,6 +388,7 @@ public class VocabularyImportService {
         response.setCatalogVersionId(job.getCatalogVersionId());
         response.setCatalogName(catalog.getName());
         response.setLearningPurpose(catalog.getLearningPurpose());
+        response.setSourceType(catalog.getExamType());
         response.setFileName(job.getSourceFileName());
         response.setStatus(job.getStatus());
         response.setTotalCount(job.getTotalCount());
@@ -421,7 +443,8 @@ public class VocabularyImportService {
     private VocabularyCatalog requireCatalog(Long userId, Long catalogId) {
         VocabularyCatalog catalog = catalogMapper.selectOne(new LambdaQueryWrapper<VocabularyCatalog>()
                 .eq(VocabularyCatalog::getId, catalogId)
-                .eq(VocabularyCatalog::getOwnerUserId, userId)
+                .and(wrapper -> wrapper.eq(VocabularyCatalog::getOwnerUserId, userId)
+                        .or().eq(VocabularyCatalog::getVisibility, LearningConstants.VocabularyImport.VISIBILITY_PUBLIC))
                 .eq(VocabularyCatalog::getDeleted, false)
                 .last(LearningConstants.SQL_LIMIT_ONE));
         if (catalog == null) {
@@ -501,6 +524,41 @@ public class VocabularyImportService {
 
     private String normalize(String value) {
         return value == null ? "" : value.trim().replaceAll("\\s+", " ").toLowerCase(Locale.ROOT);
+    }
+
+    private String normalizeSourceType(String sourceType, String legacyExamType) {
+        String value = StringUtils.hasText(sourceType) ? sourceType.trim().toLowerCase(Locale.ROOT)
+                : trimToNull(legacyExamType);
+        if ("自考".equals(value) || LearningConstants.VocabularyImport.SOURCE_SELF_STUDY.equals(value)) {
+            return LearningConstants.VocabularyImport.SOURCE_SELF_STUDY;
+        }
+        if ("四级".equals(value) || LearningConstants.VocabularyImport.SOURCE_CET4.equals(value)) {
+            return LearningConstants.VocabularyImport.SOURCE_CET4;
+        }
+        if ("六级".equals(value) || LearningConstants.VocabularyImport.SOURCE_CET6.equals(value)) {
+            return LearningConstants.VocabularyImport.SOURCE_CET6;
+        }
+        if ("雅思".equals(value) || LearningConstants.VocabularyImport.SOURCE_IELTS.equals(value)) {
+            return LearningConstants.VocabularyImport.SOURCE_IELTS;
+        }
+        throw LearningAssistantException.badRequest(
+                LearningConstants.ErrorCode.VOCABULARY_IMPORT_INVALID,
+                "数据源类型仅支持自考、四级、六级或雅思");
+    }
+
+    private VocabularyCatalogResponse toCatalogResponse(VocabularyCatalog catalog) {
+        VocabularyCatalogVersion version = catalog.getLatestVersionId() == null
+                ? null : versionMapper.selectById(catalog.getLatestVersionId());
+        VocabularyCatalogResponse response = new VocabularyCatalogResponse();
+        response.setCatalogId(catalog.getId());
+        response.setCatalogVersionId(catalog.getLatestVersionId());
+        response.setCatalogName(catalog.getName());
+        response.setSourceType(catalog.getExamType());
+        response.setLearningPurpose(catalog.getLearningPurpose());
+        response.setStatus(catalog.getStatus());
+        response.setTotalCount(version == null ? 0 : version.getTotalCount());
+        response.setPublishedTime(version == null ? null : version.getPublishedTime());
+        return response;
     }
 
     private String trimToNull(String value) {

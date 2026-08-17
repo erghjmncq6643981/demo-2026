@@ -21,6 +21,8 @@ public class VocabularyImportResponse {
 
     private String learningPurpose;
 
+    private String sourceType;
+
     private String fileName;
 
     private String status;

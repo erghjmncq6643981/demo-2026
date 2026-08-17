@@ -98,7 +98,9 @@ public class LearningPlanService {
     public LearningPlanResponse create(Long userId, LearningPlanCreateRequest request) {
         VocabularyCatalogVersion version = requirePublishedVersion(userId, request.getCatalogVersionId());
         VocabularyCatalog catalog = requireCatalog(userId, version.getCatalogId());
-        requireWordbook(userId, request.getWordbookId());
+        Long wordbookId = request.getWordbookId() == null
+                ? wordbookService.ensureDefaultWordbook(userId).getId()
+                : requireWordbook(userId, request.getWordbookId()).getId();
         int totalWords = catalogEntryMapper.selectCount(new LambdaQueryWrapper<VocabularyCatalogEntry>()
                 .eq(VocabularyCatalogEntry::getCatalogVersionId, version.getId())
                 .eq(VocabularyCatalogEntry::getPublished, true)
@@ -114,7 +116,7 @@ public class LearningPlanService {
         plan.setUserId(userId);
         plan.setCatalogId(catalog.getId());
         plan.setCatalogVersionId(version.getId());
-        plan.setWordbookId(request.getWordbookId());
+        plan.setWordbookId(wordbookId);
         plan.setName(request.getName().trim());
         plan.setLearningPurpose(StringUtils.hasText(request.getLearningPurpose())
                 ? request.getLearningPurpose().trim()
@@ -881,7 +883,8 @@ public class LearningPlanService {
     private VocabularyCatalog requireCatalog(Long userId, Long catalogId) {
         VocabularyCatalog catalog = catalogMapper.selectOne(new LambdaQueryWrapper<VocabularyCatalog>()
                 .eq(VocabularyCatalog::getId, catalogId)
-                .eq(VocabularyCatalog::getOwnerUserId, userId)
+                .and(wrapper -> wrapper.eq(VocabularyCatalog::getOwnerUserId, userId)
+                        .or().eq(VocabularyCatalog::getVisibility, LearningConstants.VocabularyImport.VISIBILITY_PUBLIC))
                 .eq(VocabularyCatalog::getDeleted, false)
                 .last(LearningConstants.SQL_LIMIT_ONE));
         if (catalog == null) {
