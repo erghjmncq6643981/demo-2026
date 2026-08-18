@@ -1,69 +1,20 @@
--- 词表导入、场景化学习计划与逐词学习进度初始化脚本。
--- 新库在完成 00、05、10、91、92 和 93 后执行；可重复执行。
-
-SET @schema_name = DATABASE();
-
-DROP PROCEDURE IF EXISTS learning_add_column_if_missing;
-DROP PROCEDURE IF EXISTS learning_add_index_if_missing;
-
-DELIMITER $$
-
-CREATE PROCEDURE learning_add_column_if_missing(
-    IN p_table_name VARCHAR(64),
-    IN p_column_name VARCHAR(64),
-    IN p_column_ddl TEXT
-)
-BEGIN
-    IF EXISTS (
-        SELECT 1 FROM information_schema.TABLES
-        WHERE TABLE_SCHEMA = @schema_name AND TABLE_NAME = p_table_name
-    ) AND NOT EXISTS (
-        SELECT 1 FROM information_schema.COLUMNS
-        WHERE TABLE_SCHEMA = @schema_name AND TABLE_NAME = p_table_name AND COLUMN_NAME = p_column_name
-    ) THEN
-        SET @learning_add_column_sql = CONCAT('ALTER TABLE `', p_table_name, '` ADD COLUMN ', p_column_ddl);
-        PREPARE learning_add_column_stmt FROM @learning_add_column_sql;
-        EXECUTE learning_add_column_stmt;
-        DEALLOCATE PREPARE learning_add_column_stmt;
-    END IF;
-END$$
-
-CREATE PROCEDURE learning_add_index_if_missing(
-    IN p_table_name VARCHAR(64),
-    IN p_index_name VARCHAR(64),
-    IN p_index_ddl TEXT
-)
-BEGIN
-    IF EXISTS (
-        SELECT 1 FROM information_schema.TABLES
-        WHERE TABLE_SCHEMA = @schema_name AND TABLE_NAME = p_table_name
-    ) AND NOT EXISTS (
-        SELECT 1 FROM information_schema.STATISTICS
-        WHERE TABLE_SCHEMA = @schema_name AND TABLE_NAME = p_table_name AND INDEX_NAME = p_index_name
-    ) THEN
-        SET @learning_add_index_sql = p_index_ddl;
-        PREPARE learning_add_index_stmt FROM @learning_add_index_sql;
-        EXECUTE learning_add_index_stmt;
-        DEALLOCATE PREPARE learning_add_index_stmt;
-    END IF;
-END$$
-
-DELIMITER ;
+-- 公共词表、学习计划、场景单元、逐词进度与批量词卡任务表。
+-- 依赖 10_learning_core_schema_mysql.sql。
 
 CREATE TABLE IF NOT EXISTS vocabulary_catalog (
     id BIGINT NOT NULL COMMENT '主键',
     create_by BIGINT NOT NULL DEFAULT 0 COMMENT '创建人用户 ID',
     update_by BIGINT NOT NULL DEFAULT 0 COMMENT '更新人用户 ID',
-    owner_user_id BIGINT NOT NULL COMMENT '词表所属用户 ID',
+    owner_user_id BIGINT NOT NULL COMMENT '词表所属用户 ID，公共词表可使用系统用户',
     name VARCHAR(120) NOT NULL COMMENT '词表名称',
     learning_purpose VARCHAR(500) DEFAULT NULL COMMENT '学习目的，例如自考、四级、六级或雅思',
-    exam_type VARCHAR(50) DEFAULT NULL COMMENT '考试或使用场景编码',
+    exam_type VARCHAR(50) DEFAULT NULL COMMENT '数据源类型或考试场景编码',
     latest_version_id BIGINT DEFAULT NULL COMMENT '当前发布版本 ID',
     status VARCHAR(20) NOT NULL DEFAULT 'draft' COMMENT '状态：draft、published、archived',
     visibility VARCHAR(20) NOT NULL DEFAULT 'private' COMMENT '可见范围：private、shared、public',
     create_time DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP COMMENT '创建时间',
     update_time DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP COMMENT '更新时间',
-    deleted TINYINT(1) NOT NULL DEFAULT 0 COMMENT '是否删除',
+    deleted TINYINT(1) NOT NULL DEFAULT 0 COMMENT '是否逻辑删除',
     version INT NOT NULL DEFAULT 0 COMMENT '乐观锁版本号',
     PRIMARY KEY (id),
     KEY idx_vocabulary_catalog_owner (owner_user_id, deleted, update_time),
@@ -86,7 +37,7 @@ CREATE TABLE IF NOT EXISTS vocabulary_catalog_version (
     published_time DATETIME DEFAULT NULL COMMENT '发布时间',
     create_time DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP COMMENT '创建时间',
     update_time DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP COMMENT '更新时间',
-    deleted TINYINT(1) NOT NULL DEFAULT 0 COMMENT '是否删除',
+    deleted TINYINT(1) NOT NULL DEFAULT 0 COMMENT '是否逻辑删除',
     version INT NOT NULL DEFAULT 0 COMMENT '乐观锁版本号',
     PRIMARY KEY (id),
     UNIQUE KEY uk_vocabulary_catalog_version (catalog_id, version_no),
@@ -112,7 +63,7 @@ CREATE TABLE IF NOT EXISTS vocabulary_catalog_entry (
     published TINYINT(1) NOT NULL DEFAULT 0 COMMENT '是否已随版本发布',
     create_time DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP COMMENT '创建时间',
     update_time DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP COMMENT '更新时间',
-    deleted TINYINT(1) NOT NULL DEFAULT 0 COMMENT '是否删除',
+    deleted TINYINT(1) NOT NULL DEFAULT 0 COMMENT '是否逻辑删除',
     version INT NOT NULL DEFAULT 0 COMMENT '乐观锁版本号',
     PRIMARY KEY (id),
     UNIQUE KEY uk_vocabulary_catalog_entry_order (catalog_version_id, source_order),
@@ -126,7 +77,7 @@ CREATE TABLE IF NOT EXISTS vocabulary_import_job (
     update_by BIGINT NOT NULL DEFAULT 0 COMMENT '更新人用户 ID',
     user_id BIGINT NOT NULL COMMENT '发起导入的用户 ID',
     catalog_id BIGINT NOT NULL COMMENT '词表 ID',
-    catalog_version_id BIGINT NOT NULL COMMENT '本次导入生成的词表版本 ID',
+    catalog_version_id BIGINT NOT NULL COMMENT '本次导入生成的版本 ID',
     source_format VARCHAR(20) NOT NULL COMMENT '来源格式',
     source_file_name VARCHAR(255) DEFAULT NULL COMMENT '来源文件名',
     status VARCHAR(20) NOT NULL COMMENT '状态：parsing、reviewing、published、failed',
@@ -137,7 +88,7 @@ CREATE TABLE IF NOT EXISTS vocabulary_import_job (
     finished_time DATETIME DEFAULT NULL COMMENT '解析或发布完成时间',
     create_time DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP COMMENT '创建时间',
     update_time DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP COMMENT '更新时间',
-    deleted TINYINT(1) NOT NULL DEFAULT 0 COMMENT '是否删除',
+    deleted TINYINT(1) NOT NULL DEFAULT 0 COMMENT '是否逻辑删除',
     version INT NOT NULL DEFAULT 0 COMMENT '乐观锁版本号',
     PRIMARY KEY (id),
     KEY idx_vocabulary_import_user_time (user_id, deleted, update_time),
@@ -164,7 +115,7 @@ CREATE TABLE IF NOT EXISTS learning_plan (
     ai_session_id BIGINT DEFAULT NULL COMMENT '场景计划复用的 AI 会话 ID',
     create_time DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP COMMENT '创建时间',
     update_time DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP COMMENT '更新时间',
-    deleted TINYINT(1) NOT NULL DEFAULT 0 COMMENT '是否删除',
+    deleted TINYINT(1) NOT NULL DEFAULT 0 COMMENT '是否逻辑删除',
     version INT NOT NULL DEFAULT 0 COMMENT '乐观锁版本号',
     PRIMARY KEY (id),
     KEY idx_learning_plan_user_status (user_id, status, deleted, update_time),
@@ -192,7 +143,7 @@ CREATE TABLE IF NOT EXISTS learning_plan_unit (
     completed_time DATETIME DEFAULT NULL COMMENT '完成时间',
     create_time DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP COMMENT '创建时间',
     update_time DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP COMMENT '更新时间',
-    deleted TINYINT(1) NOT NULL DEFAULT 0 COMMENT '是否删除',
+    deleted TINYINT(1) NOT NULL DEFAULT 0 COMMENT '是否逻辑删除',
     version INT NOT NULL DEFAULT 0 COMMENT '乐观锁版本号',
     PRIMARY KEY (id),
     UNIQUE KEY uk_learning_plan_unit_no (plan_id, unit_no),
@@ -226,7 +177,7 @@ CREATE TABLE IF NOT EXISTS learning_word_progress (
     last_learned_time DATETIME DEFAULT NULL COMMENT '最近学习时间',
     create_time DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP COMMENT '创建时间',
     update_time DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP COMMENT '更新时间',
-    deleted TINYINT(1) NOT NULL DEFAULT 0 COMMENT '是否删除',
+    deleted TINYINT(1) NOT NULL DEFAULT 0 COMMENT '是否逻辑删除',
     version INT NOT NULL DEFAULT 0 COMMENT '乐观锁版本号',
     PRIMARY KEY (id),
     UNIQUE KEY uk_learning_word_progress_term (user_id, normalized_term),
@@ -240,7 +191,7 @@ CREATE TABLE IF NOT EXISTS learning_plan_unit_entry (
     create_by BIGINT NOT NULL DEFAULT 0 COMMENT '创建人用户 ID',
     update_by BIGINT NOT NULL DEFAULT 0 COMMENT '更新人用户 ID',
     plan_id BIGINT NOT NULL COMMENT '学习计划 ID',
-    unit_id BIGINT NOT NULL COMMENT '场景单元 ID',
+    unit_id BIGINT NOT NULL COMMENT '场景学习单元 ID',
     catalog_entry_id BIGINT DEFAULT NULL COMMENT '来源词表词条 ID，AI 补充词为空',
     wordbook_entry_id BIGINT DEFAULT NULL COMMENT '个人单词本词条 ID',
     word_progress_id BIGINT NOT NULL COMMENT '用户逐词进度 ID',
@@ -258,7 +209,7 @@ CREATE TABLE IF NOT EXISTS learning_plan_unit_entry (
     sort_order INT NOT NULL DEFAULT 0 COMMENT '单元内排序',
     create_time DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP COMMENT '创建时间',
     update_time DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP COMMENT '更新时间',
-    deleted TINYINT(1) NOT NULL DEFAULT 0 COMMENT '是否删除',
+    deleted TINYINT(1) NOT NULL DEFAULT 0 COMMENT '是否逻辑删除',
     version INT NOT NULL DEFAULT 0 COMMENT '乐观锁版本号',
     PRIMARY KEY (id),
     UNIQUE KEY uk_learning_plan_unit_term (unit_id, normalized_term),
@@ -273,21 +224,21 @@ CREATE TABLE IF NOT EXISTS learning_scene_material (
     update_by BIGINT NOT NULL DEFAULT 0 COMMENT '更新人用户 ID',
     user_id BIGINT NOT NULL COMMENT '学习者用户 ID',
     plan_id BIGINT NOT NULL COMMENT '学习计划 ID',
-    unit_id BIGINT NOT NULL COMMENT '场景单元 ID',
+    unit_id BIGINT NOT NULL COMMENT '场景学习单元 ID',
     session_id BIGINT DEFAULT NULL COMMENT '复用的场景学习 AI 会话 ID',
     title VARCHAR(160) NOT NULL COMMENT '场景标题',
     scenario_type VARCHAR(80) DEFAULT NULL COMMENT '场景分类',
     learning_text MEDIUMTEXT DEFAULT NULL COMMENT '场景英文句子或文章',
     translation MEDIUMTEXT DEFAULT NULL COMMENT '中文译文',
     raw_content MEDIUMTEXT DEFAULT NULL COMMENT 'AI 原始回复',
-    parsed_json JSON DEFAULT NULL COMMENT '场景、词汇标注和检查题的完整结构化 JSON',
+    parsed_json JSON DEFAULT NULL COMMENT '场景、词汇标注和检查题 JSON',
     provider VARCHAR(50) DEFAULT NULL COMMENT '模型供应商',
     model_name VARCHAR(100) DEFAULT NULL COMMENT '模型名称',
     token_usage INT DEFAULT NULL COMMENT 'Token 用量',
     cost_time BIGINT DEFAULT NULL COMMENT '模型调用耗时毫秒',
     create_time DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP COMMENT '创建时间',
     update_time DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP COMMENT '更新时间',
-    deleted TINYINT(1) NOT NULL DEFAULT 0 COMMENT '是否删除',
+    deleted TINYINT(1) NOT NULL DEFAULT 0 COMMENT '是否逻辑删除',
     version INT NOT NULL DEFAULT 0 COMMENT '乐观锁版本号',
     PRIMARY KEY (id),
     UNIQUE KEY uk_learning_scene_material_unit (unit_id),
@@ -312,7 +263,7 @@ CREATE TABLE IF NOT EXISTS vocabulary_card_generation_job (
     finished_time DATETIME DEFAULT NULL COMMENT '结束时间',
     create_time DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP COMMENT '创建时间',
     update_time DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP COMMENT '更新时间',
-    deleted TINYINT(1) NOT NULL DEFAULT 0 COMMENT '是否删除',
+    deleted TINYINT(1) NOT NULL DEFAULT 0 COMMENT '是否逻辑删除',
     version INT NOT NULL DEFAULT 0 COMMENT '乐观锁版本号',
     PRIMARY KEY (id),
     KEY idx_vocabulary_card_job_user (user_id, status, deleted, update_time),
@@ -334,135 +285,9 @@ CREATE TABLE IF NOT EXISTS vocabulary_card_generation_job_item (
     error_message VARCHAR(1000) DEFAULT NULL COMMENT '本词失败原因',
     create_time DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP COMMENT '创建时间',
     update_time DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP COMMENT '更新时间',
-    deleted TINYINT(1) NOT NULL DEFAULT 0 COMMENT '是否删除',
+    deleted TINYINT(1) NOT NULL DEFAULT 0 COMMENT '是否逻辑删除',
     version INT NOT NULL DEFAULT 0 COMMENT '乐观锁版本号',
     PRIMARY KEY (id),
     UNIQUE KEY uk_vocabulary_card_job_item (job_id, normalized_term),
     KEY idx_vocabulary_card_job_item_status (job_id, status, deleted)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci COMMENT='批量 AI 词卡生成任务明细';
-
-CALL learning_add_column_if_missing('learning_wordbook_entry', 'progress_id',
-    '`progress_id` BIGINT DEFAULT NULL COMMENT ''用户逐词进度 ID'' AFTER `wordbook_id`');
-CALL learning_add_column_if_missing('learning_wordbook_entry', 'catalog_entry_id',
-    '`catalog_entry_id` BIGINT DEFAULT NULL COMMENT ''导入词表词条 ID'' AFTER `progress_id`');
-CALL learning_add_column_if_missing('learning_wordbook_entry', 'card_status',
-    '`card_status` VARCHAR(20) NOT NULL DEFAULT ''missing'' COMMENT ''词卡状态：missing、queued、generating、ready、failed、not_required'' AFTER `snapshot_time`');
-CALL learning_add_column_if_missing('learning_wordbook_entry', 'card_error_message',
-    '`card_error_message` VARCHAR(1000) DEFAULT NULL COMMENT ''词卡生成失败原因'' AFTER `card_status`');
-CALL learning_add_column_if_missing('learning_wordbook_entry', 'card_generated_time',
-    '`card_generated_time` DATETIME DEFAULT NULL COMMENT ''词卡生成完成时间'' AFTER `card_error_message`');
-
--- 导入词条允许先只有基础音标和释义，AI 词卡可在进入近期场景后批量补齐。
-ALTER TABLE learning_wordbook_entry MODIFY COLUMN vocabulary_id BIGINT DEFAULT NULL COMMENT '公共英语词汇学习缓存 ID，可在词卡生成前为空';
-ALTER TABLE learning_review_record MODIFY COLUMN vocabulary_id BIGINT DEFAULT NULL COMMENT '公共词汇缓存 ID，可在词卡生成前为空';
-
-CALL learning_add_column_if_missing('learning_review_record', 'word_progress_id',
-    '`word_progress_id` BIGINT DEFAULT NULL COMMENT ''用户逐词进度 ID'' AFTER `vocabulary_id`');
-CALL learning_add_column_if_missing('learning_review_record', 'plan_id',
-    '`plan_id` BIGINT DEFAULT NULL COMMENT ''场景学习计划 ID'' AFTER `word_progress_id`');
-CALL learning_add_column_if_missing('learning_review_record', 'unit_id',
-    '`unit_id` BIGINT DEFAULT NULL COMMENT ''场景学习单元 ID'' AFTER `plan_id`');
-CALL learning_add_column_if_missing('learning_review_record', 'assessment_type',
-    '`assessment_type` VARCHAR(30) DEFAULT NULL COMMENT ''检查类型：meaning_choice、copy_typing、meaning_spelling'' AFTER `unit_id`');
-CALL learning_add_column_if_missing('learning_review_record', 'question_json',
-    '`question_json` JSON DEFAULT NULL COMMENT ''检查题目和选项快照'' AFTER `assessment_type`');
-CALL learning_add_column_if_missing('learning_review_record', 'answer_text',
-    '`answer_text` VARCHAR(1000) DEFAULT NULL COMMENT ''学习者答案'' AFTER `question_json`');
-CALL learning_add_column_if_missing('learning_review_record', 'correct_answer',
-    '`correct_answer` VARCHAR(1000) DEFAULT NULL COMMENT ''正确答案快照'' AFTER `answer_text`');
-CALL learning_add_column_if_missing('learning_review_record', 'check_result',
-    '`check_result` VARCHAR(20) DEFAULT NULL COMMENT ''系统判定：correct、incorrect'' AFTER `correct_answer`');
-CALL learning_add_column_if_missing('learning_review_record', 'typing_accuracy',
-    '`typing_accuracy` DECIMAL(5,2) DEFAULT NULL COMMENT ''拼写准确率 0-100'' AFTER `check_result`');
-CALL learning_add_column_if_missing('learning_review_record', 'hint_level',
-    '`hint_level` INT DEFAULT NULL COMMENT ''使用提示级别'' AFTER `typing_accuracy`');
-CALL learning_add_column_if_missing('learning_review_record', 'attempt_count',
-    '`attempt_count` INT DEFAULT NULL COMMENT ''本题尝试次数'' AFTER `hint_level`');
-CALL learning_add_column_if_missing('learning_review_record', 'duration_millis',
-    '`duration_millis` BIGINT DEFAULT NULL COMMENT ''本次检查耗时毫秒'' AFTER `attempt_count`');
-
-CALL learning_add_column_if_missing('learning_article_study_record', 'plan_id',
-    '`plan_id` BIGINT DEFAULT NULL COMMENT ''来源场景学习计划 ID'' AFTER `wordbook_id`');
-CALL learning_add_column_if_missing('learning_article_study_record', 'plan_unit_id',
-    '`plan_unit_id` BIGINT DEFAULT NULL COMMENT ''来源场景学习单元 ID'' AFTER `plan_id`');
-
-CALL learning_add_index_if_missing('learning_wordbook_entry', 'idx_learning_wordbook_entry_progress',
-    'CREATE INDEX idx_learning_wordbook_entry_progress ON learning_wordbook_entry (progress_id, deleted)');
-CALL learning_add_index_if_missing('learning_wordbook_entry', 'idx_learning_wordbook_entry_catalog',
-    'CREATE INDEX idx_learning_wordbook_entry_catalog ON learning_wordbook_entry (catalog_entry_id, deleted)');
-CALL learning_add_index_if_missing('learning_review_record', 'idx_learning_review_record_progress_type',
-    'CREATE INDEX idx_learning_review_record_progress_type ON learning_review_record (word_progress_id, assessment_type, create_time)');
-CALL learning_add_index_if_missing('learning_article_study_record', 'idx_learning_article_plan_unit',
-    'CREATE INDEX idx_learning_article_plan_unit ON learning_article_study_record (plan_id, plan_unit_id, deleted)');
-
-DROP PROCEDURE IF EXISTS learning_add_column_if_missing;
-DROP PROCEDURE IF EXISTS learning_add_index_if_missing;
-
--- 场景计划复用固定学习场景会话；每次手动触发下一个单元时延续上下文。
-INSERT INTO ai_agent (
-    id, name, code, type, icon, description, system_prompt, concise_prompt, welcome_message,
-    model_provider, model_name, temperature, max_tokens, preset_commands, enabled, sequence
-) VALUES (
-    1201,
-    '英语场景词汇规划师',
-    'english_vocabulary_plan',
-    'assistant',
-    'map',
-    '把词表分解为可连续学习和复习的真实场景单元',
-    '你是英语场景词汇规划师。必须围绕真实生活、学习、工作或旅行场景组织词汇；相关词必须通过自然句子或短文建立联系。本批候选词全部作为本场景核心词，不能使用历史场景中的词。补充词可以来自场景常见名词。根据学习目的为每个核心词判断 recognition 或 spelling。必须只输出合法 JSON，不要输出 Markdown 代码块。',
-    '延续当前词表场景计划上下文，生成下一个不重复的场景学习单元，只输出合法 JSON。',
-    '我会把词表组织为可以连续学习和检查的场景单元。',
-    NULL, NULL, 0.55, 16000,
-    JSON_ARRAY(JSON_OBJECT('code', 'next_scene', 'name', '生成下一个场景', 'prompt', '从尚未首次学习的候选词中生成下一个场景单元')),
-    1, 3
-) ON DUPLICATE KEY UPDATE
-    name = VALUES(name), description = VALUES(description), system_prompt = VALUES(system_prompt),
-    concise_prompt = VALUES(concise_prompt), welcome_message = VALUES(welcome_message),
-    temperature = VALUES(temperature), max_tokens = VALUES(max_tokens),
-    preset_commands = VALUES(preset_commands), enabled = VALUES(enabled), sequence = VALUES(sequence);
-
-INSERT INTO ai_prompt_template (
-    id, name, code, type, tags, content, variables, description, example_input, example_output,
-    public_template, enabled, sequence
-) VALUES (
-    1201,
-    '英语场景词汇单元 JSON',
-    'english_vocab_scene_unit_json',
-    'user',
-    '英语,词表,场景学习,词汇检查,JSON',
-    '学习目的：{{learning_purpose}}。这是第 {{unit_no}} 个场景单元。候选词表 JSON：{{candidate_words}}。已完成场景标题：{{completed_scenes}}。请把本批 {{target_word_count}} 个候选词全部作为 core，必须正好输出 {{target_word_count}} 个 core；单篇材料的 core 最多 50 个，若当天目标超过 50 个，系统会拆成多个场景单元分别生成。不要把之前已经进入其他场景的词重新安排到本场景。可添加场景中高频的具体名词作为 supplementary，但 supplementary 不得冒充词表词。输出 JSON：title、scenario_type、summary、learning_text、translation、vocabulary。learning_text 是自然英文句子或短文，覆盖全部 core。vocabulary 每项包含 term、tier(core/extended/supplementary)、mastery_requirement(recognition/spelling)、phonetic、meaning、context_meaning、accepted_spellings、meaning_question。meaning_question 包含 prompt、options(恰好4个中文选项)、correct_answer。每个 core 都必须有 meaning_question；spelling 的 core 还必须给出 accepted_spellings。不要输出已完成场景的重复主题。',
-    JSON_ARRAY(
-        JSON_OBJECT('name', 'learning_purpose', 'label', '学习目的', 'required', true),
-        JSON_OBJECT('name', 'unit_no', 'label', '单元序号', 'required', true),
-        JSON_OBJECT('name', 'candidate_words', 'label', '候选词 JSON', 'required', true),
-        JSON_OBJECT('name', 'completed_scenes', 'label', '已完成场景', 'required', true),
-        JSON_OBJECT('name', 'target_word_count', 'label', '目标词数', 'required', true)
-    ),
-    '根据词表按需生成一个可学习、可检查的场景单元',
-    '{"learning_purpose":"大学英语四级","candidate_words":[{"term":"clean","meaning":"清洁"}]}',
-    '{"title":"周末大扫除","learning_text":"...","vocabulary":[]}',
-    1, 1, 4
-) ON DUPLICATE KEY UPDATE
-    name = VALUES(name), tags = VALUES(tags), content = VALUES(content), variables = VALUES(variables),
-    description = VALUES(description), example_input = VALUES(example_input), example_output = VALUES(example_output),
-    public_template = VALUES(public_template), enabled = VALUES(enabled), sequence = VALUES(sequence);
-
-INSERT INTO ai_prompt_template (
-    id, name, code, type, tags, content, variables, description, example_input, example_output,
-    public_template, enabled, sequence
-) VALUES (
-    1202,
-    '英语词汇卡片批量 JSON',
-    'english_vocab_cards_batch_json',
-    'user',
-    '英语,词卡,批量生成,JSON',
-    '请为词汇数组 {{terms}} 批量生成学习卡片。只输出合法 JSON，不要输出 Markdown。根字段为 cards 数组，每个输入词必须且只能对应一项。每项字段包括 term、is_valid、language、phonetic.uk、phonetic.us、definitions、examples、collocations、synonyms、antonyms、word_family、memory_tips。definitions 每项包含 part_of_speech、meaning、english；examples 每项包含 sentence、translation；collocations 每项包含 phrase、meaning；synonyms、antonyms、word_family 每项包含 word、part_of_speech、meaning、phonetic.uk、phonetic.us。相关词只能包含同义词、反义词和词族，搭配只放 collocations。中文解释简洁准确。',
-    JSON_ARRAY(JSON_OBJECT('name', 'terms', 'label', '词汇数组', 'required', true)),
-    '一次模型调用生成 10-20 个独立词卡，减少 Token 和请求开销',
-    '{"terms":["abandon","ability"]}',
-    '{"cards":[{"term":"abandon","is_valid":true}]}',
-    1, 1, 5
-) ON DUPLICATE KEY UPDATE
-    name = VALUES(name), tags = VALUES(tags), content = VALUES(content), variables = VALUES(variables),
-    description = VALUES(description), example_input = VALUES(example_input), example_output = VALUES(example_output),
-    public_template = VALUES(public_template), enabled = VALUES(enabled), sequence = VALUES(sequence);
