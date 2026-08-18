@@ -242,6 +242,7 @@ public class VocabularyCardBatchService {
                 .eq(VocabularyCardGenerationJob::getId, jobId)
                 .in(VocabularyCardGenerationJob::getStatus,
                         List.of(LearningConstants.VocabularyCard.JOB_PENDING,
+                                LearningConstants.VocabularyCard.JOB_RUNNING,
                                 LearningConstants.VocabularyCard.JOB_FAILED,
                                 LearningConstants.VocabularyCard.JOB_PARTIAL_FAILED,
                                 LearningConstants.VocabularyCard.JOB_CANCELLED))
@@ -258,6 +259,7 @@ public class VocabularyCardBatchService {
                         .eq(VocabularyCardGenerationJobItem::getJobId, jobId)
                         .in(VocabularyCardGenerationJobItem::getStatus,
                                 List.of(LearningConstants.VocabularyCard.ITEM_PENDING,
+                                        LearningConstants.VocabularyCard.ITEM_RUNNING,
                                         LearningConstants.VocabularyCard.ITEM_FAILED))
                         .eq(VocabularyCardGenerationJobItem::getDeleted, false)
                         .orderByAsc(VocabularyCardGenerationJobItem::getCreateTime));
@@ -329,7 +331,7 @@ public class VocabularyCardBatchService {
             List<VocabularyCardGenerationJobItem> batch = misses.subList(offset, Math.min(misses.size(), offset + batchSize));
             updateItemStatuses(batch, LearningConstants.VocabularyCard.ITEM_GENERATING, null);
             try {
-                AgentChatResponse response = requestBatch(batch, modelConfigId);
+                AgentChatResponse response = requestBatch(userId, batch, modelConfigId);
                 Map<String, JsonNode> cards = parseCards(response.getContent());
                 for (VocabularyCardGenerationJobItem item : batch) {
                     JsonNode card = cards.get(item.getNormalizedTerm());
@@ -359,11 +361,12 @@ public class VocabularyCardBatchService {
         finishJob(job);
     }
 
-    private AgentChatResponse requestBatch(List<VocabularyCardGenerationJobItem> batch, Long modelConfigId) {
+    private AgentChatResponse requestBatch(Long userId, List<VocabularyCardGenerationJobItem> batch, Long modelConfigId) {
         List<String> terms = batch.stream().map(VocabularyCardGenerationJobItem::getTerm).toList();
         Map<String, Object> variables = new HashMap<>();
         variables.put("terms", terms);
         AgentChatRequest request = new AgentChatRequest();
+        request.setUserId(userId);
         request.setInvocationScene(AiInvocationScene.VOCABULARY_CARD_BATCH);
         request.setAgentCode(LearningConstants.VOCABULARY_AGENT_CODE);
         request.setTemplateCode(LearningConstants.VOCABULARY_BATCH_TEMPLATE_CODE);

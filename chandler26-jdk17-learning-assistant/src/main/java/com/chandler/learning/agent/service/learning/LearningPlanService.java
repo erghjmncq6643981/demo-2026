@@ -841,6 +841,7 @@ public class LearningPlanService {
         variables.put("target_word_count", targetWordCount);
 
         AgentChatRequest request = new AgentChatRequest();
+        request.setUserId(plan.getUserId());
         request.setInvocationScene(AiInvocationScene.VOCABULARY_SCENE_UNIT);
         request.setAgentCode(LearningConstants.VOCABULARY_PLAN_AGENT_CODE);
         request.setTemplateCode(LearningConstants.VOCABULARY_PLAN_TEMPLATE_CODE);

@@ -38,6 +38,8 @@ import org.springframework.transaction.support.TransactionTemplate;
 import org.springframework.util.StringUtils;
 
 import java.time.LocalDateTime;
+import java.util.regex.Matcher;
+import java.util.regex.Pattern;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.LinkedHashMap;
@@ -158,6 +160,7 @@ public class VocabularyCatalogAnalysisService {
                 .eq(VocabularyCatalogAnalysisJob::getId, jobId)
                 .in(VocabularyCatalogAnalysisJob::getStatus, List.of(
                         LearningConstants.VocabularyAnalysis.STATUS_PENDING,
+                        LearningConstants.VocabularyAnalysis.STATUS_RUNNING,
                         LearningConstants.VocabularyAnalysis.STATUS_PARTIAL_FAILED,
                         LearningConstants.VocabularyAnalysis.STATUS_FAILED))
                 .set(VocabularyCatalogAnalysisJob::getStatus, LearningConstants.VocabularyAnalysis.STATUS_RUNNING)
@@ -175,6 +178,7 @@ public class VocabularyCatalogAnalysisService {
                         .eq(VocabularyCatalogAnalysisBatch::getJobId, jobId)
                         .in(VocabularyCatalogAnalysisBatch::getStatus, List.of(
                                 LearningConstants.VocabularyAnalysis.ITEM_PENDING,
+                                LearningConstants.VocabularyAnalysis.ITEM_RUNNING,
                                 LearningConstants.VocabularyAnalysis.ITEM_FAILED))
                         .eq(VocabularyCatalogAnalysisBatch::getDeleted, false)
                         .orderByAsc(VocabularyCatalogAnalysisBatch::getBatchNo));
@@ -191,8 +195,13 @@ public class VocabularyCatalogAnalysisService {
                     throw LearningAssistantException.badRequest(LearningConstants.ErrorCode.JSON_PARSE_FAILED,
                             "分析批次包含不存在的词条");
                 }
-                AgentChatResponse response = requestBatch(job, entries, modelConfigId);
-                List<VocabularyCatalogEntryAnalysis> analyses = parseAnalyses(job, batch, entries, response);
+                List<VocabularyCatalogEntryAnalysis> analyses = new ArrayList<>();
+                int chunkSize = LearningConstants.VocabularyAnalysis.DEFAULT_BATCH_SIZE;
+                for (int i = 0; i < entries.size(); i += chunkSize) {
+                    List<VocabularyCatalogEntry> chunk = entries.subList(i, Math.min(entries.size(), i + chunkSize));
+                    AgentChatResponse response = requestBatch(job, chunk, modelConfigId);
+                    analyses.addAll(parseAnalyses(job, batch, chunk, response));
+                }
                 transactionTemplate.executeWithoutResult(status -> saveBatchResult(batch, analyses, userId));
                 successCount += entries.size();
                 batch.setStatus(LearningConstants.VocabularyAnalysis.ITEM_COMPLETED);
@@ -352,6 +361,7 @@ public class VocabularyCatalogAnalysisService {
         variables.put("words", words);
 
         AgentChatRequest request = new AgentChatRequest();
+        request.setUserId(job.getUserId());
         request.setInvocationScene(AiInvocationScene.VOCABULARY_CATALOG_ANALYSIS);
         request.setAgentCode(LearningConstants.VOCABULARY_ANALYSIS_AGENT_CODE);
         request.setTemplateCode(LearningConstants.VOCABULARY_ANALYSIS_TEMPLATE_CODE);
@@ -556,11 +566,27 @@ public class VocabularyCatalogAnalysisService {
                 LearningConstants.VocabularyAnalysis.STATUS_RUNNING).contains(response.getStatus()));
     }
 
+    private static final Pattern JSON_BLOCK_PATTERN = Pattern.compile("\\{[\\s\\S]*\\}");
+
     private JsonNode parseJson(String content) {
-        String cleaned = content == null ? "" : content.replace("```json", "").replace("```", "").trim();
+        if (!org.springframework.util.StringUtils.hasText(content)) {
+            throw LearningAssistantException.badRequest(LearningConstants.ErrorCode.AI_RESPONSE_PARSE_FAILED,
+                    "公共词本关联分析响应为空");
+        }
+        String cleaned = content.replace("```json", "").replace("```", "").trim();
         try {
             return objectMapper.readTree(cleaned);
-        } catch (Exception ex) {
+        } catch (Exception ignored) {
+            Matcher matcher = JSON_BLOCK_PATTERN.matcher(cleaned);
+            if (matcher.find()) {
+                try {
+                    return objectMapper.readTree(matcher.group());
+                } catch (Exception ex) {
+                    log.warn("词本分析响应 JSON 正则提取解析失败: length={}, error={}", content.length(), ex.getMessage());
+                }
+            }
+            log.warn("公共词本关联分析响应不是合法 JSON: length={}, contentPrefix={}",
+                    content.length(), content.substring(0, Math.min(200, content.length())));
             throw LearningAssistantException.badRequest(LearningConstants.ErrorCode.AI_RESPONSE_PARSE_FAILED,
                     "公共词本关联分析响应不是合法 JSON");
         }

@@ -535,9 +535,9 @@ public final class LearningConstants {
         public static final String ENTRY_FAILED = "failed";
         public static final String SOURCE_AI = "ai";
         public static final String STRATEGY_VERSION = "semantic_coordinator_v1";
-        public static final int DEFAULT_BATCH_SIZE = 100;
-        public static final int MIN_BATCH_SIZE = 20;
-        public static final int MAX_BATCH_SIZE = 120;
+        public static final int DEFAULT_BATCH_SIZE = 25;
+        public static final int MIN_BATCH_SIZE = 10;
+        public static final int MAX_BATCH_SIZE = 50;
         public static final int MAX_TAG_COUNT = 6;
         public static final int MAX_RELATED_COUNT = 12;
         public static final double LOW_CONFIDENCE_THRESHOLD = 0.55D;

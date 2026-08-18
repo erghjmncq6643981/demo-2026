@@ -92,9 +92,7 @@ export function createTaskCenterProfileFeature(ctx) {
       const progress = Math.max(0, Math.min(100, Number(task.progressPercent || 0)))
       const status = STATUS_LABELS[task.status] || task.status || '未知'
       const canCancel = ['pending', 'running'].includes(task.status)
-      const retryCount = Number(task.retryCount || 0)
-      const maxRetryCount = Number(task.maxRetryCount ?? 2)
-      const canRetry = ['failed', 'partial_failed', 'cancelled'].includes(task.status) && retryCount < maxRetryCount
+      const canRetry = ['failed', 'partial_failed', 'cancelled'].includes(task.status)
       const canRun = task.status === 'pending' && task.executionMode !== 'immediate'
       return `
         <article class="ai-task-item">

@@ -17,6 +17,9 @@ public class AgentChatRequest {
     @NotBlank(message = "Agent 编码不能为空")
     private String agentCode;
 
+    @Schema(description = "发起调用的用户 ID，未传时从 Security 上下文获取")
+    private Long userId;
+
     @Schema(description = "会话 ID，不传则创建新会话")
     private Long sessionId;
 

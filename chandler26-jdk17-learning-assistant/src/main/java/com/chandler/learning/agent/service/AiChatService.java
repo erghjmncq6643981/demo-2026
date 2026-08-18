@@ -69,7 +69,8 @@ public class AiChatService {
                 ? AiInvocationScene.GENERAL_CHAT
                 : request.getInvocationScene();
         AiAgent agent = getEnabledAgent(request.getAgentCode());
-        AiChatSession session = resolveSession(agent, request, startTime);
+        Long userId = request.getUserId() != null ? request.getUserId() : chatSessionService.currentUserId();
+        AiChatSession session = resolveSession(agent, request, userId, startTime);
 
         List<ChatMessageParam> messages = buildMessages(agent, request, session);
         chatSessionService.addUserMessage(session.getId(), buildUserMessage(request));
@@ -83,7 +84,12 @@ public class AiChatService {
         modelRequest.setModel(modelName);
         modelRequest.setModelConfigId(selectedModelConfig == null ? null : selectedModelConfig.getId());
         modelRequest.setTemperature(agent.getTemperature());
-        modelRequest.setMaxTokens(agent.getMaxTokens());
+        Integer maxTokens = agent.getMaxTokens();
+        if (AiInvocationScene.VOCABULARY_CATALOG_ANALYSIS.equals(invocationScene)
+                || AiInvocationScene.VOCABULARY_SCENE_UNIT.equals(invocationScene)) {
+            maxTokens = Math.max(maxTokens == null ? 8192 : maxTokens, 8192);
+        }
+        modelRequest.setMaxTokens(maxTokens);
         if (AiInvocationScene.VOCABULARY_SCENE_UNIT.equals(invocationScene)
                 || AiInvocationScene.VOCABULARY_CARD_BATCH.equals(invocationScene)) {
             modelRequest.setFrequencyPenalty(0.3);
@@ -93,7 +99,7 @@ public class AiChatService {
 
         AiModelCallRecord record = buildCallRecord(session.getId(), agent, modelRequest);
         log.info("用户「{}」通过 Agent「{}」向模型「{} / {}」发起「{}」AI 调用，业务类型为「{}」",
-                userDisplayNameService.currentUserName(),
+                userId != null ? userDisplayNameService.userName(userId) : userDisplayNameService.currentUserName(),
                 agent.getName(),
                 provider,
                 modelName,
@@ -174,8 +180,7 @@ public class AiChatService {
     /**
      * 处理 {@code resolveSession} 相关业务。
      */
-    private AiChatSession resolveSession(AiAgent agent, AgentChatRequest request, long startTime) {
-        Long userId = chatSessionService.currentUserId();
+    private AiChatSession resolveSession(AiAgent agent, AgentChatRequest request, Long userId, long startTime) {
         if (request.getSessionId() != null) {
             AiChatSession session = chatSessionService.getOwnedSession(userId, request.getSessionId());
             if (session == null) {
@@ -213,7 +218,10 @@ public class AiChatService {
             messages.add(new ChatMessageParam(ChatMessageRole.SYSTEM.getCode(), promptRenderer.render(systemPrompt, variables)));
         }
 
-        messages.addAll(historyWithinBudget(history));
+        if (!AiInvocationScene.VOCABULARY_CATALOG_ANALYSIS.equals(request.getInvocationScene())
+                && !AiInvocationScene.VOCABULARY_CARD_BATCH.equals(request.getInvocationScene())) {
+            messages.addAll(historyWithinBudget(history));
+        }
 
         messages.add(new ChatMessageParam(ChatMessageRole.USER.getCode(), buildUserMessage(request)));
         return messages;

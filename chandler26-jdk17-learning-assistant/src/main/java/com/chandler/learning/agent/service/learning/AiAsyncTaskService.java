@@ -177,10 +177,6 @@ public class AiAsyncTaskService {
             return task;
         }
         int retryCount = task.getRetryCount() == null ? 0 : task.getRetryCount();
-        if (retryCount >= (task.getMaxRetryCount() == null
-                ? LearningConstants.AiTask.DEFAULT_MAX_RETRY_COUNT : task.getMaxRetryCount())) {
-            return task;
-        }
         int total = task.getTotalCount() == null ? 0 : Math.max(0, task.getTotalCount());
         int success = task.getSuccessCount() == null ? 0 : Math.max(0, task.getSuccessCount());
         int progress = total == 0 ? 0 : Math.min(100, success * 100 / total);
@@ -192,7 +188,6 @@ public class AiAsyncTaskService {
                         LearningConstants.AiTask.STATUS_FAILED,
                         LearningConstants.AiTask.STATUS_PARTIAL_FAILED,
                         LearningConstants.AiTask.STATUS_CANCELLED))
-                .eq(AiAsyncTask::getRetryCount, retryCount)
                 .eq(AiAsyncTask::getDeleted, false)
                 .set(AiAsyncTask::getRetryCount, retryCount + 1)
                 .set(AiAsyncTask::getStatus, LearningConstants.AiTask.STATUS_PENDING)

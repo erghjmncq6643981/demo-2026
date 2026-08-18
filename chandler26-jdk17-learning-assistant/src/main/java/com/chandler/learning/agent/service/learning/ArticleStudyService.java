@@ -107,7 +107,7 @@ public class ArticleStudyService {
                 difficulty.getCode(),
                 forceRefresh,
                 selectedWords.stream().map(ArticleStudyWordResponse::getNormalizedTerm).toList());
-        AgentChatResponse chatResponse = aiChat(request, selectedWords, wordCountRange, difficulty, remark);
+        AgentChatResponse chatResponse = aiChat(userId, request, selectedWords, wordCountRange, difficulty, remark);
         LocalDateTime now = LocalDateTime.now();
         LearningArticleStudyRecord record = LearningArticleStudyRecord.create(
                 userId,
@@ -224,7 +224,7 @@ public class ArticleStudyService {
     /**
      * 处理 {@code aiChat} 相关业务。
      */
-    private AgentChatResponse aiChat(ArticleStudyRequest request, List<ArticleStudyWordResponse> selectedWords,
+    private AgentChatResponse aiChat(Long userId, ArticleStudyRequest request, List<ArticleStudyWordResponse> selectedWords,
                                      ArticleWordCountRange wordCountRange, ArticleDifficulty difficulty, String remark) {
         Map<String, Object> variables = new HashMap<>();
         variables.put("words", selectedWords);
@@ -237,6 +237,7 @@ public class ArticleStudyService {
         variables.put("remark", StrUtil.blankToDefault(remark, "无特别备注"));
 
         AgentChatRequest chatRequest = new AgentChatRequest();
+        chatRequest.setUserId(userId);
         chatRequest.setInvocationScene(AiInvocationScene.ARTICLE_STUDY_MATERIAL);
         chatRequest.setAgentCode(resolveAgentCode(request));
         chatRequest.setTemplateCode(resolveTemplateCode(request));
