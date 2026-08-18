@@ -872,7 +872,7 @@ export function createScenePlanFeature(ctx) {
       const currentUnit = activeUnit(plan)
       suggestedDailyCount = number(currentUnit?.coreWordCount) || 8
     }
-    suggestedDailyCount = Math.max(8, Math.min(20, suggestedDailyCount))
+    suggestedDailyCount = Math.max(8, suggestedDailyCount)
 
     const dayDataFor = (key) => asArray(state.sceneCalendarData)
       .find((item) => String(item?.date || '').slice(0, 10) === key)

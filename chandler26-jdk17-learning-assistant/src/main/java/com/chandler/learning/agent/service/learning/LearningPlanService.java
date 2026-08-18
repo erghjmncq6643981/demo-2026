@@ -759,7 +759,7 @@ public class LearningPlanService {
                 targetWordCount = units.get(0).getCoreWordCount();
             }
         }
-        targetWordCount = Math.max(8, Math.min(20, targetWordCount));
+        targetWordCount = Math.max(8, targetWordCount);
 
         Map<String, Object> variables = new HashMap<>();
         variables.put("learning_purpose", StrUtil.blankToDefault(plan.getLearningPurpose(), "综合英语词汇学习"));
@@ -843,9 +843,8 @@ public class LearningPlanService {
             result.add(word);
         }
         int requiredMinimum = Math.min(LearningConstants.ScenePlan.MIN_CORE_WORDS, candidates.size());
-        if (coreCount < requiredMinimum || coreCount > LearningConstants.ScenePlan.MAX_CORE_WORDS) {
-            throw sceneInvalid("核心词数量应为 " + requiredMinimum + "-"
-                    + LearningConstants.ScenePlan.MAX_CORE_WORDS + " 个，实际为 " + coreCount + " 个");
+        if (coreCount < requiredMinimum) {
+            throw sceneInvalid("核心词数量不足 " + requiredMinimum + " 个，实际为 " + coreCount + " 个");
         }
         return result;
     }
