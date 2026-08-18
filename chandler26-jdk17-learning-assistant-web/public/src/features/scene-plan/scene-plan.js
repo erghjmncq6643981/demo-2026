@@ -1166,6 +1166,17 @@ export function createScenePlanFeature(ctx) {
     state.sceneChallengeStage = stage
     const hasPlan = Boolean(state.currentLearningPlan && activeUnit())
     const inLearning = hasPlan && stage !== 'overview'
+
+    if (elements.scenePlanToolbar) {
+      elements.scenePlanToolbar.classList.toggle('hidden', inLearning)
+    }
+    if (elements.scenePlanSidebar) {
+      elements.scenePlanSidebar.classList.toggle('hidden', inLearning)
+    }
+    if (elements.scenePlanLayout) {
+      elements.scenePlanLayout.classList.toggle('scene-focus-layout', inLearning)
+    }
+
     elements.scenePlanOverview.classList.toggle('hidden', inLearning)
     elements.sceneLearningStage.classList.toggle('hidden', !inLearning)
     const showReading = stage === 'learning'

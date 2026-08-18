@@ -387,6 +387,18 @@ export function createWordbookProfileFeature(ctx) {
     return state.wordbooks.find((item) => sameId(item.id, wordbookId))?.name || '所选单词本'
   }
 
+  function toggleWordbookFocusMode(forceState = null) {
+    const next = typeof forceState === 'boolean' ? forceState : !state.wordbookFocusMode
+    state.wordbookFocusMode = next
+    elements.wordbookHeaderPanel?.classList.toggle('hidden', next)
+    elements.wordbookListPanel?.classList.toggle('hidden', next)
+    elements.wordbookLayout?.classList.toggle('wordbook-focus-layout', next)
+    if (elements.toggleWordbookFocusModeBtn) {
+      elements.toggleWordbookFocusModeBtn.textContent = next ? '退出专注' : '专注模式'
+      elements.toggleWordbookFocusModeBtn.classList.toggle('active', next)
+    }
+  }
+
   return {
     loadWordbooks,
     renderWordbooks,
@@ -407,5 +419,6 @@ export function createWordbookProfileFeature(ctx) {
     updateEntryStatus,
     deleteWordbookEntry,
     currentWordbookName,
+    toggleWordbookFocusMode,
   }
 }

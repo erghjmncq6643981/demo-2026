@@ -66,10 +66,9 @@ export function createWordbookDetailFeature(ctx) {
           </div>
         </div>
         <div class="inline-actions">
-          <span class="mini-pill next-review-pill">下次 ${escapeHtml(formatDateTime(entry.nextReviewTime))}</span>
           <button class="secondary-button compact" type="button" data-generate-card="${escapeHtml(entry.id)}" data-term="${escapeHtml(entry.term || entry.normalizedTerm)}">${isCardReady ? '刷新词卡' : '生成词卡'}</button>
-          <button class="secondary-button compact" type="button" data-status-open="${escapeHtml(entry.id)}">熟练程度</button>
           <button class="secondary-button compact" type="button" data-open-review="${escapeHtml(entry.id)}">去复习</button>
+          <span class="mini-pill next-review-pill">下次 ${escapeHtml(formatDateTime(entry.nextReviewTime))}</span>
         </div>
       </div>
       <div class="mini-definition-list focus-section">
@@ -143,6 +142,9 @@ export function createWordbookDetailFeature(ctx) {
         <div class="chips focus-tags">
           ${tags.length ? tags.map((tag) => `<span class="chip tag-chip">${escapeHtml(tagLabel(tag))}</span>`).join('') : '<span class="empty">暂无标签</span>'}
         </div>
+      </div>
+      <div class="focus-section focus-actions-bar">
+        <button class="secondary-button compact" type="button" data-status-open="${escapeHtml(entry.id)}">熟练度标记</button>
       </div>
     `
     elements.wordbookFocus.querySelector('[data-open-review]')?.addEventListener('click', () => openEntryInReview(entry))

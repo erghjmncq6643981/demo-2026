@@ -370,6 +370,8 @@ bindAppEvents({
   saveSpeechPreferences,
   changeWordbook: profile.changeWordbook,
   renderWordbookEntries: profile.renderWordbookEntries,
+  toggleWordbookFocusMode: profile.toggleWordbookFocusMode,
+  toggleArticleFocusMode: article.toggleArticleFocusMode,
   loadSystemLogs: profile.loadSystemLogs,
   clearLogs: profile.clearLogs,
   study: studyFacade.study,

@@ -90,6 +90,8 @@ export function bindAppEvents(ctx) {
     saveSpeechPreferences,
     changeWordbook,
     renderWordbookEntries,
+    toggleWordbookFocusMode,
+    toggleArticleFocusMode,
     loadSystemLogs,
     clearLogs,
     study,
@@ -196,12 +198,14 @@ elements.saveSpeechBtn?.addEventListener('click', async () => {
 })
 elements.wordbookSelect.addEventListener('change', () => changeWordbook(elements.wordbookSelect.value))
 elements.wordStatusFilter.addEventListener('change', loadWordbookEntries)
+elements.toggleWordbookFocusModeBtn?.addEventListener('click', toggleWordbookFocusMode)
 elements.wordPrefixInput?.addEventListener('input', () => {
   state.wordPrefixFilter = elements.wordPrefixInput.value.trim()
   renderWordbookEntries()
 })
 elements.articleWordbookSelect?.addEventListener('change', () => changeArticleWordbook(elements.articleWordbookSelect.value))
 elements.articleStatusFilter?.addEventListener('change', loadArticleWords)
+elements.toggleArticleFocusModeBtn?.addEventListener('click', toggleArticleFocusMode)
 elements.articlePrefixInput?.addEventListener('input', () => {
   state.articlePrefixFilter = elements.articlePrefixInput.value.trim()
   renderArticleWords()
@@ -211,10 +215,6 @@ elements.articleReloadWordsBtn?.addEventListener('click', () => {
   loadArticleHistory()
 })
 elements.articleReloadHistoryBtn?.addEventListener('click', loadArticleHistory)
-elements.articleHistorySearchInput?.addEventListener('input', () => {
-  state.articleHistoryFilter = elements.articleHistorySearchInput.value.trim()
-  renderArticleHistory()
-})
 elements.sceneWordbookSelect?.addEventListener('change', () => changeSceneWordbook())
 elements.sceneReloadBtn?.addEventListener('click', loadSceneData)
 elements.openScenePlanModalBtn?.addEventListener('click', openScenePlanModal)

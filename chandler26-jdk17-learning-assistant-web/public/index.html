@@ -296,7 +296,7 @@
 
           <section class="view" id="wordbookView">
             <section class="wordbook-view-content" id="wordbookWordsPanel">
-              <section class="review-header panel">
+              <section class="review-header panel" id="wordbookHeaderPanel">
                 <div>
                   <p class="eyebrow">Wordbook</p>
                   <h3>单词本</h3>
@@ -320,8 +320,8 @@
                 </div>
               </section>
 
-              <section class="wordbook-layout">
-                <section class="panel">
+              <section class="wordbook-layout" id="wordbookLayout">
+                <section class="panel" id="wordbookListPanel">
                   <div class="panel-heading wordbook-list-heading">
                     <h3>单词列表</h3>
                     <label class="entry-prefix-field">
@@ -332,7 +332,12 @@
                   <div id="wordbookEntryList" class="entry-list empty">暂无单词</div>
                 </section>
                 <section class="panel wordbook-focus-panel">
-                  <div class="panel-heading"><h3>单词详情</h3></div>
+                  <div class="panel-heading">
+                    <h3>单词详情</h3>
+                    <div class="inline-actions">
+                      <button class="secondary-button compact" id="toggleWordbookFocusModeBtn" type="button">专注模式</button>
+                    </div>
+                  </div>
                   <div id="wordbookFocus" class="empty">选择单词后查看详情和笔记</div>
                 </section>
               </section>
@@ -340,7 +345,7 @@
           </section>
 
           <section class="view" id="scenePlanView">
-            <section class="panel scene-plan-toolbar">
+            <section class="panel scene-plan-toolbar" id="scenePlanToolbar">
               <label class="compact-field">
                 学习计划
                 <select id="scenePlanSelect"></select>
@@ -361,8 +366,8 @@
               </div>
             </section>
 
-            <section class="scene-plan-layout">
-              <aside class="panel scene-plan-sidebar">
+            <section class="scene-plan-layout" id="scenePlanLayout">
+              <aside class="panel scene-plan-sidebar" id="scenePlanSidebar">
                 <div class="panel-heading compact-heading">
                   <div>
                     <p class="eyebrow">Plans</p>
@@ -498,7 +503,7 @@
           </section>
 
           <section class="view" id="articleStudyView">
-            <section class="panel article-study-toolbar">
+            <section class="panel article-study-toolbar" id="articleStudyToolbar">
               <label class="compact-field">
                 单词本
                 <select id="articleWordbookSelect"></select>
@@ -506,8 +511,8 @@
               <button class="primary-button compact-primary" id="articleGenerateBtn" type="button">创建精读</button>
             </section>
 
-            <section class="article-study-layout">
-              <section class="panel article-history-panel">
+            <section class="article-study-layout" id="articleStudyLayout">
+              <section class="panel article-history-panel" id="articleHistoryPanel">
                 <div class="panel-heading">
                   <div>
                     <p class="eyebrow">Library</p>
@@ -515,10 +520,6 @@
                   </div>
                   <button class="secondary-button compact" id="articleReloadHistoryBtn" type="button">刷新</button>
                 </div>
-                <label class="entry-prefix-field article-history-search">
-                  <span class="sr-only">搜索文章</span>
-                  <input id="articleHistorySearchInput" autocomplete="off" placeholder="搜索标题、词汇或备注" />
-                </label>
                 <div id="articleHistoryList" class="article-history-list empty">暂无精读记录</div>
               </section>
 
@@ -528,7 +529,10 @@
                     <p class="eyebrow">Learning</p>
                     <h3>学习工作区</h3>
                   </div>
-                  <span class="mini-pill" id="articleResultBadge">等待生成</span>
+                  <div class="inline-actions">
+                    <span class="mini-pill" id="articleResultBadge">等待生成</span>
+                    <button class="secondary-button compact" id="toggleArticleFocusModeBtn" type="button">专注模式</button>
+                  </div>
                 </div>
                 <div id="articleResult" class="article-result empty">选择一份精读材料开始学习</div>
               </section>
@@ -764,19 +768,10 @@
           <button class="icon-button" id="closeScenePlanModalBtn" type="button" title="关闭" aria-label="关闭">×</button>
         </div>
         <div class="model-form-grid">
-          <label>公共词本<select id="sceneCatalogSelect"></select></label>
           <label>计划名称<input id="scenePlanNameInput" placeholder="例如：自考英语词汇冲刺" /></label>
-          <label class="full-row">学习目标<textarea id="scenePlanPurposeInput" rows="4" placeholder="例如：三个月后参加自考英语（二），高频动词需要会拼写，其余单词达到阅读中能识别"></textarea></label>
-          <label>归属个人单词本<select id="scenePlanWordbookSelect"></select></label>
+          <label>公共词本<select id="sceneCatalogSelect"></select></label>
+          <label>生词本<select id="scenePlanWordbookSelect"></select></label>
           <label>AI 模型<select id="scenePlanModelSelect"></select></label>
-          <label id="scenePlanStatusField" class="hidden">计划状态
-            <select id="scenePlanStatusSelect">
-              <option value="not_started">未开始</option>
-              <option value="active">学习中</option>
-              <option value="paused">已暂停</option>
-              <option value="cancelled">已取消</option>
-            </select>
-          </label>
           <label>开始时间
             <div class="datetime-picker" id="scenePlanStartTimePicker" data-placeholder="选择开始时间">
               <input type="hidden" id="scenePlanStartTimeInput" />
@@ -837,6 +832,15 @@
               </div>
             </div>
           </label>
+          <label id="scenePlanStatusField" class="hidden">计划状态
+            <select id="scenePlanStatusSelect">
+              <option value="not_started">未开始</option>
+              <option value="active">学习中</option>
+              <option value="paused">已暂停</option>
+              <option value="cancelled">已取消</option>
+            </select>
+          </label>
+          <label class="full-row">学习目标<textarea id="scenePlanPurposeInput" rows="3" placeholder="例如：三个月后参加自考英语（二），高频动词需要会拼写，其余单词达到阅读中能识别"></textarea></label>
         </div>
         <div class="modal-actions">
           <button class="primary-button compact-primary" id="createScenePlanBtn" type="button">创建计划</button>

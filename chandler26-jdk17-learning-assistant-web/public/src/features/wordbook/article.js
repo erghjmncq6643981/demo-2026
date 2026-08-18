@@ -316,48 +316,27 @@ export function createWordbookArticleFeature(ctx) {
 
   function renderArticleHistory() {
     if (!elements.articleHistoryList) return
-    const records = filteredArticleRecords()
+    const records = state.articleRecords || []
     if (!records.length) {
       elements.articleHistoryList.className = 'article-history-list empty'
-      elements.articleHistoryList.textContent = state.articleRecords.length ? '没有匹配的精读记录' : '暂无精读记录'
+      elements.articleHistoryList.textContent = '暂无精读记录'
       return
     }
     elements.articleHistoryList.className = 'article-history-list'
     elements.articleHistoryList.innerHTML = records
       .map((record) => {
         const title = readText(record.parsed, ['title']) || selectedWordsText(record) || '语境精读'
-        const status = articleStatusLabel(record.studyStatus)
-        const score = record.studyStatus === 'completed' ? ` · ${Number(record.practiceScore || 0)} 分` : ''
+        const time = formatDateTime(record.createTime || record.createdAt || record.updateTime)
         return `
           <button class="article-history-item ${state.currentArticleRecord && sameId(state.currentArticleRecord.id, record.id) ? 'active' : ''}" type="button" data-article-record="${escapeHtml(record.id)}">
-            <span class="article-history-title"><strong>${escapeHtml(title)}</strong><em>${escapeHtml(status)}</em></span>
-            <span>${escapeHtml(wordCountLabel(record.wordCountRange))} · ${escapeHtml(difficultyLabel(record.difficulty))}${escapeHtml(score)}</span>
-            <span>${escapeHtml(selectedWordsText(record) || '暂无目标词')}</span>
-            <small>${escapeHtml(formatDateTime(record.updateTime || record.createTime))}</small>
+            <span class="article-history-title"><strong>${escapeHtml(title)}</strong></span>
+            <small class="article-history-time">${escapeHtml(time)}</small>
           </button>
         `
       })
       .join('')
     elements.articleHistoryList.querySelectorAll('[data-article-record]').forEach((button) => {
       button.addEventListener('click', () => openArticleRecord(button.getAttribute('data-article-record')))
-    })
-  }
-
-  function filteredArticleRecords() {
-    const query = String(state.articleHistoryFilter || elements.articleHistorySearchInput?.value || '').trim().toLowerCase()
-    if (!query) return state.articleRecords
-    return state.articleRecords.filter((record) => {
-      const title = readText(record.parsed, ['title']) || ''
-      const article = readText(record.parsed, ['article', 'text', 'content']) || ''
-      const values = [
-        title,
-        article,
-        selectedWordsText(record),
-        record.remark,
-        wordCountLabel(record.wordCountRange),
-        difficultyLabel(record.difficulty),
-      ]
-      return values.some((value) => String(value || '').toLowerCase().includes(query))
     })
   }
 
@@ -1071,6 +1050,18 @@ export function createWordbookArticleFeature(ctx) {
     }
   }
 
+  function toggleArticleFocusMode(forceState = null) {
+    const next = typeof forceState === 'boolean' ? forceState : !state.articleFocusMode
+    state.articleFocusMode = next
+    elements.articleStudyToolbar?.classList.toggle('hidden', next)
+    elements.articleHistoryPanel?.classList.toggle('hidden', next)
+    elements.articleStudyLayout?.classList.toggle('article-focus-layout', next)
+    if (elements.toggleArticleFocusModeBtn) {
+      elements.toggleArticleFocusModeBtn.textContent = next ? '退出专注' : '专注模式'
+      elements.toggleArticleFocusModeBtn.classList.toggle('active', next)
+    }
+  }
+
   return {
     changeArticleWordbook,
     loadArticleWords,
@@ -1088,5 +1079,6 @@ export function createWordbookArticleFeature(ctx) {
     generateArticle,
     saveArticleStudy,
     openArticleRecord,
+    toggleArticleFocusMode,
   }
 }
