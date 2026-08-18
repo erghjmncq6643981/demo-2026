@@ -17,6 +17,7 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import lombok.RequiredArgsConstructor;
 import org.springframework.security.core.Authentication;
 import org.springframework.security.core.context.SecurityContextHolder;
+import org.springframework.dao.DuplicateKeyException;
 import org.springframework.stereotype.Service;
 import org.springframework.util.StringUtils;
 
@@ -145,17 +146,7 @@ public class AiChatSessionService {
         if (resolvedUserId == null) {
             return List.of();
         }
-        return sessionMapper.selectList(new LambdaQueryWrapper<AiChatSession>()
-                        .eq(AiChatSession::getUserId, resolvedUserId)
-                        .eq(StringUtils.hasText(agentCode), AiChatSession::getAgentCode, agentCode)
-                        .eq(StringUtils.hasText(businessType), AiChatSession::getBusinessType, businessType)
-                        .eq(StringUtils.hasText(businessId), AiChatSession::getBusinessId, businessId)
-                        .eq(StringUtils.hasText(sceneCode), AiChatSession::getSceneCode, sceneCode)
-                        .eq(AiChatSession::getDeleted, false)
-                        .orderByDesc(AiChatSession::getUpdateTime))
-                .stream()
-                .map(this::toSessionResponse)
-                .toList();
+        return sessionMapper.selectSessionSummaries(resolvedUserId, agentCode, businessType, businessId, sceneCode);
     }
 
     /**
@@ -226,7 +217,6 @@ public class AiChatSessionService {
         if (sessionId == null) {
             return;
         }
-        int nextSequence = getNextSequence(sessionId);
         AiChatMessage message = new AiChatMessage();
         message.setSessionId(sessionId);
         message.setRole(role);
@@ -235,9 +225,25 @@ public class AiChatSessionService {
         message.setCostTime(costTime);
         message.setModelProvider(modelProvider);
         message.setModelName(modelName);
-        message.setSequence(nextSequence);
         message.setCreateTime(LocalDateTime.now());
-        messageMapper.insert(message);
+        DuplicateKeyException lastConflict = null;
+        boolean inserted = false;
+        for (int attempt = LearningConstants.FIRST_SEQUENCE;
+             attempt <= LearningConstants.ChatSession.MESSAGE_SEQUENCE_RETRY_COUNT; attempt++) {
+            message.setSequence(getNextSequence(sessionId));
+            try {
+                messageMapper.insert(message);
+                inserted = true;
+                break;
+            } catch (DuplicateKeyException ex) {
+                lastConflict = ex;
+            }
+        }
+        if (!inserted) {
+            throw LearningAssistantException.of(
+                    LearningConstants.ErrorCode.CHAT_MESSAGE_SEQUENCE_CONFLICT,
+                    lastConflict);
+        }
 
         AiChatSession session = new AiChatSession();
         session.setId(sessionId);
@@ -249,13 +255,7 @@ public class AiChatSessionService {
      * 查询 {@code getNextSequence} 相关业务。
      */
     private int getNextSequence(Long sessionId) {
-        AiChatMessage last = messageMapper.selectOne(new LambdaQueryWrapper<AiChatMessage>()
-                .eq(AiChatMessage::getSessionId, sessionId)
-                .orderByDesc(AiChatMessage::getSequence)
-                .last(LearningConstants.SQL_LIMIT_ONE));
-        return last == null || last.getSequence() == null
-                ? LearningConstants.FIRST_SEQUENCE
-                : last.getSequence() + LearningConstants.SEQUENCE_STEP;
+        return messageMapper.selectNextSequence(sessionId);
     }
 
     /**

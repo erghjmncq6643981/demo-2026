@@ -95,7 +95,7 @@ CREATE TABLE IF NOT EXISTS ai_chat_message (
     deleted TINYINT(1) NOT NULL DEFAULT 0 COMMENT '是否逻辑删除',
     version INT NOT NULL DEFAULT 0 COMMENT '乐观锁版本号',
     PRIMARY KEY (id),
-    KEY idx_ai_chat_message_session_deleted_sequence (session_id, deleted, sequence),
+    UNIQUE KEY uk_ai_chat_message_session_sequence (session_id, sequence),
     CONSTRAINT fk_ai_chat_message_session FOREIGN KEY (session_id) REFERENCES ai_chat_session (id)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci COMMENT='AI 对话消息';
 

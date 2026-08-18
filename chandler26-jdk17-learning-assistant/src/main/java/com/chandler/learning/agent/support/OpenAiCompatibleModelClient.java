@@ -32,6 +32,8 @@ import java.util.Map;
 @RequiredArgsConstructor
 public class OpenAiCompatibleModelClient implements AiModelClient {
 
+    private static final int MAX_UPSTREAM_MESSAGE_LENGTH = 500;
+
     private final RestTemplate restTemplate;
     private final AiModelConfigService modelConfigService;
     private final ObjectMapper objectMapper;
@@ -126,12 +128,12 @@ public class OpenAiCompatibleModelClient implements AiModelClient {
         } catch (RestClientResponseException ex) {
             String upstreamMessage = readUpstreamMessage(ex.getResponseBodyAsString());
             String message = buildModelCallErrorMessage(provider, model, ex.getStatusCode().value(), upstreamMessage);
-            log.debug("模型 HTTP 调用失败 provider={} model={} status={} cost={}ms upstreamBody={}",
+            log.debug("模型 HTTP 调用失败 provider={} model={} status={} cost={}ms upstreamMessage={}",
                     provider,
                     model,
                     ex.getStatusCode().value(),
                     System.currentTimeMillis() - startTime,
-                    ex.getResponseBodyAsString());
+                    upstreamMessage);
             throw LearningAssistantException.externalService(
                     resolveModelCallErrorCode(upstreamMessage),
                     message,
@@ -251,12 +253,12 @@ public class OpenAiCompatibleModelClient implements AiModelClient {
             JsonNode root = objectMapper.readTree(responseBody);
             String message = root.path("error").path("message").asText(null);
             if (StringUtils.hasText(message)) {
-                return message;
+                return truncate(message);
             }
             message = root.path("message").asText(null);
-            return StringUtils.hasText(message) ? message : responseBody;
+            return truncate(StringUtils.hasText(message) ? message : responseBody);
         } catch (Exception ex) {
-            return responseBody;
+            return truncate(responseBody);
         }
     }
 
@@ -274,7 +276,7 @@ public class OpenAiCompatibleModelClient implements AiModelClient {
     /**
      * 处理 {@code resolveModelCallErrorCode} 相关业务。
      */
-    private String resolveModelCallErrorCode(String upstreamMessage) {
+    private LearningConstants.ErrorCode resolveModelCallErrorCode(String upstreamMessage) {
         return isInsufficientBalance(upstreamMessage)
                 ? LearningConstants.ErrorCode.AI_MODEL_BALANCE_INSUFFICIENT
                 : LearningConstants.ErrorCode.AI_MODEL_CALL_FAILED;
@@ -291,5 +293,12 @@ public class OpenAiCompatibleModelClient implements AiModelClient {
         return normalized.contains("insufficient balance")
                 || normalized.contains("insufficient_balance")
                 || normalized.contains("余额不足");
+    }
+
+    private String truncate(String value) {
+        if (value == null || value.length() <= MAX_UPSTREAM_MESSAGE_LENGTH) {
+            return value;
+        }
+        return value.substring(0, MAX_UPSTREAM_MESSAGE_LENGTH);
     }
 }

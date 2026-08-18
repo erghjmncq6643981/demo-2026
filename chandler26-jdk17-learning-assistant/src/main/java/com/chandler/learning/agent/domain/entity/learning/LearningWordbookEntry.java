@@ -220,6 +220,7 @@ public class LearningWordbookEntry extends BaseEntity {
                                                         Long catalogEntryId, String term, String normalizedTerm,
                                                         String basicSnapshotJson, LocalDateTime now) {
         LearningWordbookEntry entry = new LearningWordbookEntry();
+        entry.setId(com.baomidou.mybatisplus.core.toolkit.IdWorker.getId());
         entry.setUserId(userId);
         entry.setWordbookId(wordbookId);
         entry.setProgressId(progressId);
@@ -237,7 +238,10 @@ public class LearningWordbookEntry extends BaseEntity {
         entry.setReviewCount(LearningConstants.ZERO);
         entry.setCorrectCount(LearningConstants.ZERO);
         entry.setWrongCount(LearningConstants.ZERO);
+        entry.setCreateBy(userId);
+        entry.setUpdateBy(userId);
         entry.setDeleted(false);
+        entry.setVersion(LearningConstants.ZERO);
         entry.setCreateTime(now);
         entry.setUpdateTime(now);
         return entry;

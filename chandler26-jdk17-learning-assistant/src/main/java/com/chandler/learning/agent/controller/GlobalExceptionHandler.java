@@ -25,6 +25,8 @@ import java.util.Map;
 @RequiredArgsConstructor
 public class GlobalExceptionHandler {
 
+    private static final int MAX_UPSTREAM_MESSAGE_LENGTH = 500;
+
     private final ObjectMapper objectMapper;
 
     /**
@@ -32,11 +34,13 @@ public class GlobalExceptionHandler {
      */
     @ExceptionHandler(LearningAssistantException.class)
     public ResponseEntity<Map<String, String>> handleLearningAssistant(LearningAssistantException ex) {
-        log.warn("业务异常 errorCode={} message={} debug={}",
-                ex.getErrorCode(),
-                ex.getMessage(),
-                ex.getDebugMessage(),
-                ex);
+        if (ex.getStatus().is5xxServerError()) {
+            log.error("event=business_error errorCode={} message={}", ex.getErrorCode(), ex.getMessage());
+            log.debug("业务异常技术堆栈 errorCode={}", ex.getErrorCode(), ex);
+        } else {
+            log.info("event=business_rejected errorCode={} message={}", ex.getErrorCode(), ex.getMessage());
+            log.debug("业务异常诊断 errorCode={} debugMessage={}", ex.getErrorCode(), ex.getDebugMessage());
+        }
         return ResponseEntity.status(ex.getStatus()).body(Map.of(
                 "message", ex.getMessage(),
                 "errorCode", ex.getErrorCode()));
@@ -82,14 +86,13 @@ public class GlobalExceptionHandler {
         String message = StringUtils.hasText(upstreamMessage)
                 ? "外部服务调用失败（HTTP " + ex.getStatusCode().value() + "）：" + upstreamMessage
                 : "外部服务调用失败（HTTP " + ex.getStatusCode().value() + "）";
-        log.warn("外部服务调用失败 status={} message={} body={}",
+        log.warn("event=external_service_failed status={} message={}",
                 ex.getStatusCode().value(),
-                upstreamMessage,
-                ex.getResponseBodyAsString(),
-                ex);
+                upstreamMessage);
+        log.debug("外部服务异常技术堆栈 status={}", ex.getStatusCode().value(), ex);
         return ResponseEntity.status(HttpStatus.BAD_GATEWAY).body(Map.of(
                 "message", message,
-                "errorCode", LearningConstants.ErrorCode.EXTERNAL_SERVICE_CALL_FAILED));
+                "errorCode", LearningConstants.ErrorCode.EXTERNAL_SERVICE_CALL_FAILED.getCode()));
     }
 
     /**
@@ -100,7 +103,7 @@ public class GlobalExceptionHandler {
         log.error("系统发生未预期异常", ex);
         return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).body(Map.of(
                 "message", "系统异常，请稍后重试",
-                "errorCode", LearningConstants.ErrorCode.SYSTEM_UNEXPECTED));
+                "errorCode", LearningConstants.ErrorCode.SYSTEM_UNEXPECTED.getCode()));
     }
 
     /**
@@ -114,12 +117,19 @@ public class GlobalExceptionHandler {
             JsonNode root = objectMapper.readTree(responseBody);
             String message = root.path("error").path("message").asText(null);
             if (StringUtils.hasText(message)) {
-                return message;
+                return truncate(message);
             }
             message = root.path("message").asText(null);
-            return StringUtils.hasText(message) ? message : responseBody;
+            return truncate(StringUtils.hasText(message) ? message : responseBody);
         } catch (Exception ignored) {
-            return responseBody;
+            return truncate(responseBody);
         }
+    }
+
+    private String truncate(String value) {
+        if (value == null || value.length() <= MAX_UPSTREAM_MESSAGE_LENGTH) {
+            return value;
+        }
+        return value.substring(0, MAX_UPSTREAM_MESSAGE_LENGTH);
     }
 }

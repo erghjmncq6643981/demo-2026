@@ -1,5 +1,7 @@
 package com.chandler.learning.agent.support;
 
+import org.springframework.http.HttpStatus;
+
 /**
  * 后端通用业务常量。
  * <p>
@@ -156,6 +158,8 @@ public final class LearningConstants {
      */
     public static final class ChatSession {
         public static final int MAX_HISTORY_SIZE = 20;
+        public static final int MAX_HISTORY_CHARS = 24_000;
+        public static final int MESSAGE_SEQUENCE_RETRY_COUNT = 3;
         public static final String ROLE_SYSTEM = "system";
         public static final String ROLE_USER = "user";
         public static final String ROLE_ASSISTANT = "assistant";
@@ -172,6 +176,15 @@ public final class LearningConstants {
          * 处理 {@code ChatSession} 相关业务。
          */
         private ChatSession() {
+        }
+    }
+
+    /** AI 审计记录的默认安全边界。 */
+    public static final class AiAudit {
+        public static final int DEFAULT_MAX_CONTENT_LENGTH = 120_000;
+        public static final int MAX_ERROR_MESSAGE_LENGTH = 1_000;
+
+        private AiAudit() {
         }
     }
 
@@ -495,79 +508,102 @@ public final class LearningConstants {
     }
 
     /**
-     * ErrorCode 类。
+     * 稳定错误码、默认中文提示和默认 HTTP 状态。
+     * <p>
+     * 业务代码优先使用 {@code LearningAssistantException.badRequest(code)}，
+     * 只有确实需要上下文时才传入覆盖消息。
      */
-    public static final class ErrorCode {
-        public static final String AUTH_REQUIRED = "AUTH_REQUIRED";
-        public static final String AUTH_EXPIRED = "AUTH_EXPIRED";
-        public static final String AUTH_INVALID_CREDENTIALS = "AUTH_INVALID_CREDENTIALS";
-        public static final String USER_ALREADY_EXISTS = "USER_ALREADY_EXISTS";
-        public static final String USER_DISABLED = "USER_DISABLED";
-        public static final String PASSWORD_TOO_SHORT = "PASSWORD_TOO_SHORT";
-        public static final String PASSWORD_INCORRECT = "PASSWORD_INCORRECT";
-        public static final String PHONE_INVALID = "PHONE_INVALID";
-        public static final String EMAIL_INVALID = "EMAIL_INVALID";
-        public static final String JWT_INVALID = "JWT_INVALID";
-        public static final String JWT_SIGN_FAILED = "JWT_SIGN_FAILED";
-        public static final String JSON_SERIALIZE_FAILED = "JSON_SERIALIZE_FAILED";
-        public static final String JSON_PARSE_FAILED = "JSON_PARSE_FAILED";
-        public static final String API_KEY_REQUIRED = "API_KEY_REQUIRED";
-        public static final String API_KEY_CRYPTO_FAILED = "API_KEY_CRYPTO_FAILED";
-        public static final String API_KEY_CIPHER_INVALID = "API_KEY_CIPHER_INVALID";
-        public static final String SYSTEM_UNEXPECTED = "SYSTEM_UNEXPECTED";
-        public static final String EXTERNAL_SERVICE_CALL_FAILED = "EXTERNAL_SERVICE_CALL_FAILED";
-        public static final String MODEL_CONFIG_NOT_FOUND = "MODEL_CONFIG_NOT_FOUND";
-        public static final String AI_PROVIDER_MISSING = "AI_PROVIDER_MISSING";
-        public static final String AI_PROVIDER_DISABLED = "AI_PROVIDER_DISABLED";
-        public static final String AI_PROVIDER_API_KEY_MISSING = "AI_PROVIDER_API_KEY_MISSING";
-        public static final String AI_PROVIDER_BASE_URL_MISSING = "AI_PROVIDER_BASE_URL_MISSING";
-        public static final String AI_MODEL_NAME_MISSING = "AI_MODEL_NAME_MISSING";
-        public static final String AI_MODEL_CALL_FAILED = "AI_MODEL_CALL_FAILED";
-        public static final String AI_MODEL_BALANCE_INSUFFICIENT = "AI_MODEL_BALANCE_INSUFFICIENT";
-        public static final String AI_INVOCATION_SCENE_INVALID = "AI_INVOCATION_SCENE_INVALID";
-        public static final String AI_RESPONSE_PARSE_FAILED = "AI_RESPONSE_PARSE_FAILED";
-        public static final String AGENT_NOT_FOUND = "AGENT_NOT_FOUND";
-        public static final String AGENT_DISABLED = "AGENT_DISABLED";
-        public static final String AGENT_CODE_EXISTS = "AGENT_CODE_EXISTS";
-        public static final String CHAT_SESSION_NOT_FOUND = "CHAT_SESSION_NOT_FOUND";
-        public static final String PROMPT_TEMPLATE_NOT_FOUND = "PROMPT_TEMPLATE_NOT_FOUND";
-        public static final String PROMPT_TEMPLATE_DISABLED = "PROMPT_TEMPLATE_DISABLED";
-        public static final String PROMPT_TEMPLATE_CODE_EXISTS = "PROMPT_TEMPLATE_CODE_EXISTS";
-        public static final String PROMPT_TEMPLATE_LAST_NOT_DELETABLE = "PROMPT_TEMPLATE_LAST_NOT_DELETABLE";
-        public static final String VOCABULARY_EMPTY = "VOCABULARY_EMPTY";
-        public static final String VOCABULARY_RECORD_NOT_FOUND = "VOCABULARY_RECORD_NOT_FOUND";
-        public static final String WORDBOOK_NOT_FOUND = "WORDBOOK_NOT_FOUND";
-        public static final String WORDBOOK_NOT_EMPTY = "WORDBOOK_NOT_EMPTY";
-        public static final String WORDBOOK_TRANSFER_INVALID = "WORDBOOK_TRANSFER_INVALID";
-        public static final String ENTRY_NOT_FOUND = "ENTRY_NOT_FOUND";
-        public static final String ARTICLE_WORDS_EMPTY = "ARTICLE_WORDS_EMPTY";
-        public static final String ARTICLE_WORD_LIMIT_EXCEEDED = "ARTICLE_WORD_LIMIT_EXCEEDED";
-        public static final String ARTICLE_WORDS_INVALID = "ARTICLE_WORDS_INVALID";
-        public static final String ARTICLE_RECORD_NOT_FOUND = "ARTICLE_RECORD_NOT_FOUND";
-        public static final String ARTICLE_STAGE_INVALID = "ARTICLE_STAGE_INVALID";
-        public static final String ARTICLE_PRACTICE_INCOMPLETE = "ARTICLE_PRACTICE_INCOMPLETE";
-        public static final String ARTICLE_AI_RESPONSE_INVALID = "ARTICLE_AI_RESPONSE_INVALID";
-        public static final String AGENT_LAST_NOT_DELETABLE = "AGENT_LAST_NOT_DELETABLE";
-        public static final String HASH_FAILED = "HASH_FAILED";
-        public static final String VOCABULARY_IMPORT_INVALID = "VOCABULARY_IMPORT_INVALID";
-        public static final String VOCABULARY_IMPORT_NOT_FOUND = "VOCABULARY_IMPORT_NOT_FOUND";
-        public static final String VOCABULARY_IMPORT_NOT_REVIEWED = "VOCABULARY_IMPORT_NOT_REVIEWED";
-        public static final String VOCABULARY_IMPORT_ALREADY_PUBLISHED = "VOCABULARY_IMPORT_ALREADY_PUBLISHED";
-        public static final String VOCABULARY_CATALOG_NOT_FOUND = "VOCABULARY_CATALOG_NOT_FOUND";
-        public static final String LEARNING_PLAN_NOT_FOUND = "LEARNING_PLAN_NOT_FOUND";
-        public static final String LEARNING_PLAN_COMPLETED = "LEARNING_PLAN_COMPLETED";
-        public static final String LEARNING_PLAN_UNIT_NOT_FOUND = "LEARNING_PLAN_UNIT_NOT_FOUND";
-        public static final String LEARNING_PLAN_UNIT_ACTIVE = "LEARNING_PLAN_UNIT_ACTIVE";
-        public static final String LEARNING_PLAN_UNIT_INCOMPLETE = "LEARNING_PLAN_UNIT_INCOMPLETE";
-        public static final String LEARNING_PLAN_NO_WORDS = "LEARNING_PLAN_NO_WORDS";
-        public static final String LEARNING_SCENE_PARSE_FAILED = "LEARNING_SCENE_PARSE_FAILED";
-        public static final String LEARNING_ASSESSMENT_INVALID = "LEARNING_ASSESSMENT_INVALID";
-        public static final String LEARNING_PLAN_STATE_ERROR = "LEARNING_PLAN_STATE_ERROR";
+    public enum ErrorCode {
+        AUTH_REQUIRED(HttpStatus.UNAUTHORIZED, "请先登录"),
+        AUTH_EXPIRED(HttpStatus.UNAUTHORIZED, "登录状态已过期，请重新登录"),
+        AUTH_INVALID_CREDENTIALS(HttpStatus.UNAUTHORIZED, "用户名或密码错误"),
+        USER_ALREADY_EXISTS(HttpStatus.BAD_REQUEST, "用户已存在"),
+        USER_DISABLED(HttpStatus.FORBIDDEN, "用户已被禁用"),
+        PASSWORD_TOO_SHORT(HttpStatus.BAD_REQUEST, "密码长度不足"),
+        PASSWORD_INCORRECT(HttpStatus.BAD_REQUEST, "原密码不正确"),
+        PHONE_INVALID(HttpStatus.BAD_REQUEST, "手机号格式不正确"),
+        EMAIL_INVALID(HttpStatus.BAD_REQUEST, "邮箱格式不正确"),
+        JWT_INVALID(HttpStatus.UNAUTHORIZED, "登录凭证无效"),
+        JWT_SIGN_FAILED(HttpStatus.INTERNAL_SERVER_ERROR, "登录凭证生成失败"),
+        JSON_SERIALIZE_FAILED(HttpStatus.INTERNAL_SERVER_ERROR, "数据序列化失败"),
+        JSON_PARSE_FAILED(HttpStatus.BAD_REQUEST, "数据格式不正确"),
+        API_KEY_REQUIRED(HttpStatus.BAD_REQUEST, "请填写模型 API Key"),
+        API_KEY_CRYPTO_FAILED(HttpStatus.INTERNAL_SERVER_ERROR, "模型 API Key 处理失败"),
+        API_KEY_CIPHER_INVALID(HttpStatus.BAD_REQUEST, "模型 API Key 密文无效"),
+        SYSTEM_UNEXPECTED(HttpStatus.INTERNAL_SERVER_ERROR, "系统异常，请稍后重试"),
+        EXTERNAL_SERVICE_CALL_FAILED(HttpStatus.BAD_GATEWAY, "外部服务调用失败"),
+        MODEL_CONFIG_NOT_FOUND(HttpStatus.NOT_FOUND, "模型配置不存在"),
+        AI_PROVIDER_MISSING(HttpStatus.BAD_REQUEST, "未配置 AI 服务供应商"),
+        AI_PROVIDER_DISABLED(HttpStatus.BAD_REQUEST, "AI 服务供应商已停用"),
+        AI_PROVIDER_API_KEY_MISSING(HttpStatus.BAD_REQUEST, "AI 服务 API Key 未配置"),
+        AI_PROVIDER_BASE_URL_MISSING(HttpStatus.BAD_REQUEST, "AI 服务地址未配置"),
+        AI_MODEL_NAME_MISSING(HttpStatus.BAD_REQUEST, "AI 模型名称未配置"),
+        AI_MODEL_CALL_FAILED(HttpStatus.BAD_GATEWAY, "AI 模型调用失败"),
+        AI_MODEL_BALANCE_INSUFFICIENT(HttpStatus.BAD_GATEWAY, "AI 模型余额不足"),
+        AI_INVOCATION_SCENE_INVALID(HttpStatus.BAD_REQUEST, "AI 调用场景无效"),
+        AI_RESPONSE_PARSE_FAILED(HttpStatus.BAD_REQUEST, "AI 返回内容格式无效"),
+        AGENT_NOT_FOUND(HttpStatus.NOT_FOUND, "Agent 不存在"),
+        AGENT_DISABLED(HttpStatus.BAD_REQUEST, "Agent 已停用"),
+        AGENT_CODE_EXISTS(HttpStatus.BAD_REQUEST, "Agent 编码已存在"),
+        CHAT_SESSION_NOT_FOUND(HttpStatus.NOT_FOUND, "AI 会话不存在"),
+        CHAT_MESSAGE_SEQUENCE_CONFLICT(HttpStatus.CONFLICT, "AI 会话消息写入冲突，请重试"),
+        PROMPT_TEMPLATE_NOT_FOUND(HttpStatus.NOT_FOUND, "Prompt 模板不存在"),
+        PROMPT_TEMPLATE_DISABLED(HttpStatus.BAD_REQUEST, "Prompt 模板已停用"),
+        PROMPT_TEMPLATE_CODE_EXISTS(HttpStatus.BAD_REQUEST, "Prompt 模板编码已存在"),
+        PROMPT_TEMPLATE_LAST_NOT_DELETABLE(HttpStatus.BAD_REQUEST, "最后一个 Prompt 模板不可删除"),
+        VOCABULARY_EMPTY(HttpStatus.BAD_REQUEST, "没有可学习的词汇"),
+        VOCABULARY_RECORD_NOT_FOUND(HttpStatus.NOT_FOUND, "词汇记录不存在"),
+        WORDBOOK_NOT_FOUND(HttpStatus.NOT_FOUND, "单词本不存在"),
+        WORDBOOK_NOT_EMPTY(HttpStatus.BAD_REQUEST, "单词本不为空，无法删除"),
+        WORDBOOK_TRANSFER_INVALID(HttpStatus.BAD_REQUEST, "单词本转移参数无效"),
+        ENTRY_NOT_FOUND(HttpStatus.NOT_FOUND, "单词本词条不存在"),
+        ARTICLE_WORDS_EMPTY(HttpStatus.BAD_REQUEST, "请选择文章词汇"),
+        ARTICLE_WORD_LIMIT_EXCEEDED(HttpStatus.BAD_REQUEST, "文章词汇数量超出限制"),
+        ARTICLE_WORDS_INVALID(HttpStatus.BAD_REQUEST, "文章词汇无效"),
+        ARTICLE_RECORD_NOT_FOUND(HttpStatus.NOT_FOUND, "文章学习记录不存在"),
+        ARTICLE_STAGE_INVALID(HttpStatus.BAD_REQUEST, "文章学习阶段无效"),
+        ARTICLE_PRACTICE_INCOMPLETE(HttpStatus.BAD_REQUEST, "请先完成文章练习"),
+        ARTICLE_AI_RESPONSE_INVALID(HttpStatus.BAD_REQUEST, "文章 AI 返回内容无效"),
+        AGENT_LAST_NOT_DELETABLE(HttpStatus.BAD_REQUEST, "最后一个 Agent 不可删除"),
+        HASH_FAILED(HttpStatus.INTERNAL_SERVER_ERROR, "内容摘要计算失败"),
+        VOCABULARY_IMPORT_INVALID(HttpStatus.BAD_REQUEST, "词表导入内容无效"),
+        VOCABULARY_IMPORT_NOT_FOUND(HttpStatus.NOT_FOUND, "词表导入任务不存在"),
+        VOCABULARY_IMPORT_NOT_REVIEWED(HttpStatus.BAD_REQUEST, "词表仍有疑似断词未确认"),
+        VOCABULARY_IMPORT_ALREADY_PUBLISHED(HttpStatus.BAD_REQUEST, "词表已经发布"),
+        VOCABULARY_CATALOG_NOT_FOUND(HttpStatus.NOT_FOUND, "公共词本不存在"),
+        LEARNING_PLAN_NOT_FOUND(HttpStatus.NOT_FOUND, "学习计划不存在"),
+        LEARNING_PLAN_COMPLETED(HttpStatus.BAD_REQUEST, "学习计划已经完成"),
+        LEARNING_PLAN_UNIT_NOT_FOUND(HttpStatus.NOT_FOUND, "学习场景不存在"),
+        LEARNING_PLAN_UNIT_ACTIVE(HttpStatus.BAD_REQUEST, "当前已有正在学习的场景"),
+        LEARNING_PLAN_UNIT_INCOMPLETE(HttpStatus.BAD_REQUEST, "当前场景尚未完成"),
+        LEARNING_PLAN_NO_WORDS(HttpStatus.BAD_REQUEST, "词表中没有可学习词汇"),
+        LEARNING_SCENE_PARSE_FAILED(HttpStatus.BAD_REQUEST, "场景材料解析失败"),
+        LEARNING_ASSESSMENT_INVALID(HttpStatus.BAD_REQUEST, "词汇检查内容无效"),
+        LEARNING_PLAN_STATE_ERROR(HttpStatus.BAD_REQUEST, "学习计划状态不允许当前操作");
 
-        /**
-         * 处理 {@code ErrorCode} 相关业务。
-         */
-        private ErrorCode() {
+        private final HttpStatus status;
+        private final String defaultMessage;
+
+        ErrorCode(HttpStatus status, String defaultMessage) {
+            this.status = status;
+            this.defaultMessage = defaultMessage;
+        }
+
+        public HttpStatus getStatus() {
+            return status;
+        }
+
+        public String getDefaultMessage() {
+            return defaultMessage;
+        }
+
+        public String getCode() {
+            return name();
+        }
+
+        @Override
+        public String toString() {
+            return name();
         }
     }
 }

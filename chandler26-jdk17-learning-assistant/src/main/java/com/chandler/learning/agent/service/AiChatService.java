@@ -23,12 +23,14 @@ import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
 import org.springframework.util.StringUtils;
 
 import java.time.LocalDateTime;
 import java.util.ArrayList;
 import java.util.HashMap;
+import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 
@@ -51,6 +53,12 @@ public class AiChatService {
     private final AiModelCallRecordMapper callRecordMapper;
     private final ObjectMapper objectMapper;
     private final UserDisplayNameService userDisplayNameService;
+
+    @Value("${learning.ai.audit.store-content:false}")
+    private boolean storeAuditContent;
+
+    @Value("${learning.ai.audit.max-content-length:120000}")
+    private int maxAuditContentLength;
 
     /**
      * 处理 {@code chat} 相关业务。
@@ -105,9 +113,10 @@ public class AiChatService {
             long costTime = System.currentTimeMillis() - startTime;
             chatSessionService.addAssistantMessage(session.getId(), modelResponse.getContent(),
                     modelResponse.getTotalTokens(), costTime, provider, modelName);
-            saveSuccessRecord(record, modelResponse, costTime);
-            log.debug("AI 会话成功 sessionId={} agent={} provider={} model={} tokens={} cost={}ms",
+            trySaveSuccessRecord(record, modelResponse, costTime);
+            log.info("event=ai_call result=success sessionId={} invocationScene={} agent={} provider={} model={} tokens={} costMs={}",
                     session.getId(),
+                    invocationScene.getCode(),
                     agent.getCode(),
                     provider,
                     modelName,
@@ -126,15 +135,20 @@ public class AiChatService {
             return response;
         } catch (RuntimeException ex) {
             long costTime = System.currentTimeMillis() - startTime;
-            saveFailedRecord(record, ex, costTime);
-            log.error("AI 会话失败 sessionId={} agent={} provider={} model={} cost={}ms error={}",
+            trySaveFailedRecord(record, ex, costTime);
+            String errorCode = ex instanceof LearningAssistantException businessException
+                    ? businessException.getErrorCode()
+                    : LearningConstants.ErrorCode.AI_MODEL_CALL_FAILED.getCode();
+            log.warn("event=ai_call result=failed sessionId={} invocationScene={} agent={} provider={} model={} costMs={} errorCode={} message={}",
                     session.getId(),
+                    invocationScene.getCode(),
                     agent.getCode(),
                     provider,
                     modelName,
                     costTime,
-                    ex.getMessage(),
-                    ex);
+                    errorCode,
+                    ex.getMessage());
+            log.debug("AI 调用失败技术堆栈 sessionId={}", session.getId(), ex);
             throw ex;
         }
     }
@@ -199,11 +213,7 @@ public class AiChatService {
             messages.add(new ChatMessageParam(ChatMessageRole.SYSTEM.getCode(), promptRenderer.render(systemPrompt, variables)));
         }
 
-        for (AiChatMessage message : history) {
-            if (ChatMessageRole.conversational(message.getRole())) {
-                messages.add(new ChatMessageParam(message.getRole(), message.getContent()));
-            }
-        }
+        messages.addAll(historyWithinBudget(history));
 
         messages.add(new ChatMessageParam(ChatMessageRole.USER.getCode(), buildUserMessage(request)));
         return messages;
@@ -286,7 +296,7 @@ public class AiChatService {
         record.setInvocationSceneCode(request.getInvocationScene().getCode());
         record.setProvider(request.getProvider());
         record.setModelName(request.getModel());
-        record.setRequestJson(toJson(request));
+        record.setRequestJson(requestAuditJson(request));
         record.setCreateTime(LocalDateTime.now());
         return record;
     }
@@ -294,24 +304,36 @@ public class AiChatService {
     /**
      * 创建或保存 {@code saveSuccessRecord} 相关业务。
      */
-    private void saveSuccessRecord(AiModelCallRecord record, ModelChatResponse response, long costTime) {
-        record.setResponseJson(response.getResponseJson());
+    private void trySaveSuccessRecord(AiModelCallRecord record, ModelChatResponse response, long costTime) {
+        record.setResponseJson(responseAuditJson(response));
         record.setSuccess(true);
         record.setPromptTokens(response.getPromptTokens());
         record.setCompletionTokens(response.getCompletionTokens());
         record.setTotalTokens(response.getTotalTokens());
         record.setLatencyMs(costTime);
-        callRecordMapper.insert(record);
+        try {
+            callRecordMapper.insert(record);
+        } catch (RuntimeException ex) {
+            log.error("event=ai_audit_persist result=failed sessionId={} phase=success_record message={}",
+                    record.getSessionId(), ex.getMessage());
+            log.debug("AI 成功调用审计记录落库失败 sessionId={}", record.getSessionId(), ex);
+        }
     }
 
     /**
      * 创建或保存 {@code saveFailedRecord} 相关业务。
      */
-    private void saveFailedRecord(AiModelCallRecord record, RuntimeException ex, long costTime) {
+    private void trySaveFailedRecord(AiModelCallRecord record, RuntimeException ex, long costTime) {
         record.setSuccess(false);
-        record.setErrorMessage(ex.getMessage());
+        record.setErrorMessage(limit(ex.getMessage(), LearningConstants.AiAudit.MAX_ERROR_MESSAGE_LENGTH));
         record.setLatencyMs(costTime);
-        callRecordMapper.insert(record);
+        try {
+            callRecordMapper.insert(record);
+        } catch (RuntimeException persistenceException) {
+            log.error("event=ai_audit_persist result=failed sessionId={} phase=failure_record message={}",
+                    record.getSessionId(), persistenceException.getMessage());
+            log.debug("AI 失败调用审计记录落库失败 sessionId={}", record.getSessionId(), persistenceException);
+        }
     }
 
     /**
@@ -339,8 +361,81 @@ public class AiChatService {
             return objectMapper.readValue(session.getVariablesJson(), new TypeReference<>() {
             });
         } catch (Exception ex) {
-            return new HashMap<>();
+            throw LearningAssistantException.system(
+                    LearningConstants.ErrorCode.JSON_PARSE_FAILED,
+                    "AI 会话变量损坏，请新建会话后重试",
+                    ex);
         }
+    }
+
+    /** 仅携带最近且不超过字符预算的历史消息，避免上下文无限膨胀。 */
+    private List<ChatMessageParam> historyWithinBudget(List<AiChatMessage> history) {
+        List<ChatMessageParam> selected = new ArrayList<>();
+        int remaining = LearningConstants.ChatSession.MAX_HISTORY_CHARS;
+        for (int index = history.size() - LearningConstants.SEQUENCE_STEP;
+             index >= LearningConstants.ZERO; index--) {
+            AiChatMessage message = history.get(index);
+            if (!ChatMessageRole.conversational(message.getRole()) || !StringUtils.hasText(message.getContent())) {
+                continue;
+            }
+            String content = message.getContent();
+            if (content.length() > remaining) {
+                if (selected.isEmpty()) {
+                    selected.add(new ChatMessageParam(message.getRole(),
+                            content.substring(content.length() - remaining)));
+                }
+                break;
+            }
+            selected.add(0, new ChatMessageParam(message.getRole(), content));
+            remaining -= content.length();
+        }
+        return selected;
+    }
+
+    /** 构造不含提示词正文的模型请求审计摘要；本地排障可通过配置显式开启正文留存。 */
+    private String requestAuditJson(ModelChatRequest request) {
+        Map<String, Object> audit = new LinkedHashMap<>();
+        audit.put("contentStored", storeAuditContent);
+        audit.put("invocationScene", request.getInvocationScene() == null
+                ? null : request.getInvocationScene().getCode());
+        audit.put("provider", request.getProvider());
+        audit.put("model", request.getModel());
+        audit.put("modelConfigId", request.getModelConfigId());
+        audit.put("temperature", request.getTemperature());
+        audit.put("maxTokens", request.getMaxTokens());
+        List<ChatMessageParam> requestMessages = request.getMessages() == null ? List.of() : request.getMessages();
+        audit.put("messages", requestMessages.stream().map(message -> {
+            Map<String, Object> summary = new LinkedHashMap<>();
+            summary.put("role", message.getRole());
+            summary.put("characters", message.getContent() == null ? LearningConstants.ZERO : message.getContent().length());
+            return summary;
+        }).toList());
+        if (storeAuditContent) {
+            audit.put("payload", limit(toJson(request), maxAuditContentLength));
+        }
+        return toJson(audit);
+    }
+
+    /** 构造模型响应审计摘要，默认仅保留长度与 Token 指标。 */
+    private String responseAuditJson(ModelChatResponse response) {
+        Map<String, Object> audit = new LinkedHashMap<>();
+        audit.put("contentStored", storeAuditContent);
+        audit.put("contentCharacters", response.getContent() == null
+                ? LearningConstants.ZERO : response.getContent().length());
+        audit.put("promptTokens", response.getPromptTokens());
+        audit.put("completionTokens", response.getCompletionTokens());
+        audit.put("totalTokens", response.getTotalTokens());
+        if (storeAuditContent) {
+            audit.put("payload", limit(response.getResponseJson(), maxAuditContentLength));
+        }
+        return toJson(audit);
+    }
+
+    private String limit(String value, int maxLength) {
+        if (value == null || value.length() <= maxLength) {
+            return value;
+        }
+        return value.substring(LearningConstants.ZERO, maxLength);
     }
 
     /**

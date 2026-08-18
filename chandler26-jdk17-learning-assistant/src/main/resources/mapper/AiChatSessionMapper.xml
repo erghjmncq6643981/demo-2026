@@ -1,0 +1,39 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "https://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.chandler.learning.agent.mapper.AiChatSessionMapper">
+
+    <select id="selectSessionSummaries"
+            resultType="com.chandler.learning.agent.domain.dto.ChatSessionResponse">
+        SELECT s.id,
+               s.user_id AS userId,
+               s.agent_code AS agentCode,
+               s.business_type AS businessType,
+               s.business_id AS businessId,
+               s.scene_code AS sceneCode,
+               s.title,
+               COUNT(m.id) AS messageCount,
+               s.create_time AS createTime,
+               s.update_time AS updateTime
+        FROM ai_chat_session s
+        LEFT JOIN ai_chat_message m
+               ON m.session_id = s.id
+              AND m.deleted = 0
+        WHERE s.user_id = #{userId}
+          AND s.deleted = 0
+        <if test="agentCode != null and agentCode != ''">
+            AND s.agent_code = #{agentCode}
+        </if>
+        <if test="businessType != null and businessType != ''">
+            AND s.business_type = #{businessType}
+        </if>
+        <if test="businessId != null and businessId != ''">
+            AND s.business_id = #{businessId}
+        </if>
+        <if test="sceneCode != null and sceneCode != ''">
+            AND s.scene_code = #{sceneCode}
+        </if>
+        GROUP BY s.id, s.user_id, s.agent_code, s.business_type, s.business_id,
+                 s.scene_code, s.title, s.create_time, s.update_time
+        ORDER BY s.update_time DESC
+    </select>
+</mapper>

@@ -1771,16 +1771,35 @@ export function createScenePlanFeature(ctx) {
         method: 'POST',
         body: JSON.stringify({ batchSize: 15 }),
       })
+      toast('词卡任务已提交，正在生成...')
+      state.sceneCardJob = await waitForCardJob(state.sceneCardJob)
       await selectPlan(plan.id, { quiet: true })
+      if (['pending', 'running'].includes(state.sceneCardJob.status)) {
+        toast('词卡仍在后台生成，可稍后再次查看进度')
+        return
+      }
       const failed = number(state.sceneCardJob.failedCount)
       elements.sceneGenerateCardsBtn.textContent = failed ? `重试失败词 (${failed})` : '补齐词卡'
-      toast(`词卡任务完成：成功 ${number(state.sceneCardJob.successCount)}，失败 ${failed}`)
+      const failureReason = state.sceneCardJob.errorMessage ? `，原因：${state.sceneCardJob.errorMessage}` : ''
+      toast(`词卡任务完成：成功 ${number(state.sceneCardJob.successCount)}，失败 ${failed}${failureReason}`)
     } catch (error) {
       logEvent('error', '批量词卡生成失败', error.message)
       toast(`批量词卡生成失败：${error.message}`)
     } finally {
       setButtonLoading(elements.sceneGenerateCardsBtn, false)
     }
+  }
+
+  async function waitForCardJob(initialJob) {
+    let current = initialJob
+    const terminal = new Set(['completed', 'partial_failed', 'failed'])
+    if (!current?.jobId || terminal.has(current.status)) return current
+    for (let attempt = 0; attempt < 120; attempt += 1) {
+      await new Promise((resolve) => window.setTimeout(resolve, 1000))
+      current = await request(`/api/v1/vocabulary-card-jobs/${encodeURIComponent(current.jobId)}`)
+      if (terminal.has(current.status)) return current
+    }
+    return current
   }
 
   function openVocabularyImport() {

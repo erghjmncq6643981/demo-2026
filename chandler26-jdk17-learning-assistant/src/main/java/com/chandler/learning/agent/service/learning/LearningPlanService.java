@@ -49,6 +49,7 @@ import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import org.springframework.transaction.support.TransactionTemplate;
 import org.springframework.util.StringUtils;
 
 import java.time.LocalDate;
@@ -95,12 +96,22 @@ public class LearningPlanService {
     private final SystemLogService systemLogService;
     private final UserDisplayNameService userDisplayNameService;
     private final ObjectMapper objectMapper;
+    private final TransactionTemplate transactionTemplate;
 
     /**
      * 创建自助学习计划；默认立即生成第一个场景单元。
      */
-    @Transactional(rollbackFor = Exception.class)
     public LearningPlanResponse create(Long userId, LearningPlanCreateRequest request) {
+        LearningPlan plan = Objects.requireNonNull(transactionTemplate.execute(status -> createPlan(userId, request)));
+        if (LearningConstants.ScenePlan.STATUS_ACTIVE.equals(plan.getStatus())
+                && !Boolean.FALSE.equals(request.getGenerateFirstUnit())) {
+            generateNextUnit(userId, plan.getId(), request.getModelConfigId(), null);
+        }
+        return detail(userId, plan.getId());
+    }
+
+    /** 在短事务中创建计划主体，AI 场景生成必须在该事务提交后执行。 */
+    private LearningPlan createPlan(Long userId, LearningPlanCreateRequest request) {
         VocabularyCatalogVersion version = requirePublishedVersion(userId, request.getCatalogVersionId());
         VocabularyCatalog catalog = requireCatalog(userId, version.getCatalogId());
         Long wordbookId = request.getWordbookId() == null
@@ -145,17 +156,27 @@ public class LearningPlanService {
                 plan.getName() + "，词表共 " + totalWords + " 词");
         log.info("用户「{}」基于词表「{}」创建了场景学习计划「{}」，共 {} 个词",
                 userDisplayNameService.userName(userId), catalog.getName(), plan.getName(), totalWords);
-        if (LearningConstants.ScenePlan.STATUS_ACTIVE.equals(plan.getStatus())
-                && !Boolean.FALSE.equals(request.getGenerateFirstUnit())) {
-            generateNextUnit(userId, plan.getId(), request.getModelConfigId(), null);
-        }
-        return detail(userId, plan.getId());
+        return plan;
     }
 
-    @Transactional(rollbackFor = Exception.class)
     public LearningPlanResponse update(Long userId, Long planId, LearningPlanUpdateRequest request) {
+        PlanUpdateResult result = Objects.requireNonNull(transactionTemplate.execute(status ->
+                updatePlanState(userId, planId, request)));
+        if (result.generateFirstUnit()) {
+            try {
+                generateNextUnit(userId, planId, request.getModelConfigId(), null);
+            } catch (RuntimeException ex) {
+                log.warn("计划状态已更新，但自动生成首个场景失败 planId={} error={}", planId, ex.getMessage());
+            }
+        }
+        return detail(userId, planId);
+    }
+
+    /** 在短事务中更新计划状态，AI 生成在提交后由调用方触发。 */
+    private PlanUpdateResult updatePlanState(Long userId, Long planId, LearningPlanUpdateRequest request) {
         LearningPlan plan = requirePlan(userId, planId);
         LocalDateTime now = LocalDateTime.now();
+        boolean generateFirstUnit = false;
 
         plan.setName(request.getName().trim());
         plan.setLearningPurpose(StringUtils.hasText(request.getLearningPurpose()) ? request.getLearningPurpose().trim() : null);
@@ -177,11 +198,7 @@ public class LearningPlanService {
                     }
                     plan.setStatus(LearningConstants.ScenePlan.STATUS_ACTIVE);
                     if (plan.getCurrentUnitId() == null) {
-                        try {
-                            generateNextUnit(userId, planId, request.getModelConfigId(), null);
-                        } catch (Exception e) {
-                            log.warn("启动计划生成首个场景失败：{}", e.getMessage());
-                        }
+                        generateFirstUnit = true;
                     }
                 } else if (LearningConstants.ScenePlan.STATUS_PAUSED.equals(newStatus)) {
                     if (!LearningConstants.ScenePlan.STATUS_ACTIVE.equals(plan.getStatus())) {
@@ -223,7 +240,7 @@ public class LearningPlanService {
                 plan.getName() + "，状态: " + plan.getStatus());
         log.info("用户「{}」修改了场景学习计划「{}」，状态 = {}",
                 userDisplayNameService.userName(userId), plan.getName(), plan.getStatus());
-        return detail(userId, planId);
+        return new PlanUpdateResult(plan, generateFirstUnit);
     }
 
     public List<LearningPlanResponse> list(Long userId) {
@@ -294,7 +311,6 @@ public class LearningPlanService {
     /**
      * 按学习计划生成指定日期的场景材料。每日目标超过 50 词时均分为多篇材料。
      */
-    @Transactional(rollbackFor = Exception.class)
     public List<LearningPlanUnitResponse> generateNextUnit(Long userId, Long planId, Long modelConfigId,
                                                           LocalDate recommendedDate) {
         LearningPlan plan = requirePlan(userId, planId);
@@ -365,6 +381,16 @@ public class LearningPlanService {
         AgentChatResponse aiResponse = generateScene(plan, unitNo, candidates, targetWordCount, modelConfigId);
         JsonNode scene = parseScene(aiResponse.getContent());
         List<JsonNode> words = validateSceneWords(scene, candidates, targetWordCount);
+        return Objects.requireNonNull(transactionTemplate.execute(status -> persistGeneratedUnit(
+                userId, plan, resolvedRecommendedDate, today, candidates, unitNo, aiResponse, scene, words)));
+    }
+
+    /** 在短事务中持久化已经完成校验的场景材料。 */
+    private LearningPlanUnitResponse persistGeneratedUnit(Long userId, LearningPlan plan,
+                                                          LocalDate resolvedRecommendedDate, LocalDate today,
+                                                          List<VocabularyCatalogEntry> candidates, int unitNo,
+                                                          AgentChatResponse aiResponse, JsonNode scene,
+                                                          List<JsonNode> words) {
         LocalDateTime now = LocalDateTime.now();
 
         LearningPlanUnit unit = new LearningPlanUnit();
@@ -1476,30 +1502,31 @@ public class LearningPlanService {
         return detail(userId, planId);
     }
 
-    @Transactional(rollbackFor = Exception.class)
     public LearningPlanResponse resume(Long userId, Long planId) {
-        LearningPlan plan = requirePlan(userId, planId);
-        if (!LearningConstants.ScenePlan.STATUS_PAUSED.equals(plan.getStatus())
-                && !LearningConstants.ScenePlan.STATUS_NOT_STARTED.equals(plan.getStatus())) {
-            throw LearningAssistantException.badRequest(
-                    LearningConstants.ErrorCode.LEARNING_PLAN_STATE_ERROR,
-                    "只有暂停或未开始的计划才可以恢复/启动");
-        }
-        plan.setStatus(LearningConstants.ScenePlan.STATUS_ACTIVE);
-        plan.setUpdateTime(LocalDateTime.now());
-        planMapper.updateById(plan);
+        LearningPlan plan = Objects.requireNonNull(transactionTemplate.execute(status -> {
+            LearningPlan txPlan = requirePlan(userId, planId);
+            if (!LearningConstants.ScenePlan.STATUS_PAUSED.equals(txPlan.getStatus())
+                    && !LearningConstants.ScenePlan.STATUS_NOT_STARTED.equals(txPlan.getStatus())) {
+                throw LearningAssistantException.badRequest(
+                        LearningConstants.ErrorCode.LEARNING_PLAN_STATE_ERROR,
+                        "只有暂停或未开始的计划才可以恢复/启动");
+            }
+            txPlan.setStatus(LearningConstants.ScenePlan.STATUS_ACTIVE);
+            txPlan.setUpdateTime(LocalDateTime.now());
+            planMapper.updateById(txPlan);
+            systemLogService.record(userId, SystemLogType.LEARNING_PLAN, "恢复场景学习计划", txPlan.getName());
+            log.info("用户「{}」恢复了场景学习计划「{}」", userDisplayNameService.userName(userId), txPlan.getName());
+            return txPlan;
+        }));
 
-        // 如果未开始的计划首次启动，且当前无生成单元，则自动生成第一个单元
+        // 如果未开始的计划首次启动，且当前无生成单元，则在事务提交后生成第一个单元。
         if (plan.getCurrentUnitId() == null) {
             try {
                 generateNextUnit(userId, planId, null, null);
-            } catch (Exception e) {
-                log.warn("启动计划生成首个场景失败：{}", e.getMessage());
+            } catch (RuntimeException ex) {
+                log.warn("计划已恢复，但自动生成首个场景失败 planId={} error={}", planId, ex.getMessage());
             }
         }
-
-        systemLogService.record(userId, SystemLogType.LEARNING_PLAN, "恢复场景学习计划", plan.getName());
-        log.info("用户「{}」恢复了场景学习计划「{}」", userDisplayNameService.userName(userId), plan.getName());
         return detail(userId, planId);
     }
 
@@ -1519,6 +1546,9 @@ public class LearningPlanService {
         systemLogService.record(userId, SystemLogType.LEARNING_PLAN, "取消场景学习计划", plan.getName());
         log.info("用户「{}」取消了场景学习计划「{}」", userDisplayNameService.userName(userId), plan.getName());
         return detail(userId, planId);
+    }
+
+    private record PlanUpdateResult(LearningPlan plan, boolean generateFirstUnit) {
     }
 
     private record CandidateWord(Integer sourceOrder, String term, String phonetic, String meaning) {

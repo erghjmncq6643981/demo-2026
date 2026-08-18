@@ -274,8 +274,11 @@ public class VocabularyImportService {
             entry.setApprovedTerm(approved);
             entry.setNormalizedTerm(normalize(approved));
             entry.setReviewStatus(LearningConstants.VocabularyImport.REVIEW_CONFIRMED);
+            entry.setUpdateBy(userId);
             entry.setUpdateTime(now);
-            catalogEntryMapper.updateById(entry);
+        }
+        if (!pending.isEmpty()) {
+            catalogEntryMapper.updateReviewBatch(pending);
         }
         refreshReviewedCounts(job);
         log.info("用户「{}」批量确认了词表导入任务 {} 中的 {} 个疑似断词",
@@ -361,6 +364,9 @@ public class VocabularyImportService {
                         LinkedHashMap::new));
         LocalDateTime now = LocalDateTime.now();
         int inserted = LearningConstants.ZERO;
+        List<LearningWordbookEntry> newWordbookEntries = new java.util.ArrayList<>();
+        List<LearningWordbookEntry> existingWordbookEntries = new java.util.ArrayList<>();
+        List<Long> publishedEntryIds = new java.util.ArrayList<>();
         for (VocabularyCatalogEntry catalogEntry : entries) {
             if (wordbook != null) {
                 String term = catalogEntry.effectiveTerm();
@@ -371,14 +377,11 @@ public class VocabularyImportService {
                     wordbookEntry = LearningWordbookEntry.createImported(
                             userId, wordbook.getId(), progress.getId(), catalogEntry.getId(), term,
                             normalizedTerm, basicSnapshot(catalogEntry, term), now);
-                    wordbookEntryMapper.insert(wordbookEntry);
+                    newWordbookEntries.add(wordbookEntry);
                     wordbookEntryByTerm.put(normalizedTerm, wordbookEntry);
                     inserted++;
                 } else {
-                    if (Boolean.TRUE.equals(wordbookEntry.getDeleted())) {
-                        wordbookEntry.restore(wordbookEntry.getNote(), now);
-                        wordbookEntryMapper.restoreDeletedById(wordbookEntry.getId());
-                    }
+                    wordbookEntry.setDeleted(false);
                     wordbookEntry.setProgressId(progress.getId());
                     wordbookEntry.setCatalogEntryId(catalogEntry.getId());
                     if (!StringUtils.hasText(wordbookEntry.getSnapshotParsedJson())) {
@@ -388,13 +391,21 @@ public class VocabularyImportService {
                     if (!StringUtils.hasText(wordbookEntry.getCardStatus())) {
                         wordbookEntry.setCardStatus(LearningConstants.VocabularyCard.STATUS_NOT_REQUIRED);
                     }
+                    wordbookEntry.setUpdateBy(userId);
                     wordbookEntry.setUpdateTime(now);
-                    wordbookEntryMapper.updateById(wordbookEntry);
+                    existingWordbookEntries.add(wordbookEntry);
                 }
             }
-            catalogEntry.setPublished(true);
-            catalogEntry.setUpdateTime(now);
-            catalogEntryMapper.updateById(catalogEntry);
+            publishedEntryIds.add(catalogEntry.getId());
+        }
+        for (List<LearningWordbookEntry> chunk : chunks(newWordbookEntries, 500)) {
+            wordbookEntryMapper.insertBatch(chunk);
+        }
+        for (List<LearningWordbookEntry> chunk : chunks(existingWordbookEntries, 500)) {
+            wordbookEntryMapper.updateImportedBatch(chunk);
+        }
+        for (List<Long> chunk : chunks(publishedEntryIds, 500)) {
+            catalogEntryMapper.markPublishedBatch(chunk, now, userId);
         }
 
         version.setStatus(LearningConstants.VocabularyImport.VERSION_STATUS_PUBLISHED);
@@ -433,6 +444,18 @@ public class VocabularyImportService {
         version.setReviewedWarningCount(reviewed);
         version.setUpdateTime(LocalDateTime.now());
         versionMapper.updateById(version);
+    }
+
+    /** 将批量写入拆成固定大小，避免单条 SQL 超过驱动或数据库限制。 */
+    private <T> List<List<T>> chunks(List<T> source, int size) {
+        if (source == null || source.isEmpty()) {
+            return List.of();
+        }
+        List<List<T>> result = new java.util.ArrayList<>();
+        for (int offset = 0; offset < source.size(); offset += size) {
+            result.add(source.subList(offset, Math.min(source.size(), offset + size)));
+        }
+        return result;
     }
 
     private VocabularyImportResponse baseResponse(VocabularyImportJob job, VocabularyCatalog catalog) {

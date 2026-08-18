@@ -5,7 +5,7 @@
 ## 0. 开始前必须确认
 
 - [ ] 阅读根目录 `AGENTS.md`，同时检查前后端工作区，禁止覆盖用户未提交改动。
-- [ ] 执行已有库补丁 `src/main/resources/db/95_ai_invocation_scene_mysql.sql`、`98_vocabulary_scene_material_split_mysql.sql` 和 `99_article_guided_reading_mysql.sql`；新库按 `src/main/resources/db/README.md` 的顺序初始化。
+- [ ] 执行已有库补丁 `src/main/resources/db/95_ai_invocation_scene_mysql.sql`、`98_vocabulary_scene_material_split_mysql.sql`、`99_article_guided_reading_mysql.sql` 和 `101_engineering_governance_mysql.sql`；新库按 `src/main/resources/db/README.md` 的顺序初始化。
 - [ ] 配置一个已启用的模型，但不要把真实 API Key 写进源码、文档或 SQL。
 - [ ] 用测试账号登录，通过真实业务接口触发调用，不要直接绕过 Service 调模型。
 - [ ] 每个场景至少收集 3 条成功响应；结构化场景额外收集 1 条失败或边界样本。
@@ -41,7 +41,7 @@ GROUP BY invocation_scene_code
 ORDER BY invocation_scene_code;
 ```
 
-提取某场景最近 20 条原始供应商响应：
+提取某场景最近 20 条 AI 调用审计记录：
 
 ```sql
 SELECT id,
@@ -64,12 +64,12 @@ ORDER BY create_time DESC
 LIMIT 20;
 ```
 
-注意：`success = 1` 只表示模型 HTTP 调用和供应商响应解析成功，不代表业务 JSON 已通过后续 Service 校验。还要结合接口错误、业务表的 `raw_content` / `parsed_json`、批量任务的 `error_message` 判断契约是否成功。
+注意：`success = 1` 只表示模型 HTTP 调用和供应商响应解析成功，不代表业务 JSON 已通过后续 Service 校验。生产默认 `LEARNING_AI_AUDIT_STORE_CONTENT=false`，`request_json` 和 `response_json` 只保存消息长度、Token 和调用元数据；需要做真实响应分析时，应在受控环境临时开启该配置，并结合业务表的 `raw_content` / `parsed_json`、批量任务的 `error_message` 判断契约是否成功。
 
 ## 3. 每条响应的分析步骤
 
-- [ ] 还原输入：查看 `request_json.messages`、模板编码、模板变量、模型和会话历史。
-- [ ] 提取输出：从 `response_json.choices[0].message.content` 取得模型正文；兼容供应商时同时检查 `choices[0].text`。
+- [ ] 还原输入：在审计正文留存已开启的受控环境查看 `request_json.payload`、模板编码、模板变量、模型和会话历史；默认环境使用业务表中的脱敏输入摘要。
+- [ ] 提取输出：在审计正文留存已开启时从 `response_json.payload` 取得模型正文；兼容供应商时同时检查 `choices[0].text`。
 - [ ] 检查语法：结构化场景必须是可解析 JSON；记录代码块包裹、前后解释文字、截断、非法转义等问题。
 - [ ] 检查结构：对照上表和枚举的 `requiredRootFields`；继续检查数组数量、嵌套字段、字段类型和唯一性。
 - [ ] 检查业务：验证核心词来源、学习目标匹配度、场景相关性、译文准确度、题目唯一正确答案以及拼写答案可接受变体。

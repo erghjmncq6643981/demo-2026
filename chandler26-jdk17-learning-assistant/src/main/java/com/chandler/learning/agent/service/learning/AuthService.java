@@ -82,14 +82,12 @@ public class AuthService {
         if (user == null || !Boolean.TRUE.equals(user.getEnabled())) {
             log.debug("登录失败 username={} reason=user_not_found_or_disabled", username);
             throw LearningAssistantException.badRequest(
-                    LearningConstants.ErrorCode.AUTH_INVALID_CREDENTIALS,
-                    "用户名或密码错误");
+                    LearningConstants.ErrorCode.AUTH_INVALID_CREDENTIALS);
         }
         if (!verifyPassword(request.getPassword(), user.getPasswordHash())) {
             log.debug("登录失败 username={} reason=password_mismatch", username);
             throw LearningAssistantException.badRequest(
-                    LearningConstants.ErrorCode.AUTH_INVALID_CREDENTIALS,
-                    "用户名或密码错误");
+                    LearningConstants.ErrorCode.AUTH_INVALID_CREDENTIALS);
         }
         wordbookService.ensureDefaultWordbook(user.getId());
         systemLogService.record(user.getId(), SystemLogType.AUTH, "登录成功", username);
@@ -127,8 +125,7 @@ public class AuthService {
             }
             if (!verifyPassword(resolvedRequest.getCurrentPassword(), user.getPasswordHash())) {
                 throw LearningAssistantException.badRequest(
-                        LearningConstants.ErrorCode.PASSWORD_INCORRECT,
-                        "当前密码不正确");
+                        LearningConstants.ErrorCode.PASSWORD_INCORRECT);
             }
             user.setPasswordHash(hashPassword(newPassword));
             changed = true;
@@ -175,22 +172,19 @@ public class AuthService {
         String token = resolveToken(authorization);
         if (!StringUtils.hasText(token)) {
             throw LearningAssistantException.unauthorized(
-                    LearningConstants.ErrorCode.AUTH_REQUIRED,
-                    "请先登录");
+                    LearningConstants.ErrorCode.AUTH_REQUIRED);
         }
         JwtClaims claims;
         try {
             claims = jwtTokenService.parse(token);
         } catch (RuntimeException ex) {
             throw LearningAssistantException.unauthorized(
-                    LearningConstants.ErrorCode.AUTH_EXPIRED,
-                    "登录已过期，请重新登录");
+                    LearningConstants.ErrorCode.AUTH_EXPIRED);
         }
         LearningUser user = userMapper.selectById(claims.userId());
         if (user == null || !Boolean.TRUE.equals(user.getEnabled())) {
             throw LearningAssistantException.unauthorized(
-                    LearningConstants.ErrorCode.USER_DISABLED,
-                    "用户不可用");
+                    LearningConstants.ErrorCode.USER_DISABLED);
         }
         return user;
     }

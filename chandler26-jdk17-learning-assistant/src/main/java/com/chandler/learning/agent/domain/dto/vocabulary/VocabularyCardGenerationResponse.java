@@ -27,6 +27,9 @@ public class VocabularyCardGenerationResponse {
 
     private Integer failedCount;
 
+    /** 任务级失败原因；单词级失败原因位于 items。 */
+    private String errorMessage;
+
     private List<VocabularyCardGenerationItemResponse> items;
 
     private LocalDateTime startedTime;

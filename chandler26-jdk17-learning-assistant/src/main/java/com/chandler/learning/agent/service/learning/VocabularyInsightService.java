@@ -70,8 +70,14 @@ public class VocabularyInsightService {
         addTag(tags, record, VocabularyTagType.DIFFICULTY.getCode(), inferDifficulty(root, record), inferDifficulty(root, record),
                 LearningConstants.VocabularyInsight.TAG_WEIGHT_DIFFICULTY, now);
 
-        tags.values().forEach(tagMapper::insert);
-        collectRelations(root, record, now).forEach(relationMapper::insert);
+        List<LearningVocabularyTag> tagList = new ArrayList<>(tags.values());
+        if (!tagList.isEmpty()) {
+            tagMapper.insertBatch(tagList);
+        }
+        List<LearningVocabularyRelation> relations = collectRelations(root, record, now);
+        if (!relations.isEmpty()) {
+            relationMapper.insertBatch(relations);
+        }
     }
 
     /**
@@ -243,6 +249,7 @@ public class VocabularyInsightService {
         }
         String key = tagType + ":" + cleanValue;
         LearningVocabularyTag tag = new LearningVocabularyTag();
+        tag.setId(com.baomidou.mybatisplus.core.toolkit.IdWorker.getId());
         tag.setVocabularyId(record.getId());
         tag.setNormalizedTerm(record.getNormalizedTerm());
         tag.setTagType(tagType);
@@ -251,6 +258,8 @@ public class VocabularyInsightService {
                 LearningConstants.VocabularyInsight.TAG_VALUE_MAX_LENGTH));
         tag.setWeight(weight);
         tag.setSource(LearningConstants.VocabularyInsight.SOURCE_PARSED_JSON);
+        tag.setDeleted(false);
+        tag.setVersion(LearningConstants.ZERO);
         tag.setCreateTime(now);
         tag.setUpdateTime(now);
         tags.putIfAbsent(key, tag);
@@ -270,6 +279,7 @@ public class VocabularyInsightService {
         CoreMeaning coreMeaning = extractCoreMeaning(relatedRecord);
         String key = relationType.getCode() + ":" + normalizedRelated;
         LearningVocabularyRelation relation = new LearningVocabularyRelation();
+        relation.setId(com.baomidou.mybatisplus.core.toolkit.IdWorker.getId());
         relation.setVocabularyId(record.getId());
         relation.setRelatedVocabularyId(relatedRecord == null ? null : relatedRecord.getId());
         relation.setNormalizedTerm(record.getNormalizedTerm());
@@ -285,6 +295,8 @@ public class VocabularyInsightService {
         relation.setMatchScore(parsedMatchScore == null ? (relatedRecord == null ? null : LearningConstants.Vocabulary.EXACT_MATCH_SCORE) : parsedMatchScore);
         relation.setScore(score);
         relation.setSource(LearningConstants.VocabularyInsight.SOURCE_PARSED_JSON);
+        relation.setDeleted(false);
+        relation.setVersion(LearningConstants.ZERO);
         relation.setCreateTime(now);
         relation.setUpdateTime(now);
         relations.putIfAbsent(key, relation);

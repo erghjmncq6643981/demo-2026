@@ -1,0 +1,51 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "https://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.chandler.learning.agent.mapper.vocabulary.VocabularyCatalogEntryMapper">
+
+    <insert id="insertBatch">
+        INSERT INTO vocabulary_catalog_entry
+        (id, catalog_id, catalog_version_id, source_order, original_term, normalized_term,
+         suggested_term, approved_term, phonetic, definition_text, warning_codes, suspicious,
+         review_status, published, create_by, create_time, update_by, update_time, deleted, version)
+        VALUES
+        <foreach collection="list" item="item" separator=",">
+            (#{item.id}, #{item.catalogId}, #{item.catalogVersionId}, #{item.sourceOrder}, #{item.originalTerm},
+             #{item.normalizedTerm}, #{item.suggestedTerm}, #{item.approvedTerm}, #{item.phonetic},
+             #{item.definitionText}, #{item.warningCodes}, #{item.suspicious}, #{item.reviewStatus},
+             #{item.published}, #{item.createBy}, #{item.createTime}, #{item.updateBy}, #{item.updateTime},
+             #{item.deleted}, #{item.version})
+        </foreach>
+    </insert>
+
+    <update id="updateReviewBatch">
+        UPDATE vocabulary_catalog_entry
+        SET approved_term = CASE id
+            <foreach collection="list" item="item">
+                WHEN #{item.id} THEN #{item.approvedTerm}
+            </foreach>
+            END,
+            normalized_term = CASE id
+            <foreach collection="list" item="item">
+                WHEN #{item.id} THEN #{item.normalizedTerm}
+            </foreach>
+            END,
+            review_status = 'confirmed',
+            update_time = #{list[0].updateTime},
+            update_by = #{list[0].updateBy}
+        WHERE id IN
+        <foreach collection="list" item="item" open="(" separator="," close=")">
+            #{item.id}
+        </foreach>
+    </update>
+
+    <update id="markPublishedBatch">
+        UPDATE vocabulary_catalog_entry
+        SET published = 1,
+            update_time = #{updateTime},
+            update_by = #{updateBy}
+        WHERE id IN
+        <foreach collection="ids" item="id" open="(" separator="," close=")">
+            #{id}
+        </foreach>
+    </update>
+</mapper>

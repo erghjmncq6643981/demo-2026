@@ -1,0 +1,20 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "https://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.chandler.learning.agent.mapper.learning.LearningPlanUnitEntryMapper">
+    <insert id="insertBatch">
+        INSERT INTO learning_plan_unit_entry
+        (id, plan_id, unit_id, catalog_entry_id, wordbook_entry_id, word_progress_id,
+         source_order, term, normalized_term, phonetic, meaning_text, context_meaning,
+         tier, mastery_requirement, accepted_spellings_json, assessment_json, first_learning,
+         sort_order, create_by, create_time, update_by, update_time, deleted, version)
+        VALUES
+        <foreach collection="list" item="item" separator=",">
+            (#{item.id}, #{item.planId}, #{item.unitId}, #{item.catalogEntryId}, #{item.wordbookEntryId},
+             #{item.wordProgressId}, #{item.sourceOrder}, #{item.term}, #{item.normalizedTerm},
+             #{item.phonetic}, #{item.meaningText}, #{item.contextMeaning}, #{item.tier},
+             #{item.masteryRequirement}, #{item.acceptedSpellingsJson}, #{item.assessmentJson},
+             #{item.firstLearning}, #{item.sortOrder}, #{item.createBy}, #{item.createTime},
+             #{item.updateBy}, #{item.updateTime}, #{item.deleted}, #{item.version})
+        </foreach>
+    </insert>
+</mapper>

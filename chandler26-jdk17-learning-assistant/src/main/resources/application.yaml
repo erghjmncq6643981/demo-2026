@@ -7,16 +7,18 @@ spring:
     import: optional:file:./config/application-local.yaml
 
   datasource:
-    username: micro
-    password: 123456
-    url: jdbc:mysql://localhost:3306/study?useUnicode=true&characterEncoding=utf-8&autoReconnect=true&autoReconnectForPools=true
+    username: ${LEARNING_DB_USERNAME:micro}
+    password: ${LEARNING_DB_PASSWORD:}
+    url: ${LEARNING_DB_URL:jdbc:mysql://localhost:3306/study?useUnicode=true&characterEncoding=utf-8&autoReconnect=true&autoReconnectForPools=true}
     driver-class-name: com.mysql.cj.jdbc.Driver
     type: com.alibaba.druid.pool.DruidDataSource
 
 
 mybatis:
   mapper-locations: classpath:mapper/*.xml
-  type-aliases-packag: com.chandler.*.domain
+  type-aliases-package: com.chandler.learning.agent.domain
+  configuration:
+    map-underscore-to-camel-case: true
 
 info:
   app:
@@ -35,6 +37,14 @@ springdoc:
     enabled: true
 
 learning:
+  ai:
+    http:
+      connect-timeout: ${LEARNING_AI_CONNECT_TIMEOUT:10s}
+      read-timeout: ${LEARNING_AI_READ_TIMEOUT:90s}
+    audit:
+      # 生产默认只保留请求/响应摘要；本地排障可显式设置为 true。
+      store-content: ${LEARNING_AI_AUDIT_STORE_CONTENT:false}
+      max-content-length: ${LEARNING_AI_AUDIT_MAX_CONTENT_LENGTH:120000}
   security:
     jwt-secret: ${LEARNING_JWT_SECRET:dev-learning-assistant-jwt-secret-change-me}
     jwt-issuer: ${LEARNING_JWT_ISSUER:learning-assistant}

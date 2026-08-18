@@ -1,0 +1,20 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "https://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.chandler.learning.agent.mapper.learning.LearningVocabularyRelationMapper">
+    <delete id="physicalDeleteByVocabularyId">
+        DELETE FROM learning_vocabulary_relation WHERE vocabulary_id = #{vocabularyId}
+    </delete>
+    <insert id="insertBatch">
+        INSERT INTO learning_vocabulary_relation
+        (id, vocabulary_id, related_vocabulary_id, normalized_term, related_term, relation_type,
+         relation_value, related_part_of_speech, related_meaning, match_type, match_score, score, source,
+         create_time, update_time, deleted, version)
+        VALUES
+        <foreach collection="list" item="item" separator=",">
+            (#{item.id}, #{item.vocabularyId}, #{item.relatedVocabularyId}, #{item.normalizedTerm},
+             #{item.relatedTerm}, #{item.relationType}, #{item.relationValue}, #{item.relatedPartOfSpeech},
+             #{item.relatedMeaning}, #{item.matchType}, #{item.matchScore}, #{item.score}, #{item.source},
+             #{item.createTime}, #{item.updateTime}, #{item.deleted}, #{item.version})
+        </foreach>
+    </insert>
+</mapper>
