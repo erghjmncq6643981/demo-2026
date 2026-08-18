@@ -78,12 +78,12 @@
             <appender-ref ref="warnFile"/>
             <appender-ref ref="errorFile"/>
         </root>
-        <logger name="com.chandler.learning.agent" level="DEBUG" additivity="false">
-            <appender-ref ref="console"/>
-            <appender-ref ref="allFile"/>
-            <appender-ref ref="warnFile"/>
-            <appender-ref ref="errorFile"/>
-        </logger>
+<!--        <logger name="com.chandler.learning.agent" level="DEBUG" additivity="false">-->
+<!--            <appender-ref ref="console"/>-->
+<!--            <appender-ref ref="allFile"/>-->
+<!--            <appender-ref ref="warnFile"/>-->
+<!--            <appender-ref ref="errorFile"/>-->
+<!--        </logger>-->
     </springProfile>
 
     <springProfile name="prod,pre,test">
