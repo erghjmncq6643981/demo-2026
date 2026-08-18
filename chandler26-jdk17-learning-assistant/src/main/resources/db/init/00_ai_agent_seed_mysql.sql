@@ -63,8 +63,8 @@ INSERT INTO ai_prompt_template (
 ),
 (
     1201, '英语场景词汇单元 JSON', 'english_vocab_scene_unit_json', 'user', '英语,词表,场景学习,词汇检查,JSON',
-    '学习目的：{{learning_purpose}}。这是第 {{unit_no}} 个场景单元。候选词表 JSON：{{candidate_words}}。已完成场景标题：{{completed_scenes}}。请把本批 {{target_word_count}} 个候选词作为 core（单篇材料 core 最多 50 个）。不要把历史场景已经学习过的词重新安排到本场景。可添加场景常见具体名词作为 supplementary，但 supplementary 不得冒充词表词。输出 JSON 对象，包含 title、scenario_type、summary、learning_text、translation、vocabulary 字段。要求：1. learning_text 围绕一个主题由 2-4 个自然段落组成连贯短文，总词数 250-450 词，将核心词自然融入语境，禁止机械重复句式或无意义死循环；2. translation 为中文对照翻译；3. 短文后必须紧接着输出完整 vocabulary 数组，每项包含 term、tier、mastery_requirement、phonetic、meaning、context_meaning、accepted_spellings、meaning_question；meaning_question 包含 prompt、options（恰好 4 个中文选项）、correct_answer。只输出合法 JSON，不要输出 Markdown 代码块。',
-    JSON_ARRAY(JSON_OBJECT('name','learning_purpose','label','学习目的','required',true), JSON_OBJECT('name','unit_no','label','单元序号','required',true), JSON_OBJECT('name','candidate_words','label','候选词 JSON','required',true), JSON_OBJECT('name','completed_scenes','label','已完成场景','required',true), JSON_OBJECT('name','target_word_count','label','目标词数','required',true)),
+    '学习目的：{{learning_purpose}}。这是第 {{unit_no}} 个场景单元。新词候选 JSON：{{candidate_words}}。待挑战复习词 JSON：{{review_words}}。已完成场景标题：{{completed_scenes}}。本批新词候选必须作为 core；待挑战复习词只能作为 review 或语境辅助，不能冒充新的 core。单篇材料 core 最多 50 个，不要把历史场景已经学习过的新词重新安排到本场景。可添加场景常见具体名词作为 supplementary，但 supplementary 不得冒充词表词。输出 JSON 对象，包含 title、scenario_type、summary、learning_text、translation、vocabulary 字段。要求：1. learning_text 围绕一个主题由 2-4 个自然段落组成连贯短文，总词数 250-450 词，将核心词自然融入语境，禁止机械重复句式或无意义死循环；2. translation 为中文对照翻译；3. 短文后必须紧接着输出完整 vocabulary 数组，每项包含 term、tier、mastery_requirement、phonetic、meaning、context_meaning、accepted_spellings、meaning_question；meaning_question 包含 prompt、options（恰好 4 个中文选项）、correct_answer。只输出合法 JSON，不要输出 Markdown 代码块。',
+    JSON_ARRAY(JSON_OBJECT('name','learning_purpose','label','学习目的','required',true), JSON_OBJECT('name','unit_no','label','单元序号','required',true), JSON_OBJECT('name','candidate_words','label','新词候选 JSON','required',true), JSON_OBJECT('name','review_words','label','待挑战复习词 JSON','required',true), JSON_OBJECT('name','completed_scenes','label','已完成场景','required',true), JSON_OBJECT('name','target_word_count','label','目标词数','required',true)),
     '根据词表按需生成一个可学习、可检查的场景单元', '{"candidate_words":[{"term":"clean"}]}', '{"title":"周末大扫除","vocabulary":[]}', 1, 4
 ),
 (
@@ -72,6 +72,12 @@ INSERT INTO ai_prompt_template (
     '请为词汇数组 {{terms}} 批量生成学习卡片。只输出合法 JSON，不要输出 Markdown。根字段为 cards 数组，每个输入词必须且只能对应一项；字段包括 term、is_valid、language、phonetic、definitions、examples、collocations、synonyms、antonyms、word_family、memory_tips。相关词只能包含同义词、反义词和词族，搭配只放 collocations。',
     JSON_ARRAY(JSON_OBJECT('name','terms','label','词汇数组','required',true)),
     '一次模型调用生成一批独立词卡，减少请求和 Token 开销', '{"terms":["abandon","ability"]}', '{"cards":[]}', 1, 5
+),
+(
+    1203, '公共词本关联分析 JSON', 'english_vocab_catalog_analysis_json', 'user', '英语,词本,关联分析,JSON',
+    '请对词汇数组 {{words}} 做初步语义分析。这里只建立可复用的词本语义索引，不生成完整词卡，也不生成文章。只输出合法 JSON，不要输出 Markdown。根字段为 entries 数组，每个输入 entry_id 必须且只能对应一项。每项包含 entry_id、primary_group_code、primary_group_name、domain、sub_topic、tags、related_entry_ids、difficulty_level、confidence。primary_group_code 应稳定、简短、可用于后续分组；related_entry_ids 只能引用本批输入的 entry_id；tags 最多 6 个；confidence 为 0 到 1 的数字；语义关系只保留同义、反义、词族和主题相关，不要把搭配词放到 related_entry_ids。',
+    JSON_ARRAY(JSON_OBJECT('name','words','label','词条 JSON 数组','required',true), JSON_OBJECT('name','analysis_version','label','分析修订号','required',true)),
+    '为公共词本批量建立场景化学习所需的语义索引', '{"words":[{"entry_id":1,"term":"airport","meaning":"机场"}]}', '{"entries":[]}', 1, 6
 )
 ON DUPLICATE KEY UPDATE
     name = VALUES(name), tags = VALUES(tags), content = VALUES(content), variables = VALUES(variables),

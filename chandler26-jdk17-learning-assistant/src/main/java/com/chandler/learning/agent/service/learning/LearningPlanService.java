@@ -24,6 +24,7 @@ import com.chandler.learning.agent.domain.entity.learning.LearningWordbook;
 import com.chandler.learning.agent.domain.entity.learning.LearningWordbookEntry;
 import com.chandler.learning.agent.domain.entity.vocabulary.VocabularyCatalog;
 import com.chandler.learning.agent.domain.entity.vocabulary.VocabularyCatalogEntry;
+import com.chandler.learning.agent.domain.entity.vocabulary.VocabularyCatalogEntryAnalysis;
 import com.chandler.learning.agent.domain.entity.vocabulary.VocabularyCatalogVersion;
 import com.chandler.learning.agent.domain.enums.AiInvocationScene;
 import com.chandler.learning.agent.domain.enums.LearningScene;
@@ -41,6 +42,7 @@ import com.chandler.learning.agent.mapper.vocabulary.VocabularyCatalogEntryMappe
 import com.chandler.learning.agent.mapper.vocabulary.VocabularyCatalogMapper;
 import com.chandler.learning.agent.mapper.vocabulary.VocabularyCatalogVersionMapper;
 import com.chandler.learning.agent.service.AiChatService;
+import com.chandler.learning.agent.service.vocabulary.VocabularyCatalogAnalysisService;
 import com.chandler.learning.agent.support.LearningConstants;
 import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.JsonNode;
@@ -68,6 +70,7 @@ import java.util.Set;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 import java.util.stream.Collectors;
+import java.util.stream.Stream;
 
 /**
  * 按需生成并推进场景学习单元，不设置每日场景或拼写词数量限制。
@@ -93,6 +96,7 @@ public class LearningPlanService {
     private final LearningWordProgressService progressService;
     private final WordbookService wordbookService;
     private final AiChatService aiChatService;
+    private final VocabularyCatalogAnalysisService catalogAnalysisService;
     private final SystemLogService systemLogService;
     private final UserDisplayNameService userDisplayNameService;
     private final ObjectMapper objectMapper;
@@ -334,7 +338,8 @@ public class LearningPlanService {
 
         LocalDate resolvedRecommendedDate = resolveRecommendedDate(plan, recommendedDate, today);
         int dailyTarget = targetWordCount(plan);
-        List<VocabularyCatalogEntry> candidates = nextCandidates(plan, dailyTarget);
+        List<VocabularyCatalogEntry> reviewWords = pendingReviewWords(plan, dailyTarget);
+        List<VocabularyCatalogEntry> candidates = nextCandidates(plan, dailyTarget, reviewWords);
         if (candidates.isEmpty()) {
             if (hasIncompleteUnit(plan.getId())) {
                 throw LearningAssistantException.badRequest(
@@ -349,11 +354,16 @@ public class LearningPlanService {
         int totalToGenerate = Math.min(dailyTarget, candidates.size());
         List<LearningPlanUnitResponse> generatedUnits = new ArrayList<>();
         int candidateOffset = 0;
-        for (Integer batchSize : splitMaterialWordCounts(totalToGenerate)) {
+        List<Integer> materialWordCounts = splitMaterialWordCounts(totalToGenerate);
+        for (int materialIndex = 0; materialIndex < materialWordCounts.size(); materialIndex++) {
+            Integer batchSize = materialWordCounts.get(materialIndex);
             List<VocabularyCatalogEntry> batch = new ArrayList<>(
                     candidates.subList(candidateOffset, candidateOffset + batchSize));
+            int reviewStart = reviewWords.size() * materialIndex / materialWordCounts.size();
+            int reviewEnd = reviewWords.size() * (materialIndex + 1) / materialWordCounts.size();
+            List<VocabularyCatalogEntry> reviewBatch = reviewWords.subList(reviewStart, reviewEnd);
             generatedUnits.add(generateSingleUnit(userId, plan, modelConfigId, resolvedRecommendedDate,
-                    today, batch, batchSize));
+                    today, batch, batchSize, reviewBatch));
             candidateOffset += batchSize;
         }
         return List.copyOf(generatedUnits);
@@ -376,19 +386,23 @@ public class LearningPlanService {
 
     private LearningPlanUnitResponse generateSingleUnit(Long userId, LearningPlan plan, Long modelConfigId,
                                                         LocalDate resolvedRecommendedDate, LocalDate today,
-                                                        List<VocabularyCatalogEntry> candidates, int targetWordCount) {
+                                                        List<VocabularyCatalogEntry> candidates, int targetWordCount,
+                                                        List<VocabularyCatalogEntry> reviewWords) {
         int unitNo = nextUnitNo(plan.getId());
-        AgentChatResponse aiResponse = generateScene(plan, unitNo, candidates, targetWordCount, modelConfigId);
+        AgentChatResponse aiResponse = generateScene(plan, unitNo, candidates, reviewWords,
+                targetWordCount, modelConfigId);
         JsonNode scene = parseScene(aiResponse.getContent());
-        List<JsonNode> words = validateSceneWords(scene, candidates, targetWordCount);
+        List<JsonNode> words = validateSceneWords(scene, candidates, reviewWords, targetWordCount);
         return Objects.requireNonNull(transactionTemplate.execute(status -> persistGeneratedUnit(
-                userId, plan, resolvedRecommendedDate, today, candidates, unitNo, aiResponse, scene, words)));
+                userId, plan, resolvedRecommendedDate, today, candidates, reviewWords,
+                unitNo, aiResponse, scene, words)));
     }
 
     /** 在短事务中持久化已经完成校验的场景材料。 */
     private LearningPlanUnitResponse persistGeneratedUnit(Long userId, LearningPlan plan,
                                                           LocalDate resolvedRecommendedDate, LocalDate today,
-                                                          List<VocabularyCatalogEntry> candidates, int unitNo,
+                                                          List<VocabularyCatalogEntry> candidates,
+                                                          List<VocabularyCatalogEntry> reviewWords, int unitNo,
                                                           AgentChatResponse aiResponse, JsonNode scene,
                                                           List<JsonNode> words) {
         LocalDateTime now = LocalDateTime.now();
@@ -435,7 +449,8 @@ public class LearningPlanService {
         material.setUpdateTime(now);
         materialMapper.insert(material);
 
-        Map<String, VocabularyCatalogEntry> candidateMap = candidates.stream().collect(Collectors.toMap(
+        Map<String, VocabularyCatalogEntry> candidateMap = Stream.concat(candidates.stream(), reviewWords.stream())
+                .collect(Collectors.toMap(
                 entry -> normalize(entry.effectiveTerm()), entry -> entry, (left, right) -> left, LinkedHashMap::new));
 
         Set<String> missingTerms = new LinkedHashSet<>();
@@ -799,9 +814,14 @@ public class LearningPlanService {
     }
 
     private AgentChatResponse generateScene(LearningPlan plan, int unitNo,
-                                            List<VocabularyCatalogEntry> candidates, int targetWordCount,
-                                            Long modelConfigId) {
+                                            List<VocabularyCatalogEntry> candidates,
+                                            List<VocabularyCatalogEntry> reviewWords,
+                                            int targetWordCount, Long modelConfigId) {
         List<CandidateWord> words = candidates.stream()
+                .map(entry -> new CandidateWord(entry.getSourceOrder(), entry.effectiveTerm(),
+                        entry.getPhonetic(), entry.getDefinitionText()))
+                .toList();
+        List<CandidateWord> review = reviewWords.stream()
                 .map(entry -> new CandidateWord(entry.getSourceOrder(), entry.effectiveTerm(),
                         entry.getPhonetic(), entry.getDefinitionText()))
                 .toList();
@@ -816,6 +836,7 @@ public class LearningPlanService {
         variables.put("learning_purpose", StrUtil.blankToDefault(plan.getLearningPurpose(), "综合英语词汇学习"));
         variables.put("unit_no", unitNo);
         variables.put("candidate_words", words);
+        variables.put("review_words", review);
         variables.put("completed_scenes", completedScenes);
         variables.put("target_word_count", targetWordCount);
 
@@ -866,6 +887,12 @@ public class LearningPlanService {
     }
 
     private List<VocabularyCatalogEntry> nextCandidates(LearningPlan plan, int requestedLimit) {
+        return nextCandidates(plan, requestedLimit, List.of());
+    }
+
+    /** 基于已缓存的词本语义索引统筹新词；不在场景生成时重新调用 AI 分析。 */
+    private List<VocabularyCatalogEntry> nextCandidates(LearningPlan plan, int requestedLimit,
+                                                        List<VocabularyCatalogEntry> reviewWords) {
         Set<Long> arranged = unitEntryMapper.selectList(new LambdaQueryWrapper<LearningPlanUnitEntry>()
                         .eq(LearningPlanUnitEntry::getPlanId, plan.getId())
                         .isNotNull(LearningPlanUnitEntry::getCatalogEntryId)
@@ -879,8 +906,29 @@ public class LearningPlanService {
                         .eq(VocabularyCatalogEntry::getPublished, true)
                         .eq(VocabularyCatalogEntry::getDeleted, false)
                         .orderByAsc(VocabularyCatalogEntry::getSourceOrder));
-        List<VocabularyCatalogEntry> result = new ArrayList<>();
         int candidateLimit = Math.max(LearningConstants.SEQUENCE_STEP, requestedLimit);
+        List<VocabularyCatalogEntry> result = new ArrayList<>();
+        List<VocabularyCatalogEntryAnalysis> analyses = catalogAnalysisService.readyEntries(plan.getCatalogVersionId());
+        if (!analyses.isEmpty()) {
+            Map<Long, VocabularyCatalogEntryAnalysis> analysisByEntry = analyses.stream()
+                    .collect(Collectors.toMap(VocabularyCatalogEntryAnalysis::getCatalogEntryId,
+                            item -> item, (left, right) -> left));
+            Set<String> preferredGroups = reviewWords.stream()
+                    .map(item -> analysisByEntry.get(item.getId()))
+                    .filter(java.util.Objects::nonNull)
+                    .map(VocabularyCatalogEntryAnalysis::getPrimaryGroupCode)
+                    .filter(StringUtils::hasText)
+                    .collect(Collectors.toCollection(LinkedHashSet::new));
+            Map<String, Integer> groupSize = all.stream()
+                    .filter(item -> !arranged.contains(item.getId()))
+                    .map(item -> analysisByEntry.get(item.getId()))
+                    .filter(java.util.Objects::nonNull)
+                    .filter(item -> StringUtils.hasText(item.getPrimaryGroupCode()))
+                    .collect(Collectors.groupingBy(VocabularyCatalogEntryAnalysis::getPrimaryGroupCode,
+                            Collectors.summingInt(item -> LearningConstants.SEQUENCE_STEP)));
+            all.sort((left, right) -> Integer.compare(candidateScore(right, analysisByEntry, preferredGroups, groupSize),
+                    candidateScore(left, analysisByEntry, preferredGroups, groupSize)));
+        }
         for (VocabularyCatalogEntry entry : all) {
             if (arranged.contains(entry.getId())) {
                 continue;
@@ -897,8 +945,56 @@ public class LearningPlanService {
         return result;
     }
 
+    private int candidateScore(VocabularyCatalogEntry entry,
+                               Map<Long, VocabularyCatalogEntryAnalysis> analysisByEntry,
+                               Set<String> preferredGroups, Map<String, Integer> groupSize) {
+        VocabularyCatalogEntryAnalysis analysis = analysisByEntry.get(entry.getId());
+        if (analysis == null) return 0;
+        int score = groupSize.getOrDefault(analysis.getPrimaryGroupCode(), 0);
+        if (preferredGroups.contains(analysis.getPrimaryGroupCode())) score += 1000;
+        if (StringUtils.hasText(analysis.getSubTopicCode())) score += 5;
+        return score;
+    }
+
+    private List<VocabularyCatalogEntry> pendingReviewWords(LearningPlan plan, int limit) {
+        List<LearningPlanUnitEntry> previousEntries = unitEntryMapper.selectList(
+                new LambdaQueryWrapper<LearningPlanUnitEntry>()
+                        .eq(LearningPlanUnitEntry::getPlanId, plan.getId())
+                        .eq(LearningPlanUnitEntry::getTier, LearningConstants.ScenePlan.TIER_CORE)
+                        .isNotNull(LearningPlanUnitEntry::getCatalogEntryId)
+                        .eq(LearningPlanUnitEntry::getDeleted, false)
+                        .orderByDesc(LearningPlanUnitEntry::getUpdateTime));
+        List<Long> entryIds = previousEntries.stream().map(LearningPlanUnitEntry::getCatalogEntryId)
+                .filter(java.util.Objects::nonNull).distinct().toList();
+        if (entryIds.isEmpty()) return List.of();
+        Map<String, LearningWordProgress> progressByTerm = progressMapper.selectList(
+                        new LambdaQueryWrapper<LearningWordProgress>()
+                                .eq(LearningWordProgress::getUserId, plan.getUserId())
+                                .in(LearningWordProgress::getNormalizedTerm,
+                                        previousEntries.stream().map(LearningPlanUnitEntry::getNormalizedTerm).distinct().toList())
+                                .eq(LearningWordProgress::getDeleted, false))
+                .stream().collect(Collectors.toMap(LearningWordProgress::getNormalizedTerm,
+                        item -> item, (left, right) -> left));
+        Map<Long, VocabularyCatalogEntry> catalogEntries = catalogEntryMapper.selectBatchIds(entryIds).stream()
+                .collect(Collectors.toMap(VocabularyCatalogEntry::getId, item -> item));
+        List<VocabularyCatalogEntry> result = new ArrayList<>();
+        Set<Long> seen = new HashSet<>();
+        for (LearningPlanUnitEntry previous : previousEntries) {
+            LearningWordProgress progress = progressByTerm.get(previous.getNormalizedTerm());
+            if (progress != null && LearningConstants.ScenePlan.PROGRESS_MASTERED.equals(progress.getLearningState())) {
+                continue;
+            }
+            VocabularyCatalogEntry entry = catalogEntries.get(previous.getCatalogEntryId());
+            if (entry != null && seen.add(entry.getId())) {
+                result.add(entry);
+            }
+            if (result.size() >= Math.min(limit, 20)) break;
+        }
+        return List.copyOf(result);
+    }
+
     private List<JsonNode> validateSceneWords(JsonNode scene, List<VocabularyCatalogEntry> candidates,
-                                              int targetWordCount) {
+                                              List<VocabularyCatalogEntry> reviewWords, int targetWordCount) {
         JsonNode vocabulary = node(scene, "vocabulary", "words");
         if (vocabulary == null || !vocabulary.isArray() || vocabulary.isEmpty()) {
             throw sceneInvalid("AI 场景结果缺少 vocabulary 数组");
@@ -906,6 +1002,10 @@ public class LearningPlanService {
         int coreCount = LearningConstants.ZERO;
         List<JsonNode> result = new ArrayList<>();
         Set<String> seen = new HashSet<>();
+        Set<String> candidateTerms = candidates.stream().map(entry -> normalize(entry.effectiveTerm()))
+                .collect(Collectors.toSet());
+        Set<String> reviewTerms = reviewWords.stream().map(entry -> normalize(entry.effectiveTerm()))
+                .collect(Collectors.toSet());
         for (JsonNode word : vocabulary) {
             String term = requiredText(word, "term", "word");
             String normalized = normalize(term);
@@ -914,7 +1014,13 @@ public class LearningPlanService {
             }
             String tier = normalizeTier(text(word, "tier"));
             if (LearningConstants.ScenePlan.TIER_CORE.equals(tier)) {
+                if (!candidateTerms.contains(normalized)) {
+                    throw sceneInvalid("核心词必须来自本次统筹的新词候选集: " + term);
+                }
                 coreCount++;
+            } else if (LearningConstants.ScenePlan.TIER_REVIEW.equals(tier)
+                    && !reviewTerms.contains(normalized)) {
+                throw sceneInvalid("复习词必须来自当前待挑战词集合: " + term);
             }
             result.add(word);
         }
@@ -1326,7 +1432,8 @@ public class LearningPlanService {
     private String normalizeTier(String tier) {
         if (LearningConstants.ScenePlan.TIER_CORE.equals(tier)
                 || LearningConstants.ScenePlan.TIER_EXTENDED.equals(tier)
-                || LearningConstants.ScenePlan.TIER_SUPPLEMENTARY.equals(tier)) {
+                || LearningConstants.ScenePlan.TIER_SUPPLEMENTARY.equals(tier)
+                || LearningConstants.ScenePlan.TIER_REVIEW.equals(tier)) {
             return tier;
         }
         return LearningConstants.ScenePlan.TIER_EXTENDED;

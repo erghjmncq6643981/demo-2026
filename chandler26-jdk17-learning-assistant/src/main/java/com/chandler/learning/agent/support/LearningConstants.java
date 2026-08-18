@@ -24,6 +24,8 @@ public final class LearningConstants {
     public static final String VOCABULARY_PLAN_AGENT_CODE = "english_vocabulary_plan";
     public static final String VOCABULARY_PLAN_TEMPLATE_CODE = "english_vocab_scene_unit_json";
     public static final String VOCABULARY_BATCH_TEMPLATE_CODE = "english_vocab_cards_batch_json";
+    public static final String VOCABULARY_ANALYSIS_AGENT_CODE = "english_vocabulary";
+    public static final String VOCABULARY_ANALYSIS_TEMPLATE_CODE = "english_vocab_catalog_analysis_json";
     public static final int DEFAULT_JWT_EXPIRE_DAYS = 30;
 
     /**
@@ -498,6 +500,7 @@ public final class LearningConstants {
     public static final class AiTask {
         public static final String TYPE_SCENE_MATERIAL = "scene_material";
         public static final String TYPE_VOCABULARY_CARD = "vocabulary_card";
+        public static final String TYPE_VOCABULARY_CATALOG_ANALYSIS = "vocabulary_catalog_analysis";
         public static final String STATUS_PENDING = "pending";
         public static final String STATUS_RUNNING = "running";
         public static final String STATUS_COMPLETED = "completed";
@@ -513,6 +516,33 @@ public final class LearningConstants {
         public static final int MAX_PAGE_SIZE = 100;
 
         private AiTask() {
+        }
+    }
+
+    /** 公共词本语义索引分析规则。 */
+    public static final class VocabularyAnalysis {
+        public static final String STATUS_PENDING = "pending";
+        public static final String STATUS_RUNNING = "running";
+        public static final String STATUS_COMPLETED = "completed";
+        public static final String STATUS_PARTIAL_FAILED = "partial_failed";
+        public static final String STATUS_FAILED = "failed";
+        public static final String ITEM_PENDING = "pending";
+        public static final String ITEM_RUNNING = "running";
+        public static final String ITEM_COMPLETED = "completed";
+        public static final String ITEM_FAILED = "failed";
+        public static final String ENTRY_READY = "ready";
+        public static final String ENTRY_LOW_CONFIDENCE = "low_confidence";
+        public static final String ENTRY_FAILED = "failed";
+        public static final String SOURCE_AI = "ai";
+        public static final String STRATEGY_VERSION = "semantic_coordinator_v1";
+        public static final int DEFAULT_BATCH_SIZE = 100;
+        public static final int MIN_BATCH_SIZE = 20;
+        public static final int MAX_BATCH_SIZE = 120;
+        public static final int MAX_TAG_COUNT = 6;
+        public static final int MAX_RELATED_COUNT = 12;
+        public static final double LOW_CONFIDENCE_THRESHOLD = 0.55D;
+
+        private VocabularyAnalysis() {
         }
     }
 

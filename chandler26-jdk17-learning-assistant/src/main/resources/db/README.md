@@ -36,6 +36,7 @@
 12. `101_engineering_governance_mysql.sql`
 13. `102_scene_material_note_mysql.sql`
 14. `103_ai_async_task_mysql.sql`
+15. `104_vocabulary_catalog_analysis_mysql.sql`
 
 迁移脚本都设计为可重复执行，但仍建议在执行前备份数据库并记录已执行版本。
 

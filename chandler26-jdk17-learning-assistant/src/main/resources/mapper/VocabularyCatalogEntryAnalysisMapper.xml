@@ -1,0 +1,20 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "https://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.chandler.learning.agent.mapper.vocabulary.VocabularyCatalogEntryAnalysisMapper">
+    <insert id="insertBatch">
+        INSERT INTO vocabulary_catalog_entry_analysis
+        (id, job_id, catalog_id, catalog_version_id, catalog_entry_id, primary_group_code,
+         primary_group_name, domain_code, sub_topic_code, tags_json, related_entry_ids_json,
+         difficulty_level, confidence, status, source, analysis_version, raw_result_json,
+         create_by, create_time, update_by, update_time, deleted, version)
+        VALUES
+        <foreach collection="list" item="item" separator=",">
+            (#{item.id}, #{item.jobId}, #{item.catalogId}, #{item.catalogVersionId}, #{item.catalogEntryId},
+             #{item.primaryGroupCode}, #{item.primaryGroupName}, #{item.domainCode}, #{item.subTopicCode},
+             #{item.tagsJson}, #{item.relatedEntryIdsJson}, #{item.difficultyLevel}, #{item.confidence},
+             #{item.status}, #{item.source}, #{item.analysisVersion}, #{item.rawResultJson},
+             #{item.createBy}, #{item.createTime}, #{item.updateBy}, #{item.updateTime},
+             #{item.deleted}, #{item.version})
+        </foreach>
+    </insert>
+</mapper>

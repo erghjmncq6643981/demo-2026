@@ -19,4 +19,10 @@ public interface VocabularyCatalogEntryMapper extends BaseMapper<VocabularyCatal
     int markPublishedBatch(@Param("ids") List<Long> ids,
                            @Param("updateTime") java.time.LocalDateTime updateTime,
                            @Param("updateBy") Long updateBy);
+
+    /** 查询尚未产生有效语义分析结果的已发布词条。 */
+    List<VocabularyCatalogEntry> selectUnanalyzedPublished(@Param("catalogVersionId") Long catalogVersionId);
+
+    /** 统计尚未产生有效语义分析结果的已发布词条数。 */
+    int countUnanalyzedPublished(@Param("catalogVersionId") Long catalogVersionId);
 }

@@ -491,7 +491,7 @@
                     <div class="panel-heading compact-heading">
                       <div>
                         <p class="eyebrow">Core</p>
-                        <h3>核心词汇</h3>
+                        <h3>待挑战词汇</h3>
                       </div>
                       <div class="inline-actions">
                         <span class="mini-pill" id="sceneCoreCount">0</span>
@@ -505,11 +505,11 @@
                     <div class="panel-heading compact-heading">
                       <div>
                         <p class="eyebrow">Vocabulary Challenge</p>
-                        <h3>本轮挑战词汇</h3>
+                        <h3>挑战准备</h3>
                       </div>
                       <span class="mini-pill" id="sceneChallengeWordCount">0 词</span>
                     </div>
-                    <div id="sceneChallengeWords" class="scene-challenge-words empty">暂无挑战词汇</div>
+                    <div id="sceneChallengeWords" class="scene-challenge-prep empty">当前没有可挑战词汇</div>
                     <div class="scene-challenge-actions">
                       <button class="secondary-button compact" id="sceneChallengeBackBtn" type="button">继续阅读</button>
                       <button class="primary-button" id="sceneChallengeStartBtn" type="button">挑战开始</button>
@@ -803,6 +803,10 @@
               <button class="icon-action-button" id="vocabularyPrevPageBtn" type="button" title="上一页" aria-label="上一页">←</button>
               <span id="vocabularyPageInfo">第 1 页</span>
               <button class="icon-action-button" id="vocabularyNextPageBtn" type="button" title="下一页" aria-label="下一页">→</button>
+            </div>
+            <div class="vocabulary-analysis-action hidden" id="vocabularyAnalysisAction">
+              <span id="vocabularyAnalysisStatus">词本关联分析：未开始</span>
+              <button class="secondary-button compact" id="triggerVocabularyAnalysisBtn" type="button">开始关联分析</button>
             </div>
             <button class="primary-button compact-primary" id="publishVocabularyImportBtn" type="button">发布公共词本</button>
           </div>

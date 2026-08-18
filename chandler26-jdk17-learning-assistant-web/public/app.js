@@ -338,6 +338,7 @@ bindAppEvents({
   previousImportPage: scenePlan.previousImportPage,
   nextImportPage: scenePlan.nextImportPage,
   publishVocabularyImport: scenePlan.publishVocabularyImport,
+  triggerVocabularyAnalysis: scenePlan.triggerVocabularyAnalysis,
   openScenePlanModal: scenePlan.openScenePlanModal,
   closeScenePlanModal: scenePlan.closeScenePlanModal,
   closeSceneVocabularyPreview: scenePlan.closeSceneVocabularyPreview,

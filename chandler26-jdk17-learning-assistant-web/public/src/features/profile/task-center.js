@@ -12,6 +12,7 @@ const STATUS_LABELS = {
 const TYPE_LABELS = {
   scene_material: '场景材料',
   vocabulary_card: '批量词卡',
+  vocabulary_catalog_analysis: '词本关联分析',
 }
 
 const MODE_LABELS = {

@@ -2,6 +2,7 @@ package com.chandler.learning.agent.service.learning;
 
 import com.chandler.learning.agent.domain.entity.learning.AiAsyncTask;
 import com.chandler.learning.agent.service.vocabulary.VocabularyCardBatchService;
+import com.chandler.learning.agent.service.vocabulary.VocabularyCatalogAnalysisService;
 import com.chandler.learning.agent.support.LearningConstants;
 import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.ObjectMapper;
@@ -24,6 +25,7 @@ public class AiAsyncTaskDispatcher {
     private final AiAsyncTaskService taskService;
     private final LearningPlanService learningPlanService;
     private final VocabularyCardBatchService vocabularyCardBatchService;
+    private final VocabularyCatalogAnalysisService vocabularyCatalogAnalysisService;
     private final ObjectMapper objectMapper;
 
     @Async("aiTaskExecutor")
@@ -43,6 +45,11 @@ public class AiAsyncTaskDispatcher {
             }
             if (LearningConstants.AiTask.TYPE_VOCABULARY_CARD.equals(task.getTaskType())) {
                 vocabularyCardBatchService.executeJob(task.getUserId(), task.getRelatedJobId(),
+                        number(payload.get("modelConfigId")));
+                return;
+            }
+            if (LearningConstants.AiTask.TYPE_VOCABULARY_CATALOG_ANALYSIS.equals(task.getTaskType())) {
+                vocabularyCatalogAnalysisService.executeJob(task.getUserId(), task.getRelatedJobId(),
                         number(payload.get("modelConfigId")));
                 return;
             }

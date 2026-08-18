@@ -3791,6 +3791,39 @@ input[type="range"] {
   font-size: 10px;
 }
 
+.scene-challenge-prep {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 12px;
+  margin: 24px 0;
+}
+
+.scene-challenge-prep > div {
+  display: grid;
+  min-height: 96px;
+  place-content: center;
+  gap: 4px;
+  padding: 14px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  text-align: center;
+}
+
+.scene-challenge-prep strong {
+  font-size: 26px;
+}
+
+.scene-challenge-prep span,
+.scene-challenge-prep p {
+  color: var(--muted);
+}
+
+.scene-challenge-prep p {
+  grid-column: 1 / -1;
+  margin: 0;
+  text-align: center;
+}
+
 .scene-challenge-actions {
   justify-content: flex-end;
   padding-top: 14px;
@@ -4096,6 +4129,21 @@ input.sr-only:disabled + .file-upload-trigger {
 .vocabulary-review-summary,
 .vocabulary-review-footer {
   justify-content: space-between;
+}
+
+.vocabulary-analysis-action {
+  display: flex;
+  min-width: 0;
+  flex: 1 1 360px;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 10px;
+}
+
+.vocabulary-analysis-action span {
+  color: var(--muted);
+  font-size: 12px;
+  overflow-wrap: anywhere;
 }
 
 .vocabulary-review-tools {
@@ -5029,6 +5077,23 @@ input.sr-only:disabled + .file-upload-trigger {
 
   .scene-challenge-words span {
     font-size: 15px;
+  }
+
+  .scene-challenge-prep {
+    grid-template-columns: 1fr;
+  }
+
+  .scene-challenge-prep p {
+    grid-column: auto;
+  }
+
+  .vocabulary-analysis-action {
+    align-items: stretch;
+    flex-direction: column;
+  }
+
+  .vocabulary-analysis-action button {
+    width: 100%;
   }
 
   .profile-plan-progress {

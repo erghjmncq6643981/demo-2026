@@ -47,6 +47,7 @@ export function bindAppEvents(ctx) {
     previousImportPage,
     nextImportPage,
     publishVocabularyImport,
+    triggerVocabularyAnalysis,
     openScenePlanModal,
     closeScenePlanModal,
     closeSceneVocabularyPreview,
@@ -246,6 +247,7 @@ elements.vocabularyReloadReviewBtn?.addEventListener('click', () => loadImportRe
 elements.vocabularyPrevPageBtn?.addEventListener('click', previousImportPage)
 elements.vocabularyNextPageBtn?.addEventListener('click', nextImportPage)
 elements.publishVocabularyImportBtn?.addEventListener('click', publishVocabularyImport)
+elements.triggerVocabularyAnalysisBtn?.addEventListener('click', triggerVocabularyAnalysis)
 elements.closeScenePlanModalBtn?.addEventListener('click', closeScenePlanModal)
 elements.scenePlanModal?.addEventListener('click', (event) => {
   if (event.target === elements.scenePlanModal) closeScenePlanModal()

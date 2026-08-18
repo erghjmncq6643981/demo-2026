@@ -24,6 +24,15 @@ const IMPORT_STATUS_LABELS = {
   failed: '失败',
 }
 
+const ANALYSIS_STATUS_LABELS = {
+  not_started: '未开始',
+  pending: '等待执行',
+  running: '分析中',
+  completed: '已完成',
+  partial_failed: '部分完成',
+  failed: '失败',
+}
+
 const ASSESSMENT_LABELS = {
   meaning_choice: '含义选择',
   copy_typing: '跟敲单词',
@@ -1244,11 +1253,13 @@ export function createScenePlanFeature(ctx) {
   }
 
   function renderChallengeWords(coreWords) {
+    const spellingCount = coreWords.filter((word) => word.masteryRequirement === 'spelling').length
+    const recognitionCount = coreWords.length - spellingCount
     elements.sceneChallengeWordCount.textContent = `${coreWords.length} 词`
-    elements.sceneChallengeWords.className = coreWords.length ? 'scene-challenge-words' : 'scene-challenge-words empty'
+    elements.sceneChallengeWords.className = coreWords.length ? 'scene-challenge-prep' : 'scene-challenge-prep empty'
     elements.sceneChallengeWords.innerHTML = coreWords.length
-      ? coreWords.map((word, index) => `<span><small>${index + 1}</small>${escapeHtml(word.term)}</span>`).join('')
-      : '暂无挑战词汇'
+      ? `<div><strong>${coreWords.length}</strong><span>本轮词数</span></div><div><strong>${recognitionCount}</strong><span>含义选择</span></div><div><strong>${spellingCount}</strong><span>拼写检查</span></div><p>挑战开始后逐题作答，不再重复展示完整词表。</p>`
+      : '当前没有可挑战词汇'
   }
 
   function applySceneStage(stage) {
@@ -1958,6 +1969,7 @@ export function createScenePlanFeature(ctx) {
   function openVocabularyImport() {
     renderSourceOptions()
     state.currentVocabularyImport = null
+    state.currentVocabularyAnalysis = null
     state.vocabularyImportPage = 1
     elements.vocabularyImportFile.value = ''
     elements.vocabularyImportName.value = ''
@@ -2070,6 +2082,7 @@ export function createScenePlanFeature(ctx) {
   }
 
   async function openImportReview(jobId) {
+    state.currentVocabularyAnalysis = null
     state.vocabularyImportPage = 1
     elements.vocabularyWarningOnly.checked = false
     elements.vocabularyImportKeyword.value = ''
@@ -2103,6 +2116,18 @@ export function createScenePlanFeature(ctx) {
       source.pendingWarningCount = allItems.filter((item) => item.suspicious && item.reviewStatus !== 'confirmed').length
       source.reviewedWarningCount = allItems.filter((item) => item.suspicious && item.reviewStatus === 'confirmed').length
       state.currentVocabularyImport = source
+      if (source.status === 'published' && source.catalogVersionId) {
+        const total = number(source.totalCount)
+        state.currentVocabularyAnalysis = {
+          catalogId: source.catalogId,
+          catalogVersionId: source.catalogVersionId,
+          status: 'not_started',
+          publishedCount: total,
+          analyzedCount: 0,
+          unanalyzedCount: total,
+          canTrigger: total > 0,
+        }
+      }
       renderImportReview()
       renderImportList()
       return
@@ -2117,6 +2142,9 @@ export function createScenePlanFeature(ctx) {
       if (keyword) params.set('keyword', keyword)
       state.currentVocabularyImport = await request(`/api/v1/vocabulary-imports/${encodeURIComponent(jobId)}?${params}`)
       renderImportReview()
+      if (state.currentVocabularyImport.status === 'published') {
+        await loadVocabularyAnalysis(state.currentVocabularyImport.catalogVersionId, { quiet: true })
+      }
     } catch (error) {
       logEvent('error', '词表审核数据加载失败', error.message)
       toast(`词表审核加载失败：${error.message}`)
@@ -2184,6 +2212,78 @@ export function createScenePlanFeature(ctx) {
     elements.vocabularyPageInfo.textContent = `第 ${page} / ${pages} 页 · ${number(current.filteredTotal)} 条`
     elements.vocabularyPrevPageBtn.disabled = page <= 1
     elements.vocabularyNextPageBtn.disabled = page >= pages
+    renderVocabularyAnalysis(current)
+  }
+
+  function renderVocabularyAnalysis(current = state.currentVocabularyImport) {
+    if (!elements.vocabularyAnalysisAction) return
+    const published = current?.status === 'published'
+    elements.vocabularyAnalysisAction.classList.toggle('hidden', !published)
+    if (!published) return
+    const analysis = sameId(state.currentVocabularyAnalysis?.catalogVersionId, current.catalogVersionId)
+      ? state.currentVocabularyAnalysis : null
+    const status = analysis?.status || 'not_started'
+    const analyzed = number(analysis?.analyzedCount)
+    const total = number(analysis?.publishedCount) || number(current.totalCount)
+    const pending = Math.max(0, number(analysis?.unanalyzedCount) || (total - analyzed))
+    const groups = number(analysis?.groupCount)
+    elements.vocabularyAnalysisStatus.textContent = `词本关联分析：${ANALYSIS_STATUS_LABELS[status] || status} · ${analyzed}/${total} 词${groups ? ` · ${groups} 组` : ''}`
+    const running = status === 'pending' || status === 'running'
+    elements.triggerVocabularyAnalysisBtn.disabled = running || pending === 0 || analysis?.canTrigger === false
+    elements.triggerVocabularyAnalysisBtn.textContent = running
+      ? (status === 'running' ? '分析中...' : '等待执行')
+      : pending > 0 ? `分析剩余 ${pending} 词` : '分析已完成'
+  }
+
+  async function loadVocabularyAnalysis(catalogVersionId, options = {}) {
+    if (!catalogVersionId) return null
+    if (state.preview) {
+      renderVocabularyAnalysis()
+      return state.currentVocabularyAnalysis
+    }
+    try {
+      const analysis = await request(`/api/v1/vocabulary-catalogs/${encodeURIComponent(catalogVersionId)}/analysis`)
+      state.currentVocabularyAnalysis = analysis
+      renderVocabularyAnalysis()
+      return analysis
+    } catch (error) {
+      if (!options.quiet) toast(`词本关联分析状态加载失败：${error.message}`)
+      logEvent('error', '词本关联分析状态加载失败', error.message)
+      return null
+    }
+  }
+
+  async function triggerVocabularyAnalysis() {
+    const current = state.currentVocabularyImport
+    if (!current || current.status !== 'published') return
+    const pending = number(state.currentVocabularyAnalysis?.unanalyzedCount) || number(current.totalCount)
+    if (pending <= 0) return
+    const confirmed = await confirmAction({
+      title: '分析公共词本',
+      message: `将对「${current.catalogName}」中尚未分析的 ${pending} 个词进行批量语义分析。分析在后台执行，可在任务中心查看进度。`,
+      acceptText: '开始分析',
+    })
+    if (!confirmed) return
+    setButtonLoading(elements.triggerVocabularyAnalysisBtn, true, '提交中...')
+    try {
+      if (state.preview) {
+        state.currentVocabularyAnalysis = { ...state.currentVocabularyAnalysis, status: 'pending', canTrigger: false }
+      } else {
+        state.currentVocabularyAnalysis = await request(`/api/v1/vocabulary-catalogs/${encodeURIComponent(current.catalogVersionId)}/analysis`, {
+          method: 'POST',
+          body: JSON.stringify({ executionMode: 'immediate', batchSize: 100 }),
+        })
+      }
+      renderVocabularyAnalysis()
+      logEvent('vocabulary', '触发公共词本关联分析', `${current.catalogName} · ${pending} 词`)
+      toast('词本关联分析任务已创建，可在个人信息 - 任务中心查看进度')
+    } catch (error) {
+      logEvent('error', '公共词本关联分析触发失败', error.message)
+      toast(`词本关联分析触发失败：${error.message}`)
+    } finally {
+      setButtonLoading(elements.triggerVocabularyAnalysisBtn, false)
+      renderVocabularyAnalysis()
+    }
   }
 
   async function saveImportEntry(entryId) {
@@ -2274,11 +2374,21 @@ export function createScenePlanFeature(ctx) {
         }
         state.publicVocabularyCatalogs = [catalog, ...state.publicVocabularyCatalogs.filter((item) => !sameId(item.catalogVersionId, catalog.catalogVersionId))]
         state.currentVocabularyImport = current
+        state.currentVocabularyAnalysis = {
+          catalogId: current.catalogId,
+          catalogVersionId: current.catalogVersionId,
+          status: 'not_started',
+          publishedCount: number(current.totalCount),
+          analyzedCount: 0,
+          unanalyzedCount: number(current.totalCount),
+          canTrigger: number(current.totalCount) > 0,
+        }
       } else {
         state.currentVocabularyImport = await request(`/api/v1/vocabulary-imports/${encodeURIComponent(current.jobId)}/publish`, {
           method: 'POST',
           body: JSON.stringify({}),
         })
+        await loadVocabularyAnalysis(state.currentVocabularyImport.catalogVersionId, { quiet: true })
       }
       await Promise.allSettled([reloadImportHistory(), loadWordbooks?.()])
       renderImportReview()
@@ -2693,6 +2803,7 @@ export function createScenePlanFeature(ctx) {
     openImportReview,
     confirmAllWarnings,
     publishVocabularyImport,
+    triggerVocabularyAnalysis,
     openScenePlanModal,
     closeScenePlanModal,
     closeSceneVocabularyPreview,

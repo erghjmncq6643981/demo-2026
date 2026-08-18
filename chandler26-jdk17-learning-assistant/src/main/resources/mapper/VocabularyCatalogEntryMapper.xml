@@ -48,4 +48,37 @@
             #{id}
         </foreach>
     </update>
+
+    <select id="selectUnanalyzedPublished" resultType="com.chandler.learning.agent.domain.entity.vocabulary.VocabularyCatalogEntry">
+        SELECT e.*
+        FROM vocabulary_catalog_entry e
+        WHERE e.catalog_version_id = #{catalogVersionId}
+          AND e.published = 1
+          AND e.deleted = 0
+          AND NOT EXISTS (
+              SELECT 1
+              FROM vocabulary_catalog_entry_analysis a
+              WHERE a.catalog_version_id = e.catalog_version_id
+                AND a.catalog_entry_id = e.id
+                AND a.status IN ('ready', 'low_confidence')
+                AND a.deleted = 0
+          )
+        ORDER BY e.source_order ASC
+    </select>
+
+    <select id="countUnanalyzedPublished" resultType="int">
+        SELECT COUNT(1)
+        FROM vocabulary_catalog_entry e
+        WHERE e.catalog_version_id = #{catalogVersionId}
+          AND e.published = 1
+          AND e.deleted = 0
+          AND NOT EXISTS (
+              SELECT 1
+              FROM vocabulary_catalog_entry_analysis a
+              WHERE a.catalog_version_id = e.catalog_version_id
+                AND a.catalog_entry_id = e.id
+                AND a.status IN ('ready', 'low_confidence')
+                AND a.deleted = 0
+          )
+    </select>
 </mapper>

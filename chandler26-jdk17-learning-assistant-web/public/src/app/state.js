@@ -48,6 +48,7 @@ export function createInitialState() {
     articleCheckedRecords: {},
     vocabularyImports: [],
     currentVocabularyImport: null,
+    currentVocabularyAnalysis: null,
     vocabularyImportPage: 1,
     vocabularyImportPageSize: 100,
     learningPlans: [],
