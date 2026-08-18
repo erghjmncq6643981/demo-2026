@@ -1,4 +1,4 @@
-package com.chandler.learning.agent.domain.entity.vocabulary;
+package com.chandler.learning.agent.domain.entity.learning;
 
 import com.baomidou.mybatisplus.annotation.IdType;
 import com.baomidou.mybatisplus.annotation.TableId;
@@ -9,27 +9,34 @@ import lombok.Data;
 import java.time.LocalDateTime;
 
 /**
- * 批量 AI 词卡生成任务。
+ * AI 批处理任务统一记录，供任务中心和后台调度器共同使用。
  */
 @Data
-@TableName("vocabulary_card_generation_job")
-public class VocabularyCardGenerationJob extends BaseEntity {
+@TableName("learning_ai_async_task")
+public class AiAsyncTask extends BaseEntity {
 
     @TableId(value = "id", type = IdType.ASSIGN_ID)
     private Long id;
 
     private Long userId;
 
+    private String taskType;
+
+    private String taskName;
+
     private Long planId;
 
     private Long unitId;
 
-    /** 统一任务中心主键。 */
-    private Long asyncTaskId;
+    private Long relatedJobId;
 
     private String status;
 
-    private Integer batchSize;
+    private String executionMode;
+
+    private LocalDateTime scheduledTime;
+
+    private Integer priority;
 
     private Integer totalCount;
 
@@ -37,9 +44,19 @@ public class VocabularyCardGenerationJob extends BaseEntity {
 
     private Integer failedCount;
 
+    private Integer progressPercent;
+
+    private Integer retryCount;
+
+    private Integer maxRetryCount;
+
+    private String payloadJson;
+
     private String errorMessage;
 
     private LocalDateTime startedTime;
 
     private LocalDateTime finishedTime;
+
+    private LocalDateTime cancelledTime;
 }

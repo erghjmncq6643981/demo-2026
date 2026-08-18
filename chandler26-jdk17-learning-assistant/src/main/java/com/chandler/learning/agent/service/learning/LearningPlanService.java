@@ -1061,6 +1061,7 @@ public class LearningPlanService {
         response.setSupplementaryWordCount(unit.getSupplementaryWordCount());
         response.setCompletedCoreCount(unit.getCompletedCoreCount());
         response.setRecommendedDate(unit.getRecommendedDate());
+        response.setSceneMaterialId(unit.getSceneMaterialId());
         response.setLearningText(material == null ? null : material.getLearningText());
         response.setTranslation(material == null ? null : material.getTranslation());
         response.setMaterial(material == null ? null : readJson(material.getParsedJson()));

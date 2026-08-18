@@ -5,6 +5,7 @@ import { createLearningConfigProfileFeature } from '/src/features/profile/learni
 import { createModelProfileFeature } from '/src/features/profile/model.js'
 import { createTemplateProfileFeature } from '/src/features/profile/template.js'
 import { createWordbookProfileFeature } from '/src/features/profile/wordbook.js'
+import { createTaskCenterProfileFeature } from '/src/features/profile/task-center.js'
 
 export function createProfileFeature(ctx) {
   const learningConfigFeature = createLearningConfigProfileFeature(ctx)
@@ -25,6 +26,7 @@ export function createProfileFeature(ctx) {
     loadActivity: (...args) => activityFeature.loadActivity(...args),
     renderActivityHeatmap: (...args) => activityFeature.renderActivityHeatmap(...args),
   })
+  const taskCenterFeature = createTaskCenterProfileFeature(ctx)
 
   return {
     ...agentFeature,
@@ -34,5 +36,6 @@ export function createProfileFeature(ctx) {
     ...learningConfigFeature,
     ...wordbookFeature,
     ...activityFeature,
+    ...taskCenterFeature,
   }
 }

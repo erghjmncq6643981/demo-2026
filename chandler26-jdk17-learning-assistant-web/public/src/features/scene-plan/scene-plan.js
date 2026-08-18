@@ -1,6 +1,7 @@
 import { hideModal, showModal } from '/src/shared/modal.js'
 import { normalizeWordbookId, syncCurrentWordbookId } from '/src/shared/wordbook.js'
 import { initDatetimePicker } from '/src/shared/datetime-picker.js'
+import { renderMarkdown } from '/src/shared/vocabulary.js'
 
 const TIER_LABELS = {
   core: '核心',
@@ -508,6 +509,8 @@ export function createScenePlanFeature(ctx) {
     state.currentLearningPlan = null
     state.currentSceneWordId = null
     state.sceneCardJob = null
+    state.sceneNote = { content: '', updateTime: null, unitId: null }
+    state.sceneNoteMode = 'edit'
     assessmentFeedback = null
     renderSceneView()
   }
@@ -517,6 +520,90 @@ export function createScenePlanFeature(ctx) {
     renderPlanList()
     renderImportList()
     renderCurrentScene()
+  }
+
+  async function loadSceneNote(unit = activeUnit()) {
+    if (!unit) {
+      state.sceneNote = { content: '', updateTime: null, unitId: null }
+      renderSceneNote(null)
+      return
+    }
+    if (sameId(state.sceneNote?.unitId, unit.id)) {
+      renderSceneNote(unit)
+      return
+    }
+    if (state.preview) {
+      const content = unit.note?.content || ''
+      state.sceneNote = { content, updateTime: unit.note?.updateTime || null, unitId: unit.id }
+      renderSceneNote(unit)
+      return
+    }
+    try {
+      const note = await request(`/api/v1/learning/plans/${encodeURIComponent(unit.planId)}/units/${encodeURIComponent(unit.id)}/note`)
+      state.sceneNote = { content: note?.content || '', updateTime: note?.updateTime || null, unitId: unit.id }
+      renderSceneNote(unit)
+    } catch (error) {
+      state.sceneNote = { content: '', updateTime: null, unitId: unit.id }
+      renderSceneNote(unit, '笔记加载失败，可重试')
+      logEvent('error', '场景笔记加载失败', error.message)
+    }
+  }
+
+  function renderSceneNote(unit, errorMessage = '') {
+    if (!elements.sceneNoteInput || !elements.sceneNotePreview) return
+    const content = state.sceneNote?.content || ''
+    elements.sceneNoteInput.value = content
+    elements.sceneNotePreview.innerHTML = content
+      ? renderMarkdown(content)
+      : '<span class="empty">还没有笔记，记录本篇材料的重点、疑问或例句。</span>'
+    elements.sceneNotePreview.classList.toggle('hidden', state.sceneNoteMode !== 'preview')
+    elements.sceneNoteInput.classList.toggle('hidden', state.sceneNoteMode === 'preview')
+    elements.sceneNotePreviewBtn.textContent = state.sceneNoteMode === 'preview' ? '编辑笔记' : '预览 Markdown'
+    elements.sceneNoteStatus.textContent = errorMessage || (state.sceneNote?.updateTime ? `已保存 ${formatNoteTime(state.sceneNote.updateTime)}` : '未保存')
+    elements.sceneNoteStatus.classList.toggle('error', Boolean(errorMessage))
+    elements.sceneNoteSaveBtn.disabled = !unit || state.sceneNoteMode === 'preview'
+  }
+
+  function formatNoteTime(value) {
+    const date = new Date(value)
+    return Number.isNaN(date.getTime()) ? '刚刚' : date.toLocaleString('zh-CN', { hour12: false })
+  }
+
+  function toggleSceneNotePreview() {
+    const nextMode = state.sceneNoteMode === 'preview' ? 'edit' : 'preview'
+    if (nextMode === 'preview' && elements.sceneNoteInput) {
+      state.sceneNote = { ...state.sceneNote, content: elements.sceneNoteInput.value }
+    }
+    state.sceneNoteMode = nextMode
+    renderSceneNote(activeUnit())
+  }
+
+  async function saveSceneNote() {
+    const unit = activeUnit()
+    if (!unit || !elements.sceneNoteInput) return
+    const content = elements.sceneNoteInput.value
+    elements.sceneNoteSaveBtn.disabled = true
+    elements.sceneNoteStatus.textContent = '保存中...'
+    try {
+      if (state.preview) {
+        state.sceneNote = { content, updateTime: new Date().toISOString(), unitId: unit.id }
+        unit.note = { content, updateTime: state.sceneNote.updateTime }
+      } else {
+        const note = await request(`/api/v1/learning/plans/${encodeURIComponent(unit.planId)}/units/${encodeURIComponent(unit.id)}/note`, {
+          method: 'PUT',
+          body: JSON.stringify({ content }),
+        })
+        state.sceneNote = { content: note?.content || '', updateTime: note?.updateTime || new Date().toISOString(), unitId: unit.id }
+      }
+      renderSceneNote(unit)
+      toast('场景材料笔记已保存')
+    } catch (error) {
+      elements.sceneNoteStatus.textContent = '保存失败，请重试'
+      elements.sceneNoteStatus.classList.add('error')
+      toast(`场景笔记保存失败：${error.message}`)
+    } finally {
+      elements.sceneNoteSaveBtn.disabled = false
+    }
   }
 
   function renderPlanList() {
@@ -646,6 +733,7 @@ export function createScenePlanFeature(ctx) {
       renderPlanList()
       await loadCalendarData(plan)
       renderCurrentScene()
+      await loadSceneNote(activeUnit(plan))
       if (!options.quiet) logEvent('learning', '切换场景学习计划', plan.name)
     } catch (error) {
       logEvent('error', '学习计划加载失败', error.message)
@@ -1113,6 +1201,7 @@ export function createScenePlanFeature(ctx) {
             || asArray(active?.words).find((word) => word.tier === 'core')?.id
             || null
           renderCurrentScene()
+          await loadSceneNote(selectedUnit)
           startLearning()
         } catch (error) {
           logEvent('error', '开始场景失败', error.message)
@@ -1306,6 +1395,7 @@ export function createScenePlanFeature(ctx) {
 
     elements.sceneStartLearningBtn.classList.toggle('hidden', !unit)
     elements.sceneOverviewNextUnitBtn.classList.toggle('hidden', !plan?.canGenerateNext || Boolean(unit) || plan?.status !== 'active')
+    elements.sceneScheduleNextUnitBtn?.classList.toggle('hidden', !plan?.canGenerateNext || Boolean(unit) || plan?.status !== 'active')
     renderCalendar(plan)
     applySceneStage(state.sceneChallengeStage || 'overview')
     if (!plan || !unit) {
@@ -1326,6 +1416,7 @@ export function createScenePlanFeature(ctx) {
       elements.sceneAssessment.textContent = '选择一个核心词开始检查'
       elements.sceneAssessmentStage.textContent = '未开始'
       elements.sceneGenerateCardsBtn.classList.add('hidden')
+      elements.sceneScheduleCardsBtn?.classList.add('hidden')
       elements.sceneCompleteUnitBtn.classList.add('hidden')
       elements.sceneNextUnitBtn.classList.toggle('hidden', !plan?.canGenerateNext || plan?.status !== 'active')
       renderChallengeWords([])
@@ -1341,6 +1432,7 @@ export function createScenePlanFeature(ctx) {
     elements.sceneUnitSummary.textContent = unit.summary || plan.learningPurpose || '通过当前场景学习相关词汇'
     elements.sceneUnitProgress.textContent = `${number(unit.completedCoreCount)} / ${number(unit.coreWordCount)}`
     elements.sceneGenerateCardsBtn.classList.toggle('hidden', !missingCards || plan.status !== 'active')
+    elements.sceneScheduleCardsBtn?.classList.toggle('hidden', !missingCards || plan.status !== 'active')
     elements.sceneCompleteUnitBtn.classList.toggle('hidden', unit.status === 'completed' || number(unit.completedCoreCount) < number(unit.coreWordCount) || plan.status !== 'active')
     elements.sceneNextUnitBtn.classList.toggle('hidden', !plan.canGenerateNext || plan.status !== 'active')
     renderLearningText(unit, coreWords)
@@ -1747,6 +1839,37 @@ export function createScenePlanFeature(ctx) {
     }
   }
 
+  async function scheduleNextUnit() {
+    const plan = state.currentLearningPlan
+    if (!plan?.canGenerateNext || plan.status !== 'active') return
+    const confirmed = await confirmAction({
+      title: '安排低价时段生成',
+      message: '任务会进入任务中心，并在每日 00:00 - 06:00 自动生成场景材料；当前学习场景不会被替换。',
+      acceptText: '安排任务',
+    })
+    if (!confirmed) return
+    setButtonLoading(elements.sceneScheduleNextUnitBtn, true, '安排中...')
+    try {
+      if (state.preview) {
+        state.sceneScheduledTask = { id: Date.now(), taskName: '批量生成场景材料', status: 'pending', executionMode: 'low_cost_window' }
+        toast('设计预览：任务已进入低价时段队列')
+      } else {
+        const modelConfigId = elements.scenePlanModelSelect?.value || null
+        const task = await request(`/api/v1/learning/plans/${encodeURIComponent(plan.id)}/units/next/async`, {
+          method: 'POST',
+          body: JSON.stringify({ modelConfigId: modelConfigId || null, executionMode: 'low_cost_window' }),
+        })
+        state.sceneScheduledTask = task
+        toast('场景材料任务已安排，可在个人信息 - 任务中心查看')
+      }
+    } catch (error) {
+      logEvent('error', '安排场景生成失败', error.message)
+      toast(`安排场景生成失败：${error.message}`)
+    } finally {
+      setButtonLoading(elements.sceneScheduleNextUnitBtn, false)
+    }
+  }
+
   async function generateCards() {
     const plan = state.currentLearningPlan
     const unit = activeUnit(plan)
@@ -1787,6 +1910,36 @@ export function createScenePlanFeature(ctx) {
       toast(`批量词卡生成失败：${error.message}`)
     } finally {
       setButtonLoading(elements.sceneGenerateCardsBtn, false)
+    }
+  }
+
+  async function scheduleCards() {
+    const plan = state.currentLearningPlan
+    const unit = activeUnit(plan)
+    if (!plan || !unit) return
+    const confirmed = await confirmAction({
+      title: '安排低价时段补齐词卡',
+      message: '缺失词卡会在每日 00:00 - 06:00 分批生成，生成结果可在任务中心查看。',
+      acceptText: '安排任务',
+    })
+    if (!confirmed) return
+    setButtonLoading(elements.sceneScheduleCardsBtn, true, '安排中...')
+    try {
+      if (state.preview) {
+        state.sceneScheduledTask = { id: Date.now(), taskName: '批量生成场景词卡', status: 'pending', executionMode: 'low_cost_window' }
+        toast('设计预览：词卡任务已进入低价时段队列')
+      } else {
+        state.sceneCardJob = await request(`/api/v1/learning/plans/${encodeURIComponent(plan.id)}/units/${encodeURIComponent(unit.id)}/cards/generate`, {
+          method: 'POST',
+          body: JSON.stringify({ batchSize: 15, executionMode: 'low_cost_window' }),
+        })
+        toast('词卡任务已安排，可在个人信息 - 任务中心查看')
+      }
+    } catch (error) {
+      logEvent('error', '安排词卡生成失败', error.message)
+      toast(`安排词卡生成失败：${error.message}`)
+    } finally {
+      setButtonLoading(elements.sceneScheduleCardsBtn, false)
     }
   }
 
@@ -2551,7 +2704,9 @@ export function createScenePlanFeature(ctx) {
     nextImportPage,
     completeCurrentUnit,
     generateNextUnit,
+    scheduleNextUnit,
     generateCards,
+    scheduleCards,
     startLearning,
     showChallengeWords,
     startChallenge,
@@ -2565,5 +2720,9 @@ export function createScenePlanFeature(ctx) {
     resumePlan,
     cancelPlan,
     speakCurrentScene: () => speakSentence(activeUnit()?.learningText || ''),
+    loadSceneNote,
+    renderSceneNote,
+    saveSceneNote,
+    toggleSceneNotePreview,
   }
 }

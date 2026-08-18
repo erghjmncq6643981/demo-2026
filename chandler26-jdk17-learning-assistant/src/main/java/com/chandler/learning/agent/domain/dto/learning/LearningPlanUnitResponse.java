@@ -36,6 +36,9 @@ public class LearningPlanUnitResponse {
 
     private LocalDate recommendedDate;
 
+    /** 场景材料主键，用于加载与材料绑定的学习笔记。 */
+    private Long sceneMaterialId;
+
     private String learningText;
 
     private String translation;

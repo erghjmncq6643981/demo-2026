@@ -246,6 +246,61 @@ CREATE TABLE IF NOT EXISTS learning_scene_material (
     KEY idx_learning_scene_material_session (session_id)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci COMMENT='AI 场景学习材料';
 
+CREATE TABLE IF NOT EXISTS learning_scene_material_note (
+    id BIGINT NOT NULL COMMENT '主键',
+    create_by BIGINT NOT NULL DEFAULT 0 COMMENT '创建人用户 ID',
+    update_by BIGINT NOT NULL DEFAULT 0 COMMENT '更新人用户 ID',
+    user_id BIGINT NOT NULL COMMENT '学习者用户 ID',
+    plan_id BIGINT NOT NULL COMMENT '学习计划 ID',
+    unit_id BIGINT NOT NULL COMMENT '场景学习单元 ID',
+    scene_material_id BIGINT NOT NULL COMMENT '场景材料 ID',
+    content MEDIUMTEXT DEFAULT NULL COMMENT 'Markdown 笔记正文',
+    content_format VARCHAR(20) NOT NULL DEFAULT 'markdown' COMMENT '笔记格式：markdown',
+    create_time DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP COMMENT '创建时间',
+    update_time DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP COMMENT '更新时间',
+    deleted TINYINT(1) NOT NULL DEFAULT 0 COMMENT '是否逻辑删除',
+    version INT NOT NULL DEFAULT 0 COMMENT '乐观锁版本号',
+    PRIMARY KEY (id),
+    UNIQUE KEY uk_learning_scene_material_note_user_unit (user_id, unit_id, deleted),
+    KEY idx_learning_scene_material_note_material (scene_material_id, deleted),
+    KEY idx_learning_scene_material_note_plan (plan_id, deleted, update_time)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci COMMENT='学习者场景材料 Markdown 笔记';
+
+CREATE TABLE IF NOT EXISTS learning_ai_async_task (
+    id BIGINT NOT NULL COMMENT '主键',
+    create_by BIGINT NOT NULL DEFAULT 0 COMMENT '创建人用户 ID',
+    update_by BIGINT NOT NULL DEFAULT 0 COMMENT '更新人用户 ID',
+    user_id BIGINT NOT NULL COMMENT '任务所属用户 ID',
+    task_type VARCHAR(40) NOT NULL COMMENT '任务类型：scene_material、vocabulary_card',
+    task_name VARCHAR(160) NOT NULL COMMENT '任务展示名称',
+    plan_id BIGINT DEFAULT NULL COMMENT '关联学习计划 ID',
+    unit_id BIGINT DEFAULT NULL COMMENT '关联场景单元 ID',
+    related_job_id BIGINT DEFAULT NULL COMMENT '关联领域任务 ID',
+    status VARCHAR(20) NOT NULL DEFAULT 'pending' COMMENT '状态：pending、running、completed、partial_failed、failed、cancelled',
+    execution_mode VARCHAR(30) NOT NULL DEFAULT 'immediate' COMMENT '执行方式：immediate、scheduled、low_cost_window',
+    scheduled_time DATETIME DEFAULT NULL COMMENT '计划执行时间',
+    priority INT NOT NULL DEFAULT 50 COMMENT '任务优先级，数字越大越优先',
+    total_count INT NOT NULL DEFAULT 0 COMMENT '任务总量',
+    success_count INT NOT NULL DEFAULT 0 COMMENT '成功数量',
+    failed_count INT NOT NULL DEFAULT 0 COMMENT '失败数量',
+    progress_percent INT NOT NULL DEFAULT 0 COMMENT '完成百分比',
+    retry_count INT NOT NULL DEFAULT 0 COMMENT '已重试次数',
+    max_retry_count INT NOT NULL DEFAULT 2 COMMENT '最大重试次数',
+    payload_json JSON DEFAULT NULL COMMENT 'Worker 参数 JSON',
+    error_message VARCHAR(1000) DEFAULT NULL COMMENT '最后一次失败原因',
+    started_time DATETIME DEFAULT NULL COMMENT '开始执行时间',
+    finished_time DATETIME DEFAULT NULL COMMENT '结束时间',
+    cancelled_time DATETIME DEFAULT NULL COMMENT '取消时间',
+    create_time DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP COMMENT '创建时间',
+    update_time DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP COMMENT '更新时间',
+    deleted TINYINT(1) NOT NULL DEFAULT 0 COMMENT '是否逻辑删除',
+    version INT NOT NULL DEFAULT 0 COMMENT '乐观锁版本号',
+    PRIMARY KEY (id),
+    KEY idx_learning_ai_task_user_status (user_id, status, deleted, update_time),
+    KEY idx_learning_ai_task_schedule (status, scheduled_time, priority, deleted),
+    KEY idx_learning_ai_task_plan (plan_id, unit_id, deleted)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci COMMENT='AI 异步任务统一记录';
+
 CREATE TABLE IF NOT EXISTS vocabulary_card_generation_job (
     id BIGINT NOT NULL COMMENT '主键',
     create_by BIGINT NOT NULL DEFAULT 0 COMMENT '创建人用户 ID',
@@ -253,7 +308,8 @@ CREATE TABLE IF NOT EXISTS vocabulary_card_generation_job (
     user_id BIGINT NOT NULL COMMENT '任务发起用户 ID',
     plan_id BIGINT DEFAULT NULL COMMENT '学习计划 ID',
     unit_id BIGINT DEFAULT NULL COMMENT '按需预生成的场景单元 ID',
-    status VARCHAR(20) NOT NULL DEFAULT 'pending' COMMENT '状态：pending、running、completed、partial_failed、failed',
+    async_task_id BIGINT DEFAULT NULL COMMENT '统一 AI 异步任务 ID',
+    status VARCHAR(20) NOT NULL DEFAULT 'pending' COMMENT '状态：pending、running、completed、partial_failed、failed、cancelled',
     batch_size INT NOT NULL DEFAULT 15 COMMENT '每次模型调用词数',
     total_count INT NOT NULL DEFAULT 0 COMMENT '去重且缓存未命中的词数',
     success_count INT NOT NULL DEFAULT 0 COMMENT '生成成功词数',
@@ -267,7 +323,8 @@ CREATE TABLE IF NOT EXISTS vocabulary_card_generation_job (
     version INT NOT NULL DEFAULT 0 COMMENT '乐观锁版本号',
     PRIMARY KEY (id),
     KEY idx_vocabulary_card_job_user (user_id, status, deleted, update_time),
-    KEY idx_vocabulary_card_job_unit (unit_id, deleted)
+    KEY idx_vocabulary_card_job_unit (unit_id, deleted),
+    KEY idx_vocabulary_card_job_async_task (async_task_id, deleted)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci COMMENT='批量 AI 词卡生成任务';
 
 CREATE TABLE IF NOT EXISTS vocabulary_card_generation_job_item (

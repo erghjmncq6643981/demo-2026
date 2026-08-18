@@ -7,6 +7,7 @@ import com.chandler.learning.agent.domain.dto.AgentChatResponse;
 import com.chandler.learning.agent.domain.dto.vocabulary.VocabularyCardGenerationItemResponse;
 import com.chandler.learning.agent.domain.dto.vocabulary.VocabularyCardGenerationRequest;
 import com.chandler.learning.agent.domain.dto.vocabulary.VocabularyCardGenerationResponse;
+import com.chandler.learning.agent.domain.entity.learning.AiAsyncTask;
 import com.chandler.learning.agent.domain.entity.learning.LearningPlan;
 import com.chandler.learning.agent.domain.entity.learning.LearningPlanUnit;
 import com.chandler.learning.agent.domain.entity.learning.LearningPlanUnitEntry;
@@ -26,6 +27,7 @@ import com.chandler.learning.agent.mapper.vocabulary.EnglishVocabularyStudyRecor
 import com.chandler.learning.agent.mapper.vocabulary.VocabularyCardGenerationJobItemMapper;
 import com.chandler.learning.agent.mapper.vocabulary.VocabularyCardGenerationJobMapper;
 import com.chandler.learning.agent.service.AiChatService;
+import com.chandler.learning.agent.service.learning.AiAsyncTaskService;
 import com.chandler.learning.agent.service.learning.SystemLogService;
 import com.chandler.learning.agent.service.learning.UserDisplayNameService;
 import com.chandler.learning.agent.service.learning.VocabularyInsightService;
@@ -78,6 +80,7 @@ public class VocabularyCardBatchService {
     private final ObjectMapper objectMapper;
     private final TransactionTemplate transactionTemplate;
     private final ApplicationEventPublisher eventPublisher;
+    private final AiAsyncTaskService aiAsyncTaskService;
 
     /**
      * 为一个场景中的核心和复习词创建批任务。
@@ -99,6 +102,9 @@ public class VocabularyCardBatchService {
                 LearningPlanUnitEntry::getNormalizedTerm, entry -> entry,
                 (left, right) -> left, LinkedHashMap::new));
         Long modelConfigId = request == null ? null : request.getModelConfigId();
+        String executionMode = request == null ? null : request.getExecutionMode();
+        LocalDateTime scheduledTime = request == null ? null : request.getScheduledTime();
+        Integer priority = request == null ? null : request.getPriority();
         GenerationSubmission submission = transactionTemplate.execute(status -> {
             // 同一场景单元串行创建任务，避免并发点击产生多个活动任务。
             LearningPlanUnit lockedUnit = unitMapper.selectOne(
@@ -162,8 +168,19 @@ public class VocabularyCardBatchService {
             if (!items.isEmpty()) {
                 itemMapper.insertBatch(items);
             }
-            eventPublisher.publishEvent(new VocabularyCardGenerationRequestedEvent(
-                    userId, job.getId(), modelConfigId));
+            AiAsyncTask task = aiAsyncTaskService.create(userId,
+                    LearningConstants.AiTask.TYPE_VOCABULARY_CARD,
+                    "批量生成场景词卡",
+                    planId,
+                    unitId,
+                    job.getId(),
+                    executionMode,
+                    scheduledTime,
+                    priority,
+                    items.size(),
+                    Map.of("modelConfigId", modelConfigId == null ? "" : modelConfigId));
+            job.setAsyncTaskId(task.getId());
+            jobMapper.updateById(job);
             return new GenerationSubmission(job, items.size(), false);
         });
         if (submission.existing()) {
@@ -191,7 +208,15 @@ public class VocabularyCardBatchService {
             return toResponse(job);
         }
         Long modelConfigId = request == null ? null : request.getModelConfigId();
-        transactionTemplate.executeWithoutResult(status -> {
+        Boolean requeued = transactionTemplate.execute(status -> {
+            if (job.getAsyncTaskId() != null) {
+                Map<String, Object> payload = modelConfigId == null
+                        ? null : Map.of("modelConfigId", modelConfigId);
+                AiAsyncTask task = aiAsyncTaskService.retry(userId, job.getAsyncTaskId(), payload);
+                if (!LearningConstants.AiTask.STATUS_PENDING.equals(task.getStatus())) {
+                    return false;
+                }
+            }
             if (request != null && request.getBatchSize() != null) {
                 job.setBatchSize(resolveBatchSize(request.getBatchSize()));
             }
@@ -199,8 +224,14 @@ public class VocabularyCardBatchService {
             job.setFinishedTime(null);
             job.setUpdateTime(LocalDateTime.now());
             jobMapper.updateById(job);
-            eventPublisher.publishEvent(new VocabularyCardGenerationRequestedEvent(userId, jobId, modelConfigId));
+            if (job.getAsyncTaskId() == null) {
+                eventPublisher.publishEvent(new VocabularyCardGenerationRequestedEvent(userId, jobId, modelConfigId));
+            }
+            return true;
         });
+        if (!Boolean.TRUE.equals(requeued)) {
+            return toResponse(jobMapper.selectById(jobId));
+        }
         return toResponse(jobMapper.selectById(jobId));
     }
 
@@ -209,7 +240,11 @@ public class VocabularyCardBatchService {
         requireJob(userId, jobId);
         int claimed = jobMapper.update(null, new LambdaUpdateWrapper<VocabularyCardGenerationJob>()
                 .eq(VocabularyCardGenerationJob::getId, jobId)
-                .eq(VocabularyCardGenerationJob::getStatus, LearningConstants.VocabularyCard.JOB_PENDING)
+                .in(VocabularyCardGenerationJob::getStatus,
+                        List.of(LearningConstants.VocabularyCard.JOB_PENDING,
+                                LearningConstants.VocabularyCard.JOB_FAILED,
+                                LearningConstants.VocabularyCard.JOB_PARTIAL_FAILED,
+                                LearningConstants.VocabularyCard.JOB_CANCELLED))
                 .set(VocabularyCardGenerationJob::getStatus, LearningConstants.VocabularyCard.JOB_RUNNING)
                 .set(VocabularyCardGenerationJob::getStartedTime, LocalDateTime.now())
                 .set(VocabularyCardGenerationJob::getFinishedTime, null)
@@ -228,12 +263,21 @@ public class VocabularyCardBatchService {
                         .orderByAsc(VocabularyCardGenerationJobItem::getCreateTime));
         try {
             process(userId, job, items, modelConfigId);
+            if (job.getAsyncTaskId() != null) {
+                aiAsyncTaskService.updateProgress(job.getAsyncTaskId(),
+                        value(job.getTotalCount()), value(job.getSuccessCount()), value(job.getFailedCount()));
+                aiAsyncTaskService.complete(job.getAsyncTaskId(),
+                        job.getStatus(), job.getErrorMessage());
+            }
         } catch (RuntimeException ex) {
             job.setStatus(LearningConstants.VocabularyCard.JOB_FAILED);
             job.setErrorMessage(limitError(ex.getMessage()));
             job.setFinishedTime(LocalDateTime.now());
             job.setUpdateTime(LocalDateTime.now());
             jobMapper.updateById(job);
+            if (job.getAsyncTaskId() != null) {
+                aiAsyncTaskService.complete(job.getAsyncTaskId(), LearningConstants.AiTask.STATUS_FAILED, ex.getMessage());
+            }
             throw ex;
         }
     }
@@ -274,6 +318,11 @@ public class VocabularyCardBatchService {
         if (!misses.isEmpty()) {
             itemMapper.updateBatch(misses);
         }
+        refreshJobProgress(job, false);
+        if (isCancelled(job)) {
+            cancelJob(job);
+            return;
+        }
 
         int batchSize = resolveBatchSize(job.getBatchSize());
         for (int offset = 0; offset < misses.size(); offset += batchSize) {
@@ -300,6 +349,11 @@ public class VocabularyCardBatchService {
             } catch (RuntimeException ex) {
                 log.debug("批量词卡调用失败 jobId={} batchOffset={} error={}", job.getId(), offset, ex.getMessage());
                 updateItemStatuses(batch, LearningConstants.VocabularyCard.ITEM_FAILED, ex.getMessage());
+            }
+            refreshJobProgress(job, false);
+            if (isCancelled(job)) {
+                cancelJob(job);
+                return;
             }
         }
         finishJob(job);
@@ -423,6 +477,11 @@ public class VocabularyCardBatchService {
     }
 
     private void finishJob(VocabularyCardGenerationJob job) {
+        refreshJobProgress(job, true);
+    }
+
+    /** 每个 AI 批次结束后同步领域任务和任务中心进度。 */
+    private void refreshJobProgress(VocabularyCardGenerationJob job, boolean finished) {
         List<VocabularyCardGenerationJobItem> all = itemMapper.selectList(
                 new LambdaQueryWrapper<VocabularyCardGenerationJobItem>()
                         .eq(VocabularyCardGenerationJobItem::getJobId, job.getId())
@@ -430,13 +489,30 @@ public class VocabularyCardBatchService {
         int success = (int) all.stream().filter(item -> LearningConstants.VocabularyCard.ITEM_COMPLETED.equals(item.getStatus())
                 || LearningConstants.VocabularyCard.ITEM_CACHE_HIT.equals(item.getStatus())).count();
         int failed = (int) all.stream().filter(item -> LearningConstants.VocabularyCard.ITEM_FAILED.equals(item.getStatus())).count();
+        job.setTotalCount(all.size());
         job.setSuccessCount(success);
         job.setFailedCount(failed);
-        job.setStatus(failed == LearningConstants.ZERO
-                ? LearningConstants.VocabularyCard.JOB_COMPLETED
-                : success == LearningConstants.ZERO
-                ? LearningConstants.VocabularyCard.JOB_FAILED
-                : LearningConstants.VocabularyCard.JOB_PARTIAL_FAILED);
+        if (finished) {
+            job.setStatus(failed == LearningConstants.ZERO
+                    ? LearningConstants.VocabularyCard.JOB_COMPLETED
+                    : success == LearningConstants.ZERO
+                    ? LearningConstants.VocabularyCard.JOB_FAILED
+                    : LearningConstants.VocabularyCard.JOB_PARTIAL_FAILED);
+            job.setFinishedTime(LocalDateTime.now());
+        }
+        job.setUpdateTime(LocalDateTime.now());
+        jobMapper.updateById(job);
+        if (job.getAsyncTaskId() != null) {
+            aiAsyncTaskService.updateProgress(job.getAsyncTaskId(), all.size(), success, failed);
+        }
+    }
+
+    private boolean isCancelled(VocabularyCardGenerationJob job) {
+        return job.getAsyncTaskId() != null && aiAsyncTaskService.isCancelled(job.getAsyncTaskId());
+    }
+
+    private void cancelJob(VocabularyCardGenerationJob job) {
+        job.setStatus(LearningConstants.VocabularyCard.JOB_CANCELLED);
         job.setFinishedTime(LocalDateTime.now());
         job.setUpdateTime(LocalDateTime.now());
         jobMapper.updateById(job);
@@ -489,6 +565,7 @@ public class VocabularyCardBatchService {
         response.setJobId(job.getId());
         response.setPlanId(job.getPlanId());
         response.setUnitId(job.getUnitId());
+        response.setAsyncTaskId(job.getAsyncTaskId());
         response.setStatus(job.getStatus());
         response.setBatchSize(job.getBatchSize());
         response.setTotalCount(job.getTotalCount());

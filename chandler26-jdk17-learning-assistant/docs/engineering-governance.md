@@ -9,6 +9,7 @@
 - 自定义 SQL 位于 `src/main/resources/mapper/` XML 文件；简单单表查询继续使用 MyBatis-Plus。
 - 学习计划创建先提交短事务，再调用 AI；场景材料解析通过短事务保存，AI 网络调用不在数据库事务内。
 - 批量词卡任务通过 Job/Item 表记录，事务提交后异步执行，支持重复提交保护、失败重试和任务状态轮询。
+- AI 批处理统一写入 `learning_ai_async_task`，由任务中心提供人工观察、取消、立即执行和重试；调度器按预约时间/低价窗口原子领取任务，领域 Job 继续保存逐词明细。
 - `101_engineering_governance_mysql.sql` 为已有数据库增加 AI 会话消息序号唯一约束；新库完整结构直接使用 `schema/00_ai_schema_mysql.sql`。
 
 ## 错误码与日志
@@ -34,4 +35,4 @@
 
 ## 验证
 
-后端最低验证：`mvn -q -DskipTests compile`、`mvn -q test`。前端变更模块至少执行 `node --check`。涉及异步任务时还需要验证 Job 状态从 `pending -> running -> completed/partial_failed/failed` 的完整链路。
+后端最低验证：`mvn -q -DskipTests compile`、`mvn -q test`。前端变更模块至少执行 `node --check`。涉及异步任务时还需要验证统一任务状态从 `pending -> running -> completed/partial_failed/failed/cancelled` 的完整链路，并在前端任务中心核对进度和失败处理入口。

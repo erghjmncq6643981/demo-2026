@@ -17,6 +17,7 @@ export function createAppShell(ctx) {
     loadSpeechPreferences,
     loadActivity,
     loadSystemLogs,
+    loadAiTasks,
     loadDueReviews,
     loadWordbookEntries,
     loadArticleWords,
@@ -129,6 +130,7 @@ export function createAppShell(ctx) {
       if (active) button.scrollIntoView({ behavior: 'smooth', block: 'nearest', inline: 'nearest' })
     })
     document.querySelectorAll('.profile-section').forEach((section) => section.classList.toggle('active', section.id === fallback))
+    if (fallback === 'aiTaskPanel') loadAiTasks?.()
   }
 
   async function loginOrRegister(mode) {
@@ -226,7 +228,7 @@ export function createAppShell(ctx) {
       loadPreviewData()
       return
     }
-    await Promise.allSettled([loadAgents(), loadWordbooks(), loadModelConfigs(), loadPromptTemplates(), loadSpeechPreferences(), loadActivity(), loadSystemLogs()])
+    await Promise.allSettled([loadAgents(), loadWordbooks(), loadModelConfigs(), loadPromptTemplates(), loadSpeechPreferences(), loadActivity(), loadSystemLogs(), loadAiTasks?.()])
     await Promise.allSettled([loadDueReviews(), loadWordbookEntries()])
     await Promise.allSettled([loadSceneData?.()])
     if (state.activeView === 'articleStudyView') {

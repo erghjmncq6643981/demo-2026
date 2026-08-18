@@ -17,6 +17,8 @@ public class VocabularyCardGenerationResponse {
 
     private Long unitId;
 
+    private Long asyncTaskId;
+
     private String status;
 
     private Integer batchSize;

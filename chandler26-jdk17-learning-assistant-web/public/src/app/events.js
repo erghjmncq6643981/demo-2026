@@ -54,7 +54,9 @@ export function bindAppEvents(ctx) {
     changeScenePlanCatalog,
     completeCurrentUnit,
     generateNextUnit,
+    scheduleNextUnit,
     generateSceneCards,
+    scheduleSceneCards,
     speakCurrentScene,
     startSceneLearning,
     showSceneChallengeWords,
@@ -68,6 +70,8 @@ export function bindAppEvents(ctx) {
     pauseScenePlan,
     resumeScenePlan,
     cancelScenePlan,
+    saveSceneNote,
+    toggleSceneNotePreview,
     loadArticleWords,
     loadArticleHistory,
     renderArticleWords,
@@ -93,6 +97,8 @@ export function bindAppEvents(ctx) {
     toggleWordbookFocusMode,
     toggleArticleFocusMode,
     loadSystemLogs,
+    loadAiTasks,
+    renderAiTasks,
     clearLogs,
     study,
     regenerateStudyCard,
@@ -256,8 +262,12 @@ elements.sceneCatalogSelect?.addEventListener('change', changeScenePlanCatalog)
 elements.sceneCompleteUnitBtn?.addEventListener('click', completeCurrentUnit)
 elements.sceneNextUnitBtn?.addEventListener('click', generateNextUnit)
 elements.sceneOverviewNextUnitBtn?.addEventListener('click', generateNextUnit)
+elements.sceneScheduleNextUnitBtn?.addEventListener('click', scheduleNextUnit)
 elements.sceneGenerateCardsBtn?.addEventListener('click', generateSceneCards)
+elements.sceneScheduleCardsBtn?.addEventListener('click', scheduleSceneCards)
 elements.sceneSpeakBtn?.addEventListener('click', speakCurrentScene)
+elements.sceneNoteSaveBtn?.addEventListener('click', saveSceneNote)
+elements.sceneNotePreviewBtn?.addEventListener('click', toggleSceneNotePreview)
 elements.scenePlanSelect?.addEventListener('change', () => changeSelectedScenePlan(elements.scenePlanSelect.value))
 document.querySelectorAll('[data-calendar-range]').forEach((button) => {
   button.addEventListener('click', () => changeSceneCalendarRange(button.dataset.calendarRange))
@@ -281,6 +291,8 @@ elements.articleStudyModal?.addEventListener('click', (event) => {
 elements.articlePreviewGenerateBtn?.addEventListener('click', () => generateArticlePreview({ forceRefresh: Boolean(state.articleDraftRecord) }))
 elements.saveArticleStudyBtn?.addEventListener('click', saveArticleStudy)
 elements.reloadSystemLogsBtn.addEventListener('click', loadSystemLogs)
+elements.reloadAiTasksBtn?.addEventListener('click', loadAiTasks)
+elements.aiTaskStatusFilter?.addEventListener('change', renderAiTasks)
 elements.clearLogBtn.addEventListener('click', clearLogs)
 elements.studyForm.addEventListener('submit', (event) => {
   event.preventDefault()
