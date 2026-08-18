@@ -1087,18 +1087,22 @@ export function createScenePlanFeature(ctx) {
         setButtonLoading(button, true, '生成中...')
         try {
           const recommendedDate = button.dataset.recommendedDate || null
+          let generatedCount = 1
           if (state.preview) {
             const generated = createPreviewCookingUnit(plan.id, asArray(plan.units).length + 1, recommendedDate)
             plan.units.push(generated)
           } else {
             const modelConfigId = elements.scenePlanModelSelect?.value || null
-            await request(`/api/v1/learning/plans/${encodeURIComponent(plan.id)}/units/next`, {
+            const generatedUnits = await request(`/api/v1/learning/plans/${encodeURIComponent(plan.id)}/units/next`, {
               method: 'POST',
               body: JSON.stringify({ modelConfigId: modelConfigId || null, recommendedDate }),
             })
+            generatedCount = Math.max(1, asArray(generatedUnits).length)
           }
           await loadSceneData({ planId: plan.id })
-          toast('场景已提前生成，可点击场景计划预览词汇')
+          toast(generatedCount > 1
+            ? `当日词汇已均分生成 ${generatedCount} 篇场景材料`
+            : '场景材料已生成，可点击场景学习计划预览词汇')
         } catch (error) {
           toast(`生成场景失败：${error.message}`)
         } finally {
@@ -1659,25 +1663,29 @@ export function createScenePlanFeature(ctx) {
     if (!plan?.canGenerateNext) return
     const confirmed = await confirmAction({
       title: '提前生成场景',
-      message: 'AI 会根据剩余词汇与学习进度生成一个待学习场景，不会中断当前场景。',
+      message: 'AI 会按学习计划生成待学习场景材料；超过 50 个待挑战词会自动均分为多篇，不会中断当前场景。',
       acceptText: '开始生成',
     })
     if (!confirmed) return
     setButtonLoading(elements.sceneNextUnitBtn, true, '生成中...')
     try {
+      let generatedCount = 1
       if (state.preview) {
         const generated = createPreviewCookingUnit(plan.id, asArray(plan.units).length + 1)
         plan.units.push(generated)
         renderSceneView()
       } else {
         const modelConfigId = elements.scenePlanModelSelect?.value || null
-        await request(`/api/v1/learning/plans/${encodeURIComponent(plan.id)}/units/next`, {
+        const generatedUnits = await request(`/api/v1/learning/plans/${encodeURIComponent(plan.id)}/units/next`, {
           method: 'POST',
           body: JSON.stringify({ modelConfigId: modelConfigId || null }),
         })
+        generatedCount = Math.max(1, asArray(generatedUnits).length)
         await selectPlan(plan.id, { quiet: true, keepStage: true })
       }
-      toast('新场景已提前生成，可在场景学习计划中预览')
+      toast(generatedCount > 1
+        ? `当日词汇已均分生成 ${generatedCount} 篇场景材料`
+        : '场景材料已生成，可在场景学习计划中预览')
     } catch (error) {
       logEvent('error', '生成下一场景失败', error.message)
       toast(`场景生成失败：${error.message}`)

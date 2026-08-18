@@ -49,6 +49,8 @@
 - Related words should contain semantic relations only: synonym, antonym, and word family. Collocations stay in the collocation area, not in related words.
 - AI prompt templates must preserve required placeholders such as `{{term}}`; validate placeholders before saving.
 - Vocabulary card JSON should include definitions, examples with Chinese translations, collocations with meanings, related words with part of speech, meaning, and phonetics, and memory tips.
+- A generated scene material is immutable learning context: unfinished words stay in their original scene and must not be moved into a later scene's article.
+- New scene candidates must exclude every catalog word already arranged in any scene of the same plan, regardless of tier. Split a daily target evenly into scene materials with at most 50 core challenge words each; for example, 80 words becomes two 40-word materials and 120 words becomes three 40-word materials.
 
 ## Database
 

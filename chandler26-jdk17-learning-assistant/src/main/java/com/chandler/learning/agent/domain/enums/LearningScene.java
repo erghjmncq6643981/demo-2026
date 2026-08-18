@@ -15,7 +15,7 @@ import java.util.Arrays;
 public enum LearningScene {
 
     ENGLISH_VOCABULARY(LearningConstants.ChatSession.SCENE_ENGLISH_VOCABULARY, "英语词汇学习"),
-    ENGLISH_ARTICLE(LearningConstants.ChatSession.SCENE_ENGLISH_ARTICLE, "英语文章学习"),
+    ENGLISH_ARTICLE(LearningConstants.ChatSession.SCENE_ENGLISH_ARTICLE, "英语语境精读"),
     ENGLISH_VOCABULARY_PLAN(LearningConstants.ChatSession.SCENE_ENGLISH_VOCABULARY_PLAN, "英语场景词汇计划"),
     MATH(LearningConstants.ChatSession.SCENE_MATH, "数学学习"),
     PINYIN(LearningConstants.ChatSession.SCENE_PINYIN, "汉语拼音学习"),

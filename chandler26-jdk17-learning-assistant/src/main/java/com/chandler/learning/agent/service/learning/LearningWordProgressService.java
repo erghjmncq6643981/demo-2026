@@ -131,6 +131,25 @@ public class LearningWordProgressService {
     }
 
     /**
+     * 记录单词在语境精读中完成了一次学习曝光，不增加场景学习次数。
+     */
+    public LearningWordProgress recordArticleExposure(Long userId, String term) {
+        LearningWordProgress progress = getOrCreate(
+                userId, term, LearningConstants.ScenePlan.MASTERY_RECOGNITION);
+        LocalDateTime now = LocalDateTime.now();
+        progress.setTerm(term.trim());
+        progress.setExposureCount(value(progress.getExposureCount()) + LearningConstants.SEQUENCE_STEP);
+        progress.setLastLearnedTime(now);
+        if (LearningConstants.ScenePlan.PROGRESS_UNSEEN.equals(progress.getLearningState())
+                || LearningConstants.ScenePlan.PROGRESS_EXPOSED.equals(progress.getLearningState())) {
+            progress.setLearningState(LearningConstants.ScenePlan.PROGRESS_LEARNING);
+        }
+        progress.setUpdateTime(now);
+        progressMapper.updateById(progress);
+        return progress;
+    }
+
+    /**
      * 把一次检查结果归入认读或拼写维度。
      */
     public LearningWordProgress recordAssessment(Long progressId, String assessmentType, boolean correct,

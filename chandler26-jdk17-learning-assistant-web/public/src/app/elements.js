@@ -71,6 +71,7 @@ export function createElements() {
   articlePrefixInput: $('articlePrefixInput'),
   articleStatusFilter: $('articleStatusFilter'),
   articleHistorySearchInput: $('articleHistorySearchInput'),
+  articleRecommendWordsBtn: $('articleRecommendWordsBtn'),
   articleReloadWordsBtn: $('articleReloadWordsBtn'),
   articleClearSelectionBtn: $('articleClearSelectionBtn'),
   articleGenerateBtn: $('articleGenerateBtn'),

@@ -409,10 +409,10 @@ INSERT INTO ai_agent (
     'assistant',
     'map',
     '把词表分解为可连续学习和复习的真实场景单元',
-    '你是英语场景词汇规划师。必须围绕真实生活、学习、工作或旅行场景组织词汇；相关词必须通过自然句子或短文建立联系。核心词只能来自候选词表。扩展词优先来自候选词表，补充词可以来自场景常见名词。根据学习目的为每个核心词判断 recognition 或 spelling。必须只输出合法 JSON，不要输出 Markdown 代码块。',
+    '你是英语场景词汇规划师。必须围绕真实生活、学习、工作或旅行场景组织词汇；相关词必须通过自然句子或短文建立联系。本批候选词全部作为本场景核心词，不能使用历史场景中的词。补充词可以来自场景常见名词。根据学习目的为每个核心词判断 recognition 或 spelling。必须只输出合法 JSON，不要输出 Markdown 代码块。',
     '延续当前词表场景计划上下文，生成下一个不重复的场景学习单元，只输出合法 JSON。',
     '我会把词表组织为可以连续学习和检查的场景单元。',
-    NULL, NULL, 0.55, 8000,
+    NULL, NULL, 0.55, 16000,
     JSON_ARRAY(JSON_OBJECT('code', 'next_scene', 'name', '生成下一个场景', 'prompt', '从尚未首次学习的候选词中生成下一个场景单元')),
     1, 3
 ) ON DUPLICATE KEY UPDATE
@@ -430,7 +430,7 @@ INSERT INTO ai_prompt_template (
     'english_vocab_scene_unit_json',
     'user',
     '英语,词表,场景学习,词汇检查,JSON',
-    '学习目的：{{learning_purpose}}。这是第 {{unit_no}} 个场景单元。候选词表 JSON：{{candidate_words}}。已完成场景标题：{{completed_scenes}}。请从中选出 {{target_word_count}} 个语义相关的候选词作为 core（一般应正好选出 {{target_word_count}} 个，特殊情况下可在 8-20 之间微调）；候选中适合帮助理解场景但本次不要求掌握的词可放入 extended；可添加场景中高频的具体名词作为 supplementary，但 supplementary 不得冒充词表词。输出 JSON：title、scenario_type、summary、learning_text、translation、vocabulary。learning_text 是自然英文句子或短文，覆盖全部 core。vocabulary 每项包含 term、tier(core/extended/supplementary)、mastery_requirement(recognition/spelling)、phonetic、meaning、context_meaning、accepted_spellings、meaning_question。meaning_question 包含 prompt、options(恰好4个中文选项)、correct_answer。每个 core 都必须有 meaning_question；spelling 的 core 还必须给出 accepted_spellings。不要输出已完成场景的重复主题。',
+    '学习目的：{{learning_purpose}}。这是第 {{unit_no}} 个场景单元。候选词表 JSON：{{candidate_words}}。已完成场景标题：{{completed_scenes}}。请把本批 {{target_word_count}} 个候选词全部作为 core，必须正好输出 {{target_word_count}} 个 core；单篇材料的 core 最多 50 个，若当天目标超过 50 个，系统会拆成多个场景单元分别生成。不要把之前已经进入其他场景的词重新安排到本场景。可添加场景中高频的具体名词作为 supplementary，但 supplementary 不得冒充词表词。输出 JSON：title、scenario_type、summary、learning_text、translation、vocabulary。learning_text 是自然英文句子或短文，覆盖全部 core。vocabulary 每项包含 term、tier(core/extended/supplementary)、mastery_requirement(recognition/spelling)、phonetic、meaning、context_meaning、accepted_spellings、meaning_question。meaning_question 包含 prompt、options(恰好4个中文选项)、correct_answer。每个 core 都必须有 meaning_question；spelling 的 core 还必须给出 accepted_spellings。不要输出已完成场景的重复主题。',
     JSON_ARRAY(
         JSON_OBJECT('name', 'learning_purpose', 'label', '学习目的', 'required', true),
         JSON_OBJECT('name', 'unit_no', 'label', '单元序号', 'required', true),

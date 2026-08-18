@@ -7,13 +7,13 @@ import java.time.LocalDateTime;
 import java.util.List;
 
 /**
- * 文章学习记录响应。
+ * 语境精读记录响应。
  */
 @Data
-@Schema(name = "文章学习记录响应")
+@Schema(name = "语境精读记录响应")
 public class ArticleStudyResponse {
 
-    @Schema(description = "文章学习记录 ID")
+    @Schema(description = "语境精读记录 ID")
     private Long id;
 
     @Schema(description = "单词本 ID")
@@ -52,7 +52,7 @@ public class ArticleStudyResponse {
     @Schema(description = "AI 原始回复")
     private String rawContent;
 
-    @Schema(description = "解析后的结构化文章学习 JSON")
+    @Schema(description = "解析后的结构化语境精读 JSON")
     private Object parsed;
 
     @Schema(description = "Token 使用量")
@@ -63,6 +63,27 @@ public class ArticleStudyResponse {
 
     @Schema(description = "读取次数")
     private Integer lookupCount;
+
+    @Schema(description = "学习状态：generated、in_progress、completed")
+    private String studyStatus;
+
+    @Schema(description = "当前阶段：reading、vocabulary、check、completed")
+    private String currentStage;
+
+    @Schema(description = "检测题总数")
+    private Integer practiceTotal;
+
+    @Schema(description = "检测答对数")
+    private Integer practiceCorrect;
+
+    @Schema(description = "检测得分，0-100")
+    private Integer practiceScore;
+
+    @Schema(description = "开始学习时间")
+    private LocalDateTime startedTime;
+
+    @Schema(description = "完成学习时间")
+    private LocalDateTime completedTime;
 
     @Schema(description = "创建时间")
     private LocalDateTime createTime;

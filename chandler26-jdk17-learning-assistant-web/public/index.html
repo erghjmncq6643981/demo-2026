@@ -73,7 +73,7 @@
               <small>查词与 AI 卡片</small>
             </button>
             <button class="nav-item" type="button" data-view="articleStudyView">
-              <span>文章学习</span>
+              <span>语境精读</span>
               <small>选词生成阅读材料</small>
             </button>
             <button class="nav-item" type="button" data-view="reviewView">
@@ -503,15 +503,15 @@
                 单词本
                 <select id="articleWordbookSelect"></select>
               </label>
-              <button class="primary-button compact-primary" id="articleGenerateBtn" type="button">文章生成</button>
+              <button class="primary-button compact-primary" id="articleGenerateBtn" type="button">创建精读</button>
             </section>
 
             <section class="article-study-layout">
               <section class="panel article-history-panel">
                 <div class="panel-heading">
                   <div>
-                    <p class="eyebrow">Recent</p>
-                    <h3>近期学习的文章</h3>
+                    <p class="eyebrow">Library</p>
+                    <h3>精读记录</h3>
                   </div>
                   <button class="secondary-button compact" id="articleReloadHistoryBtn" type="button">刷新</button>
                 </div>
@@ -519,18 +519,18 @@
                   <span class="sr-only">搜索文章</span>
                   <input id="articleHistorySearchInput" autocomplete="off" placeholder="搜索标题、词汇或备注" />
                 </label>
-                <div id="articleHistoryList" class="article-history-list empty">暂无文章记录</div>
+                <div id="articleHistoryList" class="article-history-list empty">暂无精读记录</div>
               </section>
 
               <section class="panel article-result-panel">
                 <div class="panel-heading">
                   <div>
-                    <p class="eyebrow">Article</p>
-                    <h3>文章主体</h3>
+                    <p class="eyebrow">Learning</p>
+                    <h3>学习工作区</h3>
                   </div>
                   <span class="mini-pill" id="articleResultBadge">等待生成</span>
                 </div>
-                <div id="articleResult" class="article-result empty">选择或生成一篇文章后开始学习</div>
+                <div id="articleResult" class="article-result empty">选择一份精读材料开始学习</div>
               </section>
             </section>
           </section>
@@ -1119,8 +1119,8 @@
       <div class="config-modal article-study-modal" data-modal-scroll>
         <div class="panel-heading">
           <div>
-            <p class="eyebrow">Article Study</p>
-            <h3>生成学习文章</h3>
+            <p class="eyebrow">Guided Reading</p>
+            <h3>创建语境精读</h3>
           </div>
           <button class="icon-button" id="closeArticleStudyModalBtn" type="button" title="关闭">×</button>
         </div>
@@ -1128,7 +1128,7 @@
         <section class="article-modal-section article-modal-words">
           <div class="panel-heading compact-heading">
             <div>
-              <h3>词汇选择</h3>
+              <h3>目标词汇</h3>
               <span class="mini-pill" id="articleSelectedCount">已选 0</span>
             </div>
             <div class="article-filter-actions">
@@ -1145,6 +1145,7 @@
                   <option value="forgotten">遗忘</option>
                 </select>
               </label>
+              <button class="secondary-button compact" id="articleRecommendWordsBtn" type="button">智能推荐</button>
               <button class="secondary-button compact" id="articleReloadWordsBtn" type="button">刷新词汇</button>
               <button class="secondary-button compact" id="articleClearSelectionBtn" type="button">清空选择</button>
             </div>
@@ -1174,26 +1175,26 @@
             AI 模型
             <select id="articleModelSelect" aria-label="AI 模型"></select>
           </label>
-          <button class="primary-button compact-primary" id="articlePreviewGenerateBtn" type="button">生成预览</button>
+            <button class="primary-button compact-primary" id="articlePreviewGenerateBtn" type="button">生成学习材料</button>
           <label class="article-remark-field">
-            备注
-            <textarea id="articleRemarkInput" rows="2" placeholder="例如：偏商务语境；多解释定语从句；文章语气轻松一些"></textarea>
+            阅读主题或要求
+            <textarea id="articleRemarkInput" rows="2" placeholder="例如：商务沟通、旅行见闻、考试阅读；语气自然"></textarea>
           </label>
         </section>
 
         <section class="article-modal-section article-modal-preview">
           <div class="panel-heading compact-heading">
             <div>
-              <h3>文章预览</h3>
+              <h3>材料预览</h3>
               <span class="mini-pill" id="articleModalPreviewBadge">等待生成</span>
             </div>
           </div>
-          <div id="articleModalPreview" class="article-result empty">选择词汇并生成预览后，可保存到文章主体中继续学习</div>
+          <div id="articleModalPreview" class="article-result empty">选择目标词并生成精读材料</div>
         </section>
 
         <div class="modal-actions">
           <button class="secondary-button" id="cancelArticleStudyBtn" type="button">取消</button>
-          <button class="primary-button" id="saveArticleStudyBtn" type="button" disabled>保存</button>
+          <button class="primary-button" id="saveArticleStudyBtn" type="button" disabled>开始精读</button>
         </div>
       </div>
     </section>

@@ -363,11 +363,19 @@ public final class LearningConstants {
     public static final class Article {
         public static final int MIN_SELECTED_WORDS = 1;
         public static final int MAX_SELECTED_WORDS = 20;
+        public static final int PRACTICE_QUESTION_COUNT = 3;
         public static final int DEFAULT_HISTORY_LIMIT = 10;
         public static final String DEFAULT_HISTORY_LIMIT_PARAM = "10";
         public static final int MIN_HISTORY_LIMIT = 1;
         public static final int MAX_HISTORY_LIMIT = 50;
         public static final int DEFAULT_LOOKUP_COUNT = 1;
+        public static final String STATUS_GENERATED = "generated";
+        public static final String STATUS_IN_PROGRESS = "in_progress";
+        public static final String STATUS_COMPLETED = "completed";
+        public static final String STAGE_READING = "reading";
+        public static final String STAGE_VOCABULARY = "vocabulary";
+        public static final String STAGE_CHECK = "check";
+        public static final String STAGE_COMPLETED = "completed";
 
         /**
          * 处理 {@code Article} 相关业务。
@@ -435,9 +443,8 @@ public final class LearningConstants {
         public static final String ASSESSMENT_MEANING_SPELLING = "meaning_spelling";
         public static final String CHECK_CORRECT = "correct";
         public static final String CHECK_INCORRECT = "incorrect";
-        public static final int CANDIDATE_WORD_LIMIT = 80;
         public static final int MIN_CORE_WORDS = 8;
-        public static final int MAX_CORE_WORDS = 20;
+        public static final int MAX_CORE_WORDS_PER_UNIT = 50;
         public static final int RECOGNITION_PASS_SCORE = 70;
         public static final int SPELLING_PASS_SCORE = 70;
 
@@ -537,6 +544,9 @@ public final class LearningConstants {
         public static final String ARTICLE_WORD_LIMIT_EXCEEDED = "ARTICLE_WORD_LIMIT_EXCEEDED";
         public static final String ARTICLE_WORDS_INVALID = "ARTICLE_WORDS_INVALID";
         public static final String ARTICLE_RECORD_NOT_FOUND = "ARTICLE_RECORD_NOT_FOUND";
+        public static final String ARTICLE_STAGE_INVALID = "ARTICLE_STAGE_INVALID";
+        public static final String ARTICLE_PRACTICE_INCOMPLETE = "ARTICLE_PRACTICE_INCOMPLETE";
+        public static final String ARTICLE_AI_RESPONSE_INVALID = "ARTICLE_AI_RESPONSE_INVALID";
         public static final String AGENT_LAST_NOT_DELETABLE = "AGENT_LAST_NOT_DELETABLE";
         public static final String HASH_FAILED = "HASH_FAILED";
         public static final String VOCABULARY_IMPORT_INVALID = "VOCABULARY_IMPORT_INVALID";

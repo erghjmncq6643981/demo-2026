@@ -319,6 +319,7 @@ bindAppEvents({
   renderArticleWords: article.renderArticleWords,
   renderArticleHistory: article.renderArticleHistory,
   clearArticleSelection: article.clearArticleSelection,
+  recommendArticleWords: article.recommendArticleWords,
   openArticleStudyModal: article.openArticleStudyModal,
   closeArticleStudyModal: article.closeArticleStudyModal,
   generateArticlePreview: article.generateArticlePreview,

@@ -121,8 +121,8 @@ public class LearningPlanController {
     }
 
     @PostMapping("/{planId}/units/next")
-    @Operation(summary = "手动生成下一个场景单元，不限制每日触发次数")
-    public LearningPlanUnitResponse nextUnit(
+    @Operation(summary = "按学习计划生成指定日期的场景材料，超过 50 词自动均分多篇")
+    public List<LearningPlanUnitResponse> nextUnit(
             @RequestHeader(value = "Authorization", required = false) String authorization,
             @PathVariable Long planId,
             @RequestBody(required = false) LearningPlanNextUnitRequest request) {

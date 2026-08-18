@@ -5,7 +5,7 @@
 ## 0. 开始前必须确认
 
 - [ ] 阅读根目录 `AGENTS.md`，同时检查前后端工作区，禁止覆盖用户未提交改动。
-- [ ] 执行已有库补丁 `src/main/resources/db/95_ai_invocation_scene_mysql.sql`；新库使用更新后的 `init/00_ai_agent_init_mysql.sql`。
+- [ ] 执行已有库补丁 `src/main/resources/db/95_ai_invocation_scene_mysql.sql`、`98_vocabulary_scene_material_split_mysql.sql` 和 `99_article_guided_reading_mysql.sql`；新库按 `src/main/resources/db/README.md` 的顺序初始化。
 - [ ] 配置一个已启用的模型，但不要把真实 API Key 写进源码、文档或 SQL。
 - [ ] 用测试账号登录，通过真实业务接口触发调用，不要直接绕过 Service 调模型。
 - [ ] 每个场景至少收集 3 条成功响应；结构化场景额外收集 1 条失败或边界样本。
@@ -20,8 +20,8 @@
 | `vocabulary_follow_up` | 卡片学习页的 AI 追问 | `AiChatService`，复用当前词汇学习会话 | 回答围绕当前词或用户追问，不应输出无关词卡，也不应创建新的会话 |
 | `vocabulary_card_single` | 单词卡片学习查词 | `english_vocab_json` / `EnglishVocabularyStudyService.extractJson` | 合法 JSON；包含 term、definitions、examples、collocations、memory_tips；例句有中文翻译；相关词仅为同义词、反义词、词族 |
 | `vocabulary_card_batch` | 场景核心词缺卡时批量生成 | `english_vocab_cards_batch_json` / `VocabularyCardBatchService.parseCards` | 根字段 cards；输入词一词一项且无重复；每项满足单词词卡契约；不得漏词或混入未请求词 |
-| `article_study_material` | 从个人单词本生成文章学习材料 | `english_article_study_json` / `ArticleStudyService.extractJson` | 合法 JSON；文章自然覆盖所选词；中英译文对应；词汇、语法和练习结构完整 |
-| `vocabulary_scene_unit` | 学习计划生成下一个词汇大挑战场景 | `english_vocabulary_scene_plan_json` / `LearningPlanService.parseScene` | 合法 JSON；核心词 8-20 个且来自候选词表；场景文章连贯；掌握要求合理；含义四选一恰好 4 项；扩展名词与场景相关 |
+| `article_study_material` | 从个人单词本生成语境精读材料 | `english_vocab_article_json` / `ArticleStudyService.extractJson` | 合法 JSON；文章使用全部目标词原始拼写；逐词精讲完整；中英译文对应；恰好 3 道四选一阅读检测且正确答案在选项中 |
+| `vocabulary_scene_unit` | 学习计划生成一个词汇大挑战场景材料 | `english_vocabulary_scene_plan_json` / `LearningPlanService.parseScene` | 合法 JSON；核心词数量等于本批目标且不超过 50 个；核心词来自本批候选词表且不重复历史场景；场景文章连贯；掌握要求合理；含义四选一恰好 4 项；补充名词与场景相关 |
 
 `LearningScene` 管会话复用边界，`AiInvocationScene` 管单次调用任务。不要把两者合并，也不要按一次请求新建一个学习场景会话。
 

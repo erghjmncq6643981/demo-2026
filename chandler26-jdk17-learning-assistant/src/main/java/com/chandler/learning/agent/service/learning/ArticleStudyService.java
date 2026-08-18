@@ -6,6 +6,9 @@ import cn.hutool.crypto.digest.DigestUtil;
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import com.chandler.learning.agent.domain.dto.AgentChatRequest;
 import com.chandler.learning.agent.domain.dto.AgentChatResponse;
+import com.chandler.learning.agent.domain.dto.learning.ArticleStudyAnswerRequest;
+import com.chandler.learning.agent.domain.dto.learning.ArticleStudyCompleteRequest;
+import com.chandler.learning.agent.domain.dto.learning.ArticleStudyProgressRequest;
 import com.chandler.learning.agent.domain.dto.learning.ArticleStudyRequest;
 import com.chandler.learning.agent.domain.dto.learning.ArticleStudyResponse;
 import com.chandler.learning.agent.domain.dto.learning.ArticleStudyWordResponse;
@@ -30,6 +33,7 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
 import org.springframework.util.StringUtils;
 
 import java.time.LocalDateTime;
@@ -37,14 +41,16 @@ import java.util.Comparator;
 import java.util.HashMap;
 import java.util.LinkedHashMap;
 import java.util.List;
+import java.util.Locale;
 import java.util.Map;
 import java.util.Objects;
+import java.util.Set;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 import java.util.stream.Collectors;
 
 /**
- * 文章学习服务。
+ * 语境精读服务。
  * <p>
  * 根据用户从单词本中选择的词汇生成英语学习文章，并保存 AI 原始回复和结构化解析结果。
  */
@@ -59,6 +65,7 @@ public class ArticleStudyService {
     private final LearningWordbookMapper wordbookMapper;
     private final LearningWordbookEntryMapper entryMapper;
     private final AiChatService aiChatService;
+    private final LearningWordProgressService progressService;
     private final SystemLogService systemLogService;
     private final UserDisplayNameService userDisplayNameService;
     private final ObjectMapper objectMapper;
@@ -74,7 +81,7 @@ public class ArticleStudyService {
         List<Long> entryIds = normalizeEntryIds(request.getEntryIds());
         List<LearningWordbookEntry> entries = requireEntries(userId, wordbook.getId(), entryIds);
         List<ArticleStudyWordResponse> selectedWords = entries.stream().map(this::toSelectedWord).toList();
-        String selectedTermsJson = writeJson(selectedWords, "文章学习词汇摘要序列化失败");
+        String selectedTermsJson = writeJson(selectedWords, "语境精读词汇摘要序列化失败");
         String selectedTermHash = hash(userId, wordbook.getId(), selectedWords, wordCountRange, difficulty, remark);
 
         boolean forceRefresh = Boolean.TRUE.equals(request.getForceRefresh());
@@ -82,18 +89,18 @@ public class ArticleStudyService {
         if (existing != null) {
             existing.touch(LocalDateTime.now());
             articleStudyRecordMapper.updateById(existing);
-            systemLogService.record(userId, SystemLogType.CACHE, "读取文章学习缓存",
+            systemLogService.record(userId, SystemLogType.CACHE, "读取语境精读缓存",
                     wordbook.getName() + "，" + selectedWords.size() + " 个单词");
-            log.info("用户「{}」打开了单词本「{}」中 {} 个单词的文章学习缓存",
+            log.info("用户「{}」打开了单词本「{}」中 {} 个目标词的语境精读缓存",
                     userDisplayNameService.userName(userId),
                     wordbook.getName(),
                     selectedWords.size());
-            log.debug("文章学习缓存命中 userId={} wordbookId={} recordId={} hash={}",
+            log.debug("语境精读缓存命中 userId={} wordbookId={} recordId={} hash={}",
                     userId, wordbook.getId(), existing.getId(), selectedTermHash);
             return toResponse(existing, true);
         }
 
-        log.debug("开始生成文章学习材料 userId={} wordbookId={} wordCountRange={} difficulty={} forceRefresh={} words={}",
+        log.debug("开始生成语境精读材料 userId={} wordbookId={} wordCountRange={} difficulty={} forceRefresh={} words={}",
                 userId,
                 wordbook.getId(),
                 wordCountRange.getCode(),
@@ -113,18 +120,18 @@ public class ArticleStudyService {
                 resolveAgentCode(request),
                 resolveTemplateCode(request),
                 now);
-        record.applyAiResult(chatResponse, extractJson(chatResponse.getContent()), now);
+        record.applyAiResult(chatResponse, extractJson(chatResponse.getContent(), selectedWords), now);
         articleStudyRecordMapper.insert(record);
 
-        systemLogService.record(userId, SystemLogType.AI, "生成文章学习材料",
+        systemLogService.record(userId, SystemLogType.AI, "生成语境精读材料",
                 wordbook.getName() + "，" + selectedWords.size() + " 个单词，" + wordCountRange.getLabel() + "，" + difficulty.getLabel());
-        log.info("用户「{}」基于单词本「{}」中的 {} 个单词生成了「{}」「{}」难度的文章学习材料",
+        log.info("用户「{}」基于单词本「{}」中的 {} 个目标词生成了「{}」「{}」难度的语境精读材料",
                 userDisplayNameService.userName(userId),
                 wordbook.getName(),
                 selectedWords.size(),
                 wordCountRange.getLabel(),
                 difficulty.getLabel());
-        log.debug("文章学习材料已保存 userId={} wordbookId={} recordId={} sessionId={} provider={} model={}",
+        log.debug("语境精读材料已保存 userId={} wordbookId={} recordId={} sessionId={} provider={} model={}",
                 userId,
                 wordbook.getId(),
                 record.getId(),
@@ -157,20 +164,61 @@ public class ArticleStudyService {
      * 查询 {@code detail} 相关业务。
      */
     public ArticleStudyResponse detail(Long userId, Long recordId) {
-        LearningArticleStudyRecord record = articleStudyRecordMapper.selectOne(new LambdaQueryWrapper<LearningArticleStudyRecord>()
-                .eq(LearningArticleStudyRecord::getId, recordId)
-                .eq(LearningArticleStudyRecord::getUserId, userId)
-                .eq(LearningArticleStudyRecord::getDeleted, false)
-                .last(LearningConstants.SQL_LIMIT_ONE));
-        if (record == null) {
-            throw LearningAssistantException.notFound(
-                    LearningConstants.ErrorCode.ARTICLE_RECORD_NOT_FOUND,
-                    "文章学习记录不存在: " + recordId);
-        }
+        LearningArticleStudyRecord record = requireRecord(userId, recordId);
         record.touch(LocalDateTime.now());
         articleStudyRecordMapper.updateById(record);
-        log.debug("文章学习记录详情已读取 userId={} recordId={}", userId, recordId);
+        log.debug("语境精读记录详情已读取 userId={} recordId={}", userId, recordId);
         return toResponse(record, true);
+    }
+
+    /**
+     * 开始语境精读或保存当前学习阶段。
+     */
+    @Transactional(rollbackFor = Exception.class)
+    public ArticleStudyResponse updateProgress(Long userId, Long recordId, ArticleStudyProgressRequest request) {
+        LearningArticleStudyRecord record = requireRecord(userId, recordId);
+        String stage = normalizeStage(request.getStage());
+        boolean firstStart = !LearningConstants.Article.STATUS_IN_PROGRESS.equals(record.getStudyStatus())
+                && !LearningConstants.Article.STATUS_COMPLETED.equals(record.getStudyStatus());
+        record.moveToStage(stage, LocalDateTime.now());
+        articleStudyRecordMapper.updateById(record);
+        if (firstStart) {
+            systemLogService.record(userId, SystemLogType.REVIEW, "开始语境精读",
+                    articleTitle(record) + "，" + readSelectedWords(record).size() + " 个目标词");
+            log.info("用户「{}」开始语境精读「{}」，目标词 {} 个",
+                    userDisplayNameService.userName(userId), articleTitle(record), readSelectedWords(record).size());
+        }
+        return toResponse(record, true);
+    }
+
+    /**
+     * 提交阅读检测并完成本次语境精读。
+     */
+    @Transactional(rollbackFor = Exception.class)
+    public ArticleStudyResponse complete(Long userId, Long recordId, ArticleStudyCompleteRequest request) {
+        LearningArticleStudyRecord record = requireRecord(userId, recordId);
+        if (LearningConstants.Article.STATUS_COMPLETED.equals(record.getStudyStatus())) {
+            return toResponse(record, true);
+        }
+        PracticeScore result = scorePractice(readParsedNode(record),
+                request.getAnswers() == null ? List.of() : request.getAnswers());
+        if (result.answered() < result.total()) {
+            throw LearningAssistantException.badRequest(
+                    LearningConstants.ErrorCode.ARTICLE_PRACTICE_INCOMPLETE,
+                    "请完成全部阅读检测后再结束本次精读");
+        }
+        LocalDateTime now = LocalDateTime.now();
+        record.completeStudy(result.total(), result.correct(), result.score(), now);
+        articleStudyRecordMapper.updateById(record);
+        readSelectedWords(record).stream()
+                .map(ArticleStudyWordResponse::getTerm)
+                .filter(StringUtils::hasText)
+                .forEach(term -> progressService.recordArticleExposure(userId, term));
+        systemLogService.record(userId, SystemLogType.REVIEW, "完成语境精读",
+                articleTitle(record) + "，检测 " + result.correct() + "/" + result.total());
+        log.info("用户「{}」完成语境精读「{}」，阅读检测得分 {}，目标词 {} 个",
+                userDisplayNameService.userName(userId), articleTitle(record), result.score(), readSelectedWords(record).size());
+        return toResponse(record, false);
     }
 
     /**
@@ -197,7 +245,7 @@ public class ArticleStudyService {
         chatRequest.setBusinessType(LearningConstants.ChatSession.BUSINESS_TYPE_LEARNING);
         chatRequest.setBusinessId(LearningScene.ENGLISH_ARTICLE.getCode());
         chatRequest.setSceneCode(LearningScene.ENGLISH_ARTICLE.getCode());
-        chatRequest.setMessage("请基于用户选择的单词生成英语文章学习材料。");
+        chatRequest.setMessage("请基于用户选择的目标词生成英语语境精读材料。");
         chatRequest.setVariables(variables);
         return aiChatService.chat(chatRequest);
     }
@@ -296,7 +344,7 @@ public class ArticleStudyService {
             }
             return new CoreMeaning(partOfSpeech, meaning);
         } catch (Exception ex) {
-            log.warn("文章学习词汇核心含义读取失败 entryId={} term={} error={}",
+            log.debug("语境精读词汇核心含义读取失败 entryId={} term={} error={}",
                     entry.getId(),
                     entry.getNormalizedTerm(),
                     ex.getMessage());
@@ -371,6 +419,15 @@ public class ArticleStudyService {
         response.setTokenUsage(record.getTokenUsage());
         response.setCostTime(record.getCostTime());
         response.setLookupCount(record.getLookupCount());
+        response.setStudyStatus(StringUtils.hasText(record.getStudyStatus())
+                ? record.getStudyStatus() : LearningConstants.Article.STATUS_GENERATED);
+        response.setCurrentStage(StringUtils.hasText(record.getCurrentStage())
+                ? record.getCurrentStage() : LearningConstants.Article.STAGE_READING);
+        response.setPracticeTotal(record.getPracticeTotal());
+        response.setPracticeCorrect(record.getPracticeCorrect());
+        response.setPracticeScore(record.getPracticeScore());
+        response.setStartedTime(record.getStartedTime());
+        response.setCompletedTime(record.getCompletedTime());
         response.setCreateTime(record.getCreateTime());
         response.setUpdateTime(record.getUpdateTime());
         return response;
@@ -387,7 +444,7 @@ public class ArticleStudyService {
             return objectMapper.readValue(record.getSelectedTermsJson(), new TypeReference<List<ArticleStudyWordResponse>>() {
             });
         } catch (Exception ex) {
-            log.warn("文章学习词汇摘要读取失败 recordId={} error={}", record.getId(), ex.getMessage());
+            log.debug("语境精读词汇摘要读取失败 recordId={} error={}", record.getId(), ex.getMessage());
             return List.of();
         }
     }
@@ -402,7 +459,7 @@ public class ArticleStudyService {
         try {
             return objectMapper.readValue(record.getParsedJson(), Object.class);
         } catch (Exception ex) {
-            log.warn("文章学习结构化 JSON 读取失败 recordId={} error={}", record.getId(), ex.getMessage());
+            log.debug("语境精读结构化 JSON 读取失败 recordId={} error={}", record.getId(), ex.getMessage());
             return null;
         }
     }
@@ -410,27 +467,197 @@ public class ArticleStudyService {
     /**
      * 处理 {@code extractJson} 相关业务。
      */
-    private String extractJson(String content) {
+    private String extractJson(String content, List<ArticleStudyWordResponse> selectedWords) {
         if (!StringUtils.hasText(content)) {
-            return null;
+            throw articleInvalid("AI 未返回语境精读材料");
         }
         String cleaned = content.replace("```json", "").replace("```", "").trim();
+        JsonNode parsed = null;
         try {
-            JsonNode jsonNode = objectMapper.readTree(cleaned);
-            return objectMapper.writeValueAsString(jsonNode);
+            parsed = objectMapper.readTree(cleaned);
         } catch (Exception ignored) {
             Matcher matcher = JSON_BLOCK_PATTERN.matcher(cleaned);
-            if (!matcher.find()) {
-                return null;
-            }
-            try {
-                JsonNode jsonNode = objectMapper.readTree(matcher.group());
-                return objectMapper.writeValueAsString(jsonNode);
-            } catch (Exception ex) {
-                log.warn("文章学习模型响应 JSON 提取失败: {}", ex.getMessage());
-                return null;
+            if (matcher.find()) {
+                try {
+                    parsed = objectMapper.readTree(matcher.group());
+                } catch (Exception ex) {
+                    log.debug("语境精读模型响应 JSON 提取失败: {}", ex.getMessage());
+                }
             }
         }
+        if (parsed == null || !parsed.isObject()) {
+            throw articleInvalid("AI 返回的语境精读材料不是有效 JSON，请重新生成");
+        }
+        validateArticlePayload(parsed, selectedWords);
+        try {
+            return objectMapper.writeValueAsString(parsed);
+        } catch (Exception ex) {
+            throw LearningAssistantException.system(
+                    LearningConstants.ErrorCode.JSON_SERIALIZE_FAILED,
+                    "语境精读材料序列化失败",
+                    ex);
+        }
+    }
+
+    private void validateArticlePayload(JsonNode parsed, List<ArticleStudyWordResponse> selectedWords) {
+        String article = requiredText(parsed, "article", "text", "content");
+        requiredText(parsed, "title");
+        requiredText(parsed, "translation", "translation_cn", "translationCn", "cn", "zh");
+        String normalizedArticle = normalizeAnswer(article);
+        JsonNode vocabulary = parsed.path("vocabulary_focus");
+        if (!vocabulary.isArray()) {
+            vocabulary = parsed.path("vocabularyFocus");
+        }
+        if (!vocabulary.isArray()) {
+            throw articleInvalid("AI 返回的精读材料缺少目标词讲解");
+        }
+        Set<String> focusedWords = new java.util.HashSet<>();
+        for (JsonNode item : vocabulary) {
+            String term = text(item, "word", "term");
+            if (StringUtils.hasText(term)) {
+                focusedWords.add(normalizeAnswer(term));
+            }
+        }
+        for (ArticleStudyWordResponse selectedWord : selectedWords) {
+            String term = normalizeAnswer(selectedWord.getTerm());
+            if (!normalizedArticle.contains(term)) {
+                throw articleInvalid("AI 生成的文章没有覆盖目标词: " + selectedWord.getTerm());
+            }
+            if (!focusedWords.contains(term)) {
+                throw articleInvalid("AI 生成的词汇精讲缺少目标词: " + selectedWord.getTerm());
+            }
+        }
+        JsonNode practice = parsed.path("practice");
+        if (!practice.isArray() || practice.size() != LearningConstants.Article.PRACTICE_QUESTION_COUNT) {
+            throw articleInvalid("阅读检测必须包含 " + LearningConstants.Article.PRACTICE_QUESTION_COUNT + " 道题");
+        }
+        for (JsonNode question : practice) {
+            requiredText(question, "question", "stem");
+            JsonNode options = question.path("options");
+            if (!options.isArray() || options.size() != 4) {
+                throw articleInvalid("每道阅读检测题必须包含 4 个选项");
+            }
+            String correctAnswer = requiredText(question, "correct_answer", "correctAnswer", "answer");
+            boolean answerInOptions = false;
+            for (JsonNode option : options) {
+                if (normalizeAnswer(option.asText()).equals(normalizeAnswer(correctAnswer))) {
+                    answerInOptions = true;
+                    break;
+                }
+            }
+            if (!answerInOptions) {
+                throw articleInvalid("阅读检测题的正确答案必须包含在选项中");
+            }
+        }
+    }
+
+    static PracticeScore scorePractice(JsonNode parsed, List<ArticleStudyAnswerRequest> answers) {
+        JsonNode practice = parsed == null ? null : parsed.path("practice");
+        if (practice == null || !practice.isArray()) {
+            return new PracticeScore(LearningConstants.ZERO, LearningConstants.ZERO,
+                    LearningConstants.ZERO, LearningConstants.ZERO);
+        }
+        Map<Integer, String> submitted = answers.stream()
+                .filter(Objects::nonNull)
+                .filter(answer -> answer.getQuestionIndex() != null && StringUtils.hasText(answer.getAnswer()))
+                .collect(Collectors.toMap(ArticleStudyAnswerRequest::getQuestionIndex,
+                        ArticleStudyAnswerRequest::getAnswer, (left, right) -> right, LinkedHashMap::new));
+        int answered = LearningConstants.ZERO;
+        int correct = LearningConstants.ZERO;
+        for (int index = LearningConstants.ZERO; index < practice.size(); index++) {
+            String answer = submitted.get(index);
+            if (!StringUtils.hasText(answer)) {
+                continue;
+            }
+            answered++;
+            String expected = textValue(practice.get(index), "correct_answer", "correctAnswer", "answer");
+            if (normalizeAnswer(answer).equals(normalizeAnswer(expected))) {
+                correct++;
+            }
+        }
+        int total = practice.size();
+        int score = total == LearningConstants.ZERO
+                ? LearningConstants.ZERO
+                : (int) Math.round(correct * 100.0 / total);
+        return new PracticeScore(total, answered, correct, score);
+    }
+
+    private LearningArticleStudyRecord requireRecord(Long userId, Long recordId) {
+        LearningArticleStudyRecord record = articleStudyRecordMapper.selectOne(
+                new LambdaQueryWrapper<LearningArticleStudyRecord>()
+                        .eq(LearningArticleStudyRecord::getId, recordId)
+                        .eq(LearningArticleStudyRecord::getUserId, userId)
+                        .eq(LearningArticleStudyRecord::getDeleted, false)
+                        .last(LearningConstants.SQL_LIMIT_ONE));
+        if (record == null) {
+            throw LearningAssistantException.notFound(
+                    LearningConstants.ErrorCode.ARTICLE_RECORD_NOT_FOUND,
+                    "语境精读记录不存在: " + recordId);
+        }
+        return record;
+    }
+
+    private JsonNode readParsedNode(LearningArticleStudyRecord record) {
+        if (!StringUtils.hasText(record.getParsedJson())) {
+            throw articleInvalid("语境精读记录缺少结构化学习材料");
+        }
+        try {
+            return objectMapper.readTree(record.getParsedJson());
+        } catch (Exception ex) {
+            throw articleInvalid("语境精读记录无法解析，请重新生成");
+        }
+    }
+
+    private String normalizeStage(String value) {
+        String stage = value == null ? "" : value.trim().toLowerCase(Locale.ROOT);
+        if (!List.of(LearningConstants.Article.STAGE_READING,
+                LearningConstants.Article.STAGE_VOCABULARY,
+                LearningConstants.Article.STAGE_CHECK).contains(stage)) {
+            throw LearningAssistantException.badRequest(
+                    LearningConstants.ErrorCode.ARTICLE_STAGE_INVALID,
+                    "不支持的语境精读阶段: " + value);
+        }
+        return stage;
+    }
+
+    private String articleTitle(LearningArticleStudyRecord record) {
+        try {
+            return StrUtil.blankToDefault(text(objectMapper.readTree(record.getParsedJson()), "title"), "未命名精读材料");
+        } catch (Exception ignored) {
+            return "未命名精读材料";
+        }
+    }
+
+    private String requiredText(JsonNode node, String... keys) {
+        String value = text(node, keys);
+        if (!StringUtils.hasText(value)) {
+            throw articleInvalid("AI 返回的语境精读材料缺少字段: " + String.join("/", keys));
+        }
+        return value;
+    }
+
+    private static String textValue(JsonNode node, String... keys) {
+        if (node == null || node.isMissingNode() || node.isNull()) {
+            return "";
+        }
+        for (String key : keys) {
+            JsonNode value = node.path(key);
+            if (value.isTextual() && StringUtils.hasText(value.asText())) {
+                return value.asText();
+            }
+        }
+        return "";
+    }
+
+    private static String normalizeAnswer(String value) {
+        return value == null ? "" : value.trim().replaceAll("\\s+", " ").toLowerCase(Locale.ROOT);
+    }
+
+    private LearningAssistantException articleInvalid(String message) {
+        return LearningAssistantException.externalService(
+                LearningConstants.ErrorCode.ARTICLE_AI_RESPONSE_INVALID,
+                message,
+                null);
     }
 
     /**
@@ -488,5 +715,8 @@ public class ArticleStudyService {
      * 处理 {@code CoreMeaning} 相关业务。
      */
     private record CoreMeaning(String partOfSpeech, String meaning) {
+    }
+
+    record PracticeScore(int total, int answered, int correct, int score) {
     }
 }

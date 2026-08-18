@@ -872,6 +872,365 @@ textarea:focus {
   color: var(--muted);
 }
 
+.article-target-summary {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.article-target-summary span {
+  display: inline-flex;
+  min-height: 24px;
+  align-items: center;
+  padding: 3px 8px;
+  border: 1px solid rgba(125, 211, 168, 0.3);
+  border-radius: 4px;
+  background: rgba(125, 211, 168, 0.08);
+  color: var(--text);
+  font-size: 12px;
+  font-weight: 800;
+}
+
+.article-stage-shell {
+  position: sticky;
+  top: 0;
+  z-index: 4;
+  display: grid;
+  gap: 8px;
+  padding: 10px 0 8px;
+  background: var(--panel);
+}
+
+.article-stage-nav {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 8px;
+}
+
+.article-stage-tab {
+  display: flex;
+  min-width: 0;
+  min-height: 42px;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  padding: 7px 10px;
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  background: rgba(255, 255, 255, 0.025);
+  color: var(--muted);
+  cursor: pointer;
+}
+
+.article-stage-tab span {
+  display: inline-grid;
+  width: 22px;
+  height: 22px;
+  flex: 0 0 22px;
+  place-items: center;
+  border: 1px solid currentColor;
+  border-radius: 50%;
+  font-size: 11px;
+}
+
+.article-stage-tab strong {
+  min-width: 0;
+  overflow: hidden;
+  font-size: 13px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.article-stage-tab.active {
+  border-color: rgba(129, 140, 248, 0.6);
+  background: var(--accent-soft);
+  color: var(--text);
+}
+
+.article-stage-tab.done span {
+  border-color: rgba(125, 211, 168, 0.65);
+  background: rgba(125, 211, 168, 0.16);
+  color: #a7f3d0;
+}
+
+.article-stage-progress {
+  height: 3px;
+  overflow: hidden;
+  border-radius: 2px;
+  background: rgba(148, 163, 184, 0.16);
+}
+
+.article-stage-progress span {
+  display: block;
+  height: 100%;
+  border-radius: inherit;
+  background: var(--accent);
+  transition: width 180ms ease;
+}
+
+.article-stage-body,
+.article-stage-section {
+  display: grid;
+  gap: 16px;
+  min-width: 0;
+}
+
+.article-stage-toolbar,
+.article-check-heading,
+.article-check-heading > div {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+}
+
+.article-stage-toolbar h5,
+.article-check-heading h5 {
+  margin: 0;
+  font-size: 15px;
+}
+
+.article-mode-switch {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(64px, 1fr));
+  padding: 3px;
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  background: rgba(15, 23, 42, 0.38);
+}
+
+.article-mode-switch button {
+  min-height: 30px;
+  padding: 4px 10px;
+  border: 0;
+  border-radius: 4px;
+  background: transparent;
+  color: var(--muted);
+  cursor: pointer;
+}
+
+.article-mode-switch button.active {
+  background: var(--accent-soft);
+  color: var(--text);
+  font-weight: 850;
+}
+
+.article-target-word {
+  display: inline;
+  padding: 0 2px;
+  border: 0;
+  border-bottom: 2px solid rgba(250, 204, 107, 0.72);
+  background: rgba(250, 204, 107, 0.1);
+  color: #fde68a;
+  font: inherit;
+  font-weight: 850;
+  cursor: pointer;
+}
+
+.article-stage-actions {
+  position: sticky;
+  bottom: 0;
+  z-index: 3;
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+  padding: 12px 0 2px;
+  background: linear-gradient(to bottom, transparent, var(--panel) 28%);
+}
+
+.article-stage-actions-split {
+  justify-content: space-between;
+}
+
+.article-check-commands {
+  display: flex;
+  gap: 8px;
+}
+
+.article-vocabulary-list {
+  display: grid;
+  border-top: 1px solid var(--line);
+}
+
+.article-vocabulary-row {
+  display: grid;
+  grid-template-columns: minmax(120px, 0.7fr) minmax(160px, 1fr) minmax(220px, 1.5fr);
+  gap: 8px 16px;
+  align-items: start;
+  padding: 14px 4px;
+  border-bottom: 1px solid var(--line);
+  scroll-margin: 92px;
+}
+
+.article-vocabulary-row header {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  align-items: baseline;
+}
+
+.article-vocabulary-row header strong {
+  color: var(--text);
+  font-size: 18px;
+}
+
+.article-vocabulary-row header span,
+.article-vocabulary-row p,
+.article-vocabulary-row div,
+.article-vocabulary-row small {
+  margin: 0;
+  color: var(--muted);
+  line-height: 1.6;
+  overflow-wrap: anywhere;
+}
+
+.article-vocabulary-row p {
+  color: var(--text);
+  font-weight: 760;
+}
+
+.article-vocabulary-row small {
+  grid-column: 3;
+}
+
+.article-check-heading {
+  min-height: 42px;
+  padding-bottom: 10px;
+  border-bottom: 1px solid var(--line);
+}
+
+.article-check-heading span {
+  color: var(--muted);
+}
+
+.article-check-heading > strong {
+  color: #a7f3d0;
+  font-size: 22px;
+}
+
+.article-practice-list {
+  display: grid;
+  gap: 12px;
+}
+
+.article-practice-question {
+  display: grid;
+  gap: 12px;
+  padding: 14px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: rgba(255, 255, 255, 0.025);
+}
+
+.article-practice-question.correct {
+  border-color: rgba(125, 211, 168, 0.45);
+}
+
+.article-practice-question.incorrect {
+  border-color: rgba(251, 113, 133, 0.42);
+}
+
+.article-practice-question > header {
+  display: grid;
+  grid-template-columns: 26px minmax(0, 1fr);
+  gap: 10px;
+  align-items: start;
+}
+
+.article-practice-question > header span {
+  display: grid;
+  width: 26px;
+  height: 26px;
+  place-items: center;
+  border-radius: 50%;
+  background: var(--accent-soft);
+  color: var(--text);
+  font-size: 12px;
+  font-weight: 900;
+}
+
+.article-practice-question > header strong {
+  line-height: 1.55;
+}
+
+.article-practice-options {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 8px;
+}
+
+.article-practice-options button {
+  min-height: 42px;
+  padding: 9px 11px;
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  background: rgba(15, 23, 42, 0.36);
+  color: var(--text);
+  text-align: left;
+  cursor: pointer;
+  overflow-wrap: anywhere;
+}
+
+.article-practice-options button.selected {
+  border-color: rgba(129, 140, 248, 0.7);
+  background: var(--accent-soft);
+}
+
+.article-practice-options button.correct {
+  border-color: rgba(125, 211, 168, 0.7);
+  background: rgba(125, 211, 168, 0.12);
+}
+
+.article-practice-options button.incorrect {
+  border-color: rgba(251, 113, 133, 0.68);
+  background: rgba(251, 113, 133, 0.1);
+}
+
+.article-free-answer input {
+  width: 100%;
+}
+
+.article-answer-feedback {
+  display: grid;
+  gap: 5px;
+  padding-top: 10px;
+  border-top: 1px solid var(--line);
+}
+
+.article-answer-feedback strong,
+.article-answer-feedback p {
+  margin: 0;
+  line-height: 1.6;
+}
+
+.article-answer-feedback p {
+  color: var(--muted);
+}
+
+.article-check-result {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 12px 14px;
+  border: 1px solid var(--line);
+  border-radius: 6px;
+}
+
+.article-check-result.passed {
+  border-color: rgba(125, 211, 168, 0.45);
+  background: rgba(125, 211, 168, 0.08);
+}
+
+.article-check-result.needs-review {
+  border-color: rgba(250, 204, 107, 0.45);
+  background: rgba(250, 204, 107, 0.07);
+}
+
+.article-check-result span {
+  color: var(--muted);
+}
+
 .article-section {
   display: grid;
   gap: 10px;
@@ -973,6 +1332,8 @@ textarea:focus {
 
 .article-history-list {
   min-height: 0;
+  align-content: start;
+  grid-auto-rows: max-content;
   overflow: auto;
   overscroll-behavior: contain;
   padding-right: 4px;
@@ -1003,6 +1364,24 @@ textarea:focus {
 .article-history-item span,
 .article-history-item small {
   color: var(--muted);
+}
+
+.article-history-title {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.article-history-title em {
+  flex: 0 0 auto;
+  padding: 2px 6px;
+  border: 1px solid var(--line);
+  border-radius: 4px;
+  color: var(--muted);
+  font-size: 11px;
+  font-style: normal;
+  font-weight: 850;
 }
 
 .article-study-modal {
@@ -3706,6 +4085,14 @@ input.sr-only:disabled + .file-upload-trigger {
     grid-template-columns: 1fr;
   }
 
+  .article-result-panel {
+    order: 1;
+  }
+
+  .article-history-panel {
+    order: 2;
+  }
+
   #scenePlanView.view.active {
     grid-template-rows: auto auto;
     overflow: auto;
@@ -3949,6 +4336,11 @@ input.sr-only:disabled + .file-upload-trigger {
     grid-template-columns: 1fr;
   }
 
+  .article-study-modal > .panel-heading {
+    align-items: flex-start;
+    flex-direction: row;
+  }
+
   .article-study-modal .modal-actions {
     grid-template-columns: 1fr;
     justify-content: stretch;
@@ -3973,6 +4365,89 @@ input.sr-only:disabled + .file-upload-trigger {
 
   .article-learning-head h4 {
     font-size: 24px;
+  }
+
+  .article-modal-words .article-word-card {
+    min-height: 108px;
+    padding: 12px 14px;
+  }
+
+  .article-modal-words .article-word-card strong {
+    font-size: 20px;
+  }
+
+  .article-stage-shell {
+    padding-top: 6px;
+  }
+
+  .article-stage-nav {
+    gap: 5px;
+  }
+
+  .article-stage-tab {
+    min-height: 48px;
+    gap: 5px;
+    padding: 6px 4px;
+  }
+
+  .article-stage-tab span {
+    width: 20px;
+    height: 20px;
+    flex-basis: 20px;
+  }
+
+  .article-stage-tab strong {
+    font-size: 11px;
+  }
+
+  .article-stage-toolbar {
+    align-items: flex-start;
+    flex-direction: column;
+  }
+
+  .article-mode-switch {
+    width: 100%;
+  }
+
+  .article-vocabulary-row {
+    grid-template-columns: minmax(0, 1fr);
+    gap: 5px;
+    padding: 13px 2px;
+  }
+
+  .article-vocabulary-row small {
+    grid-column: 1;
+  }
+
+  .article-practice-options {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .article-stage-actions,
+  .article-stage-actions-split {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    padding-top: 16px;
+  }
+
+  .article-stage-actions:not(.article-stage-actions-split) {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .article-stage-actions button {
+    width: 100%;
+    min-width: 0;
+  }
+
+  .article-check-commands {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 6px;
+  }
+
+  .article-check-result {
+    align-items: flex-start;
+    flex-direction: column;
   }
 
   .article-word-card {

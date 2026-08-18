@@ -73,6 +73,7 @@ export function bindAppEvents(ctx) {
     renderArticleWords,
     renderArticleHistory,
     clearArticleSelection,
+    recommendArticleWords,
     openArticleStudyModal,
     closeArticleStudyModal,
     generateArticlePreview,
@@ -268,13 +269,14 @@ elements.sceneVocabularyChallengeBtn?.addEventListener('click', showSceneChallen
 elements.sceneChallengeBackBtn?.addEventListener('click', backToSceneReading)
 elements.sceneChallengeStartBtn?.addEventListener('click', startSceneChallenge)
 elements.articleClearSelectionBtn?.addEventListener('click', clearArticleSelection)
+elements.articleRecommendWordsBtn?.addEventListener('click', recommendArticleWords)
 elements.articleGenerateBtn?.addEventListener('click', openArticleStudyModal)
 elements.closeArticleStudyModalBtn?.addEventListener('click', closeArticleStudyModal)
 elements.cancelArticleStudyBtn?.addEventListener('click', closeArticleStudyModal)
 elements.articleStudyModal?.addEventListener('click', (event) => {
   if (event.target === elements.articleStudyModal) closeArticleStudyModal()
 })
-elements.articlePreviewGenerateBtn?.addEventListener('click', () => generateArticlePreview({ forceRefresh: true }))
+elements.articlePreviewGenerateBtn?.addEventListener('click', () => generateArticlePreview({ forceRefresh: Boolean(state.articleDraftRecord) }))
 elements.saveArticleStudyBtn?.addEventListener('click', saveArticleStudy)
 elements.reloadSystemLogsBtn.addEventListener('click', loadSystemLogs)
 elements.clearLogBtn.addEventListener('click', clearLogs)

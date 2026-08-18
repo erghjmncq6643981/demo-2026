@@ -289,11 +289,11 @@ public class LearningPlanService {
     }
 
     /**
-     * 手动生成后续场景。允许当前场景未完成时提前生成，每天可重复执行，不做配额限制。
+     * 按学习计划生成指定日期的场景材料。每日目标超过 50 词时均分为多篇材料。
      */
     @Transactional(rollbackFor = Exception.class)
-    public LearningPlanUnitResponse generateNextUnit(Long userId, Long planId, Long modelConfigId,
-                                                     LocalDate recommendedDate) {
+    public List<LearningPlanUnitResponse> generateNextUnit(Long userId, Long planId, Long modelConfigId,
+                                                          LocalDate recommendedDate) {
         LearningPlan plan = requirePlan(userId, planId);
         if (LearningConstants.ScenePlan.STATUS_COMPLETED.equals(plan.getStatus())) {
             throw LearningAssistantException.badRequest(
@@ -313,7 +313,9 @@ public class LearningPlanService {
                     "学习计划已超出结束日期，不可继续生成场景");
         }
 
-        List<VocabularyCatalogEntry> candidates = nextCandidates(plan);
+        LocalDate resolvedRecommendedDate = resolveRecommendedDate(plan, recommendedDate, today);
+        int dailyTarget = targetWordCount(plan);
+        List<VocabularyCatalogEntry> candidates = nextCandidates(plan, dailyTarget);
         if (candidates.isEmpty()) {
             if (hasIncompleteUnit(plan.getId())) {
                 throw LearningAssistantException.badRequest(
@@ -325,11 +327,41 @@ public class LearningPlanService {
                     LearningConstants.ErrorCode.LEARNING_PLAN_COMPLETED,
                     "词表中的词已经全部安排到场景中");
         }
-        LocalDate resolvedRecommendedDate = resolveRecommendedDate(plan, recommendedDate, today);
+        int totalToGenerate = Math.min(dailyTarget, candidates.size());
+        List<LearningPlanUnitResponse> generatedUnits = new ArrayList<>();
+        int candidateOffset = 0;
+        for (Integer batchSize : splitMaterialWordCounts(totalToGenerate)) {
+            List<VocabularyCatalogEntry> batch = new ArrayList<>(
+                    candidates.subList(candidateOffset, candidateOffset + batchSize));
+            generatedUnits.add(generateSingleUnit(userId, plan, modelConfigId, resolvedRecommendedDate,
+                    today, batch, batchSize));
+            candidateOffset += batchSize;
+        }
+        return List.copyOf(generatedUnits);
+    }
+
+    static List<Integer> splitMaterialWordCounts(int totalWordCount) {
+        if (totalWordCount <= LearningConstants.ZERO) {
+            return List.of();
+        }
+        int materialCount = (totalWordCount + LearningConstants.ScenePlan.MAX_CORE_WORDS_PER_UNIT - 1)
+                / LearningConstants.ScenePlan.MAX_CORE_WORDS_PER_UNIT;
+        int baseSize = totalWordCount / materialCount;
+        int remainder = totalWordCount % materialCount;
+        List<Integer> result = new ArrayList<>(materialCount);
+        for (int index = LearningConstants.ZERO; index < materialCount; index++) {
+            result.add(baseSize + (index < remainder ? LearningConstants.SEQUENCE_STEP : LearningConstants.ZERO));
+        }
+        return List.copyOf(result);
+    }
+
+    private LearningPlanUnitResponse generateSingleUnit(Long userId, LearningPlan plan, Long modelConfigId,
+                                                        LocalDate resolvedRecommendedDate, LocalDate today,
+                                                        List<VocabularyCatalogEntry> candidates, int targetWordCount) {
         int unitNo = nextUnitNo(plan.getId());
-        AgentChatResponse aiResponse = generateScene(plan, unitNo, candidates, modelConfigId);
+        AgentChatResponse aiResponse = generateScene(plan, unitNo, candidates, targetWordCount, modelConfigId);
         JsonNode scene = parseScene(aiResponse.getContent());
-        List<JsonNode> words = validateSceneWords(scene, candidates);
+        List<JsonNode> words = validateSceneWords(scene, candidates, targetWordCount);
         LocalDateTime now = LocalDateTime.now();
 
         LearningPlanUnit unit = new LearningPlanUnit();
@@ -395,12 +427,6 @@ public class LearningPlanService {
                     && (before == null
                     || LearningConstants.ScenePlan.PROGRESS_UNSEEN.equals(before.getLearningState())
                     || LearningConstants.ScenePlan.PROGRESS_EXPOSED.equals(before.getLearningState()));
-            if (LearningConstants.ScenePlan.TIER_CORE.equals(tier) && before != null
-                    && (LearningConstants.ScenePlan.PROGRESS_REVIEWING.equals(before.getLearningState())
-                    || LearningConstants.ScenePlan.PROGRESS_MASTERED.equals(before.getLearningState()))) {
-                tier = LearningConstants.ScenePlan.TIER_REVIEW;
-                firstLearning = false;
-            }
             LearningWordProgress progress = startImmediately
                     ? progressService.recordSceneExposure(
                             userId, term, requirement, tier, plan.getId(), unit.getId())
@@ -634,7 +660,7 @@ public class LearningPlanService {
                     unitMapper.updateById(nextUnit);
                 }
             }
-            if (nextCandidates(plan).isEmpty() && !hasIncompleteUnit(plan.getId())) {
+            if (nextCandidates(plan, targetWordCount(plan)).isEmpty() && !hasIncompleteUnit(plan.getId())) {
                 plan.setStatus(LearningConstants.ScenePlan.STATUS_COMPLETED);
             }
             plan.setUpdateTime(now);
@@ -720,7 +746,8 @@ public class LearningPlanService {
     }
 
     private AgentChatResponse generateScene(LearningPlan plan, int unitNo,
-                                            List<VocabularyCatalogEntry> candidates, Long modelConfigId) {
+                                            List<VocabularyCatalogEntry> candidates, int targetWordCount,
+                                            Long modelConfigId) {
         List<CandidateWord> words = candidates.stream()
                 .map(entry -> new CandidateWord(entry.getSourceOrder(), entry.effectiveTerm(),
                         entry.getPhonetic(), entry.getDefinitionText()))
@@ -732,35 +759,6 @@ public class LearningPlanService {
                 .stream()
                 .map(LearningPlanUnit::getTitle)
                 .toList();
-        int targetWordCount = 8;
-        if (plan.getEndTime() != null) {
-            LocalDate today = LocalDate.now();
-            LocalDate planStart = plan.getStartTime() != null ? plan.getStartTime().toLocalDate() : today;
-            LocalDate planEnd = plan.getEndTime().toLocalDate();
-            LocalDate startForRemaining = today.isAfter(planStart) ? today : planStart;
-            
-            long remainingDays = java.time.temporal.ChronoUnit.DAYS.between(startForRemaining, planEnd) + 1;
-            if (remainingDays > 0) {
-                Integer generatedCoreCount = unitMapper.selectList(new LambdaQueryWrapper<LearningPlanUnit>()
-                                .eq(LearningPlanUnit::getPlanId, plan.getId())
-                                .eq(LearningPlanUnit::getDeleted, false))
-                        .stream()
-                        .mapToInt(LearningPlanUnit::getCoreWordCount)
-                        .sum();
-                int remainingToGenerate = Math.max(0, plan.getTotalCatalogWords() - generatedCoreCount);
-                targetWordCount = (int) Math.ceil((double) remainingToGenerate / remainingDays);
-            }
-        } else {
-            List<LearningPlanUnit> units = unitMapper.selectList(new LambdaQueryWrapper<LearningPlanUnit>()
-                    .eq(LearningPlanUnit::getPlanId, plan.getId())
-                    .eq(LearningPlanUnit::getDeleted, false)
-                    .orderByDesc(LearningPlanUnit::getUnitNo));
-            if (!units.isEmpty()) {
-                targetWordCount = units.get(0).getCoreWordCount();
-            }
-        }
-        targetWordCount = Math.max(8, targetWordCount);
-
         Map<String, Object> variables = new HashMap<>();
         variables.put("learning_purpose", StrUtil.blankToDefault(plan.getLearningPurpose(), "综合英语词汇学习"));
         variables.put("unit_no", unitNo);
@@ -783,12 +781,41 @@ public class LearningPlanService {
         return aiChatService.chat(request);
     }
 
-    private List<VocabularyCatalogEntry> nextCandidates(LearningPlan plan) {
+    private int targetWordCount(LearningPlan plan) {
+        int target = LearningConstants.ScenePlan.MIN_CORE_WORDS;
+        if (plan.getEndTime() != null) {
+            LocalDate today = LocalDate.now();
+            LocalDate planStart = plan.getStartTime() != null ? plan.getStartTime().toLocalDate() : today;
+            LocalDate planEnd = plan.getEndTime().toLocalDate();
+            LocalDate startForRemaining = today.isAfter(planStart) ? today : planStart;
+            long remainingDays = java.time.temporal.ChronoUnit.DAYS.between(startForRemaining, planEnd) + 1;
+            if (remainingDays > 0) {
+                int generatedCoreCount = unitMapper.selectList(new LambdaQueryWrapper<LearningPlanUnit>()
+                                .eq(LearningPlanUnit::getPlanId, plan.getId())
+                                .eq(LearningPlanUnit::getDeleted, false))
+                        .stream()
+                        .mapToInt(unit -> value(unit.getCoreWordCount()))
+                        .sum();
+                int remainingToGenerate = Math.max(0, value(plan.getTotalCatalogWords()) - generatedCoreCount);
+                target = (int) Math.ceil((double) remainingToGenerate / remainingDays);
+            }
+        } else {
+            LearningPlanUnit latestUnit = unitMapper.selectOne(new LambdaQueryWrapper<LearningPlanUnit>()
+                    .eq(LearningPlanUnit::getPlanId, plan.getId())
+                    .eq(LearningPlanUnit::getDeleted, false)
+                    .orderByDesc(LearningPlanUnit::getUnitNo)
+                    .last(LearningConstants.SQL_LIMIT_ONE));
+            if (latestUnit != null) {
+                target = value(latestUnit.getCoreWordCount());
+            }
+        }
+        return Math.max(LearningConstants.ScenePlan.MIN_CORE_WORDS, target);
+    }
+
+    private List<VocabularyCatalogEntry> nextCandidates(LearningPlan plan, int requestedLimit) {
         Set<Long> arranged = unitEntryMapper.selectList(new LambdaQueryWrapper<LearningPlanUnitEntry>()
                         .eq(LearningPlanUnitEntry::getPlanId, plan.getId())
                         .isNotNull(LearningPlanUnitEntry::getCatalogEntryId)
-                        .in(LearningPlanUnitEntry::getTier,
-                                List.of(LearningConstants.ScenePlan.TIER_CORE, LearningConstants.ScenePlan.TIER_REVIEW))
                         .eq(LearningPlanUnitEntry::getDeleted, false))
                 .stream()
                 .map(LearningPlanUnitEntry::getCatalogEntryId)
@@ -800,6 +827,7 @@ public class LearningPlanService {
                         .eq(VocabularyCatalogEntry::getDeleted, false)
                         .orderByAsc(VocabularyCatalogEntry::getSourceOrder));
         List<VocabularyCatalogEntry> result = new ArrayList<>();
+        int candidateLimit = Math.max(LearningConstants.SEQUENCE_STEP, requestedLimit);
         for (VocabularyCatalogEntry entry : all) {
             if (arranged.contains(entry.getId())) {
                 continue;
@@ -809,14 +837,15 @@ public class LearningPlanService {
                 continue;
             }
             result.add(entry);
-            if (result.size() >= LearningConstants.ScenePlan.CANDIDATE_WORD_LIMIT) {
+            if (result.size() >= candidateLimit) {
                 break;
             }
         }
         return result;
     }
 
-    private List<JsonNode> validateSceneWords(JsonNode scene, List<VocabularyCatalogEntry> candidates) {
+    private List<JsonNode> validateSceneWords(JsonNode scene, List<VocabularyCatalogEntry> candidates,
+                                              int targetWordCount) {
         JsonNode vocabulary = node(scene, "vocabulary", "words");
         if (vocabulary == null || !vocabulary.isArray() || vocabulary.isEmpty()) {
             throw sceneInvalid("AI 场景结果缺少 vocabulary 数组");
@@ -842,9 +871,13 @@ public class LearningPlanService {
             }
             result.add(word);
         }
-        int requiredMinimum = Math.min(LearningConstants.ScenePlan.MIN_CORE_WORDS, candidates.size());
-        if (coreCount < requiredMinimum) {
-            throw sceneInvalid("核心词数量不足 " + requiredMinimum + " 个，实际为 " + coreCount + " 个");
+        int expectedCoreCount = Math.min(targetWordCount, candidates.size());
+        if (coreCount > LearningConstants.ScenePlan.MAX_CORE_WORDS_PER_UNIT) {
+            throw sceneInvalid("单篇场景材料最多包含 "
+                    + LearningConstants.ScenePlan.MAX_CORE_WORDS_PER_UNIT + " 个待挑战词，实际为 " + coreCount + " 个");
+        }
+        if (coreCount != expectedCoreCount) {
+            throw sceneInvalid("本篇场景材料应包含 " + expectedCoreCount + " 个待挑战词，实际为 " + coreCount + " 个");
         }
         return result;
     }

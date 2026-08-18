@@ -25,7 +25,7 @@ public enum AiInvocationScene {
     VOCABULARY_CARD_SINGLE("vocabulary_card_single", "单词词卡生成", true,
             List.of("term", "definitions", "examples", "collocations", "memory_tips")),
     VOCABULARY_CARD_BATCH("vocabulary_card_batch", "批量词卡生成", true, List.of("cards")),
-    ARTICLE_STUDY_MATERIAL("article_study_material", "文章学习材料生成", true,
+    ARTICLE_STUDY_MATERIAL("article_study_material", "语境精读材料生成", true,
             List.of("title", "article", "translation", "vocabulary_focus", "grammar_points", "practice")),
     VOCABULARY_SCENE_UNIT("vocabulary_scene_unit", "词汇大挑战场景单元生成", true,
             List.of("title", "learning_text", "translation", "vocabulary"));

@@ -9,7 +9,7 @@ function initialSidebarCollapsed() {
 
 export function createInitialState() {
   return {
-    build: '20260522-03',
+    build: '20260818-01',
     apiBase: localStorage.getItem('learning.apiBase') || 'http://localhost:16681',
     token: localStorage.getItem('learning.token') || '',
     user: readJsonStorage('learning.user'),
@@ -42,6 +42,10 @@ export function createInitialState() {
     articlePreviewError: '',
     articlePreviewLoading: false,
     articleModalOpen: false,
+    articleStage: 'reading',
+    articleReadingMode: 'english',
+    articleAnswerSets: {},
+    articleCheckedRecords: {},
     vocabularyImports: [],
     currentVocabularyImport: null,
     vocabularyImportPage: 1,

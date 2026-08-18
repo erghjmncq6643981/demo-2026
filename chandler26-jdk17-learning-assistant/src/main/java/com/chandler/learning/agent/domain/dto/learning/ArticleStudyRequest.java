@@ -7,10 +7,10 @@ import lombok.Data;
 import java.util.List;
 
 /**
- * 文章学习生成请求。
+ * 语境精读生成请求。
  */
 @Data
-@Schema(name = "文章学习生成请求")
+@Schema(name = "语境精读生成请求")
 public class ArticleStudyRequest {
 
     @NotNull(message = "单词本不能为空")

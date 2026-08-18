@@ -4,10 +4,10 @@ import io.swagger.v3.oas.annotations.media.Schema;
 import lombok.Data;
 
 /**
- * 文章学习所选词汇摘要。
+ * 语境精读目标词摘要。
  */
 @Data
-@Schema(name = "文章学习词汇摘要")
+@Schema(name = "语境精读目标词摘要")
 public class ArticleStudyWordResponse {
 
     @Schema(description = "单词本词条 ID")
