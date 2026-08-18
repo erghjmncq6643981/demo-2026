@@ -14,6 +14,14 @@
 - Keep implementation scoped to the requested behavior. Avoid opportunistic refactors.
 - Never hardcode real API keys in source, docs, or SQL. Model API keys must be stored encrypted by the backend.
 
+## Documentation
+
+- Product and design documents must describe behavior that is implemented and verified in the current frontend and backend.
+- Keep documentation concise and centered on product positioning, information architecture, core workflows, user-visible behavior, and important business rules.
+- Remove stale proposals, session history, duplicated explanations, exhaustive code-derived field lists, and unimplemented roadmap items unless the user explicitly requests them.
+- Maintain one clear source of truth for each topic. When behavior or naming changes, update the relevant document and remove the superseded description in the same change.
+- Clearly distinguish preview/mock-only behavior from production behavior; never present mock data or an unfinished interaction as a completed backend capability.
+
 ## Frontend
 
 - Keep feature code under `public/src/features/**`; shared utilities belong in `public/src/shared/**`.
