@@ -86,6 +86,12 @@ public class OpenAiCompatibleModelClient implements AiModelClient {
         if (request.getTemperature() != null) {
             payload.put("temperature", request.getTemperature());
         }
+        if (request.getFrequencyPenalty() != null) {
+            payload.put("frequency_penalty", request.getFrequencyPenalty());
+        }
+        if (request.getPresencePenalty() != null) {
+            payload.put("presence_penalty", request.getPresencePenalty());
+        }
         if (request.getMaxTokens() != null) {
             payload.put("max_tokens", request.getMaxTokens());
         }

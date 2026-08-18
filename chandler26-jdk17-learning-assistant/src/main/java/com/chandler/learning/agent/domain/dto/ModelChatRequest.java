@@ -21,6 +21,10 @@ public class ModelChatRequest {
 
     private Double temperature;
 
+    private Double frequencyPenalty;
+
+    private Double presencePenalty;
+
     private Integer maxTokens;
 
     private List<ChatMessageParam> messages;

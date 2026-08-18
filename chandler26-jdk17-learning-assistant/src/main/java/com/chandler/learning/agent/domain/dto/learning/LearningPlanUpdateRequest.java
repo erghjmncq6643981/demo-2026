@@ -21,5 +21,7 @@ public class LearningPlanUpdateRequest {
 
     private Long modelConfigId;
 
+    private Long wordbookId;
+
     private String status;
 }

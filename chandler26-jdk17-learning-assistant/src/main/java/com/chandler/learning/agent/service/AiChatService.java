@@ -76,6 +76,11 @@ public class AiChatService {
         modelRequest.setModelConfigId(selectedModelConfig == null ? null : selectedModelConfig.getId());
         modelRequest.setTemperature(agent.getTemperature());
         modelRequest.setMaxTokens(agent.getMaxTokens());
+        if (AiInvocationScene.VOCABULARY_SCENE_UNIT.equals(invocationScene)
+                || AiInvocationScene.VOCABULARY_CARD_BATCH.equals(invocationScene)) {
+            modelRequest.setFrequencyPenalty(0.3);
+            modelRequest.setPresencePenalty(0.1);
+        }
         modelRequest.setMessages(messages);
 
         AiModelCallRecord record = buildCallRecord(session.getId(), agent, modelRequest);

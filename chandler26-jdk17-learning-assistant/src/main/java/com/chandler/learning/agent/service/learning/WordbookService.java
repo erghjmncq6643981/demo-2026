@@ -15,6 +15,7 @@ import com.chandler.learning.agent.domain.dto.learning.WordbookEntryUpdateReques
 import com.chandler.learning.agent.domain.dto.learning.WordbookResponse;
 import com.chandler.learning.agent.domain.dto.learning.WordbookSaveRequest;
 import com.chandler.learning.agent.domain.dto.vocabulary.VocabularyStudyRequest;
+import com.chandler.learning.agent.domain.dto.vocabulary.VocabularyStudyResponse;
 import com.chandler.learning.agent.domain.enums.ReviewResult;
 import com.chandler.learning.agent.domain.enums.ReviewStatus;
 import com.chandler.learning.agent.domain.enums.SystemLogType;
@@ -537,6 +538,31 @@ public class WordbookService {
         entryMapper.updateById(entry);
         log.debug("个人词条已写入 AI 词卡快照 userId={} entryId={} vocabularyId={}",
                 userId, entryId, vocabulary.getId());
+    }
+
+    /**
+     * 为单词本词条生成或刷新 AI 词卡。
+     */
+    @Transactional(rollbackFor = Exception.class)
+    public WordbookEntryResponse generateCard(Long userId, Long entryId, boolean forceRefresh) {
+        LearningWordbookEntry entry = requireEntry(userId, entryId);
+        VocabularyStudyRequest studyRequest = new VocabularyStudyRequest();
+        studyRequest.setTerm(entry.getTerm());
+        studyRequest.setAgentCode(LearningConstants.VOCABULARY_AGENT_CODE);
+        studyRequest.setTemplateCode(LearningConstants.VOCABULARY_TEMPLATE_CODE);
+        studyRequest.setForceRefresh(forceRefresh);
+        VocabularyStudyResponse studyResponse = vocabularyStudyService.study(studyRequest);
+
+        EnglishVocabularyStudyRecord vocabulary = vocabularyMapper.selectById(studyResponse.getId());
+        if (vocabulary != null) {
+            attachVocabularyCard(userId, entryId, vocabulary);
+        }
+        systemLogService.record(userId, SystemLogType.WORDBOOK,
+                forceRefresh ? "重新生成词卡" : "生成词卡", entry.getNormalizedTerm());
+        log.info("用户「{}」为单词本词条「{}」{} AI 词卡",
+                userDisplayNameService.userName(userId), entry.getNormalizedTerm(),
+                forceRefresh ? "重新生成" : "生成");
+        return toEntryResponse(requireEntry(userId, entryId));
     }
 
     /**

@@ -142,6 +142,16 @@ public class WordbookController {
         return wordbookService.updateEntry(user.getId(), entryId, request);
     }
 
+    @PostMapping("/wordbook-entries/{entryId}/generate-card")
+    @Operation(summary = "为单词本词条生成或刷新 AI 词卡")
+    public WordbookEntryResponse generateCard(
+            @RequestHeader(value = "Authorization", required = false) String authorization,
+            @PathVariable Long entryId,
+            @RequestParam(required = false, defaultValue = "false") boolean forceRefresh) {
+        LearningUser user = authService.requireUser(authorization);
+        return wordbookService.generateCard(user.getId(), entryId, forceRefresh);
+    }
+
     /**
      * 更新 {@code deleteEntry} 相关业务。
      */

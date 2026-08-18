@@ -18,6 +18,10 @@ export function createWordbookDetailFeature(ctx) {
     speakSentence,
     bindStudyTermCards,
     bindInlineAudio,
+    request,
+    toast,
+    setButtonLoading,
+    sameId,
   } = ctx
 
   function renderWordbookFocus(entry) {
@@ -37,6 +41,7 @@ export function createWordbookDetailFeature(ctx) {
       parsed?.phonetic?.uk && { type: 'uk', label: 'UK', text: parsed.phonetic.uk },
       parsed?.phonetic?.us && { type: 'us', label: 'US', text: parsed.phonetic.us },
     ].filter(Boolean)
+    const isCardReady = entry.cardStatus === 'ready' || (definitions.length > 0 && examples.length > 0)
     elements.wordbookFocus.className = 'wordbook-focus-card'
     elements.wordbookFocus.innerHTML = `
       <div class="wordbook-focus-head">
@@ -62,6 +67,7 @@ export function createWordbookDetailFeature(ctx) {
         </div>
         <div class="inline-actions">
           <span class="mini-pill next-review-pill">下次 ${escapeHtml(formatDateTime(entry.nextReviewTime))}</span>
+          <button class="secondary-button compact" type="button" data-generate-card="${escapeHtml(entry.id)}" data-term="${escapeHtml(entry.term || entry.normalizedTerm)}">${isCardReady ? '刷新词卡' : '生成词卡'}</button>
           <button class="secondary-button compact" type="button" data-status-open="${escapeHtml(entry.id)}">熟练程度</button>
           <button class="secondary-button compact" type="button" data-open-review="${escapeHtml(entry.id)}">去复习</button>
         </div>
@@ -141,6 +147,36 @@ export function createWordbookDetailFeature(ctx) {
     `
     elements.wordbookFocus.querySelector('[data-open-review]')?.addEventListener('click', () => openEntryInReview(entry))
     elements.wordbookFocus.querySelector('[data-status-open]')?.addEventListener('click', () => openEntryStatusModal(entry.id))
+    elements.wordbookFocus.querySelector('[data-generate-card]')?.addEventListener('click', async (e) => {
+      const button = e.currentTarget
+      const entryId = button.dataset.generateCard
+      if (!entryId) return
+      if (typeof setButtonLoading === 'function') setButtonLoading(button, true, '生成中...')
+      else button.disabled = true
+      try {
+        if (state.preview) {
+          if (typeof toast === 'function') toast('设计预览：模拟生成词卡完成')
+          return
+        }
+        const updated = await request(`/api/v1/learning/wordbook-entries/${encodeURIComponent(entryId)}/generate-card?forceRefresh=true`, {
+          method: 'POST',
+        })
+        if (updated) {
+          const idx = state.wordbookEntries.findIndex((item) => sameId(item.id, entryId))
+          if (idx >= 0) {
+            state.wordbookEntries[idx] = updated
+          }
+          state.selectedEntry = updated
+          renderWordbookFocus(updated)
+          if (typeof toast === 'function') toast(`单词「${updated.term || updated.normalizedTerm}」AI 词卡已生成`)
+        }
+      } catch (err) {
+        if (typeof toast === 'function') toast(`生成词卡失败：${err.message}`)
+      } finally {
+        if (typeof setButtonLoading === 'function') setButtonLoading(button, false)
+        else button.disabled = false
+      }
+    })
     elements.wordbookFocus.querySelector('[data-edit-focus-note]')?.addEventListener('click', () => {
       state.currentNoteEntry = entry
       editCurrentNote()

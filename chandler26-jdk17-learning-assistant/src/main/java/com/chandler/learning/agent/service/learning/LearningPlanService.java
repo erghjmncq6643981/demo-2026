@@ -161,6 +161,9 @@ public class LearningPlanService {
         plan.setLearningPurpose(StringUtils.hasText(request.getLearningPurpose()) ? request.getLearningPurpose().trim() : null);
         plan.setStartTime(request.getStartTime());
         plan.setEndTime(request.getEndTime());
+        if (request.getWordbookId() != null && !request.getWordbookId().equals(plan.getWordbookId())) {
+            plan.setWordbookId(requireWordbook(userId, request.getWordbookId()).getId());
+        }
 
         if (request.getStatus() != null) {
             String newStatus = request.getStatus().trim();
@@ -408,19 +411,35 @@ public class LearningPlanService {
 
         Map<String, VocabularyCatalogEntry> candidateMap = candidates.stream().collect(Collectors.toMap(
                 entry -> normalize(entry.effectiveTerm()), entry -> entry, (left, right) -> left, LinkedHashMap::new));
+
+        Set<String> missingTerms = new LinkedHashSet<>();
+        for (JsonNode word : words) {
+            String nTerm = normalize(requiredText(word, "term", "word"));
+            if (!candidateMap.containsKey(nTerm)) {
+                missingTerms.add(nTerm);
+            }
+        }
+        if (!missingTerms.isEmpty()) {
+            List<VocabularyCatalogEntry> extraCatalogEntries = catalogEntryMapper.selectList(
+                    new LambdaQueryWrapper<VocabularyCatalogEntry>()
+                            .eq(VocabularyCatalogEntry::getCatalogVersionId, plan.getCatalogVersionId())
+                            .in(VocabularyCatalogEntry::getNormalizedTerm, missingTerms)
+                            .eq(VocabularyCatalogEntry::getDeleted, false));
+            for (VocabularyCatalogEntry entry : extraCatalogEntries) {
+                candidateMap.put(entry.getNormalizedTerm(), entry);
+            }
+        }
+
         int coreCount = LearningConstants.ZERO;
         int extendedCount = LearningConstants.ZERO;
         int supplementaryCount = LearningConstants.ZERO;
         int sortOrder = LearningConstants.FIRST_SEQUENCE;
+        List<LearningPlanUnitEntry> unitEntriesToInsert = new ArrayList<>(words.size());
         for (JsonNode word : words) {
             String term = requiredText(word, "term", "word");
             String normalizedTerm = normalize(term);
             VocabularyCatalogEntry source = candidateMap.get(normalizedTerm);
-            String requestedTier = normalizeTier(text(word, "tier"));
-            String tier = source == null ? LearningConstants.ScenePlan.TIER_SUPPLEMENTARY : requestedTier;
-            if (LearningConstants.ScenePlan.TIER_CORE.equals(tier) && source == null) {
-                throw sceneInvalid("核心词必须来自本次候选词表: " + term);
-            }
+            String tier = normalizeTier(text(word, "tier"));
             String requirement = normalizeRequirement(text(word, "mastery_requirement", "masteryRequirement"));
             LearningWordProgress before = progressService.find(userId, normalizedTerm);
             boolean firstLearning = LearningConstants.ScenePlan.TIER_CORE.equals(tier)
@@ -440,6 +459,9 @@ public class LearningPlanService {
             }
             List<String> acceptedSpellings = acceptedSpellings(word, term);
             LearningPlanUnitEntry unitEntry = new LearningPlanUnitEntry();
+            unitEntry.setId(com.baomidou.mybatisplus.core.toolkit.IdWorker.getId());
+            unitEntry.setCreateBy(userId);
+            unitEntry.setUpdateBy(userId);
             unitEntry.setPlanId(plan.getId());
             unitEntry.setUnitId(unit.getId());
             unitEntry.setCatalogEntryId(source == null ? null : source.getId());
@@ -459,9 +481,10 @@ public class LearningPlanService {
             unitEntry.setFirstLearning(firstLearning);
             unitEntry.setSortOrder(sortOrder++);
             unitEntry.setDeleted(false);
+            unitEntry.setVersion(LearningConstants.ZERO);
             unitEntry.setCreateTime(now);
             unitEntry.setUpdateTime(now);
-            unitEntryMapper.insert(unitEntry);
+            unitEntriesToInsert.add(unitEntry);
 
             if (LearningConstants.ScenePlan.TIER_CORE.equals(tier)) {
                 coreCount++;
@@ -470,6 +493,10 @@ public class LearningPlanService {
             } else {
                 extendedCount++;
             }
+        }
+
+        if (!unitEntriesToInsert.isEmpty()) {
+            unitEntryMapper.insertBatch(unitEntriesToInsert);
         }
 
         unit.setCoreWordCount(coreCount);
@@ -850,9 +877,6 @@ public class LearningPlanService {
         if (vocabulary == null || !vocabulary.isArray() || vocabulary.isEmpty()) {
             throw sceneInvalid("AI 场景结果缺少 vocabulary 数组");
         }
-        Set<String> candidateTerms = candidates.stream()
-                .map(entry -> normalize(entry.effectiveTerm()))
-                .collect(Collectors.toSet());
         int coreCount = LearningConstants.ZERO;
         List<JsonNode> result = new ArrayList<>();
         Set<String> seen = new HashSet<>();
@@ -864,20 +888,17 @@ public class LearningPlanService {
             }
             String tier = normalizeTier(text(word, "tier"));
             if (LearningConstants.ScenePlan.TIER_CORE.equals(tier)) {
-                if (!candidateTerms.contains(normalized)) {
-                    throw sceneInvalid("AI 返回了不在候选词表中的核心词: " + term);
-                }
                 coreCount++;
             }
             result.add(word);
         }
-        int expectedCoreCount = Math.min(targetWordCount, candidates.size());
+        int requiredMinimum = Math.min(LearningConstants.ScenePlan.MIN_CORE_WORDS, candidates.size());
+        if (coreCount < requiredMinimum) {
+            throw sceneInvalid("核心词数量不足 " + requiredMinimum + " 个，实际为 " + coreCount + " 个");
+        }
         if (coreCount > LearningConstants.ScenePlan.MAX_CORE_WORDS_PER_UNIT) {
             throw sceneInvalid("单篇场景材料最多包含 "
                     + LearningConstants.ScenePlan.MAX_CORE_WORDS_PER_UNIT + " 个待挑战词，实际为 " + coreCount + " 个");
-        }
-        if (coreCount != expectedCoreCount) {
-            throw sceneInvalid("本篇场景材料应包含 " + expectedCoreCount + " 个待挑战词，实际为 " + coreCount + " 个");
         }
         return result;
     }

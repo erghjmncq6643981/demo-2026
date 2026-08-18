@@ -883,21 +883,24 @@ export function createScenePlanFeature(ctx) {
       const withinPlan = (!planStartKey || key >= planStartKey) && (!planEndKey || key <= planEndKey)
       const units = unitsForDate(plan, key)
       const dayData = dayDataFor(key)
-      if (dayData) {
-        totalScheduled += number(dayData.pendingChallengeCount)
-      } else if (units.length) {
-        totalScheduled += units.reduce((sum, unit) => sum + pendingChallengeWords(unit).length, 0)
+      const generated = number(dayData?.generatedUnitCount) > 0 || units.length > 0
+      if (generated) {
+        const pendingCount = dayData
+          ? number(dayData.pendingChallengeCount)
+          : units.reduce((sum, unit) => sum + pendingChallengeWords(unit).length, 0)
+        totalScheduled += pendingCount
       } else if (withinPlan && key >= todayKey) {
         totalScheduled += suggestedDailyCount
       }
     })
 
     const remainingWords = Math.max(0, number(plan.totalCatalogWords) - number(plan.learnedCoreWords))
+    const rangeLabel = range === 'month' ? '本月预计' : '本周预计'
 
     elements.sceneCalendar.className = `scene-calendar ${range}`
     elements.sceneCalendar.innerHTML = `
       <div class="scene-calendar-summary">
-        <span><strong>${Math.min(remainingWords, totalScheduled)}</strong> 个待挑战词汇</span>
+        <span><strong>${rangeLabel} ${Math.min(remainingWords, totalScheduled)}</strong> 个待挑战词汇（每日目标约 ${suggestedDailyCount} 词）</span>
         <small>点击日期可预览词汇；可提前生成后续场景</small>
       </div>
       <div class="scene-calendar-grid">
@@ -994,44 +997,83 @@ export function createScenePlanFeature(ctx) {
       elements.sceneOverviewUnitsContainer.classList.add('hidden')
       return
     }
-    elements.sceneOverviewUnitsList.innerHTML = dates.flatMap((date) => {
+    elements.sceneOverviewUnitsList.innerHTML = dates.map((date) => {
       const key = dateKey(date)
       const isPast = key < todayKey
       const isToday = key === todayKey
       const units = unitsForDate(plan, key)
-      const rows = units.length ? units : [null]
-      return rows.map((unit) => {
-        const pendingCount = unit ? pendingChallengeWords(unit).length : 0
+
+      if (units.length > 1) {
+        const totalPending = units.reduce((sum, u) => sum + pendingChallengeWords(u).length, 0)
+        const allCompleted = units.every((u) => u.status === 'completed')
+        const statusLabel = allCompleted ? '已完成' : (isToday ? '今日任务' : '待学习')
+        const statusClass = allCompleted ? 'generated' : (isToday ? 'today' : 'generated')
+
         return `
-          <div class="scene-overview-unit-row ${isToday ? 'today' : ''} ${isPast ? 'past' : ''}">
-            <button class="unit-preview-button" type="button" data-preview-date="${key}" ${unit ? `data-preview-unit="${escapeHtml(unit.id)}"` : ''} aria-label="预览 ${unit ? escapeHtml(unit.title || '场景单元') : formatCalendarDate(date, true)} 的待挑战词汇">
-              <span class="unit-date-info">
-                <span class="unit-date">${formatCalendarDate(date, true)}</span>
-                <span class="unit-status-tag ${unit ? 'generated' : 'pending'}">${unit ? unitStatusLabel(unit) : '待生成'}</span>
-              </span>
-              <span class="unit-detail-info">
-                ${unit ? `
-                  <strong class="unit-title">${escapeHtml(unit.title || '场景单元')}</strong>
-                  <span class="unit-words-count">${pendingCount} 个待挑战词汇</span>
-                ` : `
-                  <span class="unit-placeholder-text">场景生成后可预览待挑战词汇</span>
-                `}
-              </span>
-            </button>
-            <div class="unit-action-button">
-              ${unit ? `
-                <button class="primary-button compact-primary" type="button" data-action-learn="${escapeHtml(unit.id)}">
-                  ${unit.status === 'completed' ? '回顾场景' : '开始学习'}
-                </button>
-              ` : `
-                <button class="secondary-button compact" type="button" data-action-generate="${escapeHtml(plan.id)}" data-recommended-date="${key}" ${plan.status !== 'active' ? 'disabled' : ''}>
-                  生成场景
-                </button>
-              `}
+          <div class="scene-overview-day-group ${isToday ? 'today' : ''} ${isPast ? 'past' : ''}">
+            <div class="day-group-header">
+              <div class="day-group-date-info">
+                <span class="day-group-date">${formatCalendarDate(date, true)}</span>
+                <span class="unit-status-tag ${statusClass}">${statusLabel}</span>
+              </div>
+              <span class="day-group-meta">共 ${units.length} 篇场景材料 · ${totalPending} 个待挑战词汇</span>
+            </div>
+            <div class="day-group-units">
+              ${units.map((unit, idx) => {
+                const pendingCount = pendingChallengeWords(unit).length
+                return `
+                  <div class="day-unit-sub-row">
+                    <button class="unit-preview-button" type="button" data-preview-date="${key}" data-preview-unit="${escapeHtml(unit.id)}" aria-label="预览第 ${idx + 1} 篇 ${escapeHtml(unit.title || '场景单元')} 的待挑战词汇">
+                      <span class="unit-index-badge">篇章 ${idx + 1}/${units.length}</span>
+                      <span class="unit-detail-info">
+                        <strong class="unit-title">${escapeHtml(unit.title || '场景单元')}</strong>
+                        <span class="unit-words-count">${pendingCount} 个待挑战词汇 · ${unitStatusLabel(unit)}</span>
+                      </span>
+                    </button>
+                    <div class="unit-action-button">
+                      <button class="primary-button compact-primary" type="button" data-action-learn="${escapeHtml(unit.id)}">
+                        ${unit.status === 'completed' ? '回顾场景' : '开始学习'}
+                      </button>
+                    </div>
+                  </div>
+                `
+              }).join('')}
             </div>
           </div>
         `
-      })
+      }
+
+      const unit = units.length === 1 ? units[0] : null
+      const pendingCount = unit ? pendingChallengeWords(unit).length : 0
+      return `
+        <div class="scene-overview-unit-row ${isToday ? 'today' : ''} ${isPast ? 'past' : ''}">
+          <button class="unit-preview-button" type="button" data-preview-date="${key}" ${unit ? `data-preview-unit="${escapeHtml(unit.id)}"` : ''} aria-label="预览 ${unit ? escapeHtml(unit.title || '场景单元') : formatCalendarDate(date, true)} 的待挑战词汇">
+            <span class="unit-date-info">
+              <span class="unit-date">${formatCalendarDate(date, true)}</span>
+              <span class="unit-status-tag ${unit ? 'generated' : 'pending'}">${unit ? unitStatusLabel(unit) : '待生成'}</span>
+            </span>
+            <span class="unit-detail-info">
+              ${unit ? `
+                <strong class="unit-title">${escapeHtml(unit.title || '场景单元')}</strong>
+                <span class="unit-words-count">${pendingCount} 个待挑战词汇</span>
+              ` : `
+                <span class="unit-placeholder-text">场景生成后可预览待挑战词汇</span>
+              `}
+            </span>
+          </button>
+          <div class="unit-action-button">
+            ${unit ? `
+              <button class="primary-button compact-primary" type="button" data-action-learn="${escapeHtml(unit.id)}">
+                ${unit.status === 'completed' ? '回顾场景' : '开始学习'}
+              </button>
+            ` : `
+              <button class="secondary-button compact" type="button" data-action-generate="${escapeHtml(plan.id)}" data-recommended-date="${key}" ${plan.status !== 'active' ? 'disabled' : ''}>
+                生成场景
+              </button>
+            `}
+          </div>
+        </div>
+      `
     }).join('')
 
     elements.sceneOverviewUnitsList.querySelectorAll('[data-preview-date]').forEach((row) => {
@@ -2072,6 +2114,7 @@ export function createScenePlanFeature(ctx) {
   let endPickerInited = false
 
   function openScenePlanModal(planId = null) {
+    const targetPlanId = (typeof planId === 'string' || typeof planId === 'number') && String(planId).trim() ? planId : null
     renderSourceOptions()
     
     const startPickerEl = document.getElementById('scenePlanStartTimePicker')
@@ -2086,10 +2129,10 @@ export function createScenePlanFeature(ctx) {
       endPickerInited = true
     }
 
-    state.currentPlanEditId = planId
+    state.currentPlanEditId = targetPlanId
 
-    if (planId) {
-      const plan = asArray(state.learningPlans).find((item) => sameId(item.id, planId))
+    if (targetPlanId) {
+      const plan = asArray(state.learningPlans).find((item) => sameId(item.id, targetPlanId))
       if (!plan) return
 
       if (elements.scenePlanModalTitle) {
@@ -2105,6 +2148,9 @@ export function createScenePlanFeature(ctx) {
       elements.scenePlanNameInput.value = plan.name || ''
       elements.scenePlanPurposeInput.value = plan.learningPurpose || ''
       elements.scenePlanModelSelect.value = plan.modelConfigId || ''
+      if (elements.scenePlanWordbookSelect) {
+        elements.scenePlanWordbookSelect.value = String(plan.wordbookId || '')
+      }
 
       if (elements.scenePlanStartTimeInput) {
         elements.scenePlanStartTimeInput.value = plan.startTime || ''
@@ -2146,6 +2192,9 @@ export function createScenePlanFeature(ctx) {
       elements.scenePlanNameInput.value = selected ? `${selected.catalogName}学习计划` : ''
       elements.scenePlanPurposeInput.value = selected?.learningPurpose || ''
       elements.scenePlanModelSelect.value = ''
+      if (elements.scenePlanWordbookSelect) {
+        elements.scenePlanWordbookSelect.value = String(state.currentWordbookId || '')
+      }
 
       if (elements.scenePlanStartTimeInput) {
         elements.scenePlanStartTimeInput.value = ''
@@ -2197,6 +2246,7 @@ export function createScenePlanFeature(ctx) {
     }
     const startTime = elements.scenePlanStartTimeInput?.value || null
     const endTime = elements.scenePlanEndTimeInput?.value || null
+    const wordbookId = elements.scenePlanWordbookSelect?.value || null
 
     if (state.currentPlanEditId) {
       setButtonLoading(elements.createScenePlanBtn, true, '保存中...')
@@ -2211,6 +2261,7 @@ export function createScenePlanFeature(ctx) {
             plan.learningPurpose = learningPurpose
             plan.startTime = startTime
             plan.endTime = endTime
+            plan.wordbookId = wordbookId || plan.wordbookId
             plan.modelConfigId = modelConfigId || null
             if (status) plan.status = status
           }
@@ -2220,6 +2271,7 @@ export function createScenePlanFeature(ctx) {
             body: JSON.stringify({
               name,
               learningPurpose,
+              wordbookId: wordbookId || null,
               modelConfigId: modelConfigId || null,
               startTime,
               endTime,
@@ -2258,6 +2310,7 @@ export function createScenePlanFeature(ctx) {
           catalog,
           name,
           learningPurpose,
+          wordbookId: wordbookId || null,
           startTime,
           endTime,
           status: isFuture ? 'not_started' : 'active',
@@ -2270,6 +2323,7 @@ export function createScenePlanFeature(ctx) {
           method: 'POST',
           body: JSON.stringify({
             catalogVersionId: catalogVersionId,
+            wordbookId: wordbookId || null,
             name,
             learningPurpose,
             modelConfigId: modelConfigId || null,
