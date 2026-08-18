@@ -62,6 +62,8 @@ export function bindAppEvents(ctx) {
     backToSceneReading,
     backToSceneOverview,
     changeSceneCalendarRange,
+    changeSceneCalendarOffset,
+    resetSceneCalendar,
     changeSelectedScenePlan,
     pauseScenePlan,
     resumeScenePlan,
@@ -257,6 +259,9 @@ elements.scenePlanSelect?.addEventListener('change', () => changeSelectedScenePl
 document.querySelectorAll('[data-calendar-range]').forEach((button) => {
   button.addEventListener('click', () => changeSceneCalendarRange(button.dataset.calendarRange))
 })
+elements.sceneCalendarPreviousBtn?.addEventListener('click', () => changeSceneCalendarOffset(-1))
+elements.sceneCalendarTodayBtn?.addEventListener('click', resetSceneCalendar)
+elements.sceneCalendarNextBtn?.addEventListener('click', () => changeSceneCalendarOffset(1))
 elements.sceneStartLearningBtn?.addEventListener('click', startSceneLearning)
 elements.sceneBackToPlanBtn?.addEventListener('click', backToSceneOverview)
 elements.sceneVocabularyChallengeBtn?.addEventListener('click', showSceneChallengeWords)

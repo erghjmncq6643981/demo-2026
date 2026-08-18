@@ -642,7 +642,9 @@ export function createScenePlanFeature(ctx) {
       state.currentSceneWordId = firstIncomplete?.id || null
       state.sceneChallengeStage = options.keepStage ? state.sceneChallengeStage : 'overview'
       assessmentFeedback = null
+      if (!state.sceneCalendarCursorDate) state.sceneCalendarCursorDate = localDateKey()
       renderPlanList()
+      await loadCalendarData(plan)
       renderCurrentScene()
       if (!options.quiet) logEvent('learning', '切换场景学习计划', plan.name)
     } catch (error) {
@@ -667,6 +669,82 @@ export function createScenePlanFeature(ctx) {
 
   function dateKey(date) {
     return localDateKey(date)
+  }
+
+  function dateFromKey(key) {
+    const [year, month, day] = String(key || '').split('-').map(Number)
+    if (![year, month, day].every(Number.isFinite)) return new Date()
+    return new Date(year, month - 1, day, 12)
+  }
+
+  function startOfWeek(date) {
+    const result = new Date(date)
+    const day = result.getDay()
+    const offset = day === 0 ? -6 : 1 - day
+    result.setDate(result.getDate() + offset)
+    result.setHours(12, 0, 0, 0)
+    return result
+  }
+
+  function calendarDates() {
+    const anchor = dateFromKey(state.sceneCalendarCursorDate || localDateKey())
+    if (state.sceneCalendarRange === 'month') {
+      const first = new Date(anchor.getFullYear(), anchor.getMonth(), 1, 12)
+      const gridStart = startOfWeek(first)
+      return Array.from({ length: 42 }, (_, index) => addDays(gridStart, index))
+    }
+    const first = startOfWeek(anchor)
+    return Array.from({ length: 7 }, (_, index) => addDays(first, index))
+  }
+
+  function calendarTitle(dates) {
+    if (!dates.length) return '本周'
+    if (state.sceneCalendarRange === 'month') {
+      const anchor = dateFromKey(state.sceneCalendarCursorDate || localDateKey())
+      return `${anchor.getFullYear()}年${anchor.getMonth() + 1}月`
+    }
+    const start = dates[0]
+    const end = dates[dates.length - 1]
+    const endYear = start.getFullYear() === end.getFullYear() ? '' : `${end.getFullYear()}年`
+    return `${start.getFullYear()}年${start.getMonth() + 1}月${start.getDate()}日 - ${endYear}${end.getMonth() + 1}月${end.getDate()}日`
+  }
+
+  async function loadCalendarData(plan) {
+    if (!plan || state.preview || !state.token) {
+      state.sceneCalendarData = null
+      return null
+    }
+    const dates = calendarDates()
+    const from = dateKey(dates[0])
+    const to = dateKey(dates[dates.length - 1])
+    try {
+      const calendarData = await request(
+        `/api/v1/learning/plans/${encodeURIComponent(plan.id)}/calendar?from=${from}&to=${to}`,
+      )
+      const currentDates = calendarDates()
+      const isCurrentRange = sameId(state.currentLearningPlan?.id, plan.id)
+        && dateKey(currentDates[0]) === from
+        && dateKey(currentDates[currentDates.length - 1]) === to
+      if (isCurrentRange) state.sceneCalendarData = calendarData
+      return calendarData
+    } catch (error) {
+      const currentDates = calendarDates()
+      if (sameId(state.currentLearningPlan?.id, plan.id)
+          && dateKey(currentDates[0]) === from
+          && dateKey(currentDates[currentDates.length - 1]) === to) {
+        state.sceneCalendarData = null
+      }
+      logEvent('error', '学习日历加载失败', error.message)
+      return null
+    }
+  }
+
+  async function refreshCalendarData(plan) {
+    const planId = plan?.id
+    await loadCalendarData(plan)
+    if (planId && state.currentLearningPlan && sameId(state.currentLearningPlan.id, planId)) {
+      renderCalendar(state.currentLearningPlan)
+    }
   }
 
   function formatCalendarDate(date, withMonth = false) {
@@ -752,31 +830,28 @@ export function createScenePlanFeature(ctx) {
     if (!plan) {
       elements.sceneCalendar.className = 'scene-calendar empty'
       elements.sceneCalendar.textContent = '选择计划后查看学习日历'
+      if (elements.sceneCalendarTitle) elements.sceneCalendarTitle.textContent = '本周'
       renderOverviewUnits(null)
       return
     }
     const range = state.sceneCalendarRange || 'week'
-    const today = new Date()
-    today.setHours(12, 0, 0, 0)
-    let dates = []
-    if (range === 'day') {
-      dates = [today]
-    } else if (range === 'month') {
-      const firstDay = new Date(today.getFullYear(), today.getMonth(), 1, 12)
-      const totalDays = new Date(today.getFullYear(), today.getMonth() + 1, 0).getDate()
-      dates = Array.from({ length: totalDays }, (_, index) => addDays(firstDay, index))
-    } else {
-      dates = Array.from({ length: 7 }, (_, index) => addDays(today, index))
-    }
+    const today = dateFromKey(localDateKey())
+    const dates = calendarDates()
     const planStartKey = plan.startTime ? plan.startTime.split('T')[0] : null
     const planEndKey = plan.endTime ? plan.endTime.split('T')[0] : null
-    dates = dates.filter((date) => {
-      const key = dateKey(date)
-      if (planStartKey && key < planStartKey) return false
-      if (planEndKey && key > planEndKey) return false
-      return true
-    })
     const todayKey = dateKey(today)
+
+    if (elements.sceneCalendarTitle) elements.sceneCalendarTitle.textContent = calendarTitle(dates)
+    if (elements.sceneCalendarPreviousBtn) {
+      const label = range === 'month' ? '上个月' : '上一周'
+      elements.sceneCalendarPreviousBtn.title = label
+      elements.sceneCalendarPreviousBtn.setAttribute('aria-label', label)
+    }
+    if (elements.sceneCalendarNextBtn) {
+      const label = range === 'month' ? '下个月' : '下一周'
+      elements.sceneCalendarNextBtn.title = label
+      elements.sceneCalendarNextBtn.setAttribute('aria-label', label)
+    }
 
     // Calculate suggestedDailyCount based on remaining unassigned words & days
     const generatedCoreCount = asArray(plan.units).reduce((sum, u) => sum + number(u.coreWordCount), 0)
@@ -799,14 +874,22 @@ export function createScenePlanFeature(ctx) {
     }
     suggestedDailyCount = Math.max(8, Math.min(20, suggestedDailyCount))
 
+    const dayDataFor = (key) => asArray(state.sceneCalendarData)
+      .find((item) => String(item?.date || '').slice(0, 10) === key)
+
     let totalScheduled = 0
     dates.forEach((date) => {
       const key = dateKey(date)
-      if (key < todayKey) return
+      const withinPlan = (!planStartKey || key >= planStartKey) && (!planEndKey || key <= planEndKey)
       const units = unitsForDate(plan, key)
-      totalScheduled += units.length
-        ? units.reduce((sum, unit) => sum + pendingChallengeWords(unit).length, 0)
-        : suggestedDailyCount
+      const dayData = dayDataFor(key)
+      if (dayData) {
+        totalScheduled += number(dayData.pendingChallengeCount)
+      } else if (units.length) {
+        totalScheduled += units.reduce((sum, unit) => sum + pendingChallengeWords(unit).length, 0)
+      } else if (withinPlan && key >= todayKey) {
+        totalScheduled += suggestedDailyCount
+      }
     })
 
     const remainingWords = Math.max(0, number(plan.totalCatalogWords) - number(plan.learnedCoreWords))
@@ -822,22 +905,35 @@ export function createScenePlanFeature(ctx) {
           const key = dateKey(date)
           const isToday = key === todayKey
           const isPast = key < todayKey
-          
+          const withinPlan = (!planStartKey || key >= planStartKey) && (!planEndKey || key <= planEndKey)
           const units = unitsForDate(plan, key)
+          const dayData = dayDataFor(key)
+          const generated = number(dayData?.generatedUnitCount) > 0 || units.length > 0
+          const pendingCount = dayData
+            ? number(dayData.pendingChallengeCount)
+            : units.reduce((sum, unit) => sum + pendingChallengeWords(unit).length, 0)
+          const overdue = number(dayData?.overdueCount) > 0 || (isPast && pendingCount > 0)
 
-          let count = 0
+          let count = pendingCount
           let label = '待挑战词汇'
-          if (units.length) {
-            count = units.reduce((sum, unit) => sum + pendingChallengeWords(unit).length, 0)
-            label = units.every((unit) => unit.status === 'completed') ? '已完成' : '待挑战词汇'
+          if (generated) {
+            label = units.length && units.every((unit) => unit.status === 'completed')
+              ? '已完成'
+              : overdue ? `逾期 ${pendingCount}` : '待挑战词汇'
+          } else if (!withinPlan) {
+            count = 0
+            label = '计划外'
+          } else if (isPast) {
+            count = 0
+            label = '未生成'
           } else {
-            count = isPast ? 0 : suggestedDailyCount
-            label = isPast ? '已跳过' : (isToday ? '待生成' : '待挑战词汇')
+            count = suggestedDailyCount
+            label = isToday ? '待生成' : '预计待挑战'
           }
 
           return `
-            <button class="scene-calendar-day ${isToday ? 'today' : ''} ${isPast ? 'past' : ''}" type="button" data-calendar-preview="${key}" aria-label="预览 ${formatCalendarDate(date, true)} 的待挑战词汇">
-              <span>${range === 'day' ? '今天' : formatCalendarDate(date, range === 'week')}</span>
+            <button class="scene-calendar-day ${isToday ? 'today' : ''} ${isPast ? 'past' : ''} ${!withinPlan ? 'outside-plan' : ''} ${overdue ? 'overdue' : ''}" type="button" data-calendar-preview="${key}" aria-label="预览 ${formatCalendarDate(date, true)} 的待挑战词汇">
+              <span>${range === 'month' ? `${date.getDate()}日` : formatCalendarDate(date, true)}</span>
               <strong>${count}</strong>
               <small>${label}</small>
             </button>
@@ -863,20 +959,8 @@ export function createScenePlanFeature(ctx) {
     }
 
     elements.sceneOverviewUnitsContainer.classList.remove('hidden')
-    const range = state.sceneCalendarRange || 'week'
-    const today = new Date()
-    today.setHours(12, 0, 0, 0)
-    let dates = []
-
-    if (range === 'day') {
-      dates = [today]
-    } else if (range === 'month') {
-      const firstDay = new Date(today.getFullYear(), today.getMonth(), 1, 12)
-      const totalDays = new Date(today.getFullYear(), today.getMonth() + 1, 0).getDate()
-      dates = Array.from({ length: totalDays }, (_, index) => addDays(firstDay, index))
-    } else {
-      dates = Array.from({ length: 7 }, (_, index) => addDays(today, index))
-    }
+    const today = dateFromKey(localDateKey())
+    let dates = calendarDates()
 
     const todayKey = dateKey(today)
 
@@ -1083,9 +1167,34 @@ export function createScenePlanFeature(ctx) {
   }
 
   function changeCalendarRange(range) {
-    if (!['day', 'week', 'month'].includes(range)) return
+    if (!['week', 'month'].includes(range)) return
     state.sceneCalendarRange = range
+    if (!state.sceneCalendarCursorDate) state.sceneCalendarCursorDate = localDateKey()
+    state.sceneCalendarData = null
     renderCalendar(state.currentLearningPlan)
+    void refreshCalendarData(state.currentLearningPlan)
+  }
+
+  function changeCalendarOffset(offset) {
+    const plan = state.currentLearningPlan
+    const anchor = dateFromKey(state.sceneCalendarCursorDate || localDateKey())
+    if (state.sceneCalendarRange === 'month') {
+      anchor.setDate(1)
+      anchor.setMonth(anchor.getMonth() + offset)
+    } else {
+      anchor.setDate(anchor.getDate() + offset * 7)
+    }
+    state.sceneCalendarCursorDate = localDateKey(anchor)
+    state.sceneCalendarData = null
+    renderCalendar(plan)
+    void refreshCalendarData(plan)
+  }
+
+  function resetCalendar() {
+    state.sceneCalendarCursorDate = localDateKey()
+    state.sceneCalendarData = null
+    renderCalendar(state.currentLearningPlan)
+    void refreshCalendarData(state.currentLearningPlan)
   }
 
   function formatPlanDate(dateStr) {
@@ -2357,6 +2466,8 @@ export function createScenePlanFeature(ctx) {
     backToReading,
     backToPlanOverview,
     changeCalendarRange,
+    changeCalendarOffset,
+    resetCalendar,
     changeSelectedPlan,
     pausePlan,
     resumePlan,

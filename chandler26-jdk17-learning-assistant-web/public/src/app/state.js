@@ -54,6 +54,8 @@ export function createInitialState() {
     sceneCardJob: null,
     sceneChallengeStage: 'overview',
     sceneCalendarRange: 'week',
+    sceneCalendarCursorDate: null,
+    sceneCalendarData: null,
     publicVocabularyCatalogs: [],
     currentNoteEntry: null,
     currentRecord: null,

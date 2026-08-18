@@ -2,10 +2,11 @@ package com.chandler.learning.agent.controller.learning;
 
 import com.chandler.learning.agent.domain.dto.learning.LearningAssessmentSubmitRequest;
 import com.chandler.learning.agent.domain.dto.learning.LearningAssessmentSubmitResponse;
+import com.chandler.learning.agent.domain.dto.learning.LearningPlanCalendarDayResponse;
 import com.chandler.learning.agent.domain.dto.learning.LearningPlanCreateRequest;
-import com.chandler.learning.agent.domain.dto.learning.LearningPlanUpdateRequest;
 import com.chandler.learning.agent.domain.dto.learning.LearningPlanNextUnitRequest;
 import com.chandler.learning.agent.domain.dto.learning.LearningPlanResponse;
+import com.chandler.learning.agent.domain.dto.learning.LearningPlanUpdateRequest;
 import com.chandler.learning.agent.domain.dto.learning.LearningPlanUnitEntryResponse;
 import com.chandler.learning.agent.domain.dto.learning.LearningPlanUnitResponse;
 import com.chandler.learning.agent.domain.entity.learning.LearningUser;
@@ -18,6 +19,7 @@ import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
+import org.springframework.format.annotation.DateTimeFormat;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
@@ -25,10 +27,10 @@ import org.springframework.web.bind.annotation.PutMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestHeader;
 import org.springframework.web.bind.annotation.RequestMapping;
+import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 
 import java.time.LocalDate;
-
 import java.util.List;
 
 /**
@@ -79,6 +81,18 @@ public class LearningPlanController {
         LearningUser user = authService.requireUser(authorization);
         return learningPlanService.detail(user.getId(), planId);
     }
+
+    @GetMapping("/{planId}/calendar")
+    @Operation(summary = "查询学习计划日历汇总")
+    public List<LearningPlanCalendarDayResponse> calendar(
+            @RequestHeader(value = "Authorization", required = false) String authorization,
+            @PathVariable Long planId,
+            @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate from,
+            @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate to) {
+        LearningUser user = authService.requireUser(authorization);
+        return learningPlanService.calendar(user.getId(), planId, from, to);
+    }
+
     @PostMapping("/{planId}/pause")
     @Operation(summary = "暂停场景学习计划")
     public LearningPlanResponse pause(

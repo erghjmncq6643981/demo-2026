@@ -354,6 +354,8 @@ bindAppEvents({
   backToSceneReading: scenePlan.backToReading,
   backToSceneOverview: scenePlan.backToPlanOverview,
   changeSceneCalendarRange: scenePlan.changeCalendarRange,
+  changeSceneCalendarOffset: scenePlan.changeCalendarOffset,
+  resetSceneCalendar: scenePlan.resetCalendar,
   changeSelectedScenePlan: scenePlan.changeSelectedPlan,
   openWordbookModal: profile.openWordbookModal,
   closeWordbookModal: profile.closeWordbookModal,

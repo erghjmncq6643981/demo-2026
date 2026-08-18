@@ -2735,9 +2735,24 @@ input[type="range"] {
   width: min(420px, 100%);
 }
 
+.scene-calendar-navigation {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+}
+
+.scene-calendar-navigation strong {
+  min-width: 180px;
+  color: var(--text);
+  font-size: 13px;
+  text-align: center;
+  white-space: nowrap;
+}
+
 .scene-range-control {
   display: grid;
-  grid-template-columns: repeat(3, 42px);
+  grid-template-columns: repeat(2, 42px);
   gap: 3px;
   padding: 3px;
   border: 1px solid var(--line);
@@ -2914,10 +2929,6 @@ input[type="range"] {
   min-width: 0;
 }
 
-.scene-calendar.day .scene-calendar-grid {
-  grid-template-columns: minmax(180px, 320px);
-}
-
 .scene-calendar.month .scene-calendar-grid {
   grid-template-columns: repeat(7, minmax(64px, 1fr));
 }
@@ -2952,6 +2963,14 @@ input[type="range"] {
 
 .scene-calendar-day.past {
   opacity: 0.56;
+}
+
+.scene-calendar-day.outside-plan {
+  opacity: 0.32;
+}
+
+.scene-calendar-day.overdue {
+  border-color: rgba(251, 113, 133, 0.6);
 }
 
 .scene-calendar-day span,
@@ -4234,7 +4253,18 @@ input.sr-only:disabled + .file-upload-trigger {
   }
 
   .scene-range-control {
-    grid-template-columns: repeat(3, minmax(0, 1fr));
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .scene-calendar-navigation {
+    justify-content: space-between;
+    width: 100%;
+  }
+
+  .scene-calendar-navigation strong {
+    min-width: 0;
+    flex: 1;
+    font-size: 12px;
   }
 
   .scene-toolbar-actions,
@@ -4270,10 +4300,6 @@ input.sr-only:disabled + .file-upload-trigger {
   .scene-calendar-grid,
   .scene-calendar.month .scene-calendar-grid {
     grid-template-columns: repeat(4, minmax(58px, 1fr));
-  }
-
-  .scene-calendar.day .scene-calendar-grid {
-    grid-template-columns: 1fr;
   }
 
   .scene-calendar-day {

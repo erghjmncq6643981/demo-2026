@@ -345,8 +345,13 @@
                 学习计划
                 <select id="scenePlanSelect"></select>
               </label>
+              <div class="scene-calendar-navigation" aria-label="日历导航">
+                <button class="icon-action-button" id="sceneCalendarPreviousBtn" type="button" title="上一周" aria-label="上一周">←</button>
+                <button class="secondary-button compact" id="sceneCalendarTodayBtn" type="button">本周</button>
+                <strong id="sceneCalendarTitle">本周</strong>
+                <button class="icon-action-button" id="sceneCalendarNextBtn" type="button" title="下一周" aria-label="下一周">→</button>
+              </div>
               <div class="scene-range-control" role="group" aria-label="计划预览范围">
-                <button type="button" data-calendar-range="day">天</button>
                 <button class="active" type="button" data-calendar-range="week">周</button>
                 <button type="button" data-calendar-range="month">月</button>
               </div>

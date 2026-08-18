@@ -7,6 +7,7 @@ import com.chandler.learning.agent.domain.dto.AgentChatResponse;
 import com.chandler.learning.agent.domain.dto.learning.LearningAssessmentSubmitRequest;
 import com.chandler.learning.agent.domain.dto.learning.LearningAssessmentSubmitResponse;
 import com.chandler.learning.agent.domain.dto.learning.LearningPlanCreateRequest;
+import com.chandler.learning.agent.domain.dto.learning.LearningPlanCalendarDayResponse;
 import com.chandler.learning.agent.domain.dto.learning.LearningPlanResponse;
 import com.chandler.learning.agent.domain.dto.learning.LearningPlanUpdateRequest;
 import com.chandler.learning.agent.domain.dto.learning.LearningPlanUnitEntryResponse;
@@ -52,6 +53,7 @@ import org.springframework.util.StringUtils;
 
 import java.time.LocalDate;
 import java.time.LocalDateTime;
+import java.time.temporal.ChronoUnit;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.HashSet;
@@ -233,6 +235,57 @@ public class LearningPlanService {
 
     public LearningPlanResponse detail(Long userId, Long planId) {
         return toPlanResponse(requirePlan(userId, planId), true);
+    }
+
+    /**
+     * 查询计划在指定日期范围内的日历汇总，过去日期也会返回，便于查看遗漏任务。
+     */
+    public List<LearningPlanCalendarDayResponse> calendar(Long userId, Long planId,
+                                                          LocalDate from, LocalDate to) {
+        LearningPlan plan = requirePlan(userId, planId);
+        LocalDate today = LocalDate.now();
+        LocalDate resolvedFrom = from == null ? today.with(java.time.DayOfWeek.MONDAY) : from;
+        LocalDate resolvedTo = to == null ? resolvedFrom.plusDays(6) : to;
+        if (resolvedTo.isBefore(resolvedFrom)) {
+            throw LearningAssistantException.badRequest(
+                    LearningConstants.ErrorCode.LEARNING_PLAN_STATE_ERROR,
+                    "日历结束日期不能早于开始日期");
+        }
+        if (ChronoUnit.DAYS.between(resolvedFrom, resolvedTo) > 62) {
+            throw LearningAssistantException.badRequest(
+                    LearningConstants.ErrorCode.LEARNING_PLAN_STATE_ERROR,
+                    "单次日历查询不能超过 63 天");
+        }
+        List<LearningPlanUnit> units = unitMapper.selectList(new LambdaQueryWrapper<LearningPlanUnit>()
+                .eq(LearningPlanUnit::getPlanId, plan.getId())
+                .ge(LearningPlanUnit::getRecommendedDate, resolvedFrom)
+                .le(LearningPlanUnit::getRecommendedDate, resolvedTo)
+                .eq(LearningPlanUnit::getDeleted, false)
+                .orderByAsc(LearningPlanUnit::getRecommendedDate)
+                .orderByAsc(LearningPlanUnit::getUnitNo));
+        Map<LocalDate, List<LearningPlanUnitResponse>> unitsByDate = units.stream()
+                .map(this::toUnitResponse)
+                .collect(Collectors.groupingBy(unit -> unit.getRecommendedDate(), LinkedHashMap::new,
+                        Collectors.toList()));
+        List<LearningPlanCalendarDayResponse> result = new ArrayList<>();
+        for (LocalDate date = resolvedFrom; !date.isAfter(resolvedTo); date = date.plusDays(1)) {
+            List<LearningPlanUnitResponse> dateUnits = unitsByDate.getOrDefault(date, List.of());
+            int planned = dateUnits.stream().mapToInt(unit -> value(unit.getCoreWordCount())).sum();
+            int pending = dateUnits.stream().mapToInt(unit -> pendingCoreCount(unit)).sum();
+            int completed = (int) dateUnits.stream()
+                    .filter(unit -> LearningConstants.ScenePlan.UNIT_COMPLETED.equals(unit.getStatus()))
+                    .count();
+            LearningPlanCalendarDayResponse day = new LearningPlanCalendarDayResponse();
+            day.setDate(date);
+            day.setPlannedWordCount(planned);
+            day.setPendingChallengeCount(pending);
+            day.setGeneratedUnitCount(dateUnits.size());
+            day.setCompletedUnitCount(completed);
+            day.setOverdueCount(date.isBefore(today) ? pending : LearningConstants.ZERO);
+            day.setUnits(dateUnits);
+            result.add(day);
+        }
+        return result;
     }
 
     /**
@@ -1048,6 +1101,21 @@ public class LearningPlanService {
                     "场景日期不能晚于学习计划结束日期");
         }
         return resolved;
+    }
+
+    private int pendingCoreCount(LearningPlanUnitResponse unit) {
+        if (unit.getWords() == null || unit.getWords().isEmpty()) {
+            return Math.max(LearningConstants.ZERO,
+                    value(unit.getCoreWordCount()) - value(unit.getCompletedCoreCount()));
+        }
+        return (int) unit.getWords().stream()
+                .filter(word -> LearningConstants.ScenePlan.TIER_CORE.equals(word.getTier()))
+                .filter(word -> {
+                    int required = LearningConstants.ScenePlan.MASTERY_SPELLING.equals(word.getMasteryRequirement())
+                            ? 3 : 1;
+                    return word.getPassedAssessments() == null || word.getPassedAssessments().size() < required;
+                })
+                .count();
     }
 
     private LearningPlanUnit findNextIncompleteUnit(Long planId, Long excludedUnitId) {
