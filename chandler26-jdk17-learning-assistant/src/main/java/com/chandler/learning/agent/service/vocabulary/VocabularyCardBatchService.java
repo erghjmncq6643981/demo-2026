@@ -259,7 +259,7 @@ public class VocabularyCardBatchService {
                         .eq(VocabularyCardGenerationJobItem::getJobId, jobId)
                         .in(VocabularyCardGenerationJobItem::getStatus,
                                 List.of(LearningConstants.VocabularyCard.ITEM_PENDING,
-                                        LearningConstants.VocabularyCard.ITEM_RUNNING,
+                                        LearningConstants.VocabularyCard.ITEM_GENERATING,
                                         LearningConstants.VocabularyCard.ITEM_FAILED))
                         .eq(VocabularyCardGenerationJobItem::getDeleted, false)
                         .orderByAsc(VocabularyCardGenerationJobItem::getCreateTime));

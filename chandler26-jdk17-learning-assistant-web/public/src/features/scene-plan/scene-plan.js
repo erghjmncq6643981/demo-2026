@@ -2271,7 +2271,7 @@ export function createScenePlanFeature(ctx) {
       } else {
         state.currentVocabularyAnalysis = await request(`/api/v1/vocabulary-catalogs/${encodeURIComponent(current.catalogVersionId)}/analysis`, {
           method: 'POST',
-          body: JSON.stringify({ executionMode: 'immediate', batchSize: 100 }),
+          body: JSON.stringify({ executionMode: 'immediate', batchSize: 25 }),
         })
       }
       renderVocabularyAnalysis()
