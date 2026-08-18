@@ -2,8 +2,8 @@
 
 ## Scope
 
-- Backend project: `/Users/chandler/Documents/repository/github/demo-2026/chandler26-jdk17-learning-assistant`
-- Frontend project: `/Users/chandler/Documents/repository/github/demo-2026/chandler26-jdk17-learning-assistant-web`
+- Backend project: `chandler26-jdk17-learning-assistant`
+- Frontend project: `chandler26-jdk17-learning-assistant-web`
 - Treat both projects as one product. Changes in one side usually need API, DTO, SQL, or UI checks on the other side.
 
 ## General
@@ -13,6 +13,8 @@
 - Use `apply_patch` for manual file edits.
 - Keep implementation scoped to the requested behavior. Avoid opportunistic refactors.
 - Never hardcode real API keys in source, docs, or SQL. Model API keys must be stored encrypted by the backend.
+- Before editing a cross-layer feature, inspect both projects and the relevant DTO, controller, service, mapper, SQL, and frontend module.
+- Do not stage or commit unrelated user changes. Preserve a dirty worktree and confirm the staged scope before publishing.
 
 ## Documentation
 
@@ -37,10 +39,27 @@
 
 - Use Spring Security + JWT for authenticated APIs.
 - Throw `LearningAssistantException` or a project-specific runtime exception instead of generic runtime errors.
-- System/runtime logs should be debug-level; business logs should be info-level and readable by business users, for example: `用户「小明」把单词「abandon」添加到单词本「默认单词本」`.
+- Technical diagnostics and stack traces should be debug-level; business events should be info-level and readable by business users, for example: `用户「小明」把单词「abandon」添加到单词本「默认单词本」`.
 - Important user-facing operations should write both server logs and system log table records where appropriate.
 - Avoid magic values. Put shared constants in `LearningConstants` only when the value has clear business meaning.
 - Use MyBatis-Plus wrappers and existing mapper/service patterns.
+
+## Engineering Governance
+
+- Keep database transactions short. Never hold a database transaction open while calling an AI provider, HTTP service, or other slow external dependency.
+- Split workflows into persistence and external-work phases. Persist the request/job first, publish an event inside that transaction, and execute external work after commit on the bounded `aiTaskExecutor`.
+- Long-running or retryable work must have explicit Job/Item state, an atomic claim from `pending` to `running`, idempotent writes, terminal success/partial-failure/failure states, and retry of failed items only.
+- Protect duplicate submissions at the business-resource boundary, preferably by locking the scene/unit row or using an equivalent database uniqueness invariant.
+- Prefer one aggregate SQL query over per-row queries when a list includes counts or related summaries. Use batch insert/update SQL for homogeneous writes and chunk large batches; do not introduce N+1 loops in services.
+- Put custom MyBatis SQL in `src/main/resources/mapper/*.xml`; keep simple CRUD and conditional queries in MyBatis-Plus wrappers. Every custom SQL must have a mapper method, clear parameters, and XML validation coverage.
+- If a schema change may already have been executed, add a new numbered migration instead of rewriting migration history. Keep clean-database schema, seed data, and upgrade migrations separate.
+- `LearningConstants.ErrorCode` is the single source for stable error codes, HTTP status, and default Chinese messages. Prefer `LearningAssistantException.*(code)`; only override a message when dynamic context is genuinely useful.
+- Business logs use info-level structured events with user/business IDs and outcomes. Provider errors, response bodies, prompts, API keys, and stack traces must be truncated, masked, or debug-only. Preserve request trace/MDC context in async work.
+- Every AI request must set an `AiInvocationScene` from the enum. Reuse one `ai_chat_session` for one learning scene; do not create a session per request. Validate prompt placeholders before saving templates, then parse and enforce business invariants on every structured response.
+- AI audit records default to metadata/token/latency summaries. Storing prompt or response content requires an explicit controlled setting and a bounded length; audit persistence failure must not replace the model result.
+- Preserve learning data invariants: generated scene materials are immutable context, unfinished words stay in their original scene, candidates exclude words already arranged in the same plan, and daily core words are evenly split into materials of at most 50 words.
+- Add Chinese comments to public DTO/entity fields and complex business boundaries. Do not add repetitive comments to trivial private accessors or obvious conversions.
+- Remove dependencies only after checking actual source usage and run dependency analysis after dependency changes. Prefer existing Hutool/Guava utilities where they materially simplify code; do not add a helper library for trivial code.
 
 ## AI Agent And Vocabulary
 
@@ -54,13 +73,19 @@
 
 ## Database
 
-- MySQL init SQL lives under `chandler26-jdk17-learning-assistant/src/main/resources/db/init`.
+- MySQL init SQL lives under `chandler26-jdk17-learning-assistant/src/main/resources/db/init` and complete schemas under `chandler26-jdk17-learning-assistant/src/main/resources/db/schema`.
 - Keep init SQL grouped by domain and easy to execute from a clean database.
 - If the user has already executed an SQL file and a new schema change is needed, create a new SQL file instead of silently editing executed migration intent.
 - Table and column comments should be clear enough for future maintenance.
+- New-database initialization order and existing-database migration order must stay documented in `src/main/resources/db/README.md`.
+- Any new unique constraint, status value, generated job table, or batch SQL must be reflected in both the current schema and the upgrade migration strategy.
 
 ## Verification
 
 - Backend: run `mvn -q -DskipTests compile` at minimum after Java changes.
+- Backend tests: run `mvn -q test`; after dependency changes also run `mvn -q dependency:analyze -DignoreNonCompile`.
+- Mapper XML: parse every changed XML file before declaring the change complete.
 - Frontend: run `node --check` on changed JS modules at minimum.
 - For visual or interaction changes, verify through the browser or a concrete DOM/style check, including mobile-sensitive surfaces when relevant.
+- For asynchronous or database-sensitive flows, verify the full state transition with a real database when available. If the environment has no database or model provider, state that limitation explicitly instead of claiming end-to-end verification.
+- Before commit, run `git diff --check`, inspect `git diff --cached --stat`, and confirm the staged files are within the requested scope.
