@@ -462,6 +462,7 @@ public final class LearningConstants {
         public static final int MAX_CORE_WORDS_PER_UNIT = 50;
         public static final int RECOGNITION_PASS_SCORE = 70;
         public static final int SPELLING_PASS_SCORE = 70;
+        public static final int GENERATION_LOCK_MINUTES = 30;
 
         private ScenePlan() {
         }
@@ -514,6 +515,9 @@ public final class LearningConstants {
         public static final int DEFAULT_MAX_RETRY_COUNT = 2;
         public static final int DEFAULT_PAGE_SIZE = 50;
         public static final int MAX_PAGE_SIZE = 100;
+        public static final int RUNNING_TIMEOUT_MINUTES = 30;
+        public static final int QUEUE_RETRY_DELAY_SECONDS = 10;
+        public static final String RUNNING_TIMEOUT_MESSAGE = "AI 任务执行超时，已转为失败，可手动重试";
 
         private AiTask() {
         }
@@ -526,6 +530,7 @@ public final class LearningConstants {
         public static final String STATUS_COMPLETED = "completed";
         public static final String STATUS_PARTIAL_FAILED = "partial_failed";
         public static final String STATUS_FAILED = "failed";
+        public static final String STATUS_CANCELLED = "cancelled";
         public static final String ITEM_PENDING = "pending";
         public static final String ITEM_RUNNING = "running";
         public static final String ITEM_COMPLETED = "completed";
@@ -630,6 +635,7 @@ public final class LearningConstants {
         LEARNING_SCENE_MATERIAL_NOT_FOUND(HttpStatus.NOT_FOUND, "场景材料不存在"),
         AI_ASYNC_TASK_NOT_FOUND(HttpStatus.NOT_FOUND, "AI 异步任务不存在"),
         AI_ASYNC_TASK_EXECUTION_MODE_INVALID(HttpStatus.BAD_REQUEST, "AI 任务执行方式无效"),
+        LEARNING_PLAN_GENERATION_IN_PROGRESS(HttpStatus.CONFLICT, "该学习计划正在生成场景材料，请稍后查看"),
         LEARNING_PLAN_UNIT_ACTIVE(HttpStatus.BAD_REQUEST, "当前已有正在学习的场景"),
         LEARNING_PLAN_UNIT_INCOMPLETE(HttpStatus.BAD_REQUEST, "当前场景尚未完成"),
         LEARNING_PLAN_NO_WORDS(HttpStatus.BAD_REQUEST, "词表中没有可学习词汇"),

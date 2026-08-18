@@ -43,6 +43,7 @@ import java.util.regex.Pattern;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.LinkedHashMap;
+import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
@@ -58,6 +59,11 @@ import org.springframework.dao.DuplicateKeyException;
 @Service
 @RequiredArgsConstructor
 public class VocabularyCatalogAnalysisService {
+
+    /** 单次 AI 返回可能只覆盖部分词条，未覆盖项留待下次分析。 */
+    record AnalysisParseResult(List<VocabularyCatalogEntryAnalysis> analyses,
+                               List<Long> unresolvedEntryIds) {
+    }
 
     private final VocabularyCatalogMapper catalogMapper;
     private final VocabularyCatalogVersionMapper versionMapper;
@@ -162,7 +168,8 @@ public class VocabularyCatalogAnalysisService {
                         LearningConstants.VocabularyAnalysis.STATUS_PENDING,
                         LearningConstants.VocabularyAnalysis.STATUS_RUNNING,
                         LearningConstants.VocabularyAnalysis.STATUS_PARTIAL_FAILED,
-                        LearningConstants.VocabularyAnalysis.STATUS_FAILED))
+                        LearningConstants.VocabularyAnalysis.STATUS_FAILED,
+                        LearningConstants.VocabularyAnalysis.STATUS_CANCELLED))
                 .set(VocabularyCatalogAnalysisJob::getStatus, LearningConstants.VocabularyAnalysis.STATUS_RUNNING)
                 .set(VocabularyCatalogAnalysisJob::getFailedCount, LearningConstants.ZERO)
                 .set(VocabularyCatalogAnalysisJob::getStartedTime, LocalDateTime.now())
@@ -173,6 +180,10 @@ public class VocabularyCatalogAnalysisService {
         }
 
         job = jobMapper.selectById(jobId);
+        if (isAnalysisCancelled(job)) {
+            markAnalysisCancelled(job, null, value(job.getSuccessCount()), value(job.getFailedCount()));
+            return;
+        }
         List<VocabularyCatalogAnalysisBatch> batches = batchMapper.selectList(
                 new LambdaQueryWrapper<VocabularyCatalogAnalysisBatch>()
                         .eq(VocabularyCatalogAnalysisBatch::getJobId, jobId)
@@ -185,38 +196,71 @@ public class VocabularyCatalogAnalysisService {
         int successCount = value(job.getSuccessCount());
         int failedCount = value(job.getFailedCount());
         for (VocabularyCatalogAnalysisBatch batch : batches) {
+            if (isAnalysisCancelled(job)) {
+                markAnalysisCancelled(job, batch, successCount, failedCount);
+                return;
+            }
             markBatchRunning(batch, userId);
+            List<Long> unresolvedEntryIds = new ArrayList<>();
+            int batchSuccessCount = LearningConstants.ZERO;
+            int batchFailedCount = LearningConstants.ZERO;
             try {
                 List<Long> entryIds = readIds(batch.getEntryIdsJson());
                 List<VocabularyCatalogEntry> entries = entryMapper.selectBatchIds(entryIds);
                 Map<Long, VocabularyCatalogEntry> entryMap = entries.stream()
                         .collect(Collectors.toMap(VocabularyCatalogEntry::getId, item -> item));
                 if (entryMap.size() != entryIds.size()) {
-                    throw LearningAssistantException.badRequest(LearningConstants.ErrorCode.JSON_PARSE_FAILED,
-                            "分析批次包含不存在的词条");
+                    throw LearningAssistantException.badRequest(LearningConstants.ErrorCode.JSON_PARSE_FAILED);
                 }
-                List<VocabularyCatalogEntryAnalysis> analyses = new ArrayList<>();
                 int chunkSize = LearningConstants.VocabularyAnalysis.DEFAULT_BATCH_SIZE;
                 for (int i = 0; i < entries.size(); i += chunkSize) {
                     List<VocabularyCatalogEntry> chunk = entries.subList(i, Math.min(entries.size(), i + chunkSize));
-                    AgentChatResponse response = requestBatch(job, chunk, modelConfigId);
-                    analyses.addAll(parseAnalyses(job, batch, chunk, response));
+                    if (isAnalysisCancelled(job)) {
+                        markAnalysisCancelled(job, batch,
+                                successCount + batchSuccessCount, failedCount + batchFailedCount);
+                        return;
+                    }
+                    try {
+                        AgentChatResponse response = requestBatch(job, chunk, modelConfigId);
+                        if (isAnalysisCancelled(job)) {
+                            markAnalysisCancelled(job, batch,
+                                    successCount + batchSuccessCount, failedCount + batchFailedCount);
+                            return;
+                        }
+                        AnalysisParseResult parsed = parseAnalyses(job, batch, chunk, response);
+                        if (!parsed.analyses().isEmpty()) {
+                            transactionTemplate.executeWithoutResult(status -> saveBatchResult(
+                                    batch, parsed.analyses(), userId));
+                            batchSuccessCount += parsed.analyses().size();
+                        }
+                        unresolvedEntryIds.addAll(parsed.unresolvedEntryIds());
+                        batchFailedCount += parsed.unresolvedEntryIds().size();
+                    } catch (RuntimeException ex) {
+                        unresolvedEntryIds.addAll(chunk.stream()
+                                .map(VocabularyCatalogEntry::getId).toList());
+                        batchFailedCount += chunk.size();
+                        log.debug("公共词本关联分析响应处理失败 jobId={} batchNo={} chunkSize={}",
+                                jobId, batch.getBatchNo(), chunk.size(), ex);
+                    }
                 }
-                transactionTemplate.executeWithoutResult(status -> saveBatchResult(batch, analyses, userId));
-                successCount += entries.size();
-                batch.setStatus(LearningConstants.VocabularyAnalysis.ITEM_COMPLETED);
-                batch.setErrorMessage(null);
+                successCount += batchSuccessCount;
+                failedCount += batchFailedCount;
+                batch.setStatus(unresolvedEntryIds.isEmpty()
+                        ? LearningConstants.VocabularyAnalysis.ITEM_COMPLETED
+                        : LearningConstants.VocabularyAnalysis.ITEM_FAILED);
+                batch.setErrorMessage(unresolvedEntryIds.isEmpty()
+                        ? null : partialBatchError(unresolvedEntryIds));
                 batch.setFinishedTime(LocalDateTime.now());
                 batch.setUpdateTime(LocalDateTime.now());
                 batchMapper.updateById(batch);
             } catch (RuntimeException ex) {
-                failedCount += value(batch.getEntryCount());
+                failedCount += Math.max(value(batch.getEntryCount()), batchFailedCount);
                 batch.setStatus(LearningConstants.VocabularyAnalysis.ITEM_FAILED);
                 batch.setErrorMessage(limitError(ex.getMessage()));
                 batch.setFinishedTime(LocalDateTime.now());
                 batch.setUpdateTime(LocalDateTime.now());
                 batchMapper.updateById(batch);
-                log.warn("公共词本关联分析批次失败 jobId={} batchNo={} error={}", jobId, batch.getBatchNo(), ex.getMessage());
+                log.info("公共词本关联分析批次失败 jobId={} batchNo={}", jobId, batch.getBatchNo());
                 log.debug("公共词本关联分析批次技术异常 jobId={} batchNo={}", jobId, batch.getBatchNo(), ex);
             }
             job.setSuccessCount(successCount);
@@ -227,6 +271,11 @@ public class VocabularyCatalogAnalysisService {
                 asyncTaskService.updateProgress(job.getAsyncTaskId(), value(job.getTotalCount()),
                         successCount, failedCount);
             }
+        }
+
+        if (isAnalysisCancelled(job)) {
+            markAnalysisCancelled(job, null, successCount, failedCount);
+            return;
         }
 
         int remaining = batchMapper.selectCount(new LambdaQueryWrapper<VocabularyCatalogAnalysisBatch>()
@@ -375,34 +424,40 @@ public class VocabularyCatalogAnalysisService {
         return aiChatService.chat(request);
     }
 
-    private List<VocabularyCatalogEntryAnalysis> parseAnalyses(VocabularyCatalogAnalysisJob job,
-                                                                VocabularyCatalogAnalysisBatch batch,
-                                                                List<VocabularyCatalogEntry> entries,
-                                                                AgentChatResponse response) {
+    AnalysisParseResult parseAnalyses(VocabularyCatalogAnalysisJob job,
+                                      VocabularyCatalogAnalysisBatch batch,
+                                      List<VocabularyCatalogEntry> entries,
+                                      AgentChatResponse response) {
         JsonNode root = parseJson(response.getContent());
         JsonNode array = root.path("entries");
         if (!array.isArray()) {
-            throw LearningAssistantException.badRequest(LearningConstants.ErrorCode.AI_RESPONSE_PARSE_FAILED,
-                    "公共词本关联分析响应缺少 entries 数组");
+            throw LearningAssistantException.badRequest(LearningConstants.ErrorCode.AI_RESPONSE_PARSE_FAILED);
         }
         Map<Long, VocabularyCatalogEntry> sourceById = entries.stream()
                 .collect(Collectors.toMap(VocabularyCatalogEntry::getId, item -> item));
         Map<Long, JsonNode> resultById = new LinkedHashMap<>();
         for (JsonNode item : array) {
             Long entryId = longValue(item, "entry_id", "entryId");
-            if (entryId != null && sourceById.containsKey(entryId)) {
+            if (entryId != null && sourceById.containsKey(entryId) && !resultById.containsKey(entryId)) {
                 resultById.put(entryId, item);
             }
-        }
-        if (resultById.size() != sourceById.size()) {
-            throw LearningAssistantException.badRequest(LearningConstants.ErrorCode.AI_RESPONSE_PARSE_FAILED,
-                    "公共词本关联分析响应未覆盖当前批次全部词条");
         }
 
         LocalDateTime now = LocalDateTime.now();
         List<VocabularyCatalogEntryAnalysis> analyses = new ArrayList<>();
+        Set<Long> resolvedEntryIds = new LinkedHashSet<>();
         for (VocabularyCatalogEntry entry : entries) {
             JsonNode item = resultById.get(entry.getId());
+            if (item == null) {
+                continue;
+            }
+            try {
+                validateAnalysisItem(item);
+            } catch (LearningAssistantException ex) {
+                log.debug("公共词本关联分析词条字段校验失败 jobId={} batchNo={} entryId={}",
+                        job.getId(), batch.getBatchNo(), entry.getId(), ex);
+                continue;
+            }
             VocabularyCatalogEntryAnalysis analysis = new VocabularyCatalogEntryAnalysis();
             analysis.setId(com.baomidou.mybatisplus.core.toolkit.IdWorker.getId());
             analysis.setJobId(job.getId());
@@ -432,8 +487,36 @@ public class VocabularyCatalogAnalysisService {
             analysis.setDeleted(false);
             analysis.setVersion(LearningConstants.ZERO);
             analyses.add(analysis);
+            resolvedEntryIds.add(entry.getId());
         }
-        return analyses;
+        List<Long> unresolvedEntryIds = sourceById.keySet().stream()
+                .filter(entryId -> !resolvedEntryIds.contains(entryId)).toList();
+        return new AnalysisParseResult(List.copyOf(analyses), unresolvedEntryIds);
+    }
+
+    private void validateAnalysisItem(JsonNode item) {
+        if (!item.isObject()
+                || !StringUtils.hasText(text(item, "primary_group_code", "primaryGroupCode", "group_code"))
+                || !StringUtils.hasText(text(item, "primary_group_name", "primaryGroupName", "group_name"))
+                || !StringUtils.hasText(text(item, "domain", "domain_code", "domainCode"))
+                || !StringUtils.hasText(text(item, "sub_topic", "sub_topic_code", "subTopicCode"))
+                || !StringUtils.hasText(text(item, "difficulty_level", "difficulty"))
+                || !item.path("tags").isArray()
+                || !item.path("related_entry_ids").isArray()) {
+            throw LearningAssistantException.badRequest(LearningConstants.ErrorCode.AI_RESPONSE_PARSE_FAILED);
+        }
+        JsonNode confidence = item.path("confidence");
+        if (!confidence.isNumber()
+                || !Double.isFinite(confidence.doubleValue())
+                || confidence.doubleValue() < 0.0D
+                || confidence.doubleValue() > 1.0D) {
+            throw LearningAssistantException.badRequest(LearningConstants.ErrorCode.AI_RESPONSE_PARSE_FAILED);
+        }
+    }
+
+    private String partialBatchError(List<Long> unresolvedEntryIds) {
+        return limitError("AI 本次仅处理了部分词条，剩余 " + unresolvedEntryIds.size()
+                + " 个词条将在下次分析任务中重试");
     }
 
     private void saveBatchResult(VocabularyCatalogAnalysisBatch batch,
@@ -455,6 +538,31 @@ public class VocabularyCatalogAnalysisService {
         batch.setUpdateBy(userId);
         batch.setUpdateTime(LocalDateTime.now());
         batchMapper.updateById(batch);
+    }
+
+    private boolean isAnalysisCancelled(VocabularyCatalogAnalysisJob job) {
+        return job.getAsyncTaskId() != null && asyncTaskService.isCancelled(job.getAsyncTaskId());
+    }
+
+    private void markAnalysisCancelled(VocabularyCatalogAnalysisJob job,
+                                       VocabularyCatalogAnalysisBatch activeBatch,
+                                       int successCount, int failedCount) {
+        LocalDateTime now = LocalDateTime.now();
+        if (activeBatch != null
+                && LearningConstants.VocabularyAnalysis.ITEM_RUNNING.equals(activeBatch.getStatus())) {
+            activeBatch.setStatus(LearningConstants.VocabularyAnalysis.ITEM_FAILED);
+            activeBatch.setErrorMessage("任务已取消，未完成词条将在下次分析任务中重试");
+            activeBatch.setFinishedTime(now);
+            activeBatch.setUpdateTime(now);
+            batchMapper.updateById(activeBatch);
+        }
+        job.setStatus(LearningConstants.VocabularyAnalysis.STATUS_CANCELLED);
+        job.setSuccessCount(Math.max(LearningConstants.ZERO, successCount));
+        job.setFailedCount(Math.max(LearningConstants.ZERO, failedCount));
+        job.setErrorMessage("用户已取消分析任务");
+        job.setFinishedTime(now);
+        job.setUpdateTime(now);
+        jobMapper.updateById(job);
     }
 
     private VocabularyCatalogAnalysisJob latestJob(Long catalogVersionId) {
@@ -570,8 +678,7 @@ public class VocabularyCatalogAnalysisService {
 
     private JsonNode parseJson(String content) {
         if (!org.springframework.util.StringUtils.hasText(content)) {
-            throw LearningAssistantException.badRequest(LearningConstants.ErrorCode.AI_RESPONSE_PARSE_FAILED,
-                    "公共词本关联分析响应为空");
+            throw LearningAssistantException.badRequest(LearningConstants.ErrorCode.AI_RESPONSE_PARSE_FAILED);
         }
         String cleaned = content.replace("```json", "").replace("```", "").trim();
         try {
@@ -582,13 +689,11 @@ public class VocabularyCatalogAnalysisService {
                 try {
                     return objectMapper.readTree(matcher.group());
                 } catch (Exception ex) {
-                    log.warn("词本分析响应 JSON 正则提取解析失败: length={}, error={}", content.length(), ex.getMessage());
+                    log.debug("词本分析响应 JSON 提取解析失败 length={}", content.length(), ex);
                 }
             }
-            log.warn("公共词本关联分析响应不是合法 JSON: length={}, contentPrefix={}",
-                    content.length(), content.substring(0, Math.min(200, content.length())));
-            throw LearningAssistantException.badRequest(LearningConstants.ErrorCode.AI_RESPONSE_PARSE_FAILED,
-                    "公共词本关联分析响应不是合法 JSON");
+            log.debug("公共词本关联分析响应不是合法 JSON length={}", content.length());
+            throw LearningAssistantException.badRequest(LearningConstants.ErrorCode.AI_RESPONSE_PARSE_FAILED);
         }
     }
 

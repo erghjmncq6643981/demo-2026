@@ -9,7 +9,7 @@ export function createAgentProfileFeature(ctx) {
   function loadAgents() {
     if (state.preview) {
       renderAgentConfigs()
-      setConnection(true)
+      setConnection('preview')
       renderLearningAgentOptions()
       renderLearningConfigSummary?.()
       return Promise.resolve()

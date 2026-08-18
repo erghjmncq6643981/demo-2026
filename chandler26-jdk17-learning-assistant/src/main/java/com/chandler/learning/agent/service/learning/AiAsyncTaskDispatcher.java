@@ -1,6 +1,7 @@
 package com.chandler.learning.agent.service.learning;
 
 import com.chandler.learning.agent.domain.entity.learning.AiAsyncTask;
+import com.chandler.learning.agent.exception.AiAsyncTaskCancelledException;
 import com.chandler.learning.agent.service.vocabulary.VocabularyCardBatchService;
 import com.chandler.learning.agent.service.vocabulary.VocabularyCatalogAnalysisService;
 import com.chandler.learning.agent.support.LearningConstants;
@@ -31,12 +32,15 @@ public class AiAsyncTaskDispatcher {
     @Async("aiTaskExecutor")
     public void dispatch(AiAsyncTask task) {
         try {
+            if (taskService.isCancelled(task.getId())) {
+                return;
+            }
             Map<String, Object> payload = readPayload(task.getPayloadJson());
             if (LearningConstants.AiTask.TYPE_SCENE_MATERIAL.equals(task.getTaskType())) {
                 Long modelConfigId = number(payload.get("modelConfigId"));
                 LocalDate recommendedDate = date(payload.get("recommendedDate"));
                 int count = learningPlanService.generateNextUnit(
-                        task.getUserId(), task.getPlanId(), modelConfigId, recommendedDate).size();
+                        task.getUserId(), task.getPlanId(), modelConfigId, recommendedDate, task.getId()).size();
                 taskService.updateProgress(task.getId(), 1, count > 0 ? 1 : 0, count > 0 ? 0 : 1);
                 taskService.complete(task.getId(), count > 0
                         ? LearningConstants.AiTask.STATUS_COMPLETED
@@ -54,9 +58,13 @@ public class AiAsyncTaskDispatcher {
                 return;
             }
             taskService.complete(task.getId(), LearningConstants.AiTask.STATUS_FAILED, "不支持的 AI 任务类型");
+        } catch (AiAsyncTaskCancelledException ex) {
+            log.info("用户取消 AI 异步任务，Worker 已停止 taskId={} type={} userId={}",
+                    task.getId(), task.getTaskType(), task.getUserId());
         } catch (RuntimeException ex) {
             taskService.complete(task.getId(), LearningConstants.AiTask.STATUS_FAILED, ex.getMessage());
-            log.error("AI 异步任务执行失败 taskId={} type={} error={}", task.getId(), task.getTaskType(), ex.getMessage());
+            log.info("AI 异步任务执行失败 taskId={} type={} userId={}",
+                    task.getId(), task.getTaskType(), task.getUserId());
             log.debug("AI 异步任务异常详情 taskId={}", task.getId(), ex);
         }
     }

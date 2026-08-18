@@ -29,6 +29,7 @@ import com.chandler.learning.agent.domain.entity.vocabulary.VocabularyCatalogVer
 import com.chandler.learning.agent.domain.enums.AiInvocationScene;
 import com.chandler.learning.agent.domain.enums.LearningScene;
 import com.chandler.learning.agent.domain.enums.SystemLogType;
+import com.chandler.learning.agent.exception.AiAsyncTaskCancelledException;
 import com.chandler.learning.agent.exception.LearningAssistantException;
 import com.chandler.learning.agent.mapper.learning.LearningPlanMapper;
 import com.chandler.learning.agent.mapper.learning.LearningPlanUnitEntryMapper;
@@ -67,6 +68,7 @@ import java.util.Locale;
 import java.util.Map;
 import java.util.Objects;
 import java.util.Set;
+import java.util.UUID;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 import java.util.stream.Collectors;
@@ -97,6 +99,7 @@ public class LearningPlanService {
     private final WordbookService wordbookService;
     private final AiChatService aiChatService;
     private final VocabularyCatalogAnalysisService catalogAnalysisService;
+    private final AiAsyncTaskService aiAsyncTaskService;
     private final SystemLogService systemLogService;
     private final UserDisplayNameService userDisplayNameService;
     private final ObjectMapper objectMapper;
@@ -317,6 +320,33 @@ public class LearningPlanService {
      */
     public List<LearningPlanUnitResponse> generateNextUnit(Long userId, Long planId, Long modelConfigId,
                                                           LocalDate recommendedDate) {
+        return generateNextUnit(userId, planId, modelConfigId, recommendedDate, null);
+    }
+
+    /** 异步生成入口在每篇材料边界检查取消状态，并复用计划级生成租约。 */
+    public List<LearningPlanUnitResponse> generateNextUnit(Long userId, Long planId, Long modelConfigId,
+                                                          LocalDate recommendedDate, Long asyncTaskId) {
+        requirePlan(userId, planId);
+        ensureAsyncTaskActive(asyncTaskId);
+        String lockToken = UUID.randomUUID().toString();
+        LocalDateTime now = LocalDateTime.now();
+        int claimed = planMapper.claimGenerationLock(planId, lockToken, now,
+                now.plusMinutes(LearningConstants.ScenePlan.GENERATION_LOCK_MINUTES));
+        if (claimed == LearningConstants.ZERO) {
+            throw LearningAssistantException.of(
+                    LearningConstants.ErrorCode.LEARNING_PLAN_GENERATION_IN_PROGRESS);
+        }
+        try {
+            return generateNextUnitWithLock(userId, planId, modelConfigId, recommendedDate,
+                    asyncTaskId, lockToken);
+        } finally {
+            planMapper.releaseGenerationLock(planId, lockToken);
+        }
+    }
+
+    private List<LearningPlanUnitResponse> generateNextUnitWithLock(Long userId, Long planId, Long modelConfigId,
+                                                                   LocalDate recommendedDate, Long asyncTaskId,
+                                                                   String lockToken) {
         LearningPlan plan = requirePlan(userId, planId);
         if (LearningConstants.ScenePlan.STATUS_COMPLETED.equals(plan.getStatus())) {
             throw LearningAssistantException.badRequest(
@@ -356,6 +386,8 @@ public class LearningPlanService {
         int candidateOffset = 0;
         List<Integer> materialWordCounts = splitMaterialWordCounts(totalToGenerate);
         for (int materialIndex = 0; materialIndex < materialWordCounts.size(); materialIndex++) {
+            ensureAsyncTaskActive(asyncTaskId);
+            renewGenerationLock(planId, lockToken);
             Integer batchSize = materialWordCounts.get(materialIndex);
             List<VocabularyCatalogEntry> batch = new ArrayList<>(
                     candidates.subList(candidateOffset, candidateOffset + batchSize));
@@ -363,7 +395,7 @@ public class LearningPlanService {
             int reviewEnd = reviewWords.size() * (materialIndex + 1) / materialWordCounts.size();
             List<VocabularyCatalogEntry> reviewBatch = reviewWords.subList(reviewStart, reviewEnd);
             generatedUnits.add(generateSingleUnit(userId, plan, modelConfigId, resolvedRecommendedDate,
-                    today, batch, batchSize, reviewBatch));
+                    today, batch, batchSize, reviewBatch, asyncTaskId));
             candidateOffset += batchSize;
         }
         return List.copyOf(generatedUnits);
@@ -387,15 +419,34 @@ public class LearningPlanService {
     private LearningPlanUnitResponse generateSingleUnit(Long userId, LearningPlan plan, Long modelConfigId,
                                                         LocalDate resolvedRecommendedDate, LocalDate today,
                                                         List<VocabularyCatalogEntry> candidates, int targetWordCount,
-                                                        List<VocabularyCatalogEntry> reviewWords) {
+                                                        List<VocabularyCatalogEntry> reviewWords,
+                                                        Long asyncTaskId) {
+        ensureAsyncTaskActive(asyncTaskId);
         int unitNo = nextUnitNo(plan.getId());
         AgentChatResponse aiResponse = generateScene(plan, unitNo, candidates, reviewWords,
                 targetWordCount, modelConfigId);
+        ensureAsyncTaskActive(asyncTaskId);
         JsonNode scene = parseScene(aiResponse.getContent());
         List<JsonNode> words = validateSceneWords(scene, candidates, reviewWords, targetWordCount);
+        ensureAsyncTaskActive(asyncTaskId);
         return Objects.requireNonNull(transactionTemplate.execute(status -> persistGeneratedUnit(
                 userId, plan, resolvedRecommendedDate, today, candidates, reviewWords,
                 unitNo, aiResponse, scene, words)));
+    }
+
+    private void ensureAsyncTaskActive(Long asyncTaskId) {
+        if (asyncTaskId != null && aiAsyncTaskService.isCancelled(asyncTaskId)) {
+            throw new AiAsyncTaskCancelledException();
+        }
+    }
+
+    private void renewGenerationLock(Long planId, String lockToken) {
+        int renewed = planMapper.renewGenerationLock(planId, lockToken,
+                LocalDateTime.now().plusMinutes(LearningConstants.ScenePlan.GENERATION_LOCK_MINUTES));
+        if (renewed == LearningConstants.ZERO) {
+            throw LearningAssistantException.of(
+                    LearningConstants.ErrorCode.LEARNING_PLAN_GENERATION_IN_PROGRESS);
+        }
     }
 
     /** 在短事务中持久化已经完成校验的场景材料。 */

@@ -58,4 +58,10 @@ public class LearningPlan extends BaseEntity {
 
     /** 计划复用的 AI 学习会话 ID。 */
     private Long aiSessionId;
+
+    /** 当前场景材料生成租约令牌，用于跨实例防重。 */
+    private String generationLockToken;
+
+    /** 当前场景材料生成租约到期时间。 */
+    private java.time.LocalDateTime generationLockUntil;
 }

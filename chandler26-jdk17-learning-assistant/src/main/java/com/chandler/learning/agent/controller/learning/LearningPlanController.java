@@ -147,6 +147,10 @@ public class LearningPlanController {
         LearningUser user = authService.requireUser(authorization);
         AiAsyncTaskScheduleRequest resolved = request == null ? new AiAsyncTaskScheduleRequest() : request;
         learningPlanService.detail(user.getId(), planId);
+        var activeTask = aiAsyncTaskService.findActiveSceneMaterialTask(user.getId(), planId);
+        if (activeTask != null) {
+            return aiAsyncTaskService.toResponse(activeTask);
+        }
         Map<String, Object> payload = new HashMap<>();
         if (resolved.getModelConfigId() != null) payload.put("modelConfigId", resolved.getModelConfigId());
         if (resolved.getRecommendedDate() != null) payload.put("recommendedDate", resolved.getRecommendedDate().toString());

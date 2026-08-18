@@ -11,6 +11,7 @@ import com.chandler.learning.agent.support.LearningConstants;
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.util.StringUtils;
@@ -24,6 +25,7 @@ import java.util.Map;
  */
 @Service
 @RequiredArgsConstructor
+@Slf4j
 public class AiAsyncTaskService {
 
     private final AiAsyncTaskMapper taskMapper;
@@ -92,6 +94,20 @@ public class AiAsyncTaskService {
         return task;
     }
 
+    /** 同一计划只保留一个待执行或运行中的场景材料任务。 */
+    public AiAsyncTask findActiveSceneMaterialTask(Long userId, Long planId) {
+        return taskMapper.selectOne(new LambdaQueryWrapper<AiAsyncTask>()
+                .eq(AiAsyncTask::getUserId, userId)
+                .eq(AiAsyncTask::getTaskType, LearningConstants.AiTask.TYPE_SCENE_MATERIAL)
+                .eq(AiAsyncTask::getPlanId, planId)
+                .in(AiAsyncTask::getStatus, List.of(
+                        LearningConstants.AiTask.STATUS_PENDING,
+                        LearningConstants.AiTask.STATUS_RUNNING))
+                .eq(AiAsyncTask::getDeleted, false)
+                .orderByDesc(AiAsyncTask::getCreateTime)
+                .last(LearningConstants.SQL_LIMIT_ONE));
+    }
+
     /** 原子领取任务，防止多实例或事件与调度器重复执行。 */
     public boolean claim(Long taskId) {
         int updated = taskMapper.update(null, new LambdaUpdateWrapper<AiAsyncTask>()
@@ -102,6 +118,18 @@ public class AiAsyncTaskService {
                 .set(AiAsyncTask::getStartedTime, LocalDateTime.now())
                 .set(AiAsyncTask::getUpdateTime, LocalDateTime.now()));
         return updated > 0;
+    }
+
+    /** AI 线程池暂时无容量时释放领取状态，交给后续调度轮次重试。 */
+    public void releaseClaim(Long taskId, LocalDateTime scheduledTime) {
+        taskMapper.update(null, new LambdaUpdateWrapper<AiAsyncTask>()
+                .eq(AiAsyncTask::getId, taskId)
+                .eq(AiAsyncTask::getStatus, LearningConstants.AiTask.STATUS_RUNNING)
+                .eq(AiAsyncTask::getDeleted, false)
+                .set(AiAsyncTask::getStatus, LearningConstants.AiTask.STATUS_PENDING)
+                .set(AiAsyncTask::getScheduledTime, scheduledTime)
+                .set(AiAsyncTask::getStartedTime, null)
+                .set(AiAsyncTask::getUpdateTime, LocalDateTime.now()));
     }
 
     public void updateProgress(Long taskId, int total, int success, int failed) {
@@ -120,6 +148,7 @@ public class AiAsyncTaskService {
     }
 
     public void complete(Long taskId, String status, String errorMessage) {
+        AiAsyncTask task = taskMapper.selectById(taskId);
         LambdaUpdateWrapper<AiAsyncTask> wrapper = new LambdaUpdateWrapper<AiAsyncTask>()
                 .eq(AiAsyncTask::getId, taskId)
                 .eq(AiAsyncTask::getStatus, LearningConstants.AiTask.STATUS_RUNNING)
@@ -131,7 +160,13 @@ public class AiAsyncTaskService {
         if (LearningConstants.AiTask.STATUS_COMPLETED.equals(status)) {
             wrapper.set(AiAsyncTask::getProgressPercent, 100);
         }
-        taskMapper.update(null, wrapper);
+        int updated = taskMapper.update(null, wrapper);
+        if (updated > 0 && task != null) {
+            log.info("AI 异步任务结束 taskId={} userId={} type={} status={}",
+                    taskId, task.getUserId(), task.getTaskType(), status);
+            systemLogService.record(task.getUserId(), SystemLogType.AI, "AI 异步任务结束",
+                    task.getTaskName() + "，状态：" + status);
+        }
     }
 
     @Transactional(rollbackFor = Exception.class)

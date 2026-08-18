@@ -57,7 +57,7 @@
 - Business logs use info-level structured events with user/business IDs and outcomes. Provider errors, response bodies, prompts, API keys, and stack traces must be truncated, masked, or debug-only. Preserve request trace/MDC context in async work.
 - Every AI request must set an `AiInvocationScene` from the enum. Reuse one `ai_chat_session` for one learning scene; do not create a session per request. Validate prompt placeholders before saving templates, then parse and enforce business invariants on every structured response.
 - AI audit records default to metadata/token/latency summaries. Storing prompt or response content requires an explicit controlled setting and a bounded length; audit persistence failure must not replace the model result.
-- Preserve learning data invariants: generated scene materials are immutable context, unfinished words stay in their original scene, candidates exclude words already arranged in the same plan, and daily core words are evenly split into materials of at most 50 words.
+- Preserve learning data invariants: generated scene materials remain traceable historical context; unfinished words may appear as `review_words` in later scenes without being counted as new core words; candidates exclude words already arranged as core words in the same plan; daily core words are evenly split into materials of at most 50 words.
 - Add Chinese comments to public DTO/entity fields and complex business boundaries. Do not add repetitive comments to trivial private accessors or obvious conversions.
 - Remove dependencies only after checking actual source usage and run dependency analysis after dependency changes. Prefer existing Hutool/Guava utilities where they materially simplify code; do not add a helper library for trivial code.
 
@@ -68,7 +68,8 @@
 - Related words should contain semantic relations only: synonym, antonym, and word family. Collocations stay in the collocation area, not in related words.
 - AI prompt templates must preserve required placeholders such as `{{term}}`; validate placeholders before saving.
 - Vocabulary card JSON should include definitions, examples with Chinese translations, collocations with meanings, related words with part of speech, meaning, and phonetics, and memory tips.
-- A generated scene material is immutable learning context: unfinished words stay in their original scene and must not be moved into a later scene's article.
+- Keep generated scene materials as traceable historical records. Unfinished words may be reused as review vocabulary in later scene articles, while their original learning records and core-word attribution remain unchanged.
+- Public vocabulary catalog analysis accepts partial AI responses: persist every valid returned entry, leave missing or invalid entries unresolved, and retry only those unresolved entries in a later analysis task.
 - New scene candidates must exclude every catalog word already arranged in any scene of the same plan, regardless of tier. Split a daily target evenly into scene materials with at most 50 core challenge words each; for example, 80 words becomes two 40-word materials and 120 words becomes three 40-word materials.
 
 ## Database

@@ -25,7 +25,7 @@ public class AsyncTaskConfig {
         executor.setQueueCapacity(50);
         executor.setKeepAliveSeconds(60);
         executor.setThreadNamePrefix("learning-ai-");
-        executor.setRejectedExecutionHandler(new ThreadPoolExecutor.CallerRunsPolicy());
+        executor.setRejectedExecutionHandler(new ThreadPoolExecutor.AbortPolicy());
         executor.setTaskDecorator(runnable -> {
             Map<String, String> context = MDC.getCopyOfContextMap();
             return () -> {

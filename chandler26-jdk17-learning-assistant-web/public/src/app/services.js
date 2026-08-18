@@ -124,9 +124,10 @@ export function createAppServices({ state, elements }) {
   function setConnection(ok) {
     for (const item of [elements.connectionStatus]) {
       if (!item) continue
-      item.classList.toggle('ok', ok)
-      item.classList.toggle('bad', !ok)
-      item.textContent = ok ? '后端已连接' : '后端未连接'
+      const preview = ok === 'preview'
+      item.classList.toggle('ok', ok === true)
+      item.classList.toggle('bad', ok === false)
+      item.textContent = preview ? '设计预览 · 未连接后端' : ok ? '后端已连接' : '后端未连接'
     }
   }
 
