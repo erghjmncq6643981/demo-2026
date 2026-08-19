@@ -43,7 +43,6 @@ export function createStudyCardFeature(ctx) {
     renderExamples(parsed)
     renderCollocations(parsed)
     renderMemoryTips(parsed)
-    renderRawJson(record)
     renderReviewFocus(record)
     renderNotes(findEntryForRecord(record))
   }
@@ -75,13 +74,7 @@ export function createStudyCardFeature(ctx) {
   }
 
   function renderRawJson(record) {
-    const parsed = record?.parsed || null
-    elements.rawJson.textContent = parsed ? JSON.stringify(parsed, null, 2) : record?.rawContent || '{}'
-    if (elements.sessionIdBadge) {
-      const provider = record?.provider || 'AI'
-      const model = record?.modelName || 'raw'
-      elements.sessionIdBadge.textContent = record?.sessionId ? `${provider} · ${model} · #${record.sessionId}` : `${provider} · ${model}`
-    }
+    state.currentSessionId = record?.sessionId || state.currentSessionId
   }
 
   function renderDefinitions(parsed) {

@@ -24,7 +24,7 @@ function voiceLabel(voiceType) {
 }
 
 export function createLearningConfigProfileFeature(ctx) {
-  const { state, elements } = ctx
+  const { state, elements, request, toast, logEvent } = ctx
 
   function renderLearningConfigSummary() {
     if (!elements.learningConfigList) return
@@ -60,12 +60,72 @@ export function createLearningConfigProfileFeature(ctx) {
     showModal(elements.learningConfigModal)
   }
 
+  async function loadLearningSettings() {
+    if (state.preview || !state.token) {
+      renderLearningConfigSummary()
+      return
+    }
+    try {
+      const settings = await request('/api/v1/learning/preferences/learning-settings')
+      if (settings?.agentCode) {
+        state.lastAgentCode = settings.agentCode
+        if ([...elements.agentSelect.options].some((option) => option.value === settings.agentCode)) {
+          elements.agentSelect.value = settings.agentCode
+        }
+      }
+      if (settings?.templateCode) {
+        state.lastTemplateCode = settings.templateCode
+        if ([...elements.templateSelect.options].some((option) => option.value === settings.templateCode)) {
+          elements.templateSelect.value = settings.templateCode
+        }
+      }
+      renderLearningConfigSummary()
+    } catch (error) {
+      logEvent('error', '学习设置加载失败', error.message)
+    }
+  }
+
+  async function saveLearningSettings() {
+    const agentCode = elements.agentSelect?.value || state.lastAgentCode || ''
+    const templateCode = elements.templateSelect?.value || state.lastTemplateCode || ''
+    if (!agentCode || !templateCode) {
+      toast('请选择学习 Agent 和模板')
+      return false
+    }
+    state.lastAgentCode = agentCode
+    state.lastTemplateCode = templateCode
+    localStorage.setItem('learning.lastAgentCode', agentCode)
+    localStorage.setItem('learning.lastTemplateCode', templateCode)
+    if (state.preview || !state.token) {
+      renderLearningConfigSummary()
+      toast('设计预览：学习设置已保存')
+      return true
+    }
+    try {
+      const settings = await request('/api/v1/learning/preferences/learning-settings', {
+        method: 'PUT',
+        body: JSON.stringify({ agentCode, templateCode }),
+      })
+      if (settings?.agentCode) state.lastAgentCode = settings.agentCode
+      if (settings?.templateCode) state.lastTemplateCode = settings.templateCode
+      renderLearningConfigSummary()
+      toast('学习设置已保存')
+      return true
+    } catch (error) {
+      logEvent('error', '学习设置保存失败', error.message)
+      toast(`学习设置保存失败：${error.message}`)
+      return false
+    }
+  }
+
   function closeLearningConfigModal() {
     hideModal(elements.learningConfigModal)
   }
 
   return {
     renderLearningConfigSummary,
+    loadLearningSettings,
+    saveLearningSettings,
     openLearningConfigModal,
     closeLearningConfigModal,
   }

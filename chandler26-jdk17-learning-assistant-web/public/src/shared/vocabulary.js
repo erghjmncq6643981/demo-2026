@@ -231,7 +231,6 @@ export function logTypeLabel(type) {
       auth: '账户',
       ai: 'AI',
       cache: '缓存',
-      chat: '追问',
       error: '错误',
       article: '文章',
       navigation: '导航',

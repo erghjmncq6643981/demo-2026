@@ -12,7 +12,8 @@ export function createModelProfileFeature(ctx) {
       renderStudyModelOptions()
       return Promise.resolve()
     }
-    return request('/api/v1/ai/model-configs')
+    const path = state.user?.roleCode === 'ADMIN' ? '/api/v1/ai/model-configs' : '/api/v1/ai/model-configs/available'
+    return request(path)
       .then((configs) => {
         state.modelConfigs = Array.isArray(configs) ? configs : []
         renderModelConfigs()
@@ -101,6 +102,13 @@ export function createModelProfileFeature(ctx) {
               </div>
               <p>${escapeHtml(item.provider)} · ${escapeHtml(item.modelName)} · ${escapeHtml(item.baseUrl || '')}</p>
               <small>优先级 ${item.sequence ?? 0} · ${escapeHtml(item.apiKeyMasked || '')}</small>
+              <div class="model-usage-row">
+                <span>调用 <strong>${Number(item.callCount || 0).toLocaleString()}</strong></span>
+                <span>成功 <strong>${Number(item.successCount || 0).toLocaleString()}</strong></span>
+                <span>失败 <strong>${Number(item.failedCount || 0).toLocaleString()}</strong></span>
+                <span>Token <strong>${Number(item.totalTokens || 0).toLocaleString()}</strong></span>
+                <span>平均 <strong>${Number(item.averageLatencyMs || 0)} ms</strong></span>
+              </div>
             </div>
             <div class="row-actions">
               <button class="icon-action-button" type="button" data-model-toggle="${escapeHtml(item.id)}" title="${item.enabled ? '停用模型' : '启用模型'}" aria-label="${item.enabled ? '停用模型' : '启用模型'}">${item.enabled ? '⏸' : '▶'}</button>
