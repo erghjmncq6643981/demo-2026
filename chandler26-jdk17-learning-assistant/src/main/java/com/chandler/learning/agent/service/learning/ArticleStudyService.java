@@ -227,12 +227,16 @@ public class ArticleStudyService {
     private AgentChatResponse aiChat(Long userId, ArticleStudyRequest request, List<ArticleStudyWordResponse> selectedWords,
                                      ArticleWordCountRange wordCountRange, ArticleDifficulty difficulty, String remark) {
         Map<String, Object> variables = new HashMap<>();
-        variables.put("words", selectedWords);
+        List<Map<String, Object>> promptWords = selectedWords.stream().map(word -> {
+            Map<String, Object> promptWord = new LinkedHashMap<>();
+            promptWord.put("term", word.getTerm());
+            promptWord.put("part_of_speech", word.getPartOfSpeech());
+            promptWord.put("meaning", word.getMeaning());
+            return promptWord;
+        }).toList();
+        variables.put("words", promptWords);
         variables.put("word_count_range", wordCountRange.getLabel());
-        variables.put("word_count_min", wordCountRange.getMinWords());
-        variables.put("word_count_max", wordCountRange.getMaxWords());
         variables.put("difficulty", difficulty.getLabel());
-        variables.put("difficulty_code", difficulty.getCode());
         variables.put("difficulty_prompt", difficulty.getPrompt());
         variables.put("remark", StrUtil.blankToDefault(remark, "无特别备注"));
 

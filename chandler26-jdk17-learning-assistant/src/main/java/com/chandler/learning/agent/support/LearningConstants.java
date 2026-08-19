@@ -190,6 +190,18 @@ public final class LearningConstants {
         }
     }
 
+    /** AI 请求上下文预算。模型输入在达到总上下文上限的 90% 时提前拒绝，避免上游返回超限错误。 */
+    public static final class AiContext {
+        public static final int MAX_TOKENS = 8_192;
+        public static final int SAFE_USAGE_PERCENT = 90;
+        public static final int ASCII_CHARACTERS_PER_TOKEN = 4;
+        public static final int NON_ASCII_TOKENS_PER_CHARACTER = 2;
+        public static final int MESSAGE_OVERHEAD_TOKENS = 4;
+
+        private AiContext() {
+        }
+    }
+
     /**
      * SystemLog 类。
      */
@@ -576,7 +588,11 @@ public final class LearningConstants {
         AUTH_EXPIRED(HttpStatus.UNAUTHORIZED, "登录状态已过期，请重新登录"),
         AUTH_INVALID_CREDENTIALS(HttpStatus.UNAUTHORIZED, "用户名或密码错误"),
         USER_ALREADY_EXISTS(HttpStatus.BAD_REQUEST, "用户已存在"),
+        USER_NOT_FOUND(HttpStatus.NOT_FOUND, "用户不存在"),
         USER_DISABLED(HttpStatus.FORBIDDEN, "用户已被禁用"),
+        ADMIN_REQUIRED(HttpStatus.FORBIDDEN, "仅系统管理员可执行此操作"),
+        LAST_ADMIN_REQUIRED(HttpStatus.BAD_REQUEST, "至少保留一个启用的系统管理员"),
+        ADMIN_SELF_OPERATION_FORBIDDEN(HttpStatus.BAD_REQUEST, "不能对当前登录管理员执行此操作"),
         PASSWORD_TOO_SHORT(HttpStatus.BAD_REQUEST, "密码长度不足"),
         PASSWORD_INCORRECT(HttpStatus.BAD_REQUEST, "原密码不正确"),
         PHONE_INVALID(HttpStatus.BAD_REQUEST, "手机号格式不正确"),
@@ -597,6 +613,7 @@ public final class LearningConstants {
         AI_PROVIDER_BASE_URL_MISSING(HttpStatus.BAD_REQUEST, "AI 服务地址未配置"),
         AI_MODEL_NAME_MISSING(HttpStatus.BAD_REQUEST, "AI 模型名称未配置"),
         AI_MODEL_CALL_FAILED(HttpStatus.BAD_GATEWAY, "AI 模型调用失败"),
+        AI_PROMPT_TOO_LARGE(HttpStatus.BAD_REQUEST, "AI 请求上下文过长，请减少本次输入后重试"),
         AI_MODEL_BALANCE_INSUFFICIENT(HttpStatus.BAD_GATEWAY, "AI 模型余额不足"),
         AI_INVOCATION_SCENE_INVALID(HttpStatus.BAD_REQUEST, "AI 调用场景无效"),
         AI_RESPONSE_PARSE_FAILED(HttpStatus.BAD_REQUEST, "AI 返回内容格式无效"),

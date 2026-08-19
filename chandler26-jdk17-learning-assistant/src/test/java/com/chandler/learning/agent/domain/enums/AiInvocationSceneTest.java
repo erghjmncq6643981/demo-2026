@@ -25,6 +25,20 @@ class AiInvocationSceneTest {
         assertThat(scene.isStructuredResponse()).isTrue();
         assertThat(scene.getRequiredRootFields())
                 .containsExactly("title", "learning_text", "translation", "vocabulary");
+        assertThat(scene.getInputVariableKeys())
+                .containsExactly("learning_purpose", "unit_no", "candidate_words", "review_words",
+                        "completed_scenes", "target_word_count");
+    }
+
+    @Test
+    void fixedActionsDoNotReuseConversationHistory() {
+        assertThat(AiInvocationScene.VOCABULARY_CARD_SINGLE.independentAction()).isTrue();
+        assertThat(AiInvocationScene.VOCABULARY_CARD_BATCH.independentAction()).isTrue();
+        assertThat(AiInvocationScene.VOCABULARY_CATALOG_ANALYSIS.independentAction()).isTrue();
+        assertThat(AiInvocationScene.ARTICLE_STUDY_MATERIAL.independentAction()).isTrue();
+        assertThat(AiInvocationScene.VOCABULARY_SCENE_UNIT.independentAction()).isTrue();
+        assertThat(AiInvocationScene.GENERAL_CHAT.independentAction()).isFalse();
+        assertThat(AiInvocationScene.VOCABULARY_FOLLOW_UP.independentAction()).isFalse();
     }
 
     @Test

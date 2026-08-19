@@ -869,11 +869,11 @@ public class LearningPlanService {
                                             List<VocabularyCatalogEntry> reviewWords,
                                             int targetWordCount, Long modelConfigId) {
         List<CandidateWord> words = candidates.stream()
-                .map(entry -> new CandidateWord(entry.getSourceOrder(), entry.effectiveTerm(),
+                .map(entry -> new CandidateWord(entry.effectiveTerm(),
                         entry.getPhonetic(), entry.getDefinitionText()))
                 .toList();
         List<CandidateWord> review = reviewWords.stream()
-                .map(entry -> new CandidateWord(entry.getSourceOrder(), entry.effectiveTerm(),
+                .map(entry -> new CandidateWord(entry.effectiveTerm(),
                         entry.getPhonetic(), entry.getDefinitionText()))
                 .toList();
         List<String> completedScenes = unitMapper.selectList(new LambdaQueryWrapper<LearningPlanUnit>()
@@ -1711,6 +1711,6 @@ public class LearningPlanService {
     private record PlanUpdateResult(LearningPlan plan, boolean generateFirstUnit) {
     }
 
-    private record CandidateWord(Integer sourceOrder, String term, String phonetic, String meaning) {
+    private record CandidateWord(String term, String phonetic, String meaning) {
     }
 }

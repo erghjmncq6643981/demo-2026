@@ -46,7 +46,7 @@ public class VocabularyImportController {
     public VocabularyImportResponse importMarkdown(
             @RequestHeader(value = "Authorization", required = false) String authorization,
             @Valid @RequestBody VocabularyMarkdownImportRequest request) {
-        LearningUser user = authService.requireUser(authorization);
+        LearningUser user = authService.requireAdmin(authorization);
         return importService.importMarkdown(user.getId(), request);
     }
 
@@ -54,7 +54,7 @@ public class VocabularyImportController {
     @Operation(summary = "词表导入历史")
     public List<VocabularyImportResponse> list(
             @RequestHeader(value = "Authorization", required = false) String authorization) {
-        LearningUser user = authService.requireUser(authorization);
+        LearningUser user = authService.requireAdmin(authorization);
         return importService.list(user.getId());
     }
 
@@ -75,7 +75,7 @@ public class VocabularyImportController {
             @RequestParam(required = false) String keyword,
             @RequestParam(defaultValue = "1") Integer page,
             @RequestParam(defaultValue = "100") Integer pageSize) {
-        LearningUser user = authService.requireUser(authorization);
+        LearningUser user = authService.requireAdmin(authorization);
         return importService.detail(user.getId(), jobId, Boolean.TRUE.equals(warningOnly), keyword, page, pageSize);
     }
 
@@ -86,7 +86,7 @@ public class VocabularyImportController {
             @PathVariable Long jobId,
             @PathVariable Long entryId,
             @Valid @RequestBody VocabularyImportEntryUpdateRequest request) {
-        LearningUser user = authService.requireUser(authorization);
+        LearningUser user = authService.requireAdmin(authorization);
         return importService.updateEntry(user.getId(), jobId, entryId, request);
     }
 
@@ -96,7 +96,7 @@ public class VocabularyImportController {
             @RequestHeader(value = "Authorization", required = false) String authorization,
             @PathVariable Long jobId,
             @RequestBody VocabularyImportBatchConfirmRequest request) {
-        LearningUser user = authService.requireUser(authorization);
+        LearningUser user = authService.requireAdmin(authorization);
         return importService.confirmWarnings(user.getId(), jobId, request);
     }
 
@@ -106,7 +106,7 @@ public class VocabularyImportController {
             @RequestHeader(value = "Authorization", required = false) String authorization,
             @PathVariable Long jobId,
             @Valid @RequestBody VocabularyImportPublishRequest request) {
-        LearningUser user = authService.requireUser(authorization);
+        LearningUser user = authService.requireAdmin(authorization);
         return importService.publish(user.getId(), jobId, request);
     }
 
@@ -116,7 +116,7 @@ public class VocabularyImportController {
             @RequestHeader(value = "Authorization", required = false) String authorization,
             @PathVariable Long jobId,
             @Valid @RequestBody VocabularyImportMetadataUpdateRequest request) {
-        LearningUser user = authService.requireUser(authorization);
+        LearningUser user = authService.requireAdmin(authorization);
         return importService.updateMetadata(user.getId(), jobId, request);
     }
 
@@ -125,7 +125,7 @@ public class VocabularyImportController {
     public void delete(
             @RequestHeader(value = "Authorization", required = false) String authorization,
             @PathVariable Long jobId) {
-        LearningUser user = authService.requireUser(authorization);
+        LearningUser user = authService.requireAdmin(authorization);
         importService.delete(user.getId(), jobId);
     }
 }

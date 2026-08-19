@@ -70,10 +70,10 @@ public class AiChatService {
                 : request.getInvocationScene();
         AiAgent agent = getEnabledAgent(request.getAgentCode());
         Long userId = request.getUserId() != null ? request.getUserId() : chatSessionService.currentUserId();
-        AiChatSession session = resolveSession(agent, request, userId, startTime);
+        AiChatSession session = resolveSession(agent, request, userId, startTime, invocationScene);
 
-        List<ChatMessageParam> messages = buildMessages(agent, request, session);
-        chatSessionService.addUserMessage(session.getId(), buildUserMessage(request));
+        List<ChatMessageParam> messages = buildMessages(agent, request, session, invocationScene);
+        validatePromptBudget(invocationScene, messages);
 
         AiModelConfig selectedModelConfig = resolveSelectedModelConfig(request.getModelConfigId());
         String provider = resolveProvider(agent, selectedModelConfig);
@@ -84,10 +84,11 @@ public class AiChatService {
         modelRequest.setModel(modelName);
         modelRequest.setModelConfigId(selectedModelConfig == null ? null : selectedModelConfig.getId());
         modelRequest.setTemperature(agent.getTemperature());
-        Integer maxTokens = agent.getMaxTokens();
+        Integer maxTokens = agent.getMaxTokens() == null ? LearningConstants.AiContext.MAX_TOKENS
+                : Math.min(agent.getMaxTokens(), LearningConstants.AiContext.MAX_TOKENS);
         if (AiInvocationScene.VOCABULARY_CATALOG_ANALYSIS.equals(invocationScene)
                 || AiInvocationScene.VOCABULARY_SCENE_UNIT.equals(invocationScene)) {
-            maxTokens = Math.max(maxTokens == null ? 8192 : maxTokens, 8192);
+            maxTokens = LearningConstants.AiContext.MAX_TOKENS;
         }
         modelRequest.setMaxTokens(maxTokens);
         if (AiInvocationScene.VOCABULARY_SCENE_UNIT.equals(invocationScene)
@@ -96,6 +97,7 @@ public class AiChatService {
             modelRequest.setPresencePenalty(0.1);
         }
         modelRequest.setMessages(messages);
+        chatSessionService.addUserMessage(session.getId(), buildUserMessage(request, invocationScene));
 
         AiModelCallRecord record = buildCallRecord(session.getId(), agent, modelRequest);
         log.info("用户「{}」通过 Agent「{}」向模型「{} / {}」发起「{}」AI 调用，业务类型为「{}」",
@@ -180,7 +182,8 @@ public class AiChatService {
     /**
      * 处理 {@code resolveSession} 相关业务。
      */
-    private AiChatSession resolveSession(AiAgent agent, AgentChatRequest request, Long userId, long startTime) {
+    private AiChatSession resolveSession(AiAgent agent, AgentChatRequest request, Long userId, long startTime,
+                                         AiInvocationScene invocationScene) {
         if (request.getSessionId() != null) {
             AiChatSession session = chatSessionService.getOwnedSession(userId, request.getSessionId());
             if (session == null) {
@@ -195,21 +198,25 @@ public class AiChatService {
                 ? request.getTitle()
                 : sceneDisplayTitle(request.getSceneCode(), request.getBusinessType(), request.getBusinessId(), agent.getName(), startTime);
         return chatSessionService.createSession(userId, agent.getCode(), title, request.getBusinessType(),
-                request.getBusinessId(), request.getSceneCode(), request.getVariables());
+                request.getBusinessId(), request.getSceneCode(), requestVariables(request, invocationScene));
     }
 
     /**
      * 处理 {@code buildMessages} 相关业务。
      */
-    private List<ChatMessageParam> buildMessages(AiAgent agent, AgentChatRequest request, AiChatSession session) {
+    private List<ChatMessageParam> buildMessages(AiAgent agent, AgentChatRequest request,
+                                                 AiChatSession session, AiInvocationScene invocationScene) {
         List<ChatMessageParam> messages = new ArrayList<>();
-        Map<String, Object> variables = readSessionVariables(session);
-        if (request.getVariables() != null) {
+        boolean independentAction = invocationScene.independentAction();
+        // 固定动作只使用本次请求变量；会话仍然保留用于审计，但不作为模型上下文。
+        Map<String, Object> variables = independentAction ? requestVariables(request, invocationScene)
+                : readSessionVariables(session);
+        if (!independentAction && request.getVariables() != null) {
             variables.putAll(request.getVariables());
         }
         variables.put("USER_QUERY", request.getMessage());
 
-        List<AiChatMessage> history = chatSessionService.getHistory(session.getId());
+        List<AiChatMessage> history = independentAction ? List.of() : chatSessionService.getHistory(session.getId());
         boolean firstRound = history.isEmpty();
         String systemPrompt = firstRound || !StringUtils.hasText(agent.getConcisePrompt())
                 ? agent.getSystemPrompt()
@@ -218,26 +225,93 @@ public class AiChatService {
             messages.add(new ChatMessageParam(ChatMessageRole.SYSTEM.getCode(), promptRenderer.render(systemPrompt, variables)));
         }
 
-        if (!AiInvocationScene.VOCABULARY_CATALOG_ANALYSIS.equals(request.getInvocationScene())
-                && !AiInvocationScene.VOCABULARY_CARD_BATCH.equals(request.getInvocationScene())) {
+        if (!independentAction) {
             messages.addAll(historyWithinBudget(history));
         }
 
-        messages.add(new ChatMessageParam(ChatMessageRole.USER.getCode(), buildUserMessage(request)));
+        messages.add(new ChatMessageParam(ChatMessageRole.USER.getCode(), buildUserMessage(request, invocationScene)));
         return messages;
     }
 
     /**
      * 用户消息由可选模板和真实提问组成，模板变量在保存消息前完成渲染。
      */
-    private String buildUserMessage(AgentChatRequest request) {
+    private String buildUserMessage(AgentChatRequest request, AiInvocationScene invocationScene) {
         StringBuilder userMessage = new StringBuilder();
         if (StringUtils.hasText(request.getTemplateCode())) {
-            userMessage.append(promptTemplateService.render(request.getTemplateCode(), request.getVariables()))
+            userMessage.append(promptTemplateService.render(request.getTemplateCode(),
+                            requestVariables(request, invocationScene)))
                     .append("\n\n");
         }
         userMessage.append(request.getMessage());
         return userMessage.toString();
+    }
+
+    /**
+     * 过滤固定动作的输入变量。通用对话和追问属于上下文型动作，保留调用方传入的全部变量。
+     */
+    private Map<String, Object> requestVariables(AgentChatRequest request, AiInvocationScene invocationScene) {
+        Map<String, Object> source = request.getVariables() == null ? Map.of() : request.getVariables();
+        if (!invocationScene.independentAction()) {
+            return new HashMap<>(source);
+        }
+        Map<String, Object> compact = new LinkedHashMap<>();
+        for (String key : invocationScene.getInputVariableKeys()) {
+            if (source.containsKey(key)) {
+                compact.put(key, source.get(key));
+            }
+        }
+        return compact;
+    }
+
+    /**
+     * 发送前估算模型输入 Token。项目不绑定某一家模型的 tokenizer，因此使用保守的字符估算：
+     * ASCII 连续文本按 4 字符约 1 Token，非 ASCII 字符按 2 Token 计算。
+     */
+    private void validatePromptBudget(AiInvocationScene invocationScene, List<ChatMessageParam> messages) {
+        int estimatedTokens = messages.stream()
+                .mapToInt(message -> LearningConstants.AiContext.MESSAGE_OVERHEAD_TOKENS
+                        + estimateTokens(message.getContent()))
+                .sum();
+        int safeLimit = LearningConstants.AiContext.MAX_TOKENS
+                * LearningConstants.AiContext.SAFE_USAGE_PERCENT / 100;
+        log.debug("AI 请求上下文估算 invocationScene={} estimatedTokens={} safeLimit={} messageCount={}",
+                invocationScene.getCode(), estimatedTokens, safeLimit, messages.size());
+        if (estimatedTokens >= safeLimit) {
+            log.warn("event=ai_context_budget result=rejected invocationScene={} estimatedTokens={} safeLimit={} maxTokens={}",
+                    invocationScene.getCode(), estimatedTokens, safeLimit,
+                    LearningConstants.AiContext.MAX_TOKENS);
+            throw LearningAssistantException.badRequest(
+                    LearningConstants.ErrorCode.AI_PROMPT_TOO_LARGE,
+                    "本次「" + invocationScene.getTitle() + "」请求预计约 " + estimatedTokens
+                            + " Token，已达到安全上限 " + safeLimit
+                            + " Token，请减少词汇批次或补充数据后重试");
+        }
+    }
+
+    private int estimateTokens(String content) {
+        if (!StringUtils.hasText(content)) {
+            return LearningConstants.ZERO;
+        }
+        int tokens = LearningConstants.ZERO;
+        int asciiCharacters = LearningConstants.ZERO;
+        for (int index = LearningConstants.ZERO; index < content.length(); index++) {
+            char character = content.charAt(index);
+            if (character <= 0x7F) {
+                asciiCharacters++;
+                continue;
+            }
+            tokens += ceilDivide(asciiCharacters, LearningConstants.AiContext.ASCII_CHARACTERS_PER_TOKEN);
+            asciiCharacters = LearningConstants.ZERO;
+            tokens += LearningConstants.AiContext.NON_ASCII_TOKENS_PER_CHARACTER;
+        }
+        return tokens + ceilDivide(asciiCharacters, LearningConstants.AiContext.ASCII_CHARACTERS_PER_TOKEN);
+    }
+
+    private int ceilDivide(int dividend, int divisor) {
+        return dividend == LearningConstants.ZERO
+                ? LearningConstants.ZERO
+                : (dividend + divisor - LearningConstants.SEQUENCE_STEP) / divisor;
     }
 
     /**

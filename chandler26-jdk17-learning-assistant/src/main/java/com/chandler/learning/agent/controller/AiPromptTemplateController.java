@@ -3,6 +3,7 @@ package com.chandler.learning.agent.controller;
 import com.chandler.learning.agent.domain.dto.PromptTemplateSaveRequest;
 import com.chandler.learning.agent.domain.entity.AiPromptTemplate;
 import com.chandler.learning.agent.service.AiPromptTemplateService;
+import com.chandler.learning.agent.service.learning.AuthService;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.Valid;
@@ -22,6 +23,7 @@ import java.util.Map;
 public class AiPromptTemplateController {
 
     private final AiPromptTemplateService templateService;
+    private final AuthService authService;
 
     @GetMapping
     @Operation(summary = "模板列表")
@@ -45,6 +47,7 @@ public class AiPromptTemplateController {
     @PostMapping
     @Operation(summary = "创建模板")
     public Long create(@Valid @RequestBody PromptTemplateSaveRequest request) {
+        authService.requireAdmin(null);
         return templateService.create(request);
     }
 
@@ -54,6 +57,7 @@ public class AiPromptTemplateController {
     @PutMapping("/{id}")
     @Operation(summary = "更新模板")
     public void update(@PathVariable Long id, @Valid @RequestBody PromptTemplateSaveRequest request) {
+        authService.requireAdmin(null);
         templateService.update(id, request);
     }
 
@@ -63,6 +67,7 @@ public class AiPromptTemplateController {
     @DeleteMapping("/{id}")
     @Operation(summary = "删除模板")
     public void delete(@PathVariable Long id) {
+        authService.requireAdmin(null);
         templateService.delete(id);
     }
 
@@ -72,6 +77,7 @@ public class AiPromptTemplateController {
     @PostMapping("/{id}/clone")
     @Operation(summary = "复制模板")
     public Long clone(@PathVariable Long id) {
+        authService.requireAdmin(null);
         return templateService.clone(id);
     }
 

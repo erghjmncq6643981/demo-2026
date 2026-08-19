@@ -3,6 +3,7 @@ package com.chandler.learning.agent.controller;
 import com.chandler.learning.agent.domain.dto.AiModelConfigResponse;
 import com.chandler.learning.agent.domain.dto.AiModelConfigSaveRequest;
 import com.chandler.learning.agent.service.AiModelConfigService;
+import com.chandler.learning.agent.service.learning.AuthService;
 import com.chandler.learning.agent.support.LearningConstants;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
@@ -23,6 +24,7 @@ import java.util.Map;
 public class AiModelConfigController {
 
     private final AiModelConfigService modelConfigService;
+    private final AuthService authService;
 
     @GetMapping
     @Operation(summary = "模型配置列表")
@@ -36,6 +38,7 @@ public class AiModelConfigController {
     @PostMapping
     @Operation(summary = "创建模型配置")
     public AiModelConfigResponse create(@Valid @RequestBody AiModelConfigSaveRequest request) {
+        authService.requireAdmin(null);
         return modelConfigService.create(request);
     }
 
@@ -45,6 +48,7 @@ public class AiModelConfigController {
     @PutMapping("/{id}")
     @Operation(summary = "更新模型配置")
     public AiModelConfigResponse update(@PathVariable Long id, @Valid @RequestBody AiModelConfigSaveRequest request) {
+        authService.requireAdmin(null);
         return modelConfigService.update(id, request);
     }
 
@@ -54,6 +58,7 @@ public class AiModelConfigController {
     @PostMapping("/{id}/enable")
     @Operation(summary = "启用模型配置")
     public void enable(@PathVariable Long id) {
+        authService.requireAdmin(null);
         modelConfigService.updateEnabled(id, true);
     }
 
@@ -63,6 +68,7 @@ public class AiModelConfigController {
     @PostMapping("/{id}/disable")
     @Operation(summary = "停用模型配置")
     public void disable(@PathVariable Long id) {
+        authService.requireAdmin(null);
         modelConfigService.updateEnabled(id, false);
     }
 
@@ -72,6 +78,7 @@ public class AiModelConfigController {
     @PostMapping("/{id}/priority")
     @Operation(summary = "更新模型配置优先级")
     public void priority(@PathVariable Long id, @RequestBody Map<String, Object> body) {
+        authService.requireAdmin(null);
         Integer sequence = body.get("sequence") instanceof Number number ? number.intValue() : LearningConstants.DEFAULT_SEQUENCE;
         Boolean isDefault = body.get("isDefault") instanceof Boolean value && value;
         modelConfigService.updatePriority(id, sequence, isDefault);
@@ -83,6 +90,7 @@ public class AiModelConfigController {
     @DeleteMapping("/{id}")
     @Operation(summary = "删除模型配置")
     public void delete(@PathVariable Long id) {
+        authService.requireAdmin(null);
         modelConfigService.delete(id);
     }
 }

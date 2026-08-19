@@ -31,7 +31,7 @@ public class VocabularyCatalogAnalysisController {
     public VocabularyCatalogAnalysisResponse detail(
             @RequestHeader(value = "Authorization", required = false) String authorization,
             @PathVariable Long catalogVersionId) {
-        LearningUser user = authService.requireUser(authorization);
+        LearningUser user = authService.requireAdmin(authorization);
         return analysisService.detail(user.getId(), catalogVersionId);
     }
 
@@ -41,7 +41,7 @@ public class VocabularyCatalogAnalysisController {
             @RequestHeader(value = "Authorization", required = false) String authorization,
             @PathVariable Long catalogVersionId,
             @RequestBody(required = false) VocabularyCatalogAnalysisRequest request) {
-        LearningUser user = authService.requireUser(authorization);
+        LearningUser user = authService.requireAdmin(authorization);
         return analysisService.trigger(user.getId(), catalogVersionId, request);
     }
 }

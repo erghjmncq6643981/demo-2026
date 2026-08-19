@@ -483,8 +483,9 @@ export function createScenePlanFeature(ctx) {
     }
     const selectedPlanId = options.planId || state.currentLearningPlan?.id
     try {
+      const canManageCatalogs = state.user?.roleCode === 'ADMIN'
       const [imports, publicCatalogs, plans] = await Promise.all([
-        request('/api/v1/vocabulary-imports'),
+        canManageCatalogs ? request('/api/v1/vocabulary-imports') : Promise.resolve([]),
         request('/api/v1/vocabulary-imports/public'),
         request('/api/v1/learning/plans'),
       ])

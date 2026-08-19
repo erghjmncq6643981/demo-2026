@@ -20,29 +20,38 @@ import java.util.Locale;
 @Getter
 public enum AiInvocationScene {
 
-    GENERAL_CHAT("general_chat", "通用 Agent 对话", false, List.of()),
-    VOCABULARY_FOLLOW_UP("vocabulary_follow_up", "词汇学习追问", false, List.of()),
+    GENERAL_CHAT("general_chat", "通用 Agent 对话", false, List.of(), List.of()),
+    VOCABULARY_FOLLOW_UP("vocabulary_follow_up", "词汇学习追问", false, List.of(), List.of()),
     VOCABULARY_CARD_SINGLE("vocabulary_card_single", "单词词卡生成", true,
-            List.of("term", "definitions", "examples", "collocations", "memory_tips")),
-    VOCABULARY_CARD_BATCH("vocabulary_card_batch", "批量词卡生成", true, List.of("cards")),
+            List.of("term", "definitions", "examples", "collocations", "memory_tips"),
+            List.of("term")),
+    VOCABULARY_CARD_BATCH("vocabulary_card_batch", "批量词卡生成", true, List.of("cards"),
+            List.of("terms")),
     VOCABULARY_CATALOG_ANALYSIS("vocabulary_catalog_analysis", "公共词本关联分析", true,
-            List.of("entries")),
+            List.of("entries"), List.of("analysis_version", "words")),
     ARTICLE_STUDY_MATERIAL("article_study_material", "语境精读材料生成", true,
-            List.of("title", "article", "translation", "vocabulary_focus", "grammar_points", "practice")),
+            List.of("title", "article", "translation", "vocabulary_focus", "grammar_points", "practice"),
+            List.of("words", "word_count_range", "difficulty", "difficulty_prompt", "remark")),
     VOCABULARY_SCENE_UNIT("vocabulary_scene_unit", "词汇大挑战场景单元生成", true,
-            List.of("title", "learning_text", "translation", "vocabulary"));
+            List.of("title", "learning_text", "translation", "vocabulary"),
+            List.of("learning_purpose", "unit_no", "candidate_words", "review_words", "completed_scenes",
+                    "target_word_count"));
 
     @JsonValue
     private final String code;
     private final String title;
     private final boolean structuredResponse;
     private final List<String> requiredRootFields;
+    /** 固定动作允许进入提示词的请求变量，避免把无关对象或历史数据带入模型。 */
+    private final List<String> inputVariableKeys;
 
-    AiInvocationScene(String code, String title, boolean structuredResponse, List<String> requiredRootFields) {
+    AiInvocationScene(String code, String title, boolean structuredResponse, List<String> requiredRootFields,
+                      List<String> inputVariableKeys) {
         this.code = code;
         this.title = title;
         this.structuredResponse = structuredResponse;
         this.requiredRootFields = requiredRootFields;
+        this.inputVariableKeys = inputVariableKeys;
     }
 
     /**
@@ -61,5 +70,18 @@ public enum AiInvocationScene {
                 .orElseThrow(() -> LearningAssistantException.badRequest(
                         LearningConstants.ErrorCode.AI_INVOCATION_SCENE_INVALID,
                         "不支持的 AI 调用场景: " + code));
+    }
+
+    /**
+     * 判断本次调用是否为固定动作。固定动作的输入已经包含完成任务所需数据，
+     * 不应把同一学习场景之前的对话历史再次发送给模型。
+     */
+    public boolean independentAction() {
+        return switch (this) {
+            case VOCABULARY_CARD_SINGLE, VOCABULARY_CARD_BATCH,
+                 VOCABULARY_CATALOG_ANALYSIS, ARTICLE_STUDY_MATERIAL,
+                 VOCABULARY_SCENE_UNIT -> true;
+            case GENERAL_CHAT, VOCABULARY_FOLLOW_UP -> false;
+        };
     }
 }

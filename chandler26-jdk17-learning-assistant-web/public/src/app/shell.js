@@ -18,6 +18,7 @@ export function createAppShell(ctx) {
     loadActivity,
     loadSystemLogs,
     loadAiTasks,
+    systemManagement,
     loadDueReviews,
     loadWordbookEntries,
     loadArticleWords,
@@ -67,6 +68,7 @@ export function createAppShell(ctx) {
     elements.profileName.textContent = displayName
     elements.profileUsername.textContent = user?.username ? `@${user.username}` : '等待登录'
     elements.profileStatus.textContent = state.token ? '在线' : '离线'
+    systemManagement?.renderAdminEntry()
     if (user?.username) elements.usernameInput.value = user.username
     updateShellVisibility()
     renderProfileMetrics()
@@ -98,6 +100,9 @@ export function createAppShell(ctx) {
   }
 
   function setView(viewId, options = {}) {
+    if (viewId === 'systemAdminView' && !systemManagement?.isAdmin()) {
+      viewId = 'profileView'
+    }
     state.activeView = viewId
     localStorage.setItem('learning.activeView', viewId)
     document.querySelectorAll('.view').forEach((view) => view.classList.toggle('active', view.id === viewId))
@@ -115,13 +120,17 @@ export function createAppShell(ctx) {
       loadArticleHistory?.()
     }
     if (viewId === 'scenePlanView') loadSceneData?.()
+    if (viewId === 'systemAdminView') {
+      systemManagement?.mountPanels()
+      systemManagement?.renderSystemTab(state.activeSystemTab)
+    }
     if (window.matchMedia('(max-width: 1100px)').matches) {
       setSidebarCollapsed(true)
     }
   }
 
   function setProfileTab(tabId) {
-    const fallback = document.getElementById(tabId) ? tabId : 'accountPanel'
+    const fallback = document.querySelector(`[data-profile-tab="${tabId}"]`) ? tabId : 'accountPanel'
     state.activeProfileTab = fallback
     localStorage.setItem('learning.profileTab', fallback)
     document.querySelectorAll('.profile-tab').forEach((button) => {
@@ -261,6 +270,10 @@ export function createAppShell(ctx) {
     return result
   }
 
+  function setSystemTab(tabId) {
+    systemManagement?.renderSystemTab(tabId)
+  }
+
   return {
     updateAuthView,
     syncSidebarState,
@@ -269,6 +282,7 @@ export function createAppShell(ctx) {
     handleViewportChange,
     setView,
     setProfileTab,
+    setSystemTab,
     loginOrRegister,
     logout,
     loadInitialData,

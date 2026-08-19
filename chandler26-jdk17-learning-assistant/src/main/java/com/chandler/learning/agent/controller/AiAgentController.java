@@ -4,8 +4,10 @@ import com.chandler.learning.agent.domain.dto.AgentChatRequest;
 import com.chandler.learning.agent.domain.dto.AgentChatResponse;
 import com.chandler.learning.agent.domain.dto.AgentSaveRequest;
 import com.chandler.learning.agent.domain.entity.AiAgent;
+import com.chandler.learning.agent.domain.entity.learning.LearningUser;
 import com.chandler.learning.agent.service.AiAgentService;
 import com.chandler.learning.agent.service.AiChatService;
+import com.chandler.learning.agent.service.learning.AuthService;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.Valid;
@@ -25,6 +27,7 @@ public class AiAgentController {
 
     private final AiAgentService agentService;
     private final AiChatService chatService;
+    private final AuthService authService;
 
     /**
      * 处理 {@code chat} 相关业务。
@@ -66,6 +69,7 @@ public class AiAgentController {
     @PostMapping
     @Operation(summary = "创建 Agent")
     public Long create(@Valid @RequestBody AgentSaveRequest request) {
+        authService.requireAdmin(null);
         return agentService.create(request);
     }
 
@@ -75,6 +79,7 @@ public class AiAgentController {
     @PutMapping("/{id}")
     @Operation(summary = "更新 Agent")
     public void update(@PathVariable Long id, @Valid @RequestBody AgentSaveRequest request) {
+        authService.requireAdmin(null);
         agentService.update(id, request);
     }
 
@@ -84,6 +89,7 @@ public class AiAgentController {
     @PostMapping("/{id}/enable")
     @Operation(summary = "启用 Agent")
     public void enable(@PathVariable Long id) {
+        authService.requireAdmin(null);
         agentService.updateEnabled(id, true);
     }
 
@@ -93,6 +99,7 @@ public class AiAgentController {
     @PostMapping("/{id}/disable")
     @Operation(summary = "停用 Agent")
     public void disable(@PathVariable Long id) {
+        authService.requireAdmin(null);
         agentService.updateEnabled(id, false);
     }
 
@@ -102,6 +109,7 @@ public class AiAgentController {
     @DeleteMapping("/{id}")
     @Operation(summary = "删除 Agent")
     public void delete(@PathVariable Long id) {
+        authService.requireAdmin(null);
         agentService.delete(id);
     }
 
@@ -111,6 +119,7 @@ public class AiAgentController {
     @PostMapping("/{id}/clone")
     @Operation(summary = "复制 Agent")
     public Long clone(@PathVariable Long id) {
+        authService.requireAdmin(null);
         return agentService.clone(id);
     }
 }

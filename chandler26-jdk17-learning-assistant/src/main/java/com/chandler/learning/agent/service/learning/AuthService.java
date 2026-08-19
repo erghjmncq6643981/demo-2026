@@ -7,6 +7,7 @@ import com.chandler.learning.agent.domain.dto.learning.UserProfileResponse;
 import com.chandler.learning.agent.domain.dto.learning.UserProfileUpdateRequest;
 import com.chandler.learning.agent.domain.entity.learning.LearningUser;
 import com.chandler.learning.agent.domain.enums.SystemLogType;
+import com.chandler.learning.agent.domain.enums.UserRole;
 import com.chandler.learning.agent.exception.LearningAssistantException;
 import com.chandler.learning.agent.mapper.learning.LearningUserMapper;
 import com.chandler.learning.agent.security.JwtClaims;
@@ -64,6 +65,7 @@ public class AuthService {
         user.setNickname(StringUtils.hasText(request.getNickname()) ? request.getNickname().trim() : username);
         user.setPasswordHash(hashPassword(request.getPassword()));
         user.setEnabled(true);
+        user.setRoleCode(UserRole.USER.getCode());
         user.setCreateTime(now);
         user.setUpdateTime(now);
         userMapper.insert(user);
@@ -190,6 +192,24 @@ public class AuthService {
     }
 
     /**
+     * 获取当前系统管理员；所有管理类接口统一从这里完成真实授权。
+     */
+    public LearningUser requireAdmin(String authorization) {
+        LearningUser user = requireUser(authorization);
+        if (UserRole.of(user.getRoleCode()) != UserRole.ADMIN) {
+            throw LearningAssistantException.of(LearningConstants.ErrorCode.ADMIN_REQUIRED);
+        }
+        return user;
+    }
+
+    /**
+     * 判断用户是否为系统管理员。
+     */
+    public boolean isAdmin(LearningUser user) {
+        return user != null && UserRole.of(user.getRoleCode()) == UserRole.ADMIN;
+    }
+
+    /**
      * 创建或保存 {@code createLoginResponse} 相关业务。
      */
     private AuthResponse createLoginResponse(LearningUser user) {
@@ -248,6 +268,9 @@ public class AuthService {
         response.setNickname(user.getNickname());
         response.setPhoneMasked(maskPhone(user.getPhone()));
         response.setEmailMasked(maskEmail(user.getEmail()));
+        UserRole role = UserRole.of(user.getRoleCode());
+        response.setRoleCode(role.getCode());
+        response.setRoleLabel(role.getLabel());
         return response;
     }
 
@@ -324,7 +347,8 @@ public class AuthService {
     /**
      * 判断 {@code hashPassword} 相关业务。
      */
-    private String hashPassword(String password) {
+    /** 为账户创建与登录校验一致的密码哈希。 */
+    public String hashPassword(String password) {
         String salt = randomHex(LearningConstants.Auth.PASSWORD_SALT_BYTES);
         return PASSWORD_PREFIX + salt + "$" + sha256(salt + LearningConstants.Auth.PASSWORD_HASH_SEPARATOR + password);
     }

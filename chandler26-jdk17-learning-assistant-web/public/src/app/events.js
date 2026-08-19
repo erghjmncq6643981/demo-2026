@@ -126,6 +126,8 @@ export function bindAppEvents(ctx) {
     closeDeleteConfirm,
     setView,
     setProfileTab,
+    setSystemTab,
+    systemManagement,
     handleReviewKeydown,
   } = ctx
 
@@ -384,9 +386,29 @@ elements.deleteConfirmModal?.addEventListener('click', (event) => {
 document.querySelectorAll('.nav-item').forEach((button) => {
   button.addEventListener('click', () => setView(button.dataset.view))
 })
-document.querySelectorAll('.profile-tab').forEach((button) => {
+document.querySelectorAll('[data-profile-tab]').forEach((button) => {
   button.addEventListener('click', () => setProfileTab(button.dataset.profileTab))
 })
+document.querySelectorAll('[data-system-tab]').forEach((button) => {
+  button.addEventListener('click', () => setSystemTab(button.dataset.systemTab))
+})
+elements.openAdminUserModalBtn?.addEventListener('click', () => systemManagement?.openUserModal())
+elements.closeAdminUserModalBtn?.addEventListener('click', () => systemManagement?.closeUserModal())
+elements.adminUserModal?.addEventListener('click', (event) => {
+  if (event.target === elements.adminUserModal) systemManagement?.closeUserModal()
+})
+elements.saveAdminUserBtn?.addEventListener('click', () => systemManagement?.saveUser())
+elements.searchAdminUsersBtn?.addEventListener('click', () => { state.adminUserPage = 1; systemManagement?.loadUsers() })
+elements.resetAdminUsersBtn?.addEventListener('click', () => {
+  elements.adminUserKeywordInput.value = ''
+  elements.adminUserRoleFilter.value = ''
+  elements.adminUserEnabledFilter.value = ''
+  state.adminUserPage = 1
+  systemManagement?.loadUsers()
+})
+elements.adminUserPrevBtn?.addEventListener('click', () => systemManagement?.changePage(-1))
+elements.adminUserNextBtn?.addEventListener('click', () => systemManagement?.changePage(1))
+elements.openAdminVocabularyImportBtn?.addEventListener('click', openVocabularyImport)
 document.addEventListener('keydown', handleReviewKeydown)
 }
 

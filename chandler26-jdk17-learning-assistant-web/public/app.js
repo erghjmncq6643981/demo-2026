@@ -27,6 +27,7 @@ import { createProfileFeature } from '/src/features/profile/profile.js'
 import { createSpeechFeature } from '/src/features/speech/speech.js'
 import { createStudyFeature } from '/src/features/study/study.js'
 import { createReviewFeature } from '/src/features/review/review.js'
+import { createSystemManagementFeature } from '/src/features/system/system-management.js'
 
 const state = createInitialState()
 const elements = createElements()
@@ -52,6 +53,15 @@ const studyFacade = createFeatureFacade(() => studyFeature)
 const review = createFeatureFacade(() => reviewFeature)
 const article = createFeatureFacade(() => articleFeature)
 const scenePlan = createFeatureFacade(() => scenePlanFeature)
+const systemManagement = createSystemManagementFeature({
+  state,
+  elements,
+  request,
+  setLoading,
+  toast,
+  logEvent,
+  confirmDelete,
+})
 
 const speechFeature = createSpeechFeature({
   state,
@@ -105,6 +115,7 @@ const {
   handleViewportChange,
   setView,
   setProfileTab,
+  setSystemTab,
   loginOrRegister,
   logout,
   loadInitialData,
@@ -123,6 +134,7 @@ const {
   loadActivity: profile.loadActivity,
   loadSystemLogs: profile.loadSystemLogs,
   loadAiTasks: profile.loadAiTasks,
+  systemManagement,
   loadDueReviews: review.loadDueReviews,
   loadWordbookEntries: profile.loadWordbookEntries,
   loadArticleWords: article.loadArticleWords,
@@ -407,6 +419,8 @@ bindAppEvents({
   closeDeleteConfirm,
   setView,
   setProfileTab,
+  setSystemTab,
+  systemManagement,
   handleReviewKeydown,
 })
 exposeDebugGlobals({ state, renderRecord: studyFacade.renderRecord, renderReviewCompleteModal, speak, setView, setProfileTab })

@@ -440,7 +440,6 @@ public class VocabularyCatalogAnalysisService {
             return item;
         }).toList();
         Map<String, Object> variables = new HashMap<>();
-        variables.put("catalog_name", job.getCatalogId());
         variables.put("analysis_version", job.getAnalysisVersion());
         variables.put("words", words);
 

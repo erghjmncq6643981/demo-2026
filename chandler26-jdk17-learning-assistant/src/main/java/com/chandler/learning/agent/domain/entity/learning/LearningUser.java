@@ -60,6 +60,12 @@ public class LearningUser extends BaseEntity {
     private Boolean enabled;
 
     /**
+     * 系统角色编码：USER-普通学习者，ADMIN-系统管理员。
+     */
+    @Schema(description = "系统角色编码：USER-普通学习者，ADMIN-系统管理员")
+    private String roleCode;
+
+    /**
      * 最近登录时间。
      */
     @Schema(description = "最近登录时间")
