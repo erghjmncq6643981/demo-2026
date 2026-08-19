@@ -1,19 +1,16 @@
 package com.chandler.learning.agent.service.learning;
 
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
+import com.chandler.learning.agent.ai.agent.application.AiAgentService;
+import com.chandler.learning.agent.ai.prompt.application.AiPromptTemplateService;
 import com.chandler.learning.agent.domain.dto.learning.SpeechPreferenceRequest;
 import com.chandler.learning.agent.domain.dto.learning.SpeechPreferenceResponse;
 import com.chandler.learning.agent.domain.dto.learning.LearningSettingsRequest;
 import com.chandler.learning.agent.domain.dto.learning.LearningSettingsResponse;
-import com.chandler.learning.agent.domain.entity.AiAgent;
-import com.chandler.learning.agent.domain.entity.AiPromptTemplate;
 import com.chandler.learning.agent.domain.entity.learning.LearningUserPreference;
 import com.chandler.learning.agent.domain.enums.SpeechVoiceType;
 import com.chandler.learning.agent.domain.enums.SystemLogType;
 import com.chandler.learning.agent.mapper.learning.LearningUserPreferenceMapper;
-import com.chandler.learning.agent.mapper.AiAgentMapper;
-import com.chandler.learning.agent.mapper.AiPromptTemplateMapper;
-import com.chandler.learning.agent.exception.LearningAssistantException;
 import com.chandler.learning.agent.support.LearningConstants;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -38,8 +35,8 @@ import java.util.Map;
 public class UserPreferenceService {
 
     private final LearningUserPreferenceMapper preferenceMapper;
-    private final AiAgentMapper agentMapper;
-    private final AiPromptTemplateMapper templateMapper;
+    private final AiAgentService agentService;
+    private final AiPromptTemplateService promptTemplateService;
     private final SystemLogService systemLogService;
     private final UserDisplayNameService userDisplayNameService;
 
@@ -201,28 +198,14 @@ public class UserPreferenceService {
      * 校验学习 Agent 存在且启用。
      */
     private void requireEnabledAgent(String agentCode) {
-        AiAgent agent = agentMapper.selectOne(new LambdaQueryWrapper<AiAgent>()
-                .eq(AiAgent::getCode, agentCode)
-                .eq(AiAgent::getEnabled, true)
-                .eq(AiAgent::getDeleted, false)
-                .last(LearningConstants.SQL_LIMIT_ONE));
-        if (agent == null) {
-            throw LearningAssistantException.badRequest(LearningConstants.ErrorCode.AGENT_NOT_FOUND);
-        }
+        agentService.requireEnabled(agentCode);
     }
 
     /**
      * 校验学习模板存在且启用。
      */
     private void requireEnabledTemplate(String templateCode) {
-        AiPromptTemplate template = templateMapper.selectOne(new LambdaQueryWrapper<AiPromptTemplate>()
-                .eq(AiPromptTemplate::getCode, templateCode)
-                .eq(AiPromptTemplate::getEnabled, true)
-                .eq(AiPromptTemplate::getDeleted, false)
-                .last(LearningConstants.SQL_LIMIT_ONE));
-        if (template == null) {
-            throw LearningAssistantException.badRequest(LearningConstants.ErrorCode.PROMPT_TEMPLATE_NOT_FOUND);
-        }
+        promptTemplateService.requireEnabled(templateCode);
     }
 
     /**

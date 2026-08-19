@@ -1,6 +1,6 @@
 package com.chandler.learning.agent.service.vocabulary;
 
-import com.chandler.learning.agent.domain.dto.AgentChatResponse;
+import com.chandler.learning.agent.ai.chat.application.AgentChatResponse;
 import com.chandler.learning.agent.domain.entity.vocabulary.VocabularyCatalogAnalysisBatch;
 import com.chandler.learning.agent.domain.entity.vocabulary.VocabularyCatalogAnalysisJob;
 import com.chandler.learning.agent.domain.entity.vocabulary.VocabularyCatalogEntry;
@@ -10,7 +10,7 @@ import com.chandler.learning.agent.mapper.vocabulary.VocabularyCatalogEntryAnaly
 import com.chandler.learning.agent.mapper.vocabulary.VocabularyCatalogEntryMapper;
 import com.chandler.learning.agent.mapper.vocabulary.VocabularyCatalogMapper;
 import com.chandler.learning.agent.mapper.vocabulary.VocabularyCatalogVersionMapper;
-import com.chandler.learning.agent.service.AiChatService;
+import com.chandler.learning.agent.ai.chat.application.AiChatService;
 import com.chandler.learning.agent.service.learning.AiAsyncTaskService;
 import com.chandler.learning.agent.service.learning.SystemLogService;
 import com.chandler.learning.agent.service.learning.UserDisplayNameService;

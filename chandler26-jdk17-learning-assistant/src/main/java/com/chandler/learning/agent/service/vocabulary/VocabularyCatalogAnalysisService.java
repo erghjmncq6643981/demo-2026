@@ -2,8 +2,8 @@ package com.chandler.learning.agent.service.vocabulary;
 
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import com.baomidou.mybatisplus.core.conditions.update.LambdaUpdateWrapper;
-import com.chandler.learning.agent.domain.dto.AgentChatRequest;
-import com.chandler.learning.agent.domain.dto.AgentChatResponse;
+import com.chandler.learning.agent.ai.chat.application.AgentChatRequest;
+import com.chandler.learning.agent.ai.chat.application.AgentChatResponse;
 import com.chandler.learning.agent.domain.dto.vocabulary.VocabularyCatalogAnalysisRequest;
 import com.chandler.learning.agent.domain.dto.vocabulary.VocabularyCatalogAnalysisResponse;
 import com.chandler.learning.agent.domain.entity.learning.AiAsyncTask;
@@ -13,7 +13,7 @@ import com.chandler.learning.agent.domain.entity.vocabulary.VocabularyCatalogAna
 import com.chandler.learning.agent.domain.entity.vocabulary.VocabularyCatalogEntry;
 import com.chandler.learning.agent.domain.entity.vocabulary.VocabularyCatalogEntryAnalysis;
 import com.chandler.learning.agent.domain.entity.vocabulary.VocabularyCatalogVersion;
-import com.chandler.learning.agent.domain.enums.AiInvocationScene;
+import com.chandler.learning.agent.ai.chat.domain.AiInvocationScene;
 import com.chandler.learning.agent.domain.enums.SystemLogType;
 import com.chandler.learning.agent.exception.LearningAssistantException;
 import com.chandler.learning.agent.mapper.vocabulary.VocabularyCatalogAnalysisBatchMapper;
@@ -22,7 +22,7 @@ import com.chandler.learning.agent.mapper.vocabulary.VocabularyCatalogEntryAnaly
 import com.chandler.learning.agent.mapper.vocabulary.VocabularyCatalogEntryMapper;
 import com.chandler.learning.agent.mapper.vocabulary.VocabularyCatalogMapper;
 import com.chandler.learning.agent.mapper.vocabulary.VocabularyCatalogVersionMapper;
-import com.chandler.learning.agent.service.AiChatService;
+import com.chandler.learning.agent.ai.chat.application.AiChatService;
 import com.chandler.learning.agent.service.learning.AiAsyncTaskService;
 import com.chandler.learning.agent.service.learning.SystemLogService;
 import com.chandler.learning.agent.service.learning.UserDisplayNameService;

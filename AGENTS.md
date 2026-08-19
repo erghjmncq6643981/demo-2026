@@ -27,6 +27,7 @@
 ## Frontend
 
 - Keep feature code under `public/src/features/**`; shared utilities belong in `public/src/shared/**`.
+- Keep AI frontend modules separated by product capability: Agent management under `features/ai-agent/**`, model/provider management under `features/ai-model/**`, AI sessions under `features/ai-chat/**`, and prompt templates under `features/ai-prompt/**`. Profile and system modules may orchestrate these capabilities but must not absorb their implementation.
 - Do not add new large logic to `public/app.js`; use feature modules and a small facade/wiring layer.
 - Do not open or close modals by directly calling `classList.remove('hidden')` / `classList.add('hidden')`. Use `showModal` / `hideModal` from `/src/shared/modal.js` so scroll position resets.
 - Normalize wordbook ids through `/src/shared/wordbook.js` helpers before API calls or state comparisons.
@@ -40,6 +41,9 @@
 ## Backend
 
 - Use Spring Security + JWT for authenticated APIs.
+- Keep AI backend code under `ai/{agent,model,chat,prompt}` with `api`, `application`, `domain`, and `infrastructure` layers. External model HTTP clients, request adapters, response parsers, and provider protocols belong under `ai/gateway/**`.
+- Enforce `api -> application -> domain` and `infrastructure -> domain`. Controllers must not access Mapper classes, domain classes must not depend on API or infrastructure, and cross-domain calls must go through application services rather than another domain's Mapper.
+- Reserve `common` for stable cross-domain foundations such as exceptions, web envelopes, persistence base classes, constants, and request context. Do not use `common` as a replacement for `support`, `utils`, or misplaced business logic; keep `config` for Spring wiring and `security` for authentication, authorization, JWT, principals, filters, and secret protection.
 - Serialize backend `Long`/Snowflake IDs as JSON strings through the shared Jackson configuration; never introduce a custom `ObjectMapper` or DTO serializer that emits these IDs as JSON numbers. Request DTOs may keep `Long` fields because Jackson accepts the frontend string representation.
 - Throw `LearningAssistantException` or a project-specific runtime exception instead of generic runtime errors.
 - Technical diagnostics and stack traces should be debug-level; business events should be info-level and readable by business users, for example: `用户「小明」把单词「abandon」添加到单词本「默认单词本」`.

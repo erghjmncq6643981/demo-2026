@@ -1,19 +1,19 @@
 package com.chandler.learning.agent.service.vocabulary;
 
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
-import com.chandler.learning.agent.domain.dto.AgentChatRequest;
-import com.chandler.learning.agent.domain.dto.AgentChatResponse;
+import com.chandler.learning.agent.ai.chat.application.AgentChatRequest;
+import com.chandler.learning.agent.ai.chat.application.AgentChatResponse;
 import com.chandler.learning.agent.domain.dto.vocabulary.VocabularyBestMatchResponse;
 import com.chandler.learning.agent.domain.dto.vocabulary.VocabularyStudyRequest;
 import com.chandler.learning.agent.domain.dto.vocabulary.VocabularyStudyResponse;
 import com.chandler.learning.agent.domain.entity.vocabulary.EnglishVocabularyStudyRecord;
-import com.chandler.learning.agent.domain.enums.AiInvocationScene;
+import com.chandler.learning.agent.ai.chat.domain.AiInvocationScene;
 import com.chandler.learning.agent.domain.enums.LearningScene;
 import com.chandler.learning.agent.domain.enums.SystemLogType;
 import com.chandler.learning.agent.domain.enums.VocabularyMatchType;
 import com.chandler.learning.agent.exception.LearningAssistantException;
 import com.chandler.learning.agent.mapper.vocabulary.EnglishVocabularyStudyRecordMapper;
-import com.chandler.learning.agent.service.AiChatService;
+import com.chandler.learning.agent.ai.chat.application.AiChatService;
 import com.chandler.learning.agent.service.learning.SystemLogService;
 import com.chandler.learning.agent.service.learning.UserDisplayNameService;
 import com.chandler.learning.agent.service.learning.VocabularyInsightService;

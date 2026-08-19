@@ -8,7 +8,13 @@ import org.springframework.boot.autoconfigure.SpringBootApplication;
 /**
  * 英语学习助手后端启动入口。
  */
-@MapperScan({"com.chandler.learning.agent.mapper"})
+@MapperScan({
+		"com.chandler.learning.agent.mapper",
+		"com.chandler.learning.agent.ai.agent.infrastructure",
+		"com.chandler.learning.agent.ai.model.infrastructure",
+		"com.chandler.learning.agent.ai.chat.infrastructure",
+		"com.chandler.learning.agent.ai.prompt.infrastructure"
+})
 @SpringBootApplication(scanBasePackages = "com.chandler")
 public class Application {
 	/**

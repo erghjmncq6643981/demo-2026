@@ -3,7 +3,7 @@ package com.chandler.learning.agent.domain.entity.learning;
 import com.baomidou.mybatisplus.annotation.IdType;
 import com.baomidou.mybatisplus.annotation.TableId;
 import com.baomidou.mybatisplus.annotation.TableName;
-import com.chandler.learning.agent.domain.dto.AgentChatResponse;
+import com.chandler.learning.agent.ai.chat.application.AgentChatResponse;
 import com.chandler.learning.agent.domain.entity.BaseEntity;
 import com.chandler.learning.agent.support.LearningConstants;
 import io.swagger.v3.oas.annotations.media.Schema;
