@@ -302,14 +302,16 @@ public class AiChatSessionService {
         }
         List<ChatMessageResponse> messages = messageMapper.selectList(new LambdaQueryWrapper<AiChatMessage>()
                         .eq(AiChatMessage::getSessionId, sessionId)
-                        .orderByAsc(AiChatMessage::getSequence))
+                        .orderByDesc(AiChatMessage::getCreateTime)
+                        .orderByDesc(AiChatMessage::getSequence))
                 .stream()
                 .map(this::toMessageResponse)
                 .toList();
         List<AiModelCallRecordResponse> calls = modelCallRecordMapper.selectList(
                         new LambdaQueryWrapper<AiModelCallRecord>()
                                 .eq(AiModelCallRecord::getSessionId, sessionId)
-                                .orderByDesc(AiModelCallRecord::getCreateTime))
+                                .orderByDesc(AiModelCallRecord::getCreateTime)
+                                .orderByDesc(AiModelCallRecord::getId))
                 .stream()
                 .map(this::toCallRecordResponse)
                 .toList();

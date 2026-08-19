@@ -312,8 +312,8 @@ export function createAiSessionAdminFeature(ctx) {
     const kimiRequestAudit = JSON.stringify({ contentStored: false, invocationScene: session.sceneCode, provider: 'moonshot', model: 'moonshot-v1-8k', maxTokens: 8000, messages: [{ role: 'system', characters: 216 }, { role: 'user', characters: 1280 }] })
     const responseAudit = JSON.stringify({ contentStored: false, contentCharacters: 5620, promptTokens: 820, completionTokens: 430, totalTokens: 1250, finishReason: 'stop', structuredParser: 'deepseek-json', structuredParseStage: 'raw', structuredRepairs: [] })
     return { session, messages: [
-      { id: 1, role: 'user', sequence: 1, content: '请根据学习目的和本批候选词生成一个可学习、可检查的机场出发场景材料。', createTime: now },
       { id: 2, role: 'assistant', sequence: 2, content: '{"title":"机场出发","learning_text":"At the airport...","translation":"在机场...","vocabulary":[{"term":"boarding pass","meaning":"登机牌"}]}', createTime: now },
+      { id: 1, role: 'user', sequence: 1, content: '请根据学习目的和本批候选词生成一个可学习、可检查的机场出发场景材料。', createTime: now },
     ], calls: [
       { id: 101, provider: session.lastProvider, modelName: session.lastModelName, invocationSceneCode: session.sceneCode, latencyMs: 820, promptTokens: 820, completionTokens: 430, totalTokens: 1250, success: true, requestJson: requestAudit, responseJson: responseAudit, createTime: now },
       { id: 100, provider: 'moonshot', modelName: 'moonshot-v1-8k', invocationSceneCode: session.sceneCode, latencyMs: 1440, promptTokens: 780, completionTokens: 0, totalTokens: 780, success: false, errorMessage: 'AI 返回内容格式无效', requestJson: kimiRequestAudit, responseJson: JSON.stringify({ contentStored: false, structuredParser: 'kimi-json', structuredParseStage: 'repaired', structuredRepairs: ['normalized_structural_punctuation', 'removed_trailing_comma'], parseError: 'Unexpected character at position 321' }), createTime: now },

@@ -19,8 +19,9 @@ const types = {
 }
 
 const server = createServer(async (req, res) => {
+  let url
   try {
-    const url = new URL(req.url || '/', `http://${req.headers.host}`)
+    url = new URL(req.url || '/', `http://${req.headers.host || `${host}:${port}`}`)
     const pathname = url.pathname === '/' ? '/index.html' : decodeURIComponent(url.pathname)
     const filePath = normalize(join(publicDir, pathname))
     if (!filePath.startsWith(publicDir)) {
@@ -35,16 +36,22 @@ const server = createServer(async (req, res) => {
     })
     res.end(content)
   } catch (error) {
-    const ext = extname(url.pathname)
+    const pathname = url?.pathname || req.url || '/'
+    const ext = extname(pathname)
     if (ext && ext !== '.html') {
-      console.warn(`[404 Not Found] ${url.pathname} (${error.message})`)
+      console.warn(`[404 Not Found] ${pathname} (${error.message})`)
       res.writeHead(404, { 'content-type': 'text/plain; charset=utf-8' })
-      res.end(`Not Found: ${url.pathname}`)
+      res.end(`Not Found: ${pathname}`)
       return
     }
-    const content = await readFile(join(publicDir, 'index.html'))
-    res.writeHead(200, { 'content-type': 'text/html; charset=utf-8', 'cache-control': 'no-store' })
-    res.end(content)
+    try {
+      const content = await readFile(join(publicDir, 'index.html'))
+      res.writeHead(200, { 'content-type': 'text/html; charset=utf-8', 'cache-control': 'no-store' })
+      res.end(content)
+    } catch {
+      res.writeHead(500, { 'content-type': 'text/plain; charset=utf-8' })
+      res.end('Internal Server Error')
+    }
   }
 })
 

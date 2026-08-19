@@ -423,7 +423,21 @@ elements.aiSessionPrevBtn?.addEventListener('click', () => systemManagement?.cha
 elements.aiSessionNextBtn?.addEventListener('click', () => systemManagement?.changeAiSessionPage(1))
 elements.closeAiSessionDetailBtn?.addEventListener('click', () => systemManagement?.closeDetail())
 elements.aiSessionDetailModal?.addEventListener('click', (event) => { if (event.target === elements.aiSessionDetailModal) systemManagement?.closeDetail() })
-document.addEventListener('keydown', handleReviewKeydown)
+  document.addEventListener('keydown', handleReviewKeydown)
+
+  window.addEventListener('unhandledrejection', (event) => {
+    const error = event.reason
+    if (error?.status === 401) {
+      state.onUnauthorized?.()
+      event.preventDefault()
+      return
+    }
+    console.error('Unhandled rejection:', error)
+  })
+
+  window.addEventListener('error', (event) => {
+    console.error('Global script error:', event.error || event.message)
+  })
 }
 
 export function exposeDebugGlobals({ state, renderRecord, renderReviewCompleteModal, speak, setView, setProfileTab }) {

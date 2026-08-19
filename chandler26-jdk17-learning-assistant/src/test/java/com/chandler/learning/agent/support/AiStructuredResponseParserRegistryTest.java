@@ -39,6 +39,51 @@ class AiStructuredResponseParserRegistryTest {
     }
 
     @Test
+    void kimiRepairsBareKeysAndSmartQuotes() {
+        String content = "{\n  “term”: abandon,\n  meaning: \"解释“牺牲”的意思\",\n  “context_meaning”: \"放弃\",\n  “correct_answer”: 1,\n}";
+
+        AiStructuredResponseParseResult result = registry.parse(AiInvocationScene.VOCABULARY_SCENE_UNIT,
+                "kimi", "moonshot-v1-8k", content);
+
+        assertThat(result.parserName()).isEqualTo("kimi-json");
+        assertThat(result.parseStage()).isEqualTo("repaired");
+        assertThat(result.repairs()).contains("normalized_structural_punctuation", "quoted_known_bare_value",
+                "quoted_known_bare_key", "removed_trailing_comma");
+        assertThat(result.root().path("term").asText()).isEqualTo("abandon");
+        assertThat(result.root().path("meaning").asText()).isEqualTo("解释“牺牲”的意思");
+        assertThat(result.root().path("context_meaning").asText()).isEqualTo("放弃");
+    }
+
+    @Test
+    void kimiRepairsUnbracketedArrayAndMissingCommas() {
+        String content = "{\n" +
+                "  \"title\": \"机场出行\",\n" +
+                "  \"learning_text\": \"This is an airport story.\",\n" +
+                "  \"translation\": \"这是机场故事。\",\n" +
+                "  \"vocabulary\":\n" +
+                "  {\n" +
+                "    \"term\": \"abandon\",\n" +
+                "    \"meaning\": \"放弃\"\n" +
+                "  }\n" +
+                "  {\n" +
+                "    \"term\": \"ability\",\n" +
+                "    \"meaning\": \"能力\"\n" +
+                "  }\n" +
+                "}";
+
+        AiStructuredResponseParseResult result = registry.parse(AiInvocationScene.VOCABULARY_SCENE_UNIT,
+                "kimi", "moonshot-v1-8k", content);
+
+        assertThat(result.parserName()).isEqualTo("kimi-json");
+        assertThat(result.parseStage()).isEqualTo("repaired");
+        assertThat(result.repairs()).contains("inserted_missing_commas", "wrapped_unbracketed_array");
+        assertThat(result.root().path("title").asText()).isEqualTo("机场出行");
+        assertThat(result.root().path("vocabulary")).hasSize(2);
+        assertThat(result.root().path("vocabulary").get(0).path("term").asText()).isEqualTo("abandon");
+        assertThat(result.root().path("vocabulary").get(1).path("term").asText()).isEqualTo("ability");
+    }
+
+    @Test
     void resolvesContextWindowsInTokensNotBytes() {
         AiModelCapabilityResolver resolver = new AiModelCapabilityResolver();
 

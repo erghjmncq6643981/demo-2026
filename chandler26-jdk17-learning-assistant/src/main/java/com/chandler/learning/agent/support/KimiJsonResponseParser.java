@@ -61,14 +61,28 @@ public class KimiJsonResponseParser extends StrictJsonResponseParser {
         if (!normalized.equals(candidate)) {
             repairs.add("normalized_structural_punctuation");
         }
-        String withoutTrailingCommas = JsonResponseParserSupport.removeTrailingCommas(normalized);
-        if (!withoutTrailingCommas.equals(normalized)) {
+        String withCommas = JsonResponseParserSupport.insertMissingCommasBetweenObjects(normalized);
+        if (!withCommas.equals(normalized)) {
+            repairs.add("inserted_missing_commas");
+        }
+        String withWrappedArrays = JsonResponseParserSupport.wrapUnbracketedArrayFields(withCommas);
+        if (!withWrappedArrays.equals(withCommas)) {
+            repairs.add("wrapped_unbracketed_array");
+        }
+        String withoutTrailingCommas = JsonResponseParserSupport.removeTrailingCommas(withWrappedArrays);
+        if (!withoutTrailingCommas.equals(withWrappedArrays)) {
             repairs.add("removed_trailing_comma");
         }
         normalized = withoutTrailingCommas;
-        String quoted = JsonResponseParserSupport.quoteKnownBareStringValues(normalized);
-        if (!quoted.equals(normalized)) {
+        // Quote known bare string values first.
+        String quotedValues = JsonResponseParserSupport.quoteKnownBareStringValues(normalized);
+        if (!quotedValues.equals(normalized)) {
             repairs.add("quoted_known_bare_value");
+        }
+        // Then quote known bare key names.
+        String quoted = JsonResponseParserSupport.quoteKnownBareKeyNames(quotedValues);
+        if (!quoted.equals(quotedValues)) {
+            repairs.add("quoted_known_bare_key");
         }
         String completed = JsonResponseParserSupport.completeClosingBrackets(quoted);
         if (!completed.equals(quoted)) {

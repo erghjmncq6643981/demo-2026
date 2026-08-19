@@ -49,6 +49,18 @@ export function createAppShell(ctx) {
     closeEntryStatusModal,
   } = ctx
 
+  function handleUnauthorized() {
+    if (state.preview) return
+    state.token = null
+    state.user = null
+    localStorage.removeItem('learning.token')
+    localStorage.removeItem('learning.user')
+    updateAuthView()
+    updateShellVisibility()
+    toast('登录状态已失效，请重新登录')
+  }
+  state.onUnauthorized = handleUnauthorized
+
   function updateShellVisibility() {
     const loggedIn = Boolean((state.token && state.user) || state.preview)
     elements.loginScreen.classList.toggle('hidden', loggedIn)
@@ -101,6 +113,10 @@ export function createAppShell(ctx) {
   }
 
   function setView(viewId, options = {}) {
+    if (!state.preview && (!state.token || !state.user)) {
+      updateShellVisibility()
+      return
+    }
     if (viewId === 'systemAdminView' && !systemManagement?.isAdmin()) {
       viewId = 'profileView'
     }

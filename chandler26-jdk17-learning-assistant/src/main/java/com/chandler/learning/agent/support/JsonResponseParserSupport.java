@@ -168,6 +168,124 @@ final class JsonResponseParserSupport {
         return result.toString();
     }
 
+    /**
+     * Quote known bare JSON key names (e.g., term, tier, mastery_requirement, etc.) when they appear without quotes.
+     * This helps parse responses where the model omits quotes around keys.
+     */
+    static String quoteKnownBareKeyNames(String json) {
+        // Match keys that are not quoted and followed by a colon.
+        // Use negative lookbehind to ensure not preceded by a quote.
+        String pattern = "(?<!\\\")\\b(term|tier|mastery_requirement|phonetic|meaning|context_meaning|correct_answer|prompt)\\b\\s*:";
+        return json.replaceAll(pattern, "\"$1\":");
+    }
+
+    /** 修复相邻对象或数组之间遗漏的逗号（例如 }{ 或 ][ 之间）。 */
+    static String insertMissingCommasBetweenObjects(String json) {
+        StringBuilder result = new StringBuilder(json.length() + 16);
+        boolean inString = false;
+        boolean escaped = false;
+        for (int index = 0; index < json.length(); index++) {
+            char character = json.charAt(index);
+            if (escaped) {
+                result.append(character);
+                escaped = false;
+                continue;
+            }
+            if (character == '\\' && inString) {
+                result.append(character);
+                escaped = true;
+                continue;
+            }
+            if (character == '"') {
+                result.append(character);
+                inString = !inString;
+                continue;
+            }
+            result.append(character);
+            if (!inString && (character == '}' || character == ']')) {
+                int next = index + 1;
+                while (next < json.length() && Character.isWhitespace(json.charAt(next))) {
+                    next++;
+                }
+                if (next < json.length() && (json.charAt(next) == '{' || json.charAt(next) == '[')) {
+                    result.append(',');
+                }
+            }
+        }
+        return result.toString();
+    }
+
+    /** 当数组字段直接输出对象而缺少数组中括号时，将其包装为合法数组。 */
+    static String wrapUnbracketedArrayFields(String json) {
+        Pattern pattern = Pattern.compile("(\\\"(?:vocabulary|cards|entries|questions|practice|definitions|examples|collocations|synonyms|antonyms|word_family)\\\"\\s*:\\s*)(\\{)");
+        Matcher matcher = pattern.matcher(json);
+        if (!matcher.find()) {
+            return json;
+        }
+        StringBuilder sb = new StringBuilder(json.length() + 32);
+        int lastPos = 0;
+        matcher.reset();
+        while (matcher.find()) {
+            sb.append(json, lastPos, matcher.start(1));
+            sb.append(matcher.group(1)).append("[");
+            int fieldObjectStart = matcher.start(2);
+            int objectDepth = 0;
+            boolean inString = false;
+            boolean escaped = false;
+            int insertCloseBracketAt = -1;
+            for (int i = fieldObjectStart; i < json.length(); i++) {
+                char c = json.charAt(i);
+                if (escaped) {
+                    escaped = false;
+                    continue;
+                }
+                if (c == '\\' && inString) {
+                    escaped = true;
+                    continue;
+                }
+                if (c == '"') {
+                    inString = !inString;
+                    continue;
+                }
+                if (inString) {
+                    continue;
+                }
+                if (c == '{') {
+                    objectDepth++;
+                } else if (c == '}') {
+                    objectDepth--;
+                    if (objectDepth == 0) {
+                        insertCloseBracketAt = i + 1;
+                        int next = i + 1;
+                        while (next < json.length() && Character.isWhitespace(json.charAt(next))) {
+                            next++;
+                        }
+                        if (next < json.length() && json.charAt(next) == ',') {
+                            int afterComma = next + 1;
+                            while (afterComma < json.length() && Character.isWhitespace(json.charAt(afterComma))) {
+                                afterComma++;
+                            }
+                            if (afterComma < json.length() && json.charAt(afterComma) == '{') {
+                                continue;
+                            }
+                        }
+                        break;
+                    }
+                }
+            }
+            if (insertCloseBracketAt > fieldObjectStart) {
+                sb.append(json, fieldObjectStart, insertCloseBracketAt);
+                sb.append("]");
+                lastPos = insertCloseBracketAt;
+            } else {
+                sb.append(json, fieldObjectStart, json.length());
+                lastPos = json.length();
+            }
+        }
+        sb.append(json.substring(lastPos));
+        return sb.toString();
+    }
+
     /** 仅在响应结尾缺少闭合结构时补齐，不尝试猜测缺失字段或字符串内容。 */
     static String completeClosingBrackets(String json) {
         StringBuilder closings = new StringBuilder();

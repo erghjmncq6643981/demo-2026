@@ -19,6 +19,9 @@ export function createAppServices({ state, elements }) {
     }
     const response = await fetch(apiUrl(path), { headers, ...options })
     if (!response.ok) {
+      if (response.status === 401 && !state.preview) {
+        state.onUnauthorized?.()
+      }
       const text = await response.text()
       const errorPayload = readErrorPayload(text, response.status)
       const error = new Error(errorPayload.message || `HTTP ${response.status}`)

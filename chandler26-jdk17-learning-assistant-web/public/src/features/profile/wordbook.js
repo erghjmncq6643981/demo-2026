@@ -90,12 +90,9 @@ export function createWordbookProfileFeature(ctx) {
         (item) => `
           <div class="wordbook-card public-catalog-card">
             <button class="wordbook-main" type="button" data-public-catalog-job="${escapeHtml(item.jobId || item.catalogVersionId || '')}">
-              <div class="scene-item-topline">
-                <strong>${escapeHtml(item.catalogName)}</strong>
-                <span class="mini-pill ok">${escapeHtml(SOURCE_LABELS[item.sourceType] || item.sourceType || '公共词本')}</span>
-              </div>
+              <strong>${escapeHtml(item.catalogName)}</strong>
               <span>${escapeHtml(item.learningPurpose || '官方精选公共词本，点击查看词条详情')}</span>
-              <small>共 ${item.totalCount || 0} 个词 · 只读详情</small>
+              <small>${SOURCE_LABELS[item.sourceType] || item.sourceType || '公共词本'} · 共 ${item.totalCount || 0} 个单词 · 只读详情</small>
             </button>
             <div class="row-actions">
               <button class="secondary-button compact" type="button" data-public-catalog-preview="${escapeHtml(item.jobId || item.catalogVersionId || '')}">查看词表</button>
