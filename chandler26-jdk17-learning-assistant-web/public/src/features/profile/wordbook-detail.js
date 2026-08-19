@@ -1,6 +1,5 @@
-import { escapeHtml, formatDateTime } from '/src/shared/text.js'
+import { escapeHtml } from '/src/shared/text.js'
 import { normalizeArray, renderCollocationMini, renderRelationItem, semanticRelations, statusLabel } from '/src/shared/vocabulary.js'
-import { sameId } from '/src/shared/ids.js'
 
 export function createWordbookDetailFeature(ctx) {
   const {

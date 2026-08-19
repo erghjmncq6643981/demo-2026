@@ -1,6 +1,8 @@
 package com.chandler.learning.agent.service.vocabulary;
 
 import com.chandler.learning.agent.ai.chat.application.AgentChatResponse;
+import com.chandler.learning.agent.ai.chat.application.codec.AiSceneResponse;
+import com.chandler.learning.agent.ai.chat.domain.AiInvocationScene;
 import com.chandler.learning.agent.domain.entity.vocabulary.VocabularyCatalogAnalysisBatch;
 import com.chandler.learning.agent.domain.entity.vocabulary.VocabularyCatalogAnalysisJob;
 import com.chandler.learning.agent.domain.entity.vocabulary.VocabularyCatalogEntry;
@@ -52,7 +54,7 @@ class VocabularyCatalogAnalysisServiceTest {
     private TransactionTemplate transactionTemplate;
 
     @Test
-    void keepsValidItemsWhenAiResponseCoversOnlyPartOfTheBatch() {
+    void keepsValidItemsWhenAiResponseCoversOnlyPartOfTheBatch() throws Exception {
         VocabularyCatalogAnalysisService service = new VocabularyCatalogAnalysisService(
                 catalogMapper, versionMapper, entryMapper, jobMapper, batchMapper,
                 entryAnalysisMapper, asyncTaskService, aiChatService, systemLogService,
@@ -74,9 +76,13 @@ class VocabularyCatalogAnalysisServiceTest {
         second.setId(2L);
 
         AgentChatResponse response = new AgentChatResponse();
-        response.setContent("""
+        String content = """
                 {"entries":[{"entry_id":1,"primary_group_code":"travel","primary_group_name":"旅行","domain":"travel","sub_topic":"airport","tags":[],"related_entry_ids":[],"difficulty_level":"medium","confidence":0.9}]}
-                """);
+                """;
+        response.setContent(content);
+        response.setStructuredResponse(new AiSceneResponse(
+                AiInvocationScene.VOCABULARY_CATALOG_ANALYSIS,
+                new ObjectMapper().readTree(content), content, "deepseek-json", "raw", List.of()));
 
         VocabularyCatalogAnalysisService.AnalysisParseResult result = service.parseAnalyses(
                 job, batch, List.of(first, second), response);

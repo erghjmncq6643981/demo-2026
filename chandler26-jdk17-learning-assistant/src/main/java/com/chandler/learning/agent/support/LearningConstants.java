@@ -475,6 +475,9 @@ public final class LearningConstants {
         public static final String CHECK_INCORRECT = "incorrect";
         public static final int MIN_CORE_WORDS = 8;
         public static final int MAX_CORE_WORDS_PER_UNIT = 50;
+        public static final int MAX_REVIEW_WORDS = 20;
+        public static final int PREFERRED_GROUP_SCORE = 1000;
+        public static final int SUB_TOPIC_SCORE = 5;
         public static final int RECOGNITION_PASS_SCORE = 70;
         public static final int SPELLING_PASS_SCORE = 70;
         public static final int GENERATION_LOCK_MINUTES = 30;

@@ -16,7 +16,7 @@ function payloadInfo(value) {
   try {
     const parsed = JSON.parse(raw)
     return { raw, parsed, pretty: JSON.stringify(parsed, null, 2), valid: true }
-  } catch (_) {
+  } catch {
     return { raw, parsed: null, pretty: raw, valid: false }
   }
 }
@@ -277,7 +277,7 @@ export function createAiSessionAdminFeature(ctx) {
     elements.aiSessionDetailContent.querySelectorAll('[data-ai-session-copy-key]').forEach((button) => button.addEventListener('click', async () => {
       const value = payloadStore.get(button.dataset.aiSessionCopyKey)
       if (!value) return toast('当前没有可复制的数据')
-      try { await navigator.clipboard.writeText(value); toast('已复制完整数据') } catch (_) { toast('复制失败，请在原始数据中手动选择') }
+      try { await navigator.clipboard.writeText(value); toast('已复制完整数据') } catch { toast('复制失败，请在原始数据中手动选择') }
     }))
     elements.aiSessionDetailContent.querySelectorAll('[data-ai-session-open-raw]').forEach((button) => button.addEventListener('click', () => { activeDetailTab = 'raw'; renderDetailTabs(); renderDetailPanel() }))
     elements.aiSessionDetailContent.querySelectorAll('[data-ai-session-expand-raw]').forEach((button) => button.addEventListener('click', () => {

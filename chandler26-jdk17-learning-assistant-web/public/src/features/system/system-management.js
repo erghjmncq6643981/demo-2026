@@ -21,7 +21,6 @@ export function createSystemManagementFeature(ctx) {
         elements.systemManagedPanels.appendChild(panel)
       }
     }
-    const importList = elements.sceneImportList
     renderSystemTab(state.activeSystemTab)
   }
 

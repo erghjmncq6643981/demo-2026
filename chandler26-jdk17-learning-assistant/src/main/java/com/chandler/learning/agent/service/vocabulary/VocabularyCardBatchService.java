@@ -51,8 +51,6 @@ import java.util.List;
 import java.util.Locale;
 import java.util.Map;
 import java.util.Set;
-import java.util.regex.Matcher;
-import java.util.regex.Pattern;
 import java.util.stream.Collectors;
 
 /**
@@ -62,8 +60,6 @@ import java.util.stream.Collectors;
 @Service
 @RequiredArgsConstructor
 public class VocabularyCardBatchService {
-
-    private static final Pattern JSON_BLOCK_PATTERN = Pattern.compile("\\{[\\s\\S]*}");
 
     private final VocabularyCardGenerationJobMapper jobMapper;
     private final VocabularyCardGenerationJobItemMapper itemMapper;
@@ -332,7 +328,7 @@ public class VocabularyCardBatchService {
             updateItemStatuses(batch, LearningConstants.VocabularyCard.ITEM_GENERATING, null);
             try {
                 AgentChatResponse response = requestBatch(userId, batch, modelConfigId);
-                Map<String, JsonNode> cards = parseCards(response.getContent());
+                Map<String, JsonNode> cards = parseCards(response);
                 for (VocabularyCardGenerationJobItem item : batch) {
                     JsonNode card = cards.get(item.getNormalizedTerm());
                     if (card == null) {
@@ -442,8 +438,8 @@ public class VocabularyCardBatchService {
                         (left, right) -> left));
     }
 
-    private Map<String, JsonNode> parseCards(String content) {
-        JsonNode root = parseJson(content);
+    private Map<String, JsonNode> parseCards(AgentChatResponse response) {
+        JsonNode root = response.requireStructuredRoot(AiInvocationScene.VOCABULARY_CARD_BATCH);
         JsonNode cards = root.path("cards");
         if (!cards.isArray()) {
             throw LearningAssistantException.badRequest(
@@ -458,25 +454,6 @@ public class VocabularyCardBatchService {
             }
         }
         return result;
-    }
-
-    private JsonNode parseJson(String content) {
-        String cleaned = content == null ? "" : content.replace("```json", "").replace("```", "").trim();
-        try {
-            return objectMapper.readTree(cleaned);
-        } catch (Exception ignored) {
-            Matcher matcher = JSON_BLOCK_PATTERN.matcher(cleaned);
-            if (matcher.find()) {
-                try {
-                    return objectMapper.readTree(matcher.group());
-                } catch (Exception ex) {
-                    log.debug("批量词卡 JSON 二次提取失败 error={}", ex.getMessage());
-                }
-            }
-            throw LearningAssistantException.badRequest(
-                    LearningConstants.ErrorCode.AI_RESPONSE_PARSE_FAILED,
-                    "批量词卡响应不是有效 JSON");
-        }
     }
 
     private void finishJob(VocabularyCardGenerationJob job) {

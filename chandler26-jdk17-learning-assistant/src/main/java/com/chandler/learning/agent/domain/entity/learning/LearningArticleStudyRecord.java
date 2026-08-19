@@ -3,7 +3,6 @@ package com.chandler.learning.agent.domain.entity.learning;
 import com.baomidou.mybatisplus.annotation.IdType;
 import com.baomidou.mybatisplus.annotation.TableId;
 import com.baomidou.mybatisplus.annotation.TableName;
-import com.chandler.learning.agent.ai.chat.application.AgentChatResponse;
 import com.chandler.learning.agent.domain.entity.BaseEntity;
 import com.chandler.learning.agent.support.LearningConstants;
 import io.swagger.v3.oas.annotations.media.Schema;
@@ -196,14 +195,15 @@ public class LearningArticleStudyRecord extends BaseEntity {
     /**
      * 更新 {@code applyAiResult} 相关业务。
      */
-    public void applyAiResult(AgentChatResponse response, String parsedJson, LocalDateTime now) {
-        setProvider(response.getModelProvider());
-        setModelName(response.getModelName());
-        setSessionId(response.getSessionId());
-        setRawContent(response.getContent());
+    public void applyAiResult(String provider, String modelName, Long sessionId, String rawContent,
+                              String parsedJson, Integer tokenUsage, Long costTime, LocalDateTime now) {
+        setProvider(provider);
+        setModelName(modelName);
+        setSessionId(sessionId);
+        setRawContent(rawContent);
         setParsedJson(parsedJson);
-        setTokenUsage(response.getTokenUsage());
-        setCostTime(response.getCostTime());
+        setTokenUsage(tokenUsage);
+        setCostTime(costTime);
         setLastLookupTime(now);
         setUpdateTime(now);
     }

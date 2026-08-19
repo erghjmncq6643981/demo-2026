@@ -3,332 +3,43 @@ import { normalizeWordbookId, syncCurrentWordbookId } from '/src/shared/wordbook
 import { initDatetimePicker } from '/src/shared/datetime-picker.js'
 import { renderMarkdown } from '/src/shared/vocabulary.js'
 import { formatDateTime } from '/src/shared/text.js'
-
-const TIER_LABELS = {
-  core: '核心',
-  extended: '词表扩展',
-  supplementary: 'AI 补充',
-  review: '复习',
-}
-
-const PLAN_STATUS_LABELS = {
-  not_started: '未开始',
-  active: '学习中',
-  completed: '已完成',
-  paused: '已暂停',
-  cancelled: '已取消',
-}
-
-const IMPORT_STATUS_LABELS = {
-  reviewing: '待审核',
-  published: '已发布',
-  failed: '失败',
-}
-
-const ANALYSIS_STATUS_LABELS = {
-  not_started: '未开始',
-  pending: '等待执行',
-  running: '分析中',
-  completed: '已完成',
-  partial_failed: '部分完成',
-  failed: '失败',
-}
-
-const ASSESSMENT_LABELS = {
-  meaning_choice: '含义选择',
-  copy_typing: '跟敲单词',
-  meaning_spelling: '含义拼写',
-}
-
-const SOURCE_LABELS = {
-  self_study: '自考',
-  cet4: '四级',
-  cet6: '六级',
-  ielts: '雅思',
-}
-
-function asArray(value) {
-  return Array.isArray(value) ? value : []
-}
-
-function number(value) {
-  const parsed = Number(value)
-  return Number.isFinite(parsed) ? parsed : 0
-}
-
-function localDateKey(date = new Date()) {
-  const year = date.getFullYear()
-  const month = String(date.getMonth() + 1).padStart(2, '0')
-  const day = String(date.getDate()).padStart(2, '0')
-  return `${year}-${month}-${day}`
-}
-
-function escapeRegExp(value) {
-  return String(value).replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
-}
-
-function previewWords() {
-  const core = [
-    ['declutter', '/diːˈklʌtər/', '清理不需要的物品', 'spelling'],
-    ['laundry', '/ˈlɔːndri/', '待洗或洗好的衣物', 'recognition'],
-    ['vacuum', '/ˈvækjuːm/', '用吸尘器清洁', 'spelling'],
-    ['shelf', '/ʃelf/', '架子', 'recognition'],
-    ['drawer', '/drɔːr/', '抽屉', 'recognition'],
-    ['organize', '/ˈɔːrɡənaɪz/', '整理，使有条理', 'spelling'],
-    ['dust', '/dʌst/', '擦去灰尘', 'recognition'],
-    ['donate', '/ˈdoʊneɪt/', '捐赠', 'spelling'],
-  ].map(([term, phonetic, meaning, masteryRequirement], index) => ({
-    id: index + 1,
-    wordbookEntryId: index + 1,
-    term,
-    normalizedTerm: term,
-    phonetic,
-    meaning,
-    contextMeaning: meaning,
-    tier: 'core',
-    masteryRequirement,
-    firstLearning: true,
-    learningState: 'learning',
-    cardStatus: index < 3 ? 'ready' : 'missing',
-    passedAssessments: [],
-    acceptedSpellings: [term],
-    assessment: {
-      prompt: `请选择“${term}”在周末大扫除场景中的含义`,
-      options: [meaning, '预订旅行行程', '准备一顿晚餐', '参加课堂讨论'],
-      correct_answer: meaning,
-    },
-  }))
-  const relatedTerms = [
-    ['T-shirt', '短袖 T 恤'], ['hoodie', '连帽衫'], ['blouse', '女式衬衫'], ['sweater', '毛衣'],
-    ['jeans', '牛仔裤'], ['shorts', '短裤'], ['skirt', '裙子'], ['jacket', '夹克'],
-    ['coat', '外套'], ['dress', '连衣裙'], ['wardrobe', '衣柜'], ['hanger', '衣架'],
-  ]
-  return [
-    ...core,
-    ...relatedTerms.map(([term, meaning], index) => ({
-      id: 100 + index,
-      term,
-      normalizedTerm: term.toLowerCase(),
-      meaning,
-      contextMeaning: meaning,
-      tier: index < 8 ? 'extended' : 'supplementary',
-      masteryRequirement: 'recognition',
-      firstLearning: false,
-      cardStatus: 'not_required',
-      passedAssessments: [],
-    })),
-  ]
-}
-
-function createPreviewCookingUnit(planId, unitNo, recommendedDate = localDateKey()) {
-  const definitions = [
-    ['chop', '/tʃɑːp/', '切碎', 'spelling'],
-    ['ingredient', '/ɪnˈɡriːdiənt/', '食材，原料', 'recognition'],
-    ['whisk', '/wɪsk/', '搅打', 'spelling'],
-    ['skillet', '/ˈskɪlɪt/', '平底煎锅', 'recognition'],
-    ['simmer', '/ˈsɪmər/', '用小火慢煮', 'recognition'],
-    ['season', '/ˈsiːzən/', '给食物调味', 'spelling'],
-    ['dough', '/doʊ/', '面团', 'recognition'],
-    ['garnish', '/ˈɡɑːrnɪʃ/', '给菜肴加装饰配料', 'spelling'],
-  ]
-  const coreWords = definitions.map(([term, phonetic, meaning, masteryRequirement], index) => ({
-    id: unitNo * 1000 + index + 1,
-    wordbookEntryId: unitNo * 1000 + index + 1,
-    term,
-    normalizedTerm: term,
-    phonetic,
-    meaning,
-    contextMeaning: meaning,
-    tier: 'core',
-    masteryRequirement,
-    firstLearning: true,
-    learningState: 'learning',
-    cardStatus: 'missing',
-    passedAssessments: [],
-    acceptedSpellings: [term],
-    assessment: {
-      prompt: `请选择“${term}”在周末烹饪课场景中的含义`,
-      options: [meaning, '整理旅行行李', '清洁卧室家具', '参加工作会议'],
-      correct_answer: meaning,
-    },
-  }))
-  const kitchenNouns = [
-    ['spatula', '锅铲'], ['ladle', '长柄勺'], ['colander', '滤盆'], ['cutting board', '砧板'],
-    ['apron', '围裙'], ['oven mitt', '隔热手套'], ['saucepan', '深平底锅'], ['measuring cup', '量杯'],
-    ['peeler', '削皮器'], ['grater', '刨丝器'], ['rolling pin', '擀面杖'], ['pantry', '食品储藏柜'],
-  ].map(([term, meaning], index) => ({
-    id: unitNo * 1000 + 100 + index,
-    term,
-    normalizedTerm: term,
-    meaning,
-    contextMeaning: meaning,
-    tier: index < 8 ? 'extended' : 'supplementary',
-    masteryRequirement: 'recognition',
-    firstLearning: false,
-    cardStatus: 'not_required',
-    passedAssessments: [],
-  }))
-  return {
-    id: planId * 100 + unitNo,
-    planId,
-    unitNo,
-    title: '周末烹饪课',
-    scenarioType: 'Cooking & Kitchen',
-    summary: '跟随食谱准备食材、使用厨具并完成一道家常菜。',
-    status: 'ready',
-    coreWordCount: coreWords.length,
-    extendedWordCount: 8,
-    supplementaryWordCount: 4,
-    completedCoreCount: 0,
-    recommendedDate,
-    learningText: 'At the cooking class, Leo checked every ingredient before he began. He used a sharp knife to chop the vegetables and a whisk to mix the eggs. While the sauce simmered in a skillet, he learned to season the dough carefully. At the end, he used fresh herbs to garnish the finished dish.',
-    translation: '在烹饪课上，利奥开始前检查了每一种食材。他用锋利的刀切碎蔬菜，用打蛋器搅打鸡蛋。酱汁在平底锅里慢煮时，他学习了如何给面团调味。最后，他用新鲜香草装饰完成的菜肴。',
-    words: [...coreWords, ...kitchenNouns],
-  }
-}
-
-function createPreviewPlan(options = {}) {
-  const catalog = options.catalog || {
-    catalogId: 1,
-    catalogVersionId: 1,
-    catalogName: '自考英语（二）全部词汇',
-    totalCount: 5087,
-  }
-  const planId = options.id || 1
-  const today = localDateKey()
-  const previewEndDate = new Date(`${today}T12:00:00`)
-  previewEndDate.setDate(previewEndDate.getDate() + 6)
-  const unit = {
-    id: planId * 100 + 1,
-    planId,
-    unitNo: 1,
-    title: '周末大扫除',
-    scenarioType: 'Home & Cleaning',
-    summary: '整理衣柜、清洁房间，并处理不再需要的衣物。',
-    status: 'in_progress',
-    coreWordCount: 8,
-    extendedWordCount: 8,
-    supplementaryWordCount: 4,
-    completedCoreCount: 0,
-    recommendedDate: today,
-    learningText: 'On Saturday morning, Mia decided to declutter her bedroom. She sorted the laundry, dusted each shelf, and used the vacuum under the bed. Then she opened every drawer to organize her clothes. She kept the items she often wore and packed the rest to donate.',
-    translation: '周六早上，米娅决定清理卧室。她整理了衣物，擦拭每层架子，并用吸尘器清理床底。随后，她打开每个抽屉整理衣服，留下常穿的衣物，其余打包捐赠。',
-    words: previewWords(),
-  }
-  return {
-    id: planId,
-    catalogId: catalog.catalogId,
-    catalogVersionId: catalog.catalogVersionId,
-    wordbookId: 1,
-    name: options.name || '自考英语（二）场景突破',
-    learningPurpose: options.learningPurpose || '三个月后参加自考英语（二），高频动词需要会拼写，其余词汇达到阅读中能识别。',
-    startTime: `${today}T08:00:00`,
-    endTime: `${localDateKey(previewEndDate)}T22:00:00`,
-    status: 'active',
-    totalCatalogWords: number(catalog.totalCount) || 5087,
-    learnedCoreWords: options.learnedCoreWords ?? 120,
-    completedUnitCount: options.completedUnitCount ?? 6,
-    currentUnitId: unit.id,
-    canGenerateNext: true,
-    units: [unit],
-  }
-}
-
-function previewCatalog() {
-  return {
-    catalogId: 1,
-    catalogVersionId: 1,
-    catalogName: '自考英语（二）全部词汇',
-    sourceType: 'self_study',
-    learningPurpose: '自考英语（二）考试大纲词汇',
-    status: 'published',
-    totalCount: 5087,
-    publishedTime: new Date().toISOString(),
-  }
-}
-
-function splitMarkdownRow(line) {
-  let value = String(line || '').trim()
-  if (value.startsWith('|')) value = value.slice(1)
-  if (value.endsWith('|')) value = value.slice(0, -1)
-  return value.split(/(?<!\\)\|/).map((cell) => cell.trim().replace(/\\\|/g, '|'))
-}
-
-function cleanMarkdownCell(value) {
-  const trimmed = String(value || '').trim()
-  return trimmed.startsWith('`') && trimmed.endsWith('`') ? trimmed.slice(1, -1).trim() : trimmed
-}
-
-function suggestedSplitCorrection(term) {
-  const tokens = String(term || '').trim().split(/\s+/)
-  for (let index = 0; index < tokens.length; index += 1) {
-    const token = tokens[index]
-    if (!/^[a-z]$/i.test(token)) continue
-    if (index === tokens.length - 1 && index > 0 && (tokens[index - 1].match(/[a-z]/gi) || []).length >= 4) {
-      return [...tokens.slice(0, index - 1), `${tokens[index - 1]}${token}`].join(' ')
-    }
-    if (index < tokens.length - 1 && !/^[ai]$/i.test(token) && (tokens[index + 1].match(/[a-z]/gi) || []).length >= 4) {
-      return [...tokens.slice(0, index), `${token}${tokens[index + 1]}`, ...tokens.slice(index + 2)].join(' ')
-    }
-  }
-  return term
-}
-
-function parsePreviewMarkdown(markdown) {
-  const lines = String(markdown || '').replace(/\r\n?/g, '\n').split('\n')
-  let columns = null
-  const items = []
-  for (const line of lines) {
-    if (!line.includes('|')) continue
-    const cells = splitMarkdownRow(line)
-    if (!columns) {
-      const names = cells.map((cell) => cleanMarkdownCell(cell).toLowerCase())
-      const candidate = {
-        order: names.indexOf('序号'),
-        word: names.indexOf('word'),
-        phonetic: names.indexOf('音标'),
-        definition: names.indexOf('释义'),
-      }
-      if (Object.values(candidate).every((index) => index >= 0)) columns = candidate
-      continue
-    }
-    if (cells.every((cell) => /^:?-{3,}:?$/.test(cell))) continue
-    const originalTerm = cleanMarkdownCell(cells[columns.word])
-    const orderText = cleanMarkdownCell(cells[columns.order])
-    if (!originalTerm && !orderText) continue
-    const sourceOrder = Number(orderText)
-    if (!Number.isInteger(sourceOrder)) throw new Error(`词表序号不是有效整数：${orderText}`)
-    if (!originalTerm) throw new Error(`序号 ${sourceOrder} 的 Word 为空`)
-    const suggestedTerm = suggestedSplitCorrection(originalTerm)
-    const suspicious = suggestedTerm !== originalTerm
-    items.push({
-      id: items.length + 1,
-      sourceOrder,
-      originalTerm,
-      suggestedTerm,
-      approvedTerm: null,
-      effectiveTerm: originalTerm,
-      phonetic: cleanMarkdownCell(cells[columns.phonetic]),
-      definition: cleanMarkdownCell(cells[columns.definition]),
-      suspicious,
-      reviewStatus: suspicious ? 'pending' : 'not_required',
-      warnings: suspicious ? ['疑似断词'] : [],
-    })
-  }
-  if (!columns) throw new Error('未找到包含“序号、Word、音标、释义”的 Markdown 表头')
-  if (!items.length) throw new Error('Markdown 表格中没有可导入词条')
-  const orders = new Set()
-  const duplicate = items.find((item) => orders.has(item.sourceOrder) || !orders.add(item.sourceOrder))
-  if (duplicate) throw new Error(`词表序号重复：${duplicate.sourceOrder}`)
-  return items
-}
+import {
+  ANALYSIS_STATUS_LABELS,
+  ASSESSMENT_LABELS,
+  IMPORT_STATUS_LABELS,
+  PLAN_STATUS_LABELS,
+  SOURCE_LABELS,
+  TIER_LABELS,
+  asArray,
+  escapeRegExp,
+  localDateKey,
+  number,
+} from '/src/features/scene-plan/model.js'
+import { parsePreviewMarkdown } from '/src/features/scene-plan/markdown-parser.js'
+import {
+  createPreviewCookingUnit,
+  createPreviewPlan,
+  previewCatalog,
+} from '/src/features/scene-plan/preview-data.js'
+import { isWordComplete, nextAssessment, pendingChallengeWords, requiredAssessments } from '/src/features/scene-plan/challenge-model.js'
+import {
+  calendarDates as resolveCalendarDates,
+  calendarTitle as resolveCalendarTitle,
+  dateFromKey,
+  formatCalendarDate,
+  unitDateKey,
+  unitStatusLabel,
+  unitsForDate,
+} from '/src/features/scene-plan/calendar-model.js'
+import { createScenePlanApi } from '/src/features/scene-plan/api.js'
+import { isRequestAbort } from '/src/shared/latest-request.js'
+import { createVocabularyCatalogApi } from '/src/features/vocabulary-catalog/api.js'
 
 export function createScenePlanFeature(ctx) {
   const {
     state,
     elements,
     request,
-    setLoading,
     toast,
     logEvent,
     confirmAction,
@@ -340,6 +51,8 @@ export function createScenePlanFeature(ctx) {
 
   let importSearchTimer = null
   let assessmentFeedback = null
+  const api = createScenePlanApi(request)
+  const catalogApi = createVocabularyCatalogApi(request)
 
   function setButtonLoading(button, loading, text) {
     if (!button) return
@@ -351,10 +64,6 @@ export function createScenePlanFeature(ctx) {
       delete button.dataset.previousText
     }
     button.disabled = loading
-  }
-
-  function activeWordbookId() {
-    return normalizeWordbookId(elements.sceneWordbookSelect?.value || state.currentWordbookId)
   }
 
   function activeUnit(plan = state.currentLearningPlan) {
@@ -371,21 +80,6 @@ export function createScenePlanFeature(ctx) {
   function currentSceneWord(unit = activeUnit()) {
     const coreWords = asArray(unit?.words).filter((word) => word.tier === 'core')
     return coreWords.find((word) => sameId(word.id, state.currentSceneWordId)) || coreWords[0] || null
-  }
-
-  function requiredAssessments(word) {
-    return word?.masteryRequirement === 'spelling'
-      ? ['meaning_choice', 'copy_typing', 'meaning_spelling']
-      : ['meaning_choice']
-  }
-
-  function nextAssessment(word) {
-    const passed = new Set(asArray(word?.passedAssessments))
-    return requiredAssessments(word).find((type) => !passed.has(type)) || null
-  }
-
-  function isWordComplete(word) {
-    return !nextAssessment(word)
   }
 
   function renderSelectOptions(select, items, selected, label, emptyLabel) {
@@ -511,9 +205,9 @@ export function createScenePlanFeature(ctx) {
     try {
       const canManageCatalogs = state.user?.roleCode === 'ADMIN'
       const [imports, publicCatalogs, plans] = await Promise.all([
-        canManageCatalogs ? request('/api/v1/vocabulary-imports') : Promise.resolve([]),
-        request('/api/v1/vocabulary-imports/public'),
-        request('/api/v1/learning/plans'),
+        canManageCatalogs ? api.listImports() : Promise.resolve([]),
+        api.listPublicCatalogs(),
+        api.listPlans(),
       ])
       state.vocabularyImports = asArray(imports)
       state.publicVocabularyCatalogs = asArray(publicCatalogs)
@@ -532,12 +226,15 @@ export function createScenePlanFeature(ctx) {
         renderCurrentScene()
       }
     } catch (error) {
+      if (isRequestAbort(error)) return
       logEvent('error', '场景学习数据加载失败', error.message)
       toast(`场景学习加载失败：${error.message}`)
     }
   }
 
   function clearSceneData() {
+    api.cancelAll()
+    catalogApi.cancelAll()
     state.vocabularyImports = []
     state.publicVocabularyCatalogs = []
     state.currentVocabularyImport = null
@@ -575,7 +272,7 @@ export function createScenePlanFeature(ctx) {
       return
     }
     try {
-      const note = await request(`/api/v1/learning/plans/${encodeURIComponent(unit.planId)}/units/${encodeURIComponent(unit.id)}/note`)
+      const note = await api.getNote(unit.planId, unit.id)
       state.sceneNote = { content: note?.content || '', updateTime: note?.updateTime || null, unitId: unit.id }
       renderSceneNote(unit)
     } catch (error) {
@@ -625,10 +322,7 @@ export function createScenePlanFeature(ctx) {
         state.sceneNote = { content, updateTime: new Date().toISOString(), unitId: unit.id }
         unit.note = { content, updateTime: state.sceneNote.updateTime }
       } else {
-        const note = await request(`/api/v1/learning/plans/${encodeURIComponent(unit.planId)}/units/${encodeURIComponent(unit.id)}/note`, {
-          method: 'PUT',
-          body: JSON.stringify({ content }),
-        })
+        const note = await api.saveNote(unit.planId, unit.id, content)
         state.sceneNote = { content: note?.content || '', updateTime: note?.updateTime || new Date().toISOString(), unitId: unit.id }
       }
       renderSceneNote(unit)
@@ -790,7 +484,7 @@ export function createScenePlanFeature(ctx) {
     try {
       const plan = state.preview
         ? asArray(state.learningPlans).find((item) => sameId(item.id, planId))
-        : await request(`/api/v1/learning/plans/${encodeURIComponent(planId)}`)
+        : await api.getPlan(planId)
       if (!plan) return
       state.currentLearningPlan = plan
       const unit = activeUnit(plan)
@@ -806,6 +500,7 @@ export function createScenePlanFeature(ctx) {
       await loadSceneNote(activeUnit(plan))
       if (!options.quiet) logEvent('learning', '切换场景学习计划', plan.name)
     } catch (error) {
+      if (isRequestAbort(error)) return
       logEvent('error', '学习计划加载失败', error.message)
       toast(`学习计划加载失败：${error.message}`)
     }
@@ -819,52 +514,16 @@ export function createScenePlanFeature(ctx) {
     return selectPlan(planId)
   }
 
-  function addDays(date, count) {
-    const result = new Date(date)
-    result.setDate(result.getDate() + count)
-    return result
-  }
-
   function dateKey(date) {
     return localDateKey(date)
   }
 
-  function dateFromKey(key) {
-    const [year, month, day] = String(key || '').split('-').map(Number)
-    if (![year, month, day].every(Number.isFinite)) return new Date()
-    return new Date(year, month - 1, day, 12)
-  }
-
-  function startOfWeek(date) {
-    const result = new Date(date)
-    const day = result.getDay()
-    const offset = day === 0 ? -6 : 1 - day
-    result.setDate(result.getDate() + offset)
-    result.setHours(12, 0, 0, 0)
-    return result
-  }
-
   function calendarDates() {
-    const anchor = dateFromKey(state.sceneCalendarCursorDate || localDateKey())
-    if (state.sceneCalendarRange === 'month') {
-      const first = new Date(anchor.getFullYear(), anchor.getMonth(), 1, 12)
-      const gridStart = startOfWeek(first)
-      return Array.from({ length: 42 }, (_, index) => addDays(gridStart, index))
-    }
-    const first = startOfWeek(anchor)
-    return Array.from({ length: 7 }, (_, index) => addDays(first, index))
+    return resolveCalendarDates(state.sceneCalendarRange, state.sceneCalendarCursorDate)
   }
 
   function calendarTitle(dates) {
-    if (!dates.length) return '本周'
-    if (state.sceneCalendarRange === 'month') {
-      const anchor = dateFromKey(state.sceneCalendarCursorDate || localDateKey())
-      return `${anchor.getFullYear()}年${anchor.getMonth() + 1}月`
-    }
-    const start = dates[0]
-    const end = dates[dates.length - 1]
-    const endYear = start.getFullYear() === end.getFullYear() ? '' : `${end.getFullYear()}年`
-    return `${start.getFullYear()}年${start.getMonth() + 1}月${start.getDate()}日 - ${endYear}${end.getMonth() + 1}月${end.getDate()}日`
+    return resolveCalendarTitle(state.sceneCalendarRange, state.sceneCalendarCursorDate, dates)
   }
 
   async function loadCalendarData(plan) {
@@ -876,9 +535,7 @@ export function createScenePlanFeature(ctx) {
     const from = dateKey(dates[0])
     const to = dateKey(dates[dates.length - 1])
     try {
-      const calendarData = await request(
-        `/api/v1/learning/plans/${encodeURIComponent(plan.id)}/calendar?from=${from}&to=${to}`,
-      )
+      const calendarData = await api.getCalendar(plan.id, from, to)
       const currentDates = calendarDates()
       const isCurrentRange = sameId(state.currentLearningPlan?.id, plan.id)
         && dateKey(currentDates[0]) === from
@@ -886,6 +543,7 @@ export function createScenePlanFeature(ctx) {
       if (isCurrentRange) state.sceneCalendarData = calendarData
       return calendarData
     } catch (error) {
+      if (isRequestAbort(error)) return null
       const currentDates = calendarDates()
       if (sameId(state.currentLearningPlan?.id, plan.id)
           && dateKey(currentDates[0]) === from
@@ -903,42 +561,6 @@ export function createScenePlanFeature(ctx) {
     if (planId && state.currentLearningPlan && sameId(state.currentLearningPlan.id, planId)) {
       renderCalendar(state.currentLearningPlan)
     }
-  }
-
-  function formatCalendarDate(date, withMonth = false) {
-    if (!date) return ''
-    if (typeof date === 'string') {
-      const match = date.match(/^(\d{4})-(\d{1,2})-(\d{1,2})/)
-      if (match) {
-        return withMonth
-          ? `${parseInt(match[2], 10)}月${parseInt(match[3], 10)}日`
-          : `${parseInt(match[3], 10)}日`
-      }
-    }
-    const d = date instanceof Date ? date : new Date(date)
-    if (isNaN(d.getTime())) return String(date)
-    return withMonth
-      ? `${d.getMonth() + 1}月${d.getDate()}日`
-      : `${d.getDate()}日`
-  }
-
-  function unitDateKey(unit) {
-    if (unit?.recommendedDate) return unit.recommendedDate
-    return unit?.generatedTime ? unit.generatedTime.split('T')[0] : ''
-  }
-
-  function unitsForDate(plan, key) {
-    return asArray(plan?.units).filter((unit) => unitDateKey(unit) === key)
-  }
-
-  function pendingChallengeWords(unit) {
-    return asArray(unit?.words).filter((word) => word.tier === 'core' && !isWordComplete(word))
-  }
-
-  function unitStatusLabel(unit) {
-    if (unit?.status === 'completed') return '已完成'
-    if (unit?.status === 'in_progress') return '学习中'
-    return '待学习'
   }
 
   function closeSceneVocabularyPreview() {
@@ -1321,9 +943,7 @@ export function createScenePlanFeature(ctx) {
             }
             plan.currentUnitId = unitId
           } else if (selectedUnit?.status !== 'completed') {
-            const updated = await request(`/api/v1/learning/plans/${encodeURIComponent(plan.id)}/units/${encodeURIComponent(unitId)}/start`, {
-              method: 'POST',
-            })
+            const updated = await api.startUnit(plan.id, unitId)
             state.currentLearningPlan = updated
             state.learningPlans = state.learningPlans.map((item) => sameId(item.id, updated.id) ? { ...item, ...updated } : item)
           } else {
@@ -1364,12 +984,9 @@ export function createScenePlanFeature(ctx) {
             return
           }
           const modelConfigId = elements.scenePlanModelSelect?.value || null
-          const generatedUnits = await request(`/api/v1/learning/plans/${encodeURIComponent(plan.id)}/units/regenerate-day`, {
-            method: 'POST',
-            body: JSON.stringify({
-              modelConfigId: modelConfigId ? String(modelConfigId) : null,
-              recommendedDate,
-            }),
+          const generatedUnits = await api.regenerateDay(plan.id, {
+            modelConfigId: modelConfigId ? String(modelConfigId) : null,
+            recommendedDate,
           })
           const count = Math.max(1, asArray(generatedUnits).length)
           await loadSceneData({ planId: plan.id })
@@ -1397,10 +1014,7 @@ export function createScenePlanFeature(ctx) {
             plan.units.push(generated)
           } else {
             const modelConfigId = elements.scenePlanModelSelect?.value || null
-            const generatedUnits = await request(`/api/v1/learning/plans/${encodeURIComponent(plan.id)}/units/next`, {
-              method: 'POST',
-              body: JSON.stringify({ modelConfigId: modelConfigId || null, recommendedDate }),
-            })
+            const generatedUnits = await api.generateNext(plan.id, { modelConfigId: modelConfigId || null, recommendedDate })
             generatedCount = Math.max(1, asArray(generatedUnits).length)
           }
           await loadSceneData({ planId: plan.id })
@@ -1909,15 +1523,12 @@ export function createScenePlanFeature(ctx) {
           completedCoreCount: unit.completedCoreCount,
         }
       } else {
-        result = await request(`/api/v1/learning/plans/${encodeURIComponent(plan.id)}/units/${encodeURIComponent(unit.id)}/assessments`, {
-          method: 'POST',
-          body: JSON.stringify({
-            unitEntryId: word.id,
-            assessmentType: type,
-            answer,
-            attemptCount: 1,
-            durationMillis: Math.max(0, Date.now() - startedAt),
-          }),
+        result = await api.submitAssessment(plan.id, unit.id, {
+          unitEntryId: word.id,
+          assessmentType: type,
+          answer,
+          attemptCount: 1,
+          durationMillis: Math.max(0, Date.now() - startedAt),
         })
       }
       word.learningState = result.learningState
@@ -1962,9 +1573,7 @@ export function createScenePlanFeature(ctx) {
         }
         renderCurrentScene()
       } else {
-        await request(`/api/v1/learning/plans/${encodeURIComponent(plan.id)}/units/${encodeURIComponent(unit.id)}/entries/${encodeURIComponent(entryId)}/promote`, {
-          method: 'POST',
-        })
+        await api.promoteEntry(plan.id, unit.id, entryId)
         await selectPlan(plan.id, { quiet: true, keepStage: true })
       }
       toast('已加入核心词，本场景检查会包含该词')
@@ -1995,9 +1604,7 @@ export function createScenePlanFeature(ctx) {
             plan.canGenerateNext = number(plan.learnedCoreWords) < number(plan.totalCatalogWords)
             return plan
           })()
-        : await request(`/api/v1/learning/plans/${encodeURIComponent(plan.id)}/units/${encodeURIComponent(unit.id)}/complete`, {
-            method: 'POST',
-          })
+        : await api.completeUnit(plan.id, unit.id)
       state.currentLearningPlan = updated
       state.learningPlans = state.learningPlans.map((item) => sameId(item.id, updated.id) ? { ...item, ...updated } : item)
       state.sceneChallengeStage = 'overview'
@@ -2031,10 +1638,7 @@ export function createScenePlanFeature(ctx) {
         renderSceneView()
       } else {
         const modelConfigId = elements.scenePlanModelSelect?.value || null
-        const generatedUnits = await request(`/api/v1/learning/plans/${encodeURIComponent(plan.id)}/units/next`, {
-          method: 'POST',
-          body: JSON.stringify({ modelConfigId: modelConfigId || null }),
-        })
+        const generatedUnits = await api.generateNext(plan.id, { modelConfigId: modelConfigId || null })
         generatedCount = Math.max(1, asArray(generatedUnits).length)
         await selectPlan(plan.id, { quiet: true, keepStage: true })
       }
@@ -2065,9 +1669,9 @@ export function createScenePlanFeature(ctx) {
         toast('设计预览：任务已进入低价时段队列')
       } else {
         const modelConfigId = elements.scenePlanModelSelect?.value || null
-        const task = await request(`/api/v1/learning/plans/${encodeURIComponent(plan.id)}/units/next/async`, {
-          method: 'POST',
-          body: JSON.stringify({ modelConfigId: modelConfigId || null, executionMode: 'low_cost_window' }),
+        const task = await api.scheduleNext(plan.id, {
+          modelConfigId: modelConfigId || null,
+          executionMode: 'low_cost_window',
         })
         state.sceneScheduledTask = task
         toast('场景材料任务已安排，可在个人信息 - 任务中心查看')
@@ -2242,15 +1846,12 @@ export function createScenePlanFeature(ctx) {
         }
         state.vocabularyImports.unshift(result)
       } else {
-        result = await request('/api/v1/vocabulary-imports/markdown', {
-          method: 'POST',
-          body: JSON.stringify({
-            catalogName,
-            sourceType,
-            learningPurpose: elements.vocabularyImportPurpose.value.trim(),
-            fileName: file.name,
-            content,
-          }),
+        result = await catalogApi.importMarkdown({
+          catalogName,
+          sourceType,
+          learningPurpose: elements.vocabularyImportPurpose.value.trim(),
+          fileName: file.name,
+          content,
         })
       }
       state.currentVocabularyImport = result
@@ -2274,7 +1875,7 @@ export function createScenePlanFeature(ctx) {
       renderSourceOptions()
       return
     }
-    const imports = await request('/api/v1/vocabulary-imports')
+    const imports = await catalogApi.listImports()
     state.vocabularyImports = asArray(imports)
     renderImportList()
     renderSourceOptions()
@@ -2339,7 +1940,7 @@ export function createScenePlanFeature(ctx) {
       })
       const keyword = elements.vocabularyImportKeyword.value.trim()
       if (keyword) params.set('keyword', keyword)
-      state.currentVocabularyImport = await request(`/api/v1/vocabulary-imports/${encodeURIComponent(jobId)}?${params}`)
+      state.currentVocabularyImport = await catalogApi.getImport(jobId, params)
       renderImportReview()
       if (state.currentVocabularyImport.status === 'published') {
         await loadVocabularyAnalysis(state.currentVocabularyImport.catalogVersionId, { quiet: true })
@@ -2527,7 +2128,7 @@ export function createScenePlanFeature(ctx) {
       return state.currentVocabularyAnalysis
     }
     try {
-      const analysis = await request(`/api/v1/vocabulary-catalogs/${encodeURIComponent(catalogVersionId)}/analysis`)
+      const analysis = await catalogApi.getAnalysis(catalogVersionId)
       state.currentVocabularyAnalysis = analysis
       renderVocabularyAnalysis()
       return analysis
@@ -2554,9 +2155,9 @@ export function createScenePlanFeature(ctx) {
       if (state.preview) {
         state.currentVocabularyAnalysis = { ...state.currentVocabularyAnalysis, status: 'pending', canTrigger: false }
       } else {
-        state.currentVocabularyAnalysis = await request(`/api/v1/vocabulary-catalogs/${encodeURIComponent(current.catalogVersionId)}/analysis`, {
-          method: 'POST',
-          body: JSON.stringify({ executionMode: 'immediate', batchSize: 25 }),
+        state.currentVocabularyAnalysis = await catalogApi.triggerAnalysis(current.catalogVersionId, {
+          executionMode: 'immediate',
+          batchSize: 25,
         })
       }
       renderVocabularyAnalysis()
@@ -2585,10 +2186,7 @@ export function createScenePlanFeature(ctx) {
           item.reviewStatus = 'confirmed'
         }
       } else {
-        await request(`/api/v1/vocabulary-imports/${encodeURIComponent(current.jobId)}/entries/${encodeURIComponent(entryId)}`, {
-          method: 'PUT',
-          body: JSON.stringify({ approvedTerm }),
-        })
+        await catalogApi.updateEntry(current.jobId, entryId, approvedTerm)
       }
       await loadImportReview()
       await reloadImportHistory()
@@ -2616,10 +2214,7 @@ export function createScenePlanFeature(ctx) {
           item.reviewStatus = 'confirmed'
         })
       } else {
-        await request(`/api/v1/vocabulary-imports/${encodeURIComponent(current.jobId)}/warnings/confirm`, {
-          method: 'POST',
-          body: JSON.stringify({ applySuggested: true }),
-        })
+        await catalogApi.confirmWarnings(current.jobId)
       }
       await loadImportReview()
       await reloadImportHistory()
@@ -2669,10 +2264,7 @@ export function createScenePlanFeature(ctx) {
           canTrigger: number(current.totalCount) > 0,
         }
       } else {
-        state.currentVocabularyImport = await request(`/api/v1/vocabulary-imports/${encodeURIComponent(current.jobId)}/publish`, {
-          method: 'POST',
-          body: JSON.stringify({}),
-        })
+        state.currentVocabularyImport = await catalogApi.publish(current.jobId)
         await loadVocabularyAnalysis(state.currentVocabularyImport.catalogVersionId, { quiet: true })
       }
       await Promise.allSettled([reloadImportHistory(), loadWordbooks?.()])
@@ -2844,17 +2436,14 @@ export function createScenePlanFeature(ctx) {
             if (status) plan.status = status
           }
         } else {
-          plan = await request(`/api/v1/learning/plans/${encodeURIComponent(state.currentPlanEditId)}`, {
-            method: 'PUT',
-            body: JSON.stringify({
-              name,
-              learningPurpose,
-              wordbookId: wordbookId || null,
-              modelConfigId: modelConfigId || null,
-              startTime,
-              endTime,
-              status,
-            }),
+          plan = await api.updatePlan(state.currentPlanEditId, {
+            name,
+            learningPurpose,
+            wordbookId: wordbookId || null,
+            modelConfigId: modelConfigId || null,
+            startTime,
+            endTime,
+            status,
           })
         }
         if (plan) {
@@ -2897,18 +2486,15 @@ export function createScenePlanFeature(ctx) {
         })
         state.learningPlans.unshift(plan)
       } else {
-        plan = await request('/api/v1/learning/plans', {
-          method: 'POST',
-          body: JSON.stringify({
-            catalogVersionId: catalogVersionId,
-            wordbookId: wordbookId || null,
-            name,
-            learningPurpose,
-            modelConfigId: modelConfigId || null,
-            generateFirstUnit: !isFuture,
-            startTime,
-            endTime,
-          }),
+        plan = await api.createPlan({
+          catalogVersionId: catalogVersionId,
+          wordbookId: wordbookId || null,
+          name,
+          learningPurpose,
+          modelConfigId: modelConfigId || null,
+          generateFirstUnit: !isFuture,
+          startTime,
+          endTime,
         })
       }
       state.currentLearningPlan = plan
@@ -2959,7 +2545,7 @@ export function createScenePlanFeature(ctx) {
     })
     if (!confirmed) return
     try {
-      await request(`/api/v1/vocabulary-imports/${encodeURIComponent(jobId)}`, { method: 'DELETE' })
+      await catalogApi.deleteImport(jobId)
       toast('导入记录已删除')
       if (sameId(state.currentVocabularyImport?.jobId, jobId)) {
         state.currentVocabularyImport = null
@@ -2991,13 +2577,10 @@ export function createScenePlanFeature(ctx) {
         current.learningPurpose = learningPurpose
         toast('设计预览：元数据已保存')
       } else {
-        const result = await request(`/api/v1/vocabulary-imports/${encodeURIComponent(current.jobId)}`, {
-          method: 'PUT',
-          body: JSON.stringify({
-            catalogName,
-            sourceType,
-            learningPurpose,
-          }),
+        const result = await catalogApi.updateImport(current.jobId, {
+          catalogName,
+          sourceType,
+          learningPurpose,
         })
         state.currentVocabularyImport = result
       }
@@ -3022,7 +2605,7 @@ export function createScenePlanFeature(ctx) {
         plan.status = 'paused'
         toast('设计预览：计划已暂停')
       } else {
-        const result = await request(`/api/v1/learning/plans/${encodeURIComponent(plan.id)}/pause`, { method: 'POST' })
+        const result = await api.updatePlanStatus(plan.id, 'pause')
         if (sameId(plan.id, state.currentLearningPlan?.id)) state.currentLearningPlan = result
       }
       await loadSceneData({ planId: plan.id })
@@ -3043,7 +2626,7 @@ export function createScenePlanFeature(ctx) {
         plan.status = 'active'
         toast('设计预览：计划已启动/恢复')
       } else {
-        const result = await request(`/api/v1/learning/plans/${encodeURIComponent(plan.id)}/resume`, { method: 'POST' })
+        const result = await api.updatePlanStatus(plan.id, 'resume')
         if (sameId(plan.id, state.currentLearningPlan?.id)) state.currentLearningPlan = result
       }
       await loadSceneData({ planId: plan.id })
@@ -3069,7 +2652,7 @@ export function createScenePlanFeature(ctx) {
         plan.status = 'cancelled'
         toast('设计预览：计划已取消')
       } else {
-        const result = await request(`/api/v1/learning/plans/${encodeURIComponent(plan.id)}/cancel`, { method: 'POST' })
+        const result = await api.updatePlanStatus(plan.id, 'cancel')
         if (sameId(plan.id, state.currentLearningPlan?.id)) state.currentLearningPlan = result
       }
       await loadSceneData()

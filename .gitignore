@@ -136,3 +136,9 @@ logs
 target
 *.iml
 .idea
+
+# Frontend dependencies, build output, and browser test artifacts
+**/node_modules/
+**/dist/
+**/test-results/
+**/playwright-report/

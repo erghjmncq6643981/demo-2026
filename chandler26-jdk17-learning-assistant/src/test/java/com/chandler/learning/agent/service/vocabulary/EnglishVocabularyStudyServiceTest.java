@@ -36,7 +36,8 @@ class EnglishVocabularyStudyServiceTest {
                 }
                 """;
 
-        String normalized = ReflectionTestUtils.invokeMethod(service, "extractJson", content, "blanket");
+        String normalized = ReflectionTestUtils.invokeMethod(
+                service, "normalizeCardPayload", objectMapper.readTree(content), "blanket");
         JsonNode root = objectMapper.readTree(normalized);
 
         assertThat(root.path("term").asText()).isEqualTo("blanket");
@@ -57,7 +58,8 @@ class EnglishVocabularyStudyServiceTest {
                 }
                 """;
 
-        String normalized = ReflectionTestUtils.invokeMethod(service, "extractJson", content, "blanket");
+        String normalized = ReflectionTestUtils.invokeMethod(
+                service, "normalizeCardPayload", objectMapper.readTree(content), "blanket");
         JsonNode root = objectMapper.readTree(normalized);
 
         assertThat(root.path("definitions").isArray()).isTrue();

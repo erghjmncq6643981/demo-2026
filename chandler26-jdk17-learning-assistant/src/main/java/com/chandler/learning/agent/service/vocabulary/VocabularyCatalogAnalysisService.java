@@ -460,7 +460,7 @@ public class VocabularyCatalogAnalysisService {
                                       VocabularyCatalogAnalysisBatch batch,
                                       List<VocabularyCatalogEntry> entries,
                                       AgentChatResponse response) {
-        JsonNode root = parseJson(response.getContent());
+        JsonNode root = response.requireStructuredRoot(AiInvocationScene.VOCABULARY_CATALOG_ANALYSIS);
         JsonNode array = root.path("entries");
         if (!array.isArray()) {
             throw LearningAssistantException.badRequest(LearningConstants.ErrorCode.AI_RESPONSE_PARSE_FAILED);
@@ -741,18 +741,6 @@ public class VocabularyCatalogAnalysisService {
             response.setCanTrigger(response.getUnanalyzedCount() > 0
                     && !List.of(LearningConstants.VocabularyAnalysis.STATUS_PENDING,
                     LearningConstants.VocabularyAnalysis.STATUS_RUNNING).contains(response.getStatus()));
-        }
-    }
-
-    private JsonNode parseJson(String content) {
-        if (!org.springframework.util.StringUtils.hasText(content)) {
-            throw LearningAssistantException.badRequest(LearningConstants.ErrorCode.AI_RESPONSE_PARSE_FAILED);
-        }
-        try {
-            return objectMapper.readTree(content);
-        } catch (Exception ex) {
-            log.debug("已标准化的公共词本分析 JSON 无法读取 length={}", content.length(), ex);
-            throw LearningAssistantException.badRequest(LearningConstants.ErrorCode.AI_RESPONSE_PARSE_FAILED);
         }
     }
 

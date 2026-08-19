@@ -45,8 +45,6 @@ import java.util.Locale;
 import java.util.Map;
 import java.util.Objects;
 import java.util.Set;
-import java.util.regex.Matcher;
-import java.util.regex.Pattern;
 import java.util.stream.Collectors;
 
 /**
@@ -58,8 +56,6 @@ import java.util.stream.Collectors;
 @Service
 @RequiredArgsConstructor
 public class ArticleStudyService {
-
-    private static final Pattern JSON_BLOCK_PATTERN = Pattern.compile("\\{[\\s\\S]*}");
 
     private final LearningArticleStudyRecordMapper articleStudyRecordMapper;
     private final LearningWordbookMapper wordbookMapper;
@@ -120,7 +116,16 @@ public class ArticleStudyService {
                 resolveAgentCode(request),
                 resolveTemplateCode(request),
                 now);
-        record.applyAiResult(chatResponse, extractJson(chatResponse.getContent(), selectedWords), now);
+        record.applyAiResult(
+                chatResponse.getModelProvider(),
+                chatResponse.getModelName(),
+                chatResponse.getSessionId(),
+                chatResponse.getContent(),
+                normalizeArticlePayload(
+                        chatResponse.requireStructuredRoot(AiInvocationScene.ARTICLE_STUDY_MATERIAL), selectedWords),
+                chatResponse.getTokenUsage(),
+                chatResponse.getCostTime(),
+                now);
         articleStudyRecordMapper.insert(record);
 
         systemLogService.record(userId, SystemLogType.AI, "生成语境精读材料",
@@ -472,24 +477,7 @@ public class ArticleStudyService {
     /**
      * 处理 {@code extractJson} 相关业务。
      */
-    private String extractJson(String content, List<ArticleStudyWordResponse> selectedWords) {
-        if (!StringUtils.hasText(content)) {
-            throw articleInvalid("AI 未返回语境精读材料");
-        }
-        String cleaned = content.replace("```json", "").replace("```", "").trim();
-        JsonNode parsed = null;
-        try {
-            parsed = objectMapper.readTree(cleaned);
-        } catch (Exception ignored) {
-            Matcher matcher = JSON_BLOCK_PATTERN.matcher(cleaned);
-            if (matcher.find()) {
-                try {
-                    parsed = objectMapper.readTree(matcher.group());
-                } catch (Exception ex) {
-                    log.debug("语境精读模型响应 JSON 提取失败: {}", ex.getMessage());
-                }
-            }
-        }
+    private String normalizeArticlePayload(JsonNode parsed, List<ArticleStudyWordResponse> selectedWords) {
         if (parsed == null || !parsed.isObject()) {
             throw articleInvalid("AI 返回的语境精读材料不是有效 JSON，请重新生成");
         }

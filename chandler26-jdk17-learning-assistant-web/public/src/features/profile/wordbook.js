@@ -16,10 +16,6 @@ export function createWordbookProfileFeature(ctx) {
     confirmDelete,
     loadDueReviews: loadDueReviewsFromCtx,
     openEntryTransferModal,
-    renderMarkdown,
-    readText,
-    stringifyValue,
-    tagLabel,
     saveEntry,
     renderProfileMetrics,
     loadActivity,
@@ -522,7 +518,9 @@ export function createWordbookProfileFeature(ctx) {
                   if (typeof parsedObj === 'string') {
                     try {
                       parsedObj = JSON.parse(parsedObj)
-                    } catch (_) {}
+                    } catch {
+                      parsedObj = null
+                    }
                   }
                   if (parsedObj && typeof parsedObj === 'object') {
                     entry.parsed = parsedObj

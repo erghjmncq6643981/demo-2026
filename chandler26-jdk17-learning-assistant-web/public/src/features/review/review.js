@@ -14,6 +14,8 @@ export function createReviewFeature(ctx) {
     loadWordbooks,
     loadWordbookEntries,
     loadActivity,
+    setView,
+    renderWordbookEntries,
     confirmAction,
     renderNotes,
     renderProfileMetrics,

@@ -3,6 +3,8 @@ package com.chandler.learning.agent.ai.chat.application;
 import com.chandler.learning.agent.ai.agent.application.AiAgentService;
 import com.chandler.learning.agent.ai.model.application.AiModelConfigService;
 import com.chandler.learning.agent.ai.prompt.application.AiPromptTemplateService;
+import com.chandler.learning.agent.ai.chat.application.codec.AiSceneResponse;
+import com.chandler.learning.agent.ai.chat.application.codec.AiSceneResponseCodecRegistry;
 import com.chandler.learning.agent.ai.gateway.protocol.ChatMessageParam;
 import com.chandler.learning.agent.ai.gateway.protocol.ModelChatRequest;
 import com.chandler.learning.agent.ai.gateway.protocol.ModelChatResponse;
@@ -26,7 +28,6 @@ import com.chandler.learning.agent.ai.gateway.parser.AiStructuredResponseParserR
 import com.chandler.learning.agent.support.LearningConstants;
 import com.chandler.learning.agent.ai.prompt.application.PromptRenderer;
 import com.fasterxml.jackson.core.type.TypeReference;
-import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -62,6 +63,8 @@ public class AiChatService {
     private final UserDisplayNameService userDisplayNameService;
     private final AiModelCapabilityResolver modelCapabilityResolver;
     private final AiStructuredResponseParserRegistry structuredResponseParserRegistry;
+    private final AiSceneResponseCodecRegistry sceneResponseCodecRegistry;
+    private final AiCallMetrics aiCallMetrics;
 
     @Value("${learning.ai.audit.store-content:false}")
     private boolean storeAuditContent;
@@ -144,26 +147,20 @@ public class AiChatService {
                 request.getBusinessId());
         try {
             ModelChatResponse modelResponse = aiModelClient.chat(modelRequest);
-            AiStructuredResponseParseResult parsedResponse = validateStructuredResponse(invocationScene,
+            AiSceneResponse structuredResponse = decodeStructuredResponse(invocationScene,
                     modelDefinition, modelResponse.getContent());
-            if (parsedResponse != null) {
-                String normalizedJson = parsedResponse.normalizedContent();
-                if (parsedResponse.root() != null) {
-                    try {
-                        normalizedJson = objectMapper.writeValueAsString(parsedResponse.root());
-                    } catch (Exception ex) {
-                        log.debug("无法将已校验的 JSON 节点序列化为字符串", ex);
-                    }
-                }
-                modelResponse.setContent(normalizedJson);
-                modelResponse.setStructuredParser(parsedResponse.parserName());
-                modelResponse.setStructuredParseStage(parsedResponse.parseStage());
-                modelResponse.setStructuredRepairs(parsedResponse.repairs());
+            if (structuredResponse != null) {
+                modelResponse.setContent(structuredResponse.normalizedContent());
+                modelResponse.setStructuredParser(structuredResponse.parserName());
+                modelResponse.setStructuredParseStage(structuredResponse.parseStage());
+                modelResponse.setStructuredRepairs(structuredResponse.repairs());
             }
             long costTime = System.currentTimeMillis() - startTime;
             chatSessionService.addAssistantMessage(session.getId(), modelResponse.getContent(),
                     modelResponse.getTotalTokens(), costTime, provider, modelName);
             trySaveSuccessRecord(record, modelResponse, costTime);
+            aiCallMetrics.recordSuccess(invocationScene, provider, modelName,
+                    modelResponse.getPromptTokens(), modelResponse.getCompletionTokens(), costTime);
             log.info("event=ai_call result=success sessionId={} invocationScene={} agent={} provider={} model={} tokens={} costMs={} responseJson={}",
                     session.getId(),
                     invocationScene.getCode(),
@@ -180,6 +177,7 @@ public class AiChatService {
             response.setModelProvider(provider);
             response.setModelName(modelName);
             response.setContent(modelResponse.getContent());
+            response.setStructuredResponse(structuredResponse);
             response.setTokenUsage(modelResponse.getTotalTokens());
             response.setCostTime(costTime);
             return response;
@@ -190,6 +188,7 @@ public class AiChatService {
             String errorCode = ex instanceof LearningAssistantException businessException
                     ? businessException.getErrorCode()
                     : LearningConstants.ErrorCode.AI_MODEL_CALL_FAILED.getCode();
+            aiCallMetrics.recordFailure(invocationScene, provider, modelName, errorCode, costTime);
             log.warn("event=ai_call result=failed sessionId={} invocationScene={} agent={} provider={} model={} costMs={} errorCode={} message={}",
                     session.getId(),
                     invocationScene.getCode(),
@@ -371,59 +370,17 @@ public class AiChatService {
         return tokens + ceilDivide(asciiCharacters, LearningConstants.AiContext.ASCII_CHARACTERS_PER_TOKEN);
     }
 
-    /** 统一执行模型解析和场景级结构化响应契约，业务服务再校验字段内容和业务覆盖范围。 */
-    private AiStructuredResponseParseResult validateStructuredResponse(AiInvocationScene invocationScene,
-                                                                        AiModelDefinition modelDefinition,
-                                                                        String content) {
+    /** 依次执行供应商响应解析和调用场景契约解码，业务服务不再重复解析 JSON 文本。 */
+    private AiSceneResponse decodeStructuredResponse(AiInvocationScene invocationScene,
+                                                     AiModelDefinition modelDefinition,
+                                                     String content) {
         if (!invocationScene.isStructuredResponse()) {
             return null;
         }
         try {
-            AiStructuredResponseParseResult result = structuredResponseParserRegistry.parse(invocationScene,
+            AiStructuredResponseParseResult parsed = structuredResponseParserRegistry.parse(invocationScene,
                     modelDefinition.getResponseParser(), content);
-            JsonNode root = result.root();
-            if (root == null || !root.isObject()) {
-                throw LearningAssistantException.badRequest(LearningConstants.ErrorCode.AI_RESPONSE_PARSE_FAILED);
-            }
-            boolean allFieldsPresent = true;
-            for (String field : invocationScene.getRequiredRootFields()) {
-                if (!hasField(root, field)) {
-                    allFieldsPresent = false;
-                    break;
-                }
-            }
-            if (!allFieldsPresent) {
-                for (String wrapper : List.of("scene", "data", "result", "unit", "material", "card", "vocabulary", "word", "item")) {
-                    JsonNode candidate = root.path(wrapper);
-                    if (candidate.isObject()) {
-                        boolean candidateValid = true;
-                        for (String f : invocationScene.getRequiredRootFields()) {
-                            if (!hasField(candidate, f)) {
-                                candidateValid = false;
-                                break;
-                            }
-                        }
-                        if (candidateValid) {
-                            root = candidate;
-                            result = new AiStructuredResponseParseResult(root, result.normalizedContent(),
-                                    result.parserName(), result.parseStage(), result.repairs());
-                            break;
-                        }
-                    }
-                }
-            }
-            List<String> missingFields = new java.util.ArrayList<>();
-            for (String field : invocationScene.getRequiredRootFields()) {
-                if (!hasField(root, field)) {
-                    missingFields.add(field);
-                }
-            }
-            if (!missingFields.isEmpty()) {
-                throw LearningAssistantException.badRequest(
-                        LearningConstants.ErrorCode.AI_RESPONSE_PARSE_FAILED,
-                        "AI 返回内容缺少必要字段：" + String.join("、", missingFields));
-            }
-            return result;
+            return sceneResponseCodecRegistry.decode(invocationScene, parsed);
         } catch (LearningAssistantException ex) {
             throw ex;
         } catch (AiStructuredResponseParseException ex) {
@@ -436,41 +393,6 @@ public class AiChatService {
                     modelDefinition.getProvider().getCode(), modelDefinition.getApiModelId(), ex.getMessage(), ex);
             throw LearningAssistantException.badRequest(LearningConstants.ErrorCode.AI_RESPONSE_PARSE_FAILED);
         }
-    }
-
-    private boolean hasField(JsonNode root, String field) {
-        if (!root.path(field).isMissingNode() && !root.path(field).isNull()) {
-            return true;
-        }
-        for (String alias : fieldAliases(field)) {
-            if (!root.path(alias).isMissingNode() && !root.path(alias).isNull()) {
-                if (root instanceof com.fasterxml.jackson.databind.node.ObjectNode objectNode) {
-                    objectNode.set(field, root.path(alias));
-                }
-                return true;
-            }
-        }
-        return false;
-    }
-
-    private List<String> fieldAliases(String field) {
-        return switch (field) {
-            case "vocabulary" -> List.of("words", "vocabulary_list", "vocabularies", "word_list");
-            case "learning_text" -> List.of("learningText", "text", "article", "content", "passage", "scene_text");
-            case "translation" -> List.of("chinese_translation", "chinese", "text_translation", "translation_text");
-            case "title" -> List.of("scene_title", "unit_title", "topic");
-            case "entries" -> List.of("words", "items", "catalog_entries");
-            case "cards" -> List.of("vocabulary", "words", "list");
-            case "definitions" -> List.of("meaning", "meanings", "definition");
-            case "examples" -> List.of("example_sentences", "example", "sentences", "exampleSentences");
-            case "collocations" -> List.of("phrases", "collocation", "common_phrases", "commonPhrases");
-            case "memory_tips" -> List.of("memoryTips", "tips", "memory_tip", "mnemonic", "memory");
-            case "article" -> List.of("content", "text", "learning_text");
-            case "vocabulary_focus" -> List.of("vocabularyFocus", "vocabulary", "words", "core_words");
-            case "grammar_points" -> List.of("grammarPoints", "grammar", "points");
-            case "practice" -> List.of("exercises", "questions");
-            default -> List.of();
-        };
     }
 
     private int ceilDivide(int dividend, int divisor) {

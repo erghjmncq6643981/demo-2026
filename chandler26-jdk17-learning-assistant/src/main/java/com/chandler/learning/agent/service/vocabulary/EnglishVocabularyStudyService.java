@@ -89,7 +89,8 @@ public class EnglishVocabularyStudyService {
         record.setModelName(chatResponse.getModelName());
         record.setSessionId(chatResponse.getSessionId());
         record.setRawContent(chatResponse.getContent());
-        String parsedJson = extractJson(chatResponse.getContent(), normalizedTerm);
+        String parsedJson = normalizeCardPayload(
+                chatResponse.requireStructuredRoot(AiInvocationScene.VOCABULARY_CARD_SINGLE), normalizedTerm);
         validateCardPayload(parsedJson);
         record.setParsedJson(parsedJson);
         record.setTokenUsage(chatResponse.getTokenUsage());
@@ -273,39 +274,27 @@ public class EnglishVocabularyStudyService {
     /**
      * 兼容模型返回纯 JSON、Markdown 代码块或包裹对象等多种格式，自动修复常见结构包装与字段别名，最终落库为标准 JSON 字符串。
      */
-    private String extractJson(String content, String fallbackTerm) {
-        if (!StringUtils.hasText(content)) {
+    private String normalizeCardPayload(JsonNode root, String fallbackTerm) {
+        if (root == null || !root.isObject()) {
             return null;
         }
         try {
-            JsonNode root = objectMapper.readTree(content);
-            if (root == null) {
-                return null;
-            }
-            if (root.isObject()) {
-                for (String wrapper : List.of("card", "data", "result", "vocabulary", "word", "item")) {
-                    if (root.has(wrapper) && root.path(wrapper).isObject()
-                            && (root.path(wrapper).has("term") || root.path(wrapper).has("definitions") || root.path(wrapper).has("meaning"))) {
-                        root = root.path(wrapper);
-                        break;
-                    }
+            if (root instanceof ObjectNode objectNode) {
+                if (!StringUtils.hasText(objectNode.path("term").asText()) && StringUtils.hasText(fallbackTerm)) {
+                    objectNode.put("term", fallbackTerm);
                 }
-                if (root instanceof ObjectNode objectNode) {
-                    if (!StringUtils.hasText(objectNode.path("term").asText()) && StringUtils.hasText(fallbackTerm)) {
-                        objectNode.put("term", fallbackTerm);
-                    }
-                    normalizeArrayField(objectNode, "definitions", List.of("meaning", "meanings", "definition"));
-                    normalizeArrayField(objectNode, "examples", List.of("example_sentences", "example", "sentences", "exampleSentences"));
-                    normalizeArrayField(objectNode, "collocations", List.of("phrases", "collocation", "common_phrases", "commonPhrases"));
-                    normalizeScalarField(objectNode, "memory_tips", List.of("memoryTips", "tips", "memory_tip", "mnemonic", "memory"));
-                    normalizeArrayField(objectNode, "related_words", List.of("relatedWords", "relations", "related"));
-                }
-                return objectMapper.writeValueAsString(root);
+                normalizeArrayField(objectNode, "definitions", List.of("meaning", "meanings", "definition"));
+                normalizeArrayField(objectNode, "examples", List.of("example_sentences", "example", "sentences", "exampleSentences"));
+                normalizeArrayField(objectNode, "collocations", List.of("phrases", "collocation", "common_phrases", "commonPhrases"));
+                normalizeScalarField(objectNode, "memory_tips", List.of("memoryTips", "tips", "memory_tip", "mnemonic", "memory"));
+                normalizeArrayField(objectNode, "related_words", List.of("relatedWords", "relations", "related"));
             }
             return objectMapper.writeValueAsString(root);
         } catch (Exception ex) {
-            log.debug("已标准化的词卡 JSON 无法读取: {}", ex.getMessage());
-            return null;
+            throw LearningAssistantException.system(
+                    LearningConstants.ErrorCode.JSON_SERIALIZE_FAILED,
+                    "词卡结构化响应标准化失败",
+                    ex);
         }
     }
 

@@ -4,6 +4,7 @@ import com.chandler.learning.agent.ai.chat.application.AgentChatRequest;
 import com.chandler.learning.agent.ai.agent.application.AiAgentService;
 import com.chandler.learning.agent.ai.model.application.AiModelConfigService;
 import com.chandler.learning.agent.ai.prompt.application.AiPromptTemplateService;
+import com.chandler.learning.agent.ai.chat.application.codec.AiSceneResponseCodecRegistry;
 import com.chandler.learning.agent.ai.gateway.protocol.ChatMessageParam;
 import com.chandler.learning.agent.ai.agent.domain.AiAgent;
 import com.chandler.learning.agent.ai.chat.domain.AiChatSession;
@@ -42,7 +43,8 @@ class AiChatServicePromptContextTest {
                 mock(AiModelConfigService.class), mock(AiModelClient.class),
                 new PromptRenderer(new ObjectMapper()), mock(AiModelCallRecordMapper.class),
                 new ObjectMapper(), mock(UserDisplayNameService.class),
-                new AiModelCapabilityResolver(), new AiStructuredResponseParserRegistry(new ObjectMapper()));
+                new AiModelCapabilityResolver(), new AiStructuredResponseParserRegistry(new ObjectMapper()),
+                new AiSceneResponseCodecRegistry(new ObjectMapper()), mock(AiCallMetrics.class));
 
         AiAgent agent = new AiAgent();
         agent.setSystemPrompt("只使用 {{term}} 生成词卡");
@@ -114,7 +116,8 @@ class AiChatServicePromptContextTest {
                 mock(AiAgentService.class), mock(AiPromptTemplateService.class), mock(AiChatSessionService.class),
                 modelConfigService, mock(AiModelClient.class), new PromptRenderer(new ObjectMapper()),
                 mock(AiModelCallRecordMapper.class), new ObjectMapper(), mock(UserDisplayNameService.class),
-                new AiModelCapabilityResolver(), new AiStructuredResponseParserRegistry(new ObjectMapper()));
+                new AiModelCapabilityResolver(), new AiStructuredResponseParserRegistry(new ObjectMapper()),
+                new AiSceneResponseCodecRegistry(new ObjectMapper()), mock(AiCallMetrics.class));
         AiAgent agent = new AiAgent();
         agent.setModelConfigId(101L);
         AiModelConfig bound = new AiModelConfig();
@@ -152,6 +155,7 @@ class AiChatServicePromptContextTest {
                 mock(AiModelConfigService.class), mock(AiModelClient.class),
                 new PromptRenderer(new ObjectMapper()), mock(AiModelCallRecordMapper.class),
                 new ObjectMapper(), mock(UserDisplayNameService.class),
-                new AiModelCapabilityResolver(), new AiStructuredResponseParserRegistry(new ObjectMapper()));
+                new AiModelCapabilityResolver(), new AiStructuredResponseParserRegistry(new ObjectMapper()),
+                new AiSceneResponseCodecRegistry(new ObjectMapper()), mock(AiCallMetrics.class));
     }
 }

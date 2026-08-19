@@ -8,26 +8,25 @@ import static org.assertj.core.api.Assertions.assertThat;
 
 class WordbookServiceScheduleTest {
 
-    private final WordbookService service = new WordbookService(
-            null, null, null, null, null, null, null, null, null);
+    private final ReviewSchedulePolicy policy = new ReviewSchedulePolicy();
 
     @Test
     void avoidSleepWindowMovesNightTimeToSixOClock() {
-        LocalDateTime result = service.avoidSleepWindow(LocalDateTime.of(2026, 5, 19, 2, 30));
+        LocalDateTime result = policy.avoidSleepWindow(LocalDateTime.of(2026, 5, 19, 2, 30));
 
         assertThat(result).isEqualTo(LocalDateTime.of(2026, 5, 19, 6, 0));
     }
 
     @Test
     void addAwakeHoursSkipsMidnightToSixOClock() {
-        LocalDateTime result = service.addAwakeHours(LocalDateTime.of(2026, 5, 19, 23, 0), 4);
+        LocalDateTime result = policy.addAwakeHours(LocalDateTime.of(2026, 5, 19, 23, 0), 4);
 
         assertThat(result).isEqualTo(LocalDateTime.of(2026, 5, 20, 9, 0));
     }
 
     @Test
     void addAwakeHoursStartsFromSixWhenSubmittedDuringSleepWindow() {
-        LocalDateTime result = service.addAwakeHours(LocalDateTime.of(2026, 5, 19, 2, 0), 4);
+        LocalDateTime result = policy.addAwakeHours(LocalDateTime.of(2026, 5, 19, 2, 0), 4);
 
         assertThat(result).isEqualTo(LocalDateTime.of(2026, 5, 19, 10, 0));
     }

@@ -11,19 +11,24 @@ import java.util.Map;
 import java.util.concurrent.ThreadPoolExecutor;
 import java.util.concurrent.Executor;
 
+import lombok.RequiredArgsConstructor;
+
 /** AI 和批处理任务使用的受控线程池。 */
 @Configuration
 @EnableAsync
 @EnableScheduling
+@RequiredArgsConstructor
 public class AsyncTaskConfig {
+
+    private final LearningAiTaskProperties properties;
 
     @Bean("aiTaskExecutor")
     public Executor aiTaskExecutor() {
         ThreadPoolTaskExecutor executor = new ThreadPoolTaskExecutor();
-        executor.setCorePoolSize(2);
-        executor.setMaxPoolSize(4);
-        executor.setQueueCapacity(50);
-        executor.setKeepAliveSeconds(60);
+        executor.setCorePoolSize(properties.getCorePoolSize());
+        executor.setMaxPoolSize(properties.getMaxPoolSize());
+        executor.setQueueCapacity(properties.getQueueCapacity());
+        executor.setKeepAliveSeconds(properties.getKeepAliveSeconds());
         executor.setThreadNamePrefix("learning-ai-");
         executor.setRejectedExecutionHandler(new ThreadPoolExecutor.AbortPolicy());
         executor.setTaskDecorator(runnable -> {
@@ -47,7 +52,7 @@ public class AsyncTaskConfig {
             };
         });
         executor.setWaitForTasksToCompleteOnShutdown(true);
-        executor.setAwaitTerminationSeconds(30);
+        executor.setAwaitTerminationSeconds(properties.getAwaitTerminationSeconds());
         executor.initialize();
         return executor;
     }

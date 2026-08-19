@@ -39,7 +39,6 @@ import org.springframework.transaction.annotation.Transactional;
 
 import java.time.LocalDateTime;
 import java.time.LocalDate;
-import java.time.temporal.ChronoUnit;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Locale;
@@ -65,6 +64,7 @@ public class WordbookService {
     private final SystemLogService systemLogService;
     private final UserDisplayNameService userDisplayNameService;
     private final ObjectMapper objectMapper;
+    private final ReviewSchedulePolicy reviewSchedulePolicy;
 
     /**
      * 创建或保存 {@code ensureDefaultWordbook} 相关业务。
@@ -391,9 +391,16 @@ public class WordbookService {
                 .le(LearningWordbookEntry::getNextReviewTime, LocalDateTime.now())
                 .orderByAsc(LearningWordbookEntry::getNextReviewTime)
                 .orderByDesc(LearningWordbookEntry::getCreateTime));
-        for (LearningWordbookEntry entry : entries) {
-            entry.markDue(LocalDateTime.now());
-            entryMapper.updateById(entry);
+        if (!entries.isEmpty()) {
+            LocalDateTime now = LocalDateTime.now();
+            entryMapper.update(null, new LambdaUpdateWrapper<LearningWordbookEntry>()
+                    .eq(LearningWordbookEntry::getUserId, userId)
+                    .eq(LearningWordbookEntry::getWordbookId, resolvedWordbookId)
+                    .eq(LearningWordbookEntry::getDeleted, false)
+                    .le(LearningWordbookEntry::getNextReviewTime, now)
+                    .setSql("due_count = COALESCE(due_count, 0) + 1")
+                    .set(LearningWordbookEntry::getUpdateTime, now));
+            entries.forEach(entry -> entry.markDue(now));
         }
         log.debug("待复习词条已查询 userId={} wordbookId={} count={}",
                 userId,
@@ -484,7 +491,8 @@ public class WordbookService {
         LocalDateTime now = LocalDateTime.now();
 
         ReviewResult.ReviewOutcome outcome = result.apply(entry);
-        LocalDateTime nextReviewTime = nextReviewTime(now, outcome.stageAfter(), result.remembered(), result.vague());
+        LocalDateTime nextReviewTime = reviewSchedulePolicy.nextReviewTime(
+                now, outcome.stageAfter(), result.remembered(), result.vague());
         entry.completeReview(now, nextReviewTime, outcome.stageAfter(), outcome.masteryAfter(), now);
         entryMapper.updateById(entry);
 
@@ -807,56 +815,12 @@ public class WordbookService {
      * 更新 {@code clearDefault} 相关业务。
      */
     private void clearDefault(Long userId) {
-        List<LearningWordbook> defaults = wordbookMapper.selectList(new LambdaQueryWrapper<LearningWordbook>()
+        wordbookMapper.update(null, new LambdaUpdateWrapper<LearningWordbook>()
                 .eq(LearningWordbook::getUserId, userId)
                 .eq(LearningWordbook::getIsDefault, true)
-                .eq(LearningWordbook::getDeleted, false));
-        for (LearningWordbook item : defaults) {
-            item.changeDefault(false, LocalDateTime.now());
-            wordbookMapper.updateById(item);
-        }
-    }
-
-    /**
-     * 处理 {@code nextReviewTime} 相关业务。
-     */
-    private LocalDateTime nextReviewTime(LocalDateTime now, int stage, boolean remembered, boolean vague) {
-        LocalDateTime baseTime = avoidSleepWindow(now);
-        if (vague) {
-            return avoidSleepWindow(baseTime.plusDays(LearningConstants.Review.VAGUE_REVIEW_DELAY_DAYS));
-        }
-        if (!remembered) {
-            return addAwakeHours(baseTime, LearningConstants.Review.FORGOTTEN_REVIEW_DELAY_HOURS);
-        }
-        return avoidSleepWindow(baseTime.plusDays(LearningConstants.Review.INTERVAL_DAYS[
-                Math.max(LearningConstants.Review.INITIAL_STAGE,
-                        Math.min(stage, LearningConstants.Review.INTERVAL_DAYS.length - LearningConstants.SEQUENCE_STEP))]));
-    }
-
-    LocalDateTime avoidSleepWindow(LocalDateTime reviewTime) {
-        int hour = reviewTime.getHour();
-        if (hour >= LearningConstants.Review.SLEEP_START_HOUR && hour < LearningConstants.Review.SLEEP_END_HOUR) {
-            return reviewTime.toLocalDate().atTime(LearningConstants.Review.SLEEP_END_HOUR, LearningConstants.ZERO);
-        }
-        return reviewTime;
-    }
-
-    LocalDateTime addAwakeHours(LocalDateTime startTime, long hours) {
-        LocalDateTime current = avoidSleepWindow(startTime);
-        long remainingMinutes = hours * ChronoUnit.HOURS.getDuration().toMinutes();
-        while (remainingMinutes > LearningConstants.ZERO) {
-            LocalDateTime sleepStart = current.toLocalDate().atTime(
-                    LearningConstants.Review.DAY_END_HOUR - LearningConstants.SEQUENCE_STEP,
-                    LearningConstants.ZERO).plusHours(LearningConstants.SEQUENCE_STEP);
-            long awakeMinutesToday = ChronoUnit.MINUTES.between(current, sleepStart);
-            if (remainingMinutes <= awakeMinutesToday) {
-                return avoidSleepWindow(current.plusMinutes(remainingMinutes));
-            }
-            remainingMinutes -= Math.max(awakeMinutesToday, LearningConstants.ZERO);
-            current = current.toLocalDate().plusDays(LearningConstants.SEQUENCE_STEP)
-                    .atTime(LearningConstants.Review.SLEEP_END_HOUR, LearningConstants.ZERO);
-        }
-        return avoidSleepWindow(current);
+                .eq(LearningWordbook::getDeleted, false)
+                .set(LearningWordbook::getIsDefault, false)
+                .set(LearningWordbook::getUpdateTime, LocalDateTime.now()));
     }
 
     /**

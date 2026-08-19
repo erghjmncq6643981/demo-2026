@@ -3,11 +3,19 @@ import { hideModal, showModal } from '/src/shared/modal.js'
 import { escapeHtml, formatDateTime } from '/src/shared/text.js'
 import { normalizeArray, normalizeDefinitions, readText, statusLabel, stringifyValue } from '/src/shared/vocabulary.js'
 import { syncCurrentWordbookId } from '/src/shared/wordbook.js'
-
-const ARTICLE_WORD_LIMIT = 20
-const ARTICLE_STAGES = ['reading', 'vocabulary', 'check']
-const ERROR_CODE_AI_MODEL_BALANCE_INSUFFICIENT = 'AI_MODEL_BALANCE_INSUFFICIENT'
-const ERROR_CODE_AI_MODEL_CALL_FAILED = 'AI_MODEL_CALL_FAILED'
+import { isRequestAbort } from '/src/shared/latest-request.js'
+import { createArticleApi } from '/src/features/wordbook/article-api.js'
+import {
+  ARTICLE_WORD_LIMIT,
+  articleStatusLabel,
+  formatArticleErrorForLog,
+  normalizeAnswerValue,
+  normalizeArticleError,
+  normalizeArticleStage,
+  readArticleError,
+  scoreArticlePractice,
+  splitArticleLines,
+} from '/src/features/wordbook/article-model.js'
 
 export function createWordbookArticleFeature(ctx) {
   const {
@@ -20,6 +28,7 @@ export function createWordbookArticleFeature(ctx) {
     confirmAction,
     speakSentence,
   } = ctx
+  const api = createArticleApi(request)
 
   async function changeArticleWordbook(wordbookId) {
     syncCurrentWordbookId(state, elements, wordbookId)
@@ -72,14 +81,14 @@ export function createWordbookArticleFeature(ctx) {
       return Promise.resolve()
     }
     const status = elements.articleStatusFilter?.value || ''
-    const query = status ? `?status=${encodeURIComponent(status)}` : ''
-    return request(`/api/v1/learning/wordbooks/${encodeURIComponent(state.currentWordbookId)}/entries${query}`)
+    return api.listEntries(state.currentWordbookId, status)
       .then((entries) => {
         state.articleEntries = Array.isArray(entries) ? entries : []
         pruneSelectedArticleEntries()
         renderArticleWords()
       })
       .catch((error) => {
+        if (isRequestAbort(error)) return
         logEvent('error', '语境精读词汇加载失败', error.message)
         toast(`精读词汇加载失败：${error.message}`)
       })
@@ -101,7 +110,7 @@ export function createWordbookArticleFeature(ctx) {
       renderArticleResult(null)
       return Promise.resolve()
     }
-    return request(`/api/v1/learning/articles?wordbookId=${encodeURIComponent(state.currentWordbookId)}&limit=10`)
+    return api.listRecords(state.currentWordbookId)
       .then((records) => {
         state.articleRecords = Array.isArray(records) ? records : []
         renderArticleHistory()
@@ -112,6 +121,7 @@ export function createWordbookArticleFeature(ctx) {
         }
       })
       .catch((error) => {
+        if (isRequestAbort(error)) return
         logEvent('error', '语境精读历史加载失败', error.message)
       })
   }
@@ -237,10 +247,7 @@ export function createWordbookArticleFeature(ctx) {
         toast(forceRefresh ? '设计预览：已模拟重新生成文章' : '设计预览：已生成文章预览')
         return
       }
-      const record = await request('/api/v1/learning/articles/study', {
-        method: 'POST',
-        body: JSON.stringify(payload),
-      })
+      const record = await api.createStudy(payload)
       state.articleDraftRecord = record
       renderArticleModalPreview(record)
       logEvent(record.cacheHit ? 'cache' : 'ai', record.cacheHit ? '读取语境精读缓存' : 'AI 生成语境精读材料', selectedWordsText(record))
@@ -268,10 +275,7 @@ export function createWordbookArticleFeature(ctx) {
       if (state.preview) {
         record = { ...record, studyStatus: 'in_progress', currentStage: 'reading', startedTime: new Date().toISOString() }
       } else {
-        record = await request(`/api/v1/learning/articles/${encodeURIComponent(record.id)}/progress`, {
-          method: 'POST',
-          body: JSON.stringify({ stage: 'reading' }),
-        })
+        record = await api.updateProgress(record.id, { stage: 'reading' })
       }
       replaceArticleRecord(record)
       state.articleStage = 'reading'
@@ -295,7 +299,7 @@ export function createWordbookArticleFeature(ctx) {
     let record = state.articleRecords.find((item) => sameId(item.id, recordId))
     try {
       if (!state.preview && !record?.parsed) {
-        record = await request(`/api/v1/learning/articles/${encodeURIComponent(recordId)}`)
+        record = await api.getRecord(recordId)
       }
       if (!record) return
       const stage = record.studyStatus === 'completed' ? 'check' : normalizeArticleStage(record.currentStage)
@@ -674,10 +678,7 @@ export function createWordbookArticleFeature(ctx) {
           updateTime: new Date().toISOString(),
         }
       } else {
-        completed = await request(`/api/v1/learning/articles/${encodeURIComponent(record.id)}/complete`, {
-          method: 'POST',
-          body: JSON.stringify(payload),
-        })
+        completed = await api.complete(record.id, payload)
       }
       replaceArticleRecord(completed)
       state.articleStage = 'check'
@@ -693,10 +694,7 @@ export function createWordbookArticleFeature(ctx) {
   }
 
   async function persistArticleStage(record, stage) {
-    const updated = await request(`/api/v1/learning/articles/${encodeURIComponent(record.id)}/progress`, {
-      method: 'POST',
-      body: JSON.stringify({ stage }),
-    })
+    const updated = await api.updateProgress(record.id, { stage })
     replaceArticleRecord(updated)
     return updated
   }
@@ -720,55 +718,12 @@ export function createWordbookArticleFeature(ctx) {
     state.articleCheckedRecords[key] = false
   }
 
-  function scoreArticlePractice(practice, answers) {
-    const correct = practice.reduce((count, item, index) => {
-      const expected = readText(item, ['correct_answer', 'correctAnswer', 'answer'])
-      return count + (normalizeAnswerValue(answers[index]) === normalizeAnswerValue(expected) ? 1 : 0)
-    }, 0)
-    const total = practice.length
-    return { total, correct, score: total ? Math.round((correct * 100) / total) : 0 }
-  }
-
   function articleRecordKey(record) {
     return String(record?.id || 'draft')
   }
 
-  function normalizeArticleStage(stage) {
-    return ARTICLE_STAGES.includes(stage) ? stage : 'reading'
-  }
-
-  function normalizeAnswerValue(value) {
-    return String(value || '').trim().replace(/\s+/g, ' ').toLowerCase()
-  }
-
-  function articleStatusLabel(status) {
-    return ({ generated: '待开始', in_progress: '学习中', completed: '已完成' })[status] || '待开始'
-  }
-
   function cssEscape(value) {
     return window.CSS?.escape ? window.CSS.escape(String(value || '')) : String(value || '').replace(/["\\]/g, '\\$&')
-  }
-
-  function normalizeArticleError(error) {
-    const message = String(error?.message || '精读材料生成失败').trim()
-    const errorCode = String(error?.errorCode || '').trim()
-    const status = error?.status || ''
-    return {
-      message,
-      errorCode,
-      status,
-      suggestion: articleErrorSuggestion(errorCode, status),
-    }
-  }
-
-  function readArticleError(error) {
-    if (!error) return null
-    if (typeof error === 'string') {
-      const message = error.trim()
-      return message ? { message, errorCode: '', status: '', suggestion: '' } : null
-    }
-    const message = String(error.message || '').trim()
-    return message ? error : null
   }
 
   function renderArticleError(error) {
@@ -784,27 +739,6 @@ export function createWordbookArticleFeature(ctx) {
         ${meta.length ? `<span>${escapeHtml(meta.join(' · '))}</span>` : ''}
       </div>
     `
-  }
-
-  function articleErrorSuggestion(errorCode, status) {
-    if (errorCode === ERROR_CODE_AI_MODEL_BALANCE_INSUFFICIENT) {
-      return '可以先切换到其它启用模型，或补充当前供应商账户余额后重试。'
-    }
-    if (errorCode === ERROR_CODE_AI_MODEL_CALL_FAILED) {
-      return '请检查模型配置、Base URL、API Key 或稍后重试。'
-    }
-    if (Number(status) >= 500) {
-      return '服务端返回异常，请查看个人信息里的系统日志或后端日志定位原因。'
-    }
-    return ''
-  }
-
-  function formatArticleErrorForLog(error) {
-    return [
-      error.message,
-      error.errorCode ? `错误码：${error.errorCode}` : '',
-      error.status ? `HTTP：${error.status}` : '',
-    ].filter(Boolean).join('；')
   }
 
   function renderVocabularyFocus(items, selectedWords = []) {
@@ -923,19 +857,6 @@ export function createWordbookArticleFeature(ctx) {
       const hint = [term, word.partOfSpeech, word.meaning].filter(Boolean).join(' · ')
       return `<button class="article-target-word" type="button" data-article-target="${escapeHtml(term)}" title="${escapeHtml(hint)}">${escapeHtml(part)}</button>`
     }).join('')
-  }
-
-  function splitArticleLines(text, language) {
-    const normalized = String(text || '')
-      .replace(/\s+/g, ' ')
-      .trim()
-    if (!normalized) return []
-    const pattern = language === 'zh'
-      ? /[^。！？!?]+[。！？!?]+|[^。！？!?]+$/g
-      : /[^.!?]+[.!?]+(?:["')\]]+)?|[^.!?]+$/g
-    return (normalized.match(pattern) || [normalized])
-      .map((line) => line.trim())
-      .filter(Boolean)
   }
 
   function pruneSelectedArticleEntries() {
