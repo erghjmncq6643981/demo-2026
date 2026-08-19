@@ -3558,18 +3558,65 @@ input[type="range"] {
   align-items: start;
   justify-content: space-between;
   gap: 16px;
+  position: relative;
+  overflow: visible;
+  z-index: 10;
+}
+
+.scene-unit-header > div:first-child {
+  flex: 1 1 0%;
+  min-width: 0;
+  position: relative;
+  overflow: visible;
 }
 
 #sceneUnitSummary,
 .scene-unit-summary-truncated {
-  max-width: 480px;
+  position: relative;
+  width: 100%;
+  min-width: 0;
+  max-width: none;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
-  cursor: help;
+  cursor: pointer;
+}
+
+#sceneUnitSummary[data-tooltip]:hover::after {
+  content: attr(data-tooltip);
+  position: absolute;
+  left: 0;
+  top: calc(100% + 6px);
+  z-index: 99;
+  max-width: 560px;
+  width: max-content;
+  white-space: normal;
+  line-height: 1.6;
+  font-size: 13px;
+  font-weight: 400;
+  color: #f1f5f9;
+  background: #1e293b;
+  border: 1px solid rgba(148, 163, 184, 0.3);
+  box-shadow: 0 12px 28px -4px rgba(0, 0, 0, 0.6), 0 8px 10px -6px rgba(0, 0, 0, 0.4);
+  padding: 10px 14px;
+  border-radius: 8px;
+  pointer-events: none;
+  animation: summaryTooltipFadeIn 120ms ease forwards;
+}
+
+@keyframes summaryTooltipFadeIn {
+  from {
+    opacity: 0;
+    transform: translateY(-4px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
 }
 
 .scene-unit-actions {
+  flex-shrink: 0;
   flex-wrap: wrap;
   justify-content: end;
   display: flex;

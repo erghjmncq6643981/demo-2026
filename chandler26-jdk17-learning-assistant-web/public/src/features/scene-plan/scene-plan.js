@@ -1493,10 +1493,9 @@ export function createScenePlanFeature(ctx) {
       elements.sceneUnitEyebrow.textContent = plan ? 'Ready for next scene' : 'Current Scene'
       elements.sceneUnitTitle.textContent = plan ? '可以生成下一个场景' : '选择一个学习计划'
       const rawSummary = plan?.learningPurpose || '当前场景会显示在这里'
-      elements.sceneUnitSummary.title = rawSummary
-      elements.sceneUnitSummary.textContent = rawSummary.length > 15
-        ? `${rawSummary.slice(0, 15)}...`
-        : rawSummary
+      elements.sceneUnitSummary.dataset.tooltip = rawSummary
+      elements.sceneUnitSummary.removeAttribute('title')
+      elements.sceneUnitSummary.textContent = rawSummary
       elements.sceneUnitProgress.textContent = plan ? `${number(plan.learnedCoreWords)} / ${number(plan.totalCatalogWords)}` : '0 / 0'
       elements.sceneLearningText.className = 'scene-learning-text empty'
       elements.sceneLearningText.textContent = plan ? '当前没有进行中的场景' : '暂无场景材料'
@@ -1531,10 +1530,9 @@ export function createScenePlanFeature(ctx) {
     elements.sceneUnitEyebrow.textContent = `Scene ${unit.unitNo || asArray(plan.units).length} · ${unit.scenarioType || 'Vocabulary'}`
     elements.sceneUnitTitle.textContent = unit.title || '未命名场景'
     const rawSummary = unit.summary || plan.learningPurpose || '通过当前场景学习相关词汇'
-    elements.sceneUnitSummary.title = rawSummary
-    elements.sceneUnitSummary.textContent = rawSummary.length > 15
-      ? `${rawSummary.slice(0, 15)}...`
-      : rawSummary
+    elements.sceneUnitSummary.dataset.tooltip = rawSummary
+    elements.sceneUnitSummary.removeAttribute('title')
+    elements.sceneUnitSummary.textContent = rawSummary
     elements.sceneUnitProgress.textContent = `${number(unit.completedCoreCount)} / ${number(unit.coreWordCount)}`
     if (elements.sceneGenerateCardsBtn) elements.sceneGenerateCardsBtn.classList.toggle('hidden', !missingCards || plan.status !== 'active')
     if (elements.sceneScheduleCardsBtn) elements.sceneScheduleCardsBtn.classList.toggle('hidden', !missingCards || plan.status !== 'active')
