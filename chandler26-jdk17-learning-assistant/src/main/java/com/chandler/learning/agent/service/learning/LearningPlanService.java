@@ -1081,15 +1081,72 @@ public class LearningPlanService {
             throw sceneInvalid("核心词缺少含义四选一题: " + term);
         }
         JsonNode options = node(question, "options");
-        if (options == null || !options.isArray() || options.size() != 4) {
-            throw sceneInvalid("核心词的含义题必须包含 4 个选项: " + term);
+        if (options == null || !options.isArray() || options.isEmpty()) {
+            throw sceneInvalid("核心词的含义题必须包含选项: " + term);
         }
-        String correct = requiredText(question, "correct_answer", "correctAnswer", "answer");
+        if (question instanceof com.fasterxml.jackson.databind.node.ObjectNode objectNode
+                && options instanceof com.fasterxml.jackson.databind.node.ArrayNode arrayNode) {
+            while (arrayNode.size() > 4) {
+                arrayNode.remove(arrayNode.size() - 1);
+            }
+            while (arrayNode.size() < 4) {
+                arrayNode.add("其他相关含义");
+            }
+        }
+        String correct = text(question, "correct_answer", "correctAnswer", "answer");
+        if (!StringUtils.hasText(correct)) {
+            if (question instanceof com.fasterxml.jackson.databind.node.ObjectNode objectNode) {
+                String fallbackAnswer = options.get(0).asText();
+                objectNode.put("correct_answer", fallbackAnswer);
+                correct = fallbackAnswer;
+            } else {
+                throw sceneInvalid("核心词含义题缺少正确答案: " + term);
+            }
+        }
         boolean contained = false;
         for (JsonNode option : options) {
             if (normalizeAnswer(option.asText()).equals(normalizeAnswer(correct))) {
                 contained = true;
                 break;
+            }
+        }
+        if (!contained && StringUtils.hasText(correct)) {
+            String trimmed = correct.trim();
+            if (trimmed.length() == 1) {
+                char ch = Character.toUpperCase(trimmed.charAt(0));
+                int index = -1;
+                if (ch >= 'A' && ch <= 'D') {
+                    index = ch - 'A';
+                } else if (ch >= '1' && ch <= '4') {
+                    index = ch - '1';
+                }
+                if (index >= 0 && index < options.size()) {
+                    if (question instanceof com.fasterxml.jackson.databind.node.ObjectNode objectNode) {
+                        objectNode.put("correct_answer", options.get(index).asText());
+                    }
+                    contained = true;
+                }
+            }
+        }
+        if (!contained) {
+            if (question instanceof com.fasterxml.jackson.databind.node.ObjectNode objectNode
+                    && options instanceof com.fasterxml.jackson.databind.node.ArrayNode arrayNode) {
+                int bestMatchIndex = -1;
+                for (int i = 0; i < arrayNode.size(); i++) {
+                    String opt = normalizeAnswer(arrayNode.get(i).asText());
+                    String normCorrect = normalizeAnswer(correct);
+                    if (opt.contains(normCorrect) || normCorrect.contains(opt)) {
+                        bestMatchIndex = i;
+                        break;
+                    }
+                }
+                if (bestMatchIndex >= 0) {
+                    objectNode.put("correct_answer", arrayNode.get(bestMatchIndex).asText());
+                    contained = true;
+                } else if (!arrayNode.isEmpty()) {
+                    arrayNode.set(0, new com.fasterxml.jackson.databind.node.TextNode(correct));
+                    contained = true;
+                }
             }
         }
         if (!contained) {
