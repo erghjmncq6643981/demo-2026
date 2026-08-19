@@ -346,19 +346,31 @@ public class WordbookService {
      * 查询 {@code listEntries} 相关业务。
      */
     public List<WordbookEntryResponse> listEntries(Long userId, Long wordbookId, boolean dueOnly) {
-        return listEntries(userId, wordbookId, dueOnly, null);
+        return listEntries(userId, wordbookId, dueOnly, null, null);
     }
 
     /**
      * 查询 {@code listEntries} 相关业务。
      */
     public List<WordbookEntryResponse> listEntries(Long userId, Long wordbookId, boolean dueOnly, String status) {
+        return listEntries(userId, wordbookId, dueOnly, status, null);
+    }
+
+    /**
+     * 查询 {@code listEntries} 相关业务。
+     */
+    public List<WordbookEntryResponse> listEntries(Long userId, Long wordbookId, boolean dueOnly, String status, String keyword) {
         requireWordbook(userId, wordbookId);
+        String trimmedKeyword = StringUtils.hasText(keyword) ? keyword.trim() : null;
         LambdaQueryWrapper<LearningWordbookEntry> wrapper = new LambdaQueryWrapper<LearningWordbookEntry>()
                 .eq(LearningWordbookEntry::getUserId, userId)
                 .eq(LearningWordbookEntry::getWordbookId, wordbookId)
                 .eq(LearningWordbookEntry::getDeleted, false)
                 .eq(StringUtils.hasText(status), LearningWordbookEntry::getStatus, normalizeStatus(status))
+                .and(trimmedKeyword != null, q -> q.likeRight(LearningWordbookEntry::getTerm, trimmedKeyword)
+                        .or().likeRight(LearningWordbookEntry::getNormalizedTerm, trimmedKeyword.toLowerCase(Locale.ROOT))
+                        .or().like(LearningWordbookEntry::getSnapshotParsedJson, trimmedKeyword)
+                        .or().like(LearningWordbookEntry::getNote, trimmedKeyword))
                 .le(dueOnly, LearningWordbookEntry::getNextReviewTime, LocalDateTime.now())
                 .orderByAsc(LearningWordbookEntry::getNextReviewTime)
                 .orderByDesc(LearningWordbookEntry::getCreateTime);

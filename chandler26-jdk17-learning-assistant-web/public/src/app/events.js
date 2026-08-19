@@ -1,3 +1,4 @@
+import { hideModal } from '/src/shared/modal.js'
 import { syncCurrentWordbookId } from '/src/shared/wordbook.js'
 import { firstExample } from '/src/shared/vocabulary.js'
 
@@ -123,6 +124,9 @@ export function bindAppEvents(ctx) {
     closeReviewModal,
     submitReview,
     closeForgottenDetailModal,
+    closeReviewNoteModal,
+    toggleReviewNotePreview,
+    saveReviewNote,
     closeDeleteConfirm,
     setView,
     setProfileTab,
@@ -205,6 +209,10 @@ elements.openWordbookModalBtn.addEventListener('click', () => openWordbookModal(
 elements.closeWordbookModalBtn.addEventListener('click', closeWordbookModal)
 elements.wordbookModal.addEventListener('click', (event) => {
   if (event.target === elements.wordbookModal) closeWordbookModal()
+})
+elements.closeWordbookCardModalBtn?.addEventListener('click', () => hideModal(elements.wordbookCardModal))
+elements.wordbookCardModal?.addEventListener('click', (event) => {
+  if (event.target === elements.wordbookCardModal) hideModal(elements.wordbookCardModal)
 })
 elements.createWordbookBtn.addEventListener('click', createWordbook)
 elements.saveModelBtn.addEventListener('click', saveModelConfig)
@@ -362,7 +370,14 @@ elements.entryStatusModal.querySelectorAll('[data-status-choice]').forEach((butt
 elements.speakWordBtn.addEventListener('click', () => speak(state.currentRecord?.normalizedTerm || elements.termInput.value))
 elements.speakSentenceBtn.addEventListener('click', () => speakSentence(firstExample(state.currentRecord?.parsed)))
 elements.editStudyNoteBtn.addEventListener('click', editCurrentNote)
-elements.editReviewNoteBtn.addEventListener('click', editCurrentNote)
+elements.editReviewNoteBtn?.addEventListener('click', editCurrentNote)
+elements.reviewNoteModalCloseBtn?.addEventListener('click', closeReviewNoteModal)
+elements.reviewNoteModalCancelBtn?.addEventListener('click', closeReviewNoteModal)
+elements.reviewNoteModal?.addEventListener('click', (event) => {
+  if (event.target === elements.reviewNoteModal) closeReviewNoteModal()
+})
+elements.reviewNotePreviewBtn?.addEventListener('click', toggleReviewNotePreview)
+elements.reviewNoteSaveBtn?.addEventListener('click', saveReviewNote)
 elements.reloadReviewBtn.addEventListener('click', startReview)
 elements.reviewWordbookSelect.addEventListener('change', () => {
   syncCurrentWordbookId(state, elements, elements.reviewWordbookSelect.value)

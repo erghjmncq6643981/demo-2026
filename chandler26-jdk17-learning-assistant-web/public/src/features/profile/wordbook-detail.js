@@ -42,6 +42,10 @@ export function createWordbookDetailFeature(ctx) {
       parsed?.phonetic?.us && { type: 'us', label: 'US', text: parsed.phonetic.us },
     ].filter(Boolean)
     const isCardReady = entry.cardStatus === 'ready' || (definitions.length > 0 && examples.length > 0)
+    const term = entry.term || entry.normalizedTerm || ''
+    if (elements.wordbookCardModalTitle) {
+      elements.wordbookCardModalTitle.textContent = `单词卡片 · ${term}`
+    }
     elements.wordbookFocus.className = 'wordbook-focus-card'
     elements.wordbookFocus.innerHTML = `
       <div class="wordbook-focus-head">
@@ -66,9 +70,8 @@ export function createWordbookDetailFeature(ctx) {
           </div>
         </div>
         <div class="inline-actions">
-          <button class="secondary-button compact" type="button" data-generate-card="${escapeHtml(entry.id)}" data-term="${escapeHtml(entry.term || entry.normalizedTerm)}">${isCardReady ? '刷新词卡' : '生成词卡'}</button>
+          <button class="primary-button compact-primary" type="button" data-generate-card="${escapeHtml(entry.id)}" title="${isCardReady ? '重新通过 AI 生成更丰富的例句、记忆法与关联词' : '通过 AI 生成例句、记忆法、搭配与关联词'}">${isCardReady ? '重新生成词卡' : 'AI 生成词卡'}</button>
           <button class="secondary-button compact" type="button" data-open-review="${escapeHtml(entry.id)}">去复习</button>
-          <span class="mini-pill next-review-pill">下次 ${escapeHtml(formatDateTime(entry.nextReviewTime))}</span>
         </div>
       </div>
       <div class="mini-definition-list focus-section">

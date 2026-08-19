@@ -17,6 +17,7 @@ class MapperXmlValidationTest {
         Configuration configuration = new Configuration();
         List<String> resources = List.of(
                 "mapper/LearningPlanMapper.xml",
+                "mapper/LearningPlanUnitMapper.xml",
                 "mapper/AiChatMessageMapper.xml",
                 "mapper/AiChatSessionMapper.xml",
                 "mapper/AiModelCallRecordMapper.xml",
@@ -33,6 +34,9 @@ class MapperXmlValidationTest {
 
         assertThat(configuration.hasStatement(
                 "com.chandler.learning.agent.mapper.learning.LearningPlanMapper.claimGenerationLock")).isTrue();
+        assertThat(configuration.hasStatement(
+                "com.chandler.learning.agent.mapper.learning.LearningPlanUnitMapper.selectMaxUnitNoIncludingDeleted"))
+                .isTrue();
         assertThat(configuration.hasStatement(
                 "com.chandler.learning.agent.ai.chat.infrastructure.AiChatMessageMapper.selectNextSequence"))
                 .isTrue();

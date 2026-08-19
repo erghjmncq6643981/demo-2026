@@ -20,6 +20,8 @@ import com.chandler.learning.agent.service.learning.VocabularyInsightService;
 import com.chandler.learning.agent.support.LearningConstants;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.fasterxml.jackson.databind.node.ArrayNode;
+import com.fasterxml.jackson.databind.node.ObjectNode;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
@@ -87,7 +89,7 @@ public class EnglishVocabularyStudyService {
         record.setModelName(chatResponse.getModelName());
         record.setSessionId(chatResponse.getSessionId());
         record.setRawContent(chatResponse.getContent());
-        String parsedJson = extractJson(chatResponse.getContent());
+        String parsedJson = extractJson(chatResponse.getContent(), normalizedTerm);
         validateCardPayload(parsedJson);
         record.setParsedJson(parsedJson);
         record.setTokenUsage(chatResponse.getTokenUsage());
@@ -269,35 +271,73 @@ public class EnglishVocabularyStudyService {
     }
 
     /**
-     * 兼容模型返回纯 JSON 或 Markdown 代码块两种格式，最终落库为标准 JSON 字符串。
+     * 兼容模型返回纯 JSON、Markdown 代码块或包裹对象等多种格式，自动修复常见结构包装与字段别名，最终落库为标准 JSON 字符串。
      */
-    private String extractJson(String content) {
+    private String extractJson(String content, String fallbackTerm) {
         if (!StringUtils.hasText(content)) {
             return null;
         }
         try {
-            JsonNode jsonNode = objectMapper.readTree(content);
-            return objectMapper.writeValueAsString(jsonNode);
+            JsonNode root = objectMapper.readTree(content);
+            if (root == null) {
+                return null;
+            }
+            if (root.isObject()) {
+                for (String wrapper : List.of("card", "data", "result", "vocabulary", "word", "item")) {
+                    if (root.has(wrapper) && root.path(wrapper).isObject()
+                            && (root.path(wrapper).has("term") || root.path(wrapper).has("definitions") || root.path(wrapper).has("meaning"))) {
+                        root = root.path(wrapper);
+                        break;
+                    }
+                }
+                if (root instanceof ObjectNode objectNode) {
+                    if (!StringUtils.hasText(objectNode.path("term").asText()) && StringUtils.hasText(fallbackTerm)) {
+                        objectNode.put("term", fallbackTerm);
+                    }
+                    normalizeField(objectNode, "definitions", List.of("meaning", "meanings", "definition"));
+                    normalizeField(objectNode, "examples", List.of("example_sentences", "example", "sentences", "exampleSentences"));
+                    normalizeField(objectNode, "collocations", List.of("phrases", "collocation", "common_phrases", "commonPhrases"));
+                    normalizeField(objectNode, "memory_tips", List.of("memoryTips", "tips", "memory_tip", "mnemonic", "memory"));
+                    normalizeField(objectNode, "related_words", List.of("relatedWords", "relations", "related"));
+                }
+                return objectMapper.writeValueAsString(root);
+            }
+            return objectMapper.writeValueAsString(root);
         } catch (Exception ex) {
             log.debug("已标准化的词卡 JSON 无法读取: {}", ex.getMessage());
             return null;
         }
     }
 
+    private void normalizeField(ObjectNode objectNode, String targetField, List<String> aliases) {
+        if (objectNode.path(targetField).isMissingNode() || objectNode.path(targetField).isNull()) {
+            for (String alias : aliases) {
+                if (!objectNode.path(alias).isMissingNode() && !objectNode.path(alias).isNull()) {
+                    objectNode.set(targetField, objectNode.path(alias));
+                    break;
+                }
+            }
+        }
+        if (objectNode.path(targetField).isMissingNode() || objectNode.path(targetField).isNull()) {
+            objectNode.putArray(targetField);
+        } else if (!objectNode.path(targetField).isArray()) {
+            ArrayNode arrayNode = objectNode.putArray(targetField);
+            arrayNode.add(objectNode.path(targetField));
+        }
+    }
+
     /** 词卡只有通过最小结构校验后才能写入共享缓存，避免坏响应污染后续学习。 */
     private void validateCardPayload(String parsedJson) {
         if (!StringUtils.hasText(parsedJson)) {
-            throw LearningAssistantException.badRequest(LearningConstants.ErrorCode.AI_RESPONSE_PARSE_FAILED);
+            throw LearningAssistantException.badRequest(LearningConstants.ErrorCode.AI_RESPONSE_PARSE_FAILED, "AI 返回内容不是有效 JSON");
         }
         try {
             JsonNode root = objectMapper.readTree(parsedJson);
-            if (!root.isObject()
-                    || !StringUtils.hasText(root.path("term").asText())
-                    || !root.path("definitions").isArray()
-                    || !root.path("examples").isArray()
-                    || !root.path("collocations").isArray()
-                    || !root.path("memory_tips").isArray()) {
-                throw LearningAssistantException.badRequest(LearningConstants.ErrorCode.AI_RESPONSE_PARSE_FAILED);
+            if (!root.isObject() || !StringUtils.hasText(root.path("term").asText())) {
+                throw LearningAssistantException.badRequest(LearningConstants.ErrorCode.AI_RESPONSE_PARSE_FAILED, "AI 返回内容缺少单词 term 字段");
+            }
+            if (!root.path("definitions").isArray() || root.path("definitions").isEmpty()) {
+                throw LearningAssistantException.badRequest(LearningConstants.ErrorCode.AI_RESPONSE_PARSE_FAILED, "AI 返回内容缺少 definitions 释义列表");
             }
         } catch (LearningAssistantException ex) {
             throw ex;

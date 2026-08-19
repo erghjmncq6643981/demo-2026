@@ -22,6 +22,8 @@ export function createReviewFeature(ctx) {
     normalizeDefinitions,
     normalizeExamples,
     normalizeArray,
+    renderMarkdown,
+    saveEntry,
     escapeHtml,
     readText,
     stringifyValue,
@@ -213,7 +215,6 @@ export function createReviewFeature(ctx) {
     elements.reviewFocus.innerHTML = `
       <div class="review-card-fixed">
         <div class="review-card-topline">
-          <p class="eyebrow">Typing Review</p>
           <span>${total ? `${state.currentReviewIndex + 1} / ${total}` : '0 / 0'}</span>
         </div>
         <h4>${escapeHtml(term)}</h4>
@@ -238,11 +239,15 @@ export function createReviewFeature(ctx) {
           <button class="secondary-button compact" type="button" data-review-prev ${canPrev ? '' : 'disabled'}>上一个</button>
           <button class="secondary-button compact" type="button" data-review-next ${canNext ? '' : 'disabled'}>下一个</button>
         </div>
-        <button class="icon-action-button" type="button" data-review-transfer="${escapeHtml(entryOrRecord.id)}" title="复制或移动" aria-label="复制或移动">＋</button>
+        <div style="display: flex; gap: 8px; align-items: center;">
+          <button class="secondary-button compact" type="button" data-review-note>查看笔记</button>
+          <button class="icon-action-button" type="button" data-review-transfer="${escapeHtml(entryOrRecord.id)}" title="复制或移动" aria-label="复制或移动">＋</button>
+        </div>
       </div>
     `
     elements.reviewFocus.querySelector('[data-review-prev]')?.addEventListener('click', () => feature.goToReviewOffset(-1))
     elements.reviewFocus.querySelector('[data-review-next]')?.addEventListener('click', () => feature.goToReviewOffset(1))
+    elements.reviewFocus.querySelector('[data-review-note]')?.addEventListener('click', () => feature.openReviewNoteModal(entryOrRecord))
     elements.reviewFocus.querySelector('[data-review-transfer]')?.addEventListener('click', () => openEntryTransferModal(entryOrRecord.id))
     elements.reviewFocus.querySelector('.typing-board')?.addEventListener(
       'wheel',
@@ -347,6 +352,9 @@ export function createReviewFeature(ctx) {
     bindStudyTermCards,
     bindInlineAudio,
     statusLabel,
+    renderMarkdown,
+    saveEntry,
+    toast,
     reviewTargetTerm: (...args) => feature.reviewTargetTerm(...args),
     renderReviewFocus: (...args) => feature.renderReviewFocus(...args),
   })

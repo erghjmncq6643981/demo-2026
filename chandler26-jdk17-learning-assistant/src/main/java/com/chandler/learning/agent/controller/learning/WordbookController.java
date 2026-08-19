@@ -111,9 +111,10 @@ public class WordbookController {
             @RequestHeader(value = "Authorization", required = false) String authorization,
             @PathVariable Long wordbookId,
             @RequestParam(defaultValue = "false") Boolean dueOnly,
-            @RequestParam(required = false) String status) {
+            @RequestParam(required = false) String status,
+            @RequestParam(required = false) String keyword) {
         LearningUser user = authService.requireUser(authorization);
-        return wordbookService.listEntries(user.getId(), wordbookId, Boolean.TRUE.equals(dueOnly), status);
+        return wordbookService.listEntries(user.getId(), wordbookId, Boolean.TRUE.equals(dueOnly), status, keyword);
     }
 
     /**

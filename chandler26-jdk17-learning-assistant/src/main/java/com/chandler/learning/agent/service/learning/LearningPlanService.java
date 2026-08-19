@@ -387,43 +387,6 @@ public class LearningPlanService {
                         .eq(LearningPlanUnit::getDeleted, false)
                         .orderByAsc(LearningPlanUnit::getUnitNo));
 
-        List<VocabularyCatalogEntry> candidates;
-        List<VocabularyCatalogEntry> reviewWords;
-        int dailyTarget = targetWordCount(plan);
-
-        if (!existingUnits.isEmpty()) {
-            List<Long> unitIds = existingUnits.stream().map(LearningPlanUnit::getId).toList();
-            List<LearningPlanUnitEntry> oldEntries = unitEntryMapper.selectList(
-                    new LambdaQueryWrapper<LearningPlanUnitEntry>()
-                            .in(LearningPlanUnitEntry::getUnitId, unitIds)
-                            .eq(LearningPlanUnitEntry::getTier, LearningConstants.ScenePlan.TIER_CORE)
-                            .isNotNull(LearningPlanUnitEntry::getCatalogEntryId)
-                            .eq(LearningPlanUnitEntry::getDeleted, false)
-                            .orderByAsc(LearningPlanUnitEntry::getSourceOrder));
-
-            List<Long> catalogEntryIds = oldEntries.stream()
-                    .map(LearningPlanUnitEntry::getCatalogEntryId)
-                    .distinct()
-                    .toList();
-
-            if (!catalogEntryIds.isEmpty()) {
-                candidates = catalogEntryMapper.selectBatchIds(catalogEntryIds);
-            } else {
-                reviewWords = pendingReviewWords(plan, dailyTarget);
-                candidates = nextCandidates(plan, dailyTarget, reviewWords);
-            }
-            reviewWords = pendingReviewWords(plan, candidates.size());
-        } else {
-            reviewWords = pendingReviewWords(plan, dailyTarget);
-            candidates = nextCandidates(plan, dailyTarget, reviewWords);
-        }
-
-        if (candidates.isEmpty()) {
-            throw LearningAssistantException.badRequest(
-                    LearningConstants.ErrorCode.LEARNING_PLAN_STATE_ERROR,
-                    "未找到可用于重新生成的词汇");
-        }
-
         if (!existingUnits.isEmpty()) {
             List<Long> unitIds = existingUnits.stream().map(LearningPlanUnit::getId).toList();
             transactionTemplate.executeWithoutResult(status -> {
@@ -435,7 +398,17 @@ public class LearningPlanService {
             });
         }
 
-        int totalToGenerate = candidates.size();
+        int dailyTarget = targetWordCount(plan);
+        List<VocabularyCatalogEntry> reviewWords = pendingReviewWords(plan, dailyTarget);
+        List<VocabularyCatalogEntry> candidates = nextCandidates(plan, dailyTarget, reviewWords);
+
+        if (candidates.isEmpty()) {
+            throw LearningAssistantException.badRequest(
+                    LearningConstants.ErrorCode.LEARNING_PLAN_STATE_ERROR,
+                    "未找到可用于重新生成的词汇");
+        }
+
+        int totalToGenerate = Math.min(dailyTarget, candidates.size());
         List<LearningPlanUnitResponse> generatedUnits = new ArrayList<>();
         int candidateOffset = 0;
         List<Integer> materialWordCounts = splitMaterialWordCounts(totalToGenerate);
@@ -670,10 +643,12 @@ public class LearningPlanService {
                     : progressService.getOrCreate(userId, term, requirement);
             LearningWordbookEntry wordbookEntry = ensureWordbookEntry(plan, source, progress, term, normalizedTerm, tier, now);
 
+            String fallbackMeaning = firstText(text(word, "meaning", "definition"),
+                    source == null ? null : source.getDefinitionText());
             JsonNode question = node(word, "meaning_question", "meaningQuestion", "assessment");
             if (LearningConstants.ScenePlan.TIER_CORE.equals(tier)
                     || LearningConstants.ScenePlan.TIER_REVIEW.equals(tier)) {
-                validateMeaningQuestion(term, question);
+                question = ensureMeaningQuestion(word, term, question, fallbackMeaning);
             }
             List<String> acceptedSpellings = acceptedSpellings(word, term);
             LearningPlanUnitEntry unitEntry = new LearningPlanUnitEntry();
@@ -1205,35 +1180,56 @@ public class LearningPlanService {
         return result;
     }
 
-    private void validateMeaningQuestion(String term, JsonNode question) {
-        if (question == null || question.isMissingNode() || question.isNull()) {
-            throw sceneInvalid("核心词缺少含义四选一题: " + term);
-        }
-        JsonNode options = node(question, "options");
-        if (options == null || !options.isArray() || options.isEmpty()) {
-            throw sceneInvalid("核心词的含义题必须包含选项: " + term);
-        }
-        if (question instanceof com.fasterxml.jackson.databind.node.ObjectNode objectNode
-                && options instanceof com.fasterxml.jackson.databind.node.ArrayNode arrayNode) {
-            while (arrayNode.size() > 4) {
-                arrayNode.remove(arrayNode.size() - 1);
-            }
-            while (arrayNode.size() < 4) {
-                arrayNode.add("其他相关含义");
+    private JsonNode ensureMeaningQuestion(JsonNode wordNode, String term, JsonNode question, String defaultMeaning) {
+        com.fasterxml.jackson.databind.node.ObjectNode questionObject;
+        if (question instanceof com.fasterxml.jackson.databind.node.ObjectNode obj) {
+            questionObject = obj;
+        } else {
+            questionObject = objectMapper.createObjectNode();
+            if (wordNode instanceof com.fasterxml.jackson.databind.node.ObjectNode wordObj) {
+                wordObj.set("meaning_question", questionObject);
             }
         }
-        String correct = text(question, "correct_answer", "correctAnswer", "answer");
+
+        if (!questionObject.hasNonNull("question") || !StringUtils.hasText(questionObject.get("question").asText())) {
+            questionObject.put("question", "「" + term + "」在语境中的主要含义是？");
+        }
+
+        JsonNode optionsNode = node(questionObject, "options", "choices", "selections", "items", "option_list");
+        com.fasterxml.jackson.databind.node.ArrayNode arrayNode;
+        if (optionsNode instanceof com.fasterxml.jackson.databind.node.ArrayNode arr && !arr.isEmpty()) {
+            arrayNode = arr;
+        } else if (optionsNode instanceof com.fasterxml.jackson.databind.node.ObjectNode obj && !obj.isEmpty()) {
+            arrayNode = objectMapper.createArrayNode();
+            obj.elements().forEachRemaining(arrayNode::add);
+        } else {
+            arrayNode = objectMapper.createArrayNode();
+            String correct = StringUtils.hasText(defaultMeaning) ? defaultMeaning.trim() : term + " 的含义";
+            arrayNode.add(correct);
+            arrayNode.add("状态或性质");
+            arrayNode.add("行动或过程");
+            arrayNode.add("关联与影响");
+        }
+
+        while (arrayNode.size() > 4) {
+            arrayNode.remove(arrayNode.size() - 1);
+        }
+        List<String> genericDistractors = List.of("状态或性质", "行动或过程", "关联与影响", "其他相关表达");
+        int distractorIndex = 0;
+        while (arrayNode.size() < 4) {
+            arrayNode.add(genericDistractors.get(distractorIndex % genericDistractors.size()));
+            distractorIndex++;
+        }
+        questionObject.set("options", arrayNode);
+
+        String correct = text(questionObject, "correct_answer", "correctAnswer", "answer");
         if (!StringUtils.hasText(correct)) {
-            if (question instanceof com.fasterxml.jackson.databind.node.ObjectNode objectNode) {
-                String fallbackAnswer = options.get(0).asText();
-                objectNode.put("correct_answer", fallbackAnswer);
-                correct = fallbackAnswer;
-            } else {
-                throw sceneInvalid("核心词含义题缺少正确答案: " + term);
-            }
+            correct = StringUtils.hasText(defaultMeaning) ? defaultMeaning.trim() : arrayNode.get(0).asText();
+            questionObject.put("correct_answer", correct);
         }
+
         boolean contained = false;
-        for (JsonNode option : options) {
+        for (JsonNode option : arrayNode) {
             if (normalizeAnswer(option.asText()).equals(normalizeAnswer(correct))) {
                 contained = true;
                 break;
@@ -1249,38 +1245,31 @@ public class LearningPlanService {
                 } else if (ch >= '1' && ch <= '4') {
                     index = ch - '1';
                 }
-                if (index >= 0 && index < options.size()) {
-                    if (question instanceof com.fasterxml.jackson.databind.node.ObjectNode objectNode) {
-                        objectNode.put("correct_answer", options.get(index).asText());
-                    }
+                if (index >= 0 && index < arrayNode.size()) {
+                    questionObject.put("correct_answer", arrayNode.get(index).asText());
                     contained = true;
                 }
             }
         }
         if (!contained) {
-            if (question instanceof com.fasterxml.jackson.databind.node.ObjectNode objectNode
-                    && options instanceof com.fasterxml.jackson.databind.node.ArrayNode arrayNode) {
-                int bestMatchIndex = -1;
-                for (int i = 0; i < arrayNode.size(); i++) {
-                    String opt = normalizeAnswer(arrayNode.get(i).asText());
-                    String normCorrect = normalizeAnswer(correct);
-                    if (opt.contains(normCorrect) || normCorrect.contains(opt)) {
-                        bestMatchIndex = i;
-                        break;
-                    }
-                }
-                if (bestMatchIndex >= 0) {
-                    objectNode.put("correct_answer", arrayNode.get(bestMatchIndex).asText());
-                    contained = true;
-                } else if (!arrayNode.isEmpty()) {
-                    arrayNode.set(0, new com.fasterxml.jackson.databind.node.TextNode(correct));
-                    contained = true;
+            int bestMatchIndex = -1;
+            for (int i = 0; i < arrayNode.size(); i++) {
+                String opt = normalizeAnswer(arrayNode.get(i).asText());
+                String normCorrect = normalizeAnswer(correct);
+                if (opt.contains(normCorrect) || normCorrect.contains(opt)) {
+                    bestMatchIndex = i;
+                    break;
                 }
             }
+            if (bestMatchIndex >= 0) {
+                questionObject.put("correct_answer", arrayNode.get(bestMatchIndex).asText());
+            } else {
+                arrayNode.set(0, new com.fasterxml.jackson.databind.node.TextNode(correct));
+                questionObject.put("correct_answer", correct);
+            }
         }
-        if (!contained) {
-            throw sceneInvalid("核心词含义题的正确答案不在选项中: " + term);
-        }
+
+        return questionObject;
     }
 
     private LearningWordbookEntry ensureWordbookEntry(LearningPlan plan, VocabularyCatalogEntry source,
@@ -1556,12 +1545,8 @@ public class LearningPlanService {
     }
 
     private int nextUnitNo(Long planId) {
-        LearningPlanUnit last = unitMapper.selectOne(new LambdaQueryWrapper<LearningPlanUnit>()
-                .eq(LearningPlanUnit::getPlanId, planId)
-                .eq(LearningPlanUnit::getDeleted, false)
-                .orderByDesc(LearningPlanUnit::getUnitNo)
-                .last(LearningConstants.SQL_LIMIT_ONE));
-        return last == null ? LearningConstants.FIRST_SEQUENCE : value(last.getUnitNo()) + 1;
+        Integer maxUnitNo = unitMapper.selectMaxUnitNoIncludingDeleted(planId);
+        return maxUnitNo == null ? LearningConstants.FIRST_SEQUENCE : maxUnitNo + 1;
     }
 
     private VocabularyCatalogVersion requirePublishedVersion(Long userId, Long versionId) {
@@ -1613,7 +1598,16 @@ public class LearningPlanService {
             throw sceneInvalid("AI 未返回场景内容");
         }
         try {
-            return objectMapper.readTree(content);
+            JsonNode tree = objectMapper.readTree(content);
+            if (tree.isObject()) {
+                for (String wrapper : List.of("scene", "data", "result", "unit", "material")) {
+                    if (tree.has(wrapper) && tree.get(wrapper).isObject()) {
+                        tree = tree.get(wrapper);
+                        break;
+                    }
+                }
+            }
+            return tree;
         } catch (Exception ex) {
             // AiChatService 已根据所选模型完成标准化；这里仅保护后续存储边界。
             log.debug("已标准化的场景 JSON 无法读取 error={}", ex.getMessage());

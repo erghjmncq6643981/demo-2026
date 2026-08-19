@@ -233,6 +233,8 @@ reviewFeature = createReviewFeature({
   normalizeDefinitions,
   normalizeExamples,
   normalizeArray,
+  renderMarkdown,
+  saveEntry: studyFacade.saveEntry,
   escapeHtml,
   readText,
   stringifyValue,
@@ -253,6 +255,10 @@ const {
   closeReviewModal,
   closeForgottenDetailModal,
   submitReview,
+  openReviewNoteModal,
+  closeReviewNoteModal,
+  toggleReviewNotePreview,
+  saveReviewNote,
 } = reviewFeature
 
 profileFeature = createProfileFeature({
@@ -419,6 +425,9 @@ bindAppEvents({
   closeReviewModal,
   submitReview,
   closeForgottenDetailModal,
+  closeReviewNoteModal,
+  toggleReviewNotePreview,
+  saveReviewNote,
   closeDeleteConfirm,
   setView,
   setProfileTab,

@@ -16,6 +16,9 @@ export function createReviewModalFeature(ctx) {
     bindStudyTermCards,
     bindInlineAudio,
     statusLabel,
+    renderMarkdown,
+    saveEntry,
+    toast,
     reviewTargetTerm,
     renderReviewFocus,
   } = ctx
@@ -133,10 +136,67 @@ export function createReviewModalFeature(ctx) {
     hideModal(elements.forgottenDetailModal)
   }
 
+  function openReviewNoteModal(entry) {
+    if (!entry) return
+    state.currentReviewNoteEntry = entry
+    const term = entry.term || entry.normalizedTerm || '复习单词'
+    if (elements.reviewNoteModalTitle) elements.reviewNoteModalTitle.textContent = `复习笔记 · ${term}`
+    if (elements.reviewNoteInput) elements.reviewNoteInput.value = entry.note || ''
+    if (elements.reviewNotePreview) {
+      elements.reviewNotePreview.innerHTML = entry.note ? renderMarkdown(entry.note) : '<span class="empty">暂无笔记内容</span>'
+      elements.reviewNotePreview.classList.add('hidden')
+    }
+    if (elements.reviewNoteInput) elements.reviewNoteInput.classList.remove('hidden')
+    if (elements.reviewNotePreviewBtn) elements.reviewNotePreviewBtn.textContent = '预览 Markdown'
+    if (elements.reviewNoteStatus) elements.reviewNoteStatus.textContent = entry.note ? '已同步' : '未记录'
+    showModal(elements.reviewNoteModal)
+  }
+
+  function closeReviewNoteModal() {
+    if (!elements.reviewNoteModal) return
+    hideModal(elements.reviewNoteModal)
+    state.currentReviewNoteEntry = null
+  }
+
+  function toggleReviewNotePreview() {
+    if (!elements.reviewNotePreview || !elements.reviewNoteInput) return
+    const isPreview = !elements.reviewNotePreview.classList.contains('hidden')
+    if (isPreview) {
+      elements.reviewNotePreview.classList.add('hidden')
+      elements.reviewNoteInput.classList.remove('hidden')
+      if (elements.reviewNotePreviewBtn) elements.reviewNotePreviewBtn.textContent = '预览 Markdown'
+    } else {
+      const content = elements.reviewNoteInput.value || ''
+      elements.reviewNotePreview.innerHTML = content ? renderMarkdown(content) : '<span class="empty">暂无笔记内容</span>'
+      elements.reviewNotePreview.classList.remove('hidden')
+      elements.reviewNoteInput.classList.add('hidden')
+      if (elements.reviewNotePreviewBtn) elements.reviewNotePreviewBtn.textContent = '编辑 Markdown'
+    }
+  }
+
+  async function saveReviewNote() {
+    const entry = state.currentReviewNoteEntry || state.currentReviewEntry
+    if (!entry) return
+    const note = elements.reviewNoteInput?.value || ''
+    if (elements.reviewNoteStatus) elements.reviewNoteStatus.textContent = '保存中...'
+    const updated = await saveEntry(entry.id, { note })
+    if (updated) {
+      if (elements.reviewNoteStatus) elements.reviewNoteStatus.textContent = '已保存'
+      toast('复习笔记已保存')
+      closeReviewNoteModal()
+    } else {
+      if (elements.reviewNoteStatus) elements.reviewNoteStatus.textContent = '保存失败'
+    }
+  }
+
   return {
     renderReviewCompleteModal,
     closeReviewModal,
     openForgottenDetailModal,
     closeForgottenDetailModal,
+    openReviewNoteModal,
+    closeReviewNoteModal,
+    toggleReviewNotePreview,
+    saveReviewNote,
   }
 }

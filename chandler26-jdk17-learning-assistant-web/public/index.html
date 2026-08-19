@@ -382,19 +382,14 @@
 
           <section class="view" id="wordbookView">
             <section class="wordbook-view-content" id="wordbookWordsPanel">
-              <section class="review-header panel" id="wordbookHeaderPanel">
-                <div>
-                  <p class="eyebrow">Wordbook</p>
-                  <h3>单词本</h3>
-                  <p>选择一个单词本后查看单词，按熟悉、遗忘、模糊筛选，也可以编辑笔记或从单词本中删除。</p>
-                </div>
+              <section class="panel wordbook-toolbar" id="wordbookHeaderPanel">
                 <div class="wordbook-tools">
                   <label class="compact-field">
-                    单词本
+                    <span>单词本</span>
                     <select id="wordbookSelect"></select>
                   </label>
                   <label class="compact-field">
-                    状态筛选
+                    <span>状态筛选</span>
                     <select id="wordStatusFilter">
                       <option value="">全部状态</option>
                       <option value="familiar">熟悉</option>
@@ -402,30 +397,43 @@
                       <option value="forgotten">遗忘</option>
                     </select>
                   </label>
-                  <button class="primary-button compact-primary" id="reloadWordbookViewBtn" type="button">刷新单词</button>
+                  <label class="compact-field">
+                    <span>单词搜索</span>
+                    <input id="wordPrefixInput" autocomplete="off" placeholder="按单词/释义搜索" />
+                  </label>
+                  <button class="primary-button compact-primary" id="reloadWordbookViewBtn" type="button">查询</button>
                 </div>
               </section>
 
-              <section class="wordbook-layout" id="wordbookLayout">
-                <section class="panel" id="wordbookListPanel">
-                  <div class="panel-heading wordbook-list-heading">
-                    <h3>单词列表</h3>
-                    <label class="entry-prefix-field">
-                      <span class="sr-only">前缀匹配</span>
-                      <input id="wordPrefixInput" autocomplete="off" placeholder="前缀匹配" />
-                    </label>
-                  </div>
-                  <div id="wordbookEntryList" class="entry-list empty">暂无单词</div>
-                </section>
-                <section class="panel wordbook-focus-panel">
-                  <div class="panel-heading">
-                    <h3>单词详情</h3>
-                    <div class="inline-actions">
-                      <button class="secondary-button compact" id="toggleWordbookFocusModeBtn" type="button">专注模式</button>
-                    </div>
-                  </div>
-                  <div id="wordbookFocus" class="empty">选择单词后查看详情和笔记</div>
-                </section>
+              <section class="panel wordbook-table-panel" id="wordbookTablePanel">
+                <div class="wordbook-table-wrap">
+                  <table class="wordbook-table">
+                    <colgroup>
+                      <col class="col-term" style="width: 130px;" />
+                      <col class="col-phonetic" style="width: 120px;" />
+                      <col class="col-meaning" style="max-width: 340px;" />
+                      <col class="col-status" style="width: 110px;" />
+                      <col class="col-mastery" style="width: 70px;" />
+                      <col class="col-next-review" style="width: 150px;" />
+                      <col class="col-actions" style="width: 90px;" />
+                    </colgroup>
+                    <thead>
+                      <tr>
+                        <th class="col-term">单词</th>
+                        <th class="col-phonetic">音标</th>
+                        <th class="col-meaning">释义</th>
+                        <th class="col-status">学习状态</th>
+                        <th class="col-mastery" style="text-align: center;">掌握度</th>
+                        <th class="col-next-review">复习时间</th>
+                        <th class="col-actions" style="text-align: center;">操作</th>
+                      </tr>
+                    </thead>
+                    <tbody id="wordbookEntryList"></tbody>
+                  </table>
+                </div>
+                <div class="wordbook-table-footer">
+                  <span id="wordbookCountSummary">共 0 个单词</span>
+                </div>
               </section>
             </section>
           </section>
@@ -433,7 +441,7 @@
           <section class="view" id="scenePlanView">
             <section class="panel scene-plan-toolbar" id="scenePlanToolbar">
               <label class="compact-field">
-                学习计划
+                <span class="sr-only">学习计划</span>
                 <select id="scenePlanSelect"></select>
               </label>
               <div class="scene-range-control" role="group" aria-label="计划预览范围">
@@ -447,29 +455,15 @@
               </div>
               <div class="scene-toolbar-actions">
                 <button class="secondary-button compact" id="sceneReloadBtn" type="button">刷新</button>
-                <button class="primary-button compact-primary" id="openScenePlanModalBtn" type="button">新建计划</button>
               </div>
             </section>
 
             <section class="scene-plan-layout" id="scenePlanLayout">
-              <aside class="panel scene-plan-sidebar" id="scenePlanSidebar">
-                <div class="panel-heading compact-heading">
-                  <div>
-                    <p class="eyebrow">Plans</p>
-                    <h3>学习计划</h3>
-                  </div>
-                  <span class="mini-pill" id="scenePlanCount">0</span>
-                </div>
-                <div id="scenePlanList" class="scene-plan-list empty">暂无学习计划</div>
-              </aside>
-
               <section class="scene-workspace">
                 <section class="panel scene-plan-overview" id="scenePlanOverview">
                   <div class="scene-plan-overview-header">
                     <div class="scene-plan-overview-meta">
                       <div>
-                        <p class="eyebrow">Plan Preview</p>
-                        <h3 id="sceneOverviewTitle">选择学习计划</h3>
                         <p id="sceneOverviewSummary">通过日历了解近期学习量，再开始当前场景。</p>
                         <div id="scenePlanMetaBar" class="scene-plan-meta-bar hidden" style="margin-top: 8px; font-size: 13px; color: var(--text-secondary); display: flex; gap: 16px;">
                           <span>时间：<strong id="scenePlanDatesText" style="color: var(--text-primary);">未设置</strong></span>
@@ -478,9 +472,6 @@
                       </div>
                       <div class="scene-overview-actions">
                         <span class="mini-pill" id="sceneOverviewProgress">0 / 0 词</span>
-                        <button class="secondary-button compact hidden" id="scenePlanPauseBtn" type="button">暂停</button>
-                        <button class="primary-button compact-primary hidden" id="scenePlanResumeBtn" type="button">启动/恢复</button>
-                        <button class="danger-button compact hidden" id="scenePlanCancelBtn" type="button">取消计划</button>
                         <button class="secondary-button compact hidden" id="sceneOverviewNextUnitBtn" type="button">生成下一个场景</button>
                         <button class="secondary-button compact hidden" id="sceneScheduleNextUnitBtn" type="button">低价时段生成</button>
                         <button class="primary-button compact-primary" id="sceneStartLearningBtn" type="button" disabled>开始学习</button>
@@ -678,18 +669,13 @@
 
           <section class="view" id="reviewView">
             <section class="review-header panel">
-              <div>
-                <p class="eyebrow">Review Plan</p>
-                <h3>今日复习</h3>
-                <p>选择词书和数量后开始跟敲复习，提交结果后自动计算下一次复习时间。</p>
-              </div>
               <div class="review-start-controls">
                 <label class="compact-field">
-                  单词本
+                  <span>单词本</span>
                   <select id="reviewWordbookSelect"></select>
                 </label>
                 <label class="compact-field small-field">
-                  数量
+                  <span>数量</span>
                   <input id="reviewLimitInput" type="number" min="1" max="100" value="10" />
                 </label>
                 <button class="primary-button compact-primary" id="reloadReviewBtn" type="button">开始复习</button>
@@ -698,21 +684,7 @@
 
             <div class="review-layout">
               <section class="panel review-focus">
-                <div class="panel-heading">
-                  <h3>复习卡片</h3>
-                  <span class="mini-pill" id="reviewProgressBadge">0 / 0</span>
-                </div>
                 <div id="reviewFocus" class="empty">选择词书和数量后开始复习</div>
-              </section>
-              <section class="panel note-panel">
-                <div class="panel-heading">
-                  <div>
-                    <p class="eyebrow">Note</p>
-                    <h3>复习笔记</h3>
-                  </div>
-                  <button class="secondary-button compact" id="editReviewNoteBtn" type="button">编辑</button>
-                </div>
-                <div id="reviewNote" class="note-view empty">选择复习单词后查看同一份 Markdown 笔记</div>
               </section>
             </div>
           </section>
@@ -721,6 +693,32 @@
     </main>
 
     <div class="toast" id="toast"></div>
+    <section class="modal-backdrop hidden" id="reviewNoteModal" aria-modal="true" role="dialog" aria-labelledby="reviewNoteModalTitle">
+      <div class="config-modal review-note-modal" data-modal-scroll>
+        <div class="panel-heading">
+          <div>
+            <p class="eyebrow">Review Note</p>
+            <h3 id="reviewNoteModalTitle">复习笔记</h3>
+          </div>
+          <button class="icon-button" id="reviewNoteModalCloseBtn" type="button" title="关闭" aria-label="关闭">×</button>
+        </div>
+        <div class="scene-note-modal-body">
+          <div class="inline-actions" style="margin-bottom: 8px;">
+            <span class="mini-pill">支持 Markdown</span>
+            <button class="secondary-button compact" id="reviewNotePreviewBtn" type="button">预览 Markdown</button>
+          </div>
+          <textarea id="reviewNoteInput" class="scene-note-input" rows="8" placeholder="记录该单词的记忆要点、例句或笔记。支持 Markdown，例如：&#10;## 记忆点&#10;- ability to do sth"></textarea>
+          <div id="reviewNotePreview" class="scene-note-preview hidden"></div>
+        </div>
+        <div class="scene-note-modal-footer">
+          <span id="reviewNoteStatus" class="scene-note-status">未保存</span>
+          <div class="inline-actions">
+            <button class="secondary-button compact" id="reviewNoteModalCancelBtn" type="button">关闭</button>
+            <button class="primary-button compact-primary" id="reviewNoteSaveBtn" type="button">保存笔记</button>
+          </div>
+        </div>
+      </div>
+    </section>
     <section class="modal-backdrop hidden" id="sceneNoteModal" aria-modal="true" role="dialog" aria-labelledby="sceneNoteModalTitle">
       <div class="config-modal scene-note-modal" data-modal-scroll>
         <div class="panel-heading">
@@ -1247,6 +1245,20 @@
               <button class="primary-button compact-primary" id="saveAccountSecurityBtn" type="button">保存安全设置</button>
             </div>
           </section>
+        </div>
+      </div>
+    </section>
+    <section class="modal-backdrop hidden" id="wordbookCardModal" aria-modal="true" role="dialog" aria-labelledby="wordbookCardModalTitle">
+      <div class="config-modal wordbook-card-modal" data-modal-scroll>
+        <div class="panel-heading">
+          <div>
+            <p class="eyebrow" id="wordbookCardModalEyebrow">Word Card</p>
+            <h3 id="wordbookCardModalTitle">单词卡片</h3>
+          </div>
+          <button class="icon-button" id="closeWordbookCardModalBtn" type="button" title="关闭" aria-label="关闭">×</button>
+        </div>
+        <div id="wordbookFocus" class="wordbook-focus-container">
+          <div class="empty">选择单词后查看详情和笔记</div>
         </div>
       </div>
     </section>

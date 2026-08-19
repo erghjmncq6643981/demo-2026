@@ -541,12 +541,35 @@ textarea:focus {
 }
 
 .compact-field {
-  width: 260px;
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
   margin: 0;
+  white-space: nowrap;
+}
+
+.compact-field span,
+.compact-field > span:first-child {
+  flex-shrink: 0;
+  white-space: nowrap;
+  font-weight: 600;
+  font-size: 13px;
+  color: var(--text-secondary);
+}
+
+.compact-field select,
+.compact-field input {
+  min-width: 0;
+  height: 36px;
 }
 
 .compact-field.small-field {
-  width: 108px;
+  width: auto;
+}
+
+.compact-field.small-field input {
+  width: 72px;
+  flex: 0 0 72px;
 }
 
 .view {
@@ -614,35 +637,23 @@ textarea:focus {
 .review-layout {
   display: grid;
   gap: 18px;
-  grid-template-rows: minmax(0, 1fr) minmax(96px, 0.22fr);
+  grid-template-rows: minmax(0, 1fr);
   min-height: 0;
   overflow: hidden;
-}
-
-.review-layout .review-focus {
-  order: -1;
 }
 
 .review-layout > .panel {
   display: grid;
   min-height: 0;
-  grid-template-rows: auto minmax(0, 1fr);
+  grid-template-rows: minmax(0, 1fr);
   overflow: hidden;
-}
-
-#reviewFocus,
-#reviewNote {
-  min-height: 0;
-  overscroll-behavior: contain;
-  padding-right: 4px;
 }
 
 #reviewFocus {
+  min-height: 0;
   overflow: hidden;
-}
-
-#reviewNote {
-  overflow: auto;
+  overscroll-behavior: contain;
+  padding-right: 4px;
 }
 
 .wordbook-layout {
@@ -3216,23 +3227,46 @@ input[type="range"] {
 .review-header {
   display: flex;
   align-items: center;
-  justify-content: space-between;
   gap: 18px;
 }
 
 .review-start-controls {
   display: flex;
-  align-items: end;
-  gap: 10px;
+  align-items: center;
+  gap: 16px;
+  flex-wrap: wrap;
 }
 
-.review-header h3,
-.review-header p {
-  margin: 4px 0 0;
+.review-start-controls .compact-field {
+  display: inline-flex;
+  flex-direction: row;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 0;
+  white-space: nowrap;
+  font-size: 13px;
+  color: var(--text-secondary);
 }
 
-.review-header p {
-  color: var(--muted);
+.review-start-controls .compact-field span {
+  flex-shrink: 0;
+  white-space: nowrap;
+  font-weight: 600;
+  color: var(--text-secondary);
+}
+
+.review-start-controls .compact-field select {
+  min-width: 180px;
+  height: 36px;
+}
+
+.review-start-controls .compact-field.small-field {
+  width: auto;
+}
+
+.review-start-controls .compact-field.small-field input {
+  width: 72px;
+  height: 36px;
 }
 
 .review-list {
@@ -3302,7 +3336,13 @@ input[type="range"] {
   color: var(--green);
 }
 
-.review-card-topline,
+.review-card-topline {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 10px;
+}
+
 .review-card-actions {
   display: flex;
   align-items: center;
@@ -3361,10 +3401,279 @@ input[type="range"] {
   font-weight: 800;
 }
 
+.wordbook-toolbar {
+  padding: 12px 16px;
+}
+
 .wordbook-tools {
   display: flex;
-  align-items: end;
-  gap: 10px;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 16px;
+  width: 100%;
+}
+
+.wordbook-tools .compact-field {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 0;
+  white-space: nowrap;
+  font-size: 13px;
+  color: var(--text-secondary);
+}
+
+.wordbook-tools .compact-field span {
+  font-weight: 600;
+  color: var(--text-secondary);
+  font-size: 13px;
+}
+
+.wordbook-tools .compact-field select,
+.wordbook-tools .compact-field input {
+  min-width: 180px;
+  height: 36px;
+}
+
+.wordbook-tools #reloadWordbookViewBtn {
+  min-width: 76px;
+  height: 36px;
+  margin-left: auto;
+}
+
+.wordbook-table-panel {
+  display: grid;
+  grid-template-rows: minmax(0, 1fr) auto;
+  min-height: 0;
+  overflow: hidden;
+  padding: 0;
+}
+
+.wordbook-table-wrap {
+  min-height: 0;
+  overflow: auto;
+  overscroll-behavior: contain;
+}
+
+.wordbook-table {
+  width: 100%;
+  border-collapse: collapse;
+  table-layout: fixed;
+  font-size: 14px;
+}
+
+.wordbook-table thead {
+  position: sticky;
+  top: 0;
+  z-index: 3;
+  background: var(--bg-panel-solid, #1f2937);
+  box-shadow: 0 1px 0 var(--line);
+}
+
+.wordbook-table th {
+  padding: 12px 14px;
+  font-weight: 600;
+  font-size: 13px;
+  color: var(--text-secondary);
+  text-align: left;
+  white-space: nowrap;
+  border-bottom: 1px solid var(--line);
+  background: inherit;
+  box-sizing: border-box;
+}
+
+.wordbook-table tbody tr.wordbook-row {
+  transition: background 0.15s ease;
+  border-bottom: 1px solid var(--line-soft, rgba(255, 255, 255, 0.06));
+}
+
+.wordbook-table tbody tr.wordbook-row:hover {
+  background: var(--bg-hover, rgba(99, 102, 241, 0.08));
+}
+
+.wordbook-table tbody tr.wordbook-row.active {
+  background: var(--bg-active, rgba(99, 102, 241, 0.14));
+}
+
+.wordbook-table td {
+  padding: 12px 14px;
+  vertical-align: middle;
+  box-sizing: border-box;
+}
+
+.wordbook-table th.col-term,
+.wordbook-table td.cell-term {
+  width: 130px;
+  max-width: 130px;
+  overflow: hidden;
+  white-space: nowrap;
+}
+
+.wordbook-table th.col-phonetic,
+.wordbook-table td.cell-phonetic {
+  width: 120px;
+  max-width: 120px;
+  overflow: hidden;
+  white-space: nowrap;
+}
+
+.wordbook-table th.col-meaning,
+.wordbook-table td.cell-meaning {
+  width: auto;
+  max-width: 340px;
+  overflow: hidden;
+}
+
+.wordbook-table th.col-status,
+.wordbook-table td.cell-status {
+  width: 110px;
+  max-width: 110px;
+  white-space: nowrap;
+}
+
+.wordbook-table th.col-mastery,
+.wordbook-table td.cell-mastery {
+  width: 70px;
+  max-width: 70px;
+  text-align: center;
+  white-space: nowrap;
+}
+
+.wordbook-table th.col-next-review,
+.wordbook-table td.cell-next-review {
+  width: 150px;
+  max-width: 150px;
+  white-space: nowrap;
+}
+
+.wordbook-table th.col-actions,
+.wordbook-table td.cell-actions {
+  width: 90px;
+  max-width: 90px;
+  text-align: center;
+  white-space: nowrap;
+}
+
+.word-link-btn {
+  background: transparent;
+  border: 0;
+  padding: 0;
+  margin: 0;
+  cursor: pointer;
+  text-align: left;
+  display: inline-flex;
+  align-items: center;
+  max-width: 100%;
+}
+
+.word-link-btn .term-text {
+  font-size: 15px;
+  font-weight: 700;
+  color: #38bdf8;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  transition: color 0.15s ease, text-decoration 0.15s ease;
+  text-decoration: underline dotted transparent;
+}
+
+.word-link-btn:hover .term-text {
+  color: #7dd3fc;
+  text-decoration: underline dotted #7dd3fc;
+}
+
+.wordbook-table .cell-phonetic .phonetic-text {
+  font-size: 13px;
+  color: var(--text-muted, #9ca3af);
+  font-family: inherit;
+  display: block;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.wordbook-table .cell-meaning .meaning-text {
+  display: block;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  max-width: 100%;
+  line-height: 1.5;
+  color: var(--text-secondary);
+  cursor: pointer;
+  user-select: text;
+  transition: color 0.15s ease;
+}
+
+.wordbook-table .cell-meaning .meaning-text:hover {
+  color: var(--text-primary);
+  text-decoration: underline dotted var(--muted);
+}
+
+.wordbook-table .cell-meaning .meaning-text.expanded {
+  white-space: normal;
+  overflow: visible;
+  word-break: break-word;
+}
+
+.wordbook-table .cell-status .status-pill {
+  display: inline-block;
+  padding: 2px 8px;
+  border-radius: 6px;
+  font-size: 12px;
+  font-weight: 600;
+  white-space: nowrap;
+}
+
+.status-pill.status-familiar {
+  background: rgba(34, 197, 94, 0.15);
+  color: #4ade80;
+  border: 1px solid rgba(34, 197, 94, 0.3);
+}
+
+.status-pill.status-vague {
+  background: rgba(234, 179, 8, 0.15);
+  color: #facc15;
+  border: 1px solid rgba(234, 179, 8, 0.3);
+}
+
+.status-pill.status-forgotten {
+  background: rgba(239, 68, 68, 0.15);
+  color: #f87171;
+  border: 1px solid rgba(239, 68, 68, 0.3);
+}
+
+.wordbook-table-footer {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 10px 16px;
+  border-top: 1px solid var(--line);
+  font-size: 13px;
+  color: var(--text-secondary);
+  background: var(--bg-panel-solid, #1f2937);
+}
+
+.wordbook-card-modal {
+  width: min(880px, 94vw);
+  max-height: min(860px, calc(100vh - 40px));
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  padding: 20px 24px;
+}
+
+.wordbook-card-modal .panel-heading {
+  flex-shrink: 0;
+  margin-bottom: 12px;
+}
+
+.wordbook-focus-container {
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  padding-right: 8px;
 }
 
 .review-focus-card h4,
@@ -4018,14 +4327,10 @@ input[type="range"] {
 
 .scene-plan-layout {
   display: grid;
-  grid-template-columns: minmax(240px, 280px) minmax(0, 1fr);
+  grid-template-columns: minmax(0, 1fr);
   gap: 18px;
   min-height: 0;
   overflow: hidden;
-}
-
-.scene-plan-layout.scene-focus-layout {
-  grid-template-columns: minmax(0, 1fr);
 }
 
 .scene-plan-layout.scene-focus-layout .scene-workspace {

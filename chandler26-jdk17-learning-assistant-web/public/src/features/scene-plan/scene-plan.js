@@ -644,7 +644,7 @@ export function createScenePlanFeature(ctx) {
 
   function renderPlanList() {
     const plans = asArray(state.learningPlans)
-    elements.scenePlanCount.textContent = String(plans.length)
+    if (elements.scenePlanCount) elements.scenePlanCount.textContent = String(plans.length)
     renderSelectOptions(
       elements.scenePlanSelect,
       plans,
@@ -653,45 +653,57 @@ export function createScenePlanFeature(ctx) {
       '暂无学习计划',
     )
     if (!plans.length) {
-      elements.scenePlanList.className = 'scene-plan-list empty'
-      elements.scenePlanList.textContent = '暂无学习计划'
-      elements.profileLearningPlanList.className = 'profile-learning-plan-list empty'
-      elements.profileLearningPlanList.textContent = '暂无学习计划'
+      if (elements.scenePlanList) {
+        elements.scenePlanList.className = 'scene-plan-list empty'
+        elements.scenePlanList.textContent = '暂无学习计划'
+      }
+      if (elements.profileLearningPlanList) {
+        elements.profileLearningPlanList.className = 'profile-learning-plan-list empty'
+        elements.profileLearningPlanList.textContent = '暂无学习计划'
+      }
       return
     }
-    const cards = plans
-      .map((plan) => `
-        <button class="scene-plan-item ${sameId(plan.id, state.currentLearningPlan?.id) ? 'active' : ''}" type="button" data-scene-plan-id="${escapeHtml(plan.id)}">
-          <span class="scene-item-topline">
-            <strong>${escapeHtml(plan.name)}</strong>
-            <small>${escapeHtml(PLAN_STATUS_LABELS[plan.status] || plan.status || '学习中')}</small>
-          </span>
-          <span>${number(plan.learnedCoreWords)} / ${number(plan.totalCatalogWords)} 个核心词</span>
-          <small>已完成 ${number(plan.completedUnitCount)} 个场景</small>
-        </button>
-      `)
-      .join('')
-    elements.scenePlanList.className = 'scene-plan-list'
-    elements.scenePlanList.innerHTML = cards
-    elements.profileLearningPlanList.className = 'profile-learning-plan-list'
-    elements.profileLearningPlanList.innerHTML = plans.map((plan) => `
-      <article class="profile-learning-plan-card">
-        <div>
-          <span class="mini-pill">${escapeHtml(PLAN_STATUS_LABELS[plan.status] || plan.status || '学习中')}</span>
-          <h4>${escapeHtml(plan.name)}</h4>
-          <p>${escapeHtml(plan.learningPurpose || '未填写学习目标')}</p>
-        </div>
-        <div class="profile-plan-progress">
-          <strong>${number(plan.learnedCoreWords)} / ${number(plan.totalCatalogWords)}</strong>
-          <span>已掌握词汇 · ${number(plan.completedUnitCount)} 个场景</span>
-          <div class="plan-actions" style="display: flex; gap: 8px; align-items: center; margin-top: 10px;">
-            <button class="secondary-button compact" type="button" data-open-scene-plan="${escapeHtml(plan.id)}">进入挑战</button>
-            <button class="icon-action-button" type="button" data-scene-plan-edit="${escapeHtml(plan.id)}" title="修改计划" aria-label="修改计划">✎</button>
+    if (elements.scenePlanList) {
+      const cards = plans
+        .map((plan) => `
+          <button class="scene-plan-item ${sameId(plan.id, state.currentLearningPlan?.id) ? 'active' : ''}" type="button" data-scene-plan-id="${escapeHtml(plan.id)}">
+            <span class="scene-item-topline">
+              <strong>${escapeHtml(plan.name)}</strong>
+              <small>${escapeHtml(PLAN_STATUS_LABELS[plan.status] || plan.status || '学习中')}</small>
+            </span>
+            <span>${number(plan.learnedCoreWords)} / ${number(plan.totalCatalogWords)} 个核心词</span>
+            <small>已完成 ${number(plan.completedUnitCount)} 个场景</small>
+          </button>
+        `)
+        .join('')
+      elements.scenePlanList.className = 'scene-plan-list'
+      elements.scenePlanList.innerHTML = cards
+    }
+    if (elements.profileLearningPlanList) {
+      elements.profileLearningPlanList.className = 'profile-learning-plan-list'
+      elements.profileLearningPlanList.innerHTML = plans.map((plan) => `
+        <article class="profile-learning-plan-card">
+          <div>
+            <span class="mini-pill">${escapeHtml(PLAN_STATUS_LABELS[plan.status] || plan.status || '学习中')}</span>
+            <h4>${escapeHtml(plan.name)}</h4>
+            <p>${escapeHtml(plan.learningPurpose || '未填写学习目标')}</p>
           </div>
-        </div>
-      </article>
-    `).join('')
-    for (const container of [elements.scenePlanList, elements.profileLearningPlanList]) {
+          <div class="profile-plan-progress">
+            <strong>${number(plan.learnedCoreWords)} / ${number(plan.totalCatalogWords)}</strong>
+            <span>已掌握词汇 · ${number(plan.completedUnitCount)} 个场景</span>
+            <div class="plan-actions" style="display: flex; gap: 8px; align-items: center; margin-top: 10px; flex-wrap: wrap;">
+              <button class="secondary-button compact" type="button" data-open-scene-plan="${escapeHtml(plan.id)}">进入挑战</button>
+              ${plan.status === 'active' ? `<button class="secondary-button compact" type="button" data-profile-plan-pause="${escapeHtml(plan.id)}">暂停</button>` : ''}
+              ${plan.status === 'paused' || plan.status === 'not_started' ? `<button class="primary-button compact-primary" type="button" data-profile-plan-resume="${escapeHtml(plan.id)}">${plan.status === 'not_started' ? '启动' : '恢复'}</button>` : ''}
+              ${plan.status !== 'cancelled' && plan.status !== 'completed' ? `<button class="danger-button compact" type="button" data-profile-plan-cancel="${escapeHtml(plan.id)}">取消计划</button>` : ''}
+              <button class="icon-action-button" type="button" data-scene-plan-edit="${escapeHtml(plan.id)}" title="修改计划" aria-label="修改计划">✎</button>
+            </div>
+          </div>
+        </article>
+      `).join('')
+    }
+    const containers = [elements.scenePlanList, elements.profileLearningPlanList].filter(Boolean)
+    for (const container of containers) {
       container.querySelectorAll('[data-scene-plan-id], [data-open-scene-plan]').forEach((button) => {
         button.addEventListener('click', async () => {
           const planId = button.dataset.scenePlanId || button.dataset.openScenePlan
@@ -700,7 +712,25 @@ export function createScenePlanFeature(ctx) {
         })
       })
     }
-    elements.profileLearningPlanList.querySelectorAll('[data-scene-plan-edit]').forEach((button) => {
+    elements.profileLearningPlanList?.querySelectorAll('[data-profile-plan-pause]').forEach((button) => {
+      button.addEventListener('click', async (e) => {
+        e.stopPropagation()
+        await pausePlan(button.dataset.profilePlanPause)
+      })
+    })
+    elements.profileLearningPlanList?.querySelectorAll('[data-profile-plan-resume]').forEach((button) => {
+      button.addEventListener('click', async (e) => {
+        e.stopPropagation()
+        await resumePlan(button.dataset.profilePlanResume)
+      })
+    })
+    elements.profileLearningPlanList?.querySelectorAll('[data-profile-plan-cancel]').forEach((button) => {
+      button.addEventListener('click', async (e) => {
+        e.stopPropagation()
+        await cancelPlan(button.dataset.profilePlanCancel)
+      })
+    })
+    elements.profileLearningPlanList?.querySelectorAll('[data-scene-plan-edit]').forEach((button) => {
       button.addEventListener('click', (e) => {
         e.stopPropagation()
         openScenePlanModal(button.dataset.scenePlanEdit)
@@ -1065,7 +1095,6 @@ export function createScenePlanFeature(ctx) {
     elements.sceneCalendar.innerHTML = `
       <div class="scene-calendar-summary">
         <span><strong>${rangeLabel} ${Math.min(remainingWords, totalScheduled)}</strong> 个待挑战词汇（每日目标约 ${suggestedDailyCount} 词）</span>
-        <small>点击日期可预览词汇；可提前生成后续场景</small>
       </div>
       <div class="scene-calendar-grid">
         ${dates.map((date) => {
@@ -1535,44 +1564,28 @@ export function createScenePlanFeature(ctx) {
   function renderCurrentScene() {
     const plan = state.currentLearningPlan
     const unit = activeUnit(plan)
-    elements.sceneOverviewTitle.textContent = plan?.name || '选择学习计划'
+    if (elements.sceneOverviewTitle) elements.sceneOverviewTitle.textContent = plan?.name || '选择学习计划'
     elements.sceneOverviewSummary.textContent = plan?.learningPurpose || '通过日历了解近期学习量，再开始当前场景。'
     elements.sceneOverviewProgress.textContent = plan
       ? `${number(plan.learnedCoreWords)} / ${number(plan.totalCatalogWords)} 词`
       : '0 / 0 词'
 
-    // Plan Meta Bar and Transition Buttons
+    // Plan Meta Bar
     if (plan) {
       elements.scenePlanMetaBar.classList.remove('hidden')
       const startStr = formatPlanDate(plan.startTime)
       const endStr = formatPlanDate(plan.endTime)
       elements.scenePlanDatesText.textContent = `${startStr} 至 ${endStr}`
       elements.scenePlanStatusText.textContent = PLAN_STATUS_LABELS[plan.status] || plan.status || '-'
-
-      elements.scenePlanPauseBtn.classList.add('hidden')
-      elements.scenePlanResumeBtn.classList.add('hidden')
-      elements.scenePlanCancelBtn.classList.add('hidden')
-
-      if (plan.status === 'not_started') {
-        elements.scenePlanResumeBtn.classList.remove('hidden')
-        elements.scenePlanResumeBtn.textContent = '启动计划'
-        elements.scenePlanCancelBtn.classList.remove('hidden')
-      } else if (plan.status === 'active') {
-        elements.scenePlanPauseBtn.classList.remove('hidden')
-        elements.scenePlanCancelBtn.classList.remove('hidden')
-      } else if (plan.status === 'paused') {
-        elements.scenePlanResumeBtn.classList.remove('hidden')
-        elements.scenePlanResumeBtn.textContent = '恢复计划'
-        elements.scenePlanCancelBtn.classList.remove('hidden')
-      }
       elements.sceneStartLearningBtn.disabled = !unit || plan.status !== 'active'
     } else {
       elements.scenePlanMetaBar.classList.add('hidden')
-      elements.scenePlanPauseBtn.classList.add('hidden')
-      elements.scenePlanResumeBtn.classList.add('hidden')
-      elements.scenePlanCancelBtn.classList.add('hidden')
       elements.sceneStartLearningBtn.disabled = !unit
     }
+
+    elements.scenePlanPauseBtn?.classList.add('hidden')
+    elements.scenePlanResumeBtn?.classList.add('hidden')
+    elements.scenePlanCancelBtn?.classList.add('hidden')
 
     elements.sceneStartLearningBtn.classList.toggle('hidden', !unit)
     elements.sceneOverviewNextUnitBtn.classList.toggle('hidden', !plan?.canGenerateNext || Boolean(unit) || plan?.status !== 'active')
@@ -2999,8 +3012,10 @@ export function createScenePlanFeature(ctx) {
     }
   }
 
-  async function pausePlan() {
-    const plan = state.currentLearningPlan
+  async function pausePlan(targetPlanId) {
+    const plan = targetPlanId
+      ? asArray(state.learningPlans).find((p) => sameId(p.id, targetPlanId)) || state.currentLearningPlan
+      : state.currentLearningPlan
     if (!plan) return
     try {
       if (state.preview) {
@@ -3008,7 +3023,7 @@ export function createScenePlanFeature(ctx) {
         toast('设计预览：计划已暂停')
       } else {
         const result = await request(`/api/v1/learning/plans/${encodeURIComponent(plan.id)}/pause`, { method: 'POST' })
-        state.currentLearningPlan = result
+        if (sameId(plan.id, state.currentLearningPlan?.id)) state.currentLearningPlan = result
       }
       await loadSceneData({ planId: plan.id })
       toast('学习计划已暂停')
@@ -3018,8 +3033,10 @@ export function createScenePlanFeature(ctx) {
     }
   }
 
-  async function resumePlan() {
-    const plan = state.currentLearningPlan
+  async function resumePlan(targetPlanId) {
+    const plan = targetPlanId
+      ? asArray(state.learningPlans).find((p) => sameId(p.id, targetPlanId)) || state.currentLearningPlan
+      : state.currentLearningPlan
     if (!plan) return
     try {
       if (state.preview) {
@@ -3027,7 +3044,7 @@ export function createScenePlanFeature(ctx) {
         toast('设计预览：计划已启动/恢复')
       } else {
         const result = await request(`/api/v1/learning/plans/${encodeURIComponent(plan.id)}/resume`, { method: 'POST' })
-        state.currentLearningPlan = result
+        if (sameId(plan.id, state.currentLearningPlan?.id)) state.currentLearningPlan = result
       }
       await loadSceneData({ planId: plan.id })
       toast('学习计划已启动/恢复')
@@ -3037,8 +3054,10 @@ export function createScenePlanFeature(ctx) {
     }
   }
 
-  async function cancelPlan() {
-    const plan = state.currentLearningPlan
+  async function cancelPlan(targetPlanId) {
+    const plan = targetPlanId
+      ? asArray(state.learningPlans).find((p) => sameId(p.id, targetPlanId)) || state.currentLearningPlan
+      : state.currentLearningPlan
     if (!plan) return
     const confirmed = await confirmAction({
       title: '取消学习计划',
@@ -3051,9 +3070,9 @@ export function createScenePlanFeature(ctx) {
         toast('设计预览：计划已取消')
       } else {
         const result = await request(`/api/v1/learning/plans/${encodeURIComponent(plan.id)}/cancel`, { method: 'POST' })
-        state.currentLearningPlan = result
+        if (sameId(plan.id, state.currentLearningPlan?.id)) state.currentLearningPlan = result
       }
-      await loadSceneData({ planId: plan.id })
+      await loadSceneData()
       toast('学习计划已取消')
     } catch (error) {
       logEvent('error', '取消学习计划失败', error.message)

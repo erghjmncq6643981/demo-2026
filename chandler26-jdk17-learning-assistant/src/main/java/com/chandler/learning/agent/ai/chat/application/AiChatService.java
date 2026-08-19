@@ -147,7 +147,15 @@ public class AiChatService {
             AiStructuredResponseParseResult parsedResponse = validateStructuredResponse(invocationScene,
                     modelDefinition, modelResponse.getContent());
             if (parsedResponse != null) {
-                modelResponse.setContent(parsedResponse.normalizedContent());
+                String normalizedJson = parsedResponse.normalizedContent();
+                if (parsedResponse.root() != null) {
+                    try {
+                        normalizedJson = objectMapper.writeValueAsString(parsedResponse.root());
+                    } catch (Exception ex) {
+                        log.debug("无法将已校验的 JSON 节点序列化为字符串", ex);
+                    }
+                }
+                modelResponse.setContent(normalizedJson);
                 modelResponse.setStructuredParser(parsedResponse.parserName());
                 modelResponse.setStructuredParseStage(parsedResponse.parseStage());
                 modelResponse.setStructuredRepairs(parsedResponse.repairs());
@@ -377,9 +385,36 @@ public class AiChatService {
             if (root == null || !root.isObject()) {
                 throw LearningAssistantException.badRequest(LearningConstants.ErrorCode.AI_RESPONSE_PARSE_FAILED);
             }
+            boolean allFieldsPresent = true;
+            for (String field : invocationScene.getRequiredRootFields()) {
+                if (!hasField(root, field)) {
+                    allFieldsPresent = false;
+                    break;
+                }
+            }
+            if (!allFieldsPresent) {
+                for (String wrapper : List.of("scene", "data", "result", "unit", "material", "card", "vocabulary", "word", "item")) {
+                    JsonNode candidate = root.path(wrapper);
+                    if (candidate.isObject()) {
+                        boolean candidateValid = true;
+                        for (String f : invocationScene.getRequiredRootFields()) {
+                            if (!hasField(candidate, f)) {
+                                candidateValid = false;
+                                break;
+                            }
+                        }
+                        if (candidateValid) {
+                            root = candidate;
+                            result = new AiStructuredResponseParseResult(root, result.normalizedContent(),
+                                    result.parserName(), result.parseStage(), result.repairs());
+                            break;
+                        }
+                    }
+                }
+            }
             List<String> missingFields = new java.util.ArrayList<>();
             for (String field : invocationScene.getRequiredRootFields()) {
-                if (root.path(field).isMissingNode() || root.path(field).isNull()) {
+                if (!hasField(root, field)) {
                     missingFields.add(field);
                 }
             }
@@ -401,6 +436,41 @@ public class AiChatService {
                     modelDefinition.getProvider().getCode(), modelDefinition.getApiModelId(), ex.getMessage(), ex);
             throw LearningAssistantException.badRequest(LearningConstants.ErrorCode.AI_RESPONSE_PARSE_FAILED);
         }
+    }
+
+    private boolean hasField(JsonNode root, String field) {
+        if (!root.path(field).isMissingNode() && !root.path(field).isNull()) {
+            return true;
+        }
+        for (String alias : fieldAliases(field)) {
+            if (!root.path(alias).isMissingNode() && !root.path(alias).isNull()) {
+                if (root instanceof com.fasterxml.jackson.databind.node.ObjectNode objectNode) {
+                    objectNode.set(field, root.path(alias));
+                }
+                return true;
+            }
+        }
+        return false;
+    }
+
+    private List<String> fieldAliases(String field) {
+        return switch (field) {
+            case "vocabulary" -> List.of("words", "vocabulary_list", "vocabularies", "word_list");
+            case "learning_text" -> List.of("learningText", "text", "article", "content", "passage", "scene_text");
+            case "translation" -> List.of("chinese_translation", "chinese", "text_translation", "translation_text");
+            case "title" -> List.of("scene_title", "unit_title", "topic");
+            case "entries" -> List.of("words", "items", "catalog_entries");
+            case "cards" -> List.of("vocabulary", "words", "list");
+            case "definitions" -> List.of("meaning", "meanings", "definition");
+            case "examples" -> List.of("example_sentences", "example", "sentences", "exampleSentences");
+            case "collocations" -> List.of("phrases", "collocation", "common_phrases", "commonPhrases");
+            case "memory_tips" -> List.of("memoryTips", "tips", "memory_tip", "mnemonic", "memory");
+            case "article" -> List.of("content", "text", "learning_text");
+            case "vocabulary_focus" -> List.of("vocabularyFocus", "vocabulary", "words", "core_words");
+            case "grammar_points" -> List.of("grammarPoints", "grammar", "points");
+            case "practice" -> List.of("exercises", "questions");
+            default -> List.of();
+        };
     }
 
     private int ceilDivide(int dividend, int divisor) {

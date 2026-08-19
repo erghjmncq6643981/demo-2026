@@ -40,7 +40,7 @@ learning:
   ai:
     http:
       connect-timeout: ${LEARNING_AI_CONNECT_TIMEOUT:15s}
-      read-timeout: ${LEARNING_AI_READ_TIMEOUT:180s}
+      read-timeout: ${LEARNING_AI_READ_TIMEOUT:300s}
     audit:
       # 生产默认只保留请求/响应摘要；本地排障可显式设置为 true。
       store-content: ${LEARNING_AI_AUDIT_STORE_CONTENT:false}

@@ -1,6 +1,6 @@
 import { sameId } from '/src/shared/ids.js'
 import { hideModal, showModal } from '/src/shared/modal.js'
-import { escapeHtml } from '/src/shared/text.js'
+import { escapeHtml, formatDateTime } from '/src/shared/text.js'
 import { statusLabel } from '/src/shared/vocabulary.js'
 import { normalizeWordbooks, resolveSelectedWordbookId, syncCurrentWordbookId } from '/src/shared/wordbook.js'
 import { createWordbookDetailFeature } from '/src/features/profile/wordbook-detail.js'
@@ -318,7 +318,11 @@ export function createWordbookProfileFeature(ctx) {
       return Promise.resolve()
     }
     const status = elements.wordStatusFilter?.value || ''
-    const query = status ? `?status=${encodeURIComponent(status)}` : ''
+    const keyword = elements.wordPrefixInput?.value?.trim() || ''
+    const params = new URLSearchParams()
+    if (status) params.set('status', status)
+    if (keyword) params.set('keyword', keyword)
+    const query = params.toString() ? `?${params.toString()}` : ''
     return request(`/api/v1/learning/wordbooks/${encodeURIComponent(state.currentWordbookId)}/entries${query}`)
       .then((entries) => {
         state.wordbookEntries = Array.isArray(entries) ? entries : []
@@ -384,55 +388,137 @@ export function createWordbookProfileFeature(ctx) {
 
   function renderWordbookEntries() {
     const filter = elements.wordStatusFilter?.value || ''
-    const prefix = String(state.wordPrefixFilter || elements.wordPrefixInput?.value || '').trim().toLowerCase()
+    const keyword = String(state.wordPrefixFilter || elements.wordPrefixInput?.value || '').trim().toLowerCase()
     const statusFiltered = filter && state.preview ? state.wordbookEntries.filter((entry) => (entry.status || 'vague') === filter) : state.wordbookEntries
-    const entries = prefix ? statusFiltered.filter((entry) => entryMatchesPrefix(entry, prefix)) : statusFiltered
+    const entries = keyword ? statusFiltered.filter((entry) => entryMatchesKeyword(entry, keyword)) : statusFiltered
+
+    if (elements.wordbookCountSummary) {
+      elements.wordbookCountSummary.textContent = `共 ${entries.length} 个单词`
+    }
+
     if (!entries.length) {
-      elements.wordbookEntryList.className = 'entry-list empty'
-      elements.wordbookEntryList.textContent = prefix ? '没有匹配前缀的单词' : state.token ? '当前单词本还没有单词' : '登录后查看单词本'
+      elements.wordbookEntryList.innerHTML = `
+        <tr>
+          <td colspan="7" class="empty" style="text-align: center; padding: 48px 16px;">
+            ${keyword ? '没有匹配搜索条件的单词' : state.token ? '当前单词本还没有单词' : '登录后查看单词本'}
+          </td>
+        </tr>
+      `
       state.selectedEntry = null
       renderWordbookFocus(null)
       ctx.renderNotes(null)
       return
     }
+
     const selectedEntry = state.selectedEntry && entries.some((entry) => sameId(entry.id, state.selectedEntry.id)) ? state.selectedEntry : entries[0]
     state.selectedEntry = selectedEntry
-    elements.wordbookEntryList.className = 'entry-list'
+
     elements.wordbookEntryList.innerHTML = entries
-      .map(
-        (entry) => `
-          <div class="entry-row ${sameId(selectedEntry.id, entry.id) ? 'active' : ''}">
-            <button type="button" data-entry-id="${escapeHtml(entry.id)}">
-              <span>${escapeHtml(entry.term || entry.normalizedTerm)}</span>
-              <small>${escapeHtml(statusLabel(entry.status))} · 掌握 ${entry.masteryScore ?? 0}</small>
-            </button>
-            <div class="row-actions">
-              <button class="icon-action-button" type="button" data-entry-transfer="${escapeHtml(entry.id)}" title="复制或移动" aria-label="复制或移动">＋</button>
-              <button class="danger-icon-button" type="button" data-entry-delete="${escapeHtml(entry.id)}" title="删除单词">×</button>
-            </div>
-          </div>
-        `,
-      )
-      .join('')
-    elements.wordbookEntryList.querySelectorAll('[data-entry-id]').forEach((button) => {
-      button.addEventListener('click', () => {
-        const entry = state.wordbookEntries.find((item) => sameId(item.id, button.getAttribute('data-entry-id')))
-        selectWordbookEntry(entry)
+      .map((entry) => {
+        const parsed = entry.parsed || {}
+        const phonetic = parsed.phonetic?.uk
+          ? `UK /${parsed.phonetic.uk}/`
+          : parsed.phonetic?.us
+            ? `US /${parsed.phonetic.us}/`
+            : entry.phonetic
+              ? `/${entry.phonetic}/`
+              : '-'
+        const definitions = typeof ctx.normalizeDefinitions === 'function' ? ctx.normalizeDefinitions(parsed) : []
+        const meaningSummary = definitions.length
+          ? definitions.map((d) => `${d.pos ? d.pos + ' ' : ''}${d.cn || d.en || ''}`).join('； ')
+          : entry.meaningText || entry.definition || '-'
+        const stateCode = entry.status || 'vague'
+        const stateText = statusLabel(stateCode)
+        const stageText = `阶段 ${entry.reviewStage ?? 0}`
+        const mastery = entry.masteryScore ?? 0
+        const nextReview = entry.nextReviewTime ? formatDateTime(entry.nextReviewTime) : '-'
+
+        return `
+          <tr class="wordbook-row ${sameId(selectedEntry.id, entry.id) ? 'active' : ''}" data-entry-id="${escapeHtml(entry.id)}">
+            <td class="cell-term">
+              <button class="word-link-btn" type="button" data-word-card="${escapeHtml(entry.id)}" title="点击查看词卡">
+                <strong class="term-text">${escapeHtml(entry.term || entry.normalizedTerm)}</strong>
+              </button>
+            </td>
+            <td class="cell-phonetic">
+              <span class="phonetic-text">${escapeHtml(phonetic)}</span>
+            </td>
+            <td class="cell-meaning">
+              <span class="meaning-text expandable" data-toggle-expand title="点击展开/收起完整释义">${escapeHtml(meaningSummary)}</span>
+            </td>
+            <td class="cell-status">
+              <span class="status-pill status-${escapeHtml(stateCode)}">${escapeHtml(stateText)} · ${escapeHtml(stageText)}</span>
+            </td>
+            <td class="cell-mastery">
+              <span class="mastery-score">${mastery}</span>
+            </td>
+            <td class="cell-next-review">
+              <span class="next-review-text">${escapeHtml(nextReview)}</span>
+            </td>
+            <td class="cell-actions" style="text-align: center;">
+              <div class="row-actions" style="justify-content: center; gap: 8px;">
+                <button class="icon-action-button" type="button" data-entry-transfer="${escapeHtml(entry.id)}" title="复制或移动到其他单词本" aria-label="复制或移动到其他单词本">＋</button>
+                <button class="danger-icon-button" type="button" data-entry-delete="${escapeHtml(entry.id)}" title="从单词本删除" aria-label="删除">×</button>
+              </div>
+            </td>
+          </tr>
+        `
       })
-    })
-    elements.wordbookEntryList.querySelectorAll('[data-entry-delete]').forEach((button) => {
-      button.addEventListener('click', () => deleteWordbookEntry(button.getAttribute('data-entry-delete')))
-    })
-    elements.wordbookEntryList.querySelectorAll('[data-entry-transfer]').forEach((button) => {
-      button.addEventListener('click', () => openEntryTransferModal(button.getAttribute('data-entry-transfer')))
-    })
+      .join('')
+
+    elements.wordbookEntryList.onclick = (e) => {
+      const deleteBtn = e.target.closest('[data-entry-delete]')
+      if (deleteBtn) {
+        e.stopPropagation()
+        deleteWordbookEntry(deleteBtn.getAttribute('data-entry-delete'))
+        return
+      }
+
+      const transferBtn = e.target.closest('[data-entry-transfer]')
+      if (transferBtn) {
+        e.stopPropagation()
+        openEntryTransferModal(transferBtn.getAttribute('data-entry-transfer'))
+        return
+      }
+
+      const expandEl = e.target.closest('[data-toggle-expand]')
+      if (expandEl) {
+        e.stopPropagation()
+        expandEl.classList.toggle('expanded')
+        return
+      }
+
+      const wordTarget = e.target.closest('[data-word-card], .cell-term')
+      if (wordTarget) {
+        e.stopPropagation()
+        const row = wordTarget.closest('tr[data-entry-id]')
+        const entryId = row?.getAttribute('data-entry-id') || wordTarget.getAttribute('data-word-card')
+        const entry = state.wordbookEntries.find((item) => sameId(item.id, entryId))
+        if (entry) {
+          selectWordbookEntry(entry, { silent: true })
+          const modal = elements.wordbookCardModal || document.getElementById('wordbookCardModal')
+          if (modal) {
+            showModal(modal)
+          }
+        }
+        return
+      }
+    }
+
     renderWordbookFocus(selectedEntry)
     ctx.renderNotes(selectedEntry)
   }
 
-  function entryMatchesPrefix(entry, prefix) {
-    const values = [entry.term, entry.normalizedTerm, entry.parsed?.term]
-    return values.some((value) => String(value || '').trim().toLowerCase().startsWith(prefix))
+  function entryMatchesKeyword(entry, keyword) {
+    const values = [
+      entry.term,
+      entry.normalizedTerm,
+      entry.parsed?.term,
+      entry.note,
+      entry.meaningText,
+      ...(Array.isArray(entry.parsed?.definitions) ? entry.parsed.definitions.map((d) => d.cn || d.en || '') : []),
+    ]
+    return values.some((value) => String(value || '').trim().toLowerCase().includes(keyword))
   }
 
   function selectWordbookEntry(entry, options = {}) {

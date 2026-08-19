@@ -19,10 +19,14 @@ export function createStudyNotesFeature(ctx) {
     state.currentNoteEntry = entry || null
     const html = entry?.note ? renderMarkdown(entry.note) : ''
     const fallback = entry ? '<span class="empty">暂无笔记，点击编辑记录 Markdown</span>' : '<span class="empty">加入或选择单词后可以记录 Markdown 笔记</span>'
-    elements.studyNote.className = `note-view${html ? '' : ' empty'}`
-    elements.reviewNote.className = `note-view${html ? '' : ' empty'}`
-    elements.studyNote.innerHTML = html || fallback
-    elements.reviewNote.innerHTML = html || (entry ? '<span class="empty">暂无笔记，复习时也可以编辑同一份笔记</span>' : '<span class="empty">选择复习单词后查看同一份 Markdown 笔记</span>')
+    if (elements.studyNote) {
+      elements.studyNote.className = `note-view${html ? '' : ' empty'}`
+      elements.studyNote.innerHTML = html || fallback
+    }
+    if (elements.reviewNote) {
+      elements.reviewNote.className = `note-view${html ? '' : ' empty'}`
+      elements.reviewNote.innerHTML = html || (entry ? '<span class="empty">暂无笔记，复习时也可以编辑同一份笔记</span>' : '<span class="empty">选择复习单词后查看同一份 Markdown 笔记</span>')
+    }
   }
 
   function editCurrentNote() {
@@ -32,7 +36,7 @@ export function createStudyNotesFeature(ctx) {
       return
     }
     state.currentNoteEntry = entry
-    const focusTarget = state.selectedEntry && sameId(state.selectedEntry.id, entry.id) ? elements.wordbookFocus.querySelector('.note-view') : null
+    const focusTarget = state.selectedEntry && sameId(state.selectedEntry.id, entry.id) ? elements.wordbookFocus?.querySelector('.note-view') : null
     const textarea = `
       <div class="note-editor">
         <textarea rows="8" placeholder="支持 Markdown，例如：## 记忆点">${escapeHtml(entry.note || '')}</textarea>
@@ -42,8 +46,8 @@ export function createStudyNotesFeature(ctx) {
         </div>
       </div>
     `
-    elements.studyNote.innerHTML = textarea
-    elements.reviewNote.innerHTML = textarea
+    if (elements.studyNote) elements.studyNote.innerHTML = textarea
+    if (elements.reviewNote) elements.reviewNote.innerHTML = textarea
     if (focusTarget) focusTarget.innerHTML = textarea
     document.querySelectorAll('[data-save-note]').forEach((button) => button.addEventListener('click', () => saveCurrentNote(button)))
     document.querySelectorAll('[data-cancel-note]').forEach((button) =>
