@@ -134,6 +134,12 @@ export function bindAppEvents(ctx) {
 
 elements.loginBtn.addEventListener('click', () => loginOrRegister('login'))
 elements.registerBtn.addEventListener('click', () => loginOrRegister('register'))
+elements.usernameInput?.addEventListener('keydown', (e) => {
+  if (e.key === 'Enter') loginOrRegister('login')
+})
+elements.passwordInput?.addEventListener('keydown', (e) => {
+  if (e.key === 'Enter') loginOrRegister('login')
+})
 elements.logoutBtn.addEventListener('click', logout)
 if (elements.apiBaseInput) {
   elements.apiBaseInput.addEventListener('change', () => {

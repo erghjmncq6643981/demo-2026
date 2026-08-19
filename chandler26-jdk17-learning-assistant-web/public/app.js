@@ -289,6 +289,7 @@ profileFeature = createProfileFeature({
   createPreviewActivity,
   updateAuthView: (...args) => updateAuthView(...args),
   saveEntry: studyFacade.saveEntry,
+  openImportReview: scenePlan.openImportReview,
 })
 
 if (elements.apiBaseInput) elements.apiBaseInput.value = state.apiBase

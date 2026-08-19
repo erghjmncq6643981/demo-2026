@@ -34,7 +34,14 @@ const server = createServer(async (req, res) => {
       'cache-control': 'no-store',
     })
     res.end(content)
-  } catch {
+  } catch (error) {
+    const ext = extname(url.pathname)
+    if (ext && ext !== '.html') {
+      console.warn(`[404 Not Found] ${url.pathname} (${error.message})`)
+      res.writeHead(404, { 'content-type': 'text/plain; charset=utf-8' })
+      res.end(`Not Found: ${url.pathname}`)
+      return
+    }
     const content = await readFile(join(publicDir, 'index.html'))
     res.writeHead(200, { 'content-type': 'text/html; charset=utf-8', 'cache-control': 'no-store' })
     res.end(content)

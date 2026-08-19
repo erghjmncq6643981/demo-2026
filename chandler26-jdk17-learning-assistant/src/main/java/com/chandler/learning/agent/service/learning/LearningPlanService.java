@@ -1437,19 +1437,35 @@ public class LearningPlanService {
         if (!StringUtils.hasText(content)) {
             throw sceneInvalid("AI 未返回场景内容");
         }
-        String cleaned = content.replace("```json", "").replace("```", "").trim();
+        String rawCleaned = content.replace("```json", "").replace("```", "").trim();
         try {
-            return objectMapper.readTree(cleaned);
-        } catch (Exception ignored) {
-            Matcher matcher = JSON_BLOCK_PATTERN.matcher(cleaned);
-            if (matcher.find()) {
+            return objectMapper.readTree(rawCleaned);
+        } catch (Exception e1) {
+            int start = rawCleaned.indexOf('{');
+            int end = rawCleaned.lastIndexOf('}');
+            if (start >= 0 && end > start) {
                 try {
-                    return objectMapper.readTree(matcher.group());
-                } catch (Exception ex) {
-                    log.debug("场景 JSON 二次提取失败 error={}", ex.getMessage());
-                }
+                    return objectMapper.readTree(rawCleaned.substring(start, end + 1));
+                } catch (Exception ignored) {}
             }
-            throw sceneInvalid("AI 返回的场景不是有效 JSON，请重试生成");
+
+            String cleaned = rawCleaned.replace("“", "\"").replace("”", "\"")
+                             .replace("‘", "'").replace("’", "'");
+            cleaned = com.chandler.learning.agent.service.AiChatService.sanitizeJsonSymbols(cleaned);
+            cleaned = com.chandler.learning.agent.service.AiChatService.fixUnquotedJsonStrings(cleaned);
+            try {
+                return objectMapper.readTree(cleaned);
+            } catch (Exception ignored) {
+                Matcher matcher = JSON_BLOCK_PATTERN.matcher(cleaned);
+                if (matcher.find()) {
+                    try {
+                        return objectMapper.readTree(matcher.group());
+                    } catch (Exception ex) {
+                        log.debug("场景 JSON 二次提取失败 error={}", ex.getMessage());
+                    }
+                }
+                throw sceneInvalid("AI 返回的场景不是有效 JSON，请重试生成");
+            }
         }
     }
 

@@ -26,11 +26,14 @@ class AiAsyncTaskServiceTest {
     @Mock
     private SystemLogService systemLogService;
 
+    @Mock
+    private UserDisplayNameService userDisplayNameService;
+
     private AiAsyncTaskService service;
 
     @BeforeEach
     void setUp() {
-        service = new AiAsyncTaskService(taskMapper, new ObjectMapper(), systemLogService);
+        service = new AiAsyncTaskService(taskMapper, new ObjectMapper(), systemLogService, userDisplayNameService);
     }
 
     @Test
