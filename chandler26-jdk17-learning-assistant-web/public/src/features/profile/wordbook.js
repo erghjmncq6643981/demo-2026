@@ -37,24 +37,88 @@ export function createWordbookProfileFeature(ctx) {
   function loadWordbooks() {
     if (state.preview) {
       renderWordbooks()
+      renderPublicCatalogs()
       renderWordbookEntries()
       renderProfileMetrics()
       return Promise.resolve()
     }
     if (!state.token) {
       renderWordbooks()
+      renderPublicCatalogs()
       return Promise.resolve()
     }
-    return request('/api/v1/learning/wordbooks')
-      .then((wordbooks) => {
-        state.wordbooks = normalizeWordbooks(wordbooks)
-        renderWordbooks()
-        return loadWordbookEntries()
-      })
-      .catch((error) => {
-        logEvent('error', '单词本加载失败', error.message)
-        toast(`单词本加载失败：${error.message}`)
-      })
+    return Promise.allSettled([
+      request('/api/v1/learning/wordbooks'),
+      request('/api/v1/vocabulary-imports/public'),
+    ]).then(([wordbooksRes, publicCatalogsRes]) => {
+      if (wordbooksRes.status === 'fulfilled') {
+        state.wordbooks = normalizeWordbooks(wordbooksRes.value)
+      }
+      if (publicCatalogsRes.status === 'fulfilled') {
+        state.publicVocabularyCatalogs = Array.isArray(publicCatalogsRes.value) ? publicCatalogsRes.value : []
+      }
+      renderWordbooks()
+      renderPublicCatalogs()
+      return loadWordbookEntries()
+    }).catch((error) => {
+      logEvent('error', '单词本加载失败', error.message)
+      toast(`单词本加载失败：${error.message}`)
+    })
+  }
+
+  function renderPublicCatalogs() {
+    if (!elements.profilePublicCatalogCards) return
+    const catalogs = Array.isArray(state.publicVocabularyCatalogs) ? state.publicVocabularyCatalogs : []
+    if (elements.profilePublicCatalogSummary) {
+      elements.profilePublicCatalogSummary.textContent = `${catalogs.length} 本公共词本`
+    }
+    if (!catalogs.length) {
+      elements.profilePublicCatalogCards.className = 'wordbook-cards empty'
+      elements.profilePublicCatalogCards.textContent = '暂无已发布的公共词本'
+      return
+    }
+    const SOURCE_LABELS = {
+      self_study: '自考',
+      cet4: '四级',
+      cet6: '六级',
+      ielts: '雅思',
+      toefl: '托福',
+    }
+    elements.profilePublicCatalogCards.className = 'wordbook-cards'
+    elements.profilePublicCatalogCards.innerHTML = catalogs
+      .map(
+        (item) => `
+          <div class="wordbook-card public-catalog-card">
+            <button class="wordbook-main" type="button" data-public-catalog-job="${escapeHtml(item.jobId || item.catalogVersionId || '')}">
+              <div class="scene-item-topline">
+                <strong>${escapeHtml(item.catalogName)}</strong>
+                <span class="mini-pill ok">${escapeHtml(SOURCE_LABELS[item.sourceType] || item.sourceType || '公共词本')}</span>
+              </div>
+              <span>${escapeHtml(item.learningPurpose || '官方精选公共词本，点击查看词条详情')}</span>
+              <small>共 ${item.totalCount || 0} 个词 · 只读详情</small>
+            </button>
+            <div class="row-actions">
+              <button class="secondary-button compact" type="button" data-public-catalog-preview="${escapeHtml(item.jobId || item.catalogVersionId || '')}">查看词表</button>
+            </div>
+          </div>
+        `,
+      )
+      .join('')
+
+    const handlePreview = (jobId) => {
+      if (!jobId) {
+        toast('该公共词本暂无可查看的导入明细')
+        return
+      }
+      ctx.openImportReview?.(jobId)
+    }
+
+    elements.profilePublicCatalogCards.querySelectorAll('[data-public-catalog-job]').forEach((button) => {
+      button.addEventListener('click', () => handlePreview(button.getAttribute('data-public-catalog-job')))
+    })
+    elements.profilePublicCatalogCards.querySelectorAll('[data-public-catalog-preview]').forEach((button) => {
+      button.addEventListener('click', () => handlePreview(button.getAttribute('data-public-catalog-preview')))
+    })
   }
 
   function renderWordbooks() {
@@ -66,8 +130,9 @@ export function createWordbookProfileFeature(ctx) {
       elements.reviewWordbookSelect.innerHTML = '<option value="">暂无单词本</option>'
       if (elements.articleWordbookSelect) elements.articleWordbookSelect.innerHTML = '<option value="">暂无单词本</option>'
       elements.wordbookCards.className = 'wordbook-cards empty'
-      elements.wordbookCards.textContent = state.token ? '暂无单词本' : '登录后查看单词本'
+      elements.wordbookCards.textContent = state.token ? '暂无个人单词本' : '登录后查看单词本'
       renderProfileMetrics()
+      renderPublicCatalogs()
       return
     }
 
@@ -113,6 +178,7 @@ export function createWordbookProfileFeature(ctx) {
       button.addEventListener('click', () => deleteWordbook(button.getAttribute('data-wordbook-delete')))
     })
     renderProfileMetrics()
+    renderPublicCatalogs()
   }
 
   async function changeWordbook(wordbookId) {

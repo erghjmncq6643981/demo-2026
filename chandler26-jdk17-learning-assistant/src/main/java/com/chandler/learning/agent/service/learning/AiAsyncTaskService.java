@@ -31,6 +31,7 @@ public class AiAsyncTaskService {
     private final AiAsyncTaskMapper taskMapper;
     private final ObjectMapper objectMapper;
     private final SystemLogService systemLogService;
+    private final UserDisplayNameService userDisplayNameService;
 
     /** 创建待执行任务。低价时段未配置具体时间时默认安排到次日 00:00。 */
     @Transactional(rollbackFor = Exception.class)
@@ -73,6 +74,20 @@ public class AiAsyncTaskService {
                 : Math.max(1, Math.min(limit, LearningConstants.AiTask.MAX_PAGE_SIZE));
         LambdaQueryWrapper<AiAsyncTask> wrapper = new LambdaQueryWrapper<AiAsyncTask>()
                 .eq(AiAsyncTask::getUserId, userId)
+                .eq(AiAsyncTask::getDeleted, false)
+                .orderByDesc(AiAsyncTask::getCreateTime)
+                .last("LIMIT " + resolvedLimit);
+        if (StringUtils.hasText(status)) {
+            wrapper.eq(AiAsyncTask::getStatus, status.trim());
+        }
+        return taskMapper.selectList(wrapper).stream().map(this::toResponse).toList();
+    }
+
+    /** 管理员查询所有用户的 AI 异步任务。 */
+    public List<AiAsyncTaskResponse> listAll(String status, Integer limit) {
+        int resolvedLimit = limit == null ? LearningConstants.AiTask.DEFAULT_PAGE_SIZE
+                : Math.max(1, Math.min(limit, LearningConstants.AiTask.MAX_PAGE_SIZE));
+        LambdaQueryWrapper<AiAsyncTask> wrapper = new LambdaQueryWrapper<AiAsyncTask>()
                 .eq(AiAsyncTask::getDeleted, false)
                 .orderByDesc(AiAsyncTask::getCreateTime)
                 .last("LIMIT " + resolvedLimit);
@@ -271,6 +286,8 @@ public class AiAsyncTaskService {
     public AiAsyncTaskResponse toResponse(AiAsyncTask task) {
         AiAsyncTaskResponse response = new AiAsyncTaskResponse();
         response.setId(task.getId());
+        response.setUserId(task.getUserId());
+        response.setUserName(userDisplayNameService.userName(task.getUserId()));
         response.setTaskType(task.getTaskType());
         response.setTaskName(task.getTaskName());
         response.setPlanId(task.getPlanId());

@@ -42,7 +42,7 @@ export function createTaskCenterProfileFeature(ctx) {
     ]
   }
 
-  function loadAiTasks() {
+  function loadAiTasks(options = {}) {
     if (state.preview) {
       state.aiTasks = state.aiTasks?.length ? state.aiTasks : previewTasks()
       renderAiTasks()
@@ -53,7 +53,9 @@ export function createTaskCenterProfileFeature(ctx) {
       renderAiTasks()
       return Promise.resolve([])
     }
-    return request('/api/v1/learning/ai-tasks?limit=80')
+    const shouldLoadAll = (state.user?.roleCode === 'ADMIN') && (options.all || state.activeView === 'systemAdminView' || state.activeSystemTab === 'aiTaskPanel')
+    const url = shouldLoadAll ? '/api/v1/learning/ai-tasks?all=true&limit=100' : '/api/v1/learning/ai-tasks?limit=80'
+    return request(url)
       .then((tasks) => {
         state.aiTasks = Array.isArray(tasks) ? tasks : []
         renderAiTasks()
@@ -99,7 +101,10 @@ export function createTaskCenterProfileFeature(ctx) {
           <div class="ai-task-main">
             <div class="ai-task-title-line">
               <strong>${escapeHtml(task.taskName || TYPE_LABELS[task.taskType] || 'AI 任务')}</strong>
-              <span class="task-status task-status-${escapeHtml(task.status || '')}">${escapeHtml(status)}</span>
+              <div class="inline-actions">
+                ${task.userName ? `<span class="user-badge-mini" title="用户 #${task.userId || ''}">👤 ${escapeHtml(task.userName)}</span>` : ''}
+                <span class="task-status task-status-${escapeHtml(task.status || '')}">${escapeHtml(status)}</span>
+              </div>
             </div>
             <p>${escapeHtml(TYPE_LABELS[task.taskType] || task.taskType || 'AI 任务')} · ${escapeHtml(MODE_LABELS[task.executionMode] || task.executionMode || '立即执行')}</p>
             <div class="ai-task-progress"><span style="width:${progress}%"></span></div>

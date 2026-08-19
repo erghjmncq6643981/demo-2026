@@ -492,15 +492,29 @@ public class VocabularyImportService {
         return response;
     }
 
-    private VocabularyImportJob requireJob(Long userId, Long jobId) {
+    private VocabularyImportJob requireJob(Long userId, Long identifier) {
         VocabularyImportJob job = importJobMapper.selectOne(new LambdaQueryWrapper<VocabularyImportJob>()
-                .eq(VocabularyImportJob::getId, jobId)
+                .eq(VocabularyImportJob::getId, identifier)
                 .eq(VocabularyImportJob::getDeleted, false)
                 .last(LearningConstants.SQL_LIMIT_ONE));
         if (job == null) {
+            job = importJobMapper.selectOne(new LambdaQueryWrapper<VocabularyImportJob>()
+                    .eq(VocabularyImportJob::getCatalogVersionId, identifier)
+                    .eq(VocabularyImportJob::getDeleted, false)
+                    .orderByDesc(VocabularyImportJob::getUpdateTime)
+                    .last(LearningConstants.SQL_LIMIT_ONE));
+        }
+        if (job == null) {
+            job = importJobMapper.selectOne(new LambdaQueryWrapper<VocabularyImportJob>()
+                    .eq(VocabularyImportJob::getCatalogId, identifier)
+                    .eq(VocabularyImportJob::getDeleted, false)
+                    .orderByDesc(VocabularyImportJob::getUpdateTime)
+                    .last(LearningConstants.SQL_LIMIT_ONE));
+        }
+        if (job == null) {
             throw LearningAssistantException.notFound(
                     LearningConstants.ErrorCode.VOCABULARY_IMPORT_NOT_FOUND,
-                    "词表导入任务不存在: " + jobId);
+                    "词表导入任务不存在: " + identifier);
         }
         return job;
     }
@@ -622,9 +636,16 @@ public class VocabularyImportService {
     private VocabularyCatalogResponse toCatalogResponse(VocabularyCatalog catalog) {
         VocabularyCatalogVersion version = catalog.getLatestVersionId() == null
                 ? null : versionMapper.selectById(catalog.getLatestVersionId());
+        VocabularyImportJob job = version == null ? null : importJobMapper.selectOne(
+                new LambdaQueryWrapper<VocabularyImportJob>()
+                        .eq(VocabularyImportJob::getCatalogVersionId, version.getId())
+                        .eq(VocabularyImportJob::getDeleted, false)
+                        .orderByDesc(VocabularyImportJob::getUpdateTime)
+                        .last(LearningConstants.SQL_LIMIT_ONE));
         VocabularyCatalogResponse response = new VocabularyCatalogResponse();
         response.setCatalogId(catalog.getId());
         response.setCatalogVersionId(catalog.getLatestVersionId());
+        response.setJobId(job == null ? null : job.getId());
         response.setCatalogName(catalog.getName());
         response.setSourceType(catalog.getExamType());
         response.setLearningPurpose(catalog.getLearningPurpose());

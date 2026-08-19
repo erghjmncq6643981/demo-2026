@@ -14,6 +14,8 @@ public class VocabularyCatalogResponse {
 
     private Long catalogVersionId;
 
+    private Long jobId;
+
     private String catalogName;
 
     private String sourceType;

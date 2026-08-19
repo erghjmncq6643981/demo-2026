@@ -93,6 +93,10 @@ public class AiChatService {
         }
         int safeLimit = LearningConstants.AiContext.MAX_TOKENS
                 * LearningConstants.AiContext.SAFE_USAGE_PERCENT / 100;
+        if (AiInvocationScene.VOCABULARY_CATALOG_ANALYSIS.equals(invocationScene)
+                || AiInvocationScene.VOCABULARY_SCENE_UNIT.equals(invocationScene)) {
+            safeLimit = 32_768;
+        }
         int availableOutputTokens = safeLimit - estimatedInputTokens;
         if (availableOutputTokens < LearningConstants.AiContext.MIN_OUTPUT_TOKENS) {
             throw LearningAssistantException.badRequest(
@@ -285,6 +289,10 @@ public class AiChatService {
                 .sum();
         int safeLimit = LearningConstants.AiContext.MAX_TOKENS
                 * LearningConstants.AiContext.SAFE_USAGE_PERCENT / 100;
+        if (AiInvocationScene.VOCABULARY_CATALOG_ANALYSIS.equals(invocationScene)
+                || AiInvocationScene.VOCABULARY_SCENE_UNIT.equals(invocationScene)) {
+            safeLimit = 32_768;
+        }
         log.debug("AI 请求上下文估算 invocationScene={} estimatedTokens={} safeLimit={} messageCount={}",
                 invocationScene.getCode(), estimatedTokens, safeLimit, messages.size());
         if (estimatedTokens >= safeLimit - LearningConstants.AiContext.MIN_OUTPUT_TOKENS) {
@@ -319,23 +327,103 @@ public class AiChatService {
         return tokens + ceilDivide(asciiCharacters, LearningConstants.AiContext.ASCII_CHARACTERS_PER_TOKEN);
     }
 
+    private static final java.util.regex.Pattern UNQUOTED_FIELD_PATTERN = java.util.regex.Pattern.compile(
+            "\"(term|tier|mastery_requirement|phonetic|meaning|context_meaning|correct_answer|prompt)\"\\s*:\\s*([^\"\\s,\\{\\}\\[\\]][^,\\{\\}\\[\\]]*)"
+    );
+
+    public static String fixUnquotedJsonStrings(String json) {
+        if (json == null) {
+            return null;
+        }
+        java.util.regex.Matcher matcher = UNQUOTED_FIELD_PATTERN.matcher(json);
+        StringBuilder sb = new StringBuilder();
+        while (matcher.find()) {
+            String field = matcher.group(1);
+            String val = matcher.group(2).trim();
+            // If the value is true, false, or null, don't quote it
+            if ("true".equalsIgnoreCase(val) || "false".equalsIgnoreCase(val) || "null".equalsIgnoreCase(val)) {
+                matcher.appendReplacement(sb, java.util.regex.Matcher.quoteReplacement(matcher.group(0)));
+            } else {
+                matcher.appendReplacement(sb, java.util.regex.Matcher.quoteReplacement("\"" + field + "\": \"" + val + "\""));
+            }
+        }
+        matcher.appendTail(sb);
+        return sb.toString();
+    }
+
+    public static String sanitizeJsonSymbols(String json) {
+        if (json == null) {
+            return null;
+        }
+        StringBuilder sb = new StringBuilder(json.length());
+        boolean inQuote = false;
+        boolean escaped = false;
+        for (int i = 0; i < json.length(); i++) {
+            char c = json.charAt(i);
+            if (escaped) {
+                sb.append(c);
+                escaped = false;
+            } else if (c == '\\') {
+                sb.append(c);
+                escaped = true;
+            } else if (c == '"') {
+                sb.append(c);
+                inQuote = !inQuote;
+            } else {
+                if (!inQuote) {
+                    if (c == '，') {
+                        sb.append(',');
+                    } else if (c == '：') {
+                        sb.append(':');
+                    } else {
+                        sb.append(c);
+                    }
+                } else {
+                    sb.append(c);
+                }
+            }
+        }
+        return sb.toString();
+    }
+
     /** 统一执行场景级结构化响应契约，业务服务再校验字段内容和业务覆盖范围。 */
     private void validateStructuredResponse(AiInvocationScene invocationScene, String content) {
         if (!invocationScene.isStructuredResponse()) {
             return;
         }
         try {
-            String cleaned = content == null ? "" : content.replace("```json", "").replace("```", "").trim();
-            JsonNode root;
+            String rawCleaned = content == null ? "" : content.replace("```json", "").replace("```", "").trim();
+            JsonNode root = null;
+            boolean parsedDirectly = false;
             try {
-                root = objectMapper.readTree(cleaned);
-            } catch (Exception ignored) {
-                int start = cleaned.indexOf('{');
-                int end = cleaned.lastIndexOf('}');
-                if (start < LearningConstants.ZERO || end <= start) {
-                    throw LearningAssistantException.badRequest(LearningConstants.ErrorCode.AI_RESPONSE_PARSE_FAILED);
+                root = objectMapper.readTree(rawCleaned);
+                parsedDirectly = true;
+            } catch (Exception e) {
+                int start = rawCleaned.indexOf('{');
+                int end = rawCleaned.lastIndexOf('}');
+                if (start >= 0 && end > start) {
+                    try {
+                        root = objectMapper.readTree(rawCleaned.substring(start, end + 1));
+                        parsedDirectly = true;
+                    } catch (Exception ignored) {}
                 }
-                root = objectMapper.readTree(cleaned.substring(start, end + LearningConstants.SEQUENCE_STEP));
+            }
+
+            if (!parsedDirectly) {
+                String cleaned = rawCleaned.replace("“", "\"").replace("”", "\"")
+                                 .replace("‘", "'").replace("’", "'");
+                cleaned = sanitizeJsonSymbols(cleaned);
+                cleaned = fixUnquotedJsonStrings(cleaned);
+                try {
+                    root = objectMapper.readTree(cleaned);
+                } catch (Exception ignored) {
+                    int start = cleaned.indexOf('{');
+                    int end = cleaned.lastIndexOf('}');
+                    if (start < LearningConstants.ZERO || end <= start) {
+                        throw LearningAssistantException.badRequest(LearningConstants.ErrorCode.AI_RESPONSE_PARSE_FAILED);
+                    }
+                    root = objectMapper.readTree(cleaned.substring(start, end + LearningConstants.SEQUENCE_STEP));
+                }
             }
             if (root == null || !root.isObject()) {
                 throw LearningAssistantException.badRequest(LearningConstants.ErrorCode.AI_RESPONSE_PARSE_FAILED);
@@ -354,9 +442,12 @@ public class AiChatService {
         } catch (LearningAssistantException ex) {
             throw ex;
         } catch (Exception ex) {
+            log.warn("AI structured response parsing failed. content={}, error={}", 
+                    content,
+                    ex.getMessage(), ex);
             throw LearningAssistantException.badRequest(
                     LearningConstants.ErrorCode.AI_RESPONSE_PARSE_FAILED,
-                    "AI 返回内容不是有效 JSON");
+                    "AI 返回内容不是有效 JSON: " + (ex.getMessage() != null && ex.getMessage().length() > 200 ? ex.getMessage().substring(0, 200) : ex.getMessage()));
         }
     }
 

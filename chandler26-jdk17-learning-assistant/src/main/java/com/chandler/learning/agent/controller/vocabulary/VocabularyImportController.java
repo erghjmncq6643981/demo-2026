@@ -75,7 +75,7 @@ public class VocabularyImportController {
             @RequestParam(required = false) String keyword,
             @RequestParam(defaultValue = "1") Integer page,
             @RequestParam(defaultValue = "100") Integer pageSize) {
-        LearningUser user = authService.requireAdmin(authorization);
+        LearningUser user = authService.requireUser(authorization);
         return importService.detail(user.getId(), jobId, Boolean.TRUE.equals(warningOnly), keyword, page, pageSize);
     }
 

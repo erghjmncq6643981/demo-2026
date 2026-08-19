@@ -44,6 +44,7 @@ export function createSystemManagementFeature(ctx) {
     })
     if (fallback === 'adminUserPanel') loadUsers()
     if (fallback === 'modelManagePanel') aiSessions.loadAiSessions()
+    if (fallback === 'aiTaskPanel') ctx.loadAiTasks?.({ all: true })
   }
 
   async function loadUsers() {

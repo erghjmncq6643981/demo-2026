@@ -12,6 +12,10 @@ public class AiAsyncTaskResponse {
 
     private Long id;
 
+    private Long userId;
+
+    private String userName;
+
     private String taskType;
 
     private String taskName;

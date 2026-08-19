@@ -178,16 +178,27 @@
               <section class="panel profile-section" id="profileWordbookPanel">
                 <div class="panel-heading">
                   <div>
-                    <p class="eyebrow">Wordbook</p>
-                    <h3>单词本管理</h3>
+                    <p class="eyebrow">Personal Wordbooks</p>
+                    <h3>个人单词本</h3>
                   </div>
                   <div class="inline-actions">
                     <button class="secondary-button compact" id="reloadWordbookEntriesBtn" type="button">刷新</button>
-                    <button class="secondary-button compact admin-only hidden" id="openVocabularyImportBtn" type="button">导入公共词本</button>
                     <button class="primary-button compact-primary" id="openWordbookModalBtn" type="button">新增单词本</button>
                   </div>
                 </div>
-                <div id="wordbookCards" class="wordbook-cards empty">暂无词书</div>
+                <div id="wordbookCards" class="wordbook-cards empty">暂无个人单词本</div>
+
+                <div class="management-block profile-public-catalogs-block">
+                  <div class="panel-heading compact-heading">
+                    <div>
+                      <p class="eyebrow">Public Vocabulary</p>
+                      <h3>已发布公共词本</h3>
+                      <p class="panel-description">系统官方词表，可点击查看词表详情与词条释义（只读），在新建学习计划时可直接选用。</p>
+                    </div>
+                    <span class="mini-pill" id="profilePublicCatalogSummary">0 本词本</span>
+                  </div>
+                  <div id="profilePublicCatalogCards" class="wordbook-cards empty">暂无公共词本</div>
+                </div>
               </section>
 
               <section class="panel profile-section" id="profileLearningPlanPanel">
@@ -268,10 +279,10 @@
                     <span class="mini-pill" id="aiSessionSummary">0 条会话</span>
                   </div>
                   <div class="ai-session-filters">
-                    <label class="compact-field">关键词<input id="aiSessionKeywordInput" placeholder="会话、用户、业务 ID" /></label>
-                    <label class="compact-field">业务场景<input id="aiSessionSceneInput" placeholder="如 vocabulary_card" /></label>
-                    <label class="compact-field">供应商<input id="aiSessionProviderInput" placeholder="如 openai" /></label>
-                    <label class="compact-field">调用结果<select id="aiSessionSuccessFilter"><option value="">全部结果</option><option value="true">成功</option><option value="false">失败</option></select></label>
+                    <label class="filter-field inline-field"><span>关键词</span><input id="aiSessionKeywordInput" placeholder="会话、用户、业务 ID" /></label>
+                    <label class="filter-field inline-field"><span>业务场景</span><input id="aiSessionSceneInput" placeholder="如 vocabulary_card" /></label>
+                    <label class="filter-field inline-field"><span>供应商</span><input id="aiSessionProviderInput" placeholder="如 openai" /></label>
+                    <label class="filter-field inline-field"><span>调用结果</span><select id="aiSessionSuccessFilter"><option value="">全部结果</option><option value="true">成功</option><option value="false">失败</option></select></label>
                     <div class="inline-actions ai-session-filter-actions"><button class="primary-button compact-primary" id="searchAiSessionsBtn" type="button">查询</button><button class="secondary-button compact" id="resetAiSessionsBtn" type="button">重置</button></div>
                   </div>
                   <div class="ai-session-table-wrap">
@@ -346,22 +357,15 @@
             </nav>
             <div class="profile-sections system-sections">
               <section class="panel profile-section system-section active" id="adminUserPanel">
-                <div class="panel-heading">
-                  <div>
-                    <p class="eyebrow">User Center</p>
-                    <h3>用户中心</h3>
-                    <p class="panel-description">管理账户状态与角色。注销采用逻辑删除，学习记录和审计日志会保留。</p>
-                  </div>
-                  <div class="inline-actions">
-                    <span class="mini-pill" id="adminUserSummary">0 位用户</span>
-                    <button class="primary-button compact-primary" id="openAdminUserModalBtn" type="button">新增用户</button>
-                  </div>
-                </div>
                 <div class="admin-user-filters">
-                  <label class="compact-field">关键词<input id="adminUserKeywordInput" placeholder="用户名或昵称" /></label>
-                  <label class="compact-field">角色<select id="adminUserRoleFilter"><option value="">全部角色</option><option value="USER">普通用户</option><option value="ADMIN">系统管理员</option></select></label>
-                  <label class="compact-field">状态<select id="adminUserEnabledFilter"><option value="">全部状态</option><option value="true">正常</option><option value="false">停用</option></select></label>
+                  <label class="filter-field inline-field"><span>关键词</span><input id="adminUserKeywordInput" placeholder="用户名或昵称" /></label>
+                  <label class="filter-field inline-field"><span>角色</span><select id="adminUserRoleFilter"><option value="">全部角色</option><option value="USER">普通用户</option><option value="ADMIN">系统管理员</option></select></label>
+                  <label class="filter-field inline-field"><span>状态</span><select id="adminUserEnabledFilter"><option value="">全部状态</option><option value="true">正常</option><option value="false">停用</option></select></label>
                   <div class="inline-actions admin-user-filter-actions"><button class="primary-button compact-primary" id="searchAdminUsersBtn" type="button">查询</button><button class="secondary-button compact" id="resetAdminUsersBtn" type="button">重置</button></div>
+                </div>
+                <div class="admin-table-toolbar">
+                  <button class="primary-button compact-primary" id="openAdminUserModalBtn" type="button">新增用户</button>
+                  <span class="mini-pill" id="adminUserSummary">0 位用户</span>
                 </div>
                 <div class="admin-user-table-wrap">
                   <table class="admin-user-table"><thead><tr><th>用户</th><th>角色</th><th>状态</th><th>学习计划</th><th>个人词本</th><th>最近登录</th><th>注册时间</th><th>操作</th></tr></thead><tbody id="adminUserRows"></tbody></table>
@@ -808,22 +812,22 @@
       <div class="config-modal vocabulary-import-modal" data-modal-scroll>
         <div class="panel-heading">
           <div>
-            <p class="eyebrow">Vocabulary Import</p>
-            <h3>导入 Markdown 词表</h3>
+            <p class="eyebrow" id="vocabularyImportEyebrow">Vocabulary Import</p>
+            <h3 id="vocabularyImportTitle">导入 Markdown 词表</h3>
           </div>
           <button class="icon-button" id="closeVocabularyImportBtn" type="button" title="关闭" aria-label="关闭">×</button>
         </div>
 
-        <section class="vocabulary-import-form">
-          <label for="vocabularyImportFile" class="file-upload-label">
+        <section class="vocabulary-import-form" id="vocabularyImportForm">
+          <label for="vocabularyImportFile" class="file-upload-label" id="vocabularyImportFileLabel">
             Markdown 文件
             <input id="vocabularyImportFile" class="sr-only" type="file" accept=".md,text/markdown,text/plain" />
             <div class="file-upload-trigger">
               <span id="fileUploadPlaceholder">选择 Markdown 文件</span>
             </div>
           </label>
-          <label>词表名称<input id="vocabularyImportName" placeholder="例如：自考英语（二）词汇" /></label>
-          <label>
+          <label id="vocabularyImportNameLabel">词表名称<input id="vocabularyImportName" placeholder="例如：自考英语（二）词汇" /></label>
+          <label id="vocabularyImportSourceTypeLabel">
             数据源类型
             <select id="vocabularyImportSourceType">
               <option value="self_study">自考</option>
@@ -832,33 +836,47 @@
               <option value="ielts">雅思</option>
             </select>
           </label>
-          <label>词本说明<input id="vocabularyImportPurpose" placeholder="例如：自考英语（二）考试大纲词汇" /></label>
-          <div class="import-form-actions">
+          <label id="vocabularyImportPurposeLabel">词本说明<input id="vocabularyImportPurpose" placeholder="例如：自考英语（二）考试大纲词汇" /></label>
+          <div class="import-form-actions" id="vocabularyImportFormActions">
             <button class="primary-button compact-primary" id="startVocabularyImportBtn" type="button">解析词表</button>
             <button class="secondary-button compact hidden" id="saveVocabularyImportMetadataBtn" type="button">保存信息</button>
           </div>
         </section>
 
+        <div class="vocabulary-catalog-meta-banner hidden" id="vocabularyCatalogMetaBanner">
+          <div class="meta-item">
+            <span class="meta-label">分类</span>
+            <span class="mini-pill ok" id="catalogMetaSourceType">自考</span>
+          </div>
+          <div class="meta-item meta-desc">
+            <span class="meta-label">说明</span>
+            <span id="catalogMetaPurpose">官方考试大纲词汇</span>
+          </div>
+          <div class="meta-item meta-count">
+            <span class="mini-pill" id="catalogMetaTotal">0 词</span>
+          </div>
+        </div>
+
         <section class="vocabulary-review-section hidden" id="vocabularyReviewSection">
-          <div class="vocabulary-review-summary">
+          <div class="vocabulary-review-summary" id="vocabularyReviewSummary">
             <strong id="vocabularyImportSummary">0 个词</strong>
             <span class="mini-pill" id="vocabularyWarningSummary">0 个待确认</span>
           </div>
           <div class="vocabulary-review-tools">
-            <label class="switch-line compact-switch">
+            <label class="switch-line compact-switch" id="vocabularyWarningOnlyLabel">
               <input id="vocabularyWarningOnly" type="checkbox" />
               <span>只看疑似断词</span>
             </label>
             <label class="entry-prefix-field">
-              <span class="sr-only">搜索导入词条</span>
+              <span class="sr-only">搜索词条</span>
               <input id="vocabularyImportKeyword" autocomplete="off" placeholder="搜索单词或释义" />
             </label>
-            <button class="secondary-button compact" id="vocabularyBatchConfirmBtn" type="button">采用全部建议</button>
+            <button class="secondary-button compact hidden" id="vocabularyBatchConfirmBtn" type="button">采用全部建议</button>
             <button class="secondary-button compact" id="vocabularyReloadReviewBtn" type="button">刷新</button>
           </div>
           <div class="vocabulary-review-table-wrap">
             <table class="vocabulary-review-table">
-              <thead>
+              <thead id="vocabularyReviewThead">
                 <tr>
                   <th>序号</th>
                   <th>原词</th>
@@ -881,7 +899,7 @@
               <span id="vocabularyAnalysisStatus">词本关联分析：未开始</span>
               <button class="secondary-button compact" id="triggerVocabularyAnalysisBtn" type="button">开始关联分析</button>
             </div>
-            <button class="primary-button compact-primary" id="publishVocabularyImportBtn" type="button">发布公共词本</button>
+            <button class="primary-button compact-primary hidden" id="publishVocabularyImportBtn" type="button">发布公共词本</button>
           </div>
         </section>
       </div>

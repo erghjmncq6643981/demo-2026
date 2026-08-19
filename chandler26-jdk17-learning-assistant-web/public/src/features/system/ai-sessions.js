@@ -1,11 +1,6 @@
 import { hideModal, showModal } from '/src/shared/modal.js'
 import { escapeHtml, formatDateTime } from '/src/shared/text.js'
 
-function compact(value, length = 34) {
-  const text = String(value ?? '')
-  return text.length > length ? `${text.slice(0, length)}…` : text
-}
-
 export function createAiSessionAdminFeature(ctx) {
   const { state, elements, request, toast, logEvent } = ctx
 
@@ -16,89 +11,217 @@ export function createAiSessionAdminFeature(ctx) {
   async function loadAiSessions() {
     if (!isAdmin() || !elements.aiSessionRows) return
     if (state.preview) {
-      const now = new Date().toISOString()
-      renderPage({ total: 2, page: 1, pageSize: 20, items: [
-        { id: 'preview-session-1', userId: 1, userName: 'Chandler', title: '词汇卡片：abandon', agentCode: 'english_vocabulary', sceneCode: 'vocabulary_card', callCount: 1, successCount: 1, failedCount: 0, totalTokens: 682, averageLatencyMs: 920, lastProvider: 'preview', lastModelName: 'mock-chat', updateTime: now },
-        { id: 'preview-session-2', userId: 2, userName: '学习者', title: '场景材料：机场出发', agentCode: 'english_scene', sceneCode: 'scene_material', callCount: 2, successCount: 1, failedCount: 1, totalTokens: 2240, averageLatencyMs: 1450, lastProvider: 'preview', lastModelName: 'mock-chat', updateTime: now },
-      ] })
+      const items = previewAiSessions()
+      renderAiSessions({ total: items.length, page: 1, pageSize: 20, items })
       return
     }
-    const params = new URLSearchParams({ page: String(state.aiSessionPage || 1), pageSize: String(state.aiSessionPageSize || 20) })
-    const values = {
-      keyword: elements.aiSessionKeywordInput?.value.trim(),
-      sceneCode: elements.aiSessionSceneInput?.value.trim(),
-      provider: elements.aiSessionProviderInput?.value.trim(),
-      success: elements.aiSessionSuccessFilter?.value,
-    }
-    Object.entries(values).forEach(([key, value]) => { if (value) params.set(key, value) })
+    const params = new URLSearchParams({
+      page: String(state.aiSessionPage || 1),
+      pageSize: String(state.aiSessionPageSize || 20),
+    })
+    const keyword = elements.aiSessionKeywordInput?.value.trim()
+    const sceneCode = elements.aiSessionSceneInput?.value.trim()
+    const provider = elements.aiSessionProviderInput?.value.trim()
+    const success = elements.aiSessionSuccessFilter?.value
+    if (keyword) params.set('keyword', keyword)
+    if (sceneCode) params.set('sceneCode', sceneCode)
+    if (provider) params.set('provider', provider)
+    if (success) params.set('success', success)
+
     try {
-      renderPage(await request(`/api/v1/ai/chat-sessions/admin?${params}`))
+      const result = await request(`/api/v1/ai/chat-sessions/admin?${params}`)
+      renderAiSessions(result || { total: 0, page: state.aiSessionPage, pageSize: state.aiSessionPageSize, items: [] })
     } catch (error) {
       logEvent('error', 'AI 会话加载失败', error.message)
       toast(`AI 会话加载失败：${error.message}`)
     }
   }
 
-  function renderPage(result = {}) {
-    const items = Array.isArray(result.items) ? result.items : []
-    const total = Number(result.total || 0)
-    const page = Number(result.page || state.aiSessionPage || 1)
-    const pageSize = Number(result.pageSize || state.aiSessionPageSize || 20)
+  function renderAiSessions(result) {
+    const items = Array.isArray(result?.items) ? result.items : []
+    const total = Number(result?.total || items.length)
+    const page = Number(result?.page || state.aiSessionPage || 1)
+    const pageSize = Number(result?.pageSize || state.aiSessionPageSize || 20)
     state.aiSessionPage = page
     state.aiSessionPageSize = pageSize
+
     if (elements.aiSessionSummary) elements.aiSessionSummary.textContent = `${total} 条会话`
     if (elements.aiSessionPageInfo) elements.aiSessionPageInfo.textContent = `第 ${page} 页 · 共 ${total} 条`
+
     if (!items.length) {
       elements.aiSessionRows.innerHTML = '<tr><td colspan="9" class="empty">暂无符合条件的 AI 会话</td></tr>'
       return
     }
+
     elements.aiSessionRows.innerHTML = items.map((item) => {
-      const success = Number(item.failedCount || 0) === 0 && Number(item.callCount || 0) > 0
-      const resultLabel = Number(item.failedCount || 0) > 0 ? `失败 ${item.failedCount}` : success ? '成功' : '无调用'
-      return `<tr>
-        <td class="cell-ellipsis" title="${escapeHtml(item.title || item.id)}"><strong>${escapeHtml(compact(item.title || `会话 #${item.id}`, 28))}</strong><small class="table-subline">#${escapeHtml(item.id)}</small></td>
-        <td>${escapeHtml(item.userName || item.userId || '-')}</td>
-        <td class="cell-ellipsis" title="${escapeHtml(item.sceneCode || item.businessType || '')}">${escapeHtml(compact(item.sceneCode || item.businessType || '-'))}</td>
-        <td class="cell-ellipsis" title="${escapeHtml(`${item.lastProvider || ''} · ${item.lastModelName || ''}`)}">${escapeHtml(compact(`${item.lastProvider || '-'} · ${item.lastModelName || '-'}`, 28))}</td>
-        <td><span class="task-status ${success ? 'task-status-completed' : 'task-status-cancelled'}">${escapeHtml(resultLabel)}</span></td>
-        <td>${Number(item.totalTokens || 0).toLocaleString()}</td>
-        <td>${Number(item.averageLatencyMs || 0)} ms</td>
-        <td>${escapeHtml(formatDateTime(item.updateTime) || '-')}</td>
-        <td><button class="icon-action-button" type="button" data-ai-session-detail="${escapeHtml(item.id)}" title="查看完整详情" aria-label="查看完整详情">⌕</button></td>
-      </tr>`
+      const callCount = Number(item.callCount || 0)
+      const successCount = Number(item.successCount || 0)
+      const failedCount = Number(item.failedCount || 0)
+      const isFailed = failedCount > 0
+      const statusPill = isFailed
+        ? `<span class="task-status task-status-failed">失败 · ${failedCount}/${callCount}</span>`
+        : `<span class="task-status task-status-completed">成功 · ${successCount}/${callCount}</span>`
+
+      return `
+        <tr>
+          <td><strong>${escapeHtml(item.title || `会话 #${item.id}`)}</strong><small class="table-subline">ID: ${escapeHtml(item.id)} · ${item.messageCount || 0} 条消息</small></td>
+          <td>${escapeHtml(item.userName || `用户 #${item.userId}`)}</td>
+          <td><span class="mini-pill">${escapeHtml(item.sceneCode || '-')}</span></td>
+          <td><span class="mini-pill">${escapeHtml(item.lastProvider || '-')}/${escapeHtml(item.lastModelName || '-')}</span></td>
+          <td>${statusPill}</td>
+          <td>${Number(item.totalTokens || 0).toLocaleString()}</td>
+          <td>${item.averageLatencyMs != null ? `${item.averageLatencyMs} ms` : '-'}</td>
+          <td>${escapeHtml(formatDateTime(item.updateTime || item.createTime) || '-')}</td>
+          <td><div class="row-actions"><button class="icon-action-button" type="button" data-ai-session-detail="${escapeHtml(item.id)}" title="查看详情" aria-label="查看详情">👁</button></div></td>
+        </tr>
+      `
     }).join('')
+
     elements.aiSessionRows.querySelectorAll('[data-ai-session-detail]').forEach((button) => {
       button.addEventListener('click', () => openDetail(button.dataset.aiSessionDetail))
     })
   }
 
+  function resetAiSessionFilters() {
+    if (elements.aiSessionKeywordInput) elements.aiSessionKeywordInput.value = ''
+    if (elements.aiSessionSceneInput) elements.aiSessionSceneInput.value = ''
+    if (elements.aiSessionProviderInput) elements.aiSessionProviderInput.value = ''
+    if (elements.aiSessionSuccessFilter) elements.aiSessionSuccessFilter.value = ''
+    state.aiSessionPage = 1
+    loadAiSessions()
+  }
+
+  function changeAiSessionPage(offset) {
+    if (offset < 0 && state.aiSessionPage <= 1) return
+    state.aiSessionPage = Math.max(1, state.aiSessionPage + offset)
+    loadAiSessions()
+  }
+
   async function openDetail(id) {
-    if (!id || !elements.aiSessionDetailModal) return
+    if (!id) return
+    if (state.preview) {
+      renderDetail(previewAiSessionDetail(id))
+      showModal(elements.aiSessionDetailModal)
+      return
+    }
     try {
-      const result = state.preview ? previewDetail(id) : await request(`/api/v1/ai/chat-sessions/admin/${encodeURIComponent(id)}`)
-      renderDetail(result)
+      const detail = await request(`/api/v1/ai/chat-sessions/admin/${encodeURIComponent(id)}`)
+      renderDetail(detail)
       showModal(elements.aiSessionDetailModal)
     } catch (error) {
-      logEvent('error', 'AI 会话详情加载失败', error.message)
-      toast(`AI 会话详情加载失败：${error.message}`)
+      toast(`加载会话详情失败：${error.message}`)
     }
   }
 
-  function renderDetail(result = {}) {
-    const session = result.session || {}
-    if (elements.aiSessionDetailTitle) elements.aiSessionDetailTitle.textContent = session.title || `AI 会话 #${session.id || '-'}`
-    if (elements.aiSessionDetailMeta) elements.aiSessionDetailMeta.innerHTML = `<span>用户：${escapeHtml(session.userName || session.userId || '-')}</span><span>场景：${escapeHtml(session.sceneCode || '-')}</span><span>Agent：${escapeHtml(session.agentCode || '-')}</span><span>更新时间：${escapeHtml(formatDateTime(session.updateTime) || '-')}</span>`
-    const messages = Array.isArray(result.messages) ? result.messages : []
-    const calls = Array.isArray(result.calls) ? result.calls : []
-    if (elements.aiSessionMessages) elements.aiSessionMessages.innerHTML = messages.length ? messages.map((message) => `<article class="ai-session-message"><div><span class="mini-pill">${escapeHtml(message.role || '-')}</span><small>${escapeHtml(formatDateTime(message.createTime) || '')}</small></div><pre>${escapeHtml(message.content || '')}</pre></article>`).join('') : '<div class="empty">暂无消息</div>'
-    if (elements.aiSessionCalls) elements.aiSessionCalls.innerHTML = calls.length ? calls.map((call) => `<article class="ai-session-call"><div class="ai-session-call-head"><strong>${escapeHtml(call.invocationSceneCode || '-')}</strong><span class="task-status ${call.success ? 'task-status-completed' : 'task-status-cancelled'}">${call.success ? '成功' : '失败'}</span></div><p>${escapeHtml(call.provider || '-')} · ${escapeHtml(call.modelName || '-')} · ${Number(call.totalTokens || 0)} tokens · ${Number(call.latencyMs || 0)} ms</p><details><summary>查看请求/响应</summary><pre>${escapeHtml(call.responseJson || call.requestJson || call.errorMessage || '')}</pre></details></article>`).join('') : '<div class="empty">暂无模型调用记录</div>'
+  function closeDetail() {
+    hideModal(elements.aiSessionDetailModal)
   }
 
-  function closeDetail() { hideModal(elements.aiSessionDetailModal) }
-  function previewDetail(id) {
-    return { session: { id, title: '预览 AI 会话', userName: 'Chandler', sceneCode: 'vocabulary_card', agentCode: 'english_vocabulary', updateTime: new Date().toISOString() }, messages: [{ role: 'user', content: '请生成 abandon 的词汇卡片', createTime: new Date().toISOString() }, { role: 'assistant', content: '{"term":"abandon","is_valid":true}', createTime: new Date().toISOString() }], calls: [{ invocationSceneCode: 'vocabulary_card', provider: 'preview', modelName: 'mock-chat', success: true, totalTokens: 682, latencyMs: 920, responseJson: '{"term":"abandon","is_valid":true}' }] }
+  function renderDetail(detail) {
+    if (!detail) return
+    const session = detail.session || {}
+    const messages = Array.isArray(detail.messages) ? detail.messages : []
+    const calls = Array.isArray(detail.calls) ? detail.calls : []
+
+    if (elements.aiSessionDetailTitle) {
+      elements.aiSessionDetailTitle.textContent = session.title || `AI 会话 #${session.id}`
+    }
+
+    if (elements.aiSessionDetailMeta) {
+      elements.aiSessionDetailMeta.innerHTML = `
+        <div class="ai-session-meta-grid">
+          <div><label>会话 ID</label><span>${escapeHtml(session.id || '-')}</span></div>
+          <div><label>用户</label><span>${escapeHtml(session.userName || session.userId || '-')}</span></div>
+          <div><label>场景</label><span><span class="mini-pill">${escapeHtml(session.sceneCode || '-')}</span></span></div>
+          <div><label>Agent</label><span>${escapeHtml(session.agentCode || '-')}</span></div>
+          <div><label>业务类型/ID</label><span>${escapeHtml(session.businessType || '-')}: ${escapeHtml(session.businessId || '-')}</span></div>
+          <div><label>模型</label><span>${escapeHtml(session.lastProvider || '-')}/${escapeHtml(session.lastModelName || '-')}</span></div>
+          <div><label>总 Token</label><span>${Number(session.totalTokens || 0).toLocaleString()}</span></div>
+          <div><label>平均耗时</label><span>${session.averageLatencyMs != null ? `${session.averageLatencyMs} ms` : '-'}</span></div>
+          <div><label>创建时间</label><span>${escapeHtml(formatDateTime(session.createTime) || '-')}</span></div>
+        </div>
+      `
+    }
+
+    if (elements.aiSessionMessages) {
+      if (!messages.length) {
+        elements.aiSessionMessages.innerHTML = '<p class="empty">暂无消息记录</p>'
+      } else {
+        elements.aiSessionMessages.innerHTML = messages.map((msg) => `
+          <div class="ai-session-message-card role-${escapeHtml(msg.role)}">
+            <div class="ai-session-message-header">
+              <span class="role-badge">${escapeHtml(msg.role)}</span>
+              <small>${escapeHtml(formatDateTime(msg.createTime) || '')}</small>
+            </div>
+            <pre class="ai-session-message-content">${escapeHtml(msg.content || '')}</pre>
+          </div>
+        `).join('')
+      }
+    }
+
+    if (elements.aiSessionCalls) {
+      if (!calls.length) {
+        elements.aiSessionCalls.innerHTML = '<p class="empty">暂无模型调用审计</p>'
+      } else {
+        elements.aiSessionCalls.innerHTML = calls.map((call) => `
+          <div class="ai-session-call-card ${call.success ? 'success' : 'failed'}">
+            <div class="ai-session-call-header">
+              <span class="task-status ${call.success ? 'task-status-completed' : 'task-status-failed'}">${call.success ? '成功' : '失败'}</span>
+              <strong>${escapeHtml(call.provider || '')} / ${escapeHtml(call.modelName || '')}</strong>
+              <small>耗时 ${call.latencyMs || 0} ms · Token: ${Number(call.totalTokens || 0)}</small>
+            </div>
+            ${call.errorMessage ? `<p class="call-error">${escapeHtml(call.errorMessage)}</p>` : ''}
+          </div>
+        `).join('')
+      }
+    }
   }
-  function changeAiSessionPage(offset) { if (offset < 0 && state.aiSessionPage <= 1) return; state.aiSessionPage = Math.max(1, (state.aiSessionPage || 1) + offset); loadAiSessions() }
-  function resetAiSessionFilters() { [elements.aiSessionKeywordInput, elements.aiSessionSceneInput, elements.aiSessionProviderInput].forEach((input) => { if (input) input.value = '' }); if (elements.aiSessionSuccessFilter) elements.aiSessionSuccessFilter.value = ''; state.aiSessionPage = 1; loadAiSessions() }
-  return { loadAiSessions, renderPage, openDetail, closeDetail, changeAiSessionPage, resetAiSessionFilters }
+
+  function previewAiSessions() {
+    return [
+      {
+        id: 1,
+        userId: 9002,
+        userName: 'chandler',
+        title: 'abandon 学习卡生成',
+        agentCode: 'english_vocabulary',
+        sceneCode: 'vocabulary_card',
+        businessType: 'word_card',
+        businessId: 'abandon',
+        messageCount: 2,
+        callCount: 1,
+        successCount: 1,
+        failedCount: 0,
+        totalTokens: 1250,
+        averageLatencyMs: 820,
+        lastProvider: 'moonshot',
+        lastModelName: 'moonshot-v1-8k',
+        createTime: new Date().toISOString(),
+        updateTime: new Date().toISOString(),
+      },
+    ]
+  }
+
+  function previewAiSessionDetail(id) {
+    const session = previewAiSessions()[0]
+    return {
+      session,
+      messages: [
+        { id: 1, role: 'user', content: '请为单词 abandon 生成学习卡片 JSON', createTime: session.createTime },
+        { id: 2, role: 'assistant', content: '{"term":"abandon","definitions":[...]}', createTime: session.updateTime },
+      ],
+      calls: [
+        { id: 101, provider: 'moonshot', modelName: 'moonshot-v1-8k', latencyMs: 820, totalTokens: 1250, success: true },
+      ],
+    }
+  }
+
+  return {
+    loadAiSessions,
+    renderAiSessions,
+    resetAiSessionFilters,
+    changeAiSessionPage,
+    openDetail,
+    closeDetail,
+  }
 }
