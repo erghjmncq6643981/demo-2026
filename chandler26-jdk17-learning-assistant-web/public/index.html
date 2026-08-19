@@ -1011,8 +1011,7 @@
           </label>
           <label>
             模型明细
-            <input id="modelModelNameInput" list="modelNameOptions" placeholder="例如：provider-chat" />
-            <datalist id="modelNameOptions"></datalist>
+            <select id="modelModelNameInput"></select>
           </label>
           <label>Base URL<input id="modelBaseUrlInput" placeholder="例如：https://api.provider.example" /></label>
           <label>Chat Path<input id="modelChatPathInput" placeholder="/chat/completions" /></label>
@@ -1050,14 +1049,9 @@
           <label>Agent 编码<input id="agentCodeInput" placeholder="例如：english_vocabulary" /></label>
           <label>类型<input id="agentTypeInput" placeholder="chat" /></label>
           <label>图标<input id="agentIconInput" placeholder="✦" /></label>
-          <label>
-            模型供应商
-            <select id="agentModelProviderInput"></select>
-          </label>
-          <label>
-            模型名称
-            <input id="agentModelNameInput" list="agentModelNameOptions" placeholder="从数据库模型配置中选择" />
-            <datalist id="agentModelNameOptions"></datalist>
+          <label class="full-row">
+            绑定模型配置
+            <select id="agentModelConfigInput"></select>
           </label>
           <label>排序<input id="agentSequenceInput" type="number" min="0" value="0" /></label>
           <label>温度<input id="agentTemperatureInput" type="number" min="0" max="2" step="0.1" /></label>

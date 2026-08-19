@@ -3,6 +3,7 @@ package com.chandler.learning.agent.domain.dto;
 import lombok.Data;
 
 import java.time.LocalDateTime;
+import java.util.List;
 
 /**
  * AI 模型配置响应。
@@ -53,6 +54,12 @@ public class AiModelConfigResponse {
     private Boolean isDefault;
 
     private Integer sequence;
+
+    /** 当前绑定该配置的未删除 Agent 数量。 */
+    private Long boundAgentCount;
+
+    /** 当前绑定该配置的 Agent 名称，供管理端识别影响范围。 */
+    private List<String> boundAgentNames;
 
     /** 累计模型调用次数。 */
     private Long callCount;

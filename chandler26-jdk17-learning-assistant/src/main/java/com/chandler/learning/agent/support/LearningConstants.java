@@ -610,6 +610,8 @@ public final class LearningConstants {
         SYSTEM_UNEXPECTED(HttpStatus.INTERNAL_SERVER_ERROR, "系统异常，请稍后重试"),
         EXTERNAL_SERVICE_CALL_FAILED(HttpStatus.BAD_GATEWAY, "外部服务调用失败"),
         MODEL_CONFIG_NOT_FOUND(HttpStatus.NOT_FOUND, "模型配置不存在"),
+        MODEL_CONFIG_NOT_BOUND(HttpStatus.BAD_REQUEST, "Agent 未绑定模型配置"),
+        MODEL_CONFIG_IN_USE(HttpStatus.CONFLICT, "模型配置正在被 Agent 使用"),
         AI_PROVIDER_MISSING(HttpStatus.BAD_REQUEST, "未配置 AI 服务供应商"),
         AI_PROVIDER_UNSUPPORTED(HttpStatus.BAD_REQUEST, "AI 服务供应商不受支持"),
         AI_PROVIDER_DISABLED(HttpStatus.BAD_REQUEST, "AI 服务供应商已停用"),

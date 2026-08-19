@@ -4,6 +4,7 @@ import com.chandler.learning.agent.domain.enums.AiAgentType;
 import com.chandler.learning.agent.support.LearningConstants;
 import io.swagger.v3.oas.annotations.media.Schema;
 import jakarta.validation.constraints.NotBlank;
+import jakarta.validation.constraints.NotNull;
 import lombok.Data;
 
 /**
@@ -32,8 +33,14 @@ public class AgentSaveRequest {
 
     private String welcomeMessage;
 
+    @NotNull(message = "请选择 Agent 使用的模型配置")
+    @Schema(description = "绑定的模型配置 ID")
+    private Long modelConfigId;
+
+    @Schema(description = "兼容字段，由后端根据模型配置生成", accessMode = Schema.AccessMode.READ_ONLY)
     private String modelProvider;
 
+    @Schema(description = "兼容字段，由后端根据模型配置生成", accessMode = Schema.AccessMode.READ_ONLY)
     private String modelName;
 
     private Double temperature;

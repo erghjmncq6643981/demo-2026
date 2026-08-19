@@ -1,6 +1,28 @@
 -- AI Agent、提示词、会话与模型配置表。
 -- 仅包含当前版本完整表结构；全新数据库第一个执行。
 
+CREATE TABLE IF NOT EXISTS ai_model_config (
+    id BIGINT NOT NULL COMMENT '主键',
+    create_by BIGINT NOT NULL DEFAULT 0 COMMENT '创建人用户 ID',
+    update_by BIGINT NOT NULL DEFAULT 0 COMMENT '更新人用户 ID',
+    name VARCHAR(100) NOT NULL COMMENT '配置名称',
+    provider VARCHAR(50) NOT NULL COMMENT '供应商编码，例如 deepseek、kimi',
+    model_name VARCHAR(100) NOT NULL COMMENT '模型名称',
+    base_url VARCHAR(255) NOT NULL COMMENT '模型服务 Base URL',
+    chat_path VARCHAR(120) NOT NULL DEFAULT '/chat/completions' COMMENT 'Chat Completions 路径',
+    api_key TEXT NOT NULL COMMENT '加密 API Key，格式 enc:v1:<iv>.<ciphertext>',
+    enabled TINYINT(1) NOT NULL DEFAULT 1 COMMENT '是否启用',
+    is_default TINYINT(1) NOT NULL DEFAULT 0 COMMENT '是否默认配置',
+    sequence INT NOT NULL DEFAULT 0 COMMENT '优先级，数字越小越优先',
+    create_time DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP COMMENT '创建时间',
+    update_time DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP COMMENT '更新时间',
+    deleted TINYINT(1) NOT NULL DEFAULT 0 COMMENT '是否逻辑删除',
+    version INT NOT NULL DEFAULT 0 COMMENT '乐观锁版本号',
+    PRIMARY KEY (id),
+    KEY idx_ai_model_config_provider (provider, enabled, deleted),
+    KEY idx_ai_model_config_priority (enabled, deleted, is_default, sequence)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci COMMENT='AI 模型配置';
+
 CREATE TABLE IF NOT EXISTS ai_agent (
     id BIGINT NOT NULL COMMENT '主键',
     create_by BIGINT NOT NULL DEFAULT 0 COMMENT '创建人用户 ID',
@@ -13,6 +35,7 @@ CREATE TABLE IF NOT EXISTS ai_agent (
     system_prompt TEXT COMMENT '完整系统提示词',
     concise_prompt TEXT COMMENT '多轮对话精简提示词',
     welcome_message VARCHAR(500) DEFAULT NULL COMMENT '欢迎语',
+    model_config_id BIGINT DEFAULT NULL COMMENT '绑定的具体模型配置 ID',
     model_provider VARCHAR(50) DEFAULT NULL COMMENT '指定模型供应商',
     model_name VARCHAR(100) DEFAULT NULL COMMENT '指定模型名称',
     temperature DECIMAL(4,2) DEFAULT NULL COMMENT '温度参数',
@@ -27,7 +50,9 @@ CREATE TABLE IF NOT EXISTS ai_agent (
     PRIMARY KEY (id),
     UNIQUE KEY uk_ai_agent_code (code),
     KEY idx_ai_agent_type (type),
-    KEY idx_ai_agent_enabled (enabled, deleted, sequence)
+    KEY idx_ai_agent_enabled (enabled, deleted, sequence),
+    KEY idx_ai_agent_model_config (model_config_id, deleted),
+    CONSTRAINT fk_ai_agent_model_config FOREIGN KEY (model_config_id) REFERENCES ai_model_config (id)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci COMMENT='AI Agent';
 
 CREATE TABLE IF NOT EXISTS ai_prompt_template (
@@ -127,25 +152,3 @@ CREATE TABLE IF NOT EXISTS ai_model_call_record (
     KEY idx_ai_model_call_provider (provider),
     KEY idx_ai_model_call_deleted_time (deleted, create_time)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci COMMENT='AI 模型调用记录';
-
-CREATE TABLE IF NOT EXISTS ai_model_config (
-    id BIGINT NOT NULL COMMENT '主键',
-    create_by BIGINT NOT NULL DEFAULT 0 COMMENT '创建人用户 ID',
-    update_by BIGINT NOT NULL DEFAULT 0 COMMENT '更新人用户 ID',
-    name VARCHAR(100) NOT NULL COMMENT '配置名称',
-    provider VARCHAR(50) NOT NULL COMMENT '供应商编码，例如 deepseek、kimi',
-    model_name VARCHAR(100) NOT NULL COMMENT '模型名称',
-    base_url VARCHAR(255) NOT NULL COMMENT '模型服务 Base URL',
-    chat_path VARCHAR(120) NOT NULL DEFAULT '/chat/completions' COMMENT 'Chat Completions 路径',
-    api_key TEXT NOT NULL COMMENT '加密 API Key，格式 enc:v1:<iv>.<ciphertext>',
-    enabled TINYINT(1) NOT NULL DEFAULT 1 COMMENT '是否启用',
-    is_default TINYINT(1) NOT NULL DEFAULT 0 COMMENT '是否默认配置',
-    sequence INT NOT NULL DEFAULT 0 COMMENT '优先级，数字越小越优先',
-    create_time DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP COMMENT '创建时间',
-    update_time DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP COMMENT '更新时间',
-    deleted TINYINT(1) NOT NULL DEFAULT 0 COMMENT '是否逻辑删除',
-    version INT NOT NULL DEFAULT 0 COMMENT '乐观锁版本号',
-    PRIMARY KEY (id),
-    KEY idx_ai_model_config_provider (provider, enabled, deleted),
-    KEY idx_ai_model_config_priority (enabled, deleted, is_default, sequence)
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci COMMENT='AI 模型配置';

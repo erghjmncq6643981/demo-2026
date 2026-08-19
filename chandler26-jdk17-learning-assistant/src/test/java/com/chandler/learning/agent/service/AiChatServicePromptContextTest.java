@@ -4,6 +4,7 @@ import com.chandler.learning.agent.domain.dto.AgentChatRequest;
 import com.chandler.learning.agent.domain.dto.ChatMessageParam;
 import com.chandler.learning.agent.domain.entity.AiAgent;
 import com.chandler.learning.agent.domain.entity.AiChatSession;
+import com.chandler.learning.agent.domain.entity.AiModelConfig;
 import com.chandler.learning.agent.domain.enums.AiInvocationScene;
 import com.chandler.learning.agent.domain.enums.AiModelDefinition;
 import com.chandler.learning.agent.exception.LearningAssistantException;
@@ -26,6 +27,7 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.when;
 
 class AiChatServicePromptContextTest {
 
@@ -100,6 +102,34 @@ class AiChatServicePromptContextTest {
                 AiModelDefinition.DEEPSEEK_V4_PRO, 943_600, 1))
                 .isInstanceOf(LearningAssistantException.class)
                 .hasMessageContaining("943718 Token");
+    }
+
+    @Test
+    void usesAgentModelBindingUnlessTaskExplicitlyOverridesIt() {
+        AiModelConfigService modelConfigService = mock(AiModelConfigService.class);
+        AiChatService service = new AiChatService(
+                mock(AiAgentService.class), mock(AiPromptTemplateService.class), mock(AiChatSessionService.class),
+                modelConfigService, mock(AiModelClient.class), new PromptRenderer(new ObjectMapper()),
+                mock(AiModelCallRecordMapper.class), new ObjectMapper(), mock(UserDisplayNameService.class),
+                new AiModelCapabilityResolver(), new AiStructuredResponseParserRegistry(new ObjectMapper()));
+        AiAgent agent = new AiAgent();
+        agent.setModelConfigId(101L);
+        AiModelConfig bound = new AiModelConfig();
+        bound.setId(101L);
+        AiModelConfig override = new AiModelConfig();
+        override.setId(202L);
+        when(modelConfigService.requireEnabled(101L)).thenReturn(bound);
+        when(modelConfigService.requireEnabled(202L)).thenReturn(override);
+
+        AiModelConfig defaultResult = ReflectionTestUtils.invokeMethod(
+                service, "resolveSelectedModelConfig", agent, null);
+        AiModelConfig overrideResult = ReflectionTestUtils.invokeMethod(
+                service, "resolveSelectedModelConfig", agent, 202L);
+
+        assertThat(defaultResult).isSameAs(bound);
+        assertThat(overrideResult).isSameAs(override);
+        verify(modelConfigService).requireEnabled(101L);
+        verify(modelConfigService).requireEnabled(202L);
     }
 
     private AiChatService serviceWith(AiChatSessionService sessionService) {

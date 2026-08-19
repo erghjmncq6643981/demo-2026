@@ -18,7 +18,10 @@ export function createProfileFeature(ctx) {
     ...ctx,
     renderLearningConfigSummary: (...args) => learningConfigFeature.renderLearningConfigSummary(...args),
   })
-  const modelFeature = createModelProfileFeature(ctx)
+  const modelFeature = createModelProfileFeature({
+    ...ctx,
+    renderAgentConfigs: (...args) => agentFeature.renderAgentConfigs(...args),
+  })
   const accountFeature = createAccountProfileFeature(ctx)
   const wordbookFeature = createWordbookProfileFeature({
     ...ctx,

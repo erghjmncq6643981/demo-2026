@@ -439,7 +439,7 @@ export function createScenePlanFeature(ctx) {
     const enabledModels = asArray(state.modelConfigs).filter((item) => item.enabled)
     if (elements.scenePlanModelSelect) {
       const current = elements.scenePlanModelSelect.value
-      elements.scenePlanModelSelect.innerHTML = '<option value="">使用默认模型</option>'
+      elements.scenePlanModelSelect.innerHTML = '<option value="">使用 Agent 绑定模型</option>'
       for (const model of enabledModels) {
         const option = document.createElement('option')
         option.value = String(model.id)

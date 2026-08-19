@@ -314,7 +314,6 @@ bindAppEvents({
   toggleModelFlag: profile.toggleModelFlag,
   openAgentModal: profile.openAgentModal,
   closeAgentModal: profile.closeAgentModal,
-  syncAgentModelProviderDefaults: profile.syncAgentModelProviderDefaults,
   openLearningConfigModal: profile.openLearningConfigModal,
   closeLearningConfigModal: profile.closeLearningConfigModal,
   saveAgentConfig: profile.saveAgentConfig,

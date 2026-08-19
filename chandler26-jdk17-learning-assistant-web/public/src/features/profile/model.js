@@ -4,7 +4,7 @@ import { escapeHtml } from '/src/shared/text.js'
 import { providerDefaults, renderModelSelect, renderProviderSelect } from '/src/features/profile/provider.js'
 
 export function createModelProfileFeature(ctx) {
-  const { state, elements, request, setLoading, toast, logEvent, confirmAction, confirmDelete } = ctx
+  const { state, elements, request, setLoading, toast, logEvent, confirmAction, confirmDelete, renderAgentConfigs } = ctx
 
   function loadModelConfigs() {
     if (state.preview) {
@@ -18,6 +18,7 @@ export function createModelProfileFeature(ctx) {
         state.modelConfigs = Array.isArray(configs) ? configs : []
         renderModelConfigs()
         renderStudyModelOptions()
+        renderAgentConfigs?.()
       })
       .catch((error) => {
         logEvent('error', '模型配置加载失败', error.message)
@@ -29,16 +30,15 @@ export function createModelProfileFeature(ctx) {
     const selects = [elements.studyModelSelect, elements.articleModelSelect].filter(Boolean)
     if (!selects.length) return
     selects.forEach((select) => {
-      select.innerHTML = ''
+      select.innerHTML = '<option value="">使用 Agent 绑定模型</option>'
     })
     const enabled = state.modelConfigs.filter((item) => item.enabled)
     if (!enabled.length) {
       selects.forEach((select) => {
-        select.innerHTML = '<option value="">请先配置模型</option>'
+        select.innerHTML = '<option value="">使用 Agent 绑定模型</option>'
       })
       return
     }
-    const preferred = enabled.find((item) => item.isDefault) || enabled[0]
     for (const select of selects) {
       for (const item of enabled) {
         const option = document.createElement('option')
@@ -46,7 +46,7 @@ export function createModelProfileFeature(ctx) {
         option.textContent = `${item.name} · ${item.modelDisplayName || item.modelName}${item.isDefault ? ' · 默认' : ''}`
         select.appendChild(option)
       }
-      select.value = String(preferred.id)
+      select.value = ''
     }
   }
 
@@ -91,8 +91,11 @@ export function createModelProfileFeature(ctx) {
     }
     elements.modelConfigList.className = 'model-list'
     elements.modelConfigList.innerHTML = list
-      .map(
-        (item) => `
+      .map((item) => {
+        const boundAgents = (state.agentConfigs || []).filter((agent) => !agent.deleted && sameId(agent.modelConfigId, item.id))
+        const boundAgentNames = boundAgents.length ? boundAgents.map((agent) => agent.name) : (item.boundAgentNames || [])
+        const boundAgentCount = boundAgents.length || Number(item.boundAgentCount || 0)
+        return `
           <div class="model-item ${item.enabled ? '' : 'disabled'}">
             <div>
               <div class="model-title-line">
@@ -102,6 +105,7 @@ export function createModelProfileFeature(ctx) {
               </div>
               <p>${escapeHtml(item.providerName || item.provider)} · ${escapeHtml(item.modelDisplayName || item.modelName)} · ${escapeHtml(item.baseUrl || '')}</p>
               <small>${item.supported === false ? '历史模型：不可用于新任务' : `${escapeHtml(item.apiProtocol || '-')} · 上下文 ${Number(item.contextWindowTokens || 0).toLocaleString()} Token`} · 优先级 ${item.sequence ?? 0} · ${escapeHtml(item.apiKeyMasked || '')}</small>
+              ${boundAgentCount > 0 ? `<small>关联 Agent：${escapeHtml(boundAgentNames.join('、'))}</small>` : '<small>暂未关联 Agent</small>'}
               <div class="model-usage-row">
                 <span>调用 <strong>${Number(item.callCount || 0).toLocaleString()}</strong></span>
                 <span>成功 <strong>${Number(item.successCount || 0).toLocaleString()}</strong></span>
@@ -111,13 +115,13 @@ export function createModelProfileFeature(ctx) {
               </div>
             </div>
             <div class="row-actions">
-              <button class="icon-action-button" type="button" data-model-toggle="${escapeHtml(item.id)}" title="${item.enabled ? '停用模型' : '启用模型'}" aria-label="${item.enabled ? '停用模型' : '启用模型'}" ${item.supported === false && !item.enabled ? 'disabled' : ''}>${item.enabled ? '⏸' : '▶'}</button>
+              <button class="icon-action-button" type="button" data-model-toggle="${escapeHtml(item.id)}" title="${boundAgentCount > 0 && item.enabled ? '请先更换关联 Agent 的模型' : item.enabled ? '停用模型' : '启用模型'}" aria-label="${item.enabled ? '停用模型' : '启用模型'}" ${(item.supported === false && !item.enabled) || (boundAgentCount > 0 && item.enabled) ? 'disabled' : ''}>${item.enabled ? '⏸' : '▶'}</button>
               <button class="icon-action-button" type="button" data-model-edit="${escapeHtml(item.id)}" title="编辑模型" aria-label="编辑模型">✎</button>
-              <button class="danger-icon-button" type="button" data-model-delete="${escapeHtml(item.id)}" title="删除模型">×</button>
+              <button class="danger-icon-button" type="button" data-model-delete="${escapeHtml(item.id)}" title="${boundAgentCount > 0 ? '请先更换关联 Agent 的模型' : '删除模型'}" ${boundAgentCount > 0 ? 'disabled' : ''}>×</button>
             </div>
           </div>
-        `,
-      )
+        `
+      })
       .join('')
     elements.modelConfigList.querySelectorAll('[data-model-edit]').forEach((button) => {
       button.addEventListener('click', () => openModelModal(button.getAttribute('data-model-edit')))

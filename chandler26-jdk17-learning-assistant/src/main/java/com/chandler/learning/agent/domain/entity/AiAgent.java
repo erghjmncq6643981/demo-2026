@@ -1,6 +1,7 @@
 package com.chandler.learning.agent.domain.entity;
 
 import com.baomidou.mybatisplus.annotation.IdType;
+import com.baomidou.mybatisplus.annotation.TableField;
 import com.baomidou.mybatisplus.annotation.TableId;
 import com.baomidou.mybatisplus.annotation.TableName;
 import io.swagger.v3.oas.annotations.media.Schema;
@@ -70,6 +71,12 @@ public class AiAgent extends BaseEntity {
     private String welcomeMessage;
 
     /**
+     * 绑定的模型配置 ID，决定 Agent 实际使用的 API 地址、密钥和模型。
+     */
+    @Schema(description = "绑定的模型配置 ID")
+    private Long modelConfigId;
+
+    /**
      * 模型供应商。
      */
     @Schema(description = "模型供应商")
@@ -80,6 +87,14 @@ public class AiAgent extends BaseEntity {
      */
     @Schema(description = "模型名称")
     private String modelName;
+
+    /** 模型配置展示名称，不写入 Agent 表。 */
+    @TableField(exist = false)
+    private String modelConfigName;
+
+    /** 绑定的模型配置当前是否可用，不写入 Agent 表。 */
+    @TableField(exist = false)
+    private Boolean modelConfigEnabled;
 
     /**
      * 温度参数。

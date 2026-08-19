@@ -1,14 +1,17 @@
 package com.chandler.learning.agent.service;
 
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
+import com.baomidou.mybatisplus.core.conditions.update.LambdaUpdateWrapper;
 import com.chandler.learning.agent.domain.dto.AiModelConfigResponse;
 import com.chandler.learning.agent.domain.dto.AiModelConfigSaveRequest;
 import com.chandler.learning.agent.domain.dto.AiModelUsageSummary;
 import com.chandler.learning.agent.domain.dto.AiModelOptionResponse;
+import com.chandler.learning.agent.domain.entity.AiAgent;
 import com.chandler.learning.agent.domain.entity.AiModelConfig;
 import com.chandler.learning.agent.domain.enums.AiModelDefinition;
 import com.chandler.learning.agent.domain.enums.SystemLogType;
 import com.chandler.learning.agent.exception.LearningAssistantException;
+import com.chandler.learning.agent.mapper.AiAgentMapper;
 import com.chandler.learning.agent.mapper.AiModelConfigMapper;
 import com.chandler.learning.agent.mapper.AiModelCallRecordMapper;
 import com.chandler.learning.agent.security.ApiKeyCryptoService;
@@ -19,9 +22,12 @@ import com.chandler.learning.agent.support.LearningConstants;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
 import org.springframework.util.StringUtils;
 
 import java.time.LocalDateTime;
+import java.util.Collection;
+import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.function.Function;
@@ -38,6 +44,7 @@ import java.util.stream.Collectors;
 public class AiModelConfigService {
 
     private final AiModelConfigMapper modelConfigMapper;
+    private final AiAgentMapper agentMapper;
     private final AiModelCallRecordMapper modelCallRecordMapper;
     private final ApiKeyCryptoService apiKeyCryptoService;
     private final SystemLogService systemLogService;
@@ -49,6 +56,7 @@ public class AiModelConfigService {
     public List<AiModelConfigResponse> list(boolean enabledOnly) {
         Map<String, AiModelUsageSummary> usageByModel = modelCallRecordMapper.selectUsageSummaries().stream()
                 .collect(Collectors.toMap(this::usageKey, Function.identity(), (left, right) -> left));
+        Map<Long, List<AiAgent>> agentsByConfig = boundAgentsByConfig();
         return modelConfigMapper.selectList(new LambdaQueryWrapper<AiModelConfig>()
                         .eq(AiModelConfig::getDeleted, false)
                         .eq(enabledOnly, AiModelConfig::getEnabled, true)
@@ -56,7 +64,9 @@ public class AiModelConfigService {
                         .orderByAsc(AiModelConfig::getSequence)
                         .orderByAsc(AiModelConfig::getCreateTime))
                 .stream()
-                .map(config -> toResponse(config, usageByModel.get(usageKey(config.getProvider(), config.getModelName()))))
+                .map(config -> toResponse(config,
+                        usageByModel.get(usageKey(config.getProvider(), config.getModelName())),
+                        agentsByConfig.getOrDefault(config.getId(), List.of())))
                 .toList();
     }
 
@@ -79,10 +89,41 @@ public class AiModelConfigService {
      * 查询 {@code getById} 相关业务。
      */
     public AiModelConfig getById(Long id) {
+        if (id == null) {
+            return null;
+        }
         return modelConfigMapper.selectOne(new LambdaQueryWrapper<AiModelConfig>()
                 .eq(AiModelConfig::getId, id)
                 .eq(AiModelConfig::getDeleted, false)
                 .last(LearningConstants.SQL_LIMIT_ONE));
+    }
+
+    /** 批量查询 Agent 绑定的模型配置，避免 Agent 列表产生 N+1 查询。 */
+    public Map<Long, AiModelConfig> getByIds(Collection<Long> ids) {
+        if (ids == null || ids.isEmpty()) {
+            return Map.of();
+        }
+        return modelConfigMapper.selectList(new LambdaQueryWrapper<AiModelConfig>()
+                        .in(AiModelConfig::getId, ids)
+                        .eq(AiModelConfig::getDeleted, false))
+                .stream()
+                .collect(Collectors.toMap(AiModelConfig::getId, Function.identity()));
+    }
+
+    /** 返回可以被 Agent 调用的具体模型配置。 */
+    public AiModelConfig requireEnabled(Long id) {
+        if (id == null) {
+            throw LearningAssistantException.badRequest(LearningConstants.ErrorCode.MODEL_CONFIG_NOT_BOUND);
+        }
+        AiModelConfig config = getById(id);
+        if (config == null) {
+            throw LearningAssistantException.notFound(LearningConstants.ErrorCode.MODEL_CONFIG_NOT_FOUND);
+        }
+        if (!Boolean.TRUE.equals(config.getEnabled())) {
+            throw LearningAssistantException.badRequest(LearningConstants.ErrorCode.AI_PROVIDER_DISABLED);
+        }
+        AiModelDefinition.resolve(config.getProvider(), config.getModelName());
+        return config;
     }
 
     /**
@@ -104,6 +145,7 @@ public class AiModelConfigService {
     /**
      * 创建或保存 {@code create} 相关业务。
      */
+    @Transactional(rollbackFor = Exception.class)
     public AiModelConfigResponse create(AiModelConfigSaveRequest request) {
         if (!StringUtils.hasText(request.getApiKey())) {
             throw LearningAssistantException.badRequest(
@@ -119,6 +161,9 @@ public class AiModelConfigService {
             clearDefault(null);
         }
         modelConfigMapper.insert(config);
+        if (Boolean.TRUE.equals(config.getEnabled())) {
+            bindMatchingUnboundAgents(config);
+        }
         systemLogService.record(null, SystemLogType.AI_MODEL, "创建模型配置", config.getName());
         log.info("用户「{}」新增了 AI 模型「{}」，供应商「{}」，明细模型「{}」，状态为「{}」，优先级为 {}",
                 userDisplayNameService.currentUserName(),
@@ -133,6 +178,7 @@ public class AiModelConfigService {
     /**
      * 更新 {@code update} 相关业务。
      */
+    @Transactional(rollbackFor = Exception.class)
     public AiModelConfigResponse update(Long id, AiModelConfigSaveRequest request) {
         AiModelConfig config = getById(id);
         if (config == null) {
@@ -140,12 +186,19 @@ public class AiModelConfigService {
                     LearningConstants.ErrorCode.MODEL_CONFIG_NOT_FOUND,
                     "模型配置不存在: " + id);
         }
+        if (!Boolean.TRUE.equals(request.getEnabled())) {
+            ensureNotBound(config.getId(), "停用");
+        }
         copy(request, config, false);
         config.setUpdateTime(LocalDateTime.now());
         if (Boolean.TRUE.equals(config.getIsDefault())) {
             clearDefault(id);
         }
         modelConfigMapper.updateById(config);
+        syncAgentModelSnapshot(config);
+        if (Boolean.TRUE.equals(config.getEnabled())) {
+            bindMatchingUnboundAgents(config);
+        }
         systemLogService.record(null, SystemLogType.AI_MODEL, "更新模型配置", config.getName());
         log.info("用户「{}」更新了 AI 模型「{}」，供应商「{}」，明细模型「{}」，状态为「{}」，优先级为 {}",
                 userDisplayNameService.currentUserName(),
@@ -160,6 +213,7 @@ public class AiModelConfigService {
     /**
      * 更新 {@code updateEnabled} 相关业务。
      */
+    @Transactional(rollbackFor = Exception.class)
     public void updateEnabled(Long id, boolean enabled) {
         AiModelConfig config = getById(id);
         if (config == null) {
@@ -169,10 +223,15 @@ public class AiModelConfigService {
         }
         if (enabled) {
             AiModelDefinition.resolve(config.getProvider(), config.getModelName());
+        } else {
+            ensureNotBound(config.getId(), "停用");
         }
         config.setEnabled(enabled);
         config.setUpdateTime(LocalDateTime.now());
         modelConfigMapper.updateById(config);
+        if (enabled) {
+            bindMatchingUnboundAgents(config);
+        }
         systemLogService.record(null, SystemLogType.AI_MODEL, enabled ? "启用模型配置" : "停用模型配置", config.getName());
         log.info("用户「{}」{}了 AI 模型「{}」",
                 userDisplayNameService.currentUserName(),
@@ -211,11 +270,13 @@ public class AiModelConfigService {
     /**
      * 更新 {@code delete} 相关业务。
      */
+    @Transactional(rollbackFor = Exception.class)
     public void delete(Long id) {
         AiModelConfig config = getById(id);
         if (config == null) {
             return;
         }
+        ensureNotBound(config.getId(), "删除");
         config.setDeleted(true);
         config.setUpdateTime(LocalDateTime.now());
         modelConfigMapper.updateById(config);
@@ -360,10 +421,11 @@ public class AiModelConfigService {
      * 转换 {@code toResponse} 相关业务。
      */
     private AiModelConfigResponse toResponse(AiModelConfig config) {
-        return toResponse(config, null);
+        return toResponse(config, null, boundAgents(config.getId()));
     }
 
-    private AiModelConfigResponse toResponse(AiModelConfig config, AiModelUsageSummary usage) {
+    private AiModelConfigResponse toResponse(AiModelConfig config, AiModelUsageSummary usage,
+                                             List<AiAgent> boundAgents) {
         encryptLegacyApiKey(config);
         AiModelDefinition modelDefinition = modelDefinition(config);
         AiModelConfigResponse response = new AiModelConfigResponse();
@@ -387,6 +449,8 @@ public class AiModelConfigService {
         response.setEnabled(config.getEnabled());
         response.setIsDefault(config.getIsDefault());
         response.setSequence(config.getSequence());
+        response.setBoundAgentCount((long) boundAgents.size());
+        response.setBoundAgentNames(boundAgents.stream().map(AiAgent::getName).toList());
         response.setCallCount(usage == null ? 0L : usage.getCallCount());
         response.setSuccessCount(usage == null ? 0L : usage.getSuccessCount());
         response.setFailedCount(usage == null ? 0L : usage.getFailedCount());
@@ -427,6 +491,59 @@ public class AiModelConfigService {
 
     private String usageKey(String provider, String modelName) {
         return String.valueOf(provider) + "\u0000" + String.valueOf(modelName);
+    }
+
+    private List<AiAgent> boundAgents(Long modelConfigId) {
+        if (modelConfigId == null) {
+            return List.of();
+        }
+        return agentMapper.selectList(new LambdaQueryWrapper<AiAgent>()
+                .eq(AiAgent::getModelConfigId, modelConfigId)
+                .eq(AiAgent::getDeleted, false)
+                .orderByAsc(AiAgent::getSequence));
+    }
+
+    private Map<Long, List<AiAgent>> boundAgentsByConfig() {
+        Map<Long, List<AiAgent>> result = new HashMap<>();
+        for (AiAgent agent : agentMapper.selectList(new LambdaQueryWrapper<AiAgent>()
+                .isNotNull(AiAgent::getModelConfigId)
+                .eq(AiAgent::getDeleted, false)
+                .orderByAsc(AiAgent::getSequence))) {
+            result.computeIfAbsent(agent.getModelConfigId(), ignored -> new java.util.ArrayList<>()).add(agent);
+        }
+        return result;
+    }
+
+    private void ensureNotBound(Long modelConfigId, String operation) {
+        List<AiAgent> agents = boundAgents(modelConfigId);
+        if (agents.isEmpty()) {
+            return;
+        }
+        String names = agents.stream().map(AiAgent::getName).collect(Collectors.joining("、"));
+        throw LearningAssistantException.badRequest(
+                LearningConstants.ErrorCode.MODEL_CONFIG_IN_USE,
+                "模型配置正在被 Agent「" + names + "」使用，请先更换 Agent 模型后再" + operation);
+    }
+
+    /** 模型型号调整后同步冗余快照；实际调用仍以 model_config_id 指向的配置为准。 */
+    private void syncAgentModelSnapshot(AiModelConfig config) {
+        agentMapper.update(null, new LambdaUpdateWrapper<AiAgent>()
+                .eq(AiAgent::getModelConfigId, config.getId())
+                .eq(AiAgent::getDeleted, false)
+                .set(AiAgent::getModelProvider, config.getProvider())
+                .set(AiAgent::getModelName, config.getModelName())
+                .set(AiAgent::getUpdateTime, LocalDateTime.now()));
+    }
+
+    /** 首次维护模型时自动接上同型号的内置 Agent，减少新库初始化后的人工补配。 */
+    private void bindMatchingUnboundAgents(AiModelConfig config) {
+        agentMapper.update(null, new LambdaUpdateWrapper<AiAgent>()
+                .isNull(AiAgent::getModelConfigId)
+                .eq(AiAgent::getModelProvider, config.getProvider())
+                .eq(AiAgent::getModelName, config.getModelName())
+                .eq(AiAgent::getDeleted, false)
+                .set(AiAgent::getModelConfigId, config.getId())
+                .set(AiAgent::getUpdateTime, LocalDateTime.now()));
     }
 
     /**

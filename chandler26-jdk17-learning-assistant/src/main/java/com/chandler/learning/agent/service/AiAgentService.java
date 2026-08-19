@@ -3,6 +3,7 @@ package com.chandler.learning.agent.service;
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import com.chandler.learning.agent.domain.dto.AgentSaveRequest;
 import com.chandler.learning.agent.domain.entity.AiAgent;
+import com.chandler.learning.agent.domain.entity.AiModelConfig;
 import com.chandler.learning.agent.domain.enums.AiAgentType;
 import com.chandler.learning.agent.domain.enums.AiModelDefinition;
 import com.chandler.learning.agent.domain.enums.SystemLogType;
@@ -19,6 +20,8 @@ import org.springframework.transaction.annotation.Transactional;
 
 import java.time.LocalDateTime;
 import java.util.List;
+import java.util.Map;
+import java.util.Objects;
 
 /**
  * AI Agent 服务。
@@ -29,6 +32,7 @@ import java.util.List;
 public class AiAgentService {
 
     private final AiAgentMapper agentMapper;
+    private final AiModelConfigService modelConfigService;
     private final SystemLogService systemLogService;
     private final UserDisplayNameService userDisplayNameService;
 
@@ -46,7 +50,7 @@ public class AiAgentService {
      * 查询 {@code getById} 相关业务。
      */
     public AiAgent getById(Long id) {
-        return agentMapper.selectById(id);
+        return enrich(agentMapper.selectById(id));
     }
 
     /**
@@ -54,11 +58,19 @@ public class AiAgentService {
      */
     public List<AiAgent> list(String type, boolean enabledOnly) {
         String normalizedType = StringUtils.hasText(type) ? AiAgentType.of(type).getCode() : null;
-        return agentMapper.selectList(new LambdaQueryWrapper<AiAgent>()
+        List<AiAgent> agents = agentMapper.selectList(new LambdaQueryWrapper<AiAgent>()
                 .eq(StringUtils.hasText(normalizedType), AiAgent::getType, normalizedType)
                 .eq(AiAgent::getDeleted, false)
                 .eq(enabledOnly, AiAgent::getEnabled, true)
                 .orderByAsc(AiAgent::getSequence));
+        Map<Long, AiModelConfig> configs = modelConfigService.getByIds(agents.stream()
+                .map(AiAgent::getModelConfigId)
+                .filter(Objects::nonNull)
+                .toList());
+        agents.forEach(agent -> enrich(agent, configs.get(agent.getModelConfigId())));
+        return enabledOnly
+                ? agents.stream().filter(agent -> Boolean.TRUE.equals(agent.getModelConfigEnabled())).toList()
+                : agents;
     }
 
     /**
@@ -114,7 +126,7 @@ public class AiAgentService {
     public void updateEnabled(Long id, boolean enabled) {
         AiAgent agent = requireAgent(id);
         if (enabled) {
-            AiModelDefinition.resolve(agent.getModelProvider(), agent.getModelName());
+            modelConfigService.requireEnabled(agent.getModelConfigId());
         }
         agent.setEnabled(enabled);
         agent.setUpdateTime(LocalDateTime.now());
@@ -154,7 +166,7 @@ public class AiAgentService {
                     LearningConstants.ErrorCode.AGENT_NOT_FOUND,
                     "Agent 不存在: " + id);
         }
-        AiModelDefinition.resolve(source.getModelProvider(), source.getModelName());
+        modelConfigService.requireEnabled(source.getModelConfigId());
         AiAgent clone = new AiAgent();
         clone.setName(source.getName() + " 副本");
         clone.setCode(source.getCode() + "-" + LocalDateTime.now().getNano());
@@ -164,6 +176,7 @@ public class AiAgentService {
         clone.setSystemPrompt(source.getSystemPrompt());
         clone.setConcisePrompt(source.getConcisePrompt());
         clone.setWelcomeMessage(source.getWelcomeMessage());
+        clone.setModelConfigId(source.getModelConfigId());
         clone.setModelProvider(source.getModelProvider());
         clone.setModelName(source.getModelName());
         clone.setTemperature(source.getTemperature());
@@ -184,7 +197,7 @@ public class AiAgentService {
      * 更新 {@code copy} 相关业务。
      */
     private void copy(AgentSaveRequest request, AiAgent agent) {
-        AiModelDefinition modelDefinition = AiModelDefinition.resolve(request.getModelProvider(), request.getModelName());
+        AiModelConfig modelConfig = modelConfigService.requireEnabled(request.getModelConfigId());
         agent.setName(request.getName());
         agent.setCode(request.getCode());
         agent.setType(AiAgentType.of(request.getType()).getCode());
@@ -193,8 +206,9 @@ public class AiAgentService {
         agent.setSystemPrompt(request.getSystemPrompt());
         agent.setConcisePrompt(request.getConcisePrompt());
         agent.setWelcomeMessage(request.getWelcomeMessage());
-        agent.setModelProvider(modelDefinition.getProvider().getCode());
-        agent.setModelName(modelDefinition.getApiModelId());
+        agent.setModelConfigId(modelConfig.getId());
+        agent.setModelProvider(modelConfig.getProvider());
+        agent.setModelName(modelConfig.getModelName());
         agent.setTemperature(request.getTemperature());
         agent.setMaxTokens(request.getMaxTokens());
         agent.setPresetCommands(request.getPresetCommands());
@@ -211,6 +225,26 @@ public class AiAgentService {
                     LearningConstants.ErrorCode.AGENT_NOT_FOUND,
                     "Agent 不存在: " + id);
         }
+        return agent;
+    }
+
+    /** 补充模型配置展示状态，避免前端通过厂商和型号字符串猜测绑定关系。 */
+    private AiAgent enrich(AiAgent agent) {
+        if (agent == null) {
+            return null;
+        }
+        return enrich(agent, modelConfigService.getById(agent.getModelConfigId()));
+    }
+
+    private AiAgent enrich(AiAgent agent, AiModelConfig config) {
+        if (agent == null) {
+            return null;
+        }
+        agent.setModelConfigName(config == null ? null : config.getName());
+        agent.setModelConfigEnabled(config != null
+                && Boolean.TRUE.equals(config.getEnabled())
+                && AiModelDefinition.supports(config.getProvider(), config.getModelName())
+                && !Boolean.TRUE.equals(config.getDeleted()));
         return agent;
     }
 }

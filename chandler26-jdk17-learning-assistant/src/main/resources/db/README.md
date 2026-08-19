@@ -39,6 +39,7 @@
 15. `104_vocabulary_catalog_analysis_mysql.sql`
 16. `105_learning_plan_generation_lock_mysql.sql`
 17. `106_ai_model_catalog_agent_defaults_mysql.sql`
+18. `107_agent_model_config_binding_mysql.sql`
 
 迁移脚本都设计为可重复执行，但仍建议在执行前备份数据库并记录已执行版本。
 

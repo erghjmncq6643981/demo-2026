@@ -80,9 +80,9 @@ public class AiChatService {
         Long userId = request.getUserId() != null ? request.getUserId() : chatSessionService.currentUserId();
         AiChatSession session = resolveSession(agent, request, userId, startTime, invocationScene);
 
-        AiModelConfig selectedModelConfig = resolveSelectedModelConfig(request.getModelConfigId());
-        String provider = resolveProvider(agent, selectedModelConfig);
-        String modelName = resolveModelName(agent, provider, selectedModelConfig);
+        AiModelConfig selectedModelConfig = resolveSelectedModelConfig(agent, request.getModelConfigId());
+        String provider = selectedModelConfig.getProvider();
+        String modelName = selectedModelConfig.getModelName();
         AiModelDefinition modelDefinition = modelCapabilityResolver.resolve(provider, modelName);
         List<ChatMessageParam> messages = buildMessages(agent, request, session, invocationScene);
         int estimatedInputTokens = estimatePromptTokens(messages);
@@ -98,7 +98,7 @@ public class AiChatService {
         modelRequest.setModelContextWindowTokens(modelDefinition.getContextWindowTokens());
         modelRequest.setEffectiveContextWindowTokens(
                 modelCapabilityResolver.effectiveContextWindowTokens(modelDefinition));
-        modelRequest.setModelConfigId(selectedModelConfig == null ? null : selectedModelConfig.getId());
+        modelRequest.setModelConfigId(selectedModelConfig.getId());
         modelRequest.setTemperature(agent.getTemperature());
         int configuredMaxTokens = agent.getMaxTokens() == null
                 ? defaultOutputTokens(invocationScene)
@@ -404,57 +404,11 @@ public class AiChatService {
     }
 
     /**
-     * 处理 {@code resolveProvider} 相关业务。
+     * 业务请求可以显式覆盖模型；未覆盖时严格使用 Agent 绑定的具体模型配置。
      */
-    private String resolveProvider(AiAgent agent, AiModelConfig selectedModelConfig) {
-        if (selectedModelConfig != null) {
-            return selectedModelConfig.getProvider();
-        }
-        if (StringUtils.hasText(agent.getModelProvider())) {
-            return agent.getModelProvider();
-        }
-        String defaultProvider = modelConfigService.resolveDefaultProvider();
-        if (StringUtils.hasText(defaultProvider)) {
-            return defaultProvider;
-        }
-        throw LearningAssistantException.badRequest(
-                LearningConstants.ErrorCode.MODEL_CONFIG_NOT_FOUND,
-                "未配置可用 AI 模型，请先在个人信息 - Agent管理 - 模型管理中新增并启用模型");
-    }
-
-    /**
-     * 处理 {@code resolveModelName} 相关业务。
-     */
-    private String resolveModelName(AiAgent agent, String provider, AiModelConfig selectedModelConfig) {
-        if (selectedModelConfig != null) {
-            return selectedModelConfig.getModelName();
-        }
-        if (StringUtils.hasText(agent.getModelName())) {
-            return agent.getModelName();
-        }
-        String configuredModel = modelConfigService.resolveDefaultModel(provider);
-        if (StringUtils.hasText(configuredModel)) {
-            return configuredModel;
-        }
-        throw LearningAssistantException.badRequest(
-                LearningConstants.ErrorCode.AI_MODEL_NAME_MISSING,
-                "未找到可用的 AI 模型明细，请先在个人信息 - Agent管理 - 模型管理中维护模型名称");
-    }
-
-    /**
-     * 处理 {@code resolveSelectedModelConfig} 相关业务。
-     */
-    private AiModelConfig resolveSelectedModelConfig(Long modelConfigId) {
-        if (modelConfigId == null) {
-            return null;
-        }
-        AiModelConfig selectedModelConfig = modelConfigService.getById(modelConfigId);
-        if (selectedModelConfig == null) {
-            throw LearningAssistantException.notFound(
-                    LearningConstants.ErrorCode.MODEL_CONFIG_NOT_FOUND,
-                    "模型配置不存在: " + modelConfigId);
-        }
-        return selectedModelConfig;
+    private AiModelConfig resolveSelectedModelConfig(AiAgent agent, Long requestedModelConfigId) {
+        Long modelConfigId = requestedModelConfigId != null ? requestedModelConfigId : agent.getModelConfigId();
+        return modelConfigService.requireEnabled(modelConfigId);
     }
 
     /**

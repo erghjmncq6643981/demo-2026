@@ -1,7 +1,6 @@
 import { sameId } from '/src/shared/ids.js'
 import { hideModal, showModal } from '/src/shared/modal.js'
 import { escapeHtml } from '/src/shared/text.js'
-import { renderModelSelect, renderProviderSelect } from '/src/features/profile/provider.js'
 
 export function createAgentProfileFeature(ctx) {
   const { state, elements, request, setLoading, toast, logEvent, confirmAction, confirmDelete, setConnection, renderLearningConfigSummary } = ctx
@@ -39,7 +38,7 @@ export function createAgentProfileFeature(ctx) {
     if (!elements.agentSelect) return
     const previous = elements.agentSelect.value || state.lastAgentCode || 'english_vocabulary'
     const agents = state.agentConfigs?.length
-      ? state.agentConfigs.filter((item) => item.enabled !== false && !item.deleted)
+      ? state.agentConfigs.filter((item) => item.enabled !== false && item.modelConfigEnabled !== false && !item.deleted)
       : [{ code: 'english_vocabulary', name: 'English Vocabulary', enabled: true }]
     elements.agentSelect.innerHTML = ''
     for (const agent of agents) {
@@ -57,14 +56,16 @@ export function createAgentProfileFeature(ctx) {
     renderLearningConfigSummary?.()
   }
 
-  function renderAgentProviderOptions(selectedProvider = '') {
-    return renderProviderSelect(elements.agentModelProviderInput, state.modelConfigs, selectedProvider)
-  }
-
-  function syncAgentModelProviderDefaults(options = {}) {
-    if (!elements.agentModelProviderInput || !elements.agentModelNameInput) return
-    const provider = elements.agentModelProviderInput.value || renderAgentProviderOptions()
-    renderModelSelect(elements.agentModelNameInput, state.modelConfigs, provider, options)
+  function renderAgentModelOptions(selectedModelConfigId = '') {
+    if (!elements.agentModelConfigInput) return ''
+    const models = (state.modelConfigs || []).filter((item) => item.supported !== false
+      && !item.deleted
+      && (item.enabled !== false || sameId(item.id, selectedModelConfigId)))
+    elements.agentModelConfigInput.innerHTML = models.length
+      ? models.map((item) => `<option value="${escapeHtml(item.id)}">${escapeHtml(item.name || item.modelName)} · ${escapeHtml(item.modelDisplayName || item.modelName)}${item.enabled === false ? ' · 停用' : ''}</option>`).join('')
+      : '<option value="">请先在模型管理中新增并启用模型</option>'
+    elements.agentModelConfigInput.value = String(selectedModelConfigId || models.find((item) => item.enabled !== false)?.id || '')
+    return elements.agentModelConfigInput.value
   }
 
   function renderAgentConfigs() {
@@ -78,8 +79,11 @@ export function createAgentProfileFeature(ctx) {
     const aliveCount = list.length
     elements.agentConfigList.className = 'model-list'
     elements.agentConfigList.innerHTML = list
-      .map(
-        (item) => `
+      .map((item) => {
+        const modelConfig = (state.modelConfigs || []).find((model) => sameId(model.id, item.modelConfigId))
+        const modelConfigName = modelConfig?.name || item.modelConfigName || `${item.modelProvider || ''} · ${item.modelName || ''}`
+        const modelConfigEnabled = modelConfig ? modelConfig.enabled !== false : item.modelConfigEnabled !== false
+        return `
           <div class="model-item agent-item ${item.enabled ? '' : 'disabled'}">
             <div>
               <div class="model-title-line">
@@ -87,7 +91,7 @@ export function createAgentProfileFeature(ctx) {
                 <span class="mini-pill ${item.enabled ? 'ok' : ''}">${item.enabled ? '启用' : '停用'}</span>
                 <span class="mini-pill">${escapeHtml(item.code)}</span>
               </div>
-              <p>${escapeHtml(item.modelProvider || '')} · ${escapeHtml(item.modelName || '')}</p>
+              <p>${escapeHtml(modelConfigName)}${modelConfigEnabled ? '' : ' · 模型不可用'}</p>
               <small>类型 ${escapeHtml(item.type || '')} · 排序 ${item.sequence ?? 0}</small>
             </div>
             <div class="row-actions">
@@ -97,8 +101,8 @@ export function createAgentProfileFeature(ctx) {
               <button class="danger-icon-button" type="button" data-agent-delete="${escapeHtml(item.id)}" title="${aliveCount <= 1 ? '至少保留一个学习 Agent' : '删除学习 Agent'}" aria-label="${aliveCount <= 1 ? '至少保留一个学习 Agent' : '删除学习 Agent'}" ${aliveCount <= 1 ? 'disabled' : ''}>×</button>
             </div>
           </div>
-        `,
-      )
+        `
+      })
       .join('')
     elements.agentConfigList.querySelectorAll('[data-agent-edit]').forEach((button) => {
       button.addEventListener('click', () => openAgentModal(button.getAttribute('data-agent-edit')))
@@ -115,7 +119,7 @@ export function createAgentProfileFeature(ctx) {
   }
 
   function openAgentModal(id = null) {
-    renderAgentProviderOptions()
+    renderAgentModelOptions()
     if (id) {
       fillAgentForm(state.agentConfigs.find((item) => sameId(item.id, id)))
       elements.agentModalTitle.textContent = '修改学习 Agent'
@@ -136,11 +140,7 @@ export function createAgentProfileFeature(ctx) {
     elements.agentCodeInput.value = agent?.code || ''
     elements.agentTypeInput.value = agent?.type || 'chat'
     elements.agentIconInput.value = agent?.icon || ''
-    renderAgentProviderOptions(agent?.modelProvider || '')
-    syncAgentModelProviderDefaults({ keepUnknownModel: true, modelName: agent?.modelName || '' })
-    elements.agentModelProviderInput.value = agent?.modelProvider || elements.agentModelProviderInput.value || ''
-    syncAgentModelProviderDefaults({ keepUnknownModel: true, modelName: agent?.modelName || '' })
-    elements.agentModelNameInput.value = agent?.modelName || ''
+    renderAgentModelOptions(agent?.modelConfigId || '')
     elements.agentSequenceInput.value = agent?.sequence ?? 0
     elements.agentTemperatureInput.value = agent?.temperature ?? ''
     elements.agentMaxTokensInput.value = agent?.maxTokens ?? ''
@@ -153,14 +153,11 @@ export function createAgentProfileFeature(ctx) {
 
   function resetAgentForm(options = {}) {
     state.currentAgentEditId = null
-    const provider = renderAgentProviderOptions('')
-    syncAgentModelProviderDefaults()
+    renderAgentModelOptions('')
     elements.agentNameInput.value = ''
     elements.agentCodeInput.value = ''
     elements.agentTypeInput.value = 'chat'
     elements.agentIconInput.value = ''
-    elements.agentModelProviderInput.value = provider
-    syncAgentModelProviderDefaults()
     elements.agentSequenceInput.value = '0'
     elements.agentTemperatureInput.value = ''
     elements.agentMaxTokensInput.value = ''
@@ -192,8 +189,7 @@ export function createAgentProfileFeature(ctx) {
       code: elements.agentCodeInput.value.trim(),
       type: elements.agentTypeInput.value.trim() || 'chat',
       icon: elements.agentIconInput.value.trim(),
-      modelProvider: elements.agentModelProviderInput.value.trim(),
-      modelName: elements.agentModelNameInput.value.trim(),
+      modelConfigId: Number(elements.agentModelConfigInput.value || 0) || null,
       sequence: Number(elements.agentSequenceInput.value || 0),
       temperature: elements.agentTemperatureInput.value.trim() === '' ? null : Number(elements.agentTemperatureInput.value),
       maxTokens: elements.agentMaxTokensInput.value.trim() === '' ? null : Number(elements.agentMaxTokensInput.value),
@@ -203,8 +199,8 @@ export function createAgentProfileFeature(ctx) {
       welcomeMessage: elements.agentWelcomeMessageInput.value.trim(),
       presetCommands: elements.agentPresetCommandsInput.value.trim(),
     }
-    if (!payload.name || !payload.code || !payload.modelProvider || !payload.modelName || !validatePresetCommands()) {
-      if (!payload.name || !payload.code || !payload.modelProvider || !payload.modelName) toast('请补全学习 Agent 配置')
+    if (!payload.name || !payload.code || !payload.modelConfigId || !validatePresetCommands()) {
+      if (!payload.name || !payload.code || !payload.modelConfigId) toast('请补全学习 Agent 配置并绑定模型')
       return
     }
     if (state.currentAgentEditId) {
@@ -330,8 +326,7 @@ export function createAgentProfileFeature(ctx) {
   return {
     loadAgents,
     renderLearningAgentOptions,
-    renderAgentProviderOptions,
-    syncAgentModelProviderDefaults,
+    renderAgentModelOptions,
     renderAgentConfigs,
     openAgentModal,
     closeAgentModal,

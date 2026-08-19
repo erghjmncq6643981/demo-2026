@@ -21,7 +21,6 @@ export function bindAppEvents(ctx) {
     closeAgentModal,
     openLearningConfigModal,
     closeLearningConfigModal,
-    syncAgentModelProviderDefaults,
     saveAgentConfig,
     openTemplateModal,
     closeTemplateModal,
@@ -175,8 +174,6 @@ elements.closeLearningConfigModalBtn?.addEventListener('click', closeLearningCon
 elements.learningConfigModal?.addEventListener('click', (event) => {
   if (event.target === elements.learningConfigModal) closeLearningConfigModal()
 })
-elements.agentModelProviderInput?.addEventListener('change', () => syncAgentModelProviderDefaults())
-elements.agentModelProviderInput?.addEventListener('input', () => syncAgentModelProviderDefaults())
 elements.saveAgentBtn?.addEventListener('click', saveAgentConfig)
 elements.openTemplateModalBtn?.addEventListener('click', () => openTemplateModal())
 elements.closeTemplateModalBtn?.addEventListener('click', closeTemplateModal)
