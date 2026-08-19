@@ -1446,8 +1446,13 @@
           <button class="icon-button" id="closeAiSessionDetailBtn" type="button" title="关闭" aria-label="关闭">×</button>
         </div>
         <div id="aiSessionDetailMeta" class="ai-session-detail-meta"></div>
-        <section class="ai-session-detail-section"><div class="panel-heading compact-heading"><h4>消息</h4></div><div id="aiSessionMessages" class="ai-session-messages"></div></section>
-        <section class="ai-session-detail-section"><div class="panel-heading compact-heading"><h4>模型调用</h4></div><div id="aiSessionCalls" class="ai-session-calls"></div></section>
+        <div id="aiSessionDetailTabs" class="ai-session-detail-tabs" role="tablist" aria-label="AI 会话详情视图">
+          <button class="segmented-button active" type="button" role="tab" aria-selected="true" data-ai-session-detail-tab="overview">概览</button>
+          <button class="segmented-button" type="button" role="tab" aria-selected="false" data-ai-session-detail-tab="messages">消息</button>
+          <button class="segmented-button" type="button" role="tab" aria-selected="false" data-ai-session-detail-tab="calls">模型调用</button>
+          <button class="segmented-button" type="button" role="tab" aria-selected="false" data-ai-session-detail-tab="raw">原始数据</button>
+        </div>
+        <div id="aiSessionDetailContent" class="ai-session-detail-content"></div>
       </div>
     </section>
     <section class="modal-backdrop hidden" id="deleteConfirmModal" aria-modal="true" role="dialog">

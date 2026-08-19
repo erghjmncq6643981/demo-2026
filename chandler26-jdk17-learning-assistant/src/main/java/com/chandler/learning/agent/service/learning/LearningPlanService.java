@@ -69,8 +69,6 @@ import java.util.Map;
 import java.util.Objects;
 import java.util.Set;
 import java.util.UUID;
-import java.util.regex.Matcher;
-import java.util.regex.Pattern;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
 
@@ -82,7 +80,6 @@ import java.util.stream.Stream;
 @RequiredArgsConstructor
 public class LearningPlanService {
 
-    private static final Pattern JSON_BLOCK_PATTERN = Pattern.compile("\\{[\\s\\S]*}");
 
     private final LearningPlanMapper planMapper;
     private final LearningPlanUnitMapper unitMapper;
@@ -1437,35 +1434,12 @@ public class LearningPlanService {
         if (!StringUtils.hasText(content)) {
             throw sceneInvalid("AI 未返回场景内容");
         }
-        String rawCleaned = content.replace("```json", "").replace("```", "").trim();
         try {
-            return objectMapper.readTree(rawCleaned);
-        } catch (Exception e1) {
-            int start = rawCleaned.indexOf('{');
-            int end = rawCleaned.lastIndexOf('}');
-            if (start >= 0 && end > start) {
-                try {
-                    return objectMapper.readTree(rawCleaned.substring(start, end + 1));
-                } catch (Exception ignored) {}
-            }
-
-            String cleaned = rawCleaned.replace("“", "\"").replace("”", "\"")
-                             .replace("‘", "'").replace("’", "'");
-            cleaned = com.chandler.learning.agent.service.AiChatService.sanitizeJsonSymbols(cleaned);
-            cleaned = com.chandler.learning.agent.service.AiChatService.fixUnquotedJsonStrings(cleaned);
-            try {
-                return objectMapper.readTree(cleaned);
-            } catch (Exception ignored) {
-                Matcher matcher = JSON_BLOCK_PATTERN.matcher(cleaned);
-                if (matcher.find()) {
-                    try {
-                        return objectMapper.readTree(matcher.group());
-                    } catch (Exception ex) {
-                        log.debug("场景 JSON 二次提取失败 error={}", ex.getMessage());
-                    }
-                }
-                throw sceneInvalid("AI 返回的场景不是有效 JSON，请重试生成");
-            }
+            return objectMapper.readTree(content);
+        } catch (Exception ex) {
+            // AiChatService 已根据所选模型完成标准化；这里仅保护后续存储边界。
+            log.debug("已标准化的场景 JSON 无法读取 error={}", ex.getMessage());
+            throw sceneInvalid("AI 返回的场景不是有效 JSON，请重试生成");
         }
     }
 

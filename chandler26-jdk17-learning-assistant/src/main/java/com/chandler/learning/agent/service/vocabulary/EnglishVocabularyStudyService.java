@@ -30,8 +30,6 @@ import java.util.Comparator;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
-import java.util.regex.Matcher;
-import java.util.regex.Pattern;
 
 /**
  * 英语词汇学习服务。
@@ -43,7 +41,6 @@ import java.util.regex.Pattern;
 @RequiredArgsConstructor
 public class EnglishVocabularyStudyService {
 
-    private static final Pattern JSON_BLOCK_PATTERN = Pattern.compile("\\{[\\s\\S]*}");
 
     private final EnglishVocabularyStudyRecordMapper recordMapper;
     private final AiChatService aiChatService;
@@ -278,23 +275,12 @@ public class EnglishVocabularyStudyService {
         if (!StringUtils.hasText(content)) {
             return null;
         }
-        String cleaned = content.replace("```json", "").replace("```", "").trim();
         try {
-            JsonNode jsonNode = objectMapper.readTree(cleaned);
+            JsonNode jsonNode = objectMapper.readTree(content);
             return objectMapper.writeValueAsString(jsonNode);
-        } catch (Exception ignored) {
-            Matcher matcher = JSON_BLOCK_PATTERN.matcher(cleaned);
-            if (!matcher.find()) {
-                return null;
-            }
-            String candidate = matcher.group();
-            try {
-                JsonNode jsonNode = objectMapper.readTree(candidate);
-                return objectMapper.writeValueAsString(jsonNode);
-            } catch (Exception ex) {
-                log.warn("词汇模型响应 JSON 提取失败: {}", ex.getMessage());
-                return null;
-            }
+        } catch (Exception ex) {
+            log.debug("已标准化的词卡 JSON 无法读取: {}", ex.getMessage());
+            return null;
         }
     }
 

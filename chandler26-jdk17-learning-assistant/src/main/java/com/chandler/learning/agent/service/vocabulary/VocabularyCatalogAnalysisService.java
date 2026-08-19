@@ -38,8 +38,6 @@ import org.springframework.transaction.support.TransactionTemplate;
 import org.springframework.util.StringUtils;
 
 import java.time.LocalDateTime;
-import java.util.regex.Matcher;
-import java.util.regex.Pattern;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.LinkedHashMap;
@@ -746,25 +744,14 @@ public class VocabularyCatalogAnalysisService {
         }
     }
 
-    private static final Pattern JSON_BLOCK_PATTERN = Pattern.compile("\\{[\\s\\S]*\\}");
-
     private JsonNode parseJson(String content) {
         if (!org.springframework.util.StringUtils.hasText(content)) {
             throw LearningAssistantException.badRequest(LearningConstants.ErrorCode.AI_RESPONSE_PARSE_FAILED);
         }
-        String cleaned = content.replace("```json", "").replace("```", "").trim();
         try {
-            return objectMapper.readTree(cleaned);
-        } catch (Exception ignored) {
-            Matcher matcher = JSON_BLOCK_PATTERN.matcher(cleaned);
-            if (matcher.find()) {
-                try {
-                    return objectMapper.readTree(matcher.group());
-                } catch (Exception ex) {
-                    log.debug("词本分析响应 JSON 提取解析失败 length={}", content.length(), ex);
-                }
-            }
-            log.debug("公共词本关联分析响应不是合法 JSON length={}", content.length());
+            return objectMapper.readTree(content);
+        } catch (Exception ex) {
+            log.debug("已标准化的公共词本分析 JSON 无法读取 length={}", content.length(), ex);
             throw LearningAssistantException.badRequest(LearningConstants.ErrorCode.AI_RESPONSE_PARSE_FAILED);
         }
     }

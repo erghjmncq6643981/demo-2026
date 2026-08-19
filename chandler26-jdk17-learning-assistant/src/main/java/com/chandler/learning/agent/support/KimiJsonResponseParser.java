@@ -1,0 +1,97 @@
+package com.chandler.learning.agent.support;
+
+import com.fasterxml.jackson.core.JsonProcessingException;
+import com.fasterxml.jackson.databind.ObjectMapper;
+import org.springframework.util.StringUtils;
+
+import java.util.ArrayList;
+import java.util.List;
+import java.util.Locale;
+
+/**
+ * Kimi / Moonshot 结构化输出解析器。
+ * <p>
+ * 先执行严格解析。只有失败后，才修复 JSON 结构外的全角分隔符、尾逗号、少量已知字段的裸字符串
+ * 和响应结尾遗漏的闭合括号；不会在已合法字符串中替换中文引号或标点。
+ */
+public class KimiJsonResponseParser extends StrictJsonResponseParser {
+
+    public KimiJsonResponseParser(ObjectMapper objectMapper) {
+        super(objectMapper);
+    }
+
+    @Override
+    public String name() {
+        return "kimi-json";
+    }
+
+    @Override
+    public boolean supports(String provider, String modelName) {
+        String providerKey = normalized(provider);
+        String modelKey = normalized(modelName);
+        return "kimi".equals(providerKey) || "moonshot".equals(providerKey)
+                || modelKey.contains("moonshot") || modelKey.contains("kimi");
+    }
+
+    @Override
+    public AiStructuredResponseParseResult parse(String content) {
+        try {
+            return super.parse(content);
+        } catch (AiStructuredResponseParseException strictFailure) {
+            return repairAndParse(content, strictFailure);
+        }
+    }
+
+    private AiStructuredResponseParseResult repairAndParse(String content, AiStructuredResponseParseException strictFailure) {
+        if (!StringUtils.hasText(content)) {
+            throw strictFailure;
+        }
+        List<String> repairs = new ArrayList<>();
+        String candidate = JsonResponseParserSupport.unwrapCodeFence(content);
+        if (candidate == null) {
+            candidate = JsonResponseParserSupport.sliceFromFirstJsonStart(content);
+        } else {
+            repairs.add("removed_code_fence");
+        }
+        if (!StringUtils.hasText(candidate)) {
+            throw strictFailure;
+        }
+
+        String normalized = JsonResponseParserSupport.normalizeStructuralPunctuation(candidate);
+        if (!normalized.equals(candidate)) {
+            repairs.add("normalized_structural_punctuation");
+        }
+        String withoutTrailingCommas = JsonResponseParserSupport.removeTrailingCommas(normalized);
+        if (!withoutTrailingCommas.equals(normalized)) {
+            repairs.add("removed_trailing_comma");
+        }
+        normalized = withoutTrailingCommas;
+        String quoted = JsonResponseParserSupport.quoteKnownBareStringValues(normalized);
+        if (!quoted.equals(normalized)) {
+            repairs.add("quoted_known_bare_value");
+        }
+        String completed = JsonResponseParserSupport.completeClosingBrackets(quoted);
+        if (!completed.equals(quoted)) {
+            repairs.add("completed_trailing_brackets");
+        }
+
+        try {
+            return success(read(completed), "repaired", repairs);
+        } catch (JsonProcessingException ex) {
+            String block = JsonResponseParserSupport.extractFirstBalancedJson(completed);
+            if (block != null) {
+                try {
+                    repairs.add("extracted_json_block");
+                    return success(read(block), "repaired_balanced", repairs);
+                } catch (JsonProcessingException ignored) {
+                    // Preserve the repair attempt and cause for AI audit diagnostics.
+                }
+            }
+            throw failure("repaired", repairs, ex);
+        }
+    }
+
+    private String normalized(String value) {
+        return StringUtils.hasText(value) ? value.trim().toLowerCase(Locale.ROOT) : "";
+    }
+}

@@ -9,6 +9,8 @@ import com.chandler.learning.agent.exception.LearningAssistantException;
 import com.chandler.learning.agent.mapper.AiModelCallRecordMapper;
 import com.chandler.learning.agent.service.learning.UserDisplayNameService;
 import com.chandler.learning.agent.support.AiModelClient;
+import com.chandler.learning.agent.support.AiModelCapabilityResolver;
+import com.chandler.learning.agent.support.AiStructuredResponseParserRegistry;
 import com.chandler.learning.agent.support.PromptRenderer;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import org.junit.jupiter.api.Test;
@@ -33,7 +35,8 @@ class AiChatServicePromptContextTest {
                 mock(AiAgentService.class), mock(AiPromptTemplateService.class), sessionService,
                 mock(AiModelConfigService.class), mock(AiModelClient.class),
                 new PromptRenderer(new ObjectMapper()), mock(AiModelCallRecordMapper.class),
-                new ObjectMapper(), mock(UserDisplayNameService.class));
+                new ObjectMapper(), mock(UserDisplayNameService.class),
+                new AiModelCapabilityResolver(), new AiStructuredResponseParserRegistry(new ObjectMapper()));
 
         AiAgent agent = new AiAgent();
         agent.setSystemPrompt("只使用 {{term}} 生成词卡");
@@ -59,12 +62,13 @@ class AiChatServicePromptContextTest {
     }
 
     @Test
-    void rejectsPromptAtNinetyPercentOfEightThousandTokenContext() {
+    void rejectsPromptAtNinetyPercentOfDefaultEightThousandTokenContext() {
         AiChatService service = serviceWith(mock(AiChatSessionService.class));
         List<ChatMessageParam> messages = List.of(new ChatMessageParam("user", "a".repeat(30_000)));
 
         assertThatThrownBy(() -> ReflectionTestUtils.invokeMethod(
-                service, "validatePromptBudget", AiInvocationScene.ARTICLE_STUDY_MATERIAL, messages))
+                service, "validatePromptBudget", AiInvocationScene.ARTICLE_STUDY_MATERIAL,
+                "unknown", "unknown", 7_504, 1))
                 .isInstanceOf(LearningAssistantException.class)
                 .hasMessageContaining("7372 Token");
     }
@@ -74,6 +78,7 @@ class AiChatServicePromptContextTest {
                 mock(AiAgentService.class), mock(AiPromptTemplateService.class), sessionService,
                 mock(AiModelConfigService.class), mock(AiModelClient.class),
                 new PromptRenderer(new ObjectMapper()), mock(AiModelCallRecordMapper.class),
-                new ObjectMapper(), mock(UserDisplayNameService.class));
+                new ObjectMapper(), mock(UserDisplayNameService.class),
+                new AiModelCapabilityResolver(), new AiStructuredResponseParserRegistry(new ObjectMapper()));
     }
 }

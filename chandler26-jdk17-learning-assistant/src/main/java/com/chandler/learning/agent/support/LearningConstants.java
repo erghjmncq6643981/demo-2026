@@ -13,6 +13,7 @@ public final class LearningConstants {
     public static final int FIRST_SEQUENCE = 1;
     public static final int SEQUENCE_STEP = 1;
     public static final int ZERO = 0;
+    public static final int PERCENT_BASE = 100;
     public static final String SQL_LIMIT_ONE = "LIMIT 1";
     public static final String DEFAULT_CHAT_PATH = "/chat/completions";
     public static final String DEFAULT_AGENT_TYPE = Agent.TYPE_CHAT;
@@ -192,7 +193,16 @@ public final class LearningConstants {
 
     /** AI 请求上下文预算。输入和预留输出合计在达到总上下文上限的 90% 时提前拒绝。 */
     public static final class AiContext {
-        public static final int MAX_TOKENS = 8_192;
+        /** 应用当前允许发送给任一模型的最大上下文窗口，单位为 Token。 */
+        public static final int MAX_SUPPORTED_CONTEXT_TOKENS = 8_192;
+        /** 未登记模型的保守上下文窗口，单位为 Token。 */
+        public static final int DEFAULT_CONTEXT_WINDOW_TOKENS = MAX_SUPPORTED_CONTEXT_TOKENS;
+        /** DeepSeek Chat 的供应商能力参考值；实际预算仍受应用上限约束。 */
+        public static final int DEEPSEEK_CONTEXT_WINDOW_TOKENS = 64_000;
+        /** Moonshot v1-8k 上下文窗口，单位为 Token。 */
+        public static final int KIMI_8K_CONTEXT_WINDOW_TOKENS = 8_192;
+        public static final int KIMI_32K_CONTEXT_WINDOW_TOKENS = 32_768;
+        public static final int KIMI_128K_CONTEXT_WINDOW_TOKENS = 131_072;
         public static final int SAFE_USAGE_PERCENT = 90;
         public static final int MIN_OUTPUT_TOKENS = 256;
         public static final int ASCII_CHARACTERS_PER_TOKEN = 4;
