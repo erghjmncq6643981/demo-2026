@@ -737,9 +737,14 @@ public class VocabularyCatalogAnalysisService {
         response.setPublishedCount(publishedCount);
         response.setAnalyzedCount(analyzedCount);
         response.setUnanalyzedCount(unanalyzedCount);
-        response.setCanTrigger(response.getUnanalyzedCount() > 0
-                && !List.of(LearningConstants.VocabularyAnalysis.STATUS_PENDING,
-                LearningConstants.VocabularyAnalysis.STATUS_RUNNING).contains(response.getStatus()));
+        if (publishedCount > 0 && unanalyzedCount == 0) {
+            response.setStatus(LearningConstants.VocabularyAnalysis.STATUS_COMPLETED);
+            response.setCanTrigger(false);
+        } else {
+            response.setCanTrigger(response.getUnanalyzedCount() > 0
+                    && !List.of(LearningConstants.VocabularyAnalysis.STATUS_PENDING,
+                    LearningConstants.VocabularyAnalysis.STATUS_RUNNING).contains(response.getStatus()));
+        }
     }
 
     private static final Pattern JSON_BLOCK_PATTERN = Pattern.compile("\\{[\\s\\S]*\\}");
