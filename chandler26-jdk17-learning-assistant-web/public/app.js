@@ -131,6 +131,7 @@ const {
   loadModelConfigs: profile.loadModelConfigs,
   loadPromptTemplates: profile.loadPromptTemplates,
   loadSpeechPreferences,
+  loadLearningSettings: profile.loadLearningSettings,
   loadActivity: profile.loadActivity,
   loadSystemLogs: profile.loadSystemLogs,
   loadAiTasks: profile.loadAiTasks,
@@ -152,6 +153,7 @@ const {
   renderAgentConfigs: profile.renderAgentConfigs,
   renderLearningAgentOptions: profile.renderLearningAgentOptions,
   renderLearningConfigSummary: profile.renderLearningConfigSummary,
+  loadLearningSettings: profile.loadLearningSettings,
   renderTemplateOptions: profile.renderTemplateOptions,
   renderTemplateConfigs: profile.renderTemplateConfigs,
   renderReviewQueue: review.renderReviewQueue,
@@ -393,6 +395,7 @@ bindAppEvents({
   validateTemplatePlaceholders: profile.validateTemplatePlaceholders,
   savePromptTemplate: profile.savePromptTemplate,
   saveSpeechPreferences,
+  saveLearningSettings: profile.saveLearningSettings,
   changeWordbook: profile.changeWordbook,
   renderWordbookEntries: profile.renderWordbookEntries,
   toggleWordbookFocusMode: profile.toggleWordbookFocusMode,
@@ -429,7 +432,6 @@ updateAuthView()
 syncSidebarState()
 setProfileTab(state.activeProfileTab)
 profile.renderSystemLogs()
-studyFacade.renderRawJson(null)
 profile.renderProviderOptions()
 profile.syncModelProviderDefaults()
 profile.renderLearningConfigSummary()

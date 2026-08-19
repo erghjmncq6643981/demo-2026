@@ -21,7 +21,6 @@ import java.util.Locale;
 public enum AiInvocationScene {
 
     GENERAL_CHAT("general_chat", "通用 Agent 对话", false, List.of(), List.of()),
-    VOCABULARY_FOLLOW_UP("vocabulary_follow_up", "词汇学习追问", false, List.of(), List.of()),
     VOCABULARY_CARD_SINGLE("vocabulary_card_single", "单词词卡生成", true,
             List.of("term", "definitions", "examples", "collocations", "memory_tips"),
             List.of("term")),
@@ -81,7 +80,7 @@ public enum AiInvocationScene {
             case VOCABULARY_CARD_SINGLE, VOCABULARY_CARD_BATCH,
                  VOCABULARY_CATALOG_ANALYSIS, ARTICLE_STUDY_MATERIAL,
                  VOCABULARY_SCENE_UNIT -> true;
-            case GENERAL_CHAT, VOCABULARY_FOLLOW_UP -> false;
+            case GENERAL_CHAT -> false;
         };
     }
 }

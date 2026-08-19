@@ -20,6 +20,7 @@ import com.chandler.learning.agent.support.AiModelClient;
 import com.chandler.learning.agent.support.LearningConstants;
 import com.chandler.learning.agent.support.PromptRenderer;
 import com.fasterxml.jackson.core.type.TypeReference;
+import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -73,7 +74,7 @@ public class AiChatService {
         AiChatSession session = resolveSession(agent, request, userId, startTime, invocationScene);
 
         List<ChatMessageParam> messages = buildMessages(agent, request, session, invocationScene);
-        validatePromptBudget(invocationScene, messages);
+        int estimatedInputTokens = validatePromptBudget(invocationScene, messages);
 
         AiModelConfig selectedModelConfig = resolveSelectedModelConfig(request.getModelConfigId());
         String provider = resolveProvider(agent, selectedModelConfig);
@@ -84,13 +85,21 @@ public class AiChatService {
         modelRequest.setModel(modelName);
         modelRequest.setModelConfigId(selectedModelConfig == null ? null : selectedModelConfig.getId());
         modelRequest.setTemperature(agent.getTemperature());
-        Integer maxTokens = agent.getMaxTokens() == null ? LearningConstants.AiContext.MAX_TOKENS
+        Integer configuredMaxTokens = agent.getMaxTokens() == null ? LearningConstants.AiContext.MAX_TOKENS
                 : Math.min(agent.getMaxTokens(), LearningConstants.AiContext.MAX_TOKENS);
         if (AiInvocationScene.VOCABULARY_CATALOG_ANALYSIS.equals(invocationScene)
                 || AiInvocationScene.VOCABULARY_SCENE_UNIT.equals(invocationScene)) {
-            maxTokens = LearningConstants.AiContext.MAX_TOKENS;
+            configuredMaxTokens = LearningConstants.AiContext.MAX_TOKENS;
         }
-        modelRequest.setMaxTokens(maxTokens);
+        int safeLimit = LearningConstants.AiContext.MAX_TOKENS
+                * LearningConstants.AiContext.SAFE_USAGE_PERCENT / 100;
+        int availableOutputTokens = safeLimit - estimatedInputTokens;
+        if (availableOutputTokens < LearningConstants.AiContext.MIN_OUTPUT_TOKENS) {
+            throw LearningAssistantException.badRequest(
+                    LearningConstants.ErrorCode.AI_PROMPT_TOO_LARGE,
+                    "本次「" + invocationScene.getTitle() + "」请求没有足够的安全输出空间，请减少输入后重试");
+        }
+        modelRequest.setMaxTokens(Math.min(configuredMaxTokens, availableOutputTokens));
         if (AiInvocationScene.VOCABULARY_SCENE_UNIT.equals(invocationScene)
                 || AiInvocationScene.VOCABULARY_CARD_BATCH.equals(invocationScene)) {
             modelRequest.setFrequencyPenalty(0.3);
@@ -118,6 +127,7 @@ public class AiChatService {
                 request.getBusinessId());
         try {
             ModelChatResponse modelResponse = aiModelClient.chat(modelRequest);
+            validateStructuredResponse(invocationScene, modelResponse.getContent());
             long costTime = System.currentTimeMillis() - startTime;
             chatSessionService.addAssistantMessage(session.getId(), modelResponse.getContent(),
                     modelResponse.getTotalTokens(), costTime, provider, modelName);
@@ -248,7 +258,7 @@ public class AiChatService {
     }
 
     /**
-     * 过滤固定动作的输入变量。通用对话和追问属于上下文型动作，保留调用方传入的全部变量。
+     * 过滤固定动作的输入变量。通用对话属于上下文型动作，保留调用方传入的全部变量。
      */
     private Map<String, Object> requestVariables(AgentChatRequest request, AiInvocationScene invocationScene) {
         Map<String, Object> source = request.getVariables() == null ? Map.of() : request.getVariables();
@@ -268,7 +278,7 @@ public class AiChatService {
      * 发送前估算模型输入 Token。项目不绑定某一家模型的 tokenizer，因此使用保守的字符估算：
      * ASCII 连续文本按 4 字符约 1 Token，非 ASCII 字符按 2 Token 计算。
      */
-    private void validatePromptBudget(AiInvocationScene invocationScene, List<ChatMessageParam> messages) {
+    private int validatePromptBudget(AiInvocationScene invocationScene, List<ChatMessageParam> messages) {
         int estimatedTokens = messages.stream()
                 .mapToInt(message -> LearningConstants.AiContext.MESSAGE_OVERHEAD_TOKENS
                         + estimateTokens(message.getContent()))
@@ -277,7 +287,7 @@ public class AiChatService {
                 * LearningConstants.AiContext.SAFE_USAGE_PERCENT / 100;
         log.debug("AI 请求上下文估算 invocationScene={} estimatedTokens={} safeLimit={} messageCount={}",
                 invocationScene.getCode(), estimatedTokens, safeLimit, messages.size());
-        if (estimatedTokens >= safeLimit) {
+        if (estimatedTokens >= safeLimit - LearningConstants.AiContext.MIN_OUTPUT_TOKENS) {
             log.warn("event=ai_context_budget result=rejected invocationScene={} estimatedTokens={} safeLimit={} maxTokens={}",
                     invocationScene.getCode(), estimatedTokens, safeLimit,
                     LearningConstants.AiContext.MAX_TOKENS);
@@ -287,6 +297,7 @@ public class AiChatService {
                             + " Token，已达到安全上限 " + safeLimit
                             + " Token，请减少词汇批次或补充数据后重试");
         }
+        return estimatedTokens;
     }
 
     private int estimateTokens(String content) {
@@ -306,6 +317,47 @@ public class AiChatService {
             tokens += LearningConstants.AiContext.NON_ASCII_TOKENS_PER_CHARACTER;
         }
         return tokens + ceilDivide(asciiCharacters, LearningConstants.AiContext.ASCII_CHARACTERS_PER_TOKEN);
+    }
+
+    /** 统一执行场景级结构化响应契约，业务服务再校验字段内容和业务覆盖范围。 */
+    private void validateStructuredResponse(AiInvocationScene invocationScene, String content) {
+        if (!invocationScene.isStructuredResponse()) {
+            return;
+        }
+        try {
+            String cleaned = content == null ? "" : content.replace("```json", "").replace("```", "").trim();
+            JsonNode root;
+            try {
+                root = objectMapper.readTree(cleaned);
+            } catch (Exception ignored) {
+                int start = cleaned.indexOf('{');
+                int end = cleaned.lastIndexOf('}');
+                if (start < LearningConstants.ZERO || end <= start) {
+                    throw LearningAssistantException.badRequest(LearningConstants.ErrorCode.AI_RESPONSE_PARSE_FAILED);
+                }
+                root = objectMapper.readTree(cleaned.substring(start, end + LearningConstants.SEQUENCE_STEP));
+            }
+            if (root == null || !root.isObject()) {
+                throw LearningAssistantException.badRequest(LearningConstants.ErrorCode.AI_RESPONSE_PARSE_FAILED);
+            }
+            List<String> missingFields = new java.util.ArrayList<>();
+            for (String field : invocationScene.getRequiredRootFields()) {
+                if (root.path(field).isMissingNode() || root.path(field).isNull()) {
+                    missingFields.add(field);
+                }
+            }
+            if (!missingFields.isEmpty()) {
+                throw LearningAssistantException.badRequest(
+                        LearningConstants.ErrorCode.AI_RESPONSE_PARSE_FAILED,
+                        "AI 返回内容缺少必要字段：" + String.join("、", missingFields));
+            }
+        } catch (LearningAssistantException ex) {
+            throw ex;
+        } catch (Exception ex) {
+            throw LearningAssistantException.badRequest(
+                    LearningConstants.ErrorCode.AI_RESPONSE_PARSE_FAILED,
+                    "AI 返回内容不是有效 JSON");
+        }
     }
 
     private int ceilDivide(int dividend, int divisor) {
@@ -507,6 +559,7 @@ public class AiChatService {
         audit.put("promptTokens", response.getPromptTokens());
         audit.put("completionTokens", response.getCompletionTokens());
         audit.put("totalTokens", response.getTotalTokens());
+        audit.put("finishReason", response.getFinishReason());
         if (storeAuditContent) {
             audit.put("payload", limit(response.getResponseJson(), maxAuditContentLength));
         }

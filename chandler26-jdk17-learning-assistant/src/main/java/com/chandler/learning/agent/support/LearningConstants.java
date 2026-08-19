@@ -190,10 +190,11 @@ public final class LearningConstants {
         }
     }
 
-    /** AI 请求上下文预算。模型输入在达到总上下文上限的 90% 时提前拒绝，避免上游返回超限错误。 */
+    /** AI 请求上下文预算。输入和预留输出合计在达到总上下文上限的 90% 时提前拒绝。 */
     public static final class AiContext {
         public static final int MAX_TOKENS = 8_192;
         public static final int SAFE_USAGE_PERCENT = 90;
+        public static final int MIN_OUTPUT_TOKENS = 256;
         public static final int ASCII_CHARACTERS_PER_TOKEN = 4;
         public static final int NON_ASCII_TOKENS_PER_CHARACTER = 2;
         public static final int MESSAGE_OVERHEAD_TOKENS = 4;
@@ -238,6 +239,8 @@ public final class LearningConstants {
      * UserPreference 类。
      */
     public static final class UserPreference {
+        public static final String KEY_LEARNING_AGENT_CODE = "learning.agent_code";
+        public static final String KEY_LEARNING_TEMPLATE_CODE = "learning.template_code";
         public static final String KEY_SPEECH_VOICE_TYPE = "speech.voice_type";
         public static final String KEY_SPEECH_SENTENCE_VOICE_NAME = "speech.sentence_voice_name";
         public static final String KEY_SPEECH_SENTENCE_RATE = "speech.sentence_rate";
@@ -651,6 +654,7 @@ public final class LearningConstants {
         LEARNING_PLAN_UNIT_NOT_FOUND(HttpStatus.NOT_FOUND, "学习场景不存在"),
         LEARNING_SCENE_MATERIAL_NOT_FOUND(HttpStatus.NOT_FOUND, "场景材料不存在"),
         AI_ASYNC_TASK_NOT_FOUND(HttpStatus.NOT_FOUND, "AI 异步任务不存在"),
+        AI_ASYNC_TASK_RETRY_EXCEEDED(HttpStatus.BAD_REQUEST, "AI 异步任务已达到最大重试次数"),
         AI_ASYNC_TASK_EXECUTION_MODE_INVALID(HttpStatus.BAD_REQUEST, "AI 任务执行方式无效"),
         LEARNING_PLAN_GENERATION_IN_PROGRESS(HttpStatus.CONFLICT, "该学习计划正在生成场景材料，请稍后查看"),
         LEARNING_PLAN_UNIT_ACTIVE(HttpStatus.BAD_REQUEST, "当前已有正在学习的场景"),

@@ -1,12 +1,8 @@
 package com.chandler.learning.agent.controller;
 
-import com.chandler.learning.agent.domain.dto.AgentChatRequest;
-import com.chandler.learning.agent.domain.dto.AgentChatResponse;
 import com.chandler.learning.agent.domain.dto.AgentSaveRequest;
 import com.chandler.learning.agent.domain.entity.AiAgent;
-import com.chandler.learning.agent.domain.entity.learning.LearningUser;
 import com.chandler.learning.agent.service.AiAgentService;
-import com.chandler.learning.agent.service.AiChatService;
 import com.chandler.learning.agent.service.learning.AuthService;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
@@ -26,17 +22,7 @@ import java.util.List;
 public class AiAgentController {
 
     private final AiAgentService agentService;
-    private final AiChatService chatService;
     private final AuthService authService;
-
-    /**
-     * 处理 {@code chat} 相关业务。
-     */
-    @PostMapping("/chat")
-    @Operation(summary = "Agent 同步对话")
-    public AgentChatResponse chat(@Valid @RequestBody AgentChatRequest request) {
-        return chatService.chat(request);
-    }
 
     @GetMapping
     @Operation(summary = "Agent 列表")

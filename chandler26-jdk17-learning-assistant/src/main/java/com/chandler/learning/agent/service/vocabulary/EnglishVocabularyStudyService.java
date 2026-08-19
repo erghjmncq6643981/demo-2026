@@ -90,7 +90,9 @@ public class EnglishVocabularyStudyService {
         record.setModelName(chatResponse.getModelName());
         record.setSessionId(chatResponse.getSessionId());
         record.setRawContent(chatResponse.getContent());
-        record.setParsedJson(extractJson(chatResponse.getContent()));
+        String parsedJson = extractJson(chatResponse.getContent());
+        validateCardPayload(parsedJson);
+        record.setParsedJson(parsedJson);
         record.setTokenUsage(chatResponse.getTokenUsage());
         record.setCostTime(chatResponse.getCostTime());
         record.setLookupCount(existing == null || existing.getLookupCount() == null
@@ -293,6 +295,31 @@ public class EnglishVocabularyStudyService {
                 log.warn("词汇模型响应 JSON 提取失败: {}", ex.getMessage());
                 return null;
             }
+        }
+    }
+
+    /** 词卡只有通过最小结构校验后才能写入共享缓存，避免坏响应污染后续学习。 */
+    private void validateCardPayload(String parsedJson) {
+        if (!StringUtils.hasText(parsedJson)) {
+            throw LearningAssistantException.badRequest(LearningConstants.ErrorCode.AI_RESPONSE_PARSE_FAILED);
+        }
+        try {
+            JsonNode root = objectMapper.readTree(parsedJson);
+            if (!root.isObject()
+                    || !StringUtils.hasText(root.path("term").asText())
+                    || !root.path("definitions").isArray()
+                    || !root.path("examples").isArray()
+                    || !root.path("collocations").isArray()
+                    || !root.path("memory_tips").isArray()) {
+                throw LearningAssistantException.badRequest(LearningConstants.ErrorCode.AI_RESPONSE_PARSE_FAILED);
+            }
+        } catch (LearningAssistantException ex) {
+            throw ex;
+        } catch (Exception ex) {
+            throw LearningAssistantException.system(
+                    LearningConstants.ErrorCode.JSON_PARSE_FAILED,
+                    "词汇学习卡片解析失败",
+                    ex);
         }
     }
 

@@ -15,6 +15,7 @@ export function createAppShell(ctx) {
     loadModelConfigs,
     loadPromptTemplates,
     loadSpeechPreferences,
+    loadLearningSettings,
     loadActivity,
     loadSystemLogs,
     loadAiTasks,
@@ -238,6 +239,7 @@ export function createAppShell(ctx) {
       return
     }
     await Promise.allSettled([loadAgents(), loadWordbooks(), loadModelConfigs(), loadPromptTemplates(), loadSpeechPreferences(), loadActivity(), loadSystemLogs(), loadAiTasks?.()])
+    await Promise.allSettled([loadLearningSettings?.()])
     await Promise.allSettled([loadDueReviews(), loadWordbookEntries()])
     await Promise.allSettled([loadSceneData?.()])
     if (state.activeView === 'articleStudyView') {

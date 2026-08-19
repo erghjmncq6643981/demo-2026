@@ -3,10 +3,13 @@ package com.chandler.learning.agent.service;
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import com.chandler.learning.agent.domain.dto.AiModelConfigResponse;
 import com.chandler.learning.agent.domain.dto.AiModelConfigSaveRequest;
+import com.chandler.learning.agent.domain.dto.AiModelUsageSummary;
+import com.chandler.learning.agent.domain.dto.AiModelOptionResponse;
 import com.chandler.learning.agent.domain.entity.AiModelConfig;
 import com.chandler.learning.agent.domain.enums.SystemLogType;
 import com.chandler.learning.agent.exception.LearningAssistantException;
 import com.chandler.learning.agent.mapper.AiModelConfigMapper;
+import com.chandler.learning.agent.mapper.AiModelCallRecordMapper;
 import com.chandler.learning.agent.security.ApiKeyCryptoService;
 import com.chandler.learning.agent.service.learning.SystemLogService;
 import com.chandler.learning.agent.service.learning.UserDisplayNameService;
@@ -19,6 +22,9 @@ import org.springframework.util.StringUtils;
 
 import java.time.LocalDateTime;
 import java.util.List;
+import java.util.Map;
+import java.util.function.Function;
+import java.util.stream.Collectors;
 
 /**
  * AI 模型配置服务。
@@ -31,6 +37,7 @@ import java.util.List;
 public class AiModelConfigService {
 
     private final AiModelConfigMapper modelConfigMapper;
+    private final AiModelCallRecordMapper modelCallRecordMapper;
     private final ApiKeyCryptoService apiKeyCryptoService;
     private final SystemLogService systemLogService;
     private final UserDisplayNameService userDisplayNameService;
@@ -39,6 +46,8 @@ public class AiModelConfigService {
      * 查询 {@code list} 相关业务。
      */
     public List<AiModelConfigResponse> list(boolean enabledOnly) {
+        Map<String, AiModelUsageSummary> usageByModel = modelCallRecordMapper.selectUsageSummaries().stream()
+                .collect(Collectors.toMap(this::usageKey, Function.identity(), (left, right) -> left));
         return modelConfigMapper.selectList(new LambdaQueryWrapper<AiModelConfig>()
                         .eq(AiModelConfig::getDeleted, false)
                         .eq(enabledOnly, AiModelConfig::getEnabled, true)
@@ -46,7 +55,21 @@ public class AiModelConfigService {
                         .orderByAsc(AiModelConfig::getSequence)
                         .orderByAsc(AiModelConfig::getCreateTime))
                 .stream()
-                .map(this::toResponse)
+                .map(config -> toResponse(config, usageByModel.get(usageKey(config.getProvider(), config.getModelName()))))
+                .toList();
+    }
+
+    /**
+     * 查询学习界面可选择的启用模型，不返回连接地址、密钥信息和治理指标。
+     */
+    public List<AiModelOptionResponse> listAvailableOptions() {
+        return modelConfigMapper.selectList(new LambdaQueryWrapper<AiModelConfig>()
+                        .eq(AiModelConfig::getDeleted, false)
+                        .eq(AiModelConfig::getEnabled, true)
+                        .orderByDesc(AiModelConfig::getIsDefault)
+                        .orderByAsc(AiModelConfig::getSequence))
+                .stream()
+                .map(this::toOptionResponse)
                 .toList();
     }
 
@@ -309,6 +332,10 @@ public class AiModelConfigService {
      * 转换 {@code toResponse} 相关业务。
      */
     private AiModelConfigResponse toResponse(AiModelConfig config) {
+        return toResponse(config, null);
+    }
+
+    private AiModelConfigResponse toResponse(AiModelConfig config, AiModelUsageSummary usage) {
         encryptLegacyApiKey(config);
         AiModelConfigResponse response = new AiModelConfigResponse();
         response.setId(config.getId());
@@ -321,9 +348,35 @@ public class AiModelConfigService {
         response.setEnabled(config.getEnabled());
         response.setIsDefault(config.getIsDefault());
         response.setSequence(config.getSequence());
+        response.setCallCount(usage == null ? 0L : usage.getCallCount());
+        response.setSuccessCount(usage == null ? 0L : usage.getSuccessCount());
+        response.setFailedCount(usage == null ? 0L : usage.getFailedCount());
+        response.setTotalTokens(usage == null ? 0L : usage.getTotalTokens());
+        response.setAverageLatencyMs(usage == null ? 0L : usage.getAverageLatencyMs());
+        response.setLastCallTime(usage == null ? null : usage.getLastCallTime());
         response.setCreateTime(config.getCreateTime());
         response.setUpdateTime(config.getUpdateTime());
         return response;
+    }
+
+    private AiModelOptionResponse toOptionResponse(AiModelConfig config) {
+        AiModelOptionResponse response = new AiModelOptionResponse();
+        response.setId(config.getId());
+        response.setName(config.getName());
+        response.setProvider(config.getProvider());
+        response.setModelName(config.getModelName());
+        response.setEnabled(config.getEnabled());
+        response.setIsDefault(config.getIsDefault());
+        response.setSequence(config.getSequence());
+        return response;
+    }
+
+    private String usageKey(AiModelUsageSummary usage) {
+        return usageKey(usage.getProvider(), usage.getModelName());
+    }
+
+    private String usageKey(String provider, String modelName) {
+        return String.valueOf(provider) + "\u0000" + String.valueOf(modelName);
     }
 
     /**

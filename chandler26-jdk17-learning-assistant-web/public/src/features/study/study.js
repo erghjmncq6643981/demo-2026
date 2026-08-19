@@ -97,47 +97,6 @@ export function createStudyFeature(ctx) {
     }
   }
 
-  async function chat() {
-    const message = elements.chatInput.value.trim()
-    if (!message) return
-    setLoading(true)
-    try {
-      if (state.preview) {
-        elements.chatInput.value = ''
-        elements.rawJson.textContent = JSON.stringify({ preview: true, answer: '这里会显示 AI 追问的原始返回内容。', message }, null, 2)
-        logEvent('chat', '预览 AI 追问回复', message)
-        toast('设计预览：已模拟 AI 回复')
-        return
-      }
-      const response = await request('/api/v1/ai/agents/chat', {
-        method: 'POST',
-        body: JSON.stringify({
-          agentCode: elements.agentSelect.value,
-          invocationScene: 'vocabulary_follow_up',
-          modelConfigId: elements.studyModelSelect.value || null,
-          sessionId: state.currentSessionId,
-          message,
-          variables: {
-            term: state.currentRecord?.normalizedTerm || elements.termInput.value.trim(),
-          },
-        }),
-      })
-      state.currentSessionId = response.sessionId
-      elements.chatInput.value = ''
-      elements.rawJson.textContent = response.content
-      if (elements.sessionIdBadge) {
-        elements.sessionIdBadge.textContent = `${response.modelProvider || 'AI'} · ${response.modelName || 'chat'} · #${response.sessionId || '-'}`
-      }
-      logEvent('chat', 'AI 追问回复', message)
-      toast('AI 已回复，完整内容进入个人信息的 AI 会话')
-    } catch (error) {
-      logEvent('error', '追问失败', error.message)
-      toast(`追问失败：${error.message}`)
-    } finally {
-      setLoading(false)
-    }
-  }
-
   function findEntryForRecord(record) {
     const term = record?.normalizedTerm || record?.term || record?.parsed?.term
     if (!term) return null
@@ -189,7 +148,6 @@ export function createStudyFeature(ctx) {
     study,
     regenerateStudyCard,
     showBestMatch,
-    chat,
     findEntryForRecord,
     ...cardFeature,
     ...wordbookFeature,

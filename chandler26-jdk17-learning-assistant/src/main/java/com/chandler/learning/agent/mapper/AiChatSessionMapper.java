@@ -2,6 +2,7 @@ package com.chandler.learning.agent.mapper;
 
 import com.baomidou.mybatisplus.core.mapper.BaseMapper;
 import com.chandler.learning.agent.domain.dto.ChatSessionResponse;
+import com.chandler.learning.agent.domain.dto.AdminAiSessionResponse;
 import com.chandler.learning.agent.domain.entity.AiChatSession;
 import org.apache.ibatis.annotations.Mapper;
 import org.apache.ibatis.annotations.Param;
@@ -22,4 +23,21 @@ public interface AiChatSessionMapper extends BaseMapper<AiChatSession> {
                                                      @Param("businessType") String businessType,
                                                      @Param("businessId") String businessId,
                                                      @Param("sceneCode") String sceneCode);
+
+    /** 管理员按条件查询所有 AI 会话。 */
+    List<AdminAiSessionResponse> selectAdminSessionPage(@Param("keyword") String keyword,
+                                                        @Param("sceneCode") String sceneCode,
+                                                        @Param("provider") String provider,
+                                                        @Param("success") Boolean success,
+                                                        @Param("offset") int offset,
+                                                        @Param("pageSize") int pageSize);
+
+    /** 统计管理员查询条件下的会话数量。 */
+    long countAdminSessions(@Param("keyword") String keyword,
+                            @Param("sceneCode") String sceneCode,
+                            @Param("provider") String provider,
+                            @Param("success") Boolean success);
+
+    /** 查询单个会话的管理员摘要。 */
+    AdminAiSessionResponse selectAdminSession(@Param("sessionId") Long sessionId);
 }

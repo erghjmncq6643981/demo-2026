@@ -30,6 +30,24 @@ public class AiModelConfigResponse {
 
     private Integer sequence;
 
+    /** 累计模型调用次数。 */
+    private Long callCount;
+
+    /** 成功调用次数。 */
+    private Long successCount;
+
+    /** 失败调用次数。 */
+    private Long failedCount;
+
+    /** 累计消耗 Token。 */
+    private Long totalTokens;
+
+    /** 平均模型响应耗时，单位毫秒。 */
+    private Long averageLatencyMs;
+
+    /** 最近一次调用时间。 */
+    private LocalDateTime lastCallTime;
+
     private LocalDateTime createTime;
 
     private LocalDateTime updateTime;

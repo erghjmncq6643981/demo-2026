@@ -212,10 +212,30 @@ public class OpenAiCompatibleModelClient implements AiModelClient {
             if (content == null) {
                 content = firstChoice.path("text").asText(null);
             }
+            String finishReason = firstChoice.path("finish_reason").asText(null);
+            if (!StringUtils.hasText(content)) {
+                throw LearningAssistantException.externalService(
+                        LearningConstants.ErrorCode.AI_RESPONSE_PARSE_FAILED,
+                        "AI 未返回有效内容，请稍后重试或切换模型",
+                        null);
+            }
+            if ("length".equalsIgnoreCase(finishReason)) {
+                throw LearningAssistantException.externalService(
+                        LearningConstants.ErrorCode.AI_RESPONSE_PARSE_FAILED,
+                        "AI 输出达到长度上限，请减少本次输入后重试",
+                        null);
+            }
+            if ("content_filter".equalsIgnoreCase(finishReason)) {
+                throw LearningAssistantException.externalService(
+                        LearningConstants.ErrorCode.AI_RESPONSE_PARSE_FAILED,
+                        "AI 输出被供应商内容安全策略拦截",
+                        null);
+            }
 
             JsonNode usage = root.path("usage");
             ModelChatResponse response = new ModelChatResponse();
             response.setContent(content);
+            response.setFinishReason(finishReason);
             response.setResponseJson(responseBody);
             if (!usage.isMissingNode()) {
                 response.setPromptTokens(readInt(usage, "prompt_tokens"));

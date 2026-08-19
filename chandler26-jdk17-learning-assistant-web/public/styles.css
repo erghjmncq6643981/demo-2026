@@ -594,6 +594,12 @@ textarea:focus {
   overflow: hidden;
 }
 
+#systemAdminView.view.active {
+  align-content: start;
+  grid-template-rows: auto minmax(0, 1fr);
+  overflow: hidden;
+}
+
 #studyView.view.active {
   grid-template-rows: minmax(0, 1fr);
   overflow: hidden;
@@ -1534,16 +1540,24 @@ textarea:focus {
 
 .system-tabs {
   position: sticky;
+  min-height: 46px;
+  align-self: start;
 }
 
 .system-sections {
+  min-height: 0;
   overflow: hidden;
 }
 
-.system-sections > .system-section {
+.system-sections .system-section {
+  min-height: 0;
   overflow: auto;
   overscroll-behavior: contain;
   padding-right: 4px;
+}
+
+#systemManagedPanels {
+  display: contents;
 }
 
 .admin-user-filters {
@@ -1560,6 +1574,129 @@ textarea:focus {
 
 .admin-user-filter-actions {
   margin-left: auto;
+}
+
+.ai-session-management,
+.management-block {
+  margin-top: 18px;
+  padding-top: 18px;
+  border-top: 1px solid var(--line);
+}
+
+.ai-session-filters {
+  display: grid;
+  grid-template-columns: minmax(160px, 1.2fr) repeat(3, minmax(130px, 0.8fr)) auto;
+  align-items: end;
+  gap: 10px;
+  margin: 12px 0;
+  padding: 12px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: rgba(15, 23, 42, 0.42);
+}
+
+.ai-session-filters .compact-field {
+  width: 100%;
+}
+
+.ai-session-filter-actions {
+  align-self: end;
+  padding-bottom: 1px;
+}
+
+.ai-session-table-wrap {
+  overflow: auto;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+}
+
+.ai-session-table {
+  min-width: 1120px;
+}
+
+.ai-session-table .cell-ellipsis {
+  max-width: 210px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.model-usage-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px 14px;
+  margin-top: 9px;
+  color: var(--muted);
+  font-size: 12px;
+}
+
+.model-usage-row strong {
+  color: var(--text);
+}
+
+.ai-session-detail-modal {
+  width: min(980px, 100%);
+}
+
+.ai-session-detail-meta {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px 18px;
+  margin-bottom: 16px;
+  color: var(--muted);
+  font-size: 12px;
+}
+
+.ai-session-detail-section {
+  margin-top: 14px;
+  padding-top: 14px;
+  border-top: 1px solid var(--line);
+}
+
+.ai-session-messages,
+.ai-session-calls {
+  display: grid;
+  gap: 10px;
+}
+
+.ai-session-message,
+.ai-session-call {
+  min-width: 0;
+  padding: 12px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: rgba(15, 23, 42, 0.48);
+}
+
+.ai-session-message > div,
+.ai-session-call-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+}
+
+.ai-session-message pre,
+.ai-session-call pre {
+  max-height: 320px;
+  margin: 10px 0 0;
+  overflow: auto;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+  color: var(--text);
+  font: 12px/1.65 "SFMono-Regular", Consolas, monospace;
+}
+
+.ai-session-call p {
+  margin: 8px 0;
+  color: var(--muted);
+  font-size: 12px;
+}
+
+.ai-session-call summary {
+  color: var(--accent);
+  cursor: pointer;
+  font-size: 12px;
+  font-weight: 800;
 }
 
 .admin-user-table-wrap {
@@ -4435,6 +4572,14 @@ input.sr-only:disabled + .file-upload-trigger {
 }
 
 @media (max-width: 1100px) {
+  .ai-session-filters {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .ai-session-filter-actions {
+    grid-column: 1 / -1;
+    justify-content: flex-end;
+  }
   .dashboard-grid,
   .content-grid,
   .review-layout,
@@ -4596,6 +4741,26 @@ input.sr-only:disabled + .file-upload-trigger {
 }
 
 @media (max-width: 720px) {
+  #systemAdminView.view.active {
+    gap: 12px;
+  }
+
+  .ai-session-filters {
+    grid-template-columns: 1fr;
+  }
+
+  .ai-session-filter-actions {
+    grid-column: auto;
+  }
+
+  .ai-session-filter-actions button {
+    flex: 1 1 0;
+  }
+
+  .ai-session-detail-modal > .panel-heading {
+    align-items: flex-start;
+    flex-direction: row;
+  }
   .login-screen,
   .content {
     width: 100%;

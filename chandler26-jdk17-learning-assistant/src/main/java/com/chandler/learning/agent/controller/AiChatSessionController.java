@@ -2,7 +2,10 @@ package com.chandler.learning.agent.controller;
 
 import com.chandler.learning.agent.domain.dto.ChatMessageResponse;
 import com.chandler.learning.agent.domain.dto.ChatSessionResponse;
+import com.chandler.learning.agent.domain.dto.AdminAiSessionDetailResponse;
+import com.chandler.learning.agent.domain.dto.AdminAiSessionPageResponse;
 import com.chandler.learning.agent.service.AiChatSessionService;
+import com.chandler.learning.agent.service.learning.AuthService;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import lombok.RequiredArgsConstructor;
@@ -20,6 +23,36 @@ import java.util.List;
 public class AiChatSessionController {
 
     private final AiChatSessionService chatSessionService;
+    private final AuthService authService;
+
+    /**
+     * 管理员分页查询全部 AI 会话。
+     */
+    @GetMapping("/admin")
+    @Operation(summary = "管理员分页查询全部 AI 会话")
+    public AdminAiSessionPageResponse adminPage(
+            @RequestHeader(value = "Authorization", required = false) String authorization,
+            @RequestParam(required = false) String keyword,
+            @RequestParam(required = false) String sceneCode,
+            @RequestParam(required = false) String provider,
+            @RequestParam(required = false) Boolean success,
+            @RequestParam(required = false) Integer page,
+            @RequestParam(required = false) Integer pageSize) {
+        authService.requireAdmin(authorization);
+        return chatSessionService.adminPage(keyword, sceneCode, provider, success, page, pageSize);
+    }
+
+    /**
+     * 管理员查看 AI 会话完整诊断信息。
+     */
+    @GetMapping("/admin/{sessionId}")
+    @Operation(summary = "管理员查看 AI 会话详情")
+    public AdminAiSessionDetailResponse adminDetail(
+            @RequestHeader(value = "Authorization", required = false) String authorization,
+            @PathVariable Long sessionId) {
+        authService.requireAdmin(authorization);
+        return chatSessionService.adminDetail(sessionId);
+    }
 
     @GetMapping
     @Operation(summary = "会话列表")

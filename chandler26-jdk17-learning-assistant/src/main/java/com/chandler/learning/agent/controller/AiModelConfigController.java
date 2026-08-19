@@ -2,6 +2,7 @@ package com.chandler.learning.agent.controller;
 
 import com.chandler.learning.agent.domain.dto.AiModelConfigResponse;
 import com.chandler.learning.agent.domain.dto.AiModelConfigSaveRequest;
+import com.chandler.learning.agent.domain.dto.AiModelOptionResponse;
 import com.chandler.learning.agent.service.AiModelConfigService;
 import com.chandler.learning.agent.service.learning.AuthService;
 import com.chandler.learning.agent.support.LearningConstants;
@@ -29,7 +30,18 @@ public class AiModelConfigController {
     @GetMapping
     @Operation(summary = "模型配置列表")
     public List<AiModelConfigResponse> list(@RequestParam(defaultValue = "false") Boolean enabledOnly) {
+        authService.requireAdmin(null);
         return modelConfigService.list(Boolean.TRUE.equals(enabledOnly));
+    }
+
+    /**
+     * 查询学习界面可用模型，不包含管理信息。
+     */
+    @GetMapping("/available")
+    @Operation(summary = "可用模型选项")
+    public List<AiModelOptionResponse> available() {
+        authService.requireUser(null);
+        return modelConfigService.listAvailableOptions();
     }
 
     /**

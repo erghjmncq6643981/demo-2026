@@ -212,6 +212,12 @@ public class AiAsyncTaskService {
             return task;
         }
         int retryCount = task.getRetryCount() == null ? 0 : task.getRetryCount();
+        int maxRetryCount = task.getMaxRetryCount() == null
+                ? LearningConstants.AiTask.DEFAULT_MAX_RETRY_COUNT : task.getMaxRetryCount();
+        if (retryCount >= maxRetryCount) {
+            throw LearningAssistantException.badRequest(
+                    LearningConstants.ErrorCode.AI_ASYNC_TASK_RETRY_EXCEEDED);
+        }
         int total = task.getTotalCount() == null ? 0 : Math.max(0, task.getTotalCount());
         int success = task.getSuccessCount() == null ? 0 : Math.max(0, task.getSuccessCount());
         int progress = total == 0 ? 0 : Math.min(100, success * 100 / total);

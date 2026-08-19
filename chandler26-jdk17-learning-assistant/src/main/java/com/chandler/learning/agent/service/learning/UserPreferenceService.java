@@ -3,10 +3,17 @@ package com.chandler.learning.agent.service.learning;
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import com.chandler.learning.agent.domain.dto.learning.SpeechPreferenceRequest;
 import com.chandler.learning.agent.domain.dto.learning.SpeechPreferenceResponse;
+import com.chandler.learning.agent.domain.dto.learning.LearningSettingsRequest;
+import com.chandler.learning.agent.domain.dto.learning.LearningSettingsResponse;
+import com.chandler.learning.agent.domain.entity.AiAgent;
+import com.chandler.learning.agent.domain.entity.AiPromptTemplate;
 import com.chandler.learning.agent.domain.entity.learning.LearningUserPreference;
 import com.chandler.learning.agent.domain.enums.SpeechVoiceType;
 import com.chandler.learning.agent.domain.enums.SystemLogType;
 import com.chandler.learning.agent.mapper.learning.LearningUserPreferenceMapper;
+import com.chandler.learning.agent.mapper.AiAgentMapper;
+import com.chandler.learning.agent.mapper.AiPromptTemplateMapper;
+import com.chandler.learning.agent.exception.LearningAssistantException;
 import com.chandler.learning.agent.support.LearningConstants;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -23,7 +30,7 @@ import java.util.Map;
 /**
  * 用户偏好配置服务。
  * <p>
- * 当前主要保存发音偏好，后续可继续扩展界面、复习节奏等用户级配置。
+ * 保存默认 Agent、提示词模板和发音等用户级学习偏好。
  */
 @Slf4j
 @Service
@@ -31,8 +38,46 @@ import java.util.Map;
 public class UserPreferenceService {
 
     private final LearningUserPreferenceMapper preferenceMapper;
+    private final AiAgentMapper agentMapper;
+    private final AiPromptTemplateMapper templateMapper;
     private final SystemLogService systemLogService;
     private final UserDisplayNameService userDisplayNameService;
+
+    /**
+     * 查询用户默认学习 Agent 和提示词模板。
+     */
+    public LearningSettingsResponse getLearningSettings(Long userId) {
+        Map<String, String> preferences = loadPreferences(userId);
+        LearningSettingsResponse response = new LearningSettingsResponse();
+        response.setAgentCode(valueOrDefault(preferences,
+                LearningConstants.UserPreference.KEY_LEARNING_AGENT_CODE, ""));
+        response.setTemplateCode(valueOrDefault(preferences,
+                LearningConstants.UserPreference.KEY_LEARNING_TEMPLATE_CODE, ""));
+        return response;
+    }
+
+    /**
+     * 保存用户默认学习 Agent 和提示词模板。
+     */
+    @Transactional(rollbackFor = Exception.class)
+    public LearningSettingsResponse saveLearningSettings(Long userId, LearningSettingsRequest request) {
+        String agentCode = request.getAgentCode().trim();
+        String templateCode = request.getTemplateCode().trim();
+        requireEnabledAgent(agentCode);
+        requireEnabledTemplate(templateCode);
+        upsert(userId, LearningConstants.UserPreference.KEY_LEARNING_AGENT_CODE, agentCode);
+        upsert(userId, LearningConstants.UserPreference.KEY_LEARNING_TEMPLATE_CODE, templateCode);
+
+        systemLogService.record(userId, SystemLogType.PREFERENCE, "更新学习设置",
+                "默认 Agent " + agentCode + "，默认模板 " + templateCode);
+        log.info("用户「{}」更新学习设置：默认Agent={}，默认模板={}",
+                userDisplayNameService.userName(userId), agentCode, templateCode);
+
+        LearningSettingsResponse response = new LearningSettingsResponse();
+        response.setAgentCode(agentCode);
+        response.setTemplateCode(templateCode);
+        return response;
+    }
 
     /**
      * 查询 {@code getSpeechPreferences} 相关业务。
@@ -150,6 +195,34 @@ public class UserPreferenceService {
         preference.setPreferenceValue(value);
         preference.setUpdateTime(now);
         preferenceMapper.updateById(preference);
+    }
+
+    /**
+     * 校验学习 Agent 存在且启用。
+     */
+    private void requireEnabledAgent(String agentCode) {
+        AiAgent agent = agentMapper.selectOne(new LambdaQueryWrapper<AiAgent>()
+                .eq(AiAgent::getCode, agentCode)
+                .eq(AiAgent::getEnabled, true)
+                .eq(AiAgent::getDeleted, false)
+                .last(LearningConstants.SQL_LIMIT_ONE));
+        if (agent == null) {
+            throw LearningAssistantException.badRequest(LearningConstants.ErrorCode.AGENT_NOT_FOUND);
+        }
+    }
+
+    /**
+     * 校验学习模板存在且启用。
+     */
+    private void requireEnabledTemplate(String templateCode) {
+        AiPromptTemplate template = templateMapper.selectOne(new LambdaQueryWrapper<AiPromptTemplate>()
+                .eq(AiPromptTemplate::getCode, templateCode)
+                .eq(AiPromptTemplate::getEnabled, true)
+                .eq(AiPromptTemplate::getDeleted, false)
+                .last(LearningConstants.SQL_LIMIT_ONE));
+        if (template == null) {
+            throw LearningAssistantException.badRequest(LearningConstants.ErrorCode.PROMPT_TEMPLATE_NOT_FOUND);
+        }
     }
 
     /**

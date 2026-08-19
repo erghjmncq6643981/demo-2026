@@ -17,4 +17,7 @@ public class ModelChatResponse {
     private Integer completionTokens;
 
     private Integer totalTokens;
+
+    /** 供应商结束原因，例如 stop、length、content_filter。 */
+    private String finishReason;
 }

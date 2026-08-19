@@ -74,6 +74,8 @@ export function createInitialState() {
     adminUsers: [],
     adminUserPage: 1,
     adminUserPageSize: 20,
+    aiSessionPage: 1,
+    aiSessionPageSize: 20,
     currentAdminUserEditId: null,
     currentReviewEntry: null,
     currentReviewIndex: 0,

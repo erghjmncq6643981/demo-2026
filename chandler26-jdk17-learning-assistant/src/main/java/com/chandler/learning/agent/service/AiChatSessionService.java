@@ -3,14 +3,20 @@ package com.chandler.learning.agent.service;
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import com.chandler.learning.agent.domain.dto.ChatMessageResponse;
 import com.chandler.learning.agent.domain.dto.ChatSessionResponse;
+import com.chandler.learning.agent.domain.dto.AdminAiSessionDetailResponse;
+import com.chandler.learning.agent.domain.dto.AdminAiSessionPageResponse;
+import com.chandler.learning.agent.domain.dto.AdminAiSessionResponse;
+import com.chandler.learning.agent.domain.dto.AiModelCallRecordResponse;
 import com.chandler.learning.agent.domain.entity.AiChatMessage;
 import com.chandler.learning.agent.domain.entity.AiChatSession;
+import com.chandler.learning.agent.domain.entity.AiModelCallRecord;
 import com.chandler.learning.agent.domain.entity.learning.LearningUser;
 import com.chandler.learning.agent.domain.enums.ChatMessageRole;
 import com.chandler.learning.agent.domain.enums.LearningScene;
 import com.chandler.learning.agent.exception.LearningAssistantException;
 import com.chandler.learning.agent.mapper.AiChatMessageMapper;
 import com.chandler.learning.agent.mapper.AiChatSessionMapper;
+import com.chandler.learning.agent.mapper.AiModelCallRecordMapper;
 import com.chandler.learning.agent.security.LearningUserPrincipal;
 import com.chandler.learning.agent.support.LearningConstants;
 import com.fasterxml.jackson.databind.ObjectMapper;
@@ -32,8 +38,13 @@ import java.util.Map;
 @RequiredArgsConstructor
 public class AiChatSessionService {
 
+    private static final int DEFAULT_ADMIN_PAGE = 1;
+    private static final int DEFAULT_ADMIN_PAGE_SIZE = 20;
+    private static final int MAX_ADMIN_PAGE_SIZE = 100;
+
     private final AiChatSessionMapper sessionMapper;
     private final AiChatMessageMapper messageMapper;
+    private final AiModelCallRecordMapper modelCallRecordMapper;
     private final ObjectMapper objectMapper;
 
     /**
@@ -259,6 +270,58 @@ public class AiChatSessionService {
     }
 
     /**
+     * 分页查询全部用户的 AI 会话及模型调用指标。
+     */
+    public AdminAiSessionPageResponse adminPage(String keyword, String sceneCode, String provider,
+                                                 Boolean success, Integer page, Integer pageSize) {
+        int resolvedPage = page == null ? DEFAULT_ADMIN_PAGE : Math.max(DEFAULT_ADMIN_PAGE, page);
+        int resolvedPageSize = pageSize == null ? DEFAULT_ADMIN_PAGE_SIZE
+                : Math.max(DEFAULT_ADMIN_PAGE, Math.min(pageSize, MAX_ADMIN_PAGE_SIZE));
+        int offset = (resolvedPage - DEFAULT_ADMIN_PAGE) * resolvedPageSize;
+        String resolvedKeyword = trimToNull(keyword);
+        String resolvedSceneCode = trimToNull(sceneCode);
+        String resolvedProvider = trimToNull(provider);
+
+        AdminAiSessionPageResponse response = new AdminAiSessionPageResponse();
+        response.setItems(sessionMapper.selectAdminSessionPage(resolvedKeyword, resolvedSceneCode,
+                resolvedProvider, success, offset, resolvedPageSize));
+        response.setTotal(sessionMapper.countAdminSessions(resolvedKeyword, resolvedSceneCode,
+                resolvedProvider, success));
+        response.setPage(resolvedPage);
+        response.setPageSize(resolvedPageSize);
+        return response;
+    }
+
+    /**
+     * 查询一个 AI 会话的消息与模型调用审计详情。
+     */
+    public AdminAiSessionDetailResponse adminDetail(Long sessionId) {
+        AdminAiSessionResponse session = sessionMapper.selectAdminSession(sessionId);
+        if (session == null) {
+            throw LearningAssistantException.notFound(LearningConstants.ErrorCode.CHAT_SESSION_NOT_FOUND);
+        }
+        List<ChatMessageResponse> messages = messageMapper.selectList(new LambdaQueryWrapper<AiChatMessage>()
+                        .eq(AiChatMessage::getSessionId, sessionId)
+                        .orderByAsc(AiChatMessage::getSequence))
+                .stream()
+                .map(this::toMessageResponse)
+                .toList();
+        List<AiModelCallRecordResponse> calls = modelCallRecordMapper.selectList(
+                        new LambdaQueryWrapper<AiModelCallRecord>()
+                                .eq(AiModelCallRecord::getSessionId, sessionId)
+                                .orderByDesc(AiModelCallRecord::getCreateTime))
+                .stream()
+                .map(this::toCallRecordResponse)
+                .toList();
+
+        AdminAiSessionDetailResponse response = new AdminAiSessionDetailResponse();
+        response.setSession(session);
+        response.setMessages(messages);
+        response.setCalls(calls);
+        return response;
+    }
+
+    /**
      * 转换 {@code toSessionResponse} 相关业务。
      */
     private ChatSessionResponse toSessionResponse(AiChatSession session) {
@@ -293,6 +356,35 @@ public class AiChatSessionService {
         response.setSequence(message.getSequence());
         response.setCreateTime(message.getCreateTime());
         return response;
+    }
+
+    /**
+     * 转换模型调用审计记录，避免向管理端返回实体内部字段。
+     */
+    private AiModelCallRecordResponse toCallRecordResponse(AiModelCallRecord record) {
+        AiModelCallRecordResponse response = new AiModelCallRecordResponse();
+        response.setId(record.getId());
+        response.setAgentCode(record.getAgentCode());
+        response.setInvocationSceneCode(record.getInvocationSceneCode());
+        response.setProvider(record.getProvider());
+        response.setModelName(record.getModelName());
+        response.setRequestJson(record.getRequestJson());
+        response.setResponseJson(record.getResponseJson());
+        response.setSuccess(record.getSuccess());
+        response.setErrorMessage(record.getErrorMessage());
+        response.setPromptTokens(record.getPromptTokens());
+        response.setCompletionTokens(record.getCompletionTokens());
+        response.setTotalTokens(record.getTotalTokens());
+        response.setLatencyMs(record.getLatencyMs());
+        response.setCreateTime(record.getCreateTime());
+        return response;
+    }
+
+    /**
+     * 将空白查询条件归一化为空值。
+     */
+    private String trimToNull(String value) {
+        return StringUtils.hasText(value) ? value.trim() : null;
     }
 
     /**

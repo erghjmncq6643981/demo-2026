@@ -17,6 +17,12 @@ public class VocabularyImportResponse {
 
     private Long catalogVersionId;
 
+    /** 执行导入的管理员用户 ID。 */
+    private Long importerUserId;
+
+    /** 执行导入的管理员显示名称。 */
+    private String importerName;
+
     private String catalogName;
 
     private String learningPurpose;

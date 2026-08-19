@@ -36,4 +36,105 @@
                  s.scene_code, s.title, s.create_time, s.update_time
         ORDER BY s.update_time DESC
     </select>
+
+    <sql id="adminSessionFilters">
+        s.deleted = 0
+        <if test="keyword != null and keyword != ''">
+            AND (s.title LIKE CONCAT('%', #{keyword}, '%')
+                 OR s.agent_code LIKE CONCAT('%', #{keyword}, '%')
+                 OR s.business_id LIKE CONCAT('%', #{keyword}, '%')
+                 OR u.username LIKE CONCAT('%', #{keyword}, '%')
+                 OR u.nickname LIKE CONCAT('%', #{keyword}, '%')
+                 OR CAST(s.id AS CHAR) = #{keyword})
+        </if>
+        <if test="sceneCode != null and sceneCode != ''">
+            AND (s.scene_code = #{sceneCode}
+                 OR EXISTS (SELECT 1 FROM ai_model_call_record cf
+                            WHERE cf.session_id = s.id AND cf.deleted = 0
+                              AND cf.invocation_scene_code = #{sceneCode}))
+        </if>
+        <if test="provider != null and provider != ''">
+            AND EXISTS (SELECT 1 FROM ai_model_call_record cf
+                        WHERE cf.session_id = s.id AND cf.deleted = 0 AND cf.provider = #{provider})
+        </if>
+        <if test="success != null and success">
+            AND EXISTS (SELECT 1 FROM ai_model_call_record cf
+                        WHERE cf.session_id = s.id AND cf.deleted = 0 AND cf.success = 1)
+            AND NOT EXISTS (SELECT 1 FROM ai_model_call_record cf
+                            WHERE cf.session_id = s.id AND cf.deleted = 0 AND cf.success = 0)
+        </if>
+        <if test="success != null and !success">
+            AND EXISTS (SELECT 1 FROM ai_model_call_record cf
+                        WHERE cf.session_id = s.id AND cf.deleted = 0 AND cf.success = 0)
+        </if>
+    </sql>
+
+    <sql id="adminSessionColumns">
+        s.id,
+        s.user_id AS userId,
+        COALESCE(NULLIF(u.nickname, ''), u.username, CAST(s.user_id AS CHAR)) AS userName,
+        s.title,
+        s.agent_code AS agentCode,
+        s.business_type AS businessType,
+        s.business_id AS businessId,
+        s.scene_code AS sceneCode,
+        COALESCE(m.message_count, 0) AS messageCount,
+        COALESCE(c.call_count, 0) AS callCount,
+        COALESCE(c.success_count, 0) AS successCount,
+        COALESCE(c.failed_count, 0) AS failedCount,
+        COALESCE(c.total_tokens, 0) AS totalTokens,
+        COALESCE(c.average_latency_ms, 0) AS averageLatencyMs,
+        c.last_provider AS lastProvider,
+        c.last_model_name AS lastModelName,
+        s.create_time AS createTime,
+        s.update_time AS updateTime
+    </sql>
+
+    <sql id="adminSessionJoins">
+        LEFT JOIN learning_user u ON u.id = s.user_id
+        LEFT JOIN (
+            SELECT session_id, COUNT(*) AS message_count
+            FROM ai_chat_message
+            WHERE deleted = 0
+            GROUP BY session_id
+        ) m ON m.session_id = s.id
+        LEFT JOIN (
+            SELECT session_id,
+                   COUNT(*) AS call_count,
+                   SUM(CASE WHEN success = 1 THEN 1 ELSE 0 END) AS success_count,
+                   SUM(CASE WHEN success = 0 THEN 1 ELSE 0 END) AS failed_count,
+                   COALESCE(SUM(total_tokens), 0) AS total_tokens,
+                   COALESCE(ROUND(AVG(latency_ms)), 0) AS average_latency_ms,
+                   SUBSTRING_INDEX(GROUP_CONCAT(provider ORDER BY create_time DESC), ',', 1) AS last_provider,
+                   SUBSTRING_INDEX(GROUP_CONCAT(model_name ORDER BY create_time DESC), ',', 1) AS last_model_name
+            FROM ai_model_call_record
+            WHERE deleted = 0
+            GROUP BY session_id
+        ) c ON c.session_id = s.id
+    </sql>
+
+    <select id="selectAdminSessionPage"
+            resultType="com.chandler.learning.agent.domain.dto.AdminAiSessionResponse">
+        SELECT <include refid="adminSessionColumns"/>
+        FROM ai_chat_session s
+        <include refid="adminSessionJoins"/>
+        WHERE <include refid="adminSessionFilters"/>
+        ORDER BY s.update_time DESC
+        LIMIT #{offset}, #{pageSize}
+    </select>
+
+    <select id="countAdminSessions" resultType="long">
+        SELECT COUNT(*)
+        FROM ai_chat_session s
+        LEFT JOIN learning_user u ON u.id = s.user_id
+        WHERE <include refid="adminSessionFilters"/>
+    </select>
+
+    <select id="selectAdminSession"
+            resultType="com.chandler.learning.agent.domain.dto.AdminAiSessionResponse">
+        SELECT <include refid="adminSessionColumns"/>
+        FROM ai_chat_session s
+        <include refid="adminSessionJoins"/>
+        WHERE s.id = #{sessionId} AND s.deleted = 0
+    </select>
 </mapper>

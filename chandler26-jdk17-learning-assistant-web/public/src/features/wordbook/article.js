@@ -354,10 +354,6 @@ export function createWordbookArticleFeature(ctx) {
       state.articleStage = record.studyStatus === 'completed' ? 'check' : normalizeArticleStage(record.currentStage)
     }
     renderArticleContent(elements.articleResult, elements.articleResultBadge, record)
-    elements.rawJson.textContent = record.parsed && Object.keys(record.parsed).length ? JSON.stringify(record.parsed, null, 2) : record.rawContent || '{}'
-    if (elements.sessionIdBadge) {
-      elements.sessionIdBadge.textContent = `${record.provider || 'AI'} · ${record.modelName || 'article'} · #${record.sessionId || '-'}`
-    }
     renderArticleHistory()
   }
 

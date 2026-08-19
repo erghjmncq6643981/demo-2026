@@ -1,10 +1,12 @@
 import { hideModal, showModal } from '/src/shared/modal.js'
 import { escapeHtml, formatDateTime } from '/src/shared/text.js'
+import { createAiSessionAdminFeature } from '/src/features/system/ai-sessions.js'
 
 const ROLE_LABELS = { USER: '普通用户', ADMIN: '系统管理员' }
 
 export function createSystemManagementFeature(ctx) {
   const { state, elements, request, setLoading, toast, logEvent, confirmDelete } = ctx
+  const aiSessions = createAiSessionAdminFeature(ctx)
 
   function isAdmin() {
     return state.preview || state.user?.roleCode === 'ADMIN'
@@ -12,7 +14,7 @@ export function createSystemManagementFeature(ctx) {
 
   function mountPanels() {
     if (!elements.systemManagedPanels) return
-    for (const id of ['aiTaskPanel', 'agentManagePanel', 'systemLogPanel', 'aiSessionPanel']) {
+    for (const id of ['aiTaskPanel', 'modelManagePanel', 'agentManagePanel', 'systemLogPanel']) {
       const panel = document.getElementById(id)
       if (panel && panel.parentElement !== elements.systemManagedPanels) {
         panel.classList.add('system-section')
@@ -41,6 +43,7 @@ export function createSystemManagementFeature(ctx) {
       section.classList.toggle('active', section.id === fallback)
     })
     if (fallback === 'adminUserPanel') loadUsers()
+    if (fallback === 'modelManagePanel') aiSessions.loadAiSessions()
   }
 
   async function loadUsers() {
@@ -187,5 +190,5 @@ export function createSystemManagementFeature(ctx) {
     ]
   }
 
-  return { isAdmin, mountPanels, renderAdminEntry, renderSystemTab, loadUsers, renderUsers, openUserModal, closeUserModal, saveUser, changePage }
+  return { isAdmin, mountPanels, renderAdminEntry, renderSystemTab, loadUsers, renderUsers, openUserModal, closeUserModal, saveUser, changePage, ...aiSessions }
 }

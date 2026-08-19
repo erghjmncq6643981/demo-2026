@@ -2,12 +2,15 @@ package com.chandler.learning.agent.controller.learning;
 
 import com.chandler.learning.agent.domain.dto.learning.SpeechPreferenceRequest;
 import com.chandler.learning.agent.domain.dto.learning.SpeechPreferenceResponse;
+import com.chandler.learning.agent.domain.dto.learning.LearningSettingsRequest;
+import com.chandler.learning.agent.domain.dto.learning.LearningSettingsResponse;
 import com.chandler.learning.agent.domain.entity.learning.LearningUser;
 import com.chandler.learning.agent.service.learning.AuthService;
 import com.chandler.learning.agent.service.learning.UserPreferenceService;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import lombok.RequiredArgsConstructor;
+import jakarta.validation.Valid;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PutMapping;
 import org.springframework.web.bind.annotation.RequestBody;
@@ -26,6 +29,29 @@ public class UserPreferenceController {
 
     private final AuthService authService;
     private final UserPreferenceService userPreferenceService;
+
+    /**
+     * 获取个人学习设置。
+     */
+    @GetMapping("/learning-settings")
+    @Operation(summary = "获取学习设置")
+    public LearningSettingsResponse getLearningSettings(
+            @RequestHeader(value = "Authorization", required = false) String authorization) {
+        LearningUser user = authService.requireUser(authorization);
+        return userPreferenceService.getLearningSettings(user.getId());
+    }
+
+    /**
+     * 保存个人学习设置。
+     */
+    @PutMapping("/learning-settings")
+    @Operation(summary = "保存学习设置")
+    public LearningSettingsResponse saveLearningSettings(
+            @RequestHeader(value = "Authorization", required = false) String authorization,
+            @Valid @RequestBody LearningSettingsRequest request) {
+        LearningUser user = authService.requireUser(authorization);
+        return userPreferenceService.saveLearningSettings(user.getId(), request);
+    }
 
     /**
      * 查询 {@code getSpeechPreferences} 相关业务。

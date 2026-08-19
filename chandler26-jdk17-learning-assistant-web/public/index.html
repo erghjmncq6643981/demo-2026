@@ -58,7 +58,7 @@
           <nav class="nav-menu" aria-label="主功能">
             <button class="nav-item active" type="button" data-view="profileView">
               <span>个人信息</span>
-              <small>账户、模型、日志</small>
+              <small>账户、词本与设置</small>
             </button>
             <button class="nav-item" type="button" data-view="wordbookView">
               <span>单词本</span>
@@ -118,6 +118,7 @@
               <button class="profile-tab active" type="button" data-profile-tab="accountPanel">账户</button>
               <button class="profile-tab" type="button" data-profile-tab="profileWordbookPanel">单词本</button>
               <button class="profile-tab" type="button" data-profile-tab="profileLearningPlanPanel">学习计划</button>
+              <button class="profile-tab" type="button" data-profile-tab="profileLearningSettingsPanel">学习设置</button>
             </nav>
 
             <div class="profile-sections">
@@ -182,6 +183,7 @@
                   </div>
                   <div class="inline-actions">
                     <button class="secondary-button compact" id="reloadWordbookEntriesBtn" type="button">刷新</button>
+                    <button class="secondary-button compact admin-only hidden" id="openVocabularyImportBtn" type="button">导入公共词本</button>
                     <button class="primary-button compact-primary" id="openWordbookModalBtn" type="button">新增单词本</button>
                   </div>
                 </div>
@@ -198,6 +200,18 @@
                   <button class="primary-button compact-primary" id="openProfileScenePlanModalBtn" type="button">新建学习计划</button>
                 </div>
                 <div id="profileLearningPlanList" class="profile-learning-plan-list empty">暂无学习计划</div>
+              </section>
+
+              <section class="panel profile-section" id="profileLearningSettingsPanel">
+                <div class="panel-heading">
+                  <div>
+                    <p class="eyebrow">Learning Settings</p>
+                    <h3>学习设置</h3>
+                    <p class="panel-description">设置个人默认学习 Agent、内容模板与朗读偏好，并同步到当前账号。</p>
+                  </div>
+                  <button class="primary-button compact-primary" id="openLearningConfigModalBtn" type="button">修改设置</button>
+                </div>
+                <div id="learningConfigList" class="model-list empty">暂无学习设置</div>
               </section>
 
               <section class="panel log-panel profile-section" id="aiTaskPanel">
@@ -230,11 +244,12 @@
                 <div id="aiTaskList" class="ai-task-list empty">暂无 AI 异步任务</div>
               </section>
 
-              <section class="panel model-panel profile-section" id="agentManagePanel">
+              <section class="panel model-panel profile-section" id="modelManagePanel">
                 <div class="panel-heading">
                   <div>
                     <p class="eyebrow">Models</p>
-                    <h3>模型列表</h3>
+                    <h3>模型管理</h3>
+                    <p class="panel-description">查看模型可用状态与调用指标，并追踪每一次 AI 业务会话。</p>
                   </div>
                   <div class="inline-actions">
                     <button class="secondary-button compact" id="reloadModelsBtn" type="button">刷新</button>
@@ -243,20 +258,38 @@
                 </div>
                 <div id="modelConfigList" class="model-list empty">暂无模型配置</div>
 
-                <section class="sub-panel">
+                <div class="ai-session-management">
                   <div class="panel-heading">
                     <div>
-                      <p class="eyebrow">Agent</p>
-                      <h3>学习配置</h3>
+                      <p class="eyebrow">AI Sessions</p>
+                      <h3>AI 会话</h3>
+                      <p class="panel-description">按用户、业务场景和模型结果定位请求，详情中可查看完整消息与模型调用数据。</p>
                     </div>
-                    <div class="inline-actions">
-                      <button class="secondary-button compact" id="openLearningConfigModalBtn" type="button">修改</button>
-                    </div>
+                    <span class="mini-pill" id="aiSessionSummary">0 条会话</span>
                   </div>
-                  <div id="learningConfigList" class="model-list empty">暂无学习配置</div>
-                </section>
+                  <div class="ai-session-filters">
+                    <label class="compact-field">关键词<input id="aiSessionKeywordInput" placeholder="会话、用户、业务 ID" /></label>
+                    <label class="compact-field">业务场景<input id="aiSessionSceneInput" placeholder="如 vocabulary_card" /></label>
+                    <label class="compact-field">供应商<input id="aiSessionProviderInput" placeholder="如 openai" /></label>
+                    <label class="compact-field">调用结果<select id="aiSessionSuccessFilter"><option value="">全部结果</option><option value="true">成功</option><option value="false">失败</option></select></label>
+                    <div class="inline-actions ai-session-filter-actions"><button class="primary-button compact-primary" id="searchAiSessionsBtn" type="button">查询</button><button class="secondary-button compact" id="resetAiSessionsBtn" type="button">重置</button></div>
+                  </div>
+                  <div class="ai-session-table-wrap">
+                    <table class="admin-user-table ai-session-table"><thead><tr><th>会话</th><th>用户</th><th>场景</th><th>模型</th><th>调用结果</th><th>Token</th><th>平均耗时</th><th>更新时间</th><th>操作</th></tr></thead><tbody id="aiSessionRows"></tbody></table>
+                  </div>
+                  <div class="admin-user-pagination"><span id="aiSessionPageInfo">第 1 页</span><div class="inline-actions"><button class="icon-action-button" id="aiSessionPrevBtn" type="button" title="上一页" aria-label="上一页">←</button><button class="icon-action-button" id="aiSessionNextBtn" type="button" title="下一页" aria-label="下一页">→</button></div></div>
+                </div>
+              </section>
 
-                <section class="sub-panel compact-list-panel">
+              <section class="panel model-panel profile-section" id="agentManagePanel">
+                <div class="panel-heading">
+                  <div>
+                    <p class="eyebrow">Agent &amp; Templates</p>
+                    <h3>Agent 与模板</h3>
+                    <p class="panel-description">维护业务 Agent 的模型策略和结构化提示词模板。</p>
+                  </div>
+                </div>
+                <div class="management-block">
                   <div class="panel-heading">
                     <div>
                       <p class="eyebrow">Agent</p>
@@ -268,9 +301,9 @@
                     </div>
                   </div>
                   <div id="agentConfigList" class="model-list empty">暂无学习 Agent</div>
-                </section>
+                </div>
 
-                <section class="sub-panel compact-list-panel">
+                <div class="management-block">
                   <div class="panel-heading">
                     <div>
                       <p class="eyebrow">Template</p>
@@ -282,7 +315,7 @@
                     </div>
                   </div>
                   <div id="templateConfigList" class="model-list empty">暂无学习 Agent 模板</div>
-                </section>
+                </div>
               </section>
 
               <section class="panel log-panel profile-section" id="systemLogPanel">
@@ -299,17 +332,6 @@
               <div id="systemLogList" class="log-list"></div>
               </section>
 
-              <section class="panel log-panel profile-section" id="aiSessionPanel">
-                <div class="panel-heading">
-                  <div>
-                    <p class="eyebrow">AI Session</p>
-                    <h3>AI 会话</h3>
-                  </div>
-                  <span class="mini-pill" id="sessionIdBadge">Session -</span>
-                </div>
-                <p class="panel-description">这里展示最近一次 AI 模型返回的原始数据，方便排查模板、解析和缓存行为。</p>
-                <pre id="rawJson" class="raw-box">{}</pre>
-              </section>
             </div>
           </section>
 
@@ -318,9 +340,9 @@
               <button class="profile-tab active" type="button" data-system-tab="adminUserPanel">用户中心</button>
               <button class="profile-tab" type="button" data-system-tab="adminVocabularyPanel">公共词本</button>
               <button class="profile-tab" type="button" data-system-tab="aiTaskPanel">AI 任务</button>
+              <button class="profile-tab" type="button" data-system-tab="modelManagePanel">模型管理</button>
               <button class="profile-tab" type="button" data-system-tab="agentManagePanel">Agent 与模板</button>
               <button class="profile-tab" type="button" data-system-tab="systemLogPanel">系统日志</button>
-              <button class="profile-tab" type="button" data-system-tab="aiSessionPanel">AI 会话</button>
             </nav>
             <div class="profile-sections system-sections">
               <section class="panel profile-section system-section active" id="adminUserPanel">
@@ -646,16 +668,6 @@
                   <div id="tagList" class="chips empty">暂无标签</div>
                 </section>
 
-                <section class="panel chat-panel">
-                  <div class="panel-heading">
-                    <div>
-                      <p class="eyebrow">Chat</p>
-                      <h3>继续追问</h3>
-                    </div>
-                  </div>
-                  <textarea id="chatInput" rows="5" placeholder="例如：给我三个容易混淆的近义词"></textarea>
-                  <button class="secondary-button" id="chatBtn" type="button">发送追问</button>
-                </section>
               </div>
             </section>
           </section>
@@ -1407,6 +1419,17 @@
         <div class="modal-actions">
           <button class="primary-button compact-primary" id="forgottenBackToReviewBtn" type="button">回到复习</button>
         </div>
+      </div>
+    </section>
+    <section class="modal-backdrop hidden" id="aiSessionDetailModal" aria-modal="true" role="dialog" aria-labelledby="aiSessionDetailTitle">
+      <div class="config-modal detail-modal ai-session-detail-modal">
+        <div class="panel-heading">
+          <div><p class="eyebrow">AI Session Detail</p><h3 id="aiSessionDetailTitle">AI 会话详情</h3></div>
+          <button class="icon-button" id="closeAiSessionDetailBtn" type="button" title="关闭" aria-label="关闭">×</button>
+        </div>
+        <div id="aiSessionDetailMeta" class="ai-session-detail-meta"></div>
+        <section class="ai-session-detail-section"><div class="panel-heading compact-heading"><h4>消息</h4></div><div id="aiSessionMessages" class="ai-session-messages"></div></section>
+        <section class="ai-session-detail-section"><div class="panel-heading compact-heading"><h4>模型调用</h4></div><div id="aiSessionCalls" class="ai-session-calls"></div></section>
       </div>
     </section>
     <section class="modal-backdrop hidden" id="deleteConfirmModal" aria-modal="true" role="dialog">

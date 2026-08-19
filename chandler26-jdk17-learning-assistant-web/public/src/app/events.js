@@ -100,6 +100,7 @@ export function bindAppEvents(ctx) {
     validateTemplatePlaceholders,
     savePromptTemplate,
     saveSpeechPreferences,
+    saveLearningSettings,
     changeWordbook,
     renderWordbookEntries,
     toggleWordbookFocusMode,
@@ -211,7 +212,9 @@ elements.templateSelect.addEventListener('change', renderSelectedTemplate)
 elements.templateContentInput.addEventListener('input', () => validateTemplatePlaceholders({ quiet: true }))
 elements.saveTemplateBtn.addEventListener('click', savePromptTemplate)
 elements.saveSpeechBtn?.addEventListener('click', async () => {
-  const saved = await saveSpeechPreferences()
+  const speechSaved = await saveSpeechPreferences()
+  const learningSaved = await saveLearningSettings?.()
+  const saved = speechSaved !== false && learningSaved !== false
   if (saved !== false) closeLearningConfigModal()
 })
 elements.wordbookSelect.addEventListener('change', () => changeWordbook(elements.wordbookSelect.value))
@@ -356,7 +359,6 @@ elements.speakWordBtn.addEventListener('click', () => speak(state.currentRecord?
 elements.speakSentenceBtn.addEventListener('click', () => speakSentence(firstExample(state.currentRecord?.parsed)))
 elements.editStudyNoteBtn.addEventListener('click', editCurrentNote)
 elements.editReviewNoteBtn.addEventListener('click', editCurrentNote)
-elements.chatBtn.addEventListener('click', chat)
 elements.reloadReviewBtn.addEventListener('click', startReview)
 elements.reviewWordbookSelect.addEventListener('change', () => {
   syncCurrentWordbookId(state, elements, elements.reviewWordbookSelect.value)
@@ -409,6 +411,12 @@ elements.resetAdminUsersBtn?.addEventListener('click', () => {
 elements.adminUserPrevBtn?.addEventListener('click', () => systemManagement?.changePage(-1))
 elements.adminUserNextBtn?.addEventListener('click', () => systemManagement?.changePage(1))
 elements.openAdminVocabularyImportBtn?.addEventListener('click', openVocabularyImport)
+elements.searchAiSessionsBtn?.addEventListener('click', () => { state.aiSessionPage = 1; systemManagement?.loadAiSessions() })
+elements.resetAiSessionsBtn?.addEventListener('click', () => systemManagement?.resetAiSessionFilters())
+elements.aiSessionPrevBtn?.addEventListener('click', () => systemManagement?.changeAiSessionPage(-1))
+elements.aiSessionNextBtn?.addEventListener('click', () => systemManagement?.changeAiSessionPage(1))
+elements.closeAiSessionDetailBtn?.addEventListener('click', () => systemManagement?.closeDetail())
+elements.aiSessionDetailModal?.addEventListener('click', (event) => { if (event.target === elements.aiSessionDetailModal) systemManagement?.closeDetail() })
 document.addEventListener('keydown', handleReviewKeydown)
 }
 

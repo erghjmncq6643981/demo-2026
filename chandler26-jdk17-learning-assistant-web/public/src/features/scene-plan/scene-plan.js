@@ -2,6 +2,7 @@ import { hideModal, showModal } from '/src/shared/modal.js'
 import { normalizeWordbookId, syncCurrentWordbookId } from '/src/shared/wordbook.js'
 import { initDatetimePicker } from '/src/shared/datetime-picker.js'
 import { renderMarkdown } from '/src/shared/vocabulary.js'
+import { formatDateTime } from '/src/shared/text.js'
 
 const TIER_LABELS = {
   core: '核心',
@@ -454,19 +455,44 @@ export function createScenePlanFeature(ctx) {
       if (!state.publicVocabularyCatalogs.length) state.publicVocabularyCatalogs = [previewCatalog()]
       if (!state.vocabularyImports.length) {
         const catalog = state.publicVocabularyCatalogs[0]
-        state.vocabularyImports = [{
-          jobId: 1,
-          ...catalog,
-          status: 'published',
-          fileName: '自学考试(二)全部词汇5087_正序版.md',
-          warningCount: 3,
-          reviewedWarningCount: 3,
-          pendingWarningCount: 0,
-          items: [],
-          filteredTotal: 0,
-          page: 1,
-          pageSize: state.vocabularyImportPageSize,
-        }]
+        state.vocabularyImports = [
+          {
+            jobId: 1,
+            ...catalog,
+            importerUserId: 1,
+            importerName: '系统管理员',
+            status: 'published',
+            fileName: '自学考试(二)全部词汇5087_正序版.md',
+            warningCount: 3,
+            reviewedWarningCount: 3,
+            pendingWarningCount: 0,
+            items: [],
+            filteredTotal: 0,
+            page: 1,
+            pageSize: state.vocabularyImportPageSize,
+            createTime: new Date(Date.now() - 86400000 * 5).toISOString(),
+          },
+          {
+            jobId: 2,
+            catalogId: 2,
+            catalogVersionId: 2,
+            catalogName: '大学英语四级核心词汇',
+            sourceType: 'cet4',
+            totalCount: 3260,
+            importerUserId: 2,
+            importerName: '内容管理员',
+            status: 'reviewing',
+            fileName: 'cet4-core.md',
+            warningCount: 8,
+            reviewedWarningCount: 5,
+            pendingWarningCount: 3,
+            items: [],
+            filteredTotal: 0,
+            page: 1,
+            pageSize: state.vocabularyImportPageSize,
+            createTime: new Date(Date.now() - 86400000 * 2).toISOString(),
+          },
+        ]
       }
       if (!state.learningPlans.length) state.learningPlans = [createPreviewPlan({ catalog: state.publicVocabularyCatalogs[0] })]
       const selectedPlanId = options.planId || state.currentLearningPlan?.id || state.learningPlans[0]?.id
@@ -700,6 +726,7 @@ export function createScenePlanFeature(ctx) {
               <small class="import-status ${item.status}">${escapeHtml(IMPORT_STATUS_LABELS[item.status] || item.status)}</small>
             </span>
             <span>${escapeHtml(SOURCE_LABELS[item.sourceType] || item.sourceType || '公共词本')} · ${number(item.totalCount)} 词 · ${number(item.pendingWarningCount)} 个待确认</span>
+            <small>导入人：${escapeHtml(item.importerName || (item.importerUserId ? `用户 #${item.importerUserId}` : '系统管理员'))} · ${escapeHtml(formatDateTime(item.createTime) || '时间未知')}</small>
           </button>
           <div class="row-actions">
             <button class="icon-action-button" type="button" data-import-job-edit="${escapeHtml(item.jobId)}" title="编辑词表" aria-label="编辑词表">✎</button>

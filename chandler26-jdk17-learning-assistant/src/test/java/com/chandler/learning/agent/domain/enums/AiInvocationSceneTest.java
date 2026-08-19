@@ -38,15 +38,12 @@ class AiInvocationSceneTest {
         assertThat(AiInvocationScene.ARTICLE_STUDY_MATERIAL.independentAction()).isTrue();
         assertThat(AiInvocationScene.VOCABULARY_SCENE_UNIT.independentAction()).isTrue();
         assertThat(AiInvocationScene.GENERAL_CHAT.independentAction()).isFalse();
-        assertThat(AiInvocationScene.VOCABULARY_FOLLOW_UP.independentAction()).isFalse();
     }
 
     @Test
     void shouldSerializeAsBusinessCode() throws Exception {
         assertThat(objectMapper.writeValueAsString(AiInvocationScene.ARTICLE_STUDY_MATERIAL))
                 .isEqualTo("\"article_study_material\"");
-        assertThat(objectMapper.readValue("\"vocabulary_follow_up\"", AiInvocationScene.class))
-                .isEqualTo(AiInvocationScene.VOCABULARY_FOLLOW_UP);
     }
 
     @Test

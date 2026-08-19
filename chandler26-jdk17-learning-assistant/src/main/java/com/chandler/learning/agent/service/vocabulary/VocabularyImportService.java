@@ -210,12 +210,9 @@ public class VocabularyImportService {
         return response;
     }
 
-    /**
-     * 查询当前用户的导入历史。
-     */
+    /** 查询全部管理员导入历史；调用入口必须先完成管理员鉴权。 */
     public List<VocabularyImportResponse> list(Long userId) {
         return importJobMapper.selectList(new LambdaQueryWrapper<VocabularyImportJob>()
-                        .eq(VocabularyImportJob::getUserId, userId)
                         .eq(VocabularyImportJob::getDeleted, false)
                         .orderByDesc(VocabularyImportJob::getUpdateTime))
                 .stream()
@@ -463,6 +460,8 @@ public class VocabularyImportService {
         response.setJobId(job.getId());
         response.setCatalogId(job.getCatalogId());
         response.setCatalogVersionId(job.getCatalogVersionId());
+        response.setImporterUserId(job.getUserId());
+        response.setImporterName(userDisplayNameService.userName(job.getUserId()));
         response.setCatalogName(catalog.getName());
         response.setLearningPurpose(catalog.getLearningPurpose());
         response.setSourceType(catalog.getExamType());
@@ -496,7 +495,6 @@ public class VocabularyImportService {
     private VocabularyImportJob requireJob(Long userId, Long jobId) {
         VocabularyImportJob job = importJobMapper.selectOne(new LambdaQueryWrapper<VocabularyImportJob>()
                 .eq(VocabularyImportJob::getId, jobId)
-                .eq(VocabularyImportJob::getUserId, userId)
                 .eq(VocabularyImportJob::getDeleted, false)
                 .last(LearningConstants.SQL_LIMIT_ONE));
         if (job == null) {
@@ -520,8 +518,6 @@ public class VocabularyImportService {
     private VocabularyCatalog requireCatalog(Long userId, Long catalogId) {
         VocabularyCatalog catalog = catalogMapper.selectOne(new LambdaQueryWrapper<VocabularyCatalog>()
                 .eq(VocabularyCatalog::getId, catalogId)
-                .and(wrapper -> wrapper.eq(VocabularyCatalog::getOwnerUserId, userId)
-                        .or().eq(VocabularyCatalog::getVisibility, LearningConstants.VocabularyImport.VISIBILITY_PUBLIC))
                 .eq(VocabularyCatalog::getDeleted, false)
                 .last(LearningConstants.SQL_LIMIT_ONE));
         if (catalog == null) {
