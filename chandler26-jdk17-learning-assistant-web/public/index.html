@@ -381,15 +381,14 @@
                 学习计划
                 <select id="scenePlanSelect"></select>
               </label>
-              <div class="scene-calendar-navigation" aria-label="日历导航">
-                <button class="icon-action-button" id="sceneCalendarPreviousBtn" type="button" title="上一周" aria-label="上一周">←</button>
-                <button class="secondary-button compact" id="sceneCalendarTodayBtn" type="button">本周</button>
-                <strong id="sceneCalendarTitle">本周</strong>
-                <button class="icon-action-button" id="sceneCalendarNextBtn" type="button" title="下一周" aria-label="下一周">→</button>
-              </div>
               <div class="scene-range-control" role="group" aria-label="计划预览范围">
                 <button class="active" type="button" data-calendar-range="week">周</button>
                 <button type="button" data-calendar-range="month">月</button>
+              </div>
+              <div class="scene-calendar-navigation" aria-label="日历导航">
+                <button class="icon-action-button" id="sceneCalendarPreviousBtn" type="button" title="上一周期" aria-label="上一周期">←</button>
+                <strong id="sceneCalendarTitle">2026年8月17日 - 8月23日</strong>
+                <button class="icon-action-button" id="sceneCalendarNextBtn" type="button" title="下一周期" aria-label="下一周期">→</button>
               </div>
               <div class="scene-toolbar-actions">
                 <button class="secondary-button compact" id="sceneReloadBtn" type="button">刷新</button>
@@ -411,25 +410,29 @@
 
               <section class="scene-workspace">
                 <section class="panel scene-plan-overview" id="scenePlanOverview">
-                  <div>
-                    <p class="eyebrow">Plan Preview</p>
-                    <h3 id="sceneOverviewTitle">选择学习计划</h3>
-                    <p id="sceneOverviewSummary">通过日历了解近期学习量，再开始当前场景。</p>
-                    <div id="scenePlanMetaBar" class="scene-plan-meta-bar hidden" style="margin-top: 8px; font-size: 13px; color: var(--text-secondary); display: flex; gap: 16px;">
-                      <span>时间：<strong id="scenePlanDatesText" style="color: var(--text-primary);">未设置</strong></span>
-                      <span>状态：<strong id="scenePlanStatusText" style="color: var(--text-primary);">-</strong></span>
+                  <div class="scene-plan-overview-header">
+                    <div class="scene-plan-overview-meta">
+                      <div>
+                        <p class="eyebrow">Plan Preview</p>
+                        <h3 id="sceneOverviewTitle">选择学习计划</h3>
+                        <p id="sceneOverviewSummary">通过日历了解近期学习量，再开始当前场景。</p>
+                        <div id="scenePlanMetaBar" class="scene-plan-meta-bar hidden" style="margin-top: 8px; font-size: 13px; color: var(--text-secondary); display: flex; gap: 16px;">
+                          <span>时间：<strong id="scenePlanDatesText" style="color: var(--text-primary);">未设置</strong></span>
+                          <span>状态：<strong id="scenePlanStatusText" style="color: var(--text-primary);">-</strong></span>
+                        </div>
+                      </div>
+                      <div class="scene-overview-actions">
+                        <span class="mini-pill" id="sceneOverviewProgress">0 / 0 词</span>
+                        <button class="secondary-button compact hidden" id="scenePlanPauseBtn" type="button">暂停</button>
+                        <button class="primary-button compact-primary hidden" id="scenePlanResumeBtn" type="button">启动/恢复</button>
+                        <button class="danger-button compact hidden" id="scenePlanCancelBtn" type="button">取消计划</button>
+                        <button class="secondary-button compact hidden" id="sceneOverviewNextUnitBtn" type="button">生成下一个场景</button>
+                        <button class="secondary-button compact hidden" id="sceneScheduleNextUnitBtn" type="button">低价时段生成</button>
+                        <button class="primary-button compact-primary" id="sceneStartLearningBtn" type="button" disabled>开始学习</button>
+                      </div>
                     </div>
+                    <div id="sceneCalendar" class="scene-calendar empty">选择计划后查看学习日历</div>
                   </div>
-                  <div class="scene-overview-actions">
-                    <span class="mini-pill" id="sceneOverviewProgress">0 / 0 词</span>
-                    <button class="secondary-button compact hidden" id="scenePlanPauseBtn" type="button">暂停</button>
-                    <button class="primary-button compact-primary hidden" id="scenePlanResumeBtn" type="button">启动/恢复</button>
-                    <button class="danger-button compact hidden" id="scenePlanCancelBtn" type="button">取消计划</button>
-                    <button class="secondary-button compact hidden" id="sceneOverviewNextUnitBtn" type="button">生成下一个场景</button>
-                    <button class="secondary-button compact hidden" id="sceneScheduleNextUnitBtn" type="button">低价时段生成</button>
-                    <button class="primary-button compact-primary" id="sceneStartLearningBtn" type="button" disabled>开始学习</button>
-                  </div>
-                  <div id="sceneCalendar" class="scene-calendar empty">选择计划后查看学习日历</div>
                   <div id="sceneOverviewUnitsContainer" class="scene-overview-units-container hidden">
                     <h4 class="section-title">场景学习计划</h4>
                     <div id="sceneOverviewUnitsList" class="scene-overview-units-list"></div>
@@ -441,13 +444,11 @@
                     <div>
                       <p class="eyebrow" id="sceneUnitEyebrow">Current Scene</p>
                       <h3 id="sceneUnitTitle">选择一个学习计划</h3>
-                      <p id="sceneUnitSummary">当前场景会显示在这里</p>
+                      <p id="sceneUnitSummary" class="scene-unit-summary-truncated">当前场景会显示在这里</p>
                     </div>
                     <div class="scene-unit-actions">
                       <span class="mini-pill" id="sceneUnitProgress">0 / 0</span>
-                      <button class="secondary-button compact hidden" id="sceneGenerateCardsBtn" type="button">补齐词卡</button>
-                      <button class="ghost-button compact hidden" id="sceneScheduleCardsBtn" type="button">低价时段补齐</button>
-                      <button class="secondary-button compact hidden" id="sceneNextUnitBtn" type="button">生成下一场景</button>
+                      <button class="secondary-button compact" id="sceneOpenNoteModalBtn" type="button">添加笔记</button>
                       <button class="secondary-button compact" id="sceneBackToPlanBtn" type="button">返回计划</button>
                       <button class="primary-button compact-primary hidden" id="sceneCompleteUnitBtn" type="button">完成场景</button>
                     </div>
@@ -468,37 +469,18 @@
                     </details>
                   </section>
 
-                  <section class="panel scene-note-panel">
-                    <div class="panel-heading compact-heading">
-                      <div>
-                        <p class="eyebrow">Notes</p>
-                        <h3>场景材料笔记</h3>
-                      </div>
-                      <div class="inline-actions">
-                        <span class="mini-pill">Markdown</span>
-                        <button class="secondary-button compact" id="sceneNotePreviewBtn" type="button">预览 Markdown</button>
-                      </div>
+                  <section class="panel scene-learning-footer" id="sceneLearningFooter">
+                    <div class="scene-learning-footer-left">
+                      <button class="secondary-button compact" id="sceneOpenCoreWordsBtn" type="button">
+                        待挑战词汇 <span class="mini-pill" id="sceneCoreCount">0</span>
+                      </button>
+                      <button class="secondary-button compact" id="sceneOpenRelatedWordsBtn" type="button">
+                        场景相关词汇 <span class="mini-pill" id="sceneRelatedCount">0</span>
+                      </button>
                     </div>
-                    <textarea id="sceneNoteInput" class="scene-note-input" rows="7" placeholder="记录本篇材料的重点、疑问、易错词或自己的例句。支持 Markdown，例如：\n## 本篇重点\n- airport 与 boarding 的区别"></textarea>
-                    <div id="sceneNotePreview" class="scene-note-preview hidden"></div>
-                    <div class="scene-note-actions">
-                      <span id="sceneNoteStatus" class="scene-note-status">未保存</span>
-                      <button class="primary-button compact-primary" id="sceneNoteSaveBtn" type="button">保存笔记</button>
+                    <div class="scene-learning-footer-right">
+                      <button class="primary-button compact-primary" id="sceneVocabularyChallengeBtn" type="button">词汇挑战</button>
                     </div>
-                  </section>
-
-                  <section class="panel scene-core-panel">
-                    <div class="panel-heading compact-heading">
-                      <div>
-                        <p class="eyebrow">Core</p>
-                        <h3>待挑战词汇</h3>
-                      </div>
-                      <div class="inline-actions">
-                        <span class="mini-pill" id="sceneCoreCount">0</span>
-                        <button class="primary-button compact-primary" id="sceneVocabularyChallengeBtn" type="button">词汇挑战</button>
-                      </div>
-                    </div>
-                    <div id="sceneCoreWords" class="scene-core-words empty">暂无核心词汇</div>
                   </section>
 
                   <section class="panel scene-challenge-stage hidden" id="sceneChallengeStage">
@@ -525,29 +507,6 @@
                       <span class="mini-pill" id="sceneAssessmentStage">未开始</span>
                     </div>
                     <div id="sceneAssessment" class="scene-assessment empty">点击“挑战开始”进入词汇检查</div>
-                  </section>
-
-                  <section class="panel scene-related-panel">
-                    <div class="panel-heading compact-heading">
-                      <div>
-                        <p class="eyebrow">Related</p>
-                        <h3>场景相关词汇</h3>
-                      </div>
-                      <div class="scene-related-tools">
-                        <label class="entry-prefix-field">
-                          <span class="sr-only">筛选场景词汇</span>
-                          <input id="sceneRelatedFilter" autocomplete="off" placeholder="筛选单词或含义" />
-                        </label>
-                        <select id="sceneTierFilter" aria-label="词汇层级">
-                          <option value="">全部层级</option>
-                          <option value="extended">词表扩展</option>
-                          <option value="supplementary">AI 补充</option>
-                          <option value="review">复习词</option>
-                        </select>
-                        <span class="mini-pill" id="sceneRelatedCount">0</span>
-                      </div>
-                    </div>
-                    <div id="sceneRelatedWords" class="scene-related-words empty">暂无场景相关词汇</div>
                   </section>
                 </div>
               </section>
@@ -717,17 +676,90 @@
     </main>
 
     <div class="toast" id="toast"></div>
+    <section class="modal-backdrop hidden" id="sceneNoteModal" aria-modal="true" role="dialog" aria-labelledby="sceneNoteModalTitle">
+      <div class="config-modal scene-note-modal" data-modal-scroll>
+        <div class="panel-heading">
+          <div>
+            <p class="eyebrow">Notes</p>
+            <h3 id="sceneNoteModalTitle">场景材料笔记</h3>
+          </div>
+          <button class="icon-button" id="sceneNoteModalCloseBtn" type="button" title="关闭" aria-label="关闭">×</button>
+        </div>
+        <div class="scene-note-modal-body">
+          <div class="inline-actions" style="margin-bottom: 8px;">
+            <span class="mini-pill">支持 Markdown</span>
+            <button class="secondary-button compact" id="sceneNotePreviewBtn" type="button">预览 Markdown</button>
+          </div>
+          <textarea id="sceneNoteInput" class="scene-note-input" rows="8" placeholder="记录本篇材料的重点、疑问、易错词或自己的例句。支持 Markdown，例如：&#10;## 本篇重点&#10;- airport 与 boarding 的区别"></textarea>
+          <div id="sceneNotePreview" class="scene-note-preview hidden"></div>
+        </div>
+        <div class="scene-note-modal-footer">
+          <span id="sceneNoteStatus" class="scene-note-status">未保存</span>
+          <div class="inline-actions">
+            <button class="secondary-button compact" id="sceneNoteModalCancelBtn" type="button">关闭</button>
+            <button class="primary-button compact-primary" id="sceneNoteSaveBtn" type="button">保存笔记</button>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <section class="modal-backdrop hidden" id="sceneCoreWordsModal" aria-modal="true" role="dialog" aria-labelledby="sceneCoreWordsModalTitle">
+      <div class="config-modal scene-core-words-modal" data-modal-scroll>
+        <div class="panel-heading">
+          <div>
+            <p class="eyebrow">Core Vocabulary</p>
+            <h3 id="sceneCoreWordsModalTitle">待挑战核心词汇</h3>
+          </div>
+          <div class="inline-actions">
+            <span class="mini-pill" id="sceneCoreModalCount">0</span>
+            <button class="icon-button" id="sceneCoreWordsModalCloseBtn" type="button" title="关闭" aria-label="关闭">×</button>
+          </div>
+        </div>
+        <div id="sceneCoreWords" class="scene-core-words empty">暂无核心词汇</div>
+        <div class="modal-actions" style="margin-top: 14px; display: flex; justify-content: flex-end; gap: 8px;">
+          <button class="secondary-button compact" id="sceneCoreWordsModalCancelBtn" type="button">返回阅读</button>
+          <button class="primary-button compact-primary" id="sceneStartChallengeFromModalBtn" type="button">开始挑战</button>
+        </div>
+      </div>
+    </section>
+
+    <section class="modal-backdrop hidden" id="sceneRelatedWordsModal" aria-modal="true" role="dialog" aria-labelledby="sceneRelatedWordsModalTitle">
+      <div class="config-modal scene-related-words-modal" data-modal-scroll>
+        <div class="panel-heading">
+          <div>
+            <p class="eyebrow">Related Vocabulary</p>
+            <h3 id="sceneRelatedWordsModalTitle">场景相关词汇</h3>
+          </div>
+          <div class="scene-related-tools">
+            <label class="entry-prefix-field">
+              <span class="sr-only">筛选场景词汇</span>
+              <input id="sceneRelatedFilter" autocomplete="off" placeholder="筛选单词或含义" />
+            </label>
+            <select id="sceneTierFilter" aria-label="词汇层级">
+              <option value="">全部层级</option>
+              <option value="extended">词表扩展</option>
+              <option value="supplementary">AI 补充</option>
+              <option value="review">复习词</option>
+            </select>
+            <span class="mini-pill" id="sceneRelatedModalCount">0</span>
+            <button class="icon-button" id="sceneRelatedWordsModalCloseBtn" type="button" title="关闭" aria-label="关闭">×</button>
+          </div>
+        </div>
+        <div id="sceneRelatedWords" class="scene-related-words empty">暂无场景相关词汇</div>
+      </div>
+    </section>
+
     <section class="modal-backdrop hidden" id="sceneVocabularyPreviewModal" aria-modal="true" role="dialog" aria-labelledby="sceneVocabularyPreviewTitle">
-      <div class="config-modal small-modal scene-vocabulary-preview-modal" data-modal-scroll>
+      <div class="config-modal scene-vocabulary-preview-modal" data-modal-scroll>
         <div class="panel-heading">
           <div>
             <p class="eyebrow">Vocabulary Preview</p>
-            <h3 id="sceneVocabularyPreviewTitle">待挑战词汇</h3>
+            <h3 id="sceneVocabularyPreviewTitle">待挑战 / 已完成词汇</h3>
           </div>
           <button class="icon-button" id="closeSceneVocabularyPreviewBtn" type="button" title="关闭" aria-label="关闭">×</button>
         </div>
         <p class="scene-vocabulary-preview-summary" id="sceneVocabularyPreviewSummary">选择日历日期或场景查看词汇</p>
-        <div class="scene-vocabulary-preview-list empty" id="sceneVocabularyPreviewList">暂无待挑战词汇</div>
+        <div class="scene-vocabulary-preview-list empty" id="sceneVocabularyPreviewList">暂无词汇</div>
       </div>
     </section>
 

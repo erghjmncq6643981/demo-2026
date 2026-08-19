@@ -212,49 +212,84 @@ public class VocabularyCatalogAnalysisService {
                 if (entryMap.size() != entryIds.size()) {
                     throw LearningAssistantException.badRequest(LearningConstants.ErrorCode.JSON_PARSE_FAILED);
                 }
-                int chunkSize = LearningConstants.VocabularyAnalysis.DEFAULT_BATCH_SIZE;
-                for (int i = 0; i < entries.size(); i += chunkSize) {
-                    List<VocabularyCatalogEntry> chunk = entries.subList(i, Math.min(entries.size(), i + chunkSize));
-                    if (isAnalysisCancelled(job)) {
-                        markAnalysisCancelled(job, batch,
-                                successCount + batchSuccessCount, failedCount + batchFailedCount);
-                        return;
-                    }
-                    try {
-                        AgentChatResponse response = requestBatch(job, chunk, modelConfigId);
+
+                Set<Long> alreadyAnalyzedIds = entryAnalysisMapper.selectList(
+                        new LambdaQueryWrapper<VocabularyCatalogEntryAnalysis>()
+                                .eq(VocabularyCatalogEntryAnalysis::getJobId, jobId)
+                                .in(VocabularyCatalogEntryAnalysis::getCatalogEntryId, entryIds)
+                                .eq(VocabularyCatalogEntryAnalysis::getDeleted, false))
+                        .stream()
+                        .map(VocabularyCatalogEntryAnalysis::getCatalogEntryId)
+                        .collect(Collectors.toSet());
+
+                List<VocabularyCatalogEntry> pendingEntries = entries.stream()
+                        .filter(e -> !alreadyAnalyzedIds.contains(e.getId()))
+                        .toList();
+
+                if (pendingEntries.isEmpty()) {
+                    batch.setStatus(LearningConstants.VocabularyAnalysis.ITEM_COMPLETED);
+                    batch.setErrorMessage(null);
+                    batch.setFinishedTime(LocalDateTime.now());
+                    batch.setUpdateTime(LocalDateTime.now());
+                    batchMapper.updateById(batch);
+                } else {
+                    int chunkSize = LearningConstants.VocabularyAnalysis.DEFAULT_BATCH_SIZE;
+                    for (int i = 0; i < pendingEntries.size(); i += chunkSize) {
+                        List<VocabularyCatalogEntry> chunk = pendingEntries.subList(
+                                i, Math.min(pendingEntries.size(), i + chunkSize));
                         if (isAnalysisCancelled(job)) {
                             markAnalysisCancelled(job, batch,
                                     successCount + batchSuccessCount, failedCount + batchFailedCount);
                             return;
                         }
-                        AnalysisParseResult parsed = parseAnalyses(job, batch, chunk, response);
-                        if (!parsed.analyses().isEmpty()) {
-                            transactionTemplate.executeWithoutResult(status -> saveBatchResult(
-                                    batch, parsed.analyses(), userId));
-                            batchSuccessCount += parsed.analyses().size();
+                        try {
+                            AgentChatResponse response = requestBatch(job, chunk, modelConfigId);
+                            if (isAnalysisCancelled(job)) {
+                                markAnalysisCancelled(job, batch,
+                                        successCount + batchSuccessCount, failedCount + batchFailedCount);
+                                return;
+                            }
+                            AnalysisParseResult parsed = parseAnalyses(job, batch, chunk, response);
+                            if (!parsed.analyses().isEmpty()) {
+                                transactionTemplate.executeWithoutResult(status -> saveBatchResult(
+                                        batch, parsed.analyses(), userId));
+                                batchSuccessCount += parsed.analyses().size();
+                            }
+                            unresolvedEntryIds.addAll(parsed.unresolvedEntryIds());
+                            batchFailedCount += parsed.unresolvedEntryIds().size();
+                        } catch (RuntimeException ex) {
+                            unresolvedEntryIds.addAll(chunk.stream()
+                                    .map(VocabularyCatalogEntry::getId).toList());
+                            batchFailedCount += chunk.size();
+                            log.debug("公共词本关联分析响应处理失败 jobId={} batchNo={} chunkSize={}",
+                                    jobId, batch.getBatchNo(), chunk.size(), ex);
                         }
-                        unresolvedEntryIds.addAll(parsed.unresolvedEntryIds());
-                        batchFailedCount += parsed.unresolvedEntryIds().size();
-                    } catch (RuntimeException ex) {
-                        unresolvedEntryIds.addAll(chunk.stream()
-                                .map(VocabularyCatalogEntry::getId).toList());
-                        batchFailedCount += chunk.size();
-                        log.debug("公共词本关联分析响应处理失败 jobId={} batchNo={} chunkSize={}",
-                                jobId, batch.getBatchNo(), chunk.size(), ex);
                     }
+                    boolean batchFullyCompleted = unresolvedEntryIds.isEmpty()
+                            && (alreadyAnalyzedIds.size() + batchSuccessCount) >= entries.size();
+                    batch.setStatus(batchFullyCompleted
+                            ? LearningConstants.VocabularyAnalysis.ITEM_COMPLETED
+                            : LearningConstants.VocabularyAnalysis.ITEM_FAILED);
+                    batch.setErrorMessage(batchFullyCompleted
+                            ? null : partialBatchError(entries, unresolvedEntryIds));
+                    batch.setFinishedTime(LocalDateTime.now());
+                    batch.setUpdateTime(LocalDateTime.now());
+                    batchMapper.updateById(batch);
                 }
-                successCount += batchSuccessCount;
-                failedCount += batchFailedCount;
-                batch.setStatus(unresolvedEntryIds.isEmpty()
-                        ? LearningConstants.VocabularyAnalysis.ITEM_COMPLETED
-                        : LearningConstants.VocabularyAnalysis.ITEM_FAILED);
-                batch.setErrorMessage(unresolvedEntryIds.isEmpty()
-                        ? null : partialBatchError(unresolvedEntryIds));
-                batch.setFinishedTime(LocalDateTime.now());
-                batch.setUpdateTime(LocalDateTime.now());
-                batchMapper.updateById(batch);
+
+                int jobSuccessCount = entryAnalysisMapper.selectCount(
+                        new LambdaQueryWrapper<VocabularyCatalogEntryAnalysis>()
+                                .eq(VocabularyCatalogEntryAnalysis::getJobId, jobId)
+                                .eq(VocabularyCatalogEntryAnalysis::getDeleted, false)).intValue();
+                successCount = jobSuccessCount;
+                failedCount = Math.max(0, value(job.getTotalCount()) - successCount);
             } catch (RuntimeException ex) {
-                failedCount += Math.max(value(batch.getEntryCount()), batchFailedCount);
+                int jobSuccessCount = entryAnalysisMapper.selectCount(
+                        new LambdaQueryWrapper<VocabularyCatalogEntryAnalysis>()
+                                .eq(VocabularyCatalogEntryAnalysis::getJobId, jobId)
+                                .eq(VocabularyCatalogEntryAnalysis::getDeleted, false)).intValue();
+                successCount = jobSuccessCount;
+                failedCount = Math.max(0, value(job.getTotalCount()) - successCount);
                 batch.setStatus(LearningConstants.VocabularyAnalysis.ITEM_FAILED);
                 batch.setErrorMessage(limitError(ex.getMessage()));
                 batch.setFinishedTime(LocalDateTime.now());
@@ -435,12 +470,31 @@ public class VocabularyCatalogAnalysisService {
         }
         Map<Long, VocabularyCatalogEntry> sourceById = entries.stream()
                 .collect(Collectors.toMap(VocabularyCatalogEntry::getId, item -> item));
+        Map<String, VocabularyCatalogEntry> sourceByTerm = entries.stream()
+                .filter(e -> StringUtils.hasText(e.getNormalizedTerm()))
+                .collect(Collectors.toMap(e -> e.getNormalizedTerm().toLowerCase().trim(), e -> e, (a, b) -> a));
+
         Map<Long, JsonNode> resultById = new LinkedHashMap<>();
+        int arrayIndex = 0;
         for (JsonNode item : array) {
-            Long entryId = longValue(item, "entry_id", "entryId");
+            Long entryId = longValue(item, "entry_id", "entryId", "id");
             if (entryId != null && sourceById.containsKey(entryId) && !resultById.containsKey(entryId)) {
                 resultById.put(entryId, item);
+            } else {
+                String term = text(item, "term", "word", "normalized_term");
+                if (term != null && sourceByTerm.containsKey(term.toLowerCase().trim())) {
+                    Long matchedId = sourceByTerm.get(term.toLowerCase().trim()).getId();
+                    if (!resultById.containsKey(matchedId)) {
+                        resultById.put(matchedId, item);
+                    }
+                } else if (arrayIndex < entries.size()) {
+                    Long positionalId = entries.get(arrayIndex).getId();
+                    if (!resultById.containsKey(positionalId)) {
+                        resultById.put(positionalId, item);
+                    }
+                }
             }
+            arrayIndex++;
         }
 
         LocalDateTime now = LocalDateTime.now();
@@ -491,6 +545,14 @@ public class VocabularyCatalogAnalysisService {
         }
         List<Long> unresolvedEntryIds = sourceById.keySet().stream()
                 .filter(entryId -> !resolvedEntryIds.contains(entryId)).toList();
+        if (!unresolvedEntryIds.isEmpty()) {
+            List<String> unresolvedTerms = entries.stream()
+                    .filter(entry -> unresolvedEntryIds.contains(entry.getId()))
+                    .map(VocabularyCatalogEntry::effectiveTerm)
+                    .toList();
+            log.warn("公共词本关联分析响应未完全覆盖当前批次词条: jobId={} batchNo={} expectedCount={} resolvedCount={} unresolvedCount={} 未覆盖词汇={}",
+                    job.getId(), batch.getBatchNo(), entries.size(), resolvedEntryIds.size(), unresolvedEntryIds.size(), unresolvedTerms);
+        }
         return new AnalysisParseResult(List.copyOf(analyses), unresolvedEntryIds);
     }
 
@@ -514,9 +576,15 @@ public class VocabularyCatalogAnalysisService {
         }
     }
 
-    private String partialBatchError(List<Long> unresolvedEntryIds) {
-        return limitError("AI 本次仅处理了部分词条，剩余 " + unresolvedEntryIds.size()
-                + " 个词条将在下次分析任务中重试");
+    private String partialBatchError(List<VocabularyCatalogEntry> entries, List<Long> unresolvedEntryIds) {
+        List<String> terms = (entries == null ? List.<VocabularyCatalogEntry>of() : entries).stream()
+                .filter(entry -> unresolvedEntryIds.contains(entry.getId()))
+                .map(VocabularyCatalogEntry::effectiveTerm)
+                .limit(5)
+                .toList();
+        String suffix = unresolvedEntryIds.size() > 5 ? " 等" : "";
+        String wordsHint = terms.isEmpty() ? "" : "（" + String.join("、", terms) + suffix + "）";
+        return limitError("AI 本次未覆盖 " + unresolvedEntryIds.size() + " 个词条" + wordsHint + "，将在下次分析任务中重试");
     }
 
     private void saveBatchResult(VocabularyCatalogAnalysisBatch batch,

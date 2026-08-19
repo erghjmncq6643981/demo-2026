@@ -46,6 +46,10 @@ public class VocabularyCatalogEntry extends BaseEntity {
      * 返回审核后真正用于学习的词。
      */
     public String effectiveTerm() {
-        return approvedTerm == null || approvedTerm.isBlank() ? originalTerm : approvedTerm;
+        if (approvedTerm != null && !approvedTerm.isBlank()) return approvedTerm.trim();
+        if (originalTerm != null && !originalTerm.isBlank()) return originalTerm.trim();
+        if (suggestedTerm != null && !suggestedTerm.isBlank()) return suggestedTerm.trim();
+        if (normalizedTerm != null && !normalizedTerm.isBlank()) return normalizedTerm.trim();
+        return id != null ? "词条#" + id : "未知词条";
     }
 }

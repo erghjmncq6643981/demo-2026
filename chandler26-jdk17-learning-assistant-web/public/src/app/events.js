@@ -73,6 +73,13 @@ export function bindAppEvents(ctx) {
     cancelScenePlan,
     saveSceneNote,
     toggleSceneNotePreview,
+    openSceneNoteModal,
+    closeSceneNoteModal,
+    openCoreWordsModal,
+    closeCoreWordsModal,
+    openRelatedWordsModal,
+    closeRelatedWordsModal,
+    renderSceneRelatedWords,
     loadArticleWords,
     loadArticleHistory,
     renderArticleWords,
@@ -268,8 +275,34 @@ elements.sceneScheduleNextUnitBtn?.addEventListener('click', scheduleNextUnit)
 elements.sceneGenerateCardsBtn?.addEventListener('click', generateSceneCards)
 elements.sceneScheduleCardsBtn?.addEventListener('click', scheduleSceneCards)
 elements.sceneSpeakBtn?.addEventListener('click', speakCurrentScene)
+elements.sceneOpenNoteModalBtn?.addEventListener('click', openSceneNoteModal)
+elements.sceneNoteModalCloseBtn?.addEventListener('click', closeSceneNoteModal)
+elements.sceneNoteModalCancelBtn?.addEventListener('click', closeSceneNoteModal)
+elements.sceneNoteModal?.addEventListener('click', (event) => {
+  if (event.target === elements.sceneNoteModal) closeSceneNoteModal()
+})
 elements.sceneNoteSaveBtn?.addEventListener('click', saveSceneNote)
 elements.sceneNotePreviewBtn?.addEventListener('click', toggleSceneNotePreview)
+
+elements.sceneOpenCoreWordsBtn?.addEventListener('click', openCoreWordsModal)
+elements.sceneCoreWordsModalCloseBtn?.addEventListener('click', closeCoreWordsModal)
+elements.sceneCoreWordsModalCancelBtn?.addEventListener('click', closeCoreWordsModal)
+elements.sceneStartChallengeFromModalBtn?.addEventListener('click', () => {
+  closeCoreWordsModal()
+  startSceneChallenge()
+})
+elements.sceneCoreWordsModal?.addEventListener('click', (event) => {
+  if (event.target === elements.sceneCoreWordsModal) closeCoreWordsModal()
+})
+
+elements.sceneOpenRelatedWordsBtn?.addEventListener('click', openRelatedWordsModal)
+elements.sceneRelatedWordsModalCloseBtn?.addEventListener('click', closeRelatedWordsModal)
+elements.sceneRelatedWordsModal?.addEventListener('click', (event) => {
+  if (event.target === elements.sceneRelatedWordsModal) closeRelatedWordsModal()
+})
+elements.sceneRelatedFilter?.addEventListener('input', renderSceneRelatedWords)
+elements.sceneTierFilter?.addEventListener('change', renderSceneRelatedWords)
+
 elements.scenePlanSelect?.addEventListener('change', () => changeSelectedScenePlan(elements.scenePlanSelect.value))
 document.querySelectorAll('[data-calendar-range]').forEach((button) => {
   button.addEventListener('click', () => changeSceneCalendarRange(button.dataset.calendarRange))

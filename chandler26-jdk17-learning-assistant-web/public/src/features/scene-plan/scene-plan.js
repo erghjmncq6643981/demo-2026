@@ -880,19 +880,32 @@ export function createScenePlanFeature(ctx) {
       ? asArray(plan.units).filter((unit) => sameId(unit.id, unitId))
       : unitsForDate(plan, date)
     const displayDate = date || unitDateKey(selectedUnits[0])
-    const pendingTotal = selectedUnits.reduce((sum, unit) => sum + pendingChallengeWords(unit).length, 0)
+
+    let pendingTotal = 0
+    let completedTotal = 0
+    selectedUnits.forEach((unit) => {
+      const coreWords = asArray(unit.words).filter((word) => word.tier === 'core')
+      coreWords.forEach((word) => {
+        if (isWordComplete(word)) {
+          completedTotal++
+        } else {
+          pendingTotal++
+        }
+      })
+    })
+
     elements.sceneVocabularyPreviewTitle.textContent = displayDate
-      ? `${formatCalendarDate(new Date(`${displayDate}T12:00:00`), true)} · 待挑战词汇`
-      : '待挑战词汇'
+      ? `${formatCalendarDate(new Date(`${displayDate}T12:00:00`), true)} · 场景词汇`
+      : '场景词汇'
     elements.sceneVocabularyPreviewSummary.textContent = selectedUnits.length
-      ? `${selectedUnits.length} 个场景，共 ${pendingTotal} 个待挑战词汇`
+      ? `${selectedUnits.length} 个场景，待挑战 ${pendingTotal} 词 · 已完成 ${completedTotal} 词`
       : '该日期的场景尚未生成，生成后即可预览具体词汇。'
     elements.sceneVocabularyPreviewList.className = selectedUnits.length
       ? 'scene-vocabulary-preview-list'
       : 'scene-vocabulary-preview-list empty'
     elements.sceneVocabularyPreviewList.innerHTML = selectedUnits.length
       ? selectedUnits.map((unit) => {
-          const words = pendingChallengeWords(unit)
+          const coreWords = asArray(unit.words).filter((word) => word.tier === 'core')
           return `
             <section class="scene-vocabulary-preview-group">
               <div class="scene-vocabulary-preview-heading">
@@ -900,38 +913,50 @@ export function createScenePlanFeature(ctx) {
                   <strong>${escapeHtml(unit.title || '场景单元')}</strong>
                   <small>Scene ${number(unit.unitNo)} · ${unitStatusLabel(unit)}</small>
                 </div>
-                <span class="mini-pill">${words.length} 词</span>
+                <span class="mini-pill">${coreWords.length} 核心词</span>
               </div>
-              ${words.length ? `
+              ${coreWords.length ? `
                 <div class="scene-vocabulary-preview-words">
-                  ${words.map((word, index) => `
-                    <div class="scene-vocabulary-preview-word">
+                  ${coreWords.map((word, index) => {
+                    const complete = isWordComplete(word)
+                    return `
+                    <div class="scene-vocabulary-preview-word ${complete ? 'completed' : ''}">
                       <span class="scene-vocabulary-preview-index">${index + 1}</span>
-                      <span>
-                        <strong>${escapeHtml(word.term)}</strong>
-                        <small>${word.masteryRequirement === 'spelling' ? '会拼写' : '认识'}</small>
+                      <div class="scene-vocabulary-preview-word-content">
+                        <div class="scene-vocabulary-preview-topline">
+                          <strong>${escapeHtml(word.term)}</strong>
+                          <small>${escapeHtml(word.phonetic || '')}</small>
+                        </div>
+                        <p class="scene-vocabulary-preview-meaning">${escapeHtml(word.contextMeaning || word.meaning || '场景释义待补充')}</p>
+                      </div>
+                      <span class="scene-vocabulary-preview-status-pill ${complete ? 'completed' : 'pending'}">
+                        ${complete ? '已完成' : (word.masteryRequirement === 'spelling' ? '待拼写' : '待认读')}
                       </span>
                     </div>
-                  `).join('')}
+                  `}).join('')}
                 </div>
-              ` : '<div class="empty">本场景的核心词已全部完成挑战</div>'}
+              ` : '<div class="empty">本场景暂无核心词汇</div>'}
             </section>
           `
         }).join('')
-      : '暂无待挑战词汇'
+      : '暂无词汇'
     showModal(elements.sceneVocabularyPreviewModal)
   }
 
   function renderCalendar(plan) {
     if (!elements.sceneCalendar) return
+    const range = state.sceneCalendarRange || 'week'
     if (!plan) {
       elements.sceneCalendar.className = 'scene-calendar empty'
       elements.sceneCalendar.textContent = '选择计划后查看学习日历'
-      if (elements.sceneCalendarTitle) elements.sceneCalendarTitle.textContent = '本周'
+      if (elements.sceneCalendarTitle) {
+        elements.sceneCalendarTitle.textContent = range === 'month'
+          ? `${new Date().getFullYear()}年${new Date().getMonth() + 1}月`
+          : calendarTitle(calendarDates())
+      }
       renderOverviewUnits(null)
       return
     }
-    const range = state.sceneCalendarRange || 'week'
     const today = dateFromKey(localDateKey())
     const dates = calendarDates()
     const planStartKey = plan.startTime ? plan.startTime.split('T')[0] : null
@@ -1013,13 +1038,19 @@ export function createScenePlanFeature(ctx) {
             ? number(dayData.pendingChallengeCount)
             : units.reduce((sum, unit) => sum + pendingChallengeWords(unit).length, 0)
           const overdue = number(dayData?.overdueCount) > 0 || (isPast && pendingCount > 0)
+          const isCompleted = units.length && units.every((unit) => unit.status === 'completed')
 
           let count = pendingCount
           let label = '待挑战词汇'
           if (generated) {
-            label = units.length && units.every((unit) => unit.status === 'completed')
-              ? '已完成'
-              : overdue ? `逾期 ${pendingCount}` : '待挑战词汇'
+            if (isCompleted) {
+              label = '已完成'
+              count = units.reduce((sum, unit) => sum + number(unit.completedCoreCount || unit.coreWordCount), 0)
+                || number(dayData?.completedCount)
+                || 0
+            } else {
+              label = overdue ? `逾期 ${pendingCount}` : '待挑战词汇'
+            }
           } else if (!withinPlan) {
             count = 0
             label = '计划外'
@@ -1032,7 +1063,7 @@ export function createScenePlanFeature(ctx) {
           }
 
           return `
-            <button class="scene-calendar-day ${isToday ? 'today' : ''} ${isPast ? 'past' : ''} ${!withinPlan ? 'outside-plan' : ''} ${overdue ? 'overdue' : ''}" type="button" data-calendar-preview="${key}" aria-label="预览 ${formatCalendarDate(date, true)} 的待挑战词汇">
+            <button class="scene-calendar-day ${isToday ? 'today' : ''} ${isPast ? 'past' : ''} ${!withinPlan ? 'outside-plan' : ''} ${overdue ? 'overdue' : ''} ${isCompleted ? 'completed-day' : ''}" type="button" data-calendar-preview="${key}" aria-label="预览 ${formatCalendarDate(date, true)} 的词汇">
               <span>${range === 'month' ? `${date.getDate()}日` : formatCalendarDate(date, true)}</span>
               <strong>${count}</strong>
               <small>${label}</small>
@@ -1102,9 +1133,13 @@ export function createScenePlanFeature(ctx) {
 
       if (units.length > 1) {
         const totalPending = units.reduce((sum, u) => sum + pendingChallengeWords(u).length, 0)
+        const totalCompleted = units.reduce((sum, u) => sum + number(u.completedCoreCount || u.coreWordCount), 0)
         const allCompleted = units.every((u) => u.status === 'completed')
         const statusLabel = allCompleted ? '已完成' : (isToday ? '今日任务' : '待学习')
         const statusClass = allCompleted ? 'generated' : (isToday ? 'today' : 'generated')
+        const dayMeta = allCompleted
+          ? `共 ${units.length} 篇场景材料 · ${totalCompleted} 个已完成词汇`
+          : `共 ${units.length} 篇场景材料 · ${totalPending} 个待挑战词汇`
 
         return `
           <div class="scene-overview-day-group ${isToday ? 'today' : ''} ${isPast ? 'past' : ''}">
@@ -1113,18 +1148,23 @@ export function createScenePlanFeature(ctx) {
                 <span class="day-group-date">${formatCalendarDate(date, true)}</span>
                 <span class="unit-status-tag ${statusClass}">${statusLabel}</span>
               </div>
-              <span class="day-group-meta">共 ${units.length} 篇场景材料 · ${totalPending} 个待挑战词汇</span>
+              <span class="day-group-meta">${dayMeta}</span>
             </div>
             <div class="day-group-units">
               ${units.map((unit, idx) => {
+                const isComplete = unit.status === 'completed'
                 const pendingCount = pendingChallengeWords(unit).length
+                const completedCount = number(unit.completedCoreCount || unit.coreWordCount)
+                const wordInfo = isComplete
+                  ? `${completedCount} 个已完成词汇 · 已完成`
+                  : `${pendingCount} 个待挑战词汇 · ${unitStatusLabel(unit)}`
                 return `
                   <div class="day-unit-sub-row">
-                    <button class="unit-preview-button" type="button" data-preview-date="${key}" data-preview-unit="${escapeHtml(unit.id)}" aria-label="预览第 ${idx + 1} 篇 ${escapeHtml(unit.title || '场景单元')} 的待挑战词汇">
+                    <button class="unit-preview-button" type="button" data-preview-date="${key}" data-preview-unit="${escapeHtml(unit.id)}" aria-label="预览第 ${idx + 1} 篇 ${escapeHtml(unit.title || '场景单元')} 的词汇">
                       <span class="unit-index-badge">篇章 ${idx + 1}/${units.length}</span>
                       <span class="unit-detail-info">
                         <strong class="unit-title">${escapeHtml(unit.title || '场景单元')}</strong>
-                        <span class="unit-words-count">${pendingCount} 个待挑战词汇 · ${unitStatusLabel(unit)}</span>
+                        <span class="unit-words-count">${wordInfo}</span>
                       </span>
                     </button>
                     <div class="unit-action-button">
@@ -1141,20 +1181,25 @@ export function createScenePlanFeature(ctx) {
       }
 
       const unit = units.length === 1 ? units[0] : null
+      const isComplete = unit?.status === 'completed'
       const pendingCount = unit ? pendingChallengeWords(unit).length : 0
+      const completedCount = unit ? number(unit.completedCoreCount || unit.coreWordCount) : 0
+      const wordInfo = unit
+        ? (isComplete ? `${completedCount} 个已完成词汇 · 已完成` : `${pendingCount} 个待挑战词汇 · ${unitStatusLabel(unit)}`)
+        : '场景生成后可预览待挑战与已完成词汇'
       return `
         <div class="scene-overview-unit-row ${isToday ? 'today' : ''} ${isPast ? 'past' : ''}">
-          <button class="unit-preview-button" type="button" data-preview-date="${key}" ${unit ? `data-preview-unit="${escapeHtml(unit.id)}"` : ''} aria-label="预览 ${unit ? escapeHtml(unit.title || '场景单元') : formatCalendarDate(date, true)} 的待挑战词汇">
+          <button class="unit-preview-button" type="button" data-preview-date="${key}" ${unit ? `data-preview-unit="${escapeHtml(unit.id)}"` : ''} aria-label="预览 ${unit ? escapeHtml(unit.title || '场景单元') : formatCalendarDate(date, true)} 的词汇">
             <span class="unit-date-info">
               <span class="unit-date">${formatCalendarDate(date, true)}</span>
-              <span class="unit-status-tag ${unit ? 'generated' : 'pending'}">${unit ? unitStatusLabel(unit) : '待生成'}</span>
+              <span class="unit-status-tag ${unit ? (isComplete ? 'generated' : 'today') : 'pending'}">${unit ? unitStatusLabel(unit) : '待生成'}</span>
             </span>
             <span class="unit-detail-info">
               ${unit ? `
                 <strong class="unit-title">${escapeHtml(unit.title || '场景单元')}</strong>
-                <span class="unit-words-count">${pendingCount} 个待挑战词汇</span>
+                <span class="unit-words-count">${wordInfo}</span>
               ` : `
-                <span class="unit-placeholder-text">场景生成后可预览待挑战词汇</span>
+                <span class="unit-placeholder-text">${wordInfo}</span>
               `}
             </span>
           </button>
@@ -1282,10 +1327,45 @@ export function createScenePlanFeature(ctx) {
     const showReading = stage === 'learning'
     elements.sceneLearningStage.querySelector('.scene-unit-header')?.classList.toggle('hidden', false)
     elements.sceneLearningStage.querySelector('.scene-reading-panel')?.classList.toggle('hidden', !showReading)
-    elements.sceneLearningStage.querySelector('.scene-core-panel')?.classList.toggle('hidden', !showReading)
-    elements.sceneLearningStage.querySelector('.scene-related-panel')?.classList.toggle('hidden', !showReading)
+    if (elements.sceneLearningFooter) {
+      elements.sceneLearningFooter.classList.toggle('hidden', !showReading)
+    }
     elements.sceneChallengeStage.classList.toggle('hidden', stage !== 'challenge')
     elements.sceneAssessmentPanel.classList.toggle('hidden', stage !== 'assessment')
+  }
+
+  function openSceneNoteModal() {
+    const unit = activeUnit()
+    if (!unit) return
+    void loadSceneNote(unit)
+    showModal(elements.sceneNoteModal)
+  }
+
+  function closeSceneNoteModal() {
+    hideModal(elements.sceneNoteModal)
+  }
+
+  function openCoreWordsModal() {
+    const unit = activeUnit()
+    if (!unit) return
+    const coreWords = asArray(unit.words).filter((word) => word.tier === 'core')
+    renderCoreWords(coreWords)
+    showModal(elements.sceneCoreWordsModal)
+  }
+
+  function closeCoreWordsModal() {
+    hideModal(elements.sceneCoreWordsModal)
+  }
+
+  function openRelatedWordsModal() {
+    const unit = activeUnit()
+    if (!unit) return
+    renderRelatedWords(unit)
+    showModal(elements.sceneRelatedWordsModal)
+  }
+
+  function closeRelatedWordsModal() {
+    hideModal(elements.sceneRelatedWordsModal)
   }
 
   function startLearning() {
@@ -1412,24 +1492,34 @@ export function createScenePlanFeature(ctx) {
     if (!plan || !unit) {
       elements.sceneUnitEyebrow.textContent = plan ? 'Ready for next scene' : 'Current Scene'
       elements.sceneUnitTitle.textContent = plan ? '可以生成下一个场景' : '选择一个学习计划'
-      elements.sceneUnitSummary.textContent = plan?.learningPurpose || '当前场景会显示在这里'
+      const rawSummary = plan?.learningPurpose || '当前场景会显示在这里'
+      elements.sceneUnitSummary.title = rawSummary
+      elements.sceneUnitSummary.textContent = rawSummary.length > 15
+        ? `${rawSummary.slice(0, 15)}...`
+        : rawSummary
       elements.sceneUnitProgress.textContent = plan ? `${number(plan.learnedCoreWords)} / ${number(plan.totalCatalogWords)}` : '0 / 0'
       elements.sceneLearningText.className = 'scene-learning-text empty'
       elements.sceneLearningText.textContent = plan ? '当前没有进行中的场景' : '暂无场景材料'
       elements.sceneTranslation.textContent = '暂无译文'
-      elements.sceneCoreWords.className = 'scene-core-words empty'
-      elements.sceneCoreWords.textContent = '暂无核心词汇'
-      elements.sceneCoreCount.textContent = '0'
-      elements.sceneRelatedWords.className = 'scene-related-words empty'
-      elements.sceneRelatedWords.textContent = '暂无场景相关词汇'
-      elements.sceneRelatedCount.textContent = '0'
+      if (elements.sceneCoreWords) {
+        elements.sceneCoreWords.className = 'scene-core-words empty'
+        elements.sceneCoreWords.textContent = '暂无核心词汇'
+      }
+      if (elements.sceneCoreCount) elements.sceneCoreCount.textContent = '0'
+      if (elements.sceneCoreModalCount) elements.sceneCoreModalCount.textContent = '0 词'
+      if (elements.sceneRelatedWords) {
+        elements.sceneRelatedWords.className = 'scene-related-words empty'
+        elements.sceneRelatedWords.textContent = '暂无场景相关词汇'
+      }
+      if (elements.sceneRelatedCount) elements.sceneRelatedCount.textContent = '0'
+      if (elements.sceneRelatedModalCount) elements.sceneRelatedModalCount.textContent = '0 词'
       elements.sceneAssessment.className = 'scene-assessment empty'
       elements.sceneAssessment.textContent = '选择一个核心词开始检查'
       elements.sceneAssessmentStage.textContent = '未开始'
-      elements.sceneGenerateCardsBtn.classList.add('hidden')
-      elements.sceneScheduleCardsBtn?.classList.add('hidden')
-      elements.sceneCompleteUnitBtn.classList.add('hidden')
-      elements.sceneNextUnitBtn.classList.toggle('hidden', !plan?.canGenerateNext || plan?.status !== 'active')
+      if (elements.sceneGenerateCardsBtn) elements.sceneGenerateCardsBtn.classList.add('hidden')
+      if (elements.sceneScheduleCardsBtn) elements.sceneScheduleCardsBtn.classList.add('hidden')
+      if (elements.sceneCompleteUnitBtn) elements.sceneCompleteUnitBtn.classList.add('hidden')
+      if (elements.sceneNextUnitBtn) elements.sceneNextUnitBtn.classList.toggle('hidden', !plan?.canGenerateNext || plan?.status !== 'active')
       renderChallengeWords([])
       return
     }
@@ -1440,12 +1530,16 @@ export function createScenePlanFeature(ctx) {
     )
     elements.sceneUnitEyebrow.textContent = `Scene ${unit.unitNo || asArray(plan.units).length} · ${unit.scenarioType || 'Vocabulary'}`
     elements.sceneUnitTitle.textContent = unit.title || '未命名场景'
-    elements.sceneUnitSummary.textContent = unit.summary || plan.learningPurpose || '通过当前场景学习相关词汇'
+    const rawSummary = unit.summary || plan.learningPurpose || '通过当前场景学习相关词汇'
+    elements.sceneUnitSummary.title = rawSummary
+    elements.sceneUnitSummary.textContent = rawSummary.length > 15
+      ? `${rawSummary.slice(0, 15)}...`
+      : rawSummary
     elements.sceneUnitProgress.textContent = `${number(unit.completedCoreCount)} / ${number(unit.coreWordCount)}`
-    elements.sceneGenerateCardsBtn.classList.toggle('hidden', !missingCards || plan.status !== 'active')
-    elements.sceneScheduleCardsBtn?.classList.toggle('hidden', !missingCards || plan.status !== 'active')
-    elements.sceneCompleteUnitBtn.classList.toggle('hidden', unit.status === 'completed' || number(unit.completedCoreCount) < number(unit.coreWordCount) || plan.status !== 'active')
-    elements.sceneNextUnitBtn.classList.toggle('hidden', !plan.canGenerateNext || plan.status !== 'active')
+    if (elements.sceneGenerateCardsBtn) elements.sceneGenerateCardsBtn.classList.toggle('hidden', !missingCards || plan.status !== 'active')
+    if (elements.sceneScheduleCardsBtn) elements.sceneScheduleCardsBtn.classList.toggle('hidden', !missingCards || plan.status !== 'active')
+    if (elements.sceneCompleteUnitBtn) elements.sceneCompleteUnitBtn.classList.toggle('hidden', unit.status === 'completed' || number(unit.completedCoreCount) < number(unit.coreWordCount) || plan.status !== 'active')
+    if (elements.sceneNextUnitBtn) elements.sceneNextUnitBtn.classList.toggle('hidden', !plan.canGenerateNext || plan.status !== 'active')
     renderLearningText(unit, coreWords)
     renderCoreWords(coreWords)
     renderRelatedWords(unit)
@@ -1495,7 +1589,9 @@ export function createScenePlanFeature(ctx) {
   }
 
   function renderCoreWords(words) {
-    elements.sceneCoreCount.textContent = String(words.length)
+    if (elements.sceneCoreCount) elements.sceneCoreCount.textContent = String(words.length)
+    if (elements.sceneCoreModalCount) elements.sceneCoreModalCount.textContent = `${words.length} 词`
+    if (!elements.sceneCoreWords) return
     if (!words.length) {
       elements.sceneCoreWords.className = 'scene-core-words empty'
       elements.sceneCoreWords.textContent = '暂无核心词汇'
@@ -1540,7 +1636,9 @@ export function createScenePlanFeature(ctx) {
       const haystack = `${word.term || ''} ${word.meaning || ''} ${word.contextMeaning || ''}`.toLowerCase()
       return !keyword || haystack.includes(keyword)
     })
-    elements.sceneRelatedCount.textContent = String(related.length)
+    if (elements.sceneRelatedCount) elements.sceneRelatedCount.textContent = String(related.length)
+    if (elements.sceneRelatedModalCount) elements.sceneRelatedModalCount.textContent = `${related.length} 词`
+    if (!elements.sceneRelatedWords) return
     if (!related.length) {
       elements.sceneRelatedWords.className = 'scene-related-words empty'
       elements.sceneRelatedWords.textContent = '没有符合条件的场景词汇'
@@ -2835,5 +2933,11 @@ export function createScenePlanFeature(ctx) {
     renderSceneNote,
     saveSceneNote,
     toggleSceneNotePreview,
+    openSceneNoteModal,
+    closeSceneNoteModal,
+    openCoreWordsModal,
+    closeCoreWordsModal,
+    openRelatedWordsModal,
+    closeRelatedWordsModal,
   }
 }
