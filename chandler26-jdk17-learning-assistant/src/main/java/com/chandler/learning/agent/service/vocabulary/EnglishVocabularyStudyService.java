@@ -294,11 +294,11 @@ public class EnglishVocabularyStudyService {
                     if (!StringUtils.hasText(objectNode.path("term").asText()) && StringUtils.hasText(fallbackTerm)) {
                         objectNode.put("term", fallbackTerm);
                     }
-                    normalizeField(objectNode, "definitions", List.of("meaning", "meanings", "definition"));
-                    normalizeField(objectNode, "examples", List.of("example_sentences", "example", "sentences", "exampleSentences"));
-                    normalizeField(objectNode, "collocations", List.of("phrases", "collocation", "common_phrases", "commonPhrases"));
-                    normalizeField(objectNode, "memory_tips", List.of("memoryTips", "tips", "memory_tip", "mnemonic", "memory"));
-                    normalizeField(objectNode, "related_words", List.of("relatedWords", "relations", "related"));
+                    normalizeArrayField(objectNode, "definitions", List.of("meaning", "meanings", "definition"));
+                    normalizeArrayField(objectNode, "examples", List.of("example_sentences", "example", "sentences", "exampleSentences"));
+                    normalizeArrayField(objectNode, "collocations", List.of("phrases", "collocation", "common_phrases", "commonPhrases"));
+                    normalizeScalarField(objectNode, "memory_tips", List.of("memoryTips", "tips", "memory_tip", "mnemonic", "memory"));
+                    normalizeArrayField(objectNode, "related_words", List.of("relatedWords", "relations", "related"));
                 }
                 return objectMapper.writeValueAsString(root);
             }
@@ -309,21 +309,33 @@ public class EnglishVocabularyStudyService {
         }
     }
 
-    private void normalizeField(ObjectNode objectNode, String targetField, List<String> aliases) {
-        if (objectNode.path(targetField).isMissingNode() || objectNode.path(targetField).isNull()) {
-            for (String alias : aliases) {
-                if (!objectNode.path(alias).isMissingNode() && !objectNode.path(alias).isNull()) {
-                    objectNode.set(targetField, objectNode.path(alias));
-                    break;
-                }
+    private void normalizeArrayField(ObjectNode objectNode, String targetField, List<String> aliases) {
+        JsonNode value = resolveFieldValue(objectNode, targetField, aliases);
+        if (value == null) {
+            objectNode.putArray(targetField);
+        } else if (!value.isArray()) {
+            ArrayNode arrayNode = objectNode.putArray(targetField);
+            arrayNode.add(value);
+        }
+    }
+
+    private void normalizeScalarField(ObjectNode objectNode, String targetField, List<String> aliases) {
+        resolveFieldValue(objectNode, targetField, aliases);
+    }
+
+    private JsonNode resolveFieldValue(ObjectNode objectNode, String targetField, List<String> aliases) {
+        JsonNode value = objectNode.get(targetField);
+        if (value != null && !value.isNull()) {
+            return value;
+        }
+        for (String alias : aliases) {
+            value = objectNode.get(alias);
+            if (value != null && !value.isNull()) {
+                objectNode.set(targetField, value);
+                return value;
             }
         }
-        if (objectNode.path(targetField).isMissingNode() || objectNode.path(targetField).isNull()) {
-            objectNode.putArray(targetField);
-        } else if (!objectNode.path(targetField).isArray()) {
-            ArrayNode arrayNode = objectNode.putArray(targetField);
-            arrayNode.add(objectNode.path(targetField));
-        }
+        return null;
     }
 
     /** 词卡只有通过最小结构校验后才能写入共享缓存，避免坏响应污染后续学习。 */
