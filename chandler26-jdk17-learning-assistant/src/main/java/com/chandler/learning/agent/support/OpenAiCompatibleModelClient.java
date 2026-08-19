@@ -207,12 +207,6 @@ public class OpenAiCompatibleModelClient implements AiModelClient {
                 content = firstChoice.path("text").asText(null);
             }
             String finishReason = firstChoice.path("finish_reason").asText(null);
-            if (!StringUtils.hasText(content)) {
-                throw LearningAssistantException.externalService(
-                        LearningConstants.ErrorCode.AI_RESPONSE_PARSE_FAILED,
-                        "AI 未返回有效内容，请稍后重试或切换模型",
-                        null);
-            }
             if ("length".equalsIgnoreCase(finishReason)) {
                 throw LearningAssistantException.externalService(
                         LearningConstants.ErrorCode.AI_RESPONSE_PARSE_FAILED,
@@ -223,6 +217,12 @@ public class OpenAiCompatibleModelClient implements AiModelClient {
                 throw LearningAssistantException.externalService(
                         LearningConstants.ErrorCode.AI_RESPONSE_PARSE_FAILED,
                         "AI 输出被供应商内容安全策略拦截",
+                        null);
+            }
+            if (!StringUtils.hasText(content)) {
+                throw LearningAssistantException.externalService(
+                        LearningConstants.ErrorCode.AI_RESPONSE_PARSE_FAILED,
+                        "AI 未返回有效内容，请稍后重试或切换模型",
                         null);
             }
 

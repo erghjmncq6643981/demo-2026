@@ -28,7 +28,9 @@ import java.util.List;
 @RequiredArgsConstructor
 public class AiModelConnectionTestService {
 
-    private static final int TEST_MAX_TOKENS = 16;
+    /** 普通模型探活只需少量输出；Kimi K3 的 completion token 还包含推理过程。 */
+    private static final int BASIC_TEST_MAX_TOKENS = 16;
+    private static final int REASONING_TEST_MAX_TOKENS = 64;
     private static final String TEST_MESSAGE = "请仅回复 OK";
     private static final int RESPONSE_PREVIEW_LENGTH = 120;
 
@@ -63,7 +65,9 @@ public class AiModelConnectionTestService {
         request.setEffectiveContextWindowTokens(definition.getContextWindowTokens());
         request.setModelConfigId(config.getId());
         request.setTemperature(0D);
-        request.setMaxTokens(TEST_MAX_TOKENS);
+        request.setMaxTokens(definition == AiModelDefinition.KIMI_K3
+                ? REASONING_TEST_MAX_TOKENS
+                : BASIC_TEST_MAX_TOKENS);
         request.setMessages(List.of(new ChatMessageParam("user", TEST_MESSAGE)));
 
         long start = System.currentTimeMillis();

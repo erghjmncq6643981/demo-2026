@@ -189,7 +189,8 @@ export function createAgentProfileFeature(ctx) {
       code: elements.agentCodeInput.value.trim(),
       type: elements.agentTypeInput.value.trim() || 'chat',
       icon: elements.agentIconInput.value.trim(),
-      modelConfigId: Number(elements.agentModelConfigInput.value || 0) || null,
+      // 模型配置 ID 是后端雪花 Long，必须按字符串提交，不能转成 JS Number 丢失精度。
+      modelConfigId: elements.agentModelConfigInput.value.trim() || null,
       sequence: Number(elements.agentSequenceInput.value || 0),
       temperature: elements.agentTemperatureInput.value.trim() === '' ? null : Number(elements.agentTemperatureInput.value),
       maxTokens: elements.agentMaxTokensInput.value.trim() === '' ? null : Number(elements.agentMaxTokensInput.value),

@@ -48,6 +48,27 @@ class AiModelConnectionTestServiceTest {
     }
 
     @Test
+    void givesKimiK3ReasoningRoomDuringConnectionTest() {
+        AiModelConfigService modelConfigService = mock(AiModelConfigService.class);
+        AiModelClient modelClient = mock(AiModelClient.class);
+        AiModelConnectionTestService service = new AiModelConnectionTestService(
+                modelConfigService, modelClient, mock(SystemLogService.class), mock(UserDisplayNameService.class));
+        AiModelConfig config = config();
+        config.setProvider("kimi");
+        config.setModelName("kimi-k3");
+        when(modelConfigService.getById(12L)).thenReturn(config);
+        ModelChatResponse modelResponse = new ModelChatResponse();
+        modelResponse.setContent("OK");
+        when(modelClient.testConnection(org.mockito.ArgumentMatchers.any())).thenReturn(modelResponse);
+
+        service.test(12L);
+
+        ArgumentCaptor<ModelChatRequest> requestCaptor = ArgumentCaptor.forClass(ModelChatRequest.class);
+        verify(modelClient).testConnection(requestCaptor.capture());
+        assertThat(requestCaptor.getValue().getMaxTokens()).isEqualTo(64);
+    }
+
+    @Test
     void returnsReadableFailureWithoutThrowingProviderErrorToUi() {
         AiModelConfigService modelConfigService = mock(AiModelConfigService.class);
         AiModelClient modelClient = mock(AiModelClient.class);

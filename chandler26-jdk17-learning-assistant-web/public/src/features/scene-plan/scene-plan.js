@@ -2812,7 +2812,7 @@ export function createScenePlanFeature(ctx) {
       if (state.preview) {
         const catalog = state.publicVocabularyCatalogs.find((item) => sameId(item.catalogVersionId, catalogVersionId))
         plan = createPreviewPlan({
-          id: Math.max(0, ...state.learningPlans.map((item) => number(item.id))) + 1,
+          id: `preview-${Date.now()}`,
           catalog,
           name,
           learningPurpose,

@@ -30,6 +30,8 @@
 - Do not add new large logic to `public/app.js`; use feature modules and a small facade/wiring layer.
 - Do not open or close modals by directly calling `classList.remove('hidden')` / `classList.add('hidden')`. Use `showModal` / `hideModal` from `/src/shared/modal.js` so scroll position resets.
 - Normalize wordbook ids through `/src/shared/wordbook.js` helpers before API calls or state comparisons.
+- Treat every backend `Long`/Snowflake identifier (`id`, `*Id`, `data-*-id`, select values, URL path/query IDs, and request DTO IDs) as an opaque string in the frontend. Never call `Number`, `parseInt`, arithmetic, or numeric sorting on an identifier; use `normalizeId`/`sameId` and `String(...)` when serializing or comparing. JSON request bodies may send the string directly because Spring deserializes it to `Long`.
+- Before committing frontend changes, scan for ID coercion with `rg -n -i "(Number|parseInt|parseFloat)\\([^\\n]*(id|identifier)|\\b(id|[A-Za-z]+Id)\\s*:\\s*(Number|parseInt)" public/src` and manually review every match. Numeric business values such as counts, limits, sequence, indexes, dates, and scores are allowed only when they are not identifiers.
 - All destructive actions and navigation that discards context need a secondary confirmation dialog.
 - Keep the navigation and fixed card controls from scrolling away. Scroll only the intended content panel.
 - Check desktop and mobile behavior for any layout or interaction change, especially review cards, modals, wordbook lists, and long buttons.
@@ -38,6 +40,7 @@
 ## Backend
 
 - Use Spring Security + JWT for authenticated APIs.
+- Serialize backend `Long`/Snowflake IDs as JSON strings through the shared Jackson configuration; never introduce a custom `ObjectMapper` or DTO serializer that emits these IDs as JSON numbers. Request DTOs may keep `Long` fields because Jackson accepts the frontend string representation.
 - Throw `LearningAssistantException` or a project-specific runtime exception instead of generic runtime errors.
 - Technical diagnostics and stack traces should be debug-level; business events should be info-level and readable by business users, for example: `用户「小明」把单词「abandon」添加到单词本「默认单词本」`.
 - Important user-facing operations should write both server logs and system log table records where appropriate.
