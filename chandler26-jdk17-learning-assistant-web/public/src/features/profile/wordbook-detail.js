@@ -1,5 +1,6 @@
 import { escapeHtml, formatDateTime } from '/src/shared/text.js'
 import { normalizeArray, renderCollocationMini, renderRelationItem, semanticRelations, statusLabel } from '/src/shared/vocabulary.js'
+import { sameId } from '/src/shared/ids.js'
 
 export function createWordbookDetailFeature(ctx) {
   const {
@@ -31,7 +32,10 @@ export function createWordbookDetailFeature(ctx) {
       return
     }
     const parsed = entry.parsed || {}
-    const definitions = normalizeDefinitions(parsed)
+    let definitions = normalizeDefinitions(parsed)
+    if (!definitions.length && entry.meaningText) {
+      definitions = [{ pos: 'meaning', cn: entry.meaningText }]
+    }
     const examples = normalizeExamples(parsed).slice(0, 3)
     const collocations = normalizeArray(parsed?.collocations || parsed?.phrases || parsed?.common_phrases).slice(0, 6)
     const memoryTips = normalizeArray(parsed?.memory_tips || parsed?.memoryTips || parsed?.tips || parsed?.memory).slice(0, 3)
@@ -77,7 +81,12 @@ export function createWordbookDetailFeature(ctx) {
       <div class="mini-definition-list focus-section">
         ${
           definitions.length
-            ? definitions.map((item) => `<div><span>${escapeHtml(item.pos || 'meaning')}</span><p>${escapeHtml(item.cn || item.en || '')}</p></div>`).join('')
+            ? definitions
+                .map((item) => {
+                  const posBadge = item.pos && item.pos !== 'meaning' && item.pos !== 'pos' ? `<span>${escapeHtml(item.pos)}</span>` : ''
+                  return `<div>${posBadge}<p>${escapeHtml(item.cn || item.en || '')}</p></div>`
+                })
+                .join('')
             : '<div class="empty">暂无释义</div>'
         }
       </div>

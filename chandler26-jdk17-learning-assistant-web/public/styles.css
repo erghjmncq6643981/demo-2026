@@ -3503,16 +3503,16 @@ input[type="range"] {
 
 .wordbook-table th.col-term,
 .wordbook-table td.cell-term {
-  width: 130px;
-  max-width: 130px;
+  width: 220px;
+  max-width: 220px;
   overflow: hidden;
   white-space: nowrap;
 }
 
 .wordbook-table th.col-phonetic,
 .wordbook-table td.cell-phonetic {
-  width: 120px;
-  max-width: 120px;
+  width: 130px;
+  max-width: 130px;
   overflow: hidden;
   white-space: nowrap;
 }
@@ -3520,29 +3520,29 @@ input[type="range"] {
 .wordbook-table th.col-meaning,
 .wordbook-table td.cell-meaning {
   width: auto;
-  max-width: 340px;
+  max-width: 480px;
   overflow: hidden;
 }
 
 .wordbook-table th.col-status,
 .wordbook-table td.cell-status {
-  width: 110px;
-  max-width: 110px;
+  width: 120px;
+  max-width: 120px;
   white-space: nowrap;
 }
 
 .wordbook-table th.col-mastery,
 .wordbook-table td.cell-mastery {
-  width: 70px;
-  max-width: 70px;
+  width: 80px;
+  max-width: 80px;
   text-align: center;
   white-space: nowrap;
 }
 
 .wordbook-table th.col-next-review,
 .wordbook-table td.cell-next-review {
-  width: 150px;
-  max-width: 150px;
+  width: 160px;
+  max-width: 160px;
   white-space: nowrap;
 }
 

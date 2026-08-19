@@ -1,4 +1,4 @@
-import { sameId } from '/src/shared/ids.js'
+import { normalizeId, sameId } from '/src/shared/ids.js'
 import { hideModal, showModal } from '/src/shared/modal.js'
 import { escapeHtml, formatDateTime } from '/src/shared/text.js'
 import { statusLabel } from '/src/shared/vocabulary.js'
@@ -27,6 +27,8 @@ export function createWordbookProfileFeature(ctx) {
   } = ctx
   const detailFeature = createWordbookDetailFeature({
     ...ctx,
+    sameId,
+    normalizeId,
     openEntryStatusModal,
   })
 
@@ -425,7 +427,16 @@ export function createWordbookProfileFeature(ctx) {
               : '-'
         const definitions = typeof ctx.normalizeDefinitions === 'function' ? ctx.normalizeDefinitions(parsed) : []
         const meaningSummary = definitions.length
-          ? definitions.map((d) => `${d.pos ? d.pos + ' ' : ''}${d.cn || d.en || ''}`).join('； ')
+          ? definitions
+              .map((d) => {
+                const pos = d.pos && d.pos !== 'meaning' && d.pos !== 'pos' ? (d.pos.endsWith('.') ? d.pos : d.pos + '.') : ''
+                const text = (d.cn || d.en || '').trim()
+                if (pos && !text.startsWith(pos)) {
+                  return `${pos} ${text}`
+                }
+                return text
+              })
+              .join('； ')
           : entry.meaningText || entry.definition || '-'
         const stateCode = entry.status || 'vague'
         const stateText = statusLabel(stateCode)
@@ -499,6 +510,32 @@ export function createWordbookProfileFeature(ctx) {
           const modal = elements.wordbookCardModal || document.getElementById('wordbookCardModal')
           if (modal) {
             showModal(modal)
+          }
+
+          const term = entry.term || entry.normalizedTerm
+          const hasFullCard = entry.cardStatus === 'ready' || (Array.isArray(entry.parsed?.examples) && entry.parsed.examples.length > 0)
+          if (!state.preview && !hasFullCard && term) {
+            request(`/api/v1/english/vocabularies/${encodeURIComponent(term)}`)
+              .then((cached) => {
+                if (cached && sameId(state.selectedEntry?.id, entry.id)) {
+                  let parsedObj = cached.parsed
+                  if (typeof parsedObj === 'string') {
+                    try {
+                      parsedObj = JSON.parse(parsedObj)
+                    } catch (_) {}
+                  }
+                  if (parsedObj && typeof parsedObj === 'object') {
+                    entry.parsed = parsedObj
+                    if (Array.isArray(cached.tags) && cached.tags.length) entry.tags = cached.tags
+                    if (Array.isArray(cached.relations) && cached.relations.length) entry.relations = cached.relations
+                    entry.cardStatus = 'ready'
+                    renderWordbookFocus(entry)
+                  }
+                }
+              })
+              .catch(() => {
+                // 没有缓存时保持展示简要释义与 AI 生成词卡按钮
+              })
           }
         }
         return

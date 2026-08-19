@@ -164,14 +164,14 @@ public class AiChatService {
             chatSessionService.addAssistantMessage(session.getId(), modelResponse.getContent(),
                     modelResponse.getTotalTokens(), costTime, provider, modelName);
             trySaveSuccessRecord(record, modelResponse, costTime);
-            log.info("event=ai_call result=success sessionId={} invocationScene={} agent={} provider={} model={} tokens={} costMs={}",
+            log.info("event=ai_call result=success sessionId={} invocationScene={} agent={} provider={} model={} tokens={} costMs={} responseJson={}",
                     session.getId(),
                     invocationScene.getCode(),
                     agent.getCode(),
                     provider,
                     modelName,
                     modelResponse.getTotalTokens(),
-                    costTime);
+                    costTime,modelResponse.getResponseJson());
 
             AgentChatResponse response = new AgentChatResponse();
             response.setSessionId(session.getId());
