@@ -2,6 +2,7 @@ package com.chandler.learning.agent.service.learning;
 
 import cn.hutool.core.util.StrUtil;
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
+import com.baomidou.mybatisplus.core.conditions.update.LambdaUpdateWrapper;
 import com.chandler.learning.agent.domain.dto.AgentChatRequest;
 import com.chandler.learning.agent.domain.dto.AgentChatResponse;
 import com.chandler.learning.agent.domain.dto.learning.LearningAssessmentSubmitRequest;
@@ -339,6 +340,134 @@ public class LearningPlanService {
         } finally {
             planMapper.releaseGenerationLock(planId, lockToken);
         }
+    }
+
+    /**
+     * 重新生成指定日期的场景材料。
+     * 将该日期已存在的单元、条目和材料标记删除，并复用原有的核心词汇重新调用 AI 生成场景。
+     */
+    public List<LearningPlanUnitResponse> regenerateDayUnits(Long userId, Long planId, Long modelConfigId,
+                                                             LocalDate recommendedDate) {
+        LearningPlan plan = requirePlan(userId, planId);
+        if (LearningConstants.ScenePlan.STATUS_COMPLETED.equals(plan.getStatus())) {
+            throw LearningAssistantException.badRequest(
+                    LearningConstants.ErrorCode.LEARNING_PLAN_COMPLETED,
+                    "学习计划已经完成");
+        }
+        if (recommendedDate == null) {
+            throw LearningAssistantException.badRequest(
+                    LearningConstants.ErrorCode.LEARNING_PLAN_STATE_ERROR,
+                    "请指定要重新生成的日期");
+        }
+        String lockToken = UUID.randomUUID().toString();
+        LocalDateTime now = LocalDateTime.now();
+        int claimed = planMapper.claimGenerationLock(planId, lockToken, now,
+                now.plusMinutes(LearningConstants.ScenePlan.GENERATION_LOCK_MINUTES));
+        if (claimed == LearningConstants.ZERO) {
+            throw LearningAssistantException.of(
+                    LearningConstants.ErrorCode.LEARNING_PLAN_GENERATION_IN_PROGRESS);
+        }
+        try {
+            return regenerateDayUnitsWithLock(userId, plan, modelConfigId, recommendedDate, lockToken);
+        } finally {
+            planMapper.releaseGenerationLock(planId, lockToken);
+        }
+    }
+
+    private List<LearningPlanUnitResponse> regenerateDayUnitsWithLock(Long userId, LearningPlan plan,
+                                                                     Long modelConfigId, LocalDate recommendedDate,
+                                                                     String lockToken) {
+        LocalDate today = LocalDate.now();
+        LocalDate resolvedRecommendedDate = resolveRecommendedDate(plan, recommendedDate, today);
+
+        List<LearningPlanUnit> existingUnits = unitMapper.selectList(
+                new LambdaQueryWrapper<LearningPlanUnit>()
+                        .eq(LearningPlanUnit::getPlanId, plan.getId())
+                        .eq(LearningPlanUnit::getRecommendedDate, resolvedRecommendedDate)
+                        .eq(LearningPlanUnit::getDeleted, false)
+                        .orderByAsc(LearningPlanUnit::getUnitNo));
+
+        List<VocabularyCatalogEntry> candidates;
+        List<VocabularyCatalogEntry> reviewWords;
+        int dailyTarget = targetWordCount(plan);
+
+        if (!existingUnits.isEmpty()) {
+            List<Long> unitIds = existingUnits.stream().map(LearningPlanUnit::getId).toList();
+            List<LearningPlanUnitEntry> oldEntries = unitEntryMapper.selectList(
+                    new LambdaQueryWrapper<LearningPlanUnitEntry>()
+                            .in(LearningPlanUnitEntry::getUnitId, unitIds)
+                            .eq(LearningPlanUnitEntry::getTier, LearningConstants.ScenePlan.TIER_CORE)
+                            .isNotNull(LearningPlanUnitEntry::getCatalogEntryId)
+                            .eq(LearningPlanUnitEntry::getDeleted, false)
+                            .orderByAsc(LearningPlanUnitEntry::getSourceOrder));
+
+            List<Long> catalogEntryIds = oldEntries.stream()
+                    .map(LearningPlanUnitEntry::getCatalogEntryId)
+                    .distinct()
+                    .toList();
+
+            if (!catalogEntryIds.isEmpty()) {
+                candidates = catalogEntryMapper.selectBatchIds(catalogEntryIds);
+            } else {
+                reviewWords = pendingReviewWords(plan, dailyTarget);
+                candidates = nextCandidates(plan, dailyTarget, reviewWords);
+            }
+            reviewWords = pendingReviewWords(plan, candidates.size());
+        } else {
+            reviewWords = pendingReviewWords(plan, dailyTarget);
+            candidates = nextCandidates(plan, dailyTarget, reviewWords);
+        }
+
+        if (candidates.isEmpty()) {
+            throw LearningAssistantException.badRequest(
+                    LearningConstants.ErrorCode.LEARNING_PLAN_STATE_ERROR,
+                    "未找到可用于重新生成的词汇");
+        }
+
+        if (!existingUnits.isEmpty()) {
+            List<Long> unitIds = existingUnits.stream().map(LearningPlanUnit::getId).toList();
+            transactionTemplate.executeWithoutResult(status -> {
+                unitMapper.deleteBatchIds(unitIds);
+                unitEntryMapper.delete(new LambdaQueryWrapper<LearningPlanUnitEntry>()
+                        .in(LearningPlanUnitEntry::getUnitId, unitIds));
+                materialMapper.delete(new LambdaQueryWrapper<LearningSceneMaterial>()
+                        .in(LearningSceneMaterial::getUnitId, unitIds));
+            });
+        }
+
+        int totalToGenerate = candidates.size();
+        List<LearningPlanUnitResponse> generatedUnits = new ArrayList<>();
+        int candidateOffset = 0;
+        List<Integer> materialWordCounts = splitMaterialWordCounts(totalToGenerate);
+        for (int materialIndex = 0; materialIndex < materialWordCounts.size(); materialIndex++) {
+            renewGenerationLock(plan.getId(), lockToken);
+            Integer batchSize = materialWordCounts.get(materialIndex);
+            List<VocabularyCatalogEntry> batch = new ArrayList<>(
+                    candidates.subList(candidateOffset, candidateOffset + batchSize));
+            int reviewStart = reviewWords.size() * materialIndex / materialWordCounts.size();
+            int reviewEnd = reviewWords.size() * (materialIndex + 1) / materialWordCounts.size();
+            List<VocabularyCatalogEntry> reviewBatch = reviewWords.subList(reviewStart, reviewEnd);
+            generatedUnits.add(generateSingleUnit(userId, plan, modelConfigId, resolvedRecommendedDate,
+                    today, batch, batchSize, reviewBatch, null));
+            candidateOffset += batchSize;
+        }
+
+        if (!generatedUnits.isEmpty() && plan.getCurrentUnitId() != null) {
+            boolean currentWasInOld = existingUnits.stream()
+                    .anyMatch(u -> u.getId().equals(plan.getCurrentUnitId()));
+            if (currentWasInOld) {
+                plan.setCurrentUnitId(generatedUnits.get(0).getId());
+                plan.setUpdateTime(LocalDateTime.now());
+                planMapper.updateById(plan);
+            }
+        }
+
+        systemLogService.record(userId, SystemLogType.LEARNING_PLAN, "重新生成场景学习材料",
+                plan.getName() + "（" + resolvedRecommendedDate + "）");
+        log.info("用户「{}」重新生成了场景计划「{}」在「{}」的材料，共 {} 篇",
+                userDisplayNameService.userName(userId), plan.getName(), resolvedRecommendedDate, generatedUnits.size());
+
+        return List.copyOf(generatedUnits);
     }
 
     private List<LearningPlanUnitResponse> generateNextUnitWithLock(Long userId, Long planId, Long modelConfigId,

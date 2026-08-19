@@ -138,6 +138,16 @@ public class LearningPlanController {
         return learningPlanService.generateNextUnit(user.getId(), planId, modelConfigId, recommendedDate);
     }
 
+    @PostMapping("/{planId}/units/regenerate-day")
+    @Operation(summary = "重新生成指定日期的场景材料")
+    public List<LearningPlanUnitResponse> regenerateDayUnits(
+            @RequestHeader(value = "Authorization", required = false) String authorization,
+            @PathVariable Long planId,
+            @Valid @RequestBody com.chandler.learning.agent.domain.dto.learning.LearningPlanRegenerateDayRequest request) {
+        LearningUser user = authService.requireUser(authorization);
+        return learningPlanService.regenerateDayUnits(user.getId(), planId, request.getModelConfigId(), request.getRecommendedDate());
+    }
+
     @PostMapping("/{planId}/units/next/async")
     @Operation(summary = "预约生成场景材料，任务由低价时段调度器执行")
     public AiAsyncTaskResponse scheduleNextUnit(

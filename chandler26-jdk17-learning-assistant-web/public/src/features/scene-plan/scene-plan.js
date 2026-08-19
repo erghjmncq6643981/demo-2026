@@ -876,9 +876,20 @@ export function createScenePlanFeature(ctx) {
   }
 
   function formatCalendarDate(date, withMonth = false) {
+    if (!date) return ''
+    if (typeof date === 'string') {
+      const match = date.match(/^(\d{4})-(\d{1,2})-(\d{1,2})/)
+      if (match) {
+        return withMonth
+          ? `${parseInt(match[2], 10)}月${parseInt(match[3], 10)}日`
+          : `${parseInt(match[3], 10)}日`
+      }
+    }
+    const d = date instanceof Date ? date : new Date(date)
+    if (isNaN(d.getTime())) return String(date)
     return withMonth
-      ? `${date.getMonth() + 1}月${date.getDate()}日`
-      : `${date.getDate()}日`
+      ? `${d.getMonth() + 1}月${d.getDate()}日`
+      : `${d.getDate()}日`
   }
 
   function unitDateKey(unit) {
@@ -1178,8 +1189,13 @@ export function createScenePlanFeature(ctx) {
               <div class="day-group-date-info">
                 <span class="day-group-date">${formatCalendarDate(date, true)}</span>
                 <span class="unit-status-tag ${statusClass}">${statusLabel}</span>
+                <span class="day-group-meta">${dayMeta}</span>
               </div>
-              <span class="day-group-meta">${dayMeta}</span>
+              <div class="day-group-actions">
+                <button class="secondary-button compact" type="button" data-action-regenerate-date="${key}" ${plan.status !== 'active' ? 'disabled' : ''} title="重新生成当天场景材料与题目">
+                  重新生成
+                </button>
+              </div>
             </div>
             <div class="day-group-units">
               ${units.map((unit, idx) => {
@@ -1236,6 +1252,9 @@ export function createScenePlanFeature(ctx) {
           </button>
           <div class="unit-action-button">
             ${unit ? `
+              <button class="secondary-button compact" type="button" data-action-regenerate-date="${key}" ${plan.status !== 'active' ? 'disabled' : ''} title="重新生成当天场景材料">
+                重新生成
+              </button>
               <button class="primary-button compact-primary" type="button" data-action-learn="${escapeHtml(unit.id)}">
                 ${unit.status === 'completed' ? '回顾场景' : '开始学习'}
               </button>
@@ -1291,6 +1310,46 @@ export function createScenePlanFeature(ctx) {
         } catch (error) {
           logEvent('error', '开始场景失败', error.message)
           toast(`开始场景失败：${error.message}`)
+        } finally {
+          setButtonLoading(button, false)
+        }
+      })
+    })
+
+    elements.sceneOverviewUnitsList.querySelectorAll('[data-action-regenerate-date]').forEach((button) => {
+      button.addEventListener('click', async (event) => {
+        event.stopPropagation()
+        const recommendedDate = button.dataset.actionRegenerateDate
+        if (!plan || !recommendedDate) return
+        const confirmed = await confirmAction({
+          title: '重新生成场景材料',
+          message: `重新生成将为【${formatCalendarDate(recommendedDate, true)}】重新创作全新的场景短文、翻译与题目，当天的做题记录将被重置，是否确认重新生成？`,
+          acceptText: '重新生成',
+          danger: true,
+        })
+        if (!confirmed) return
+        setButtonLoading(button, true, '生成中...')
+        try {
+          if (state.preview) {
+            toast('演示模式已模拟重新生成')
+            return
+          }
+          const modelConfigId = elements.scenePlanModelSelect?.value || null
+          const generatedUnits = await request(`/api/v1/learning/plans/${encodeURIComponent(plan.id)}/units/regenerate-day`, {
+            method: 'POST',
+            body: JSON.stringify({
+              modelConfigId: modelConfigId ? String(modelConfigId) : null,
+              recommendedDate,
+            }),
+          })
+          const count = Math.max(1, asArray(generatedUnits).length)
+          await loadSceneData({ planId: plan.id })
+          toast(count > 1
+            ? `当日已重新生成 ${count} 篇场景材料`
+            : '场景材料已重新生成，可点击预览词汇')
+        } catch (error) {
+          logEvent('error', '重新生成场景材料失败', error.message)
+          toast(`重新生成失败：${error.message}`)
         } finally {
           setButtonLoading(button, false)
         }

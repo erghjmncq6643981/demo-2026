@@ -22,14 +22,17 @@ public class KimiChatRequestAdapter extends AbstractOpenAiChatRequestAdapter {
     @Override
     public AiPreparedModelRequest prepare(ModelChatRequest request) {
         Map<String, Object> payload = textMessagePayload(request);
-        putIfPresent(payload, "max_completion_tokens", request.getMaxTokens());
-        applyJsonMode(request, payload);
         if ("kimi-k3".equalsIgnoreCase(request.getModel())) {
+            putIfPresent(payload, "max_completion_tokens", request.getMaxTokens());
             payload.put("reasoning_effort",
                     request.getInvocationScene() == AiInvocationScene.MODEL_CONNECTION_TEST ? "low" : "high");
-        } else if (request.getInvocationScene() != null && request.getInvocationScene().independentAction()) {
-            payload.put("thinking", Map.of("type", "disabled"));
+        } else {
+            putIfPresent(payload, "max_tokens", request.getMaxTokens());
+            if (request.getInvocationScene() != null && request.getInvocationScene().independentAction()) {
+                payload.put("thinking", Map.of("type", "disabled"));
+            }
         }
+        applyJsonMode(request, payload);
         return new AiPreparedModelRequest(AiApiProtocol.OPENAI_CHAT_COMPLETIONS, type(), payload);
     }
 }

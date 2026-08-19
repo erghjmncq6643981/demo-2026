@@ -6308,7 +6308,8 @@ input.sr-only:disabled + .file-upload-trigger {
 .day-group-date-info {
   display: flex;
   align-items: center;
-  gap: 8px;
+  flex-wrap: wrap;
+  gap: 10px;
 }
 
 .day-group-date {
@@ -6320,6 +6321,14 @@ input.sr-only:disabled + .file-upload-trigger {
 .day-group-meta {
   font-size: 12px;
   color: var(--text-secondary);
+  margin-left: 2px;
+}
+
+.day-group-actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-shrink: 0;
 }
 
 .day-group-units {
