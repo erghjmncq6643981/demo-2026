@@ -115,11 +115,11 @@ public class OpenAiCompatibleModelClient implements AiModelClient {
                 url,
                 request.getMessages() == null ? LearningConstants.ModelClient.EMPTY_SIZE : request.getMessages().size());
         String responseBody = callModel(url, payload, headers, provider, model, startTime);
-        log.debug("模型 HTTP 响应 provider={} model={} cost={}ms bodySize={}",
+        log.debug("模型 HTTP 响应 provider={} model={} cost={}ms responseBody={}",
                 provider,
                 model,
                 System.currentTimeMillis() - startTime,
-                responseBody == null ? LearningConstants.ModelClient.EMPTY_SIZE : responseBody.length());
+                responseBody);
         return parseResponse(responseBody);
     }
 
