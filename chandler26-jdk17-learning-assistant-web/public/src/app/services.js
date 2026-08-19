@@ -52,6 +52,7 @@ export function createAppServices({ state, elements }) {
       elements.saveAgentBtn,
       elements.saveSpeechBtn,
       elements.saveModelBtn,
+      elements.saveAndTestModelBtn,
       elements.saveTemplateBtn,
       elements.saveAccountProfileBtn,
       elements.saveAccountSecurityBtn,

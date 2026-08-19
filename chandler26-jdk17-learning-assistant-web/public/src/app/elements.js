@@ -286,6 +286,7 @@ export function createElements() {
   modelDefaultToggleBtn: $('modelDefaultToggleBtn'),
   modelEnabledToggleBtn: $('modelEnabledToggleBtn'),
   saveModelBtn: $('saveModelBtn'),
+  saveAndTestModelBtn: $('saveAndTestModelBtn'),
   resetModelFormBtn: $('resetModelFormBtn'),
   modelConfigList: $('modelConfigList'),
   systemLogList: $('systemLogList'),

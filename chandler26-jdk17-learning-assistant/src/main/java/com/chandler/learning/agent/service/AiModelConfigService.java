@@ -317,6 +317,18 @@ public class AiModelConfigService {
     }
 
     /**
+     * 解析模型连接测试所需的配置；测试允许检查已保存但停用的模型。
+     */
+    public AiModelConnectionConfig resolveProviderConfigForTest(Long modelConfigId) {
+        AiModelConfig config = getById(modelConfigId);
+        if (config == null) {
+            throw LearningAssistantException.notFound(LearningConstants.ErrorCode.MODEL_CONFIG_NOT_FOUND);
+        }
+        AiModelDefinition.resolve(config.getProvider(), config.getModelName());
+        return toConnectionConfig(config);
+    }
+
+    /**
      * 按供应商和模型解析连接配置，确保 Agent 指定的模型与实际 API 接入点一致。
      */
     public AiModelConnectionConfig resolveProviderConfig(String provider, String modelName) {

@@ -42,6 +42,18 @@ public class OpenAiCompatibleModelClient implements AiModelClient {
      */
     @Override
     public ModelChatResponse chat(ModelChatRequest request) {
+        return chatInternal(request, false);
+    }
+
+    /**
+     * 管理端模型连接测试入口，允许测试已保存但停用的配置。
+     */
+    @Override
+    public ModelChatResponse testConnection(ModelChatRequest request) {
+        return chatInternal(request, true);
+    }
+
+    private ModelChatResponse chatInternal(ModelChatRequest request, boolean connectionTest) {
         String provider = StringUtils.hasText(request.getProvider())
                 ? request.getProvider()
                 : modelConfigService.resolveDefaultProvider();
@@ -50,13 +62,13 @@ public class OpenAiCompatibleModelClient implements AiModelClient {
                     LearningConstants.ErrorCode.MODEL_CONFIG_NOT_FOUND,
                     "未配置可用 AI 模型，请先在个人信息 - Agent管理 - 模型管理中新增并启用模型");
         }
-        AiModelConnectionConfig providerConfig = resolveProviderConfig(request, provider);
+        AiModelConnectionConfig providerConfig = resolveProviderConfig(request, provider, connectionTest);
         if (providerConfig == null) {
             throw LearningAssistantException.badRequest(
                     LearningConstants.ErrorCode.AI_PROVIDER_MISSING,
                     "数据库中未找到可用 AI 模型配置: " + provider);
         }
-        if (!Boolean.TRUE.equals(providerConfig.getEnabled())) {
+        if (!connectionTest && !Boolean.TRUE.equals(providerConfig.getEnabled())) {
             throw LearningAssistantException.badRequest(
                     LearningConstants.ErrorCode.AI_PROVIDER_DISABLED,
                     "AI 供应商已禁用: " + provider);
@@ -147,9 +159,12 @@ public class OpenAiCompatibleModelClient implements AiModelClient {
     /**
      * 处理 {@code resolveProviderConfig} 相关业务。
      */
-    private AiModelConnectionConfig resolveProviderConfig(ModelChatRequest request, String provider) {
+    private AiModelConnectionConfig resolveProviderConfig(ModelChatRequest request, String provider,
+                                                          boolean connectionTest) {
         if (request.getModelConfigId() != null) {
-            return modelConfigService.resolveProviderConfig(request.getModelConfigId());
+            return connectionTest
+                    ? modelConfigService.resolveProviderConfigForTest(request.getModelConfigId())
+                    : modelConfigService.resolveProviderConfig(request.getModelConfigId());
         }
         return modelConfigService.resolveProviderConfig(provider, request.getModel());
     }

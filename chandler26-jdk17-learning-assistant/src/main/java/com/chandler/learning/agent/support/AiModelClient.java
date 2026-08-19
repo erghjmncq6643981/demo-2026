@@ -9,4 +9,9 @@ import com.chandler.learning.agent.domain.dto.ModelChatResponse;
 public interface AiModelClient {
 
     ModelChatResponse chat(ModelChatRequest request);
+
+    /**
+     * 直接测试模型连接，不创建业务会话或调用记录。
+     */
+    ModelChatResponse testConnection(ModelChatRequest request);
 }

@@ -1660,6 +1660,31 @@ textarea:focus {
   color: var(--text);
 }
 
+.model-test-result {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px 8px;
+  align-items: baseline;
+  margin-top: 9px;
+  padding: 8px 10px;
+  border: 1px solid rgba(251, 113, 133, 0.35);
+  border-radius: 6px;
+  background: rgba(251, 113, 133, 0.08);
+  color: var(--danger);
+  font-size: 12px;
+}
+
+.model-test-result.success {
+  border-color: rgba(125, 211, 168, 0.38);
+  background: rgba(125, 211, 168, 0.08);
+  color: var(--green);
+}
+
+.model-test-result small {
+  flex-basis: 100%;
+  color: var(--muted);
+}
+
 .ai-session-detail-modal {
   width: min(1180px, 100%);
   max-height: min(860px, calc(100vh - 28px));
@@ -6597,4 +6622,3 @@ input.sr-only:disabled + .file-upload-trigger {
     grid-template-columns: repeat(2, minmax(0, 1fr));
   }
 }
-

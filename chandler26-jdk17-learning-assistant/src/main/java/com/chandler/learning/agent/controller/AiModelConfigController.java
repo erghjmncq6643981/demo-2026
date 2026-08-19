@@ -3,6 +3,8 @@ package com.chandler.learning.agent.controller;
 import com.chandler.learning.agent.domain.dto.AiModelConfigResponse;
 import com.chandler.learning.agent.domain.dto.AiModelConfigSaveRequest;
 import com.chandler.learning.agent.domain.dto.AiModelOptionResponse;
+import com.chandler.learning.agent.domain.dto.AiModelConnectionTestResponse;
+import com.chandler.learning.agent.service.AiModelConnectionTestService;
 import com.chandler.learning.agent.service.AiModelConfigService;
 import com.chandler.learning.agent.service.learning.AuthService;
 import com.chandler.learning.agent.support.LearningConstants;
@@ -25,6 +27,7 @@ import java.util.Map;
 public class AiModelConfigController {
 
     private final AiModelConfigService modelConfigService;
+    private final AiModelConnectionTestService connectionTestService;
     private final AuthService authService;
 
     @GetMapping
@@ -104,5 +107,15 @@ public class AiModelConfigController {
     public void delete(@PathVariable Long id) {
         authService.requireAdmin(null);
         modelConfigService.delete(id);
+    }
+
+    /**
+     * 发送最小请求验证模型配置，不经过 Agent 或学习会话。
+     */
+    @PostMapping("/{id}/test")
+    @Operation(summary = "测试模型连接")
+    public AiModelConnectionTestResponse test(@PathVariable Long id) {
+        authService.requireAdmin(null);
+        return connectionTestService.test(id);
     }
 }

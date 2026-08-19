@@ -5,6 +5,7 @@ import { providerDefaults, renderModelSelect, renderProviderSelect } from '/src/
 
 export function createModelProfileFeature(ctx) {
   const { state, elements, request, setLoading, toast, logEvent, confirmAction, confirmDelete, renderAgentConfigs } = ctx
+  const testingModelIds = new Set()
 
   function loadModelConfigs() {
     if (state.preview) {
@@ -95,6 +96,8 @@ export function createModelProfileFeature(ctx) {
         const boundAgents = (state.agentConfigs || []).filter((agent) => !agent.deleted && sameId(agent.modelConfigId, item.id))
         const boundAgentNames = boundAgents.length ? boundAgents.map((agent) => agent.name) : (item.boundAgentNames || [])
         const boundAgentCount = boundAgents.length || Number(item.boundAgentCount || 0)
+        const testing = testingModelIds.has(String(item.id))
+        const testResult = item.connectionTestResult
         return `
           <div class="model-item ${item.enabled ? '' : 'disabled'}">
             <div>
@@ -113,8 +116,16 @@ export function createModelProfileFeature(ctx) {
                 <span>Token <strong>${Number(item.totalTokens || 0).toLocaleString()}</strong></span>
                 <span>平均 <strong>${Number(item.averageLatencyMs || 0)} ms</strong></span>
               </div>
+              ${testResult ? `
+                <div class="model-test-result ${testResult.success ? 'success' : 'failed'}" role="status">
+                  <strong>${testResult.success ? '连接有效' : '连接失败'}</strong>
+                  <span>${escapeHtml(testResult.message || '')}${testResult.latencyMs == null ? '' : ` · ${Number(testResult.latencyMs)} ms`}</span>
+                  ${testResult.responsePreview ? `<small>响应：${escapeHtml(testResult.responsePreview)}</small>` : ''}
+                </div>
+              ` : ''}
             </div>
             <div class="row-actions">
+              <button class="secondary-button compact" type="button" data-model-test="${escapeHtml(item.id)}" ${testing || item.supported === false ? 'disabled' : ''}>${testing ? '测试中…' : '测试连接'}</button>
               <button class="icon-action-button" type="button" data-model-toggle="${escapeHtml(item.id)}" title="${boundAgentCount > 0 && item.enabled ? '请先更换关联 Agent 的模型' : item.enabled ? '停用模型' : '启用模型'}" aria-label="${item.enabled ? '停用模型' : '启用模型'}" ${(item.supported === false && !item.enabled) || (boundAgentCount > 0 && item.enabled) ? 'disabled' : ''}>${item.enabled ? '⏸' : '▶'}</button>
               <button class="icon-action-button" type="button" data-model-edit="${escapeHtml(item.id)}" title="编辑模型" aria-label="编辑模型">✎</button>
               <button class="danger-icon-button" type="button" data-model-delete="${escapeHtml(item.id)}" title="${boundAgentCount > 0 ? '请先更换关联 Agent 的模型' : '删除模型'}" ${boundAgentCount > 0 ? 'disabled' : ''}>×</button>
@@ -125,6 +136,9 @@ export function createModelProfileFeature(ctx) {
       .join('')
     elements.modelConfigList.querySelectorAll('[data-model-edit]').forEach((button) => {
       button.addEventListener('click', () => openModelModal(button.getAttribute('data-model-edit')))
+    })
+    elements.modelConfigList.querySelectorAll('[data-model-test]').forEach((button) => {
+      button.addEventListener('click', () => testModelConfig(button.getAttribute('data-model-test')))
     })
     elements.modelConfigList.querySelectorAll('[data-model-toggle]').forEach((button) => {
       button.addEventListener('click', () => toggleModelConfig(button.getAttribute('data-model-toggle')))
@@ -190,7 +204,7 @@ export function createModelProfileFeature(ctx) {
     syncModelToggleButtons()
   }
 
-  async function saveModelConfig() {
+  async function saveModelConfig(options = {}) {
     const payload = {
       name: elements.modelNameInput.value.trim(),
       provider: elements.modelProviderInput.value.trim(),
@@ -225,20 +239,62 @@ export function createModelProfileFeature(ctx) {
         else state.modelConfigs.push(next)
         renderModelConfigs()
         resetModelForm()
-        toast('设计预览：模型配置已保存')
+        if (options.testAfterSave) {
+          await testModelConfig(id)
+        } else {
+          toast('设计预览：模型配置已保存')
+        }
         return
       }
       const path = state.currentModelEditId ? `/api/v1/ai/model-configs/${encodeURIComponent(state.currentModelEditId)}` : '/api/v1/ai/model-configs'
       const method = state.currentModelEditId ? 'PUT' : 'POST'
-      await request(path, { method, body: JSON.stringify(payload) })
+      const saved = await request(path, { method, body: JSON.stringify(payload) })
       await loadModelConfigs()
       resetModelForm()
-      toast('模型配置已保存')
+      if (options.testAfterSave && saved?.id) {
+        await testModelConfig(saved.id)
+      } else {
+        toast('模型配置已保存')
+      }
     } catch (error) {
       logEvent('error', '模型配置保存失败', error.message)
       toast(`模型配置保存失败：${error.message}`)
     } finally {
       setLoading(false)
+    }
+  }
+
+  async function testModelConfig(id) {
+    const item = state.modelConfigs.find((model) => sameId(model.id, id))
+    if (!item || testingModelIds.has(String(item.id))) return
+    const key = String(item.id)
+    testingModelIds.add(key)
+    item.connectionTestResult = null
+    renderModelConfigs()
+    try {
+      const result = state.preview
+        ? {
+            success: true,
+            provider: item.provider,
+            modelName: item.modelName,
+            latencyMs: 428,
+            message: '连接成功，模型已返回有效响应',
+            responsePreview: 'OK',
+          }
+        : await request(`/api/v1/ai/model-configs/${encodeURIComponent(item.id)}/test`, { method: 'POST' })
+      item.connectionTestResult = result || { success: false, message: '未收到测试结果' }
+      if (item.connectionTestResult.success) {
+        toast(`连接成功 · ${item.modelDisplayName || item.modelName} · ${Number(item.connectionTestResult.latencyMs || 0)} ms`)
+      } else {
+        toast(`连接失败：${item.connectionTestResult.message || '请检查模型配置'}`)
+      }
+    } catch (error) {
+      item.connectionTestResult = { success: false, message: error.message || '模型连接测试失败' }
+      logEvent('error', '模型连接测试失败', `${item.name}：${error.message}`)
+      toast(`连接失败：${error.message}`)
+    } finally {
+      testingModelIds.delete(key)
+      renderModelConfigs()
     }
   }
 
@@ -310,6 +366,7 @@ export function createModelProfileFeature(ctx) {
     syncToggleButton,
     toggleModelFlag,
     saveModelConfig,
+    testModelConfig,
     toggleModelConfig,
     setDefaultModelConfig,
     deleteModelConfig,

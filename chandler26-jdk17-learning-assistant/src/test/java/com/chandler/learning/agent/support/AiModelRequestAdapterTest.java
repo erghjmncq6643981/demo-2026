@@ -53,6 +53,19 @@ class AiModelRequestAdapterTest {
         assertThat(payload).doesNotContainKey("reasoning_effort");
     }
 
+    @Test
+    void kimiK3UsesLowReasoningForConnectionTest() {
+        ModelChatRequest request = request("kimi-k3");
+        request.setInvocationScene(AiInvocationScene.MODEL_CONNECTION_TEST);
+        request.setMaxTokens(16);
+
+        Map<String, Object> payload = new KimiChatRequestAdapter().prepare(request).payload();
+
+        assertThat(payload).containsEntry("max_completion_tokens", 16)
+                .containsEntry("reasoning_effort", "low");
+        assertThat(payload).doesNotContainKey("response_format");
+    }
+
     private ModelChatRequest request(String model) {
         ModelChatRequest request = new ModelChatRequest();
         request.setModel(model);

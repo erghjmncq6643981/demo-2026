@@ -2,6 +2,7 @@ package com.chandler.learning.agent.support;
 
 import com.chandler.learning.agent.domain.dto.ModelChatRequest;
 import com.chandler.learning.agent.domain.enums.AiApiProtocol;
+import com.chandler.learning.agent.domain.enums.AiInvocationScene;
 import com.chandler.learning.agent.domain.enums.AiRequestAdapterType;
 import org.springframework.stereotype.Component;
 
@@ -24,7 +25,8 @@ public class KimiChatRequestAdapter extends AbstractOpenAiChatRequestAdapter {
         putIfPresent(payload, "max_completion_tokens", request.getMaxTokens());
         applyJsonMode(request, payload);
         if ("kimi-k3".equalsIgnoreCase(request.getModel())) {
-            payload.put("reasoning_effort", "high");
+            payload.put("reasoning_effort",
+                    request.getInvocationScene() == AiInvocationScene.MODEL_CONNECTION_TEST ? "low" : "high");
         } else if (request.getInvocationScene() != null && request.getInvocationScene().independentAction()) {
             payload.put("thinking", Map.of("type", "disabled"));
         }

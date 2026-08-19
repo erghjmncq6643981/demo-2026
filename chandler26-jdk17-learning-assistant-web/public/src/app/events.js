@@ -164,6 +164,7 @@ elements.modelProviderInput.addEventListener('change', () => syncModelProviderDe
 elements.modelProviderInput.addEventListener('input', () => syncModelProviderDefaults())
 elements.modelDefaultToggleBtn?.addEventListener('click', () => toggleModelFlag(elements.modelDefaultInput))
 elements.modelEnabledToggleBtn?.addEventListener('click', () => toggleModelFlag(elements.modelEnabledInput))
+elements.saveAndTestModelBtn?.addEventListener('click', () => saveModelConfig({ testAfterSave: true }))
 elements.openAgentModalBtn?.addEventListener('click', () => openAgentModal())
 elements.closeAgentModalBtn?.addEventListener('click', closeAgentModal)
 elements.agentModal?.addEventListener('click', (event) => {

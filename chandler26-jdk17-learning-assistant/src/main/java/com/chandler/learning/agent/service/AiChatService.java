@@ -76,6 +76,11 @@ public class AiChatService {
         AiInvocationScene invocationScene = request.getInvocationScene() == null
                 ? AiInvocationScene.GENERAL_CHAT
                 : request.getInvocationScene();
+        if (AiInvocationScene.MODEL_CONNECTION_TEST.equals(invocationScene)) {
+            throw LearningAssistantException.badRequest(
+                    LearningConstants.ErrorCode.AI_INVOCATION_SCENE_INVALID,
+                    "模型连接验证必须在模型管理中直接执行，不能通过 Agent 调用");
+        }
         AiAgent agent = getEnabledAgent(request.getAgentCode());
         Long userId = request.getUserId() != null ? request.getUserId() : chatSessionService.currentUserId();
         AiChatSession session = resolveSession(agent, request, userId, startTime, invocationScene);

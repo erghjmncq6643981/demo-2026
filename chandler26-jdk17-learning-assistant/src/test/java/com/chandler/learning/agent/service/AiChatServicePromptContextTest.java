@@ -132,6 +132,17 @@ class AiChatServicePromptContextTest {
         verify(modelConfigService).requireEnabled(202L);
     }
 
+    @Test
+    void rejectsConnectionTestSceneThroughAgent() {
+        AiChatService service = serviceWith(mock(AiChatSessionService.class));
+        AgentChatRequest request = new AgentChatRequest();
+        request.setInvocationScene(AiInvocationScene.MODEL_CONNECTION_TEST);
+
+        assertThatThrownBy(() -> service.chat(request))
+                .isInstanceOf(LearningAssistantException.class)
+                .hasMessageContaining("不能通过 Agent 调用");
+    }
+
     private AiChatService serviceWith(AiChatSessionService sessionService) {
         return new AiChatService(
                 mock(AiAgentService.class), mock(AiPromptTemplateService.class), sessionService,
