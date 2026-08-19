@@ -56,7 +56,7 @@ public class LearningPlan extends BaseEntity {
     /** 当前正在学习的场景单元 ID。 */
     private Long currentUnitId;
 
-    /** 计划复用的 AI 学习会话 ID。 */
+    /** 计划复用的 AI 审计会话 ID；固定生成动作不会把该会话的历史消息发送给模型。 */
     private Long aiSessionId;
 
     /** 当前场景材料生成租约令牌，用于跨实例防重。 */

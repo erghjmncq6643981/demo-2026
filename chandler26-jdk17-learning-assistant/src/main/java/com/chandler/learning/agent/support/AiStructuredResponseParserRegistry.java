@@ -1,6 +1,7 @@
 package com.chandler.learning.agent.support;
 
 import com.chandler.learning.agent.domain.enums.AiInvocationScene;
+import com.chandler.learning.agent.domain.enums.AiResponseParserType;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import org.springframework.stereotype.Component;
 
@@ -26,10 +27,15 @@ public class AiStructuredResponseParserRegistry {
     /**
      * 解析指定模型的结构化响应。场景参数保留为明确的调用边界，字段契约由调用方随后校验。
      */
-    public AiStructuredResponseParseResult parse(AiInvocationScene invocationScene, String provider,
-                                                  String modelName, String content) {
+    public AiStructuredResponseParseResult parse(AiInvocationScene invocationScene,
+                                                  AiResponseParserType parserType, String content) {
+        Class<? extends AiStructuredResponseParser> parserClass = switch (parserType) {
+            case DEEPSEEK_JSON -> DeepSeekJsonResponseParser.class;
+            case KIMI_JSON -> KimiJsonResponseParser.class;
+            case STRICT_JSON -> StrictJsonResponseParser.class;
+        };
         return parsers.stream()
-                .filter(parser -> parser.supports(provider, modelName))
+                .filter(parserClass::isInstance)
                 .findFirst()
                 .orElseThrow()
                 .parse(content);

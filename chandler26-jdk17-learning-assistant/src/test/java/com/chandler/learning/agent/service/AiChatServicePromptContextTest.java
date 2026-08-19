@@ -5,6 +5,7 @@ import com.chandler.learning.agent.domain.dto.ChatMessageParam;
 import com.chandler.learning.agent.domain.entity.AiAgent;
 import com.chandler.learning.agent.domain.entity.AiChatSession;
 import com.chandler.learning.agent.domain.enums.AiInvocationScene;
+import com.chandler.learning.agent.domain.enums.AiModelDefinition;
 import com.chandler.learning.agent.exception.LearningAssistantException;
 import com.chandler.learning.agent.mapper.AiModelCallRecordMapper;
 import com.chandler.learning.agent.service.learning.UserDisplayNameService;
@@ -62,15 +63,43 @@ class AiChatServicePromptContextTest {
     }
 
     @Test
-    void rejectsPromptAtNinetyPercentOfDefaultEightThousandTokenContext() {
+    void sceneGenerationReusesSessionForAuditWithoutSendingPreviousMaterials() {
+        AiChatSessionService sessionService = mock(AiChatSessionService.class);
+        AiChatService service = serviceWith(sessionService);
+
+        AiAgent agent = new AiAgent();
+        agent.setSystemPrompt("仅使用本批候选词 {{candidate_words}} 生成场景材料");
+        agent.setConcisePrompt("延续历史场景生成材料");
+        AgentChatRequest request = new AgentChatRequest();
+        request.setMessage("生成当前场景材料");
+        request.setVariables(new HashMap<>(Map.of(
+                "candidate_words", List.of("airport", "boarding"),
+                "completed_scenes", "数月计划中已经生成的大量历史场景材料")));
+
+        AiChatSession session = new AiChatSession();
+        session.setId(99L);
+        @SuppressWarnings("unchecked")
+        List<ChatMessageParam> messages = ReflectionTestUtils.invokeMethod(
+                service, "buildMessages", agent, request, session, AiInvocationScene.VOCABULARY_SCENE_UNIT);
+
+        assertThat(messages).hasSize(2);
+        assertThat(messages.get(0).getContent())
+                .contains("airport", "boarding")
+                .doesNotContain("历史场景材料");
+        assertThat(messages.get(1).getContent()).isEqualTo("生成当前场景材料");
+        verify(sessionService, never()).getHistory(99L);
+    }
+
+    @Test
+    void rejectsPromptAtNinetyPercentOfSelectedModelContext() {
         AiChatService service = serviceWith(mock(AiChatSessionService.class));
         List<ChatMessageParam> messages = List.of(new ChatMessageParam("user", "a".repeat(30_000)));
 
         assertThatThrownBy(() -> ReflectionTestUtils.invokeMethod(
                 service, "validatePromptBudget", AiInvocationScene.ARTICLE_STUDY_MATERIAL,
-                "unknown", "unknown", 7_504, 1))
+                AiModelDefinition.DEEPSEEK_V4_PRO, 943_600, 1))
                 .isInstanceOf(LearningAssistantException.class)
-                .hasMessageContaining("7372 Token");
+                .hasMessageContaining("943718 Token");
     }
 
     private AiChatService serviceWith(AiChatSessionService sessionService) {

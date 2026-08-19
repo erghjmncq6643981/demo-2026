@@ -6,6 +6,7 @@ import com.chandler.learning.agent.domain.dto.AiModelConfigSaveRequest;
 import com.chandler.learning.agent.domain.dto.AiModelUsageSummary;
 import com.chandler.learning.agent.domain.dto.AiModelOptionResponse;
 import com.chandler.learning.agent.domain.entity.AiModelConfig;
+import com.chandler.learning.agent.domain.enums.AiModelDefinition;
 import com.chandler.learning.agent.domain.enums.SystemLogType;
 import com.chandler.learning.agent.exception.LearningAssistantException;
 import com.chandler.learning.agent.mapper.AiModelConfigMapper;
@@ -69,6 +70,7 @@ public class AiModelConfigService {
                         .orderByDesc(AiModelConfig::getIsDefault)
                         .orderByAsc(AiModelConfig::getSequence))
                 .stream()
+                .filter(config -> AiModelDefinition.supports(config.getProvider(), config.getModelName()))
                 .map(this::toOptionResponse)
                 .toList();
     }
@@ -87,21 +89,16 @@ public class AiModelConfigService {
      * 查询 {@code getDefaultEnabled} 相关业务。
      */
     public AiModelConfig getDefaultEnabled() {
-        AiModelConfig config = modelConfigMapper.selectOne(new LambdaQueryWrapper<AiModelConfig>()
+        return modelConfigMapper.selectList(new LambdaQueryWrapper<AiModelConfig>()
                 .eq(AiModelConfig::getDeleted, false)
                 .eq(AiModelConfig::getEnabled, true)
-                .eq(AiModelConfig::getIsDefault, true)
+                .orderByDesc(AiModelConfig::getIsDefault)
                 .orderByAsc(AiModelConfig::getSequence)
-                .last(LearningConstants.SQL_LIMIT_ONE));
-        if (config != null) {
-            return config;
-        }
-        return modelConfigMapper.selectOne(new LambdaQueryWrapper<AiModelConfig>()
-                .eq(AiModelConfig::getDeleted, false)
-                .eq(AiModelConfig::getEnabled, true)
-                .orderByAsc(AiModelConfig::getSequence)
-                .orderByAsc(AiModelConfig::getCreateTime)
-                .last(LearningConstants.SQL_LIMIT_ONE));
+                .orderByAsc(AiModelConfig::getCreateTime))
+                .stream()
+                .filter(config -> AiModelDefinition.supports(config.getProvider(), config.getModelName()))
+                .findFirst()
+                .orElse(null);
     }
 
     /**
@@ -170,6 +167,9 @@ public class AiModelConfigService {
                     LearningConstants.ErrorCode.MODEL_CONFIG_NOT_FOUND,
                     "模型配置不存在: " + id);
         }
+        if (enabled) {
+            AiModelDefinition.resolve(config.getProvider(), config.getModelName());
+        }
         config.setEnabled(enabled);
         config.setUpdateTime(LocalDateTime.now());
         modelConfigMapper.updateById(config);
@@ -189,6 +189,9 @@ public class AiModelConfigService {
             throw LearningAssistantException.notFound(
                     LearningConstants.ErrorCode.MODEL_CONFIG_NOT_FOUND,
                     "模型配置不存在: " + id);
+        }
+        if (Boolean.TRUE.equals(isDefault)) {
+            AiModelDefinition.resolve(config.getProvider(), config.getModelName());
         }
         config.setSequence(sequence == null ? LearningConstants.DEFAULT_SEQUENCE : sequence);
         config.setIsDefault(Boolean.TRUE.equals(isDefault));
@@ -245,7 +248,28 @@ public class AiModelConfigService {
                     LearningConstants.ErrorCode.MODEL_CONFIG_NOT_FOUND,
                     "模型配置不存在: " + modelConfigId);
         }
+        if (!Boolean.TRUE.equals(config.getEnabled())) {
+            throw LearningAssistantException.badRequest(LearningConstants.ErrorCode.AI_PROVIDER_DISABLED);
+        }
+        AiModelDefinition.resolve(config.getProvider(), config.getModelName());
         return toConnectionConfig(config);
+    }
+
+    /**
+     * 按供应商和模型解析连接配置，确保 Agent 指定的模型与实际 API 接入点一致。
+     */
+    public AiModelConnectionConfig resolveProviderConfig(String provider, String modelName) {
+        return modelConfigMapper.selectList(new LambdaQueryWrapper<AiModelConfig>()
+                        .eq(AiModelConfig::getDeleted, false)
+                        .eq(AiModelConfig::getEnabled, true)
+                        .eq(AiModelConfig::getProvider, provider)
+                        .eq(AiModelConfig::getModelName, modelName)
+                        .orderByDesc(AiModelConfig::getIsDefault)
+                        .orderByAsc(AiModelConfig::getSequence))
+                .stream()
+                .findFirst()
+                .map(this::toConnectionConfig)
+                .orElse(null);
     }
 
     /**
@@ -271,13 +295,16 @@ public class AiModelConfigService {
         if (!StringUtils.hasText(provider)) {
             return getDefaultEnabled();
         }
-        return modelConfigMapper.selectOne(new LambdaQueryWrapper<AiModelConfig>()
+        return modelConfigMapper.selectList(new LambdaQueryWrapper<AiModelConfig>()
                 .eq(AiModelConfig::getDeleted, false)
                 .eq(AiModelConfig::getEnabled, true)
                 .eq(AiModelConfig::getProvider, provider)
                 .orderByDesc(AiModelConfig::getIsDefault)
-                .orderByAsc(AiModelConfig::getSequence)
-                .last(LearningConstants.SQL_LIMIT_ONE));
+                .orderByAsc(AiModelConfig::getSequence))
+                .stream()
+                .filter(config -> AiModelDefinition.supports(config.getProvider(), config.getModelName()))
+                .findFirst()
+                .orElse(null);
     }
 
     /**
@@ -298,9 +325,10 @@ public class AiModelConfigService {
      * 更新 {@code copy} 相关业务。
      */
     private void copy(AiModelConfigSaveRequest request, AiModelConfig config, boolean create) {
+        AiModelDefinition modelDefinition = AiModelDefinition.resolve(request.getProvider(), request.getModelName());
         config.setName(request.getName().trim());
-        config.setProvider(request.getProvider().trim());
-        config.setModelName(request.getModelName().trim());
+        config.setProvider(modelDefinition.getProvider().getCode());
+        config.setModelName(modelDefinition.getApiModelId());
         config.setBaseUrl(request.getBaseUrl().trim());
         config.setChatPath(StringUtils.hasText(request.getChatPath()) ? request.getChatPath().trim() : LearningConstants.DEFAULT_CHAT_PATH);
         if (create || StringUtils.hasText(request.getApiKey())) {
@@ -337,11 +365,22 @@ public class AiModelConfigService {
 
     private AiModelConfigResponse toResponse(AiModelConfig config, AiModelUsageSummary usage) {
         encryptLegacyApiKey(config);
+        AiModelDefinition modelDefinition = modelDefinition(config);
         AiModelConfigResponse response = new AiModelConfigResponse();
         response.setId(config.getId());
         response.setName(config.getName());
         response.setProvider(config.getProvider());
         response.setModelName(config.getModelName());
+        response.setSupported(modelDefinition != null);
+        if (modelDefinition != null) {
+            response.setProviderName(modelDefinition.getProvider().getTitle());
+            response.setModelDisplayName(modelDefinition.getTitle());
+            response.setApiProtocol(modelDefinition.getProvider().getApiProtocol().getCode());
+            response.setRequestAdapter(modelDefinition.getRequestAdapter().getCode());
+            response.setResponseParser(modelDefinition.getResponseParser().getCode());
+            response.setContextWindowTokens(modelDefinition.getContextWindowTokens());
+            response.setMaxOutputTokens(modelDefinition.getMaxOutputTokens());
+        }
         response.setBaseUrl(config.getBaseUrl());
         response.setChatPath(config.getChatPath());
         response.setApiKeyMasked(apiKeyCryptoService.mask(config.getApiKey()));
@@ -360,15 +399,26 @@ public class AiModelConfigService {
     }
 
     private AiModelOptionResponse toOptionResponse(AiModelConfig config) {
+        AiModelDefinition modelDefinition = AiModelDefinition.resolve(config.getProvider(), config.getModelName());
         AiModelOptionResponse response = new AiModelOptionResponse();
         response.setId(config.getId());
         response.setName(config.getName());
         response.setProvider(config.getProvider());
         response.setModelName(config.getModelName());
+        response.setModelDisplayName(modelDefinition.getTitle());
+        response.setContextWindowTokens(modelDefinition.getContextWindowTokens());
         response.setEnabled(config.getEnabled());
         response.setIsDefault(config.getIsDefault());
         response.setSequence(config.getSequence());
         return response;
+    }
+
+    private AiModelDefinition modelDefinition(AiModelConfig config) {
+        return java.util.Arrays.stream(AiModelDefinition.values())
+                .filter(model -> model.getProvider().getCode().equalsIgnoreCase(config.getProvider())
+                        && model.getApiModelId().equalsIgnoreCase(config.getModelName()))
+                .findFirst()
+                .orElse(null);
     }
 
     private String usageKey(AiModelUsageSummary usage) {

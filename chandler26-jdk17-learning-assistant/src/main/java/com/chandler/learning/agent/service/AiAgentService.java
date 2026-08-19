@@ -4,6 +4,7 @@ import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import com.chandler.learning.agent.domain.dto.AgentSaveRequest;
 import com.chandler.learning.agent.domain.entity.AiAgent;
 import com.chandler.learning.agent.domain.enums.AiAgentType;
+import com.chandler.learning.agent.domain.enums.AiModelDefinition;
 import com.chandler.learning.agent.domain.enums.SystemLogType;
 import com.chandler.learning.agent.exception.LearningAssistantException;
 import com.chandler.learning.agent.mapper.AiAgentMapper;
@@ -112,6 +113,9 @@ public class AiAgentService {
      */
     public void updateEnabled(Long id, boolean enabled) {
         AiAgent agent = requireAgent(id);
+        if (enabled) {
+            AiModelDefinition.resolve(agent.getModelProvider(), agent.getModelName());
+        }
         agent.setEnabled(enabled);
         agent.setUpdateTime(LocalDateTime.now());
         agentMapper.updateById(agent);
@@ -150,6 +154,7 @@ public class AiAgentService {
                     LearningConstants.ErrorCode.AGENT_NOT_FOUND,
                     "Agent 不存在: " + id);
         }
+        AiModelDefinition.resolve(source.getModelProvider(), source.getModelName());
         AiAgent clone = new AiAgent();
         clone.setName(source.getName() + " 副本");
         clone.setCode(source.getCode() + "-" + LocalDateTime.now().getNano());
@@ -179,6 +184,7 @@ public class AiAgentService {
      * 更新 {@code copy} 相关业务。
      */
     private void copy(AgentSaveRequest request, AiAgent agent) {
+        AiModelDefinition modelDefinition = AiModelDefinition.resolve(request.getModelProvider(), request.getModelName());
         agent.setName(request.getName());
         agent.setCode(request.getCode());
         agent.setType(AiAgentType.of(request.getType()).getCode());
@@ -187,8 +193,8 @@ public class AiAgentService {
         agent.setSystemPrompt(request.getSystemPrompt());
         agent.setConcisePrompt(request.getConcisePrompt());
         agent.setWelcomeMessage(request.getWelcomeMessage());
-        agent.setModelProvider(request.getModelProvider());
-        agent.setModelName(request.getModelName());
+        agent.setModelProvider(modelDefinition.getProvider().getCode());
+        agent.setModelName(modelDefinition.getApiModelId());
         agent.setTemperature(request.getTemperature());
         agent.setMaxTokens(request.getMaxTokens());
         agent.setPresetCommands(request.getPresetCommands());

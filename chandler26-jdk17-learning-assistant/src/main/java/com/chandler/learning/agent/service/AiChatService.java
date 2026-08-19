@@ -11,6 +11,7 @@ import com.chandler.learning.agent.domain.entity.AiChatSession;
 import com.chandler.learning.agent.domain.entity.AiModelCallRecord;
 import com.chandler.learning.agent.domain.entity.AiModelConfig;
 import com.chandler.learning.agent.domain.enums.AiInvocationScene;
+import com.chandler.learning.agent.domain.enums.AiModelDefinition;
 import com.chandler.learning.agent.domain.enums.ChatMessageRole;
 import com.chandler.learning.agent.domain.enums.LearningScene;
 import com.chandler.learning.agent.exception.LearningAssistantException;
@@ -82,13 +83,21 @@ public class AiChatService {
         AiModelConfig selectedModelConfig = resolveSelectedModelConfig(request.getModelConfigId());
         String provider = resolveProvider(agent, selectedModelConfig);
         String modelName = resolveModelName(agent, provider, selectedModelConfig);
+        AiModelDefinition modelDefinition = modelCapabilityResolver.resolve(provider, modelName);
         List<ChatMessageParam> messages = buildMessages(agent, request, session, invocationScene);
         int estimatedInputTokens = estimatePromptTokens(messages);
-        int safeContextWindow = validatePromptBudget(invocationScene, provider, modelName, estimatedInputTokens, messages.size());
+        int safeContextWindow = validatePromptBudget(invocationScene, modelDefinition, estimatedInputTokens,
+                messages.size());
         ModelChatRequest modelRequest = new ModelChatRequest();
         modelRequest.setInvocationScene(invocationScene);
-        modelRequest.setProvider(provider);
-        modelRequest.setModel(modelName);
+        modelRequest.setProvider(modelDefinition.getProvider().getCode());
+        modelRequest.setModel(modelDefinition.getApiModelId());
+        modelRequest.setApiProtocol(modelDefinition.getProvider().getApiProtocol());
+        modelRequest.setRequestAdapter(modelDefinition.getRequestAdapter());
+        modelRequest.setResponseParser(modelDefinition.getResponseParser());
+        modelRequest.setModelContextWindowTokens(modelDefinition.getContextWindowTokens());
+        modelRequest.setEffectiveContextWindowTokens(
+                modelCapabilityResolver.effectiveContextWindowTokens(modelDefinition));
         modelRequest.setModelConfigId(selectedModelConfig == null ? null : selectedModelConfig.getId());
         modelRequest.setTemperature(agent.getTemperature());
         int configuredMaxTokens = agent.getMaxTokens() == null
@@ -100,7 +109,8 @@ public class AiChatService {
                     LearningConstants.ErrorCode.AI_PROMPT_TOO_LARGE,
                     "本次「" + invocationScene.getTitle() + "」请求没有足够的安全输出空间，请减少输入后重试");
         }
-        modelRequest.setMaxTokens(Math.min(configuredMaxTokens, availableOutputTokens));
+        modelRequest.setMaxTokens(Math.min(Math.min(configuredMaxTokens, modelDefinition.getMaxOutputTokens()),
+                availableOutputTokens));
         if (AiInvocationScene.VOCABULARY_SCENE_UNIT.equals(invocationScene)
                 || AiInvocationScene.VOCABULARY_CARD_BATCH.equals(invocationScene)) {
             modelRequest.setFrequencyPenalty(0.3);
@@ -128,8 +138,8 @@ public class AiChatService {
                 request.getBusinessId());
         try {
             ModelChatResponse modelResponse = aiModelClient.chat(modelRequest);
-            AiStructuredResponseParseResult parsedResponse = validateStructuredResponse(invocationScene, provider,
-                    modelName, modelResponse.getContent());
+            AiStructuredResponseParseResult parsedResponse = validateStructuredResponse(invocationScene,
+                    modelDefinition, modelResponse.getContent());
             if (parsedResponse != null) {
                 modelResponse.setContent(parsedResponse.normalizedContent());
                 modelResponse.setStructuredParser(parsedResponse.parserName());
@@ -298,10 +308,13 @@ public class AiChatService {
     /**
      * 按实际模型能力而非请求字节数控制上下文。输入和模型最大输出合计触及 90% 前会被拒绝。
      */
-    private int validatePromptBudget(AiInvocationScene invocationScene, String provider, String modelName,
+    private int validatePromptBudget(AiInvocationScene invocationScene, AiModelDefinition modelDefinition,
                                      int estimatedTokens, int messageCount) {
-        int contextWindow = modelCapabilityResolver.contextWindowTokens(provider, modelName);
-        int safeLimit = modelCapabilityResolver.safeContextWindowTokens(provider, modelName);
+        String provider = modelDefinition.getProvider().getCode();
+        String modelName = modelDefinition.getApiModelId();
+        int contextWindow = modelCapabilityResolver.effectiveContextWindowTokens(modelDefinition);
+        int safeLimit = contextWindow * LearningConstants.AiContext.SAFE_USAGE_PERCENT
+                / LearningConstants.PERCENT_BASE;
         log.debug("AI 请求上下文估算 invocationScene={} provider={} model={} estimatedTokens={} contextWindow={} safeLimit={} messageCount={}",
                 invocationScene.getCode(), provider, modelName, estimatedTokens, contextWindow, safeLimit, messageCount);
         if (estimatedTokens >= safeLimit - LearningConstants.AiContext.MIN_OUTPUT_TOKENS) {
@@ -346,14 +359,14 @@ public class AiChatService {
 
     /** 统一执行模型解析和场景级结构化响应契约，业务服务再校验字段内容和业务覆盖范围。 */
     private AiStructuredResponseParseResult validateStructuredResponse(AiInvocationScene invocationScene,
-                                                                        String provider, String modelName,
+                                                                        AiModelDefinition modelDefinition,
                                                                         String content) {
         if (!invocationScene.isStructuredResponse()) {
             return null;
         }
         try {
-            AiStructuredResponseParseResult result = structuredResponseParserRegistry.parse(invocationScene, provider,
-                    modelName, content);
+            AiStructuredResponseParseResult result = structuredResponseParserRegistry.parse(invocationScene,
+                    modelDefinition.getResponseParser(), content);
             JsonNode root = result.root();
             if (root == null || !root.isObject()) {
                 throw LearningAssistantException.badRequest(LearningConstants.ErrorCode.AI_RESPONSE_PARSE_FAILED);
@@ -374,11 +387,12 @@ public class AiChatService {
             throw ex;
         } catch (AiStructuredResponseParseException ex) {
             log.debug("AI structured response parsing failed. provider={} model={} parser={} stage={} repairs={}",
-                    provider, modelName, ex.getParserName(), ex.getParseStage(), ex.getRepairs(), ex);
+                    modelDefinition.getProvider().getCode(), modelDefinition.getApiModelId(), ex.getParserName(),
+                    ex.getParseStage(), ex.getRepairs(), ex);
             throw LearningAssistantException.of(LearningConstants.ErrorCode.AI_RESPONSE_PARSE_FAILED, ex);
         } catch (Exception ex) {
             log.debug("AI structured response contract validation failed. provider={} model={} error={}",
-                    provider, modelName, ex.getMessage(), ex);
+                    modelDefinition.getProvider().getCode(), modelDefinition.getApiModelId(), ex.getMessage(), ex);
             throw LearningAssistantException.badRequest(LearningConstants.ErrorCode.AI_RESPONSE_PARSE_FAILED);
         }
     }
@@ -574,6 +588,11 @@ public class AiChatService {
                 ? null : request.getInvocationScene().getCode());
         audit.put("provider", request.getProvider());
         audit.put("model", request.getModel());
+        audit.put("apiProtocol", request.getApiProtocol() == null ? null : request.getApiProtocol().getCode());
+        audit.put("requestAdapter", request.getRequestAdapter() == null ? null : request.getRequestAdapter().getCode());
+        audit.put("responseParser", request.getResponseParser() == null ? null : request.getResponseParser().getCode());
+        audit.put("modelContextWindowTokens", request.getModelContextWindowTokens());
+        audit.put("effectiveContextWindowTokens", request.getEffectiveContextWindowTokens());
         audit.put("modelConfigId", request.getModelConfigId());
         audit.put("temperature", request.getTemperature());
         audit.put("maxTokens", request.getMaxTokens());

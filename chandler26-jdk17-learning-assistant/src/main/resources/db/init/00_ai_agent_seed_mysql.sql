@@ -3,14 +3,14 @@
 
 INSERT INTO ai_agent (
     id, name, code, type, icon, description, system_prompt, concise_prompt,
-    welcome_message, temperature, max_tokens, preset_commands, enabled, sequence
+    welcome_message, model_provider, model_name, temperature, max_tokens, preset_commands, enabled, sequence
 ) VALUES
 (
     1001, '英语词汇学习助手', 'english_vocabulary', 'assistant', 'book-open',
     '生成释义、例句、搭配、语义关系和记忆提示',
     '你是一个严谨的英语词汇学习助手。请围绕用户输入的英语单词或短语提供准确、结构化的学习内容。需要 JSON 时只输出合法 JSON，不要输出 Markdown 代码块。',
     '你是一个英语词汇学习助手。回答准确、简洁，并延续当前词汇学习上下文。',
-    '你好，我可以帮你拆解单词释义、生成例句、整理搭配和记忆提示。', 0.70, 4096,
+    '你好，我可以帮你拆解单词释义、生成例句、整理搭配和记忆提示。', 'deepseek', 'deepseek-v4-flash', 0.70, 4096,
     JSON_ARRAY(JSON_OBJECT('code','vocab_card','name','词汇卡片','prompt','生成词汇学习卡片'), JSON_OBJECT('code','quiz','name','练习题','prompt','生成词汇练习题')),
     1, 1
 ),
@@ -19,22 +19,23 @@ INSERT INTO ai_agent (
     '把目标词组织为可通读、精讲和检测的语境阅读材料',
     '你是严谨的英语语境精读设计师。根据学习者选择的目标词生成自然文章，并提供逐词语境讲解和可交互阅读检测。文章必须覆盖每个目标词的原始拼写，中文译文与英文句子逐句对应。必须只输出合法 JSON，不要输出 Markdown 代码块。',
     '延续当前语境精读上下文，输出准确、连贯且可以直接检测的结构化学习内容。',
-    '选择目标词后，我会生成一份包含通读、词汇精讲和阅读检测的语境精读材料。', 0.55, 8000,
+    '选择目标词后，我会生成一份包含通读、词汇精讲和阅读检测的语境精读材料。', 'deepseek', 'deepseek-v4-pro', 0.55, 8000,
     JSON_ARRAY(JSON_OBJECT('code','article','name','生成精读材料','prompt','根据所选词汇生成语境精读材料'), JSON_OBJECT('code','grammar','name','讲解语法点','prompt','解释材料中的重要语法点')),
     1, 2
 ),
 (
     1201, '英语场景词汇规划师', 'english_vocabulary_plan', 'assistant', 'map',
     '把词表分解为可连续学习和复习的真实场景单元',
-    '你是英语场景词汇规划师。必须围绕真实生活、学习、工作或旅行场景组织词汇；本批候选词全部作为本场景核心词，不能使用历史场景中的词。补充词可以来自场景常见名词。根据学习目的为每个核心词判断 recognition 或 spelling。必须只输出合法 JSON，不要输出 Markdown 代码块。',
-    '延续当前词表场景计划上下文，生成下一个不重复的场景学习单元，只输出合法 JSON。',
-    '我会把词表组织为可以连续学习和检查的场景单元。', 0.55, 16000,
+    '你是英语场景词汇规划师。必须围绕真实生活、学习、工作或旅行场景组织词汇；仅使用本次请求提供的候选词作为本场景核心词，候选词已由系统排除其他场景安排过的词。补充词可以来自场景常见名词。根据学习目的为每个核心词判断 recognition 或 spelling。必须只输出合法 JSON，不要输出 Markdown 代码块。',
+    '仅根据本次请求的学习目的、候选词和复习词生成场景学习单元，只输出合法 JSON。',
+    '我会把词表组织为可以连续学习和检查的场景单元。', 'deepseek', 'deepseek-v4-pro', 0.55, 16000,
     JSON_ARRAY(JSON_OBJECT('code','next_scene','name','生成下一个场景','prompt','从尚未首次学习的候选词中生成下一个场景学习单元')),
     1, 3
 )
 ON DUPLICATE KEY UPDATE
     name = VALUES(name), description = VALUES(description), system_prompt = VALUES(system_prompt),
     concise_prompt = VALUES(concise_prompt), welcome_message = VALUES(welcome_message),
+    model_provider = VALUES(model_provider), model_name = VALUES(model_name),
     temperature = VALUES(temperature), max_tokens = VALUES(max_tokens),
     preset_commands = VALUES(preset_commands), enabled = VALUES(enabled), sequence = VALUES(sequence),
     update_time = CURRENT_TIMESTAMP;
@@ -63,8 +64,8 @@ INSERT INTO ai_prompt_template (
 ),
 (
     1201, '英语场景词汇单元 JSON', 'english_vocab_scene_unit_json', 'user', '英语,词表,场景学习,词汇检查,JSON',
-    '学习目的：{{learning_purpose}}。这是第 {{unit_no}} 个场景单元。新词候选 JSON：{{candidate_words}}。待挑战复习词 JSON：{{review_words}}。已完成场景标题：{{completed_scenes}}。目标词数：{{target_word_count}}。本批新词候选必须作为 core；待挑战复习词只能作为 review 或语境辅助，不能冒充新的 core。单篇材料 core 最多 50 个，不要把历史场景已经学习过的新词重新安排到本场景。可添加场景常见具体名词作为 supplementary，但 supplementary 不得冒充词表词。请只输出合法的单个 JSON 对象，不要输出 Markdown 代码块或额外说明文字，必须符合如下 JSON 结构：{"title":"场景标题","scenario_type":"场景类型","summary":"场景说明","learning_text":"英文短文（由2-4个自然段组成连贯短文，总词数250-450词，核心词自然融入语境）","translation":"中文对照翻译","vocabulary":[{"term":"单词","tier":"core","mastery_requirement":"recognition","phonetic":"音标","meaning":"词义","context_meaning":"语境释义","accepted_spellings":["单词"],"meaning_question":{"prompt":"题目说明","options":["选项A","选项B","选项C","选项D"],"correct_answer":"正确选项"}}]}。',
-    JSON_ARRAY(JSON_OBJECT('name','learning_purpose','label','学习目的','required',true), JSON_OBJECT('name','unit_no','label','单元序号','required',true), JSON_OBJECT('name','candidate_words','label','新词候选 JSON','required',true), JSON_OBJECT('name','review_words','label','待挑战复习词 JSON','required',true), JSON_OBJECT('name','completed_scenes','label','已完成场景','required',true), JSON_OBJECT('name','target_word_count','label','目标词数','required',true)),
+    '学习目的：{{learning_purpose}}。这是第 {{unit_no}} 个场景单元。新词候选 JSON：{{candidate_words}}。待挑战复习词 JSON：{{review_words}}。目标词数：{{target_word_count}}。本批新词候选必须作为 core；待挑战复习词只能作为 review 或语境辅助，不能冒充新的 core。候选词已由系统排除其他场景的核心词，不需要根据历史对话自行判断。单篇材料 core 最多 50 个。可添加场景常见具体名词作为 supplementary，但 supplementary 不得冒充词表词。请只输出合法的单个 JSON 对象，不要输出 Markdown 代码块或额外说明文字，必须符合如下 JSON 结构：{"title":"场景标题","scenario_type":"场景类型","summary":"场景说明","learning_text":"英文短文（由2-4个自然段组成连贯短文，总词数250-450词，核心词自然融入语境）","translation":"中文对照翻译","vocabulary":[{"term":"单词","tier":"core","mastery_requirement":"recognition","phonetic":"音标","meaning":"词义","context_meaning":"语境释义","accepted_spellings":["单词"],"meaning_question":{"prompt":"题目说明","options":["选项A","选项B","选项C","选项D"],"correct_answer":"正确选项"}}]}。',
+    JSON_ARRAY(JSON_OBJECT('name','learning_purpose','label','学习目的','required',true), JSON_OBJECT('name','unit_no','label','单元序号','required',true), JSON_OBJECT('name','candidate_words','label','新词候选 JSON','required',true), JSON_OBJECT('name','review_words','label','待挑战复习词 JSON','required',true), JSON_OBJECT('name','target_word_count','label','目标词数','required',true)),
     '根据词表按需生成一个可学习、可检查的场景单元', '{"candidate_words":[{"term":"clean"}]}', '{"title":"周末大扫除","vocabulary":[]}', 1, 1, 4
 ),
 (

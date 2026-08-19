@@ -27,7 +27,7 @@ class AiInvocationSceneTest {
                 .containsExactly("title", "learning_text", "translation", "vocabulary");
         assertThat(scene.getInputVariableKeys())
                 .containsExactly("learning_purpose", "unit_no", "candidate_words", "review_words",
-                        "completed_scenes", "target_word_count");
+                        "target_word_count");
     }
 
     @Test

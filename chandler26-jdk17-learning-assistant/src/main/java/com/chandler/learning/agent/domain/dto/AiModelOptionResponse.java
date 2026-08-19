@@ -12,6 +12,10 @@ public class AiModelOptionResponse {
     private String name;
     private String provider;
     private String modelName;
+    /** 模型展示名称。 */
+    private String modelDisplayName;
+    /** 模型原生上下文窗口，单位为 Token。 */
+    private Integer contextWindowTokens;
     private Boolean enabled;
     private Boolean isDefault;
     private Integer sequence;

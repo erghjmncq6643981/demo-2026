@@ -873,19 +873,11 @@ public class LearningPlanService {
                 .map(entry -> new CandidateWord(entry.effectiveTerm(),
                         entry.getPhonetic(), entry.getDefinitionText()))
                 .toList();
-        List<String> completedScenes = unitMapper.selectList(new LambdaQueryWrapper<LearningPlanUnit>()
-                        .eq(LearningPlanUnit::getPlanId, plan.getId())
-                        .eq(LearningPlanUnit::getDeleted, false)
-                        .orderByAsc(LearningPlanUnit::getUnitNo))
-                .stream()
-                .map(LearningPlanUnit::getTitle)
-                .toList();
         Map<String, Object> variables = new HashMap<>();
         variables.put("learning_purpose", StrUtil.blankToDefault(plan.getLearningPurpose(), "综合英语词汇学习"));
         variables.put("unit_no", unitNo);
         variables.put("candidate_words", words);
         variables.put("review_words", review);
-        variables.put("completed_scenes", completedScenes);
         variables.put("target_word_count", targetWordCount);
 
         AgentChatRequest request = new AgentChatRequest();

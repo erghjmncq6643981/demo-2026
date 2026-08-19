@@ -1,6 +1,7 @@
 package com.chandler.learning.agent.support;
 
 import com.chandler.learning.agent.domain.enums.AiInvocationScene;
+import com.chandler.learning.agent.domain.enums.AiResponseParserType;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import org.junit.jupiter.api.Test;
 
@@ -15,7 +16,7 @@ class AiStructuredResponseParserRegistryTest {
         String content = "{\"meaning\":\"解释“牺牲”的意思\",\"items\":[1]}";
 
         AiStructuredResponseParseResult result = registry.parse(AiInvocationScene.VOCABULARY_SCENE_UNIT,
-                "deepseek", "deepseek-chat", content);
+                AiResponseParserType.DEEPSEEK_JSON, content);
 
         assertThat(result.parserName()).isEqualTo("deepseek-json");
         assertThat(result.parseStage()).isEqualTo("raw");
@@ -28,7 +29,7 @@ class AiStructuredResponseParserRegistryTest {
         String content = "{\"term\": abandon，\"meaning\":\"解释“牺牲”的意思\",\"items\":[1,],";
 
         AiStructuredResponseParseResult result = registry.parse(AiInvocationScene.VOCABULARY_SCENE_UNIT,
-                "moonshot", "moonshot-v1-8k", content);
+                AiResponseParserType.KIMI_JSON, content);
 
         assertThat(result.parserName()).isEqualTo("kimi-json");
         assertThat(result.parseStage()).isEqualTo("repaired");
@@ -43,7 +44,7 @@ class AiStructuredResponseParserRegistryTest {
         String content = "{\n  “term”: abandon,\n  meaning: \"解释“牺牲”的意思\",\n  “context_meaning”: \"放弃\",\n  “correct_answer”: 1,\n}";
 
         AiStructuredResponseParseResult result = registry.parse(AiInvocationScene.VOCABULARY_SCENE_UNIT,
-                "kimi", "moonshot-v1-8k", content);
+                AiResponseParserType.KIMI_JSON, content);
 
         assertThat(result.parserName()).isEqualTo("kimi-json");
         assertThat(result.parseStage()).isEqualTo("repaired");
@@ -72,7 +73,7 @@ class AiStructuredResponseParserRegistryTest {
                 "}";
 
         AiStructuredResponseParseResult result = registry.parse(AiInvocationScene.VOCABULARY_SCENE_UNIT,
-                "kimi", "moonshot-v1-8k", content);
+                AiResponseParserType.KIMI_JSON, content);
 
         assertThat(result.parserName()).isEqualTo("kimi-json");
         assertThat(result.parseStage()).isEqualTo("repaired");
@@ -87,7 +88,8 @@ class AiStructuredResponseParserRegistryTest {
     void resolvesContextWindowsInTokensNotBytes() {
         AiModelCapabilityResolver resolver = new AiModelCapabilityResolver();
 
-        assertThat(resolver.contextWindowTokens("deepseek", "deepseek-chat")).isEqualTo(8_192);
-        assertThat(resolver.safeContextWindowTokens("moonshot", "moonshot-v1-8k")).isEqualTo(7_372);
+        assertThat(resolver.contextWindowTokens("deepseek", "deepseek-v4-pro")).isEqualTo(1_048_576);
+        assertThat(resolver.contextWindowTokens("kimi", "kimi-k2.6")).isEqualTo(262_144);
+        assertThat(resolver.safeContextWindowTokens("kimi", "kimi-k3")).isEqualTo(943_718);
     }
 }

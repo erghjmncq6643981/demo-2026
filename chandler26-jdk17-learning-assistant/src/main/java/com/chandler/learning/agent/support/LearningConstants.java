@@ -191,18 +191,8 @@ public final class LearningConstants {
         }
     }
 
-    /** AI 请求上下文预算。输入和预留输出合计在达到总上下文上限的 90% 时提前拒绝。 */
+    /** AI 请求上下文预算。输入和预留输出合计在达到具体模型上下文上限的 90% 时提前拒绝。 */
     public static final class AiContext {
-        /** 应用当前允许发送给任一模型的最大上下文窗口，单位为 Token。 */
-        public static final int MAX_SUPPORTED_CONTEXT_TOKENS = 8_192;
-        /** 未登记模型的保守上下文窗口，单位为 Token。 */
-        public static final int DEFAULT_CONTEXT_WINDOW_TOKENS = MAX_SUPPORTED_CONTEXT_TOKENS;
-        /** DeepSeek Chat 的供应商能力参考值；实际预算仍受应用上限约束。 */
-        public static final int DEEPSEEK_CONTEXT_WINDOW_TOKENS = 64_000;
-        /** Moonshot v1-8k 上下文窗口，单位为 Token。 */
-        public static final int KIMI_8K_CONTEXT_WINDOW_TOKENS = 8_192;
-        public static final int KIMI_32K_CONTEXT_WINDOW_TOKENS = 32_768;
-        public static final int KIMI_128K_CONTEXT_WINDOW_TOKENS = 131_072;
         public static final int SAFE_USAGE_PERCENT = 90;
         public static final int MIN_OUTPUT_TOKENS = 256;
         public static final int ASCII_CHARACTERS_PER_TOKEN = 4;
@@ -621,10 +611,12 @@ public final class LearningConstants {
         EXTERNAL_SERVICE_CALL_FAILED(HttpStatus.BAD_GATEWAY, "外部服务调用失败"),
         MODEL_CONFIG_NOT_FOUND(HttpStatus.NOT_FOUND, "模型配置不存在"),
         AI_PROVIDER_MISSING(HttpStatus.BAD_REQUEST, "未配置 AI 服务供应商"),
+        AI_PROVIDER_UNSUPPORTED(HttpStatus.BAD_REQUEST, "AI 服务供应商不受支持"),
         AI_PROVIDER_DISABLED(HttpStatus.BAD_REQUEST, "AI 服务供应商已停用"),
         AI_PROVIDER_API_KEY_MISSING(HttpStatus.BAD_REQUEST, "AI 服务 API Key 未配置"),
         AI_PROVIDER_BASE_URL_MISSING(HttpStatus.BAD_REQUEST, "AI 服务地址未配置"),
         AI_MODEL_NAME_MISSING(HttpStatus.BAD_REQUEST, "AI 模型名称未配置"),
+        AI_MODEL_UNSUPPORTED(HttpStatus.BAD_REQUEST, "AI 模型不受支持或已经下线"),
         AI_MODEL_CALL_FAILED(HttpStatus.BAD_GATEWAY, "AI 模型调用失败"),
         AI_PROMPT_TOO_LARGE(HttpStatus.BAD_REQUEST, "AI 请求上下文过长，请减少本次输入后重试"),
         AI_MODEL_BALANCE_INSUFFICIENT(HttpStatus.BAD_GATEWAY, "AI 模型余额不足"),

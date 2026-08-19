@@ -112,7 +112,7 @@ CREATE TABLE IF NOT EXISTS learning_plan (
     learned_core_words INT NOT NULL DEFAULT 0 COMMENT '已完成首次核心学习的词数',
     completed_unit_count INT NOT NULL DEFAULT 0 COMMENT '已完成场景单元数',
     current_unit_id BIGINT DEFAULT NULL COMMENT '当前进行中的单元 ID',
-    ai_session_id BIGINT DEFAULT NULL COMMENT '场景计划复用的 AI 会话 ID',
+    ai_session_id BIGINT DEFAULT NULL COMMENT '场景计划复用的 AI 审计会话 ID，不作为模型历史上下文',
     generation_lock_token VARCHAR(64) DEFAULT NULL COMMENT '场景材料生成租约令牌',
     generation_lock_until DATETIME DEFAULT NULL COMMENT '场景材料生成租约到期时间',
     create_time DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP COMMENT '创建时间',

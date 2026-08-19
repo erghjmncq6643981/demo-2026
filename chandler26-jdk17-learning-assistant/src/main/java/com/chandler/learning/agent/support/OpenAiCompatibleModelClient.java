@@ -1,8 +1,8 @@
 package com.chandler.learning.agent.support;
 
-import com.chandler.learning.agent.domain.dto.ChatMessageParam;
 import com.chandler.learning.agent.domain.dto.ModelChatRequest;
 import com.chandler.learning.agent.domain.dto.ModelChatResponse;
+import com.chandler.learning.agent.domain.enums.AiApiProtocol;
 import com.chandler.learning.agent.exception.LearningAssistantException;
 import com.chandler.learning.agent.service.AiModelConfigService;
 import com.fasterxml.jackson.databind.JsonNode;
@@ -18,8 +18,6 @@ import org.springframework.web.client.ResourceAccessException;
 import org.springframework.web.client.RestClientResponseException;
 import org.springframework.web.client.RestTemplate;
 
-import java.util.HashMap;
-import java.util.List;
 import java.util.Map;
 
 /**
@@ -37,6 +35,7 @@ public class OpenAiCompatibleModelClient implements AiModelClient {
     private final RestTemplate restTemplate;
     private final AiModelConfigService modelConfigService;
     private final ObjectMapper objectMapper;
+    private final AiModelRequestAdapterRegistry requestAdapterRegistry;
 
     /**
      * 处理 {@code chat} 相关业务。
@@ -82,21 +81,13 @@ public class OpenAiCompatibleModelClient implements AiModelClient {
                     "AI 模型名称为空: " + provider);
         }
 
-        Map<String, Object> payload = new HashMap<>();
-        payload.put("model", model);
-        payload.put("messages", toMessagePayload(request.getMessages()));
-        if (request.getTemperature() != null) {
-            payload.put("temperature", request.getTemperature());
+        AiPreparedModelRequest preparedRequest = requestAdapterRegistry.prepare(request);
+        if (preparedRequest.protocol() != AiApiProtocol.OPENAI_CHAT_COMPLETIONS) {
+            throw LearningAssistantException.badRequest(
+                    LearningConstants.ErrorCode.AI_PROVIDER_UNSUPPORTED,
+                    "当前模型客户端不支持 API 协议：" + preparedRequest.protocol().getTitle());
         }
-        if (request.getFrequencyPenalty() != null) {
-            payload.put("frequency_penalty", request.getFrequencyPenalty());
-        }
-        if (request.getPresencePenalty() != null) {
-            payload.put("presence_penalty", request.getPresencePenalty());
-        }
-        if (request.getMaxTokens() != null) {
-            payload.put("max_tokens", request.getMaxTokens());
-        }
+        Map<String, Object> payload = preparedRequest.payload();
 
         HttpHeaders headers = new HttpHeaders();
         headers.setContentType(MediaType.APPLICATION_JSON);
@@ -104,9 +95,11 @@ public class OpenAiCompatibleModelClient implements AiModelClient {
 
         String url = buildUrl(providerConfig);
         long startTime = System.currentTimeMillis();
-        log.debug("模型 HTTP 请求 provider={} model={} url={} messages={}",
+        log.debug("模型 HTTP 请求 provider={} model={} protocol={} requestAdapter={} url={} messages={}",
                 provider,
                 model,
+                preparedRequest.protocol().getCode(),
+                preparedRequest.adapterType().getCode(),
                 url,
                 request.getMessages() == null ? LearningConstants.ModelClient.EMPTY_SIZE : request.getMessages().size());
         String responseBody = callModel(url, payload, headers, provider, model, startTime);
@@ -158,21 +151,7 @@ public class OpenAiCompatibleModelClient implements AiModelClient {
         if (request.getModelConfigId() != null) {
             return modelConfigService.resolveProviderConfig(request.getModelConfigId());
         }
-        return modelConfigService.resolveProviderConfig(provider);
-    }
-
-    /**
-     * 转换 {@code toMessagePayload} 相关业务。
-     */
-    private List<Map<String, String>> toMessagePayload(List<ChatMessageParam> messages) {
-        return messages.stream()
-                .map(message -> {
-                    Map<String, String> item = new HashMap<>();
-                    item.put("role", message.getRole());
-                    item.put("content", message.getContent());
-                    return item;
-                })
-                .toList();
+        return modelConfigService.resolveProviderConfig(provider, request.getModel());
     }
 
     /**

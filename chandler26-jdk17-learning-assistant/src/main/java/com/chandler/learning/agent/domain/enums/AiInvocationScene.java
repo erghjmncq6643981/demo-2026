@@ -33,7 +33,7 @@ public enum AiInvocationScene {
             List.of("words", "word_count_range", "difficulty", "difficulty_prompt", "remark")),
     VOCABULARY_SCENE_UNIT("vocabulary_scene_unit", "词汇大挑战场景单元生成", true,
             List.of("title", "learning_text", "translation", "vocabulary"),
-            List.of("learning_purpose", "unit_no", "candidate_words", "review_words", "completed_scenes",
+            List.of("learning_purpose", "unit_no", "candidate_words", "review_words",
                     "target_word_count"));
 
     @JsonValue

@@ -1,6 +1,9 @@
 package com.chandler.learning.agent.domain.dto;
 
 import com.chandler.learning.agent.domain.enums.AiInvocationScene;
+import com.chandler.learning.agent.domain.enums.AiApiProtocol;
+import com.chandler.learning.agent.domain.enums.AiRequestAdapterType;
+import com.chandler.learning.agent.domain.enums.AiResponseParserType;
 import lombok.Data;
 
 import java.util.List;
@@ -16,6 +19,21 @@ public class ModelChatRequest {
     private String provider;
 
     private String model;
+
+    /** 本次调用使用的 API 协议，由模型枚举确定。 */
+    private AiApiProtocol apiProtocol;
+
+    /** 调用前请求预处理适配器。 */
+    private AiRequestAdapterType requestAdapter;
+
+    /** 调用后模型正文解析器。 */
+    private AiResponseParserType responseParser;
+
+    /** 当前模型原生上下文窗口，单位为 Token。 */
+    private Integer modelContextWindowTokens;
+
+    /** 本次调用实际使用的上下文窗口，单位为 Token。 */
+    private Integer effectiveContextWindowTokens;
 
     private Long modelConfigId;
 

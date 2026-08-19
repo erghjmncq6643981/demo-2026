@@ -18,6 +18,30 @@ public class AiModelConfigResponse {
 
     private String modelName;
 
+    /** 当前配置是否属于可用于新任务的模型枚举。 */
+    private Boolean supported;
+
+    /** 供应商展示名称。 */
+    private String providerName;
+
+    /** 模型展示名称。 */
+    private String modelDisplayName;
+
+    /** API 协议编码。 */
+    private String apiProtocol;
+
+    /** 调用前请求适配器编码。 */
+    private String requestAdapter;
+
+    /** 调用后结构化响应解析器编码。 */
+    private String responseParser;
+
+    /** 模型原生上下文窗口，单位为 Token。 */
+    private Integer contextWindowTokens;
+
+    /** 模型单次最大输出，单位为 Token。 */
+    private Integer maxOutputTokens;
+
     private String baseUrl;
 
     private String chatPath;

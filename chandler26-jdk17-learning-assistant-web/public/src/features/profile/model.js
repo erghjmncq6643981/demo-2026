@@ -43,7 +43,7 @@ export function createModelProfileFeature(ctx) {
       for (const item of enabled) {
         const option = document.createElement('option')
         option.value = String(item.id)
-        option.textContent = `${item.name} · ${item.modelName}${item.isDefault ? ' · 默认' : ''}`
+        option.textContent = `${item.name} · ${item.modelDisplayName || item.modelName}${item.isDefault ? ' · 默认' : ''}`
         select.appendChild(option)
       }
       select.value = String(preferred.id)
@@ -100,8 +100,8 @@ export function createModelProfileFeature(ctx) {
                 <span class="mini-pill ${item.enabled ? 'ok' : ''}">${item.enabled ? '启用' : '停用'}</span>
                 ${item.isDefault ? '<span class="mini-pill ok">默认</span>' : ''}
               </div>
-              <p>${escapeHtml(item.provider)} · ${escapeHtml(item.modelName)} · ${escapeHtml(item.baseUrl || '')}</p>
-              <small>优先级 ${item.sequence ?? 0} · ${escapeHtml(item.apiKeyMasked || '')}</small>
+              <p>${escapeHtml(item.providerName || item.provider)} · ${escapeHtml(item.modelDisplayName || item.modelName)} · ${escapeHtml(item.baseUrl || '')}</p>
+              <small>${item.supported === false ? '历史模型：不可用于新任务' : `${escapeHtml(item.apiProtocol || '-')} · 上下文 ${Number(item.contextWindowTokens || 0).toLocaleString()} Token`} · 优先级 ${item.sequence ?? 0} · ${escapeHtml(item.apiKeyMasked || '')}</small>
               <div class="model-usage-row">
                 <span>调用 <strong>${Number(item.callCount || 0).toLocaleString()}</strong></span>
                 <span>成功 <strong>${Number(item.successCount || 0).toLocaleString()}</strong></span>
@@ -111,7 +111,7 @@ export function createModelProfileFeature(ctx) {
               </div>
             </div>
             <div class="row-actions">
-              <button class="icon-action-button" type="button" data-model-toggle="${escapeHtml(item.id)}" title="${item.enabled ? '停用模型' : '启用模型'}" aria-label="${item.enabled ? '停用模型' : '启用模型'}">${item.enabled ? '⏸' : '▶'}</button>
+              <button class="icon-action-button" type="button" data-model-toggle="${escapeHtml(item.id)}" title="${item.enabled ? '停用模型' : '启用模型'}" aria-label="${item.enabled ? '停用模型' : '启用模型'}" ${item.supported === false && !item.enabled ? 'disabled' : ''}>${item.enabled ? '⏸' : '▶'}</button>
               <button class="icon-action-button" type="button" data-model-edit="${escapeHtml(item.id)}" title="编辑模型" aria-label="编辑模型">✎</button>
               <button class="danger-icon-button" type="button" data-model-delete="${escapeHtml(item.id)}" title="删除模型">×</button>
             </div>
