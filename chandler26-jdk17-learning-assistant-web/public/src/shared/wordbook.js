@@ -1,4 +1,6 @@
-import { normalizeId } from './ids.js'
+import { normalizeId, sameId } from './ids.js'
+
+export { normalizeId, sameId }
 
 export function normalizeWordbookId(value) {
   const id = normalizeId(value)
