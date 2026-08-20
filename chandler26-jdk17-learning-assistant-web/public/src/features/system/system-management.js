@@ -1,6 +1,6 @@
 import { hideModal, showModal } from '/src/shared/modal.js'
 import { escapeHtml, formatDateTime } from '/src/shared/text.js'
-import { createAiSessionAdminFeature } from '/src/features/ai-chat/session-admin.js'
+import { createAiSessionAdminFeature } from '/src/features/ai/chat/session-admin.js'
 
 const ROLE_LABELS = { USER: '普通用户', ADMIN: '系统管理员' }
 

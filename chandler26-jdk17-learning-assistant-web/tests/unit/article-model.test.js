@@ -4,7 +4,7 @@ import {
   normalizeArticleStage,
   scoreArticlePractice,
   splitArticleLines,
-} from '../../public/src/features/wordbook/article-model.js'
+} from '../../public/src/features/reading/article-model.js'
 
 describe('语境精读规则', () => {
   it('按题数计算阅读检测得分', () => {

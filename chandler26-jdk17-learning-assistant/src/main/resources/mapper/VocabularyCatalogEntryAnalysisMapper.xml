@@ -1,6 +1,6 @@
 <?xml version="1.0" encoding="UTF-8" ?>
 <!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "https://mybatis.org/dtd/mybatis-3-mapper.dtd">
-<mapper namespace="com.chandler.learning.agent.mapper.vocabulary.VocabularyCatalogEntryAnalysisMapper">
+<mapper namespace="com.chandler.learning.agent.vocabulary.infrastructure.VocabularyCatalogEntryAnalysisMapper">
     <insert id="insertBatch">
         INSERT INTO vocabulary_catalog_entry_analysis
         (id, job_id, catalog_id, catalog_version_id, catalog_entry_id, primary_group_code,

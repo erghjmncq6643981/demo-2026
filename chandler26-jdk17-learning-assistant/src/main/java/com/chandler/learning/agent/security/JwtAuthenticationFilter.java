@@ -1,7 +1,7 @@
 package com.chandler.learning.agent.security;
 
-import com.chandler.learning.agent.domain.entity.learning.LearningUser;
-import com.chandler.learning.agent.mapper.learning.LearningUserMapper;
+import com.chandler.learning.agent.identity.domain.LearningUser;
+import com.chandler.learning.agent.identity.infrastructure.LearningUserMapper;
 import com.chandler.learning.agent.support.LearningConstants;
 import jakarta.servlet.FilterChain;
 import jakarta.servlet.ServletException;

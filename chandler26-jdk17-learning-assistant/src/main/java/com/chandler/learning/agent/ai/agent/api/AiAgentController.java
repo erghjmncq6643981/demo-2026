@@ -3,7 +3,7 @@ package com.chandler.learning.agent.ai.agent.api;
 import com.chandler.learning.agent.ai.agent.api.AgentSaveRequest;
 import com.chandler.learning.agent.ai.agent.domain.AiAgent;
 import com.chandler.learning.agent.ai.agent.application.AiAgentService;
-import com.chandler.learning.agent.service.learning.AuthService;
+import com.chandler.learning.agent.identity.application.AuthService;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.Valid;

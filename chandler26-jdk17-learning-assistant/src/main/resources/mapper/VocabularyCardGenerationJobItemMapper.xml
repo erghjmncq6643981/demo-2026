@@ -1,6 +1,6 @@
 <?xml version="1.0" encoding="UTF-8" ?>
 <!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "https://mybatis.org/dtd/mybatis-3-mapper.dtd">
-<mapper namespace="com.chandler.learning.agent.mapper.vocabulary.VocabularyCardGenerationJobItemMapper">
+<mapper namespace="com.chandler.learning.agent.vocabulary.infrastructure.VocabularyCardGenerationJobItemMapper">
     <insert id="insertBatch">
         INSERT INTO vocabulary_card_generation_job_item
         (id, job_id, word_progress_id, wordbook_entry_id, term, normalized_term, status,

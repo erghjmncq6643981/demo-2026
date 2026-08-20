@@ -13,7 +13,7 @@ import com.chandler.learning.agent.ai.chat.domain.AiInvocationScene;
 import com.chandler.learning.agent.ai.model.domain.AiModelDefinition;
 import com.chandler.learning.agent.exception.LearningAssistantException;
 import com.chandler.learning.agent.ai.chat.infrastructure.AiModelCallRecordMapper;
-import com.chandler.learning.agent.service.learning.UserDisplayNameService;
+import com.chandler.learning.agent.identity.application.UserDisplayNameService;
 import com.chandler.learning.agent.ai.gateway.client.AiModelClient;
 import com.chandler.learning.agent.ai.gateway.protocol.AiModelCapabilityResolver;
 import com.chandler.learning.agent.ai.gateway.parser.AiStructuredResponseParserRegistry;

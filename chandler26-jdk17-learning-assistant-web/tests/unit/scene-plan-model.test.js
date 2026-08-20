@@ -1,8 +1,8 @@
 import { describe, expect, it } from 'vitest'
-import { localDateKey, number } from '../../public/src/features/scene-plan/model.js'
-import { parsePreviewMarkdown, suggestedSplitCorrection } from '../../public/src/features/scene-plan/markdown-parser.js'
-import { calendarDates, startOfWeek } from '../../public/src/features/scene-plan/calendar-model.js'
-import { isWordComplete, nextAssessment, pendingChallengeWords } from '../../public/src/features/scene-plan/challenge-model.js'
+import { localDateKey, number } from '../../public/src/features/learning/scene-plan/model.js'
+import { parsePreviewMarkdown, suggestedSplitCorrection } from '../../public/src/features/learning/scene-plan/markdown-parser.js'
+import { calendarDates, startOfWeek } from '../../public/src/features/learning/scene-plan/calendar-model.js'
+import { isWordComplete, nextAssessment, pendingChallengeWords } from '../../public/src/features/learning/scene-plan/challenge-model.js'
 
 describe('scene plan model', () => {
   it('formats dates using the local calendar date', () => {

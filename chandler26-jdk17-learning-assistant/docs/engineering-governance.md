@@ -4,10 +4,10 @@
 
 ## 架构边界
 
-- AI 代码按 `agent/model/chat/prompt/gateway` 分域；供应商 HTTP 协议、请求适配和响应解析集中在 `ai/gateway`。
-- ArchUnit 禁止 Controller 直连 Mapper、Entity 反向依赖 Service/API/Infrastructure，以及 Service 依赖 Controller。
+- 后端按 `identity`、`vocabulary`、`learning`、`reading`、`task`、`system` 业务域组织，每个域内部使用 `api/application/domain/infrastructure` 分层；AI 代码按 `agent/model/chat/prompt/gateway` 分域，供应商 HTTP 协议、请求适配和响应解析集中在 `ai/gateway`。
+- ArchUnit 禁止 Controller/API 直连 Mapper，禁止 Entity 反向依赖 Service/API/Infrastructure，禁止 Application 跨域访问其他业务域的 Mapper，并阻止重新创建根级 `controller/service/mapper` 横向目录。
 - 学习计划响应由 `LearningPlanResponseAssembler` 批量装配；选词由 `LearningPlanVocabularySelector` 负责；复习时间由 `ReviewSchedulePolicy` 负责。
-- 前端功能代码位于 `public/src/features`，共享能力位于 `public/src/shared`。场景计划和语境精读已拆出纯业务模型、预览数据与 API 网关。
+- 前端功能代码位于 `public/src/features`，按 `identity`、`vocabulary`、`learning`、`reading`、`ai`、`task`、`system` 业务域组织；共享能力位于 `public/src/shared`，入口 `app.js` 只负责 wiring。场景计划和语境精读已拆出纯业务模型、预览数据与 API 网关。
 
 ## 数据库与事务
 

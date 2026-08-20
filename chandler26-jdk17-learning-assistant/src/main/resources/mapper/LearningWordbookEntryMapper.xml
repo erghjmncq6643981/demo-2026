@@ -1,8 +1,8 @@
 <?xml version="1.0" encoding="UTF-8" ?>
 <!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "https://mybatis.org/dtd/mybatis-3-mapper.dtd">
-<mapper namespace="com.chandler.learning.agent.mapper.learning.LearningWordbookEntryMapper">
+<mapper namespace="com.chandler.learning.agent.vocabulary.infrastructure.LearningWordbookEntryMapper">
     <select id="selectIncludingDeleted"
-            resultType="com.chandler.learning.agent.domain.entity.learning.LearningWordbookEntry">
+            resultType="com.chandler.learning.agent.vocabulary.domain.LearningWordbookEntry">
         SELECT *
         FROM learning_wordbook_entry
         WHERE wordbook_id = #{wordbookId}
@@ -11,7 +11,7 @@
     </select>
 
     <select id="selectAllIncludingDeleted"
-            resultType="com.chandler.learning.agent.domain.entity.learning.LearningWordbookEntry">
+            resultType="com.chandler.learning.agent.vocabulary.domain.LearningWordbookEntry">
         SELECT *
         FROM learning_wordbook_entry
         WHERE wordbook_id = #{wordbookId}

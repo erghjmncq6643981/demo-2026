@@ -1,6 +1,6 @@
 package com.chandler.learning.agent.security;
 
-import com.chandler.learning.agent.domain.entity.learning.LearningUser;
+import com.chandler.learning.agent.identity.domain.LearningUser;
 import org.springframework.security.core.GrantedAuthority;
 import org.springframework.security.core.authority.SimpleGrantedAuthority;
 import org.springframework.security.core.userdetails.UserDetails;

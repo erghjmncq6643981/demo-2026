@@ -5,7 +5,7 @@ import com.chandler.learning.agent.ai.chat.api.ChatSessionResponse;
 import com.chandler.learning.agent.ai.chat.api.AdminAiSessionDetailResponse;
 import com.chandler.learning.agent.ai.chat.api.AdminAiSessionPageResponse;
 import com.chandler.learning.agent.ai.chat.application.AiChatSessionService;
-import com.chandler.learning.agent.service.learning.AuthService;
+import com.chandler.learning.agent.identity.application.AuthService;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import lombok.RequiredArgsConstructor;

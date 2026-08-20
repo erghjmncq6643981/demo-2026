@@ -27,7 +27,8 @@
 ## Frontend
 
 - Keep feature code under `public/src/features/**`; shared utilities belong in `public/src/shared/**`.
-- Keep AI frontend modules separated by product capability: Agent management under `features/ai-agent/**`, model/provider management under `features/ai-model/**`, AI sessions under `features/ai-chat/**`, and prompt templates under `features/ai-prompt/**`. Profile and system modules may orchestrate these capabilities but must not absorb their implementation.
+- Organize frontend modules by business domain: `features/identity/**`, `features/vocabulary/**`, `features/learning/**`, `features/reading/**`, `features/ai/**`, `features/task/**`, and `features/system/**`. Within `features/ai/**`, keep Agent, model/provider, session, and prompt capabilities in separate subdirectories.
+- Domain modules own their UI, API adapters, state, and pure models. Cross-domain composition belongs in the app facade or an explicit domain coordinator; do not copy another domain's implementation into `profile`, `system`, or `app.js`.
 - Do not add new large logic to `public/app.js`; use feature modules and a small facade/wiring layer.
 - Do not open or close modals by directly calling `classList.remove('hidden')` / `classList.add('hidden')`. Use `showModal` / `hideModal` from `/src/shared/modal.js` so scroll position resets.
 - Normalize wordbook ids through `/src/shared/wordbook.js` helpers before API calls or state comparisons.
@@ -42,7 +43,11 @@
 
 - Use Spring Security + JWT for authenticated APIs.
 - Keep AI backend code under `ai/{agent,model,chat,prompt}` with `api`, `application`, `domain`, and `infrastructure` layers. External model HTTP clients, request adapters, response parsers, and provider protocols belong under `ai/gateway/**`.
+- Organize non-AI backend code by business domain: `identity`, `vocabulary`, `learning`, `reading`, `task`, and `system`; each domain owns its `api`, `application`, `domain`, and `infrastructure` packages. Do not create new horizontal `controller`, `service`, `mapper`, or shared business `domain` packages.
 - Enforce `api -> application -> domain` and `infrastructure -> domain`. Controllers must not access Mapper classes, domain classes must not depend on API or infrastructure, and cross-domain calls must go through application services rather than another domain's Mapper.
+- Treat the backend as a modular monolith with physical package boundaries: an `application` class may access infrastructure only from its own business domain. Other domains expose narrow application-level access/query services; their Mapper and Entity implementation details must remain private to that domain.
+- Do not recreate root-level `controller`, `service`, `mapper`, or shared business `domain` packages. New production and test classes must be placed under the matching business domain; Mapper XML validation tests belong under the database test domain.
+- Any new cross-domain dependency requires an explicit application contract and an ArchUnit rule update when the boundary is intentional. Never bypass the boundary by importing another domain's `infrastructure` package, even inside a transaction.
 - Reserve `common` for stable cross-domain foundations such as exceptions, web envelopes, persistence base classes, constants, and request context. Do not use `common` as a replacement for `support`, `utils`, or misplaced business logic; keep `config` for Spring wiring and `security` for authentication, authorization, JWT, principals, filters, and secret protection.
 - Serialize backend `Long`/Snowflake IDs as JSON strings through the shared Jackson configuration; never introduce a custom `ObjectMapper` or DTO serializer that emits these IDs as JSON numbers. Request DTOs may keep `Long` fields because Jackson accepts the frontend string representation.
 - Throw `LearningAssistantException` or a project-specific runtime exception instead of generic runtime errors.

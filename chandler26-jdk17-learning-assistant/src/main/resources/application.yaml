@@ -24,7 +24,14 @@ spring:
 
 mybatis:
   mapper-locations: classpath:mapper/*.xml
-  type-aliases-package: com.chandler.learning.agent.domain
+  type-aliases-package: >-
+    com.chandler.learning.agent.identity.domain,
+    com.chandler.learning.agent.vocabulary.domain,
+    com.chandler.learning.agent.learning.domain,
+    com.chandler.learning.agent.reading.domain,
+    com.chandler.learning.agent.task.domain,
+    com.chandler.learning.agent.system.domain,
+    com.chandler.learning.agent.common.persistence
   configuration:
     map-underscore-to-camel-case: true
 

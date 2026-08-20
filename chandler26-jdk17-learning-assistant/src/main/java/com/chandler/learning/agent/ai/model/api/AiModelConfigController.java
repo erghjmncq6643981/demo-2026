@@ -6,7 +6,7 @@ import com.chandler.learning.agent.ai.model.api.AiModelOptionResponse;
 import com.chandler.learning.agent.ai.model.api.AiModelConnectionTestResponse;
 import com.chandler.learning.agent.ai.model.application.AiModelConnectionTestService;
 import com.chandler.learning.agent.ai.model.application.AiModelConfigService;
-import com.chandler.learning.agent.service.learning.AuthService;
+import com.chandler.learning.agent.identity.application.AuthService;
 import com.chandler.learning.agent.support.LearningConstants;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;

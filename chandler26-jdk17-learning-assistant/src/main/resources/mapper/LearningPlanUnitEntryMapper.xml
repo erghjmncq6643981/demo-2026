@@ -1,6 +1,6 @@
 <?xml version="1.0" encoding="UTF-8" ?>
 <!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "https://mybatis.org/dtd/mybatis-3-mapper.dtd">
-<mapper namespace="com.chandler.learning.agent.mapper.learning.LearningPlanUnitEntryMapper">
+<mapper namespace="com.chandler.learning.agent.learning.infrastructure.LearningPlanUnitEntryMapper">
     <insert id="insertBatch">
         INSERT INTO learning_plan_unit_entry
         (id, plan_id, unit_id, catalog_entry_id, wordbook_entry_id, word_progress_id,

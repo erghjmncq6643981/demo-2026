@@ -6,8 +6,8 @@ import com.chandler.learning.agent.ai.agent.domain.AiAgent;
 import com.chandler.learning.agent.ai.model.domain.AiModelConfig;
 import com.chandler.learning.agent.ai.model.application.AiModelConfigService;
 import com.chandler.learning.agent.ai.agent.infrastructure.AiAgentMapper;
-import com.chandler.learning.agent.service.learning.SystemLogService;
-import com.chandler.learning.agent.service.learning.UserDisplayNameService;
+import com.chandler.learning.agent.system.application.SystemLogService;
+import com.chandler.learning.agent.identity.application.UserDisplayNameService;
 import org.junit.jupiter.api.Test;
 import org.mockito.ArgumentCaptor;
 

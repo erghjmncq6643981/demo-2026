@@ -9,7 +9,12 @@ import org.springframework.boot.autoconfigure.SpringBootApplication;
  * 英语学习助手后端启动入口。
  */
 @MapperScan({
-		"com.chandler.learning.agent.mapper",
+		"com.chandler.learning.agent.identity.infrastructure",
+		"com.chandler.learning.agent.vocabulary.infrastructure",
+		"com.chandler.learning.agent.learning.infrastructure",
+		"com.chandler.learning.agent.reading.infrastructure",
+		"com.chandler.learning.agent.task.infrastructure",
+		"com.chandler.learning.agent.system.infrastructure",
 		"com.chandler.learning.agent.ai.agent.infrastructure",
 		"com.chandler.learning.agent.ai.model.infrastructure",
 		"com.chandler.learning.agent.ai.chat.infrastructure",

@@ -7,8 +7,8 @@ import com.chandler.learning.agent.ai.model.domain.AiModelConfig;
 import com.chandler.learning.agent.exception.LearningAssistantException;
 import com.chandler.learning.agent.ai.model.infrastructure.AiModelConfigMapper;
 import com.chandler.learning.agent.security.ApiKeyCryptoService;
-import com.chandler.learning.agent.service.learning.SystemLogService;
-import com.chandler.learning.agent.service.learning.UserDisplayNameService;
+import com.chandler.learning.agent.system.application.SystemLogService;
+import com.chandler.learning.agent.identity.application.UserDisplayNameService;
 import org.junit.jupiter.api.Test;
 
 import java.util.List;

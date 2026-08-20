@@ -20,13 +20,13 @@ import {
   stringifyValue,
   tagLabel,
 } from '/src/shared/vocabulary.js'
-import { createWordbookTransferFeature } from '/src/features/wordbook/transfer.js'
-import { createWordbookArticleFeature } from '/src/features/wordbook/article.js'
-import { createScenePlanFeature } from '/src/features/scene-plan/scene-plan.js'
-import { createProfileFeature } from '/src/features/profile/profile.js'
-import { createSpeechFeature } from '/src/features/speech/speech.js'
-import { createStudyFeature } from '/src/features/study/study.js'
-import { createReviewFeature } from '/src/features/review/review.js'
+import { createWordbookTransferFeature } from '/src/features/vocabulary/transfer.js'
+import { createWordbookArticleFeature } from '/src/features/reading/article.js'
+import { createScenePlanFeature } from '/src/features/learning/scene-plan/scene-plan.js'
+import { createProfileFeature } from '/src/features/identity/profile.js'
+import { createSpeechFeature } from '/src/features/learning/speech/speech.js'
+import { createStudyFeature } from '/src/features/learning/study/study.js'
+import { createReviewFeature } from '/src/features/learning/review/review.js'
 import { createSystemManagementFeature } from '/src/features/system/system-management.js'
 
 const state = createInitialState()
