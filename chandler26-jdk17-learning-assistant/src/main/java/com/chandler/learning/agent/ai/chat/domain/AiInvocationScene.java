@@ -35,7 +35,11 @@ public enum AiInvocationScene {
     VOCABULARY_SCENE_UNIT("vocabulary_scene_unit", "词汇大挑战场景单元生成", true,
             List.of("title", "learning_text", "translation", "vocabulary"),
             List.of("learning_purpose", "unit_no", "candidate_words", "review_words",
-                    "target_word_count"));
+                    "target_word_count")),
+    VOCABULARY_SCENE_RELATED_WORDS("vocabulary_scene_related_words", "场景相关词汇生成", true,
+            List.of("related_words"),
+            List.of("learning_purpose", "scene_title", "scene_summary", "learning_text",
+                    "core_words", "existing_words", "target_word_count"));
 
     @JsonValue
     private final String code;
@@ -80,7 +84,7 @@ public enum AiInvocationScene {
         return switch (this) {
             case MODEL_CONNECTION_TEST, VOCABULARY_CARD_SINGLE, VOCABULARY_CARD_BATCH,
                  VOCABULARY_CATALOG_ANALYSIS, ARTICLE_STUDY_MATERIAL,
-                 VOCABULARY_SCENE_UNIT -> true;
+                 VOCABULARY_SCENE_UNIT, VOCABULARY_SCENE_RELATED_WORDS -> true;
             case GENERAL_CHAT -> false;
         };
     }

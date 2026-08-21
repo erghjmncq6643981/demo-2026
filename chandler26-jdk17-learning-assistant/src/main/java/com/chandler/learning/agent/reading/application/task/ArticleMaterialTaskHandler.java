@@ -1,0 +1,55 @@
+package com.chandler.learning.agent.reading.application.task;
+
+import com.chandler.learning.agent.reading.api.ArticleStudyRequest;
+import com.chandler.learning.agent.reading.api.ArticleStudyResponse;
+import com.chandler.learning.agent.reading.application.ArticleStudyService;
+import com.chandler.learning.agent.support.LearningConstants;
+import com.chandler.learning.agent.task.application.AiAsyncTaskService;
+import com.chandler.learning.agent.task.application.AiTaskExecutionService;
+import com.chandler.learning.agent.task.application.contract.AiTaskHandler;
+import com.chandler.learning.agent.task.application.contract.AiTaskPayload;
+import com.chandler.learning.agent.task.application.contract.AiTaskStepDefinition;
+import com.chandler.learning.agent.task.domain.AiAsyncTask;
+import com.chandler.learning.agent.task.domain.AiTaskType;
+import com.fasterxml.jackson.databind.ObjectMapper;
+import lombok.RequiredArgsConstructor;
+import org.springframework.stereotype.Component;
+
+import java.util.List;
+import java.util.Map;
+
+/** 语境精读材料的可恢复任务处理器；文章生成完成后才写入正式阅读记录。 */
+@Component
+@RequiredArgsConstructor
+public class ArticleMaterialTaskHandler implements AiTaskHandler {
+
+    private final ArticleStudyService articleStudyService;
+    private final AiTaskExecutionService executionService;
+    private final AiAsyncTaskService taskService;
+    private final ObjectMapper objectMapper;
+
+    @Override
+    public AiTaskType taskType() {
+        return AiTaskType.ARTICLE_MATERIAL;
+    }
+
+    @Override
+    public List<AiTaskStepDefinition> steps() {
+        return List.of(new AiTaskStepDefinition("generate_article", "生成并保存语境精读材料", 10));
+    }
+
+    @Override
+    public void execute(AiAsyncTask task, Map<String, Object> payload) {
+        executionService.execute(task.getId(), "generate_article", task.getOperatorUserId(),
+                AiTaskPayload.longValue(payload, "modelConfigId"), () -> {
+                    ArticleStudyRequest request = objectMapper.convertValue(payload, ArticleStudyRequest.class);
+                    ArticleStudyResponse response = articleStudyService.study(task.getOwnerUserId(), request);
+                    if (response.getId() != null) {
+                        taskService.bindBusiness(task.getId(), "article_study", String.valueOf(response.getId()));
+                    }
+                    return request.getWordbookId();
+                });
+        taskService.updateProgress(task.getId(), 1, 1, 0);
+        taskService.complete(task.getId(), LearningConstants.AiTask.STATUS_COMPLETED, null);
+    }
+}

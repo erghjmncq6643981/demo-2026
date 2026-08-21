@@ -121,6 +121,7 @@ public class AiChatService {
         modelRequest.setMaxTokens(Math.min(Math.min(configuredMaxTokens, modelDefinition.getMaxOutputTokens()),
                 availableOutputTokens));
         if (AiInvocationScene.VOCABULARY_SCENE_UNIT.equals(invocationScene)
+                || AiInvocationScene.VOCABULARY_SCENE_RELATED_WORDS.equals(invocationScene)
                 || AiInvocationScene.VOCABULARY_CARD_BATCH.equals(invocationScene)) {
             modelRequest.setFrequencyPenalty(0.3);
             modelRequest.setPresencePenalty(0.1);
@@ -346,6 +347,7 @@ public class AiChatService {
     private int defaultOutputTokens(AiInvocationScene invocationScene) {
         return switch (invocationScene) {
             case VOCABULARY_CATALOG_ANALYSIS, VOCABULARY_SCENE_UNIT -> 16_000;
+            case VOCABULARY_SCENE_RELATED_WORDS -> 8_000;
             case VOCABULARY_CARD_BATCH -> 8_000;
             default -> 4_096;
         };

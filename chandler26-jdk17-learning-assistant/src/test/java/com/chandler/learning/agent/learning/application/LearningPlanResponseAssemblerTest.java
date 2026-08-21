@@ -12,6 +12,7 @@ import com.chandler.learning.agent.learning.infrastructure.LearningPlanUnitEntry
 import com.chandler.learning.agent.learning.infrastructure.LearningPlanUnitMapper;
 import com.chandler.learning.agent.learning.infrastructure.LearningReviewRecordMapper;
 import com.chandler.learning.agent.learning.infrastructure.LearningSceneMaterialMapper;
+import com.chandler.learning.agent.learning.infrastructure.LearningSceneRelatedWordMapper;
 import com.chandler.learning.agent.vocabulary.application.LearningWordProgressService;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import org.junit.jupiter.api.Test;
@@ -36,6 +37,8 @@ class LearningPlanResponseAssemblerTest {
     @Mock
     private LearningSceneMaterialMapper materialMapper;
     @Mock
+    private LearningSceneRelatedWordMapper relatedWordMapper;
+    @Mock
     private LearningWordProgressService progressService;
     @Mock
     private LearningReviewRecordMapper reviewRecordMapper;
@@ -55,6 +58,7 @@ class LearningPlanResponseAssemblerTest {
         material.setLearningText("Scene text");
         material.setParsedJson("{}");
         when(materialMapper.selectList(any(Wrapper.class))).thenReturn(List.of(material));
+        when(relatedWordMapper.selectList(any(Wrapper.class))).thenReturn(List.of());
 
         LearningPlanUnitEntry firstEntry = entry(1001L, 101L, 2001L, 3001L, "airport");
         LearningPlanUnitEntry secondEntry = entry(1002L, 102L, 2002L, 3002L, "ticket");
@@ -70,7 +74,8 @@ class LearningPlanResponseAssemblerTest {
         when(reviewRecordMapper.selectList(any(Wrapper.class))).thenReturn(List.of(record));
 
         LearningPlanResponseAssembler assembler = new LearningPlanResponseAssembler(
-                unitMapper, unitEntryMapper, materialMapper, progressService, reviewRecordMapper, new ObjectMapper());
+                unitMapper, unitEntryMapper, materialMapper, relatedWordMapper,
+                progressService, reviewRecordMapper, new ObjectMapper());
 
         LearningPlanResponse response = assembler.toPlanResponse(plan, true);
 

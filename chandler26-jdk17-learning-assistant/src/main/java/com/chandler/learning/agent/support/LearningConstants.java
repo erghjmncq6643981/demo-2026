@@ -27,6 +27,7 @@ public final class LearningConstants {
     public static final String VOCABULARY_BATCH_TEMPLATE_CODE = "english_vocab_cards_batch_json";
     public static final String VOCABULARY_ANALYSIS_AGENT_CODE = "english_vocabulary";
     public static final String VOCABULARY_ANALYSIS_TEMPLATE_CODE = "english_vocab_catalog_analysis_json";
+    public static final String VOCABULARY_SCENE_RELATED_TEMPLATE_CODE = "english_vocab_scene_related_words_json";
     public static final int DEFAULT_JWT_EXPIRE_DAYS = 30;
 
     /**
@@ -518,12 +519,17 @@ public final class LearningConstants {
     /** AI 异步任务状态和调度规则。 */
     public static final class AiTask {
         public static final String TYPE_SCENE_MATERIAL = "scene_material";
+        public static final String TYPE_SCENE_MATERIAL_REGENERATION = "scene_material_regeneration";
+        public static final String TYPE_SCENE_RELATED_VOCABULARY = "scene_related_vocabulary";
         public static final String TYPE_VOCABULARY_CARD = "vocabulary_card";
         public static final String TYPE_VOCABULARY_CATALOG_ANALYSIS = "vocabulary_catalog_analysis";
+        public static final String TYPE_ARTICLE_MATERIAL = "article_material";
         public static final String STATUS_PENDING = "pending";
         public static final String STATUS_RUNNING = "running";
+        public static final String STATUS_RETRY_WAIT = "retry_wait";
         public static final String STATUS_COMPLETED = "completed";
         public static final String STATUS_PARTIAL_FAILED = "partial_failed";
+        public static final String STATUS_ATTENTION_REQUIRED = "attention_required";
         public static final String STATUS_FAILED = "failed";
         public static final String STATUS_CANCELLED = "cancelled";
         public static final String EXECUTION_IMMEDIATE = "immediate";
@@ -535,6 +541,9 @@ public final class LearningConstants {
         public static final int MAX_PAGE_SIZE = 100;
         public static final int RUNNING_TIMEOUT_MINUTES = 30;
         public static final int QUEUE_RETRY_DELAY_SECONDS = 10;
+        public static final int STEP_LEASE_MINUTES = 10;
+        public static final int RETRY_BASE_DELAY_SECONDS = 30;
+        public static final int MAX_RETRY_DELAY_SECONDS = 1800;
         public static final String RUNNING_TIMEOUT_MESSAGE = "AI 任务执行超时，已转为失败，可手动重试";
 
         private AiTask() {
@@ -661,6 +670,9 @@ public final class LearningConstants {
         LEARNING_PLAN_UNIT_NOT_FOUND(HttpStatus.NOT_FOUND, "学习场景不存在"),
         LEARNING_SCENE_MATERIAL_NOT_FOUND(HttpStatus.NOT_FOUND, "场景材料不存在"),
         AI_ASYNC_TASK_NOT_FOUND(HttpStatus.NOT_FOUND, "AI 异步任务不存在"),
+        AI_ASYNC_TASK_TYPE_INVALID(HttpStatus.BAD_REQUEST, "AI 异步任务类型无效"),
+        AI_ASYNC_TASK_STEP_NOT_FOUND(HttpStatus.NOT_FOUND, "AI 异步任务步骤不存在"),
+        AI_ASYNC_TASK_OPERATION_FORBIDDEN(HttpStatus.FORBIDDEN, "无权操作该 AI 异步任务"),
         AI_ASYNC_TASK_RETRY_EXCEEDED(HttpStatus.BAD_REQUEST, "AI 异步任务已达到最大重试次数"),
         AI_ASYNC_TASK_EXECUTION_MODE_INVALID(HttpStatus.BAD_REQUEST, "AI 任务执行方式无效"),
         LEARNING_PLAN_GENERATION_IN_PROGRESS(HttpStatus.CONFLICT, "该学习计划正在生成场景材料，请稍后查看"),

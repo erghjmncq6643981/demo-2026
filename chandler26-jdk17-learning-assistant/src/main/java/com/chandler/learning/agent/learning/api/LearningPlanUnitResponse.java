@@ -45,6 +45,12 @@ public class LearningPlanUnitResponse {
 
     private Object material;
 
+    /** 当前材料版本号。 */
+    private Integer materialRevision;
+
+    /** 不计入个人进度的场景相关词。 */
+    private List<SceneRelatedWordResponse> relatedWords;
+
     private List<LearningPlanUnitEntryResponse> words;
 
     private LocalDateTime generatedTime;

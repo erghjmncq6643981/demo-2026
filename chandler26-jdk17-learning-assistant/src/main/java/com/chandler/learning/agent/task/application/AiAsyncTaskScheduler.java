@@ -25,11 +25,13 @@ public class AiAsyncTaskScheduler {
     private final AiAsyncTaskMapper taskMapper;
     private final AiAsyncTaskService taskService;
     private final AiAsyncTaskDispatcher dispatcher;
+    private final AiTaskExecutionService executionService;
 
     @Scheduled(fixedDelayString = "${learning.ai-task.poll-interval-ms:10000}")
     public void dispatchDueTasks() {
         LocalDateTime now = LocalDateTime.now();
         recoverStaleTasks(now);
+        promoteDueRetries(now);
         List<AiAsyncTask> tasks = taskMapper.selectList(new LambdaQueryWrapper<AiAsyncTask>()
                 .eq(AiAsyncTask::getStatus, LearningConstants.AiTask.STATUS_PENDING)
                 .eq(AiAsyncTask::getDeleted, false)
@@ -52,19 +54,35 @@ public class AiAsyncTaskScheduler {
         }
     }
 
+    /** 到达退避时间后重新放入待领取队列，失败步骤会在 Worker 中断点续跑。 */
+    private void promoteDueRetries(LocalDateTime now) {
+        int promoted = taskMapper.update(null, new LambdaUpdateWrapper<AiAsyncTask>()
+                .eq(AiAsyncTask::getStatus, LearningConstants.AiTask.STATUS_RETRY_WAIT)
+                .eq(AiAsyncTask::getDeleted, false)
+                .le(AiAsyncTask::getScheduledTime, now)
+                .set(AiAsyncTask::getStatus, LearningConstants.AiTask.STATUS_PENDING)
+                .set(AiAsyncTask::getStartedTime, null)
+                .set(AiAsyncTask::getFinishedTime, null)
+                .set(AiAsyncTask::getUpdateTime, now));
+        if (promoted > 0) log.info("AI 异步任务退避结束，重新排队 count={}", promoted);
+    }
+
     /** 将失去心跳的运行中任务转为可人工重试的失败状态。 */
     void recoverStaleTasks(LocalDateTime now) {
+        int recoveredSteps = executionService.recoverExpired(now);
         int recovered = taskMapper.update(null, new LambdaUpdateWrapper<AiAsyncTask>()
                 .eq(AiAsyncTask::getStatus, LearningConstants.AiTask.STATUS_RUNNING)
                 .eq(AiAsyncTask::getDeleted, false)
                 .lt(AiAsyncTask::getUpdateTime,
                         now.minusMinutes(LearningConstants.AiTask.RUNNING_TIMEOUT_MINUTES))
-                .set(AiAsyncTask::getStatus, LearningConstants.AiTask.STATUS_FAILED)
-                .set(AiAsyncTask::getErrorMessage, LearningConstants.AiTask.RUNNING_TIMEOUT_MESSAGE)
-                .set(AiAsyncTask::getFinishedTime, now)
+                .set(AiAsyncTask::getStatus, LearningConstants.AiTask.STATUS_PENDING)
+                .set(AiAsyncTask::getErrorMessage, "执行进程中断，系统将从未完成步骤继续")
+                .set(AiAsyncTask::getScheduledTime, now)
+                .set(AiAsyncTask::getStartedTime, null)
+                .set(AiAsyncTask::getFinishedTime, null)
                 .set(AiAsyncTask::getUpdateTime, now));
-        if (recovered > LearningConstants.ZERO) {
-            log.info("回收超时 AI 异步任务，共 {} 个，状态已转为失败并等待人工重试", recovered);
+        if (recovered > LearningConstants.ZERO || recoveredSteps > LearningConstants.ZERO) {
+            log.info("回收中断 AI 异步任务 taskCount={} stepCount={}，将从未完成步骤自动继续", recovered, recoveredSteps);
         }
     }
 }

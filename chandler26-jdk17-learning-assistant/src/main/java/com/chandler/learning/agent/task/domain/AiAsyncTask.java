@@ -20,6 +20,21 @@ public class AiAsyncTask extends BaseEntity {
 
     private Long userId;
 
+    /** 任务成果所属用户 ID。 */
+    private Long ownerUserId;
+
+    /** 触发任务的用户 ID，系统触发时为空。 */
+    private Long triggerUserId;
+
+    /** 最近一次人工干预用户 ID。 */
+    private Long operatorUserId;
+
+    /** 触发来源：user、admin、system。 */
+    private String triggerType;
+
+    /** 可见范围：owner_admin、admin。 */
+    private String visibility;
+
     private String taskType;
 
     private String taskName;
@@ -29,6 +44,12 @@ public class AiAsyncTask extends BaseEntity {
     private Long unitId;
 
     private Long relatedJobId;
+
+    private String businessType;
+
+    private String businessId;
+
+    private String idempotencyKey;
 
     private String status;
 

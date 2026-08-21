@@ -148,6 +148,30 @@ public class LearningPlanController {
         return learningPlanService.regenerateDayUnits(user.getId(), planId, request.getModelConfigId(), request.getRecommendedDate());
     }
 
+    @PostMapping("/{planId}/units/regenerate-day/async")
+    @Operation(summary = "异步生成当天场景材料新版本，并保留旧版本历史")
+    public AiAsyncTaskResponse regenerateDayUnitsAsync(
+            @RequestHeader(value = "Authorization", required = false) String authorization,
+            @PathVariable Long planId,
+            @Valid @RequestBody com.chandler.learning.agent.learning.api.LearningPlanRegenerateDayRequest request) {
+        LearningUser user = authService.requireUser(authorization);
+        learningPlanService.detail(user.getId(), planId);
+        String idempotencyKey = "scene_material_regeneration:" + planId + ":" + request.getRecommendedDate();
+        var active = aiAsyncTaskService.findActiveByKey(user.getId(),
+                com.chandler.learning.agent.support.LearningConstants.AiTask.TYPE_SCENE_MATERIAL_REGENERATION,
+                planId, idempotencyKey);
+        if (active != null) return aiAsyncTaskService.toResponse(active);
+        Map<String, Object> payload = new HashMap<>();
+        if (request.getModelConfigId() != null) payload.put("modelConfigId", request.getModelConfigId());
+        payload.put("recommendedDate", request.getRecommendedDate().toString());
+        var task = aiAsyncTaskService.create(user.getId(),
+                com.chandler.learning.agent.support.LearningConstants.AiTask.TYPE_SCENE_MATERIAL_REGENERATION,
+                 "重新生成 " + request.getRecommendedDate() + " 场景材料", planId, null, null,
+                 com.chandler.learning.agent.support.LearningConstants.AiTask.EXECUTION_IMMEDIATE,
+                 null, null, 3, idempotencyKey, payload);
+        return aiAsyncTaskService.toResponse(task);
+    }
+
     @PostMapping("/{planId}/units/next/async")
     @Operation(summary = "预约生成场景材料，任务由低价时段调度器执行")
     public AiAsyncTaskResponse scheduleNextUnit(
@@ -157,7 +181,9 @@ public class LearningPlanController {
         LearningUser user = authService.requireUser(authorization);
         AiAsyncTaskScheduleRequest resolved = request == null ? new AiAsyncTaskScheduleRequest() : request;
         learningPlanService.detail(user.getId(), planId);
-        var activeTask = aiAsyncTaskService.findActiveSceneMaterialTask(user.getId(), planId);
+        LocalDate taskDate = resolved.getRecommendedDate() == null ? LocalDate.now() : resolved.getRecommendedDate();
+        String idempotencyKey = "scene_material:" + planId + ":" + taskDate;
+        var activeTask = aiAsyncTaskService.findActiveSceneMaterialTask(user.getId(), planId, idempotencyKey);
         if (activeTask != null) {
             return aiAsyncTaskService.toResponse(activeTask);
         }
@@ -166,8 +192,9 @@ public class LearningPlanController {
         if (resolved.getRecommendedDate() != null) payload.put("recommendedDate", resolved.getRecommendedDate().toString());
         var task = aiAsyncTaskService.create(user.getId(),
                 com.chandler.learning.agent.support.LearningConstants.AiTask.TYPE_SCENE_MATERIAL,
-                "批量生成场景材料", planId, null, null,
-                resolved.getExecutionMode(), resolved.getScheduledTime(), resolved.getPriority(), 1, payload);
+                 "批量生成场景材料", planId, null, null,
+                 resolved.getExecutionMode(), resolved.getScheduledTime(), resolved.getPriority(), 1,
+                 idempotencyKey, payload);
         return aiAsyncTaskService.toResponse(task);
     }
 
@@ -211,6 +238,30 @@ public class LearningPlanController {
             @PathVariable Long entryId) {
         LearningUser user = authService.requireUser(authorization);
         return learningPlanService.promoteWord(user.getId(), planId, unitId, entryId);
+    }
+
+    @PostMapping("/{planId}/units/{unitId}/related-words/async")
+    @Operation(summary = "为已有场景材料独立补生成场景相关词汇")
+    public AiAsyncTaskResponse generateRelatedWords(
+            @RequestHeader(value = "Authorization", required = false) String authorization,
+            @PathVariable Long planId,
+            @PathVariable Long unitId,
+            @RequestBody(required = false) Map<String, Object> request) {
+        LearningUser user = authService.requireUser(authorization);
+        learningPlanService.detail(user.getId(), planId);
+        String idempotencyKey = "scene_related_vocabulary:" + planId + ":" + unitId;
+        var active = aiAsyncTaskService.findActiveByKey(user.getId(),
+                com.chandler.learning.agent.support.LearningConstants.AiTask.TYPE_SCENE_RELATED_VOCABULARY,
+                planId, idempotencyKey);
+        if (active != null) return aiAsyncTaskService.toResponse(active);
+        Map<String, Object> payload = request == null ? new HashMap<>() : new HashMap<>(request);
+        payload.putIfAbsent("targetCount", 50);
+        var task = aiAsyncTaskService.create(user.getId(),
+                com.chandler.learning.agent.support.LearningConstants.AiTask.TYPE_SCENE_RELATED_VOCABULARY,
+                 "补充场景相关词汇", planId, unitId, null,
+                 com.chandler.learning.agent.support.LearningConstants.AiTask.EXECUTION_IMMEDIATE,
+                 null, null, 50, idempotencyKey, payload);
+        return aiAsyncTaskService.toResponse(task);
     }
 
     @PostMapping("/{planId}/units/{unitId}/cards/generate")

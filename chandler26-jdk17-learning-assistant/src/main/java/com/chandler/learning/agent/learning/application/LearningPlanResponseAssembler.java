@@ -4,16 +4,19 @@ import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import com.chandler.learning.agent.learning.api.LearningPlanResponse;
 import com.chandler.learning.agent.learning.api.LearningPlanUnitEntryResponse;
 import com.chandler.learning.agent.learning.api.LearningPlanUnitResponse;
+import com.chandler.learning.agent.learning.api.SceneRelatedWordResponse;
 import com.chandler.learning.agent.learning.domain.LearningPlan;
 import com.chandler.learning.agent.learning.domain.LearningPlanUnit;
 import com.chandler.learning.agent.learning.domain.LearningPlanUnitEntry;
 import com.chandler.learning.agent.learning.domain.LearningReviewRecord;
 import com.chandler.learning.agent.learning.domain.LearningSceneMaterial;
+import com.chandler.learning.agent.learning.domain.LearningSceneRelatedWord;
 import com.chandler.learning.agent.vocabulary.domain.LearningWordProgress;
 import com.chandler.learning.agent.learning.infrastructure.LearningPlanUnitEntryMapper;
 import com.chandler.learning.agent.learning.infrastructure.LearningPlanUnitMapper;
 import com.chandler.learning.agent.learning.infrastructure.LearningReviewRecordMapper;
 import com.chandler.learning.agent.learning.infrastructure.LearningSceneMaterialMapper;
+import com.chandler.learning.agent.learning.infrastructure.LearningSceneRelatedWordMapper;
 import com.chandler.learning.agent.vocabulary.application.LearningWordProgressService;
 import com.chandler.learning.agent.support.LearningConstants;
 import com.fasterxml.jackson.core.type.TypeReference;
@@ -44,6 +47,7 @@ public class LearningPlanResponseAssembler {
     private final LearningPlanUnitMapper unitMapper;
     private final LearningPlanUnitEntryMapper unitEntryMapper;
     private final LearningSceneMaterialMapper materialMapper;
+    private final LearningSceneRelatedWordMapper relatedWordMapper;
     private final LearningWordProgressService progressService;
     private final LearningReviewRecordMapper reviewRecordMapper;
     private final ObjectMapper objectMapper;
@@ -118,9 +122,21 @@ public class LearningPlanResponseAssembler {
         Map<Long, LearningSceneMaterial> materialByUnit = materialMapper.selectList(
                         new LambdaQueryWrapper<LearningSceneMaterial>()
                                 .in(LearningSceneMaterial::getUnitId, unitIds)
+                                .eq(LearningSceneMaterial::getCurrentVersion, true)
                                 .eq(LearningSceneMaterial::getDeleted, false))
                 .stream()
                 .collect(Collectors.toMap(LearningSceneMaterial::getUnitId, Function.identity(), (left, right) -> left));
+        Map<Long, List<LearningSceneRelatedWord>> relatedWordsByUnit = relatedWordMapper.selectList(
+                        new LambdaQueryWrapper<LearningSceneRelatedWord>()
+                                .in(LearningSceneRelatedWord::getUnitId, unitIds)
+                                .eq(LearningSceneRelatedWord::getDeleted, false)
+                                .orderByAsc(LearningSceneRelatedWord::getUnitId)
+                                .orderByAsc(LearningSceneRelatedWord::getSortOrder))
+                .stream().collect(Collectors.groupingBy(LearningSceneRelatedWord::getUnitId));
+        relatedWordsByUnit.replaceAll((unitId, words) -> words.stream()
+                .filter(word -> materialByUnit.get(unitId) != null
+                        && Objects.equals(word.getSceneMaterialId(), materialByUnit.get(unitId).getId()))
+                .toList());
         List<LearningPlanUnitEntry> entries = unitEntryMapper.selectList(
                 new LambdaQueryWrapper<LearningPlanUnitEntry>()
                         .eq(LearningPlanUnitEntry::getPlanId, planId)
@@ -152,11 +168,13 @@ public class LearningPlanResponseAssembler {
                                         Collectors.toCollection(LinkedHashSet::new), List::copyOf))));
         return units.stream()
                 .map(unit -> toUnitResponse(unit, materialByUnit.get(unit.getId()),
+                        relatedWordsByUnit.getOrDefault(unit.getId(), List.of()),
                         entriesByUnit.getOrDefault(unit.getId(), List.of()), progressById, passedByEntry))
                 .toList();
     }
 
     private LearningPlanUnitResponse toUnitResponse(LearningPlanUnit unit, LearningSceneMaterial material,
+                                                    List<LearningSceneRelatedWord> relatedWords,
                                                     List<LearningPlanUnitEntry> entries,
                                                     Map<Long, LearningWordProgress> progressById,
                                                     Map<Long, List<String>> passedByEntry) {
@@ -177,11 +195,29 @@ public class LearningPlanResponseAssembler {
         response.setLearningText(material == null ? null : material.getLearningText());
         response.setTranslation(material == null ? null : material.getTranslation());
         response.setMaterial(material == null ? null : readJson(material.getParsedJson()));
+        response.setMaterialRevision(material == null ? null : material.getRevisionNo());
+        response.setRelatedWords(relatedWords.stream().map(this::toRelatedWordResponse).toList());
         response.setWords(entries.stream()
                 .map(entry -> toEntryResponse(entry, progressById.get(entry.getWordProgressId()), passedByEntry))
                 .toList());
         response.setGeneratedTime(unit.getGeneratedTime());
         response.setCompletedTime(unit.getCompletedTime());
+        return response;
+    }
+
+    private SceneRelatedWordResponse toRelatedWordResponse(LearningSceneRelatedWord word) {
+        SceneRelatedWordResponse response = new SceneRelatedWordResponse();
+        response.setId(word.getId());
+        response.setSceneMaterialId(word.getSceneMaterialId());
+        response.setTerm(word.getTerm());
+        response.setNormalizedTerm(word.getNormalizedTerm());
+        response.setPhonetic(word.getPhonetic());
+        response.setMeaning(word.getMeaningText());
+        response.setContextMeaning(word.getContextMeaning());
+        response.setCategoryCode(word.getCategoryCode());
+        response.setCategoryName(word.getCategoryName());
+        response.setPromoted(word.getPromoted());
+        response.setPromotedEntryId(word.getPromotedEntryId());
         return response;
     }
 

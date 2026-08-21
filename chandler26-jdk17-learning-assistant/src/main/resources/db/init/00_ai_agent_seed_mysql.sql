@@ -64,7 +64,7 @@ INSERT INTO ai_prompt_template (
 ),
 (
     1201, '英语场景词汇单元 JSON', 'english_vocab_scene_unit_json', 'user', '英语,词表,场景学习,词汇检查,JSON',
-    '学习目的：{{learning_purpose}}。这是第 {{unit_no}} 个场景单元。新词候选 JSON：{{candidate_words}}。待挑战复习词 JSON：{{review_words}}。目标词数：{{target_word_count}}。本批新词候选必须作为 core；待挑战复习词只能作为 review 或语境辅助，不能冒充新的 core。候选词已由系统排除其他场景的核心词，不需要根据历史对话自行判断。单篇材料 core 最多 50 个。可添加场景常见具体名词作为 supplementary，但 supplementary 不得冒充词表词。请只输出合法的单个 JSON 对象，不要输出 Markdown 代码块或额外说明文字，必须符合如下 JSON 结构：{"title":"场景标题","scenario_type":"场景类型","summary":"场景说明","learning_text":"英文短文（由2-4个自然段组成连贯短文，总词数250-450词，核心词自然融入语境）","translation":"中文对照翻译","vocabulary":[{"term":"单词","tier":"core","mastery_requirement":"recognition","phonetic":"音标","meaning":"词义","context_meaning":"语境释义","accepted_spellings":["单词"],"meaning_question":{"prompt":"题目说明","options":["选项A","选项B","选项C","选项D"],"correct_answer":"正确选项"}}]}。',
+    '学习目的：{{learning_purpose}}。这是第 {{unit_no}} 个场景单元。新词候选 JSON：{{candidate_words}}。待挑战复习词 JSON：{{review_words}}。目标词数：{{target_word_count}}。本批新词候选必须作为 core；待挑战复习词只能作为 review 或语境辅助，不能冒充新的 core。候选词已由系统排除其他场景的核心词，不需要根据历史对话自行判断。单篇材料 core 最多 50 个。词汇数组只返回 core 和 review，场景扩展名词由独立动作生成，不要返回 supplementary 或其他额外词条。请只输出合法的单个 JSON 对象，不要输出 Markdown 代码块或额外说明文字，必须符合如下 JSON 结构：{"title":"场景标题","scenario_type":"场景类型","summary":"场景说明","learning_text":"英文短文（由2-4个自然段组成连贯短文，总词数250-450词，核心词自然融入语境）","translation":"中文对照翻译","vocabulary":[{"term":"单词","tier":"core","mastery_requirement":"recognition","phonetic":"音标","meaning":"词义","context_meaning":"语境释义","accepted_spellings":["单词"],"meaning_question":{"prompt":"题目说明","options":["选项A","选项B","选项C","选项D"],"correct_answer":"正确选项"}}]}。',
     JSON_ARRAY(JSON_OBJECT('name','learning_purpose','label','学习目的','required',true), JSON_OBJECT('name','unit_no','label','单元序号','required',true), JSON_OBJECT('name','candidate_words','label','新词候选 JSON','required',true), JSON_OBJECT('name','review_words','label','待挑战复习词 JSON','required',true), JSON_OBJECT('name','target_word_count','label','目标词数','required',true)),
     '根据词表按需生成一个可学习、可检查的场景单元', '{"candidate_words":[{"term":"clean"}]}', '{"title":"周末大扫除","vocabulary":[]}', 1, 1, 4
 ),
@@ -79,6 +79,12 @@ INSERT INTO ai_prompt_template (
     '请对词汇数组 {{words}} 做初步语义分析。这里只建立可复用的词本语义索引，不生成完整词卡，也不生成文章。只输出合法 JSON，不要输出 Markdown。根字段为 entries 数组，每个输入 entry_id 必须且只能对应一项。每项包含 entry_id、primary_group_code、primary_group_name、domain、sub_topic、tags、related_entry_ids、difficulty_level、confidence。primary_group_code 应稳定、简短、可用于后续分组；related_entry_ids 只能引用本批输入的 entry_id；tags 最多 6 个；confidence 为 0 到 1 的数字；语义关系只保留同义、反义、词族和主题相关，不要把搭配词放到 related_entry_ids。',
     JSON_ARRAY(JSON_OBJECT('name','words','label','词条 JSON 数组','required',true), JSON_OBJECT('name','analysis_version','label','分析修订号','required',true)),
     '为公共词本批量建立场景化学习所需的语义索引', '{"words":[{"entry_id":1,"term":"airport","meaning":"机场"}]}', '{"entries":[]}', 1, 1, 6
+),
+(
+    1204, '场景相关词汇 JSON', 'english_vocab_scene_related_words_json', 'user', '英语,场景词汇,分类,JSON',
+    '学习目的：{{learning_purpose}}。场景标题：{{scene_title}}。场景摘要：{{scene_summary}}。场景文章：{{learning_text}}。核心词：{{core_words}}。已经生成的场景相关词：{{existing_words}}。请生成 {{target_word_count}} 个帮助学习者扩展场景认知的英语词汇，重点覆盖具体事物、人物、地点和常用动作。不要重复核心词或已经生成的场景相关词，不生成专有名词或生僻术语。只输出合法 JSON：{"related_words":[{"term":"apron","phonetic":"/ˈeɪprən/","meaning":"围裙","context_meaning":"烹饪时用于保护衣服的围裙","category_code":"object","category_name":"具体物品"}]}。',
+    JSON_ARRAY(JSON_OBJECT('name','learning_purpose','label','学习目的','required',true), JSON_OBJECT('name','scene_title','label','场景标题','required',true), JSON_OBJECT('name','scene_summary','label','场景摘要','required',true), JSON_OBJECT('name','learning_text','label','场景文章','required',true), JSON_OBJECT('name','core_words','label','核心词','required',true), JSON_OBJECT('name','existing_words','label','已生成场景词','required',true), JSON_OBJECT('name','target_word_count','label','目标词数','required',true)),
+    '为已生成材料独立补充分类明确的场景词汇', '{"scene_title":"周末大扫除","core_words":["clean"]}', '{"related_words":[]}', 1, 1, 7
 )
 ON DUPLICATE KEY UPDATE
     name = VALUES(name), tags = VALUES(tags), content = VALUES(content), variables = VALUES(variables),

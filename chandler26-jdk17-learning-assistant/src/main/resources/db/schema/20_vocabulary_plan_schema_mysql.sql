@@ -227,6 +227,10 @@ CREATE TABLE IF NOT EXISTS learning_scene_material (
     user_id BIGINT NOT NULL COMMENT '学习者用户 ID',
     plan_id BIGINT NOT NULL COMMENT '学习计划 ID',
     unit_id BIGINT NOT NULL COMMENT '场景学习单元 ID',
+    revision_no INT NOT NULL DEFAULT 1 COMMENT '单元内材料版本号，从 1 递增',
+    material_status VARCHAR(20) NOT NULL DEFAULT 'published' COMMENT '材料状态：draft、published、archived、failed',
+    current_version TINYINT(1) NOT NULL DEFAULT 1 COMMENT '是否为当前生效版本',
+    supersedes_material_id BIGINT DEFAULT NULL COMMENT '被当前版本替换的上一材料 ID',
     session_id BIGINT DEFAULT NULL COMMENT '复用的场景学习 AI 会话 ID',
     title VARCHAR(160) NOT NULL COMMENT '场景标题',
     scenario_type VARCHAR(80) DEFAULT NULL COMMENT '场景分类',
@@ -243,10 +247,28 @@ CREATE TABLE IF NOT EXISTS learning_scene_material (
     deleted TINYINT(1) NOT NULL DEFAULT 0 COMMENT '是否逻辑删除',
     version INT NOT NULL DEFAULT 0 COMMENT '乐观锁版本号',
     PRIMARY KEY (id),
-    UNIQUE KEY uk_learning_scene_material_unit (unit_id),
+    UNIQUE KEY uk_learning_scene_material_revision (unit_id, revision_no),
     KEY idx_learning_scene_material_plan (plan_id, deleted, update_time),
+    KEY idx_learning_scene_material_current (unit_id, current_version, deleted),
     KEY idx_learning_scene_material_session (session_id)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci COMMENT='AI 场景学习材料';
+
+CREATE TABLE IF NOT EXISTS learning_scene_related_word (
+    id BIGINT NOT NULL COMMENT '主键', create_by BIGINT NOT NULL DEFAULT 0 COMMENT '创建人用户 ID',
+    update_by BIGINT NOT NULL DEFAULT 0 COMMENT '更新人用户 ID', user_id BIGINT NOT NULL COMMENT '学习者用户 ID',
+    plan_id BIGINT NOT NULL COMMENT '学习计划 ID', unit_id BIGINT NOT NULL COMMENT '场景学习单元 ID',
+    scene_material_id BIGINT NOT NULL COMMENT '所属场景材料版本 ID', term VARCHAR(255) NOT NULL COMMENT '场景相关单词或短语',
+    normalized_term VARCHAR(255) NOT NULL COMMENT '归一化词', phonetic VARCHAR(255) DEFAULT NULL COMMENT '音标',
+    meaning_text VARCHAR(1000) DEFAULT NULL COMMENT '基础释义', context_meaning VARCHAR(1000) DEFAULT NULL COMMENT '当前场景下的释义',
+    category_code VARCHAR(50) DEFAULT NULL COMMENT '场景类别编码', category_name VARCHAR(80) DEFAULT NULL COMMENT '场景类别名称',
+    source_type VARCHAR(20) NOT NULL DEFAULT 'ai' COMMENT '来源：ai、manual', sort_order INT NOT NULL DEFAULT 0 COMMENT '材料内展示顺序',
+    promoted TINYINT(1) NOT NULL DEFAULT 0 COMMENT '是否已加入当前场景挑战', promoted_entry_id BIGINT DEFAULT NULL COMMENT '提升后的场景词条 ID',
+    create_time DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP COMMENT '创建时间',
+    update_time DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP COMMENT '更新时间',
+    deleted TINYINT(1) NOT NULL DEFAULT 0 COMMENT '是否逻辑删除', version INT NOT NULL DEFAULT 0 COMMENT '乐观锁版本号',
+    PRIMARY KEY (id), UNIQUE KEY uk_scene_related_material_term (scene_material_id, normalized_term),
+    KEY idx_scene_related_unit (unit_id, deleted, sort_order), KEY idx_scene_related_plan (plan_id, deleted, update_time)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci COMMENT='具体材料版本的场景相关词汇';
 
 CREATE TABLE IF NOT EXISTS learning_scene_material_note (
     id BIGINT NOT NULL COMMENT '主键',
@@ -263,7 +285,7 @@ CREATE TABLE IF NOT EXISTS learning_scene_material_note (
     deleted TINYINT(1) NOT NULL DEFAULT 0 COMMENT '是否逻辑删除',
     version INT NOT NULL DEFAULT 0 COMMENT '乐观锁版本号',
     PRIMARY KEY (id),
-    UNIQUE KEY uk_learning_scene_material_note_user_unit (user_id, unit_id, deleted),
+    UNIQUE KEY uk_learning_scene_material_note_user_material (user_id, scene_material_id, deleted),
     KEY idx_learning_scene_material_note_material (scene_material_id, deleted),
     KEY idx_learning_scene_material_note_plan (plan_id, deleted, update_time)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci COMMENT='学习者场景材料 Markdown 笔记';
@@ -272,13 +294,21 @@ CREATE TABLE IF NOT EXISTS learning_ai_async_task (
     id BIGINT NOT NULL COMMENT '主键',
     create_by BIGINT NOT NULL DEFAULT 0 COMMENT '创建人用户 ID',
     update_by BIGINT NOT NULL DEFAULT 0 COMMENT '更新人用户 ID',
-    user_id BIGINT NOT NULL COMMENT '任务所属用户 ID',
-    task_type VARCHAR(40) NOT NULL COMMENT '任务类型：scene_material、vocabulary_card、vocabulary_catalog_analysis',
+    user_id BIGINT NOT NULL COMMENT '兼容字段：任务成果归属用户 ID',
+    owner_user_id BIGINT NOT NULL COMMENT '任务成果归属用户 ID',
+    trigger_user_id BIGINT DEFAULT NULL COMMENT '任务触发用户 ID，系统触发时为空',
+    operator_user_id BIGINT DEFAULT NULL COMMENT '最近一次继续或干预的用户 ID',
+    trigger_type VARCHAR(20) NOT NULL DEFAULT 'user' COMMENT '触发来源：user、admin、system',
+    visibility VARCHAR(20) NOT NULL DEFAULT 'owner_admin' COMMENT '可见范围：owner_admin、admin',
+    task_type VARCHAR(40) NOT NULL COMMENT '任务类型：场景材料、相关词、词卡、词本分析、语境精读',
     task_name VARCHAR(160) NOT NULL COMMENT '任务展示名称',
     plan_id BIGINT DEFAULT NULL COMMENT '关联学习计划 ID',
     unit_id BIGINT DEFAULT NULL COMMENT '关联场景单元 ID',
     related_job_id BIGINT DEFAULT NULL COMMENT '关联领域任务 ID',
-    status VARCHAR(20) NOT NULL DEFAULT 'pending' COMMENT '状态：pending、running、completed、partial_failed、failed、cancelled',
+    business_type VARCHAR(50) DEFAULT NULL COMMENT '关联业务对象类型',
+    business_id VARCHAR(100) DEFAULT NULL COMMENT '关联业务对象 ID',
+    idempotency_key VARCHAR(160) DEFAULT NULL COMMENT '有效任务业务幂等键',
+    status VARCHAR(20) NOT NULL DEFAULT 'pending' COMMENT '状态：pending、running、retry_wait、completed、partial_failed、attention_required、failed、cancelled',
     execution_mode VARCHAR(30) NOT NULL DEFAULT 'immediate' COMMENT '执行方式：immediate、scheduled、low_cost_window',
     scheduled_time DATETIME DEFAULT NULL COMMENT '计划执行时间',
     priority INT NOT NULL DEFAULT 50 COMMENT '任务优先级，数字越大越优先',
@@ -299,9 +329,46 @@ CREATE TABLE IF NOT EXISTS learning_ai_async_task (
     version INT NOT NULL DEFAULT 0 COMMENT '乐观锁版本号',
     PRIMARY KEY (id),
     KEY idx_learning_ai_task_user_status (user_id, status, deleted, update_time),
+    KEY idx_learning_ai_task_owner_status (owner_user_id, status, deleted, update_time),
     KEY idx_learning_ai_task_schedule (status, scheduled_time, priority, deleted),
-    KEY idx_learning_ai_task_plan (plan_id, unit_id, deleted)
+    KEY idx_learning_ai_task_plan (plan_id, unit_id, deleted),
+    KEY idx_learning_ai_task_idempotency (idempotency_key, status, deleted)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci COMMENT='AI 异步任务统一记录';
+
+CREATE TABLE IF NOT EXISTS learning_ai_async_task_step (
+    id BIGINT NOT NULL COMMENT '主键', create_by BIGINT NOT NULL DEFAULT 0 COMMENT '创建人用户 ID',
+    update_by BIGINT NOT NULL DEFAULT 0 COMMENT '更新人用户 ID', task_id BIGINT NOT NULL COMMENT '父任务 ID',
+    step_code VARCHAR(60) NOT NULL COMMENT '任务内稳定步骤编码', step_name VARCHAR(100) NOT NULL COMMENT '面向用户的步骤名称',
+    step_order INT NOT NULL COMMENT '执行顺序', status VARCHAR(20) NOT NULL DEFAULT 'pending' COMMENT '步骤状态',
+    completed_count INT NOT NULL DEFAULT 0 COMMENT '完成项数', total_count INT NOT NULL DEFAULT 1 COMMENT '总项数',
+    checkpoint_json JSON DEFAULT NULL COMMENT '断点续跑检查点', lease_token VARCHAR(64) DEFAULT NULL COMMENT '执行租约令牌',
+    lease_until DATETIME DEFAULT NULL COMMENT '租约到期时间', heartbeat_time DATETIME DEFAULT NULL COMMENT '最近心跳时间',
+    attempt_count INT NOT NULL DEFAULT 0 COMMENT '已执行次数', max_attempt_count INT NOT NULL DEFAULT 3 COMMENT '最大执行次数',
+    error_message VARCHAR(1000) DEFAULT NULL COMMENT '最近失败摘要', started_time DATETIME DEFAULT NULL COMMENT '首次开始时间',
+    finished_time DATETIME DEFAULT NULL COMMENT '结束时间', create_time DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP COMMENT '创建时间',
+    update_time DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP COMMENT '更新时间',
+    deleted TINYINT(1) NOT NULL DEFAULT 0 COMMENT '是否逻辑删除', version INT NOT NULL DEFAULT 0 COMMENT '乐观锁版本号',
+    PRIMARY KEY (id), UNIQUE KEY uk_ai_task_step (task_id, step_code),
+    KEY idx_ai_task_step_status (task_id, status, step_order, deleted), KEY idx_ai_task_step_lease (status, lease_until, deleted)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci COMMENT='AI 异步任务可恢复步骤';
+
+CREATE TABLE IF NOT EXISTS learning_ai_async_task_attempt (
+    id BIGINT NOT NULL COMMENT '主键', create_by BIGINT NOT NULL DEFAULT 0 COMMENT '创建人用户 ID',
+    update_by BIGINT NOT NULL DEFAULT 0 COMMENT '更新人用户 ID', task_id BIGINT NOT NULL COMMENT '父任务 ID',
+    step_id BIGINT NOT NULL COMMENT '任务步骤 ID', operator_user_id BIGINT DEFAULT NULL COMMENT '操作者用户 ID',
+    attempt_no INT NOT NULL COMMENT '步骤内尝试序号', status VARCHAR(20) NOT NULL COMMENT '执行状态',
+    model_config_id BIGINT DEFAULT NULL COMMENT '模型配置 ID', provider VARCHAR(50) DEFAULT NULL COMMENT '模型服务商',
+    model_name VARCHAR(100) DEFAULT NULL COMMENT '模型名称', model_call_record_id BIGINT DEFAULT NULL COMMENT 'AI 调用审计记录 ID',
+    prompt_tokens INT DEFAULT NULL COMMENT '输入 Token 数', completion_tokens INT DEFAULT NULL COMMENT '输出 Token 数',
+    total_tokens INT DEFAULT NULL COMMENT '总 Token 数', cost_time BIGINT DEFAULT NULL COMMENT '耗时毫秒',
+    error_code VARCHAR(80) DEFAULT NULL COMMENT '错误编码', error_message VARCHAR(1000) DEFAULT NULL COMMENT '错误摘要',
+    started_time DATETIME NOT NULL COMMENT '开始时间', finished_time DATETIME DEFAULT NULL COMMENT '结束时间',
+    create_time DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP COMMENT '创建时间',
+    update_time DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP COMMENT '更新时间',
+    deleted TINYINT(1) NOT NULL DEFAULT 0 COMMENT '是否逻辑删除', version INT NOT NULL DEFAULT 0 COMMENT '乐观锁版本号',
+    PRIMARY KEY (id), UNIQUE KEY uk_ai_task_step_attempt (step_id, attempt_no),
+    KEY idx_ai_task_attempt_task (task_id, create_time, deleted), KEY idx_ai_task_attempt_model_call (model_call_record_id, deleted)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci COMMENT='AI 任务步骤执行尝试审计';
 
 CREATE TABLE IF NOT EXISTS vocabulary_card_generation_job (
     id BIGINT NOT NULL COMMENT '主键',

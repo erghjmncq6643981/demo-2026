@@ -44,7 +44,7 @@ public class LearningSceneMaterialNoteService {
     /** 查询场景材料笔记；没有保存过时返回空 Markdown 文档。 */
     public SceneMaterialNoteResponse get(Long userId, Long planId, Long unitId) {
         LearningSceneMaterial material = requireMaterial(userId, planId, unitId);
-        LearningSceneMaterialNote note = findNote(userId, planId, unitId);
+        LearningSceneMaterialNote note = findNote(userId, planId, unitId, material.getId());
         return toResponse(note, planId, unitId, material.getId());
     }
 
@@ -53,7 +53,7 @@ public class LearningSceneMaterialNoteService {
     public SceneMaterialNoteResponse save(Long userId, Long planId, Long unitId, SceneMaterialNoteRequest request) {
         LearningSceneMaterial material = requireMaterial(userId, planId, unitId);
         String content = request == null || request.getContent() == null ? "" : request.getContent();
-        LearningSceneMaterialNote note = findNote(userId, planId, unitId);
+        LearningSceneMaterialNote note = findNote(userId, planId, unitId, material.getId());
         LocalDateTime now = LocalDateTime.now();
         if (note == null) {
             note = new LearningSceneMaterialNote();
@@ -112,11 +112,12 @@ public class LearningSceneMaterialNoteService {
         return material;
     }
 
-    private LearningSceneMaterialNote findNote(Long userId, Long planId, Long unitId) {
+    private LearningSceneMaterialNote findNote(Long userId, Long planId, Long unitId, Long materialId) {
         return noteMapper.selectOne(new LambdaQueryWrapper<LearningSceneMaterialNote>()
                 .eq(LearningSceneMaterialNote::getUserId, userId)
                 .eq(LearningSceneMaterialNote::getPlanId, planId)
                 .eq(LearningSceneMaterialNote::getUnitId, unitId)
+                .eq(LearningSceneMaterialNote::getSceneMaterialId, materialId)
                 .eq(LearningSceneMaterialNote::getDeleted, false)
                 .last(LearningConstants.SQL_LIMIT_ONE));
     }

@@ -61,7 +61,10 @@ public class AiAsyncTaskController {
             @RequestHeader(value = "Authorization", required = false) String authorization,
             @PathVariable Long taskId) {
         LearningUser user = authService.requireUser(authorization);
-        return taskService.toResponse(taskService.require(user.getId(), taskId));
+        if (UserRole.ADMIN.getCode().equals(user.getRoleCode())) {
+            return taskService.toDetailResponse(taskService.requireAny(taskId));
+        }
+        return taskService.toDetailResponse(taskService.require(user.getId(), taskId));
     }
 
     @PostMapping("/{taskId}/cancel")
@@ -70,6 +73,9 @@ public class AiAsyncTaskController {
             @RequestHeader(value = "Authorization", required = false) String authorization,
             @PathVariable Long taskId) {
         LearningUser user = authService.requireUser(authorization);
+        if (UserRole.ADMIN.getCode().equals(user.getRoleCode())) {
+            return taskService.toResponse(taskService.cancelAsAdmin(user.getId(), taskId));
+        }
         return taskService.toResponse(taskService.cancel(user.getId(), taskId));
     }
 
@@ -79,7 +85,19 @@ public class AiAsyncTaskController {
             @RequestHeader(value = "Authorization", required = false) String authorization,
             @PathVariable Long taskId) {
         LearningUser user = authService.requireUser(authorization);
+        if (UserRole.ADMIN.getCode().equals(user.getRoleCode())) {
+            return taskService.toResponse(taskService.retryAsAdmin(user.getId(), taskId));
+        }
         return taskService.toResponse(taskService.retry(user.getId(), taskId));
+    }
+
+    @PostMapping("/{taskId}/admin-retry")
+    @Operation(summary = "管理员代任务归属人从失败步骤继续")
+    public AiAsyncTaskResponse adminRetry(
+            @RequestHeader(value = "Authorization", required = false) String authorization,
+            @PathVariable Long taskId) {
+        LearningUser operator = authService.requireAdmin(authorization);
+        return taskService.toResponse(taskService.retryAsAdmin(operator.getId(), taskId));
     }
 
     @PostMapping("/{taskId}/run-now")
@@ -88,6 +106,9 @@ public class AiAsyncTaskController {
             @RequestHeader(value = "Authorization", required = false) String authorization,
             @PathVariable Long taskId) {
         LearningUser user = authService.requireUser(authorization);
+        if (UserRole.ADMIN.getCode().equals(user.getRoleCode())) {
+            return taskService.toResponse(taskService.runNowAsAdmin(user.getId(), taskId));
+        }
         return taskService.toResponse(taskService.runNow(user.getId(), taskId));
     }
 }

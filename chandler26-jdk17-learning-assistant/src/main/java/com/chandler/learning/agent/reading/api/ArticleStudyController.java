@@ -8,6 +8,8 @@ import com.chandler.learning.agent.identity.domain.LearningUser;
 import com.chandler.learning.agent.reading.application.ArticleStudyService;
 import com.chandler.learning.agent.identity.application.AuthService;
 import com.chandler.learning.agent.support.LearningConstants;
+import com.chandler.learning.agent.task.api.AiAsyncTaskResponse;
+import com.chandler.learning.agent.task.application.AiAsyncTaskService;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.Valid;
@@ -22,6 +24,9 @@ import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 
 import java.util.List;
+import java.util.Map;
+import com.fasterxml.jackson.databind.ObjectMapper;
+import com.fasterxml.jackson.core.type.TypeReference;
 
 /**
  * ArticleStudyController 类。
@@ -34,6 +39,8 @@ public class ArticleStudyController {
 
     private final AuthService authService;
     private final ArticleStudyService articleStudyService;
+    private final AiAsyncTaskService aiAsyncTaskService;
+    private final ObjectMapper objectMapper;
 
     /**
      * 处理 {@code study} 相关业务。
@@ -45,6 +52,26 @@ public class ArticleStudyController {
             @Valid @RequestBody ArticleStudyRequest request) {
         LearningUser user = authService.requireUser(authorization);
         return articleStudyService.study(user.getId(), request);
+    }
+
+    @PostMapping("/study/async")
+    @Operation(summary = "提交异步语境精读材料生成任务")
+    public AiAsyncTaskResponse studyAsync(
+            @RequestHeader(value = "Authorization", required = false) String authorization,
+            @Valid @RequestBody ArticleStudyRequest request) {
+        LearningUser user = authService.requireUser(authorization);
+        Map<String, Object> payload = objectMapper.convertValue(request, new TypeReference<>() {
+        });
+        String idempotencyKey = "article_material:" + user.getId() + ":" + request.getWordbookId()
+                + ":" + String.valueOf(request.getEntryIds()) + ":" + request.getWordCountRange()
+                + ":" + request.getDifficulty();
+        var active = aiAsyncTaskService.findActiveByKey(user.getId(),
+                LearningConstants.AiTask.TYPE_ARTICLE_MATERIAL, null, idempotencyKey);
+        if (active != null) return aiAsyncTaskService.toResponse(active);
+        var task = aiAsyncTaskService.create(user.getId(), LearningConstants.AiTask.TYPE_ARTICLE_MATERIAL,
+                "生成语境精读材料", null, null, null,
+                LearningConstants.AiTask.EXECUTION_IMMEDIATE, null, null, 1, idempotencyKey, payload);
+        return aiAsyncTaskService.toResponse(task);
     }
 
     /**

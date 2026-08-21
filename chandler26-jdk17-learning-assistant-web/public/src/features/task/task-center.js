@@ -1,18 +1,24 @@
 import { escapeHtml, formatDateTime } from '/src/shared/text.js'
+import { hideModal, showModal } from '/src/shared/modal.js'
 
 const STATUS_LABELS = {
   pending: '等待执行',
   running: '生成中',
+  retry_wait: '等待重试',
   completed: '已完成',
   partial_failed: '部分失败',
+  attention_required: '需要处理',
   failed: '失败',
   cancelled: '已取消',
 }
 
 const TYPE_LABELS = {
   scene_material: '场景材料',
+  scene_material_regeneration: '材料重新生成',
+  scene_related_vocabulary: '场景相关词汇',
   vocabulary_card: '批量词卡',
   vocabulary_catalog_analysis: '词本关联分析',
+  article_material: '语境精读材料',
 }
 
 const MODE_LABELS = {
@@ -72,7 +78,7 @@ export function createTaskCenterProfileFeature(ctx) {
 
   function scheduleRefresh() {
     window.clearTimeout(refreshTimer)
-    if (!state.aiTasks?.some((task) => ['pending', 'running'].includes(task.status))) return
+    if (!state.aiTasks?.some((task) => ['pending', 'running', 'retry_wait'].includes(task.status))) return
     refreshTimer = window.setTimeout(() => loadAiTasks(), 8000)
   }
 
@@ -80,8 +86,8 @@ export function createTaskCenterProfileFeature(ctx) {
     if (!elements.aiTaskList) return
     const filter = elements.aiTaskStatusFilter?.value || ''
     const tasks = (Array.isArray(state.aiTasks) ? state.aiTasks : []).filter((task) => !filter || task.status === filter)
-    const active = (state.aiTasks || []).filter((task) => ['pending', 'running'].includes(task.status)).length
-    const failed = (state.aiTasks || []).filter((task) => ['failed', 'partial_failed'].includes(task.status)).length
+    const active = (state.aiTasks || []).filter((task) => ['pending', 'running', 'retry_wait'].includes(task.status)).length
+    const failed = (state.aiTasks || []).filter((task) => ['failed', 'partial_failed', 'attention_required'].includes(task.status)).length
     if (elements.aiTaskSummary) elements.aiTaskSummary.textContent = `${active} 执行中 · ${failed} 个需处理`
     if (!tasks.length) {
       elements.aiTaskList.className = 'ai-task-list empty'
@@ -93,8 +99,8 @@ export function createTaskCenterProfileFeature(ctx) {
       const total = Number(task.totalCount || 0)
       const progress = Math.max(0, Math.min(100, Number(task.progressPercent || 0)))
       const status = STATUS_LABELS[task.status] || task.status || '未知'
-      const canCancel = ['pending', 'running'].includes(task.status)
-      const canRetry = ['failed', 'partial_failed', 'cancelled'].includes(task.status)
+      const canCancel = ['pending', 'running', 'retry_wait'].includes(task.status)
+      const canRetry = ['failed', 'partial_failed', 'attention_required', 'cancelled'].includes(task.status)
       const canRun = task.status === 'pending' && task.executionMode !== 'immediate'
       return `
         <article class="ai-task-item">
@@ -102,11 +108,11 @@ export function createTaskCenterProfileFeature(ctx) {
             <div class="ai-task-title-line">
               <strong>${escapeHtml(task.taskName || TYPE_LABELS[task.taskType] || 'AI 任务')}</strong>
               <div class="inline-actions">
-                ${task.userName ? `<span class="user-badge-mini" title="用户 #${task.userId || ''}">👤 ${escapeHtml(task.userName)}</span>` : ''}
+                ${task.userName ? `<span class="user-badge-mini" title="任务归属人 #${task.ownerUserId || task.userId || ''}">${escapeHtml(task.userName)}</span>` : ''}
                 <span class="task-status task-status-${escapeHtml(task.status || '')}">${escapeHtml(status)}</span>
               </div>
             </div>
-            <p>${escapeHtml(TYPE_LABELS[task.taskType] || task.taskType || 'AI 任务')} · ${escapeHtml(MODE_LABELS[task.executionMode] || task.executionMode || '立即执行')}</p>
+            <p>${escapeHtml(TYPE_LABELS[task.taskType] || task.taskType || 'AI 任务')} · ${escapeHtml(MODE_LABELS[task.executionMode] || task.executionMode || '立即执行')} · ${escapeHtml(task.triggerType === 'system' ? '系统触发' : task.triggerType === 'admin' ? '管理员触发' : '用户触发')}</p>
             <div class="ai-task-progress"><span style="width:${progress}%"></span></div>
             <small>${total ? `成功 ${Number(task.successCount || 0)} / ${total} · 失败 ${Number(task.failedCount || 0)}` : '等待任务开始'}${task.scheduledTime ? ` · 计划 ${escapeHtml(formatDateTime(task.scheduledTime))}` : ''}</small>
             ${task.errorMessage ? `<small class="ai-task-error">${escapeHtml(task.errorMessage)}</small>` : ''}
@@ -115,6 +121,7 @@ export function createTaskCenterProfileFeature(ctx) {
             <small>创建 ${escapeHtml(formatDateTime(task.createTime))}</small>
             <div class="inline-actions">
               ${canRun ? `<button class="secondary-button compact" type="button" data-task-run="${escapeHtml(task.id)}">立即执行</button>` : ''}
+              <button class="secondary-button compact" type="button" data-task-detail="${escapeHtml(task.id)}">查看详情</button>
               ${canRetry ? `<button class="secondary-button compact" type="button" data-task-retry="${escapeHtml(task.id)}">重试</button>` : ''}
               ${canCancel ? `<button class="ghost-button compact" type="button" data-task-cancel="${escapeHtml(task.id)}">取消</button>` : ''}
             </div>
@@ -123,8 +130,37 @@ export function createTaskCenterProfileFeature(ctx) {
       `
     }).join('')
     elements.aiTaskList.querySelectorAll('[data-task-run]').forEach((button) => button.addEventListener('click', () => operateTask(button.dataset.taskRun, 'run-now')))
+    elements.aiTaskList.querySelectorAll('[data-task-detail]').forEach((button) => button.addEventListener('click', () => showTaskDetail(button.dataset.taskDetail)))
     elements.aiTaskList.querySelectorAll('[data-task-retry]').forEach((button) => button.addEventListener('click', () => operateTask(button.dataset.taskRetry, 'retry')))
     elements.aiTaskList.querySelectorAll('[data-task-cancel]').forEach((button) => button.addEventListener('click', () => operateTask(button.dataset.taskCancel, 'cancel')))
+  }
+
+  async function showTaskDetail(taskId) {
+    try {
+      const task = state.preview
+        ? (state.aiTasks || []).find((item) => String(item.id) === String(taskId))
+        : await request(`/api/v1/learning/ai-tasks/${encodeURIComponent(taskId)}`)
+      if (!task) return
+      const steps = Array.isArray(task.steps) ? task.steps : []
+      const body = steps.length
+        ? steps.map((step) => {
+          const attempts = Array.isArray(step.attempts) ? step.attempts : []
+          return `<section class="ai-task-detail-step">
+            <div><strong>${escapeHtml(step.stepName || step.stepCode)}</strong><span class="task-status task-status-${escapeHtml(step.status || '')}">${escapeHtml(STATUS_LABELS[step.status] || step.status)}</span></div>
+            <p>${Number(step.completedCount || 0)} / ${Number(step.totalCount || 0)} · 尝试 ${Number(step.attemptCount || 0)} 次${step.heartbeatTime ? ` · 心跳 ${escapeHtml(formatDateTime(step.heartbeatTime))}` : ''}</p>
+            ${step.errorMessage ? `<small class="ai-task-error">${escapeHtml(step.errorMessage)}</small>` : ''}
+            ${attempts.map((attempt) => `<small>第 ${Number(attempt.attemptNo || 0)} 次 · ${escapeHtml(STATUS_LABELS[attempt.status] || attempt.status || '')}${attempt.modelName ? ` · ${escapeHtml(attempt.provider || '')}/${escapeHtml(attempt.modelName)}` : ''}${attempt.totalTokens ? ` · ${Number(attempt.totalTokens)} Token` : ''}</small>`).join('')}
+          </section>`
+        }).join('')
+        : '<p class="empty">该历史任务没有步骤明细</p>'
+      if (!elements.aiTaskDetailModal) return
+      elements.aiTaskDetailTitle.textContent = task.taskName || '任务详情'
+      elements.aiTaskDetailMeta.textContent = `归属人：${task.userName || '-'} · 触发人：${task.triggerUserName || '系统'} · 最近操作：${task.operatorUserName || '-'}`
+      elements.aiTaskDetailSteps.innerHTML = body
+      showModal(elements.aiTaskDetailModal)
+    } catch (error) {
+      toast(`任务详情加载失败：${error.message}`)
+    }
   }
 
   async function operateTask(taskId, action) {
@@ -160,5 +196,10 @@ export function createTaskCenterProfileFeature(ctx) {
     }
   }
 
-  return { loadAiTasks, renderAiTasks, operateTask }
+  elements.aiTaskDetailCloseBtn?.addEventListener('click', () => hideModal(elements.aiTaskDetailModal))
+  elements.aiTaskDetailModal?.addEventListener('click', (event) => {
+    if (event.target === elements.aiTaskDetailModal) hideModal(elements.aiTaskDetailModal)
+  })
+
+  return { loadAiTasks, renderAiTasks, operateTask, showTaskDetail }
 }

@@ -11,7 +11,7 @@
 应用默认启用 Flyway：
 
 - 空数据库执行 Java 基线迁移 `V1__BaselineSchema`，按下述顺序加载当前 schema 和种子数据。
-- 未接入 Flyway 的存量非空数据库自动建立 `107` 基线，后续只执行 `db/migration` 中版本号大于 107 的迁移。
+- 未接入 Flyway 的存量非空数据库自动建立 `107` 基线，后续执行 `V108` 及更高版本迁移。
 - 新增存量库变更必须创建 `V108__*.sql` 及后续文件，不再新增根目录手工脚本。
 - 生产部署禁止 Flyway clean；部署前仍需备份数据库。
 
@@ -51,6 +51,7 @@
 16. `105_learning_plan_generation_lock_mysql.sql`
 17. `106_ai_model_catalog_agent_defaults_mysql.sql`
 18. `107_agent_model_config_binding_mysql.sql`
+19. Java 迁移 `V108__RecoverableAiTasksAndSceneMaterials`：可恢复任务步骤、执行尝试、材料版本和场景相关词
 
 迁移脚本都设计为可重复执行，但仍建议在执行前备份数据库并记录已执行版本。
 

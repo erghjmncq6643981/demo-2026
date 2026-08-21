@@ -21,6 +21,8 @@ class MapperXmlValidationTest {
                 "mapper/AiChatMessageMapper.xml",
                 "mapper/AiChatSessionMapper.xml",
                 "mapper/AiModelCallRecordMapper.xml",
+                "mapper/AiAsyncTaskStepMapper.xml",
+                "mapper/LearningSceneRelatedWordMapper.xml",
                 "mapper/VocabularyCatalogAnalysisBatchMapper.xml",
                 "mapper/VocabularyCatalogEntryAnalysisMapper.xml",
                 "mapper/VocabularyCatalogEntryMapper.xml");
@@ -45,6 +47,13 @@ class MapperXmlValidationTest {
                 .isTrue();
         assertThat(configuration.hasStatement(
                 "com.chandler.learning.agent.ai.chat.infrastructure.AiModelCallRecordMapper.selectUsageSummaries"))
+                .isTrue();
+        assertThat(configuration.hasStatement(
+                "com.chandler.learning.agent.task.infrastructure.AiAsyncTaskStepMapper.claim")).isTrue();
+        assertThat(configuration.hasStatement(
+                "com.chandler.learning.agent.task.infrastructure.AiAsyncTaskStepMapper.recoverExpired")).isTrue();
+        assertThat(configuration.hasStatement(
+                "com.chandler.learning.agent.learning.infrastructure.LearningSceneRelatedWordMapper.insertBatch"))
                 .isTrue();
         assertThat(configuration.hasStatement(
                 "com.chandler.learning.agent.learning.infrastructure.LearningPlanMapper.releaseGenerationLock")).isTrue();

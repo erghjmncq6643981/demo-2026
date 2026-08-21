@@ -22,6 +22,18 @@ public class LearningSceneMaterial extends BaseEntity {
 
     private Long unitId;
 
+    /** 单元内材料版本号。 */
+    private Integer revisionNo;
+
+    /** 材料状态：draft、published、archived、failed。 */
+    private String materialStatus;
+
+    /** 是否为单元当前生效版本。 */
+    private Boolean currentVersion;
+
+    /** 上一版本材料 ID。 */
+    private Long supersedesMaterialId;
+
     private Long sessionId;
 
     private String title;

@@ -244,8 +244,10 @@
                       <option value="">全部任务</option>
                       <option value="pending">等待执行</option>
                       <option value="running">生成中</option>
+                      <option value="retry_wait">等待重试</option>
                       <option value="completed">已完成</option>
                       <option value="partial_failed">部分失败</option>
+                      <option value="attention_required">需要处理</option>
                       <option value="failed">失败</option>
                       <option value="cancelled">已取消</option>
                     </select>
@@ -253,6 +255,17 @@
                   <span class="ai-task-window-hint">低价窗口：每日 00:00 - 06:00（可通过预约时间避开学习时段）</span>
                 </div>
                 <div id="aiTaskList" class="ai-task-list empty">暂无 AI 异步任务</div>
+              </section>
+
+              <section class="modal-backdrop hidden" id="aiTaskDetailModal" aria-modal="true" role="dialog" aria-labelledby="aiTaskDetailTitle">
+                <div class="config-modal ai-task-detail-modal" data-modal-scroll>
+                  <div class="panel-heading">
+                    <div><p class="eyebrow">Task Detail</p><h3 id="aiTaskDetailTitle">任务详情</h3></div>
+                    <button class="icon-button" id="aiTaskDetailCloseBtn" type="button" title="关闭" aria-label="关闭">×</button>
+                  </div>
+                  <p id="aiTaskDetailMeta" class="panel-description"></p>
+                  <div id="aiTaskDetailSteps" class="ai-task-detail-steps"></div>
+                </div>
               </section>
 
               <section class="panel model-panel profile-section" id="modelManagePanel">
@@ -778,11 +791,13 @@
               <span class="sr-only">筛选场景词汇</span>
               <input id="sceneRelatedFilter" autocomplete="off" placeholder="筛选单词或含义" />
             </label>
-            <select id="sceneTierFilter" aria-label="词汇层级">
-              <option value="">全部层级</option>
-              <option value="extended">词表扩展</option>
-              <option value="supplementary">AI 补充</option>
-              <option value="review">复习词</option>
+            <select id="sceneTierFilter" aria-label="场景词汇分类">
+              <option value="">全部分类</option>
+              <option value="object">具体物品</option>
+              <option value="person">人物</option>
+              <option value="place">地点</option>
+              <option value="action">常用动作</option>
+              <option value="other">其他</option>
             </select>
             <span class="mini-pill" id="sceneRelatedModalCount">0</span>
             <button class="icon-button" id="sceneRelatedWordsModalCloseBtn" type="button" title="关闭" aria-label="关闭">×</button>

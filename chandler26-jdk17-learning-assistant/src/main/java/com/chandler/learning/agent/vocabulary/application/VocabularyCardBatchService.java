@@ -152,6 +152,7 @@ public class VocabularyCardBatchService {
                     scheduledTime,
                     priority,
                     items.size(),
+                    "vocabulary_card:" + planId + ":" + unitId + ":" + job.getId(),
                     Map.of("modelConfigId", modelConfigId == null ? "" : modelConfigId));
             job.setAsyncTaskId(task.getId());
             jobMapper.updateById(job);

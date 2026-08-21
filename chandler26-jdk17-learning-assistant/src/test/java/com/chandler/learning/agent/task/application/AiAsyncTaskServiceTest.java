@@ -31,11 +31,15 @@ class AiAsyncTaskServiceTest {
     @Mock
     private UserDisplayNameService userDisplayNameService;
 
+    @Mock
+    private AiTaskExecutionService executionService;
+
     private AiAsyncTaskService service;
 
     @BeforeEach
     void setUp() {
-        service = new AiAsyncTaskService(taskMapper, new ObjectMapper(), systemLogService, userDisplayNameService);
+        service = new AiAsyncTaskService(taskMapper, new ObjectMapper(), systemLogService,
+                userDisplayNameService, executionService);
     }
 
     @Test
@@ -47,6 +51,8 @@ class AiAsyncTaskServiceTest {
         assertThat(task.getExecutionMode()).isEqualTo(LearningConstants.AiTask.EXECUTION_IMMEDIATE);
         assertThat(task.getScheduledTime()).isNotNull();
         assertThat(task.getPayloadJson()).contains("2026-08-18");
+        assertThat(task.getOwnerUserId()).isEqualTo(1L);
+        assertThat(task.getTriggerUserId()).isEqualTo(1L);
     }
 
     @Test

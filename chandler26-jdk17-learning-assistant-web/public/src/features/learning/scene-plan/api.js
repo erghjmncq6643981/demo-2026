@@ -50,6 +50,14 @@ export function createScenePlanApi(request) {
       `/api/v1/learning/plans/${id(planId)}/units/next/async`,
       { method: 'POST', body: JSON.stringify(payload) },
     ),
+    regenerateDayAsync: (planId, payload) => request(
+      `/api/v1/learning/plans/${id(planId)}/units/regenerate-day/async`,
+      { method: 'POST', body: JSON.stringify(payload) },
+    ),
+    generateRelatedWords: (planId, unitId, payload = {}) => request(
+      `/api/v1/learning/plans/${id(planId)}/units/${id(unitId)}/related-words/async`,
+      { method: 'POST', body: JSON.stringify(payload) },
+    ),
     createPlan: (payload) => request('/api/v1/learning/plans', {
       method: 'POST',
       body: JSON.stringify(payload),

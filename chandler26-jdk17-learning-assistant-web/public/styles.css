@@ -6904,6 +6904,39 @@ input.sr-only:disabled + .file-upload-trigger {
   margin-top: 2px;
 }
 
+.ai-task-detail-modal {
+  width: min(760px, calc(100vw - 32px));
+  max-height: min(720px, calc(100vh - 32px));
+  overflow: auto;
+}
+
+.ai-task-detail-steps {
+  display: grid;
+  gap: 10px;
+}
+
+.ai-task-detail-step {
+  padding: 12px;
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  background: rgba(255, 255, 255, 0.025);
+}
+
+.ai-task-detail-step > div {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.ai-task-detail-step p,
+.ai-task-detail-step small {
+  display: block;
+  margin: 6px 0 0;
+  color: var(--muted);
+  line-height: 1.5;
+}
+
 @media (max-width: 720px) {
   .scene-vocabulary-preview-modal .panel-heading {
     align-items: start;

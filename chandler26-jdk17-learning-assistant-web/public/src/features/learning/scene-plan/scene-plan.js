@@ -984,15 +984,12 @@ export function createScenePlanFeature(ctx) {
             return
           }
           const modelConfigId = elements.scenePlanModelSelect?.value || null
-          const generatedUnits = await api.regenerateDay(plan.id, {
+          const task = await api.regenerateDayAsync(plan.id, {
             modelConfigId: modelConfigId ? String(modelConfigId) : null,
             recommendedDate,
           })
-          const count = Math.max(1, asArray(generatedUnits).length)
           await loadSceneData({ planId: plan.id })
-          toast(count > 1
-            ? `当日已重新生成 ${count} 篇场景材料`
-            : '场景材料已重新生成，可点击预览词汇')
+          toast(`重新生成任务已提交（${task.status === 'pending' ? '等待执行' : '执行中'}），可在任务中心查看进度`)
         } catch (error) {
           logEvent('error', '重新生成场景材料失败', error.message)
           toast(`重新生成失败：${error.message}`)
@@ -1014,8 +1011,12 @@ export function createScenePlanFeature(ctx) {
             plan.units.push(generated)
           } else {
             const modelConfigId = elements.scenePlanModelSelect?.value || null
-            const generatedUnits = await api.generateNext(plan.id, { modelConfigId: modelConfigId || null, recommendedDate })
-            generatedCount = Math.max(1, asArray(generatedUnits).length)
+            const task = await api.scheduleNext(plan.id, {
+              modelConfigId: modelConfigId || null,
+              recommendedDate,
+              executionMode: 'immediate',
+            })
+            state.sceneScheduledTask = task
           }
           await loadSceneData({ planId: plan.id })
           toast(generatedCount > 1
@@ -1345,9 +1346,10 @@ export function createScenePlanFeature(ctx) {
   function renderRelatedWords(unit) {
     const keyword = elements.sceneRelatedFilter?.value.trim().toLowerCase() || ''
     const tier = elements.sceneTierFilter?.value || ''
-    const related = asArray(unit.words).filter((word) => {
-      if (word.tier === 'core') return false
-      if (tier && word.tier !== tier) return false
+    // 场景相关词来自独立材料版本表；不能回退到 review/扩展词，否则会掩盖补生成入口。
+    const source = asArray(unit?.relatedWords).map((word) => ({ ...word, standalone: true }))
+    const related = source.filter((word) => {
+      if (tier && word.categoryCode !== tier) return false
       const haystack = `${word.term || ''} ${word.meaning || ''} ${word.contextMeaning || ''}`.toLowerCase()
       return !keyword || haystack.includes(keyword)
     })
@@ -1356,7 +1358,8 @@ export function createScenePlanFeature(ctx) {
     if (!elements.sceneRelatedWords) return
     if (!related.length) {
       elements.sceneRelatedWords.className = 'scene-related-words empty'
-      elements.sceneRelatedWords.textContent = '没有符合条件的场景词汇'
+      elements.sceneRelatedWords.innerHTML = '<span>暂无场景相关词汇</span><button class="secondary-button compact" type="button" data-generate-related>生成场景相关词汇</button>'
+      elements.sceneRelatedWords.querySelector('[data-generate-related]')?.addEventListener('click', () => generateRelatedWords(unit))
       return
     }
     elements.sceneRelatedWords.className = 'scene-related-words'
@@ -1368,8 +1371,7 @@ export function createScenePlanFeature(ctx) {
             <p>${escapeHtml(word.contextMeaning || word.meaning || '暂无释义')}</p>
           </div>
           <div class="scene-related-side">
-            ${word.tier !== 'supplementary' ? `<span class="mini-pill">${escapeHtml(TIER_LABELS[word.tier] || word.tier)}</span>` : '<span></span>'}
-            ${['extended', 'supplementary'].includes(word.tier) ? `<button class="icon-action-button" type="button" data-promote-word="${escapeHtml(word.id)}" title="加入核心" aria-label="加入核心">＋</button>` : ''}
+            ${word.categoryName ? `<span class="mini-pill">${escapeHtml(word.categoryName)}</span>` : '<span></span>'}
           </div>
         </article>
       `)
@@ -1377,6 +1379,22 @@ export function createScenePlanFeature(ctx) {
     elements.sceneRelatedWords.querySelectorAll('[data-promote-word]').forEach((button) => {
       button.addEventListener('click', () => promoteWord(button.dataset.promoteWord))
     })
+  }
+
+  async function generateRelatedWords(unit = activeUnit()) {
+    const plan = state.currentLearningPlan
+    if (!plan || !unit) return
+    try {
+      if (state.preview) {
+        toast('演示模式：已模拟提交场景相关词汇任务')
+        return
+      }
+      const task = await api.generateRelatedWords(plan.id, unit.id, { targetCount: 50 })
+      toast(`场景相关词汇任务已提交（${task.status === 'pending' ? '等待执行' : '执行中'}）`)
+    } catch (error) {
+      logEvent('error', '生成场景相关词汇失败', error.message)
+      toast(`生成场景相关词汇失败：${error.message}`)
+    }
   }
 
   function renderAssessment(unit) {
@@ -1638,9 +1656,12 @@ export function createScenePlanFeature(ctx) {
         renderSceneView()
       } else {
         const modelConfigId = elements.scenePlanModelSelect?.value || null
-        const generatedUnits = await api.generateNext(plan.id, { modelConfigId: modelConfigId || null })
-        generatedCount = Math.max(1, asArray(generatedUnits).length)
-        await selectPlan(plan.id, { quiet: true, keepStage: true })
+        const task = await api.scheduleNext(plan.id, {
+          modelConfigId: modelConfigId || null,
+          executionMode: 'immediate',
+        })
+        state.sceneScheduledTask = task
+        await loadSceneData({ planId: plan.id })
       }
       toast(generatedCount > 1
         ? `当日词汇已均分生成 ${generatedCount} 篇场景材料`
@@ -2715,5 +2736,6 @@ export function createScenePlanFeature(ctx) {
     closeCoreWordsModal,
     openRelatedWordsModal,
     closeRelatedWordsModal,
+    generateRelatedWords,
   }
 }

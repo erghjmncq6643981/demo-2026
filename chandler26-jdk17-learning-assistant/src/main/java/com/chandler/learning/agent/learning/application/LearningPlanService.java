@@ -334,8 +334,8 @@ public class LearningPlanService {
     }
 
     /**
-     * 重新生成指定日期的场景材料。
-     * 将该日期已存在的单元、条目和材料标记删除，并复用原有的核心词汇重新调用 AI 生成场景。
+     * 重新生成指定日期的场景材料。学习单元、核心词归属和学习记录保持不变，
+     * 新结果作为材料新版本发布，旧版本保留用于笔记和历史追溯。
      */
     public List<LearningPlanUnitResponse> regenerateDayUnits(Long userId, Long planId, Long modelConfigId,
                                                              LocalDate recommendedDate) {
@@ -368,8 +368,7 @@ public class LearningPlanService {
     private List<LearningPlanUnitResponse> regenerateDayUnitsWithLock(Long userId, LearningPlan plan,
                                                                      Long modelConfigId, LocalDate recommendedDate,
                                                                      String lockToken) {
-        LocalDate today = LocalDate.now();
-        LocalDate resolvedRecommendedDate = resolveRecommendedDate(plan, recommendedDate, today);
+        LocalDate resolvedRecommendedDate = resolveRecommendedDate(plan, recommendedDate, LocalDate.now());
 
         List<LearningPlanUnit> existingUnits = unitMapper.selectList(
                 new LambdaQueryWrapper<LearningPlanUnit>()
@@ -378,52 +377,15 @@ public class LearningPlanService {
                         .eq(LearningPlanUnit::getDeleted, false)
                         .orderByAsc(LearningPlanUnit::getUnitNo));
 
-        if (!existingUnits.isEmpty()) {
-            List<Long> unitIds = existingUnits.stream().map(LearningPlanUnit::getId).toList();
-            transactionTemplate.executeWithoutResult(status -> {
-                unitMapper.deleteBatchIds(unitIds);
-                unitEntryMapper.delete(new LambdaQueryWrapper<LearningPlanUnitEntry>()
-                        .in(LearningPlanUnitEntry::getUnitId, unitIds));
-                materialMapper.delete(new LambdaQueryWrapper<LearningSceneMaterial>()
-                        .in(LearningSceneMaterial::getUnitId, unitIds));
-            });
-        }
-
-        int dailyTarget = targetWordCount(plan);
-        List<VocabularyCatalogEntry> reviewWords = vocabularySelector.pendingReviewWords(plan, dailyTarget);
-        List<VocabularyCatalogEntry> candidates = vocabularySelector.nextCandidates(plan, dailyTarget, reviewWords);
-
-        if (candidates.isEmpty()) {
+        if (existingUnits.isEmpty()) {
             throw LearningAssistantException.badRequest(
                     LearningConstants.ErrorCode.LEARNING_PLAN_STATE_ERROR,
-                    "未找到可用于重新生成的词汇");
+                    "指定日期没有可重新生成的场景材料");
         }
-
-        int totalToGenerate = Math.min(dailyTarget, candidates.size());
         List<LearningPlanUnitResponse> generatedUnits = new ArrayList<>();
-        int candidateOffset = 0;
-        List<Integer> materialWordCounts = splitMaterialWordCounts(totalToGenerate);
-        for (int materialIndex = 0; materialIndex < materialWordCounts.size(); materialIndex++) {
+        for (LearningPlanUnit unit : existingUnits) {
             renewGenerationLock(plan.getId(), lockToken);
-            Integer batchSize = materialWordCounts.get(materialIndex);
-            List<VocabularyCatalogEntry> batch = new ArrayList<>(
-                    candidates.subList(candidateOffset, candidateOffset + batchSize));
-            int reviewStart = reviewWords.size() * materialIndex / materialWordCounts.size();
-            int reviewEnd = reviewWords.size() * (materialIndex + 1) / materialWordCounts.size();
-            List<VocabularyCatalogEntry> reviewBatch = reviewWords.subList(reviewStart, reviewEnd);
-            generatedUnits.add(generateSingleUnit(userId, plan, modelConfigId, resolvedRecommendedDate,
-                    today, batch, batchSize, reviewBatch, null));
-            candidateOffset += batchSize;
-        }
-
-        if (!generatedUnits.isEmpty() && plan.getCurrentUnitId() != null) {
-            boolean currentWasInOld = existingUnits.stream()
-                    .anyMatch(u -> u.getId().equals(plan.getCurrentUnitId()));
-            if (currentWasInOld) {
-                plan.setCurrentUnitId(generatedUnits.get(0).getId());
-                plan.setUpdateTime(LocalDateTime.now());
-                planMapper.updateById(plan);
-            }
+            generatedUnits.add(regenerateUnitVersion(userId, plan, unit, modelConfigId));
         }
 
         systemLogService.record(userId, SystemLogType.LEARNING_PLAN, "重新生成场景学习材料",
@@ -432,6 +394,108 @@ public class LearningPlanService {
                 userDisplayNameService.userName(userId), plan.getName(), resolvedRecommendedDate, generatedUnits.size());
 
         return List.copyOf(generatedUnits);
+    }
+
+    private LearningPlanUnitResponse regenerateUnitVersion(Long userId, LearningPlan plan,
+                                                           LearningPlanUnit unit, Long modelConfigId) {
+        List<LearningPlanUnitEntry> entries = unitEntryMapper.selectList(
+                new LambdaQueryWrapper<LearningPlanUnitEntry>()
+                        .eq(LearningPlanUnitEntry::getUnitId, unit.getId())
+                        .in(LearningPlanUnitEntry::getTier, List.of(
+                                LearningConstants.ScenePlan.TIER_CORE,
+                                LearningConstants.ScenePlan.TIER_REVIEW))
+                        .eq(LearningPlanUnitEntry::getDeleted, false)
+                        .orderByAsc(LearningPlanUnitEntry::getSortOrder));
+        List<CandidateWord> coreWords = entries.stream()
+                .filter(entry -> LearningConstants.ScenePlan.TIER_CORE.equals(entry.getTier()))
+                .map(entry -> new CandidateWord(entry.getTerm(), entry.getPhonetic(), entry.getMeaningText()))
+                .toList();
+        List<CandidateWord> reviewWords = entries.stream()
+                .filter(entry -> LearningConstants.ScenePlan.TIER_REVIEW.equals(entry.getTier()))
+                .map(entry -> new CandidateWord(entry.getTerm(), entry.getPhonetic(), entry.getMeaningText()))
+                .toList();
+        if (coreWords.isEmpty()) {
+            throw LearningAssistantException.badRequest(
+                    LearningConstants.ErrorCode.LEARNING_PLAN_STATE_ERROR,
+                    "场景核心词为空，无法保持原词组重新生成");
+        }
+        AgentChatResponse aiResponse = generateSceneWithWords(plan, unit.getUnitNo(), coreWords, reviewWords,
+                coreWords.size(), modelConfigId);
+        JsonNode scene = aiResponse.requireStructuredRoot(AiInvocationScene.VOCABULARY_SCENE_UNIT);
+        List<JsonNode> words = validateSceneWords(scene,
+                coreWords.stream().map(CandidateWord::term).collect(Collectors.toSet()),
+                reviewWords.stream().map(CandidateWord::term).collect(Collectors.toSet()), coreWords.size());
+        return Objects.requireNonNull(transactionTemplate.execute(status -> switchMaterialVersion(
+                userId, unit, entries, aiResponse, scene, words)));
+    }
+
+    private LearningPlanUnitResponse switchMaterialVersion(Long userId, LearningPlanUnit unit,
+                                                           List<LearningPlanUnitEntry> entries,
+                                                           AgentChatResponse aiResponse, JsonNode scene,
+                                                           List<JsonNode> words) {
+        LocalDateTime now = LocalDateTime.now();
+        LearningSceneMaterial previous = materialMapper.selectById(unit.getSceneMaterialId());
+        int revision = previous == null || previous.getRevisionNo() == null
+                ? LearningConstants.FIRST_SEQUENCE : previous.getRevisionNo() + 1;
+        if (previous != null) {
+            previous.setCurrentVersion(false);
+            previous.setMaterialStatus("archived");
+            previous.setUpdateTime(now);
+            materialMapper.updateById(previous);
+        }
+        LearningSceneMaterial material = new LearningSceneMaterial();
+        material.setUserId(userId);
+        material.setPlanId(unit.getPlanId());
+        material.setUnitId(unit.getId());
+        material.setRevisionNo(revision);
+        material.setMaterialStatus("published");
+        material.setCurrentVersion(true);
+        material.setSupersedesMaterialId(previous == null ? null : previous.getId());
+        material.setSessionId(aiResponse.getSessionId());
+        material.setTitle(requiredText(scene, "title"));
+        material.setScenarioType(text(scene, "scenario_type", "scenarioType"));
+        material.setLearningText(text(scene, "learning_text", "learningText", "article"));
+        material.setTranslation(text(scene, "translation"));
+        material.setRawContent(aiResponse.getContent());
+        material.setParsedJson(writeJson(scene));
+        material.setProvider(aiResponse.getModelProvider());
+        material.setModelName(aiResponse.getModelName());
+        material.setTokenUsage(aiResponse.getTokenUsage());
+        material.setCostTime(aiResponse.getCostTime());
+        material.setDeleted(false);
+        material.setCreateTime(now);
+        material.setUpdateTime(now);
+        materialMapper.insert(material);
+
+        Map<String, JsonNode> generatedByTerm = words.stream().collect(Collectors.toMap(
+                word -> normalize(requiredText(word, "term", "word")), word -> word,
+                (left, right) -> left, LinkedHashMap::new));
+        for (LearningPlanUnitEntry entry : entries) {
+            JsonNode generated = generatedByTerm.get(entry.getNormalizedTerm());
+            if (generated == null) continue;
+            entry.setPhonetic(firstText(text(generated, "phonetic"), entry.getPhonetic()));
+            entry.setMeaningText(firstText(text(generated, "meaning", "definition"), entry.getMeaningText()));
+            entry.setContextMeaning(firstText(text(generated, "context_meaning", "contextMeaning"),
+                    entry.getContextMeaning()));
+            JsonNode question = node(generated, "meaning_question", "meaningQuestion", "assessment");
+            if (LearningConstants.ScenePlan.TIER_CORE.equals(entry.getTier())
+                    || LearningConstants.ScenePlan.TIER_REVIEW.equals(entry.getTier())) {
+                question = ensureMeaningQuestion(generated, entry.getTerm(), question, entry.getMeaningText());
+            }
+            entry.setAssessmentJson(question == null ? entry.getAssessmentJson() : writeJson(question));
+            entry.setAcceptedSpellingsJson(writeJson(acceptedSpellings(generated, entry.getTerm())));
+            entry.setUpdateTime(now);
+            unitEntryMapper.updateById(entry);
+        }
+        unit.setTitle(material.getTitle());
+        unit.setScenarioType(material.getScenarioType());
+        unit.setSummary(text(scene, "summary", "description"));
+        unit.setSceneMaterialId(material.getId());
+        unit.setGeneratedTime(now);
+        unit.setSupplementaryWordCount(LearningConstants.ZERO);
+        unit.setUpdateTime(now);
+        unitMapper.updateById(unit);
+        return responseAssembler.toUnitResponse(unit);
     }
 
     private List<LearningPlanUnitResponse> generateNextUnitWithLock(Long userId, Long planId, Long modelConfigId,
@@ -574,6 +638,9 @@ public class LearningPlanService {
         material.setUserId(userId);
         material.setPlanId(plan.getId());
         material.setUnitId(unit.getId());
+        material.setRevisionNo(LearningConstants.FIRST_SEQUENCE);
+        material.setMaterialStatus("published");
+        material.setCurrentVersion(true);
         material.setSessionId(aiResponse.getSessionId());
         material.setTitle(unit.getTitle());
         material.setScenarioType(unit.getScenarioType());
@@ -971,6 +1038,13 @@ public class LearningPlanService {
                 .map(entry -> new CandidateWord(entry.effectiveTerm(),
                         entry.getPhonetic(), entry.getDefinitionText()))
                 .toList();
+        return generateSceneWithWords(plan, unitNo, words, review, targetWordCount, modelConfigId);
+    }
+
+    private AgentChatResponse generateSceneWithWords(LearningPlan plan, int unitNo,
+                                            List<CandidateWord> words,
+                                            List<CandidateWord> review,
+                                            int targetWordCount, Long modelConfigId) {
         Map<String, Object> variables = new HashMap<>();
         variables.put("learning_purpose", StrUtil.blankToDefault(plan.getLearningPurpose(), "综合英语词汇学习"));
         variables.put("unit_no", unitNo);
@@ -1027,6 +1101,14 @@ public class LearningPlanService {
 
     private List<JsonNode> validateSceneWords(JsonNode scene, List<VocabularyCatalogEntry> candidates,
                                               List<VocabularyCatalogEntry> reviewWords, int targetWordCount) {
+        return validateSceneWords(scene,
+                candidates.stream().map(VocabularyCatalogEntry::effectiveTerm).collect(Collectors.toSet()),
+                reviewWords.stream().map(VocabularyCatalogEntry::effectiveTerm).collect(Collectors.toSet()),
+                targetWordCount);
+    }
+
+    private List<JsonNode> validateSceneWords(JsonNode scene, Set<String> candidateInputTerms,
+                                              Set<String> reviewInputTerms, int targetWordCount) {
         JsonNode vocabulary = node(scene, "vocabulary", "words");
         if (vocabulary == null || !vocabulary.isArray() || vocabulary.isEmpty()) {
             throw sceneInvalid("AI 场景结果缺少 vocabulary 数组");
@@ -1034,10 +1116,8 @@ public class LearningPlanService {
         int coreCount = LearningConstants.ZERO;
         List<JsonNode> result = new ArrayList<>();
         Set<String> seen = new HashSet<>();
-        Set<String> candidateTerms = candidates.stream().map(entry -> normalize(entry.effectiveTerm()))
-                .collect(Collectors.toSet());
-        Set<String> reviewTerms = reviewWords.stream().map(entry -> normalize(entry.effectiveTerm()))
-                .collect(Collectors.toSet());
+        Set<String> candidateTerms = candidateInputTerms.stream().map(this::normalize).collect(Collectors.toSet());
+        Set<String> reviewTerms = reviewInputTerms.stream().map(this::normalize).collect(Collectors.toSet());
         for (JsonNode word : vocabulary) {
             String term = requiredText(word, "term", "word");
             String normalized = normalize(term);
@@ -1054,9 +1134,13 @@ public class LearningPlanService {
                     && !reviewTerms.contains(normalized)) {
                 throw sceneInvalid("复习词必须来自当前待挑战词集合: " + term);
             }
-            result.add(word);
+            // 场景扩展词不属于待挑战词组，统一由 learning_scene_related_word 独立动作承载。
+            if (LearningConstants.ScenePlan.TIER_CORE.equals(tier)
+                    || LearningConstants.ScenePlan.TIER_REVIEW.equals(tier)) {
+                result.add(word);
+            }
         }
-        int requiredMinimum = Math.min(LearningConstants.ScenePlan.MIN_CORE_WORDS, candidates.size());
+        int requiredMinimum = Math.min(targetWordCount, candidateTerms.size());
         if (coreCount < requiredMinimum) {
             throw sceneInvalid("核心词数量不足 " + requiredMinimum + " 个，实际为 " + coreCount + " 个");
         }
