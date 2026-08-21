@@ -14,7 +14,7 @@ spring:
     type: com.alibaba.druid.pool.DruidDataSource
 
   flyway:
-    enabled: ${LEARNING_FLYWAY_ENABLED:true}
+    enabled: ${LEARNING_FLYWAY_ENABLED:false}
     locations: classpath:db/migration
     baseline-on-migrate: true
     baseline-version: 107
