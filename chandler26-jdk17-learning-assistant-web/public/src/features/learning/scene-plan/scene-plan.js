@@ -1605,9 +1605,22 @@ export function createScenePlanFeature(ctx) {
     const plan = state.currentLearningPlan
     const unit = activeUnit(plan)
     if (!plan || !unit) return
+
+    const units = asArray(plan.units)
+    const currentIndex = units.findIndex((u) => sameId(u.id, unit.id))
+    const nextExistingUnit = units.find((u, idx) => idx > currentIndex && u.status !== 'completed')
+      || units.find((u) => !sameId(u.id, unit.id) && u.status !== 'completed')
+
+    let nextStepText = '完成后可手动生成下一个场景。'
+    if (nextExistingUnit) {
+      nextStepText = `完成后可直接进入下一篇「${nextExistingUnit.title || '下一场景'}」继续学习。`
+    } else if (!plan.canGenerateNext) {
+      nextStepText = '完成后将完成本计划的全部场景学习。'
+    }
+
     const confirmed = await confirmAction({
       title: '完成当前场景',
-      message: `确认完成「${unit.title}」？完成后可手动生成下一个场景。`,
+      message: `确认完成「${unit.title}」？${nextStepText}`,
       acceptText: '完成场景',
     })
     if (!confirmed) return
@@ -1625,11 +1638,29 @@ export function createScenePlanFeature(ctx) {
         : await api.completeUnit(plan.id, unit.id)
       state.currentLearningPlan = updated
       state.learningPlans = state.learningPlans.map((item) => sameId(item.id, updated.id) ? { ...item, ...updated } : item)
-      state.sceneChallengeStage = 'overview'
+
+      const updatedUnits = asArray(updated.units)
+      const nextRemainingUnit = updatedUnits.find((u) => u.status !== 'completed')
+
+      if (nextRemainingUnit) {
+        state.sceneChallengeStage = 'learning'
+        state.currentSceneWordId = null
+      } else {
+        state.sceneChallengeStage = 'overview'
+      }
+
       renderPlanList()
       renderCurrentScene()
       logEvent('learning', '完成场景学习', `${plan.name} / ${unit.title}`)
-      toast(updated.canGenerateNext ? '场景已完成，可继续生成下一个场景' : '学习计划已完成')
+
+      if (nextRemainingUnit) {
+        elements.sceneLearningStage?.scrollIntoView({ behavior: 'smooth', block: 'start' })
+        toast(`当前场景已完成，已自动进入下一篇「${nextRemainingUnit.title || '下一场景'}」`)
+      } else if (updated.canGenerateNext) {
+        toast('场景已完成，可继续生成下一个场景')
+      } else {
+        toast('恭喜！学习计划已全部完成')
+      }
     } catch (error) {
       logEvent('error', '完成场景失败', error.message)
       toast(`完成场景失败：${error.message}`)

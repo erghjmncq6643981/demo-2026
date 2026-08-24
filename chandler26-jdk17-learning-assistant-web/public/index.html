@@ -257,17 +257,6 @@
                 <div id="aiTaskList" class="ai-task-list empty">暂无 AI 异步任务</div>
               </section>
 
-              <section class="modal-backdrop hidden" id="aiTaskDetailModal" aria-modal="true" role="dialog" aria-labelledby="aiTaskDetailTitle">
-                <div class="config-modal ai-task-detail-modal" data-modal-scroll>
-                  <div class="panel-heading">
-                    <div><p class="eyebrow">Task Detail</p><h3 id="aiTaskDetailTitle">任务详情</h3></div>
-                    <button class="icon-button" id="aiTaskDetailCloseBtn" type="button" title="关闭" aria-label="关闭">×</button>
-                  </div>
-                  <p id="aiTaskDetailMeta" class="panel-description"></p>
-                  <div id="aiTaskDetailSteps" class="ai-task-detail-steps"></div>
-                </div>
-              </section>
-
               <section class="panel model-panel profile-section" id="modelManagePanel">
                 <div class="panel-heading">
                   <div>
@@ -1475,6 +1464,16 @@
           <button class="segmented-button" type="button" role="tab" aria-selected="false" data-ai-session-detail-tab="raw">原始数据</button>
         </div>
         <div id="aiSessionDetailContent" class="ai-session-detail-content"></div>
+      </div>
+    </section>
+    <section class="modal-backdrop hidden" id="aiTaskDetailModal" aria-modal="true" role="dialog" aria-labelledby="aiTaskDetailTitle">
+      <div class="config-modal ai-task-detail-modal" data-modal-scroll>
+        <div class="panel-heading">
+          <div><p class="eyebrow">Task Detail</p><h3 id="aiTaskDetailTitle">任务详情</h3></div>
+          <button class="icon-button" id="aiTaskDetailCloseBtn" type="button" title="关闭" aria-label="关闭">×</button>
+        </div>
+        <p id="aiTaskDetailMeta" class="panel-description"></p>
+        <div id="aiTaskDetailSteps" class="ai-task-detail-steps"></div>
       </div>
     </section>
     <section class="modal-backdrop hidden" id="deleteConfirmModal" aria-modal="true" role="dialog">

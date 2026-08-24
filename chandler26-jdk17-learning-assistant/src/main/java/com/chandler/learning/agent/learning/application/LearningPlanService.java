@@ -1124,25 +1124,25 @@ public class LearningPlanService {
             if (!seen.add(normalized)) {
                 continue;
             }
-            String tier = normalizeTier(text(word, "tier"));
-            if (LearningConstants.ScenePlan.TIER_CORE.equals(tier)) {
-                if (!candidateTerms.contains(normalized)) {
-                    throw sceneInvalid("核心词必须来自本次统筹的新词候选集: " + term);
+            if (candidateTerms.contains(normalized)) {
+                if (word instanceof com.fasterxml.jackson.databind.node.ObjectNode obj) {
+                    obj.put("tier", LearningConstants.ScenePlan.TIER_CORE);
                 }
                 coreCount++;
-            } else if (LearningConstants.ScenePlan.TIER_REVIEW.equals(tier)
-                    && !reviewTerms.contains(normalized)) {
-                throw sceneInvalid("复习词必须来自当前待挑战词集合: " + term);
-            }
-            // 场景扩展词不属于待挑战词组，统一由 learning_scene_related_word 独立动作承载。
-            if (LearningConstants.ScenePlan.TIER_CORE.equals(tier)
-                    || LearningConstants.ScenePlan.TIER_REVIEW.equals(tier)) {
                 result.add(word);
+            } else if (reviewTerms.contains(normalized)) {
+                if (word instanceof com.fasterxml.jackson.databind.node.ObjectNode obj) {
+                    obj.put("tier", LearningConstants.ScenePlan.TIER_REVIEW);
+                }
+                result.add(word);
+            } else {
+                log.info("AI 场景生成返回了不在计划候选集或复习集的额外词条，已自动过滤: term={}", term);
             }
         }
         int requiredMinimum = Math.min(targetWordCount, candidateTerms.size());
-        if (coreCount < requiredMinimum) {
-            throw sceneInvalid("核心词数量不足 " + requiredMinimum + " 个，实际为 " + coreCount + " 个");
+        int acceptableMinimum = Math.min(requiredMinimum, Math.max(1, (int) Math.floor(requiredMinimum * 0.75)));
+        if (coreCount < acceptableMinimum) {
+            throw sceneInvalid("核心词数量不足，期望至少 " + acceptableMinimum + " 个，实际为 " + coreCount + " 个");
         }
         if (coreCount > LearningConstants.ScenePlan.MAX_CORE_WORDS_PER_UNIT) {
             throw sceneInvalid("单篇场景材料最多包含 "
