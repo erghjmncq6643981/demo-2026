@@ -121,6 +121,23 @@ public class AiTaskExecutionService {
                 .set(AiAsyncTaskStep::getUpdateTime, now));
     }
 
+    public void deleteStepsAndAttempts(Long taskId, Long operatorUserId) {
+        LocalDateTime now = LocalDateTime.now();
+        stepMapper.update(null, new LambdaUpdateWrapper<AiAsyncTaskStep>()
+                .eq(AiAsyncTaskStep::getTaskId, taskId)
+                .eq(AiAsyncTaskStep::getDeleted, false)
+                .set(AiAsyncTaskStep::getDeleted, true)
+                .set(AiAsyncTaskStep::getUpdateBy, operatorUserId)
+                .set(AiAsyncTaskStep::getUpdateTime, now));
+
+        attemptMapper.update(null, new LambdaUpdateWrapper<AiAsyncTaskAttempt>()
+                .eq(AiAsyncTaskAttempt::getTaskId, taskId)
+                .eq(AiAsyncTaskAttempt::getDeleted, false)
+                .set(AiAsyncTaskAttempt::getDeleted, true)
+                .set(AiAsyncTaskAttempt::getUpdateBy, operatorUserId)
+                .set(AiAsyncTaskAttempt::getUpdateTime, now));
+    }
+
     public int recoverExpired(LocalDateTime now) {
         return stepMapper.recoverExpired(now);
     }

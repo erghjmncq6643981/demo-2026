@@ -28,8 +28,12 @@ const MODE_LABELS = {
 }
 
 export function createTaskCenterProfileFeature(ctx) {
-  const { state, elements, request, toast, logEvent, confirmAction } = ctx
+  const { state, elements, request, toast, logEvent, confirmAction, confirmDelete } = ctx
   let refreshTimer = null
+
+  function isAdmin() {
+    return state.preview || state.user?.roleCode === 'ADMIN'
+  }
 
   function previewTasks() {
     return [
@@ -124,6 +128,7 @@ export function createTaskCenterProfileFeature(ctx) {
               <button class="secondary-button compact" type="button" data-task-detail="${escapeHtml(task.id)}">查看详情</button>
               ${canRetry ? `<button class="secondary-button compact" type="button" data-task-retry="${escapeHtml(task.id)}">重试</button>` : ''}
               ${canCancel ? `<button class="ghost-button compact" type="button" data-task-cancel="${escapeHtml(task.id)}">取消</button>` : ''}
+              ${isAdmin() ? `<button class="danger-button compact" type="button" data-task-delete="${escapeHtml(task.id)}" title="删除此任务记录">删除</button>` : ''}
             </div>
           </div>
         </article>
@@ -133,6 +138,30 @@ export function createTaskCenterProfileFeature(ctx) {
     elements.aiTaskList.querySelectorAll('[data-task-detail]').forEach((button) => button.addEventListener('click', () => showTaskDetail(button.dataset.taskDetail)))
     elements.aiTaskList.querySelectorAll('[data-task-retry]').forEach((button) => button.addEventListener('click', () => operateTask(button.dataset.taskRetry, 'retry')))
     elements.aiTaskList.querySelectorAll('[data-task-cancel]').forEach((button) => button.addEventListener('click', () => operateTask(button.dataset.taskCancel, 'cancel')))
+    elements.aiTaskList.querySelectorAll('[data-task-delete]').forEach((button) => button.addEventListener('click', () => deleteTask(button.dataset.taskDelete)))
+  }
+
+  async function deleteTask(taskId) {
+    const task = (state.aiTasks || []).find((item) => String(item.id) === String(taskId))
+    if (!task) return
+    const confirmed = await confirmDelete({
+      title: '删除 AI 任务',
+      message: `确认删除任务「${task.taskName || '该任务'}」？删除后将不再显示。`,
+    })
+    if (!confirmed) return
+    try {
+      if (state.preview) {
+        state.aiTasks = state.aiTasks.filter((item) => String(item.id) !== String(taskId))
+      } else {
+        await request(`/api/v1/learning/ai-tasks/${encodeURIComponent(taskId)}`, { method: 'DELETE' })
+        state.aiTasks = state.aiTasks.filter((item) => String(item.id) !== String(taskId))
+      }
+      renderAiTasks()
+      toast('AI 任务已删除')
+    } catch (error) {
+      logEvent('error', 'AI 任务删除失败', error.message)
+      toast(`删除任务失败：${error.message}`)
+    }
   }
 
   async function showTaskDetail(taskId) {
@@ -201,5 +230,5 @@ export function createTaskCenterProfileFeature(ctx) {
     if (event.target === elements.aiTaskDetailModal) hideModal(elements.aiTaskDetailModal)
   })
 
-  return { loadAiTasks, renderAiTasks, operateTask, showTaskDetail }
+  return { loadAiTasks, renderAiTasks, operateTask, showTaskDetail, deleteTask }
 }

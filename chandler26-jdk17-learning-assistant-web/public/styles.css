@@ -669,9 +669,8 @@ textarea:focus {
 }
 
 .wordbook-layout.wordbook-focus-layout .wordbook-focus-panel {
-  max-width: 1080px;
-  margin: 0 auto;
   width: 100%;
+  max-width: 100%;
 }
 
 .article-study-toolbar {
@@ -707,9 +706,8 @@ textarea:focus {
 }
 
 .article-study-layout.article-focus-layout .article-result-panel {
-  max-width: 1080px;
-  margin: 0 auto;
   width: 100%;
+  max-width: 100%;
 }
 
 .wordbook-layout > .panel {
@@ -1521,7 +1519,8 @@ textarea:focus {
   padding-right: 4px;
 }
 
-.profile-tab {
+.profile-tab,
+.system-tab {
   flex: 0 0 auto;
   min-height: 38px;
   padding: 0 14px;
@@ -1534,18 +1533,21 @@ textarea:focus {
   white-space: nowrap;
 }
 
-.profile-tab.active {
+.profile-tab.active,
+.system-tab.active {
   border-color: rgba(129, 140, 248, 0.48);
   background: var(--accent-soft);
   color: var(--text);
 }
 
-.profile-section {
+.profile-section,
+.system-section {
   display: none;
   min-width: 0;
 }
 
-.profile-section.active {
+.profile-section.active,
+.system-section.active {
   display: block;
 }
 
@@ -4334,9 +4336,8 @@ input[type="range"] {
 }
 
 .scene-plan-layout.scene-focus-layout .scene-workspace {
-  max-width: 1100px;
-  margin: 0 auto;
   width: 100%;
+  max-width: 100%;
 }
 
 .scene-plan-sidebar {
@@ -5718,14 +5719,16 @@ input.sr-only:disabled + .file-upload-trigger {
     gap: 12px;
   }
 
-  .profile-tabs {
+  .profile-tabs,
+  .system-tabs {
     position: sticky;
     top: 0;
     margin: 0 -2px;
     border-radius: 10px;
   }
 
-  .profile-tab {
+  .profile-tab,
+  .system-tab {
     min-height: 34px;
     padding: 0 12px;
     font-size: 12px;

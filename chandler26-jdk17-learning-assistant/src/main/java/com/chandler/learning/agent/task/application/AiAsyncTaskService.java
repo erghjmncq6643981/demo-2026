@@ -297,7 +297,7 @@ public class AiAsyncTaskService {
         return retry(userId, taskId, null);
     }
 
-    /** 重新排队失败或已取消的任务，并可替换本次 Worker 参数。 */
+    /** 重新排队失败或已取消的任务，并可替换本次 Worker 参数。手动重试将重置重试计数。 */
     @Transactional(rollbackFor = Exception.class)
     public AiAsyncTask retry(Long userId, Long taskId, Map<String, Object> payload) {
         AiAsyncTask task = require(userId, taskId);
@@ -306,13 +306,6 @@ public class AiAsyncTaskService {
                 LearningConstants.AiTask.STATUS_ATTENTION_REQUIRED,
                 LearningConstants.AiTask.STATUS_CANCELLED).contains(task.getStatus())) {
             return task;
-        }
-        int retryCount = task.getRetryCount() == null ? 0 : task.getRetryCount();
-        int maxRetryCount = task.getMaxRetryCount() == null
-                ? LearningConstants.AiTask.DEFAULT_MAX_RETRY_COUNT : task.getMaxRetryCount();
-        if (retryCount >= maxRetryCount) {
-            throw LearningAssistantException.badRequest(
-                    LearningConstants.ErrorCode.AI_ASYNC_TASK_RETRY_EXCEEDED);
         }
         int total = task.getTotalCount() == null ? 0 : Math.max(0, task.getTotalCount());
         int success = task.getSuccessCount() == null ? 0 : Math.max(0, task.getSuccessCount());
@@ -327,7 +320,7 @@ public class AiAsyncTaskService {
                         LearningConstants.AiTask.STATUS_ATTENTION_REQUIRED,
                         LearningConstants.AiTask.STATUS_CANCELLED))
                 .eq(AiAsyncTask::getDeleted, false)
-                .set(AiAsyncTask::getRetryCount, retryCount + 1)
+                .set(AiAsyncTask::getRetryCount, LearningConstants.ZERO)
                 .set(AiAsyncTask::getStatus, LearningConstants.AiTask.STATUS_PENDING)
                 .set(AiAsyncTask::getExecutionMode, LearningConstants.AiTask.EXECUTION_IMMEDIATE)
                 .set(AiAsyncTask::getFailedCount, LearningConstants.ZERO)
@@ -424,6 +417,44 @@ public class AiAsyncTaskService {
                 .set(AiAsyncTask::getUpdateBy, operatorUserId)
                 .set(AiAsyncTask::getUpdateTime, LocalDateTime.now()));
         return requireAny(updated.getId());
+    }
+
+    /** 用户删除自己的任务（软删除）。 */
+    @Transactional(rollbackFor = Exception.class)
+    public void delete(Long userId, Long taskId) {
+        AiAsyncTask task = require(userId, taskId);
+        deleteInternal(userId, task);
+    }
+
+    /** 管理员删除任意任务（软删除）。 */
+    @Transactional(rollbackFor = Exception.class)
+    public void deleteAsAdmin(Long operatorUserId, Long taskId) {
+        AiAsyncTask task = requireAny(taskId);
+        deleteInternal(operatorUserId, task);
+    }
+
+    private void deleteInternal(Long operatorUserId, AiAsyncTask task) {
+        LocalDateTime now = LocalDateTime.now();
+        if (List.of(LearningConstants.AiTask.STATUS_PENDING,
+                LearningConstants.AiTask.STATUS_RUNNING,
+                LearningConstants.AiTask.STATUS_RETRY_WAIT).contains(task.getStatus())) {
+            executionService.cancelPendingSteps(task.getId(), operatorUserId);
+        }
+        taskMapper.update(null, new LambdaUpdateWrapper<AiAsyncTask>()
+                .eq(AiAsyncTask::getId, task.getId())
+                .eq(AiAsyncTask::getDeleted, false)
+                .set(AiAsyncTask::getDeleted, true)
+                .set(AiAsyncTask::getStatus, LearningConstants.AiTask.STATUS_CANCELLED)
+                .set(AiAsyncTask::getOperatorUserId, operatorUserId)
+                .set(AiAsyncTask::getUpdateBy, operatorUserId)
+                .set(AiAsyncTask::getUpdateTime, now));
+
+        executionService.deleteStepsAndAttempts(task.getId(), operatorUserId);
+
+        log.info("用户「{}」删除了 AI 异步任务 taskId={}「{}」",
+                userDisplayNameService.userName(operatorUserId), task.getId(), task.getTaskName());
+        systemLogService.record(operatorUserId, SystemLogType.AI, "删除 AI 异步任务",
+                task.getTaskName() + " (taskId=" + task.getId() + ")");
     }
 
     public AiAsyncTaskResponse toResponse(AiAsyncTask task) {

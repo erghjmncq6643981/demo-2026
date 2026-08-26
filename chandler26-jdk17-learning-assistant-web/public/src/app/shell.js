@@ -139,7 +139,7 @@ export function createAppShell(ctx) {
     if (viewId === 'scenePlanView') loadSceneData?.()
     if (viewId === 'systemAdminView') {
       systemManagement?.mountPanels()
-      systemManagement?.renderSystemTab(state.activeSystemTab)
+      systemManagement?.renderSystemTab(state.activeSystemTab || 'adminUserPanel')
     }
     if (window.matchMedia('(max-width: 1100px)').matches) {
       setSidebarCollapsed(true)
@@ -150,12 +150,12 @@ export function createAppShell(ctx) {
     const fallback = document.querySelector(`[data-profile-tab="${tabId}"]`) ? tabId : 'accountPanel'
     state.activeProfileTab = fallback
     localStorage.setItem('learning.profileTab', fallback)
-    document.querySelectorAll('.profile-tab').forEach((button) => {
+    document.querySelectorAll('[data-profile-tab]').forEach((button) => {
       const active = button.dataset.profileTab === fallback
       button.classList.toggle('active', active)
       if (active) button.scrollIntoView({ behavior: 'smooth', block: 'nearest', inline: 'nearest' })
     })
-    document.querySelectorAll('.profile-section').forEach((section) => section.classList.toggle('active', section.id === fallback))
+    document.querySelectorAll('#profileView .profile-section').forEach((section) => section.classList.toggle('active', section.id === fallback))
     if (fallback === 'aiTaskPanel') loadAiTasks?.()
   }
 

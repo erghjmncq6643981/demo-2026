@@ -111,4 +111,17 @@ public class AiAsyncTaskController {
         }
         return taskService.toResponse(taskService.runNow(user.getId(), taskId));
     }
+
+    @org.springframework.web.bind.annotation.DeleteMapping("/{taskId}")
+    @Operation(summary = "删除 AI 异步任务")
+    public void delete(
+            @RequestHeader(value = "Authorization", required = false) String authorization,
+            @PathVariable Long taskId) {
+        LearningUser user = authService.requireUser(authorization);
+        if (UserRole.ADMIN.getCode().equals(user.getRoleCode())) {
+            taskService.deleteAsAdmin(user.getId(), taskId);
+            return;
+        }
+        taskService.delete(user.getId(), taskId);
+    }
 }
