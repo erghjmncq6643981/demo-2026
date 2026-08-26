@@ -55,19 +55,42 @@ export function createTaskCenterProfileFeature(ctx) {
   function loadAiTasks(options = {}) {
     if (state.preview) {
       state.aiTasks = state.aiTasks?.length ? state.aiTasks : previewTasks()
+      state.aiTaskTotal = state.aiTasks.length
       renderAiTasks()
       return Promise.resolve(state.aiTasks)
     }
     if (!state.token) {
       state.aiTasks = []
+      state.aiTaskTotal = 0
       renderAiTasks()
       return Promise.resolve([])
     }
+    if (options.page) {
+      state.aiTaskPage = options.page
+    }
     const shouldLoadAll = (state.user?.roleCode === 'ADMIN') && (options.all || state.activeView === 'systemAdminView' || state.activeSystemTab === 'aiTaskPanel')
-    const url = shouldLoadAll ? '/api/v1/learning/ai-tasks?all=true&limit=100' : '/api/v1/learning/ai-tasks?limit=80'
+    const filter = elements.aiTaskStatusFilter?.value || ''
+    const params = new URLSearchParams({
+      page: String(state.aiTaskPage || 1),
+      pageSize: String(state.aiTaskPageSize || 20),
+    })
+    if (shouldLoadAll) params.set('all', 'true')
+    if (filter) params.set('status', filter)
+    const url = `/api/v1/learning/ai-tasks?${params.toString()}`
     return request(url)
-      .then((tasks) => {
-        state.aiTasks = Array.isArray(tasks) ? tasks : []
+      .then((res) => {
+        if (res && Array.isArray(res.items)) {
+          state.aiTasks = res.items
+          state.aiTaskTotal = Number(res.total ?? res.items.length)
+          state.aiTaskPage = Number(res.page ?? 1)
+          state.aiTaskPageSize = Number(res.pageSize ?? 20)
+        } else if (Array.isArray(res)) {
+          state.aiTasks = res
+          state.aiTaskTotal = res.length
+        } else {
+          state.aiTasks = []
+          state.aiTaskTotal = 0
+        }
         renderAiTasks()
         scheduleRefresh()
         return state.aiTasks
@@ -80,6 +103,15 @@ export function createTaskCenterProfileFeature(ctx) {
       })
   }
 
+  function changePage(delta) {
+    const totalPages = Math.max(1, Math.ceil((state.aiTaskTotal || 0) / (state.aiTaskPageSize || 20)))
+    const target = Math.max(1, Math.min(totalPages, (state.aiTaskPage || 1) + delta))
+    if (target !== state.aiTaskPage) {
+      state.aiTaskPage = target
+      loadAiTasks()
+    }
+  }
+
   function scheduleRefresh() {
     window.clearTimeout(refreshTimer)
     if (!state.aiTasks?.some((task) => ['pending', 'running', 'retry_wait'].includes(task.status))) return
@@ -88,11 +120,23 @@ export function createTaskCenterProfileFeature(ctx) {
 
   function renderAiTasks() {
     if (!elements.aiTaskList) return
-    const filter = elements.aiTaskStatusFilter?.value || ''
-    const tasks = (Array.isArray(state.aiTasks) ? state.aiTasks : []).filter((task) => !filter || task.status === filter)
-    const active = (state.aiTasks || []).filter((task) => ['pending', 'running', 'retry_wait'].includes(task.status)).length
-    const failed = (state.aiTasks || []).filter((task) => ['failed', 'partial_failed', 'attention_required'].includes(task.status)).length
+    const tasks = Array.isArray(state.aiTasks) ? state.aiTasks : []
+    const active = tasks.filter((task) => ['pending', 'running', 'retry_wait'].includes(task.status)).length
+    const failed = tasks.filter((task) => ['failed', 'partial_failed', 'attention_required'].includes(task.status)).length
     if (elements.aiTaskSummary) elements.aiTaskSummary.textContent = `${active} 执行中 · ${failed} 个需处理`
+
+    const totalPages = Math.max(1, Math.ceil((state.aiTaskTotal || 0) / (state.aiTaskPageSize || 20)))
+    const currentPage = Math.min(state.aiTaskPage || 1, totalPages)
+    if (elements.aiTaskPageInfo) {
+      elements.aiTaskPageInfo.textContent = `第 ${currentPage} / ${totalPages} 页 · 共 ${state.aiTaskTotal || 0} 条`
+    }
+    if (elements.aiTaskPrevBtn) {
+      elements.aiTaskPrevBtn.disabled = currentPage <= 1
+    }
+    if (elements.aiTaskNextBtn) {
+      elements.aiTaskNextBtn.disabled = currentPage >= totalPages
+    }
+
     if (!tasks.length) {
       elements.aiTaskList.className = 'ai-task-list empty'
       elements.aiTaskList.textContent = '暂无 AI 任务'
@@ -229,6 +273,12 @@ export function createTaskCenterProfileFeature(ctx) {
   elements.aiTaskDetailModal?.addEventListener('click', (event) => {
     if (event.target === elements.aiTaskDetailModal) hideModal(elements.aiTaskDetailModal)
   })
+  elements.aiTaskPrevBtn?.addEventListener('click', () => changePage(-1))
+  elements.aiTaskNextBtn?.addEventListener('click', () => changePage(1))
+  elements.aiTaskStatusFilter?.addEventListener('change', () => {
+    state.aiTaskPage = 1
+    loadAiTasks()
+  })
 
-  return { loadAiTasks, renderAiTasks, operateTask, showTaskDetail, deleteTask }
+  return { loadAiTasks, renderAiTasks, operateTask, showTaskDetail, deleteTask, changePage }
 }

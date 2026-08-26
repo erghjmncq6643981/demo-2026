@@ -1121,17 +1121,22 @@ public class LearningPlanService {
         for (JsonNode word : vocabulary) {
             String term = requiredText(word, "term", "word");
             String normalized = normalize(term);
-            if (!seen.add(normalized)) {
+            String matchedCandidate = resolveCandidateLemma(normalized, candidateTerms);
+            String matchedReview = matchedCandidate == null ? resolveCandidateLemma(normalized, reviewTerms) : null;
+            String canonicalTerm = matchedCandidate != null ? matchedCandidate : (matchedReview != null ? matchedReview : normalized);
+            if (!seen.add(canonicalTerm)) {
                 continue;
             }
-            if (candidateTerms.contains(normalized)) {
+            if (matchedCandidate != null) {
                 if (word instanceof com.fasterxml.jackson.databind.node.ObjectNode obj) {
+                    obj.put("term", matchedCandidate);
                     obj.put("tier", LearningConstants.ScenePlan.TIER_CORE);
                 }
                 coreCount++;
                 result.add(word);
-            } else if (reviewTerms.contains(normalized)) {
+            } else if (matchedReview != null) {
                 if (word instanceof com.fasterxml.jackson.databind.node.ObjectNode obj) {
+                    obj.put("term", matchedReview);
                     obj.put("tier", LearningConstants.ScenePlan.TIER_REVIEW);
                 }
                 result.add(word);
@@ -1149,6 +1154,61 @@ public class LearningPlanService {
                     + LearningConstants.ScenePlan.MAX_CORE_WORDS_PER_UNIT + " 个待挑战词，实际为 " + coreCount + " 个");
         }
         return result;
+    }
+
+    private String resolveCandidateLemma(String normalized, Set<String> candidates) {
+        if (candidates.contains(normalized)) {
+            return normalized;
+        }
+        // 尝试常见屈折变形还原：
+        // 1. -ies -> -y (activities -> activity)
+        if (normalized.endsWith("ies") && normalized.length() > 3) {
+            String candidate = normalized.substring(0, normalized.length() - 3) + "y";
+            if (candidates.contains(candidate)) {
+                return candidate;
+            }
+        }
+        // 2. -es -> -e / 原形 (utilizes -> utilize, actresses -> actress)
+        if (normalized.endsWith("es") && normalized.length() > 3) {
+            String candidateNoS = normalized.substring(0, normalized.length() - 1);
+            if (candidates.contains(candidateNoS)) {
+                return candidateNoS;
+            }
+            String candidateNoEs = normalized.substring(0, normalized.length() - 2);
+            if (candidates.contains(candidateNoEs)) {
+                return candidateNoEs;
+            }
+        }
+        // 3. -ed -> -e / 原形 (utilized -> utilize, annoyed -> annoy)
+        if (normalized.endsWith("ed") && normalized.length() > 3) {
+            String candidateE = normalized.substring(0, normalized.length() - 1);
+            if (candidates.contains(candidateE)) {
+                return candidateE;
+            }
+            String candidateNoEd = normalized.substring(0, normalized.length() - 2);
+            if (candidates.contains(candidateNoEd)) {
+                return candidateNoEd;
+            }
+        }
+        // 4. -ing -> -e / 原形 (utilizing -> utilize, annoying -> annoy)
+        if (normalized.endsWith("ing") && normalized.length() > 4) {
+            String candidateE = normalized.substring(0, normalized.length() - 3) + "e";
+            if (candidates.contains(candidateE)) {
+                return candidateE;
+            }
+            String candidateNoIng = normalized.substring(0, normalized.length() - 3);
+            if (candidates.contains(candidateNoIng)) {
+                return candidateNoIng;
+            }
+        }
+        // 5. -s -> 原形 (artists -> artist, winds -> wind)
+        if (normalized.endsWith("s") && normalized.length() > 2) {
+            String candidateNoS = normalized.substring(0, normalized.length() - 1);
+            if (candidates.contains(candidateNoS)) {
+                return candidateNoS;
+            }
+        }
+        return null;
     }
 
     private JsonNode ensureMeaningQuestion(JsonNode wordNode, String term, JsonNode question, String defaultMeaning) {

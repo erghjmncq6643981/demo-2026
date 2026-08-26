@@ -2,6 +2,8 @@ package com.chandler.learning.agent.task.application;
 
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import com.baomidou.mybatisplus.core.conditions.update.LambdaUpdateWrapper;
+import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
+import com.chandler.learning.agent.task.api.AiAsyncTaskPageResponse;
 import com.chandler.learning.agent.task.api.AiAsyncTaskResponse;
 import com.chandler.learning.agent.task.domain.AiAsyncTask;
 import com.chandler.learning.agent.task.domain.AiTaskTriggerType;
@@ -90,6 +92,46 @@ public class AiAsyncTaskService {
         task.setVersion(LearningConstants.ZERO);
         taskMapper.insert(task);
         return task;
+    }
+
+    public AiAsyncTaskPageResponse page(Long userId, String status, Integer page, Integer pageSize) {
+        int current = page == null || page < 1 ? 1 : page;
+        int size = pageSize == null || pageSize < 1 ? LearningConstants.AiTask.DEFAULT_PAGE_SIZE
+                : Math.min(pageSize, LearningConstants.AiTask.MAX_PAGE_SIZE);
+        LambdaQueryWrapper<AiAsyncTask> wrapper = new LambdaQueryWrapper<AiAsyncTask>()
+                .eq(AiAsyncTask::getOwnerUserId, userId)
+                .eq(AiAsyncTask::getDeleted, false)
+                .orderByDesc(AiAsyncTask::getCreateTime);
+        if (StringUtils.hasText(status)) {
+            wrapper.eq(AiAsyncTask::getStatus, status.trim());
+        }
+        Page<AiAsyncTask> taskPage = taskMapper.selectPage(new Page<>(current, size), wrapper);
+        AiAsyncTaskPageResponse response = new AiAsyncTaskPageResponse();
+        response.setItems(taskPage.getRecords().stream().map(this::toResponse).toList());
+        response.setTotal(taskPage.getTotal());
+        response.setPage((int) taskPage.getCurrent());
+        response.setPageSize((int) taskPage.getSize());
+        return response;
+    }
+
+    /** 管理员分页查询所有用户的 AI 异步任务。 */
+    public AiAsyncTaskPageResponse pageAll(String status, Integer page, Integer pageSize) {
+        int current = page == null || page < 1 ? 1 : page;
+        int size = pageSize == null || pageSize < 1 ? LearningConstants.AiTask.DEFAULT_PAGE_SIZE
+                : Math.min(pageSize, LearningConstants.AiTask.MAX_PAGE_SIZE);
+        LambdaQueryWrapper<AiAsyncTask> wrapper = new LambdaQueryWrapper<AiAsyncTask>()
+                .eq(AiAsyncTask::getDeleted, false)
+                .orderByDesc(AiAsyncTask::getCreateTime);
+        if (StringUtils.hasText(status)) {
+            wrapper.eq(AiAsyncTask::getStatus, status.trim());
+        }
+        Page<AiAsyncTask> taskPage = taskMapper.selectPage(new Page<>(current, size), wrapper);
+        AiAsyncTaskPageResponse response = new AiAsyncTaskPageResponse();
+        response.setItems(taskPage.getRecords().stream().map(this::toResponse).toList());
+        response.setTotal(taskPage.getTotal());
+        response.setPage((int) taskPage.getCurrent());
+        response.setPageSize((int) taskPage.getSize());
+        return response;
     }
 
     public List<AiAsyncTaskResponse> list(Long userId, String status, Integer limit) {

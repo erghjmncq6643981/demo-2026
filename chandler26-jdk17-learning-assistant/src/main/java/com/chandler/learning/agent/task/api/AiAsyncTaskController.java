@@ -32,27 +32,29 @@ public class AiAsyncTaskController {
     private final AiAsyncTaskService taskService;
 
     @GetMapping
-    @Operation(summary = "查询 AI 异步任务（普通用户查自己，管理员可查全部）")
-    public List<AiAsyncTaskResponse> list(
+    @Operation(summary = "分页查询 AI 异步任务（普通用户查自己，管理员可查全部）")
+    public AiAsyncTaskPageResponse list(
             @RequestHeader(value = "Authorization", required = false) String authorization,
             @RequestParam(required = false) String status,
-            @RequestParam(required = false) Integer limit,
+            @RequestParam(required = false) Integer page,
+            @RequestParam(required = false) Integer pageSize,
             @RequestParam(defaultValue = "false") Boolean all) {
         LearningUser user = authService.requireUser(authorization);
         if (Boolean.TRUE.equals(all) && UserRole.ADMIN.getCode().equals(user.getRoleCode())) {
-            return taskService.listAll(status, limit);
+            return taskService.pageAll(status, page, pageSize);
         }
-        return taskService.list(user.getId(), status, limit);
+        return taskService.page(user.getId(), status, page, pageSize);
     }
 
     @GetMapping("/admin")
-    @Operation(summary = "管理员查询全部用户 AI 异步任务")
-    public List<AiAsyncTaskResponse> adminList(
+    @Operation(summary = "管理员分页查询全部用户 AI 异步任务")
+    public AiAsyncTaskPageResponse adminList(
             @RequestHeader(value = "Authorization", required = false) String authorization,
             @RequestParam(required = false) String status,
-            @RequestParam(required = false) Integer limit) {
+            @RequestParam(required = false) Integer page,
+            @RequestParam(required = false) Integer pageSize) {
         authService.requireAdmin(authorization);
-        return taskService.listAll(status, limit);
+        return taskService.pageAll(status, page, pageSize);
     }
 
     @GetMapping("/{taskId}")

@@ -54,8 +54,9 @@ public class AiAgentController {
      */
     @PostMapping
     @Operation(summary = "创建 Agent")
-    public Long create(@Valid @RequestBody AgentSaveRequest request) {
-        authService.requireAdmin(null);
+    public Long create(@RequestHeader(value = "Authorization", required = false) String authorization,
+                       @Valid @RequestBody AgentSaveRequest request) {
+        authService.requireAdmin(authorization);
         return agentService.create(request);
     }
 
@@ -64,8 +65,9 @@ public class AiAgentController {
      */
     @PutMapping("/{id}")
     @Operation(summary = "更新 Agent")
-    public void update(@PathVariable Long id, @Valid @RequestBody AgentSaveRequest request) {
-        authService.requireAdmin(null);
+    public void update(@RequestHeader(value = "Authorization", required = false) String authorization,
+                       @PathVariable Long id, @Valid @RequestBody AgentSaveRequest request) {
+        authService.requireAdmin(authorization);
         agentService.update(id, request);
     }
 
@@ -74,8 +76,9 @@ public class AiAgentController {
      */
     @PostMapping("/{id}/enable")
     @Operation(summary = "启用 Agent")
-    public void enable(@PathVariable Long id) {
-        authService.requireAdmin(null);
+    public void enable(@RequestHeader(value = "Authorization", required = false) String authorization,
+                       @PathVariable Long id) {
+        authService.requireAdmin(authorization);
         agentService.updateEnabled(id, true);
     }
 
@@ -84,8 +87,9 @@ public class AiAgentController {
      */
     @PostMapping("/{id}/disable")
     @Operation(summary = "停用 Agent")
-    public void disable(@PathVariable Long id) {
-        authService.requireAdmin(null);
+    public void disable(@RequestHeader(value = "Authorization", required = false) String authorization,
+                        @PathVariable Long id) {
+        authService.requireAdmin(authorization);
         agentService.updateEnabled(id, false);
     }
 
@@ -94,8 +98,9 @@ public class AiAgentController {
      */
     @DeleteMapping("/{id}")
     @Operation(summary = "删除 Agent")
-    public void delete(@PathVariable Long id) {
-        authService.requireAdmin(null);
+    public void delete(@RequestHeader(value = "Authorization", required = false) String authorization,
+                       @PathVariable Long id) {
+        authService.requireAdmin(authorization);
         agentService.delete(id);
     }
 
@@ -104,8 +109,9 @@ public class AiAgentController {
      */
     @PostMapping("/{id}/clone")
     @Operation(summary = "复制 Agent")
-    public Long clone(@PathVariable Long id) {
-        authService.requireAdmin(null);
+    public Long clone(@RequestHeader(value = "Authorization", required = false) String authorization,
+                      @PathVariable Long id) {
+        authService.requireAdmin(authorization);
         return agentService.clone(id);
     }
 }

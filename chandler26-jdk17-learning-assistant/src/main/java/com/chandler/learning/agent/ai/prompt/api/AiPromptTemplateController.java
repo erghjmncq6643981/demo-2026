@@ -46,8 +46,9 @@ public class AiPromptTemplateController {
      */
     @PostMapping
     @Operation(summary = "创建模板")
-    public Long create(@Valid @RequestBody PromptTemplateSaveRequest request) {
-        authService.requireAdmin(null);
+    public Long create(@RequestHeader(value = "Authorization", required = false) String authorization,
+                       @Valid @RequestBody PromptTemplateSaveRequest request) {
+        authService.requireAdmin(authorization);
         return templateService.create(request);
     }
 
@@ -56,8 +57,9 @@ public class AiPromptTemplateController {
      */
     @PutMapping("/{id}")
     @Operation(summary = "更新模板")
-    public void update(@PathVariable Long id, @Valid @RequestBody PromptTemplateSaveRequest request) {
-        authService.requireAdmin(null);
+    public void update(@RequestHeader(value = "Authorization", required = false) String authorization,
+                       @PathVariable Long id, @Valid @RequestBody PromptTemplateSaveRequest request) {
+        authService.requireAdmin(authorization);
         templateService.update(id, request);
     }
 
@@ -66,8 +68,9 @@ public class AiPromptTemplateController {
      */
     @DeleteMapping("/{id}")
     @Operation(summary = "删除模板")
-    public void delete(@PathVariable Long id) {
-        authService.requireAdmin(null);
+    public void delete(@RequestHeader(value = "Authorization", required = false) String authorization,
+                       @PathVariable Long id) {
+        authService.requireAdmin(authorization);
         templateService.delete(id);
     }
 
@@ -76,8 +79,9 @@ public class AiPromptTemplateController {
      */
     @PostMapping("/{id}/clone")
     @Operation(summary = "复制模板")
-    public Long clone(@PathVariable Long id) {
-        authService.requireAdmin(null);
+    public Long clone(@RequestHeader(value = "Authorization", required = false) String authorization,
+                      @PathVariable Long id) {
+        authService.requireAdmin(authorization);
         return templateService.clone(id);
     }
 

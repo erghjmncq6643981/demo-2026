@@ -1272,26 +1272,80 @@ export function createScenePlanFeature(ctx) {
     elements.sceneTranslation.textContent = unit.translation || unit.material?.translation || '暂无译文'
   }
 
+  function generateWordVariants(rawTerm, acceptedSpellings = []) {
+    const term = String(rawTerm || '').trim().toLowerCase()
+    if (!term) return []
+    const variants = new Set([term])
+
+    if (Array.isArray(acceptedSpellings)) {
+      acceptedSpellings.forEach((spelling) => {
+        const s = String(spelling || '').trim().toLowerCase()
+        if (s) variants.add(s)
+      })
+    }
+
+    if (term.includes(' ') || term.includes('-')) {
+      variants.add(term.replace(/-/g, ' '))
+      variants.add(term.replace(/\s+/g, '-'))
+      return Array.from(variants)
+    }
+
+    if (/[bcdfghjklmnpqrstvwxyz]y$/.test(term)) {
+      const stem = term.slice(0, -1)
+      variants.add(`${stem}ies`)
+      variants.add(`${stem}ied`)
+      variants.add(`${term}ing`)
+      variants.add(`${term}s`)
+    } else if (/e$/.test(term)) {
+      const stem = term.slice(0, -1)
+      variants.add(`${term}s`)
+      variants.add(`${term}d`)
+      variants.add(`${stem}ing`)
+    } else if (/(?:[sxz]|[sc]h)$/.test(term)) {
+      variants.add(`${term}es`)
+      variants.add(`${term}ed`)
+      variants.add(`${term}ing`)
+    } else if (term.length <= 4 && /[bcdfghjklmnpqrstvwxyz][aeiou][bcdfghjklmnpqrstvwxyz]$/.test(term)) {
+      const lastChar = term.slice(-1)
+      variants.add(`${term}s`)
+      variants.add(`${term}${lastChar}ed`)
+      variants.add(`${term}${lastChar}ing`)
+    } else {
+      variants.add(`${term}s`)
+      variants.add(`${term}es`)
+      variants.add(`${term}ed`)
+      variants.add(`${term}ing`)
+    }
+
+    variants.add(`${term}'s`)
+    return Array.from(variants)
+  }
+
   function annotateUnknownWords(text, words) {
-    const byTerm = new Map(
-      words
-        .filter((word) => word.term)
-        .map((word) => [String(word.term).toLowerCase(), word]),
-    )
-    if (!byTerm.size) {
+    const byVariant = new Map()
+    for (const word of words) {
+      if (!word?.term) continue
+      const variants = generateWordVariants(word.term, word.acceptedSpellings || word.accepted_spellings)
+      for (const variant of variants) {
+        if (!byVariant.has(variant)) {
+          byVariant.set(variant, word)
+        }
+      }
+    }
+    if (!byVariant.size) {
       return String(text)
         .split(/\r?\n/)
         .filter(Boolean)
         .map((line) => `<p>${escapeHtml(line)}</p>`)
         .join('')
     }
-    const terms = [...byTerm.keys()].sort((left, right) => right.length - left.length)
+    const terms = [...byVariant.keys()].sort((left, right) => right.length - left.length)
     const pattern = new RegExp(`(?<![A-Za-z])(${terms.map(escapeRegExp).join('|')})(?![A-Za-z])`, 'gi')
     let cursor = 0
     let html = ''
     for (const match of String(text).matchAll(pattern)) {
       const index = match.index ?? 0
-      const word = byTerm.get(match[0].toLowerCase())
+      const word = byVariant.get(match[0].toLowerCase())
       html += escapeHtml(String(text).slice(cursor, index))
       html += `<mark class="scene-inline-word" tabindex="0"><strong>${escapeHtml(match[0])}</strong><span>(${escapeHtml(word?.phonetic || '暂无音标')}，${escapeHtml(word?.contextMeaning || word?.meaning || '当前场景含义待补充')})</span></mark>`
       cursor = index + match[0].length

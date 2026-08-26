@@ -612,14 +612,16 @@ textarea:focus {
 }
 
 #profileView.view.active {
-  align-content: start;
   grid-template-rows: auto minmax(0, 1fr);
+  min-height: 0;
+  height: 100%;
   overflow: hidden;
 }
 
 #systemAdminView.view.active {
-  align-content: start;
   grid-template-rows: auto minmax(0, 1fr);
+  min-height: 0;
+  height: 100%;
   overflow: hidden;
 }
 
@@ -1511,12 +1513,14 @@ textarea:focus {
   scrollbar-color: rgba(129, 140, 248, 0.46) transparent;
 }
 
-.profile-sections {
+.profile-sections,
+.system-sections {
+  display: grid;
+  grid-template-rows: minmax(0, 1fr);
+  height: 100%;
   min-height: 0;
   min-width: 0;
-  overflow: auto;
-  overscroll-behavior: contain;
-  padding-right: 4px;
+  overflow: hidden;
 }
 
 .profile-tab,
@@ -1543,30 +1547,24 @@ textarea:focus {
 .profile-section,
 .system-section {
   display: none;
+  min-height: 0;
   min-width: 0;
 }
 
 .profile-section.active,
 .system-section.active {
   display: block;
+  min-height: 0;
+  height: 100%;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  padding-right: 4px;
 }
 
 .system-tabs {
   position: sticky;
   min-height: 46px;
   align-self: start;
-}
-
-.system-sections {
-  min-height: 0;
-  overflow: hidden;
-}
-
-.system-sections .system-section {
-  min-height: 0;
-  overflow: auto;
-  overscroll-behavior: contain;
-  padding-right: 4px;
 }
 
 #systemManagedPanels {
@@ -2837,6 +2835,19 @@ input[type="range"] {
   font-weight: 950;
 }
 
+#aiTaskPanel {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  min-height: 0;
+  overflow: hidden;
+}
+
+#aiTaskPanel .panel-heading,
+#aiTaskPanel .ai-task-toolbar {
+  flex-shrink: 0;
+}
+
 .log-panel {
   min-height: 320px;
 }
@@ -2864,8 +2875,21 @@ input[type="range"] {
 }
 
 .ai-task-list {
+  flex: 1 1 0%;
+  min-height: 0;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  padding-right: 4px;
   display: grid;
   gap: 9px;
+  align-content: start;
+}
+
+.ai-task-pagination {
+  flex-shrink: 0;
+  padding-top: 12px;
+  border-top: 1px solid var(--line);
+  margin-top: 8px;
 }
 
 .ai-task-item {

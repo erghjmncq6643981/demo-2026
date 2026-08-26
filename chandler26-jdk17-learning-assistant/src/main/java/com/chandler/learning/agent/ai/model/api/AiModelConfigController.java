@@ -32,8 +32,9 @@ public class AiModelConfigController {
 
     @GetMapping
     @Operation(summary = "模型配置列表")
-    public List<AiModelConfigResponse> list(@RequestParam(defaultValue = "false") Boolean enabledOnly) {
-        authService.requireAdmin(null);
+    public List<AiModelConfigResponse> list(@RequestHeader(value = "Authorization", required = false) String authorization,
+                                            @RequestParam(defaultValue = "false") Boolean enabledOnly) {
+        authService.requireAdmin(authorization);
         return modelConfigService.list(Boolean.TRUE.equals(enabledOnly));
     }
 
@@ -42,8 +43,8 @@ public class AiModelConfigController {
      */
     @GetMapping("/available")
     @Operation(summary = "可用模型选项")
-    public List<AiModelOptionResponse> available() {
-        authService.requireUser(null);
+    public List<AiModelOptionResponse> available(@RequestHeader(value = "Authorization", required = false) String authorization) {
+        authService.requireUser(authorization);
         return modelConfigService.listAvailableOptions();
     }
 
@@ -52,8 +53,9 @@ public class AiModelConfigController {
      */
     @PostMapping
     @Operation(summary = "创建模型配置")
-    public AiModelConfigResponse create(@Valid @RequestBody AiModelConfigSaveRequest request) {
-        authService.requireAdmin(null);
+    public AiModelConfigResponse create(@RequestHeader(value = "Authorization", required = false) String authorization,
+                                        @Valid @RequestBody AiModelConfigSaveRequest request) {
+        authService.requireAdmin(authorization);
         return modelConfigService.create(request);
     }
 
@@ -62,8 +64,9 @@ public class AiModelConfigController {
      */
     @PutMapping("/{id}")
     @Operation(summary = "更新模型配置")
-    public AiModelConfigResponse update(@PathVariable Long id, @Valid @RequestBody AiModelConfigSaveRequest request) {
-        authService.requireAdmin(null);
+    public AiModelConfigResponse update(@RequestHeader(value = "Authorization", required = false) String authorization,
+                                        @PathVariable Long id, @Valid @RequestBody AiModelConfigSaveRequest request) {
+        authService.requireAdmin(authorization);
         return modelConfigService.update(id, request);
     }
 
@@ -72,8 +75,9 @@ public class AiModelConfigController {
      */
     @PostMapping("/{id}/enable")
     @Operation(summary = "启用模型配置")
-    public void enable(@PathVariable Long id) {
-        authService.requireAdmin(null);
+    public void enable(@RequestHeader(value = "Authorization", required = false) String authorization,
+                       @PathVariable Long id) {
+        authService.requireAdmin(authorization);
         modelConfigService.updateEnabled(id, true);
     }
 
@@ -82,8 +86,9 @@ public class AiModelConfigController {
      */
     @PostMapping("/{id}/disable")
     @Operation(summary = "停用模型配置")
-    public void disable(@PathVariable Long id) {
-        authService.requireAdmin(null);
+    public void disable(@RequestHeader(value = "Authorization", required = false) String authorization,
+                        @PathVariable Long id) {
+        authService.requireAdmin(authorization);
         modelConfigService.updateEnabled(id, false);
     }
 
@@ -92,8 +97,9 @@ public class AiModelConfigController {
      */
     @PostMapping("/{id}/priority")
     @Operation(summary = "更新模型配置优先级")
-    public void priority(@PathVariable Long id, @RequestBody Map<String, Object> body) {
-        authService.requireAdmin(null);
+    public void priority(@RequestHeader(value = "Authorization", required = false) String authorization,
+                         @PathVariable Long id, @RequestBody Map<String, Object> body) {
+        authService.requireAdmin(authorization);
         Integer sequence = body.get("sequence") instanceof Number number ? number.intValue() : LearningConstants.DEFAULT_SEQUENCE;
         Boolean isDefault = body.get("isDefault") instanceof Boolean value && value;
         modelConfigService.updatePriority(id, sequence, isDefault);
@@ -104,8 +110,9 @@ public class AiModelConfigController {
      */
     @DeleteMapping("/{id}")
     @Operation(summary = "删除模型配置")
-    public void delete(@PathVariable Long id) {
-        authService.requireAdmin(null);
+    public void delete(@RequestHeader(value = "Authorization", required = false) String authorization,
+                       @PathVariable Long id) {
+        authService.requireAdmin(authorization);
         modelConfigService.delete(id);
     }
 
@@ -114,8 +121,9 @@ public class AiModelConfigController {
      */
     @PostMapping("/{id}/test")
     @Operation(summary = "测试模型连接")
-    public AiModelConnectionTestResponse test(@PathVariable Long id) {
-        authService.requireAdmin(null);
+    public AiModelConnectionTestResponse test(@RequestHeader(value = "Authorization", required = false) String authorization,
+                                              @PathVariable Long id) {
+        authService.requireAdmin(authorization);
         return connectionTestService.test(id);
     }
 }
