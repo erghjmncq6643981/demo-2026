@@ -226,6 +226,8 @@ public class LearningPlanResponseAssembler {
         response.setPhonetic(entry.getPhonetic());
         response.setMeaning(entry.getMeaningText());
         response.setContextMeaning(entry.getContextMeaning());
+        response.setTier(entry.getTier());
+        response.setMasteryRequirement(entry.getMasteryRequirement());
         response.setAcceptedSpellings(StringUtils.hasText(entry.getAcceptedSpellingsJson()) ? entry.getAcceptedSpellingsJson() : "[]");
         response.setAssessment(StringUtils.hasText(entry.getAssessmentJson()) ? entry.getAssessmentJson() : null);
         response.setPassedAssessments(entry.getWordbookEntryId() == null
