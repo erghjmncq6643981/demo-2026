@@ -1,6 +1,7 @@
 package com.chandler.learning.agent.identity.application;
 
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
+import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
 import com.chandler.learning.agent.identity.api.AdminUserPageResponse;
 import com.chandler.learning.agent.identity.api.AdminUserResetPasswordRequest;
 import com.chandler.learning.agent.identity.api.AdminUserResponse;
@@ -56,19 +57,16 @@ public class AdminUserService {
         int resolvedPageSize = pageSize == null ? DEFAULT_PAGE_SIZE
                 : Math.max(DEFAULT_PAGE, Math.min(pageSize, MAX_PAGE_SIZE));
         LambdaQueryWrapper<LearningUser> wrapper = buildQuery(keyword, roleCode, enabled,
-                registeredFrom, registeredTo, lastLoginFrom, lastLoginTo);
-        long total = userMapper.selectCount(wrapper);
-        long offset = (long) (resolvedPage - 1) * resolvedPageSize;
-        List<LearningUser> users = userMapper.selectList(buildQuery(keyword, roleCode, enabled,
-                        registeredFrom, registeredTo, lastLoginFrom, lastLoginTo)
-                .orderByDesc(LearningUser::getCreateTime)
-                .last("LIMIT " + offset + ", " + resolvedPageSize));
+                registeredFrom, registeredTo, lastLoginFrom, lastLoginTo)
+                .orderByDesc(LearningUser::getCreateTime);
+        Page<LearningUser> userPage = userMapper.selectPage(
+                new Page<>(resolvedPage, resolvedPageSize), wrapper);
 
         AdminUserPageResponse response = new AdminUserPageResponse();
-        response.setItems(toResponses(users));
-        response.setTotal(total);
-        response.setPage(resolvedPage);
-        response.setPageSize(resolvedPageSize);
+        response.setItems(toResponses(userPage.getRecords()));
+        response.setTotal(userPage.getTotal());
+        response.setPage((int) userPage.getCurrent());
+        response.setPageSize((int) userPage.getSize());
         return response;
     }
 

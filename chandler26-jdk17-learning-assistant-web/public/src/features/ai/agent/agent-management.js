@@ -98,7 +98,6 @@ export function createAgentManagementFeature(ctx) {
               <button class="icon-action-button" type="button" data-agent-edit="${escapeHtml(item.id)}" title="修改学习 Agent" aria-label="修改学习 Agent">✎</button>
               <button class="icon-action-button" type="button" data-agent-toggle="${escapeHtml(item.id)}" title="${item.enabled ? '停用学习 Agent' : '启用学习 Agent'}" aria-label="${item.enabled ? '停用学习 Agent' : '启用学习 Agent'}">${item.enabled ? '⏸' : '▶'}</button>
               <button class="icon-action-button" type="button" data-agent-clone="${escapeHtml(item.id)}" title="复制学习 Agent" aria-label="复制学习 Agent">⧉</button>
-              <button class="danger-icon-button" type="button" data-agent-delete="${escapeHtml(item.id)}" title="${aliveCount <= 1 ? '至少保留一个学习 Agent' : '删除学习 Agent'}" aria-label="${aliveCount <= 1 ? '至少保留一个学习 Agent' : '删除学习 Agent'}" ${aliveCount <= 1 ? 'disabled' : ''}>×</button>
             </div>
           </div>
         `
@@ -106,9 +105,6 @@ export function createAgentManagementFeature(ctx) {
       .join('')
     elements.agentConfigList.querySelectorAll('[data-agent-edit]').forEach((button) => {
       button.addEventListener('click', () => openAgentModal(button.getAttribute('data-agent-edit')))
-    })
-    elements.agentConfigList.querySelectorAll('[data-agent-delete]').forEach((button) => {
-      button.addEventListener('click', () => deleteAgentConfig(button.getAttribute('data-agent-delete')))
     })
     elements.agentConfigList.querySelectorAll('[data-agent-toggle]').forEach((button) => {
       button.addEventListener('click', () => toggleAgentEnabled(button.getAttribute('data-agent-toggle')))

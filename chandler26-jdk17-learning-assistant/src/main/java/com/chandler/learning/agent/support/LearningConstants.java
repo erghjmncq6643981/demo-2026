@@ -481,7 +481,7 @@ public final class LearningConstants {
         public static final int SUB_TOPIC_SCORE = 5;
         public static final int RECOGNITION_PASS_SCORE = 70;
         public static final int SPELLING_PASS_SCORE = 70;
-        public static final int GENERATION_LOCK_MINUTES = 30;
+        public static final int GENERATION_LOCK_MINUTES = 5;
 
         private ScenePlan() {
         }
@@ -539,9 +539,9 @@ public final class LearningConstants {
         public static final int DEFAULT_MAX_RETRY_COUNT = 2;
         public static final int DEFAULT_PAGE_SIZE = 50;
         public static final int MAX_PAGE_SIZE = 100;
-        public static final int RUNNING_TIMEOUT_MINUTES = 30;
+        public static final int RUNNING_TIMEOUT_MINUTES = 5;
         public static final int QUEUE_RETRY_DELAY_SECONDS = 10;
-        public static final int STEP_LEASE_MINUTES = 10;
+        public static final int STEP_LEASE_MINUTES = 5;
         public static final int RETRY_BASE_DELAY_SECONDS = 30;
         public static final int MAX_RETRY_DELAY_SECONDS = 1800;
         public static final String RUNNING_TIMEOUT_MESSAGE = "AI 任务执行超时，已转为失败，可手动重试";

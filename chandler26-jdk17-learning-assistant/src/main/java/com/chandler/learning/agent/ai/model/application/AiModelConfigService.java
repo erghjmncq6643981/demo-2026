@@ -1,6 +1,7 @@
 package com.chandler.learning.agent.ai.model.application;
 
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
+import com.baomidou.mybatisplus.core.conditions.update.LambdaUpdateWrapper;
 import com.chandler.learning.agent.ai.agent.application.AiAgentBindingService;
 import com.chandler.learning.agent.ai.chat.application.AiModelUsageQueryService;
 import com.chandler.learning.agent.ai.model.api.AiModelConfigResponse;
@@ -414,17 +415,15 @@ public class AiModelConfigService {
      * 更新 {@code clearDefault} 相关业务。
      */
     private void clearDefault(Long keepId) {
-        List<AiModelConfig> defaults = modelConfigMapper.selectList(new LambdaQueryWrapper<AiModelConfig>()
+        LambdaUpdateWrapper<AiModelConfig> wrapper = new LambdaUpdateWrapper<AiModelConfig>()
                 .eq(AiModelConfig::getDeleted, false)
-                .eq(AiModelConfig::getIsDefault, true));
-        for (AiModelConfig item : defaults) {
-            if (keepId != null && keepId.equals(item.getId())) {
-                continue;
-            }
-            item.setIsDefault(false);
-            item.setUpdateTime(LocalDateTime.now());
-            modelConfigMapper.updateById(item);
+                .eq(AiModelConfig::getIsDefault, true)
+                .set(AiModelConfig::getIsDefault, false)
+                .set(AiModelConfig::getUpdateTime, LocalDateTime.now());
+        if (keepId != null) {
+            wrapper.ne(AiModelConfig::getId, keepId);
         }
+        modelConfigMapper.update(null, wrapper);
     }
 
     /**

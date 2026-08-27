@@ -18,6 +18,7 @@ class MapperXmlValidationTest {
         List<String> resources = List.of(
                 "mapper/LearningPlanMapper.xml",
                 "mapper/LearningPlanUnitMapper.xml",
+                "mapper/LearningPlanUnitEntryMapper.xml",
                 "mapper/AiChatMessageMapper.xml",
                 "mapper/AiChatSessionMapper.xml",
                 "mapper/AiModelCallRecordMapper.xml",
@@ -25,7 +26,8 @@ class MapperXmlValidationTest {
                 "mapper/LearningSceneRelatedWordMapper.xml",
                 "mapper/VocabularyCatalogAnalysisBatchMapper.xml",
                 "mapper/VocabularyCatalogEntryAnalysisMapper.xml",
-                "mapper/VocabularyCatalogEntryMapper.xml");
+                "mapper/VocabularyCatalogEntryMapper.xml",
+                "mapper/LearningWordProgressMapper.xml");
 
         for (String resource : resources) {
             try (InputStream input = Resources.getResourceAsStream(resource)) {
@@ -38,6 +40,15 @@ class MapperXmlValidationTest {
                 "com.chandler.learning.agent.learning.infrastructure.LearningPlanMapper.claimGenerationLock")).isTrue();
         assertThat(configuration.hasStatement(
                 "com.chandler.learning.agent.learning.infrastructure.LearningPlanUnitMapper.selectMaxUnitNoIncludingDeleted"))
+                .isTrue();
+        assertThat(configuration.hasStatement(
+                "com.chandler.learning.agent.learning.infrastructure.LearningPlanUnitMapper.selectUnitsWithMaterial"))
+                .isTrue();
+        assertThat(configuration.hasStatement(
+                "com.chandler.learning.agent.learning.infrastructure.LearningPlanUnitEntryMapper.selectEntriesWithProgress"))
+                .isTrue();
+        assertThat(configuration.hasStatement(
+                "com.chandler.learning.agent.learning.infrastructure.LearningPlanUnitEntryMapper.insertBatch"))
                 .isTrue();
         assertThat(configuration.hasStatement(
                 "com.chandler.learning.agent.ai.chat.infrastructure.AiChatMessageMapper.selectNextSequence"))
@@ -65,6 +76,9 @@ class MapperXmlValidationTest {
                 .isTrue();
         assertThat(configuration.hasStatement(
                 "com.chandler.learning.agent.vocabulary.infrastructure.VocabularyCatalogEntryMapper.selectUnanalyzedPublished"))
+                .isTrue();
+        assertThat(configuration.hasStatement(
+                "com.chandler.learning.agent.vocabulary.infrastructure.LearningWordProgressMapper.updateBatch"))
                 .isTrue();
     }
 }

@@ -24,6 +24,7 @@ import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
+import java.util.stream.Collectors;
 
 /**
  * 用户偏好配置服务。
@@ -63,8 +64,9 @@ public class UserPreferenceService {
         String templateCode = request.getTemplateCode().trim();
         requireEnabledAgent(agentCode);
         requireEnabledTemplate(templateCode);
-        upsert(userId, LearningConstants.UserPreference.KEY_LEARNING_AGENT_CODE, agentCode);
-        upsert(userId, LearningConstants.UserPreference.KEY_LEARNING_TEMPLATE_CODE, templateCode);
+        upsertBatch(userId, Map.of(
+                LearningConstants.UserPreference.KEY_LEARNING_AGENT_CODE, agentCode,
+                LearningConstants.UserPreference.KEY_LEARNING_TEMPLATE_CODE, templateCode));
 
         systemLogService.record(userId, SystemLogType.PREFERENCE, "更新学习设置",
                 "默认 Agent " + agentCode + "，默认模板 " + templateCode);
@@ -112,10 +114,11 @@ public class UserPreferenceService {
                 LearningConstants.UserPreference.SENTENCE_PITCH_MIN,
                 LearningConstants.UserPreference.SENTENCE_PITCH_MAX);
 
-        upsert(userId, LearningConstants.UserPreference.KEY_SPEECH_VOICE_TYPE, voiceType);
-        upsert(userId, LearningConstants.UserPreference.KEY_SPEECH_SENTENCE_VOICE_NAME, sentenceVoiceName);
-        upsert(userId, LearningConstants.UserPreference.KEY_SPEECH_SENTENCE_RATE, formatNumber(sentenceRate));
-        upsert(userId, LearningConstants.UserPreference.KEY_SPEECH_SENTENCE_PITCH, formatNumber(sentencePitch));
+        upsertBatch(userId, Map.of(
+                LearningConstants.UserPreference.KEY_SPEECH_VOICE_TYPE, voiceType,
+                LearningConstants.UserPreference.KEY_SPEECH_SENTENCE_VOICE_NAME, sentenceVoiceName,
+                LearningConstants.UserPreference.KEY_SPEECH_SENTENCE_RATE, formatNumber(sentenceRate),
+                LearningConstants.UserPreference.KEY_SPEECH_SENTENCE_PITCH, formatNumber(sentencePitch)));
 
         systemLogService.record(userId, SystemLogType.PREFERENCE, "更新发音设置",
                 "默认发音 " + voiceType + "，句子语速 " + formatNumber(sentenceRate)
@@ -172,27 +175,35 @@ public class UserPreferenceService {
     }
 
     /**
-     * 处理 {@code upsert} 相关业务。
+     * 批量插入或更新用户偏好。
      */
-    private void upsert(Long userId, String key, String value) {
-        LearningUserPreference preference = preferenceMapper.selectOne(new LambdaQueryWrapper<LearningUserPreference>()
-                .eq(LearningUserPreference::getUserId, userId)
-                .eq(LearningUserPreference::getPreferenceKey, key)
-                .last(LearningConstants.SQL_LIMIT_ONE));
-        LocalDateTime now = LocalDateTime.now();
-        if (preference == null) {
-            preference = new LearningUserPreference();
-            preference.setUserId(userId);
-            preference.setPreferenceKey(key);
-            preference.setPreferenceValue(value);
-            preference.setCreateTime(now);
-            preference.setUpdateTime(now);
-            preferenceMapper.insert(preference);
+    private void upsertBatch(Long userId, Map<String, String> keyValues) {
+        if (keyValues == null || keyValues.isEmpty()) {
             return;
         }
-        preference.setPreferenceValue(value);
-        preference.setUpdateTime(now);
-        preferenceMapper.updateById(preference);
+        List<LearningUserPreference> existingList = preferenceMapper.selectList(
+                new LambdaQueryWrapper<LearningUserPreference>()
+                        .eq(LearningUserPreference::getUserId, userId)
+                        .in(LearningUserPreference::getPreferenceKey, keyValues.keySet()));
+        Map<String, LearningUserPreference> existingMap = existingList.stream()
+                .collect(Collectors.toMap(LearningUserPreference::getPreferenceKey, p -> p, (a, b) -> a));
+        LocalDateTime now = LocalDateTime.now();
+        for (Map.Entry<String, String> entry : keyValues.entrySet()) {
+            LearningUserPreference existing = existingMap.get(entry.getKey());
+            if (existing == null) {
+                LearningUserPreference pref = new LearningUserPreference();
+                pref.setUserId(userId);
+                pref.setPreferenceKey(entry.getKey());
+                pref.setPreferenceValue(entry.getValue());
+                pref.setCreateTime(now);
+                pref.setUpdateTime(now);
+                preferenceMapper.insert(pref);
+            } else {
+                existing.setPreferenceValue(entry.getValue());
+                existing.setUpdateTime(now);
+                preferenceMapper.updateById(existing);
+            }
+        }
     }
 
     /**

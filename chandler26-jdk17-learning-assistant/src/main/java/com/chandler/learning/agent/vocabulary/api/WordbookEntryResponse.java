@@ -45,7 +45,8 @@ public class WordbookEntryResponse {
 
     private LocalDateTime createTime;
 
-    private Object parsed;
+    @com.fasterxml.jackson.annotation.JsonRawValue
+    private String parsed;
 
     private String snapshotProvider;
 

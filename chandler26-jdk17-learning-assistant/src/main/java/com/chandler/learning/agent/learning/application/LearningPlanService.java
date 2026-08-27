@@ -279,15 +279,16 @@ public class LearningPlanService {
                 .eq(LearningPlanUnit::getDeleted, false)
                 .orderByAsc(LearningPlanUnit::getRecommendedDate)
                 .orderByAsc(LearningPlanUnit::getUnitNo));
-        Map<LocalDate, List<LearningPlanUnitResponse>> unitsByDate = responseAssembler
-                .toUnitResponses(units, plan.getId()).stream()
-                .collect(Collectors.groupingBy(unit -> unit.getRecommendedDate(), LinkedHashMap::new,
+        Map<LocalDate, List<LearningPlanUnit>> unitsByDate = units.stream()
+                .collect(Collectors.groupingBy(LearningPlanUnit::getRecommendedDate, LinkedHashMap::new,
                         Collectors.toList()));
+        Set<LocalDate> generatingDates = aiAsyncTaskService.findActiveGeneratingDatesForPlan(userId, plan.getId());
         List<LearningPlanCalendarDayResponse> result = new ArrayList<>();
         for (LocalDate date = resolvedFrom; !date.isAfter(resolvedTo); date = date.plusDays(1)) {
-            List<LearningPlanUnitResponse> dateUnits = unitsByDate.getOrDefault(date, List.of());
+            List<LearningPlanUnit> dateUnits = unitsByDate.getOrDefault(date, List.of());
             int planned = dateUnits.stream().mapToInt(unit -> value(unit.getCoreWordCount())).sum();
-            int pending = dateUnits.stream().mapToInt(unit -> pendingCoreCount(unit)).sum();
+            int pending = dateUnits.stream().mapToInt(unit -> Math.max(LearningConstants.ZERO,
+                    value(unit.getCoreWordCount()) - value(unit.getCompletedCoreCount()))).sum();
             int completed = (int) dateUnits.stream()
                     .filter(unit -> LearningConstants.ScenePlan.UNIT_COMPLETED.equals(unit.getStatus()))
                     .count();
@@ -298,7 +299,8 @@ public class LearningPlanService {
             day.setGeneratedUnitCount(dateUnits.size());
             day.setCompletedUnitCount(completed);
             day.setOverdueCount(date.isBefore(today) ? pending : LearningConstants.ZERO);
-            day.setUnits(dateUnits);
+            day.setGenerating(generatingDates.contains(date));
+            day.setUnits(List.of());
             result.add(day);
         }
         return result;
@@ -470,6 +472,7 @@ public class LearningPlanService {
         Map<String, JsonNode> generatedByTerm = words.stream().collect(Collectors.toMap(
                 word -> normalize(requiredText(word, "term", "word")), word -> word,
                 (left, right) -> left, LinkedHashMap::new));
+        List<LearningPlanUnitEntry> updatedEntries = new ArrayList<>();
         for (LearningPlanUnitEntry entry : entries) {
             JsonNode generated = generatedByTerm.get(entry.getNormalizedTerm());
             if (generated == null) continue;
@@ -484,8 +487,12 @@ public class LearningPlanService {
             }
             entry.setAssessmentJson(question == null ? entry.getAssessmentJson() : writeJson(question));
             entry.setAcceptedSpellingsJson(writeJson(acceptedSpellings(generated, entry.getTerm())));
+            entry.setUpdateBy(userId);
             entry.setUpdateTime(now);
-            unitEntryMapper.updateById(entry);
+            updatedEntries.add(entry);
+        }
+        if (!updatedEntries.isEmpty()) {
+            unitEntryMapper.updateBatch(updatedEntries);
         }
         unit.setTitle(material.getTitle());
         unit.setScenarioType(material.getScenarioType());
@@ -800,11 +807,14 @@ public class LearningPlanService {
         }
         unit.setStatus(LearningConstants.ScenePlan.UNIT_IN_PROGRESS);
         if (firstStart) {
-            unitEntryMapper.selectList(new LambdaQueryWrapper<LearningPlanUnitEntry>()
-                            .eq(LearningPlanUnitEntry::getUnitId, unit.getId())
-                            .eq(LearningPlanUnitEntry::getDeleted, false))
-                    .forEach(entry -> progressService.recordSceneExposure(
-                            userId, entry.getTerm(), entry.getMasteryRequirement(), entry.getTier(), planId, unitId));
+            List<LearningPlanUnitEntry> entries = unitEntryMapper.selectList(new LambdaQueryWrapper<LearningPlanUnitEntry>()
+                    .eq(LearningPlanUnitEntry::getUnitId, unit.getId())
+                    .eq(LearningPlanUnitEntry::getDeleted, false));
+            List<LearningWordProgressService.SceneExposureCommand> commands = entries.stream()
+                    .map(entry -> new LearningWordProgressService.SceneExposureCommand(
+                            entry.getTerm(), entry.getMasteryRequirement(), entry.getTier(), planId, unitId))
+                    .toList();
+            progressService.recordSceneExposures(userId, commands);
             unit.setStartedTime(now);
         }
         unit.setUpdateTime(now);

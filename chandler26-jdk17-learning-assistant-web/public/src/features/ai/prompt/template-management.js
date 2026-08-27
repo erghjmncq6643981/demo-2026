@@ -74,7 +74,6 @@ export function createPromptTemplateManagementFeature(ctx) {
             <div class="row-actions">
               <button class="icon-action-button" type="button" data-template-edit="${escapeHtml(item.id)}" title="修改模板" aria-label="修改模板">✎</button>
               <button class="icon-action-button" type="button" data-template-clone="${escapeHtml(item.id)}" title="复制模板" aria-label="复制模板">⧉</button>
-              <button class="danger-icon-button" type="button" data-template-delete="${escapeHtml(item.id)}" title="${aliveCount <= 1 ? '至少保留一个学习 Agent 模板' : '删除模板'}" aria-label="${aliveCount <= 1 ? '至少保留一个学习 Agent 模板' : '删除模板'}" ${aliveCount <= 1 ? 'disabled' : ''}>×</button>
             </div>
           </div>
         `,
@@ -82,9 +81,6 @@ export function createPromptTemplateManagementFeature(ctx) {
       .join('')
     elements.templateConfigList.querySelectorAll('[data-template-edit]').forEach((button) => {
       button.addEventListener('click', () => openTemplateModal(button.getAttribute('data-template-edit')))
-    })
-    elements.templateConfigList.querySelectorAll('[data-template-delete]').forEach((button) => {
-      button.addEventListener('click', () => deletePromptTemplate(button.getAttribute('data-template-delete')))
     })
     elements.templateConfigList.querySelectorAll('[data-template-clone]').forEach((button) => {
       button.addEventListener('click', () => clonePromptTemplate(button.getAttribute('data-template-clone')))

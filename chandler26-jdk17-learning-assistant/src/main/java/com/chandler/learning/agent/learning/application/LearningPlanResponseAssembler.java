@@ -8,6 +8,8 @@ import com.chandler.learning.agent.learning.api.SceneRelatedWordResponse;
 import com.chandler.learning.agent.learning.domain.LearningPlan;
 import com.chandler.learning.agent.learning.domain.LearningPlanUnit;
 import com.chandler.learning.agent.learning.domain.LearningPlanUnitEntry;
+import com.chandler.learning.agent.learning.domain.LearningPlanUnitEntryItem;
+import com.chandler.learning.agent.learning.domain.LearningPlanUnitItem;
 import com.chandler.learning.agent.learning.domain.LearningReviewRecord;
 import com.chandler.learning.agent.learning.domain.LearningSceneMaterial;
 import com.chandler.learning.agent.learning.domain.LearningSceneRelatedWord;
@@ -50,7 +52,6 @@ public class LearningPlanResponseAssembler {
     private final LearningSceneRelatedWordMapper relatedWordMapper;
     private final LearningWordProgressService progressService;
     private final LearningReviewRecordMapper reviewRecordMapper;
-    private final ObjectMapper objectMapper;
 
     /** 装配计划摘要或完整详情。 */
     public LearningPlanResponse toPlanResponse(LearningPlan plan, boolean includeUnits) {
@@ -83,7 +84,12 @@ public class LearningPlanResponseAssembler {
 
     /** 批量装配日历或计划详情中的单元。 */
     public List<LearningPlanUnitResponse> toUnitResponses(List<LearningPlanUnit> units, Long planId) {
-        return loadUnitResponses(units, planId);
+        if (units == null || units.isEmpty()) {
+            return List.of();
+        }
+        List<Long> unitIds = units.stream().map(LearningPlanUnit::getId).toList();
+        List<com.chandler.learning.agent.learning.domain.LearningPlanUnitItem> unitItems = unitMapper.selectUnitsWithMaterial(planId, unitIds);
+        return loadUnitResponses(unitItems, planId);
     }
 
     /** 装配单个词条，适用于提升词汇等单条命令响应。 */
@@ -107,25 +113,18 @@ public class LearningPlanResponseAssembler {
     }
 
     private List<LearningPlanUnitResponse> loadUnits(Long planId) {
-        List<LearningPlanUnit> units = unitMapper.selectList(new LambdaQueryWrapper<LearningPlanUnit>()
-                .eq(LearningPlanUnit::getPlanId, planId)
-                .eq(LearningPlanUnit::getDeleted, false)
-                .orderByAsc(LearningPlanUnit::getUnitNo));
-        return loadUnitResponses(units, planId);
+        List<com.chandler.learning.agent.learning.domain.LearningPlanUnitItem> unitItems = unitMapper.selectUnitsWithMaterial(planId, null);
+        return loadUnitResponses(unitItems, planId);
     }
 
-    private List<LearningPlanUnitResponse> loadUnitResponses(List<LearningPlanUnit> units, Long planId) {
-        if (units.isEmpty()) {
+    private List<LearningPlanUnitResponse> loadUnitResponses(
+            List<com.chandler.learning.agent.learning.domain.LearningPlanUnitItem> unitItems, Long planId) {
+        if (unitItems == null || unitItems.isEmpty()) {
             return List.of();
         }
-        List<Long> unitIds = units.stream().map(LearningPlanUnit::getId).toList();
-        Map<Long, LearningSceneMaterial> materialByUnit = materialMapper.selectList(
-                        new LambdaQueryWrapper<LearningSceneMaterial>()
-                                .in(LearningSceneMaterial::getUnitId, unitIds)
-                                .eq(LearningSceneMaterial::getCurrentVersion, true)
-                                .eq(LearningSceneMaterial::getDeleted, false))
-                .stream()
-                .collect(Collectors.toMap(LearningSceneMaterial::getUnitId, Function.identity(), (left, right) -> left));
+        List<Long> unitIds = unitItems.stream().map(LearningPlanUnit::getId).toList();
+
+        // 1. 场景关联词
         Map<Long, List<LearningSceneRelatedWord>> relatedWordsByUnit = relatedWordMapper.selectList(
                         new LambdaQueryWrapper<LearningSceneRelatedWord>()
                                 .in(LearningSceneRelatedWord::getUnitId, unitIds)
@@ -133,27 +132,14 @@ public class LearningPlanResponseAssembler {
                                 .orderByAsc(LearningSceneRelatedWord::getUnitId)
                                 .orderByAsc(LearningSceneRelatedWord::getSortOrder))
                 .stream().collect(Collectors.groupingBy(LearningSceneRelatedWord::getUnitId));
-        relatedWordsByUnit.replaceAll((unitId, words) -> words.stream()
-                .filter(word -> materialByUnit.get(unitId) != null
-                        && Objects.equals(word.getSceneMaterialId(), materialByUnit.get(unitId).getId()))
-                .toList());
-        List<LearningPlanUnitEntry> entries = unitEntryMapper.selectList(
-                new LambdaQueryWrapper<LearningPlanUnitEntry>()
-                        .eq(LearningPlanUnitEntry::getPlanId, planId)
-                        .in(LearningPlanUnitEntry::getUnitId, unitIds)
-                        .eq(LearningPlanUnitEntry::getDeleted, false)
-                        .orderByAsc(LearningPlanUnitEntry::getUnitId)
-                        .orderByAsc(LearningPlanUnitEntry::getSortOrder));
-        Map<Long, List<LearningPlanUnitEntry>> entriesByUnit = entries.stream()
+
+        // 2. 联表查询词条 + 词汇进度
+        List<com.chandler.learning.agent.learning.domain.LearningPlanUnitEntryItem> entries =
+                unitEntryMapper.selectEntriesWithProgress(planId, unitIds);
+        Map<Long, List<com.chandler.learning.agent.learning.domain.LearningPlanUnitEntryItem>> entriesByUnit = entries.stream()
                 .collect(Collectors.groupingBy(LearningPlanUnitEntry::getUnitId));
-        Set<Long> progressIds = entries.stream()
-                .map(LearningPlanUnitEntry::getWordProgressId)
-                .filter(Objects::nonNull)
-                .collect(Collectors.toSet());
-        Map<Long, LearningWordProgress> progressById = progressIds.isEmpty()
-                ? Map.of()
-                : progressService.findByIds(progressIds).stream()
-                        .collect(Collectors.toMap(LearningWordProgress::getId, Function.identity()));
+
+        // 3. 评测通过记录
         Map<Long, List<String>> passedByEntry = reviewRecordMapper.selectList(
                         new LambdaQueryWrapper<LearningReviewRecord>()
                                 .eq(LearningReviewRecord::getPlanId, planId)
@@ -166,18 +152,20 @@ public class LearningPlanResponseAssembler {
                         Collectors.mapping(LearningReviewRecord::getAssessmentType,
                                 Collectors.collectingAndThen(
                                         Collectors.toCollection(LinkedHashSet::new), List::copyOf))));
-        return units.stream()
-                .map(unit -> toUnitResponse(unit, materialByUnit.get(unit.getId()),
-                        relatedWordsByUnit.getOrDefault(unit.getId(), List.of()),
-                        entriesByUnit.getOrDefault(unit.getId(), List.of()), progressById, passedByEntry))
+
+        return unitItems.stream()
+                .map(unitItem -> toUnitResponse(unitItem,
+                        relatedWordsByUnit.getOrDefault(unitItem.getId(), List.of()),
+                        entriesByUnit.getOrDefault(unitItem.getId(), List.of()),
+                        passedByEntry))
                 .toList();
     }
 
-    private LearningPlanUnitResponse toUnitResponse(LearningPlanUnit unit, LearningSceneMaterial material,
-                                                    List<LearningSceneRelatedWord> relatedWords,
-                                                    List<LearningPlanUnitEntry> entries,
-                                                    Map<Long, LearningWordProgress> progressById,
-                                                    Map<Long, List<String>> passedByEntry) {
+    private LearningPlanUnitResponse toUnitResponse(
+            com.chandler.learning.agent.learning.domain.LearningPlanUnitItem unit,
+            List<LearningSceneRelatedWord> relatedWords,
+            List<com.chandler.learning.agent.learning.domain.LearningPlanUnitEntryItem> entries,
+            Map<Long, List<String>> passedByEntry) {
         LearningPlanUnitResponse response = new LearningPlanUnitResponse();
         response.setId(unit.getId());
         response.setPlanId(unit.getPlanId());
@@ -192,13 +180,17 @@ public class LearningPlanResponseAssembler {
         response.setCompletedCoreCount(unit.getCompletedCoreCount());
         response.setRecommendedDate(unit.getRecommendedDate());
         response.setSceneMaterialId(unit.getSceneMaterialId());
-        response.setLearningText(material == null ? null : material.getLearningText());
-        response.setTranslation(material == null ? null : material.getTranslation());
-        response.setMaterial(material == null ? null : readJson(material.getParsedJson()));
-        response.setMaterialRevision(material == null ? null : material.getRevisionNo());
-        response.setRelatedWords(relatedWords.stream().map(this::toRelatedWordResponse).toList());
+        response.setLearningText(unit.getMaterialLearningText());
+        response.setTranslation(unit.getMaterialTranslation());
+        response.setMaterial(StringUtils.hasText(unit.getMaterialParsedJson()) ? unit.getMaterialParsedJson() : null);
+        response.setMaterialRevision(unit.getMaterialRevisionNo());
+        List<LearningSceneRelatedWord> matchedRelatedWords = relatedWords.stream()
+                .filter(word -> unit.getMaterialId() != null
+                        && Objects.equals(word.getSceneMaterialId(), unit.getMaterialId()))
+                .toList();
+        response.setRelatedWords(matchedRelatedWords.stream().map(this::toRelatedWordResponse).toList());
         response.setWords(entries.stream()
-                .map(entry -> toEntryResponse(entry, progressById.get(entry.getWordProgressId()), passedByEntry))
+                .map(entry -> toEntryResponse(entry, passedByEntry))
                 .toList());
         response.setGeneratedTime(unit.getGeneratedTime());
         response.setCompletedTime(unit.getCompletedTime());
@@ -221,6 +213,34 @@ public class LearningPlanResponseAssembler {
         return response;
     }
 
+    private LearningPlanUnitEntryResponse toEntryResponse(LearningPlanUnitEntryItem entry,
+                                                          Map<Long, List<String>> passedByEntry) {
+        LearningPlanUnitEntryResponse response = new LearningPlanUnitEntryResponse();
+        response.setId(entry.getId());
+        response.setCatalogEntryId(entry.getCatalogEntryId());
+        response.setWordbookEntryId(entry.getWordbookEntryId());
+        response.setWordProgressId(entry.getWordProgressId());
+        response.setSourceOrder(entry.getSourceOrder());
+        response.setTerm(entry.getTerm());
+        response.setNormalizedTerm(entry.getNormalizedTerm());
+        response.setPhonetic(entry.getPhonetic());
+        response.setMeaning(entry.getMeaningText());
+        response.setContextMeaning(entry.getContextMeaning());
+        response.setAcceptedSpellings(StringUtils.hasText(entry.getAcceptedSpellingsJson()) ? entry.getAcceptedSpellingsJson() : "[]");
+        response.setAssessment(StringUtils.hasText(entry.getAssessmentJson()) ? entry.getAssessmentJson() : null);
+        response.setPassedAssessments(entry.getWordbookEntryId() == null
+                ? List.of()
+                : passedByEntry.getOrDefault(entry.getWordbookEntryId(), List.of()));
+        response.setFirstLearning(entry.getFirstLearning());
+        if (entry.getWordProgressId() != null) {
+            response.setLearningState(entry.getProgressLearningState());
+            response.setRecognitionScore(entry.getProgressRecognitionScore());
+            response.setSpellingScore(entry.getProgressSpellingScore());
+            response.setCardStatus(entry.getProgressCardStatus());
+        }
+        return response;
+    }
+
     private LearningPlanUnitEntryResponse toEntryResponse(LearningPlanUnitEntry entry,
                                                           LearningWordProgress progress,
                                                           Map<Long, List<String>> passedByEntry) {
@@ -237,8 +257,8 @@ public class LearningPlanResponseAssembler {
         response.setContextMeaning(entry.getContextMeaning());
         response.setTier(entry.getTier());
         response.setMasteryRequirement(entry.getMasteryRequirement());
-        response.setAcceptedSpellings(readStringList(entry.getAcceptedSpellingsJson()));
-        response.setAssessment(readJson(entry.getAssessmentJson()));
+        response.setAcceptedSpellings(StringUtils.hasText(entry.getAcceptedSpellingsJson()) ? entry.getAcceptedSpellingsJson() : "[]");
+        response.setAssessment(StringUtils.hasText(entry.getAssessmentJson()) ? entry.getAssessmentJson() : null);
         response.setPassedAssessments(entry.getWordbookEntryId() == null
                 ? List.of()
                 : passedByEntry.getOrDefault(entry.getWordbookEntryId(), List.of()));
@@ -250,30 +270,5 @@ public class LearningPlanResponseAssembler {
             response.setCardStatus(progress.getCardStatus());
         }
         return response;
-    }
-
-    private Object readJson(String json) {
-        if (!StringUtils.hasText(json)) {
-            return null;
-        }
-        try {
-            return objectMapper.readValue(json, Object.class);
-        } catch (Exception ex) {
-            log.debug("学习计划响应 JSON 读取失败 error={}", ex.getMessage());
-            return null;
-        }
-    }
-
-    private List<String> readStringList(String json) {
-        if (!StringUtils.hasText(json)) {
-            return List.of();
-        }
-        try {
-            return objectMapper.readValue(json, new TypeReference<>() {
-            });
-        } catch (Exception ex) {
-            log.debug("学习计划可接受拼写 JSON 读取失败 error={}", ex.getMessage());
-            return List.of();
-        }
     }
 }

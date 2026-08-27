@@ -46,12 +46,29 @@ public class LearningWordProgressService {
     }
 
     /**
+     * 场景曝光命令参数。
+     */
+    public record SceneExposureCommand(String term, String masteryRequirement, String tier, Long planId, Long unitId) {}
+
+    /**
      * 批量导入时一次预加载已有进度，只为真正缺失的归一化词插入新行。
      */
     public Map<String, LearningWordProgress> getOrCreateAll(Long userId, List<String> terms) {
+        if (terms == null || terms.isEmpty()) {
+            return new LinkedHashMap<>();
+        }
+        List<String> normalizedTerms = terms.stream()
+                .filter(StringUtils::hasText)
+                .map(this::normalize)
+                .distinct()
+                .toList();
+        if (normalizedTerms.isEmpty()) {
+            return new LinkedHashMap<>();
+        }
         Map<String, LearningWordProgress> result = progressMapper.selectList(
                         new LambdaQueryWrapper<LearningWordProgress>()
                                 .eq(LearningWordProgress::getUserId, userId)
+                                .in(LearningWordProgress::getNormalizedTerm, normalizedTerms)
                                 .eq(LearningWordProgress::getDeleted, false))
                 .stream()
                 .collect(Collectors.toMap(
@@ -61,7 +78,7 @@ public class LearningWordProgressService {
                         LinkedHashMap::new));
         for (String term : terms) {
             String normalizedTerm = normalize(term);
-            if (!result.containsKey(normalizedTerm)) {
+            if (StringUtils.hasText(normalizedTerm) && !result.containsKey(normalizedTerm)) {
                 result.put(normalizedTerm, createNew(
                         userId, term, LearningConstants.ScenePlan.MASTERY_RECOGNITION));
             }
@@ -97,6 +114,53 @@ public class LearningWordProgressService {
             return progress;
         } catch (DuplicateKeyException ex) {
             return find(userId, normalizedTerm);
+        }
+    }
+
+    /**
+     * 批量记录词汇被一个新场景展示；核心词进入正式学习并按需等待词卡。
+     */
+    public void recordSceneExposures(Long userId, List<SceneExposureCommand> commands) {
+        if (commands == null || commands.isEmpty()) {
+            return;
+        }
+        List<String> terms = commands.stream()
+                .map(SceneExposureCommand::term)
+                .filter(StringUtils::hasText)
+                .distinct()
+                .toList();
+        Map<String, LearningWordProgress> progressMap = getOrCreateAll(userId, terms);
+        LocalDateTime now = LocalDateTime.now();
+        for (SceneExposureCommand cmd : commands) {
+            String norm = normalize(cmd.term());
+            LearningWordProgress progress = progressMap.get(norm);
+            if (progress != null) {
+                boolean core = LearningConstants.ScenePlan.TIER_CORE.equals(cmd.tier());
+                progress.setTerm(cmd.term().trim());
+                progress.setExposureCount(value(progress.getExposureCount()) + LearningConstants.SEQUENCE_STEP);
+                progress.setSceneCount(value(progress.getSceneCount()) + LearningConstants.SEQUENCE_STEP);
+                progress.setLatestPlanId(cmd.planId());
+                progress.setLatestUnitId(cmd.unitId());
+                progress.setLastLearnedTime(now);
+                if (core) {
+                    if (!LearningConstants.ScenePlan.PROGRESS_MASTERED.equals(progress.getLearningState())) {
+                        progress.setLearningState(LearningConstants.ScenePlan.PROGRESS_LEARNING);
+                    }
+                    if (LearningConstants.VocabularyCard.STATUS_NOT_REQUIRED.equals(progress.getCardStatus())) {
+                        progress.setCardStatus(LearningConstants.VocabularyCard.STATUS_MISSING);
+                    }
+                } else if (LearningConstants.ScenePlan.PROGRESS_UNSEEN.equals(progress.getLearningState())) {
+                    progress.setLearningState(LearningConstants.ScenePlan.PROGRESS_EXPOSED);
+                }
+                if (LearningConstants.ScenePlan.MASTERY_SPELLING.equals(cmd.masteryRequirement())) {
+                    progress.setMasteryRequirement(LearningConstants.ScenePlan.MASTERY_SPELLING);
+                }
+                progress.setUpdateTime(now);
+            }
+        }
+        List<LearningWordProgress> toUpdate = progressMap.values().stream().filter(p -> p.getId() != null).toList();
+        if (!toUpdate.isEmpty()) {
+            progressMapper.updateBatch(toUpdate);
         }
     }
 

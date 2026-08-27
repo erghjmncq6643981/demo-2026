@@ -637,6 +637,13 @@ export function createScenePlanFeature(ctx) {
     showModal(elements.sceneVocabularyPreviewModal)
   }
 
+  function isDayGenerating(key, plan) {
+    if (!key) return false
+    const dayData = asArray(state.sceneCalendarData)
+      .find((item) => String(item?.date || '').slice(0, 10) === key)
+    return Boolean(dayData?.generating)
+  }
+
   function renderCalendar(plan) {
     if (!elements.sceneCalendar) return
     const range = state.sceneCalendarRange || 'week'
@@ -651,73 +658,35 @@ export function createScenePlanFeature(ctx) {
       renderOverviewUnits(null)
       return
     }
-    const today = dateFromKey(localDateKey())
     const dates = calendarDates()
+    if (elements.sceneCalendarTitle) {
+      elements.sceneCalendarTitle.textContent = calendarTitle(dates)
+    }
+
+    const today = dateFromKey(localDateKey())
+    const todayKey = dateKey(today)
     const planStartKey = plan.startTime ? plan.startTime.split('T')[0] : null
     const planEndKey = plan.endTime ? plan.endTime.split('T')[0] : null
-    const todayKey = dateKey(today)
 
-    if (elements.sceneCalendarTitle) elements.sceneCalendarTitle.textContent = calendarTitle(dates)
-    if (elements.sceneCalendarPreviousBtn) {
-      const label = range === 'month' ? '上个月' : '上一周'
-      elements.sceneCalendarPreviousBtn.title = label
-      elements.sceneCalendarPreviousBtn.setAttribute('aria-label', label)
-    }
-    if (elements.sceneCalendarNextBtn) {
-      const label = range === 'month' ? '下个月' : '下一周'
-      elements.sceneCalendarNextBtn.title = label
-      elements.sceneCalendarNextBtn.setAttribute('aria-label', label)
-    }
-
-    // Calculate suggestedDailyCount based on remaining unassigned words & days
-    const generatedCoreCount = asArray(plan.units).reduce((sum, u) => sum + number(u.coreWordCount), 0)
-    const remainingToGenerate = Math.max(0, number(plan.totalCatalogWords) - generatedCoreCount)
+    const remainingWords = Math.max(0, number(plan.totalCatalogWords) - number(plan.learnedCoreWords))
     let suggestedDailyCount = 8
     if (plan.endTime) {
-      const planStart = plan.startTime ? new Date(plan.startTime) : today
-      const planEnd = new Date(plan.endTime)
-      const startForRemaining = today > planStart ? today : planStart
+      const planEnd = dateFromKey(plan.endTime.split('T')[0])
+      const startForRemaining = planStartKey && todayKey < planStartKey ? dateFromKey(planStartKey) : new Date(today.getTime())
       startForRemaining.setHours(12, 0, 0, 0)
       planEnd.setHours(12, 0, 0, 0)
       const diffTime = planEnd.getTime() - startForRemaining.getTime()
       const remainingDays = diffTime <= 0 ? 1 : Math.ceil(diffTime / (1000 * 3600 * 24)) + 1
       if (remainingDays > 0) {
-        suggestedDailyCount = Math.ceil(remainingToGenerate / remainingDays)
+        suggestedDailyCount = Math.max(8, Math.ceil(remainingWords / remainingDays))
       }
-    } else {
-      const currentUnit = activeUnit(plan)
-      suggestedDailyCount = number(currentUnit?.coreWordCount) || 8
     }
-    suggestedDailyCount = Math.max(8, suggestedDailyCount)
 
     const dayDataFor = (key) => asArray(state.sceneCalendarData)
       .find((item) => String(item?.date || '').slice(0, 10) === key)
 
-    let totalScheduled = 0
-    dates.forEach((date) => {
-      const key = dateKey(date)
-      const withinPlan = (!planStartKey || key >= planStartKey) && (!planEndKey || key <= planEndKey)
-      const units = unitsForDate(plan, key)
-      const dayData = dayDataFor(key)
-      const generated = number(dayData?.generatedUnitCount) > 0 || units.length > 0
-      if (generated) {
-        const pendingCount = dayData
-          ? number(dayData.pendingChallengeCount)
-          : units.reduce((sum, unit) => sum + pendingChallengeWords(unit).length, 0)
-        totalScheduled += pendingCount
-      } else if (withinPlan && key >= todayKey) {
-        totalScheduled += suggestedDailyCount
-      }
-    })
-
-    const remainingWords = Math.max(0, number(plan.totalCatalogWords) - number(plan.learnedCoreWords))
-    const rangeLabel = range === 'month' ? '本月预计' : '本周预计'
-
     elements.sceneCalendar.className = `scene-calendar ${range}`
     elements.sceneCalendar.innerHTML = `
-      <div class="scene-calendar-summary">
-        <span><strong>${rangeLabel} ${Math.min(remainingWords, totalScheduled)}</strong> 个待挑战词汇（每日目标约 ${suggestedDailyCount} 词）</span>
-      </div>
       <div class="scene-calendar-grid">
         ${dates.map((date) => {
           const key = dateKey(date)
@@ -726,6 +695,7 @@ export function createScenePlanFeature(ctx) {
           const withinPlan = (!planStartKey || key >= planStartKey) && (!planEndKey || key <= planEndKey)
           const units = unitsForDate(plan, key)
           const dayData = dayDataFor(key)
+          const isGenerating = isDayGenerating(key, plan)
           const generated = number(dayData?.generatedUnitCount) > 0 || units.length > 0
           const pendingCount = dayData
             ? number(dayData.pendingChallengeCount)
@@ -735,7 +705,9 @@ export function createScenePlanFeature(ctx) {
 
           let count = pendingCount
           let label = '待挑战词汇'
-          if (generated) {
+          if (isGenerating) {
+            label = '生成中'
+          } else if (generated) {
             if (isCompleted) {
               label = '已完成'
               count = units.reduce((sum, unit) => sum + number(unit.completedCoreCount || unit.coreWordCount), 0)
@@ -756,7 +728,7 @@ export function createScenePlanFeature(ctx) {
           }
 
           return `
-            <button class="scene-calendar-day ${isToday ? 'today' : ''} ${isPast ? 'past' : ''} ${!withinPlan ? 'outside-plan' : ''} ${overdue ? 'overdue' : ''} ${isCompleted ? 'completed-day' : ''}" type="button" data-calendar-preview="${key}" aria-label="预览 ${formatCalendarDate(date, true)} 的词汇">
+            <button class="scene-calendar-day ${isToday ? 'today' : ''} ${isPast ? 'past' : ''} ${!withinPlan ? 'outside-plan' : ''} ${overdue ? 'overdue' : ''} ${isCompleted ? 'completed-day' : ''} ${isGenerating ? 'generating-day' : ''}" type="button" data-calendar-preview="${key}" aria-label="预览 ${formatCalendarDate(date, true)} 的词汇">
               <span>${range === 'month' ? `${date.getDate()}日` : formatCalendarDate(date, true)}</span>
               <strong>${count}</strong>
               <small>${label}</small>
@@ -765,9 +737,6 @@ export function createScenePlanFeature(ctx) {
         }).join('')}
       </div>
     `
-    document.querySelectorAll('[data-calendar-range]').forEach((button) => {
-      button.classList.toggle('active', button.dataset.calendarRange === range)
-    })
     elements.sceneCalendar.querySelectorAll('[data-calendar-preview]').forEach((button) => {
       button.addEventListener('click', () => openSceneVocabularyPreview({ date: button.dataset.calendarPreview }))
     })
@@ -785,15 +754,12 @@ export function createScenePlanFeature(ctx) {
     elements.sceneOverviewUnitsContainer.classList.remove('hidden')
     const today = dateFromKey(localDateKey())
     let dates = calendarDates()
-
     const todayKey = dateKey(today)
 
-    // Only use explicitly-set plan dates for filtering — do NOT fall back to createTime
     const planStartKey = plan.startTime ? plan.startTime.split('T')[0] : null
     const planEndKey = plan.endTime ? plan.endTime.split('T')[0] : null
     const hasPlanDateRange = !!(planStartKey || planEndKey)
 
-    // Filter dates to plan range when a range is defined
     if (hasPlanDateRange) {
       dates = dates.filter((date) => {
         const key = dateKey(date)
@@ -802,7 +768,6 @@ export function createScenePlanFeature(ctx) {
         return true
       })
     } else {
-      // No date range: only keep dates that have a generated unit
       dates = dates.filter((date) => {
         const key = dateKey(date)
         return asArray(plan.units).some((u) => {
@@ -814,7 +779,6 @@ export function createScenePlanFeature(ctx) {
     }
 
     if (!dates.length) {
-      // Hide the container entirely when there's nothing to show
       elements.sceneOverviewUnitsContainer.classList.add('hidden')
       return
     }
@@ -823,16 +787,19 @@ export function createScenePlanFeature(ctx) {
       const isPast = key < todayKey
       const isToday = key === todayKey
       const units = unitsForDate(plan, key)
+      const isGenerating = isDayGenerating(key, plan)
 
       if (units.length > 1) {
         const totalPending = units.reduce((sum, u) => sum + pendingChallengeWords(u).length, 0)
         const totalCompleted = units.reduce((sum, u) => sum + number(u.completedCoreCount || u.coreWordCount), 0)
         const allCompleted = units.every((u) => u.status === 'completed')
-        const statusLabel = allCompleted ? '已完成' : (isToday ? '今日任务' : '待学习')
-        const statusClass = allCompleted ? 'generated' : (isToday ? 'today' : 'generated')
-        const dayMeta = allCompleted
-          ? `共 ${units.length} 篇场景材料 · ${totalCompleted} 个已完成词汇`
-          : `共 ${units.length} 篇场景材料 · ${totalPending} 个待挑战词汇`
+        const statusLabel = isGenerating ? '生成中...' : (allCompleted ? '已完成' : (isToday ? '今日任务' : '待学习'))
+        const statusClass = isGenerating ? 'running' : (allCompleted ? 'generated' : (isToday ? 'today' : 'generated'))
+        const dayMeta = isGenerating
+          ? 'AI 正在后台生成场景材料与练习题...'
+          : (allCompleted
+            ? `共 ${units.length} 篇场景材料 · ${totalCompleted} 个已完成词汇`
+            : `共 ${units.length} 篇场景材料 · ${totalPending} 个待挑战词汇`)
 
         return `
           <div class="scene-overview-day-group ${isToday ? 'today' : ''} ${isPast ? 'past' : ''}">
@@ -843,9 +810,15 @@ export function createScenePlanFeature(ctx) {
                 <span class="day-group-meta">${dayMeta}</span>
               </div>
               <div class="day-group-actions">
-                <button class="secondary-button compact" type="button" data-action-regenerate-date="${key}" ${plan.status !== 'active' ? 'disabled' : ''} title="重新生成当天场景材料与题目">
-                  重新生成
-                </button>
+                ${isGenerating ? `
+                  <button class="secondary-button compact" type="button" disabled title="正在后台生成场景材料，可在任务中心查看进度">
+                    生成中...
+                  </button>
+                ` : `
+                  <button class="secondary-button compact" type="button" data-action-regenerate-date="${key}" ${plan.status !== 'active' ? 'disabled' : ''} title="重新生成当天场景材料与题目">
+                    重新生成
+                  </button>
+                `}
               </div>
             </div>
             <div class="day-group-units">
@@ -882,15 +855,20 @@ export function createScenePlanFeature(ctx) {
       const isComplete = unit?.status === 'completed'
       const pendingCount = unit ? pendingChallengeWords(unit).length : 0
       const completedCount = unit ? number(unit.completedCoreCount || unit.coreWordCount) : 0
-      const wordInfo = unit
-        ? (isComplete ? `${completedCount} 个已完成词汇 · 已完成` : `${pendingCount} 个待挑战词汇 · ${unitStatusLabel(unit)}`)
-        : '场景生成后可预览待挑战与已完成词汇'
+      const wordInfo = isGenerating
+        ? 'AI 正在后台异步生成场景短文与练习题，请稍候...'
+        : (unit
+          ? (isComplete ? `${completedCount} 个已完成词汇 · 已完成` : `${pendingCount} 个待挑战词汇 · ${unitStatusLabel(unit)}`)
+          : '场景生成后可预览待挑战与已完成词汇')
+      const tagLabel = isGenerating ? '生成中...' : (unit ? unitStatusLabel(unit) : '待生成')
+      const tagClass = isGenerating ? 'running' : (unit ? (isComplete ? 'generated' : 'today') : 'pending')
+
       return `
         <div class="scene-overview-unit-row ${isToday ? 'today' : ''} ${isPast ? 'past' : ''}">
           <button class="unit-preview-button" type="button" data-preview-date="${key}" ${unit ? `data-preview-unit="${escapeHtml(unit.id)}"` : ''} aria-label="预览 ${unit ? escapeHtml(unit.title || '场景单元') : formatCalendarDate(date, true)} 的词汇">
             <span class="unit-date-info">
               <span class="unit-date">${formatCalendarDate(date, true)}</span>
-              <span class="unit-status-tag ${unit ? (isComplete ? 'generated' : 'today') : 'pending'}">${unit ? unitStatusLabel(unit) : '待生成'}</span>
+              <span class="unit-status-tag ${tagClass}">${tagLabel}</span>
             </span>
             <span class="unit-detail-info">
               ${unit ? `
@@ -902,7 +880,16 @@ export function createScenePlanFeature(ctx) {
             </span>
           </button>
           <div class="unit-action-button">
-            ${unit ? `
+            ${isGenerating ? `
+              <button class="secondary-button compact" type="button" disabled title="该日期场景材料正在后台生成中，可在任务中心查看进度">
+                生成中...
+              </button>
+              ${unit ? `
+                <button class="primary-button compact-primary" type="button" data-action-learn="${escapeHtml(unit.id)}">
+                  ${unit.status === 'completed' ? '回顾场景' : '开始学习'}
+                </button>
+              ` : ''}
+            ` : unit ? `
               <button class="secondary-button compact" type="button" data-action-regenerate-date="${key}" ${plan.status !== 'active' ? 'disabled' : ''} title="重新生成当天场景材料">
                 重新生成
               </button>
@@ -1002,10 +989,16 @@ export function createScenePlanFeature(ctx) {
     elements.sceneOverviewUnitsList.querySelectorAll('[data-action-generate]').forEach((button) => {
       button.addEventListener('click', async (event) => {
         event.stopPropagation()
-        setButtonLoading(button, true, '生成中...')
+        const recommendedDate = button.dataset.recommendedDate || null
+        if (!plan) return
+        const confirmed = await confirmAction({
+          title: '生成场景材料',
+          message: `将为【${formatCalendarDate(recommendedDate, true)}】提交后台异步生成场景材料。任务在后台执行，不会中断当前学习，生成进度可在任务中心实时查看。是否确认生成？`,
+          acceptText: '开始生成',
+        })
+        if (!confirmed) return
+        setButtonLoading(button, true, '提交中...')
         try {
-          const recommendedDate = button.dataset.recommendedDate || null
-          let generatedCount = 1
           if (state.preview) {
             const generated = createPreviewCookingUnit(plan.id, asArray(plan.units).length + 1, recommendedDate)
             plan.units.push(generated)
@@ -1019,9 +1012,7 @@ export function createScenePlanFeature(ctx) {
             state.sceneScheduledTask = task
           }
           await loadSceneData({ planId: plan.id })
-          toast(generatedCount > 1
-            ? `当日词汇已均分生成 ${generatedCount} 篇场景材料`
-            : '场景材料已生成，可点击场景学习计划预览词汇')
+          toast('场景材料生成任务已提交，可在任务中心查看进度')
         } catch (error) {
           toast(`生成场景失败：${error.message}`)
         } finally {
@@ -1727,14 +1718,13 @@ export function createScenePlanFeature(ctx) {
     const plan = state.currentLearningPlan
     if (!plan?.canGenerateNext) return
     const confirmed = await confirmAction({
-      title: '提前生成场景',
-      message: 'AI 会按学习计划生成待学习场景材料；超过 50 个待挑战词会自动均分为多篇，不会中断当前场景。',
+      title: '生成下一场景材料',
+      message: '任务将提交至后台异步生成下一批场景材料（若待挑战词超过 50 个将自动均分为多篇）。任务在后台执行，不会中断当前学习，可在任务中心实时查看进度。是否确认生成？',
       acceptText: '开始生成',
     })
     if (!confirmed) return
-    setButtonLoading(elements.sceneNextUnitBtn, true, '生成中...')
+    setButtonLoading(elements.sceneNextUnitBtn, true, '提交中...')
     try {
-      let generatedCount = 1
       if (state.preview) {
         const generated = createPreviewCookingUnit(plan.id, asArray(plan.units).length + 1)
         plan.units.push(generated)
@@ -1748,9 +1738,7 @@ export function createScenePlanFeature(ctx) {
         state.sceneScheduledTask = task
         await loadSceneData({ planId: plan.id })
       }
-      toast(generatedCount > 1
-        ? `当日词汇已均分生成 ${generatedCount} 篇场景材料`
-        : '场景材料已生成，可在场景学习计划中预览')
+      toast('场景材料生成任务已提交，可在任务中心查看进度')
     } catch (error) {
       logEvent('error', '生成下一场景失败', error.message)
       toast(`场景生成失败：${error.message}`)

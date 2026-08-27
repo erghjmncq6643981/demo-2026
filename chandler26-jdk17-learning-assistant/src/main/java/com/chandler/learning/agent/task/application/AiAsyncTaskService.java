@@ -15,6 +15,7 @@ import com.chandler.learning.agent.system.application.SystemLogService;
 import com.chandler.learning.agent.task.infrastructure.AiAsyncTaskMapper;
 import com.chandler.learning.agent.support.LearningConstants;
 import com.fasterxml.jackson.core.JsonProcessingException;
+import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -22,7 +23,9 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.util.StringUtils;
 
+import java.time.LocalDate;
 import java.time.LocalDateTime;
+import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
@@ -50,12 +53,19 @@ public class AiAsyncTaskService {
                 priority, totalCount, null, payload);
     }
 
-    /** 创建带业务幂等键的任务；幂等键只约束同一业务资源的活动任务。 */
     @Transactional(rollbackFor = Exception.class)
     public AiAsyncTask create(Long userId, String taskType, String taskName, Long planId, Long unitId,
                               Long relatedJobId, String executionMode, LocalDateTime scheduledTime,
                               Integer priority, Integer totalCount, String idempotencyKey,
                               Map<String, Object> payload) {
+        if (StringUtils.hasText(idempotencyKey)) {
+            AiAsyncTask existing = findActiveByKey(userId, taskType, planId, idempotencyKey);
+            if (existing != null) {
+                log.info("event=ai_async_task_idempotent_hit taskId={} type={} idempotencyKey={}",
+                        existing.getId(), taskType, idempotencyKey);
+                return existing;
+            }
+        }
         LocalDateTime now = LocalDateTime.now();
         String mode = resolveExecutionMode(executionMode);
         AiTaskType.of(taskType);
@@ -231,6 +241,51 @@ public class AiAsyncTaskService {
         if (planId == null) wrapper.isNull(AiAsyncTask::getPlanId);
         else wrapper.eq(AiAsyncTask::getPlanId, planId);
         return taskMapper.selectOne(wrapper);
+    }
+
+    /** 查询指定计划下所有处于活动状态的场景生成或重构任务对应的推荐日期。 */
+    public Set<LocalDate> findActiveGeneratingDatesForPlan(Long ownerUserId, Long planId) {
+        List<AiAsyncTask> tasks = taskMapper.selectList(new LambdaQueryWrapper<AiAsyncTask>()
+                .eq(AiAsyncTask::getOwnerUserId, ownerUserId)
+                .eq(AiAsyncTask::getPlanId, planId)
+                .in(AiAsyncTask::getTaskType, List.of(
+                        LearningConstants.AiTask.TYPE_SCENE_MATERIAL,
+                        LearningConstants.AiTask.TYPE_SCENE_MATERIAL_REGENERATION))
+                .in(AiAsyncTask::getStatus, List.of(
+                        LearningConstants.AiTask.STATUS_PENDING,
+                        LearningConstants.AiTask.STATUS_RUNNING,
+                        LearningConstants.AiTask.STATUS_RETRY_WAIT))
+                .eq(AiAsyncTask::getDeleted, false));
+        Set<LocalDate> dates = new HashSet<>();
+        for (AiAsyncTask task : tasks) {
+            LocalDate d = extractTaskDate(task);
+            if (d != null) dates.add(d);
+        }
+        return dates;
+    }
+
+    private LocalDate extractTaskDate(AiAsyncTask task) {
+        if (task == null) return null;
+        if (StringUtils.hasText(task.getPayloadJson())) {
+            try {
+                JsonNode node = objectMapper.readTree(task.getPayloadJson());
+                String dateStr = node.path("recommendedDate").asText(null);
+                if (StringUtils.hasText(dateStr)) {
+                    return LocalDate.parse(dateStr.trim());
+                }
+            } catch (Exception ignored) {
+            }
+        }
+        if (StringUtils.hasText(task.getIdempotencyKey())) {
+            String[] parts = task.getIdempotencyKey().split(":");
+            if (parts.length >= 3) {
+                try {
+                    return LocalDate.parse(parts[parts.length - 1].trim());
+                } catch (Exception ignored) {
+                }
+            }
+        }
+        return null;
     }
 
     /** 原子领取任务，防止多实例或事件与调度器重复执行。 */

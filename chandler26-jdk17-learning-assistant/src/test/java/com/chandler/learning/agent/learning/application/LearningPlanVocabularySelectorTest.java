@@ -50,9 +50,9 @@ class LearningPlanVocabularySelectorTest {
         when(catalogAnalysisService.readyEntries(30L)).thenReturn(List.of());
 
         LearningWordProgress masteredProgress = new LearningWordProgress();
+        masteredProgress.setNormalizedTerm("mastered");
         masteredProgress.setLearningState("mastered");
-        when(progressService.find(20L, "mastered")).thenReturn(masteredProgress);
-        when(progressService.find(20L, "eligible")).thenReturn(null);
+        when(progressService.findByTerms(any(), any())).thenReturn(List.of(masteredProgress));
 
         LearningPlanVocabularySelector selector = new LearningPlanVocabularySelector(
                 unitEntryMapper, catalogQueryService, progressService, catalogAnalysisService);

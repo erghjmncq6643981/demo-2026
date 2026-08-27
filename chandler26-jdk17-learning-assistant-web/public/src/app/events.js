@@ -11,7 +11,9 @@ export function bindAppEvents(ctx) {
     toggleSidebar,
     setSidebarCollapsed,
     handleViewportChange,
+    reloadCurrentView,
     loadAgents,
+    loadWordbooks,
     loadModelConfigs,
     loadPromptTemplates,
     openModelModal,
@@ -154,7 +156,8 @@ if (elements.apiBaseInput) {
 elements.toggleSidebarBtn.addEventListener('click', toggleSidebar)
 elements.sidebarBackdrop.addEventListener('click', () => setSidebarCollapsed(true))
 window.matchMedia('(max-width: 1100px)').addEventListener('change', handleViewportChange)
-elements.reloadAgentsBtn?.addEventListener('click', loadAgents)
+elements.reloadAgentsBtn?.addEventListener('click', reloadCurrentView)
+elements.reloadAppBtn?.addEventListener('click', reloadCurrentView)
 elements.reloadAgentConfigsBtn?.addEventListener('click', loadAgents)
 elements.reloadModelsBtn.addEventListener('click', loadModelConfigs)
 elements.openModelModalBtn.addEventListener('click', () => openModelModal())
@@ -199,7 +202,7 @@ elements.cancelAccountSecurityBtn?.addEventListener('click', cancelAccountSecuri
 elements.accountNewPasswordInput?.addEventListener('input', updateAccountPasswordStrength)
 elements.saveAccountProfileBtn.addEventListener('click', saveAccountProfile)
 elements.saveAccountSecurityBtn.addEventListener('click', saveAccountSecurity)
-elements.reloadWordbookEntriesBtn.addEventListener('click', loadWordbookEntries)
+elements.reloadWordbookEntriesBtn.addEventListener('click', () => Promise.allSettled([loadWordbooks?.(), loadWordbookEntries?.()]))
 elements.openVocabularyImportBtn?.addEventListener('click', openVocabularyImport)
 elements.openProfileScenePlanModalBtn?.addEventListener('click', openScenePlanModal)
 elements.reloadWordbookViewBtn.addEventListener('click', loadWordbookEntries)

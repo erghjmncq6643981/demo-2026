@@ -745,14 +745,15 @@ public class WordbookService {
     /**
      * 查询 {@code readEntryParsed} 相关业务。
      */
-    private Object readEntryParsed(LearningWordbookEntry entry) {
+    private String readEntryParsed(LearningWordbookEntry entry) {
         if (StringUtils.hasText(entry.getSnapshotParsedJson())) {
-            Object parsed = readJson(entry.getSnapshotParsedJson(), Object.class, "单词本词条个人结构化 JSON 快照读取失败", entry);
-            if (parsed != null) {
-                return parsed;
-            }
+            return entry.getSnapshotParsedJson();
         }
-        return readParsed(entry.getVocabularyId());
+        if (entry.getVocabularyId() == null) {
+            return null;
+        }
+        EnglishVocabularyStudyRecord record = vocabularyMapper.selectById(entry.getVocabularyId());
+        return record == null ? null : record.getParsedJson();
     }
 
     /**
@@ -765,6 +766,9 @@ public class WordbookService {
             if (tags != null) {
                 return tags;
             }
+        }
+        if (entry.getVocabularyId() == null) {
+            return List.of();
         }
         return vocabularyInsightService.listTags(entry.getVocabularyId());
     }
@@ -779,6 +783,9 @@ public class WordbookService {
             if (relations != null) {
                 return vocabularyInsightService.enrichRelationPhonetics(entry.getVocabularyId(), relations);
             }
+        }
+        if (entry.getVocabularyId() == null) {
+            return List.of();
         }
         return vocabularyInsightService.listRelations(entry.getNormalizedTerm());
     }
@@ -822,25 +829,6 @@ public class WordbookService {
                     errorMessage,
                     entry.getId(),
                     entry.getNormalizedTerm(),
-                    ex.getMessage());
-            return null;
-        }
-    }
-
-    /**
-     * 查询 {@code readParsed} 相关业务。
-     */
-    private Object readParsed(Long vocabularyId) {
-        EnglishVocabularyStudyRecord record = vocabularyMapper.selectById(vocabularyId);
-        if (record == null || !StringUtils.hasText(record.getParsedJson())) {
-            return null;
-        }
-        try {
-            return objectMapper.readValue(record.getParsedJson(), Object.class);
-        } catch (Exception ex) {
-            log.warn("单词本词条结构化 JSON 读取失败 vocabularyId={} term={} error={}",
-                    vocabularyId,
-                    record.getNormalizedTerm(),
                     ex.getMessage());
             return null;
         }

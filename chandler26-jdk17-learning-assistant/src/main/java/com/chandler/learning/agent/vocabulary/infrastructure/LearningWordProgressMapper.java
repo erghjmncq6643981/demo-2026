@@ -15,4 +15,7 @@ public interface LearningWordProgressMapper extends BaseMapper<LearningWordProgr
     int updateCardStatusBatch(@Param("ids") List<Long> ids,
                               @Param("cardStatus") String cardStatus,
                               @Param("updateTime") LocalDateTime updateTime);
+
+    /** 批量更新词汇进度。 */
+    int updateBatch(@Param("items") List<LearningWordProgress> items);
 }

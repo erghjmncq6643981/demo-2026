@@ -17,4 +17,69 @@
              #{item.updateBy}, #{item.updateTime}, #{item.deleted}, #{item.version})
         </foreach>
     </insert>
+
+    <update id="updateBatch">
+        UPDATE learning_plan_unit_entry
+        SET phonetic = CASE id
+            <foreach collection="list" item="item">WHEN #{item.id} THEN #{item.phonetic}</foreach>
+            END,
+            meaning_text = CASE id
+            <foreach collection="list" item="item">WHEN #{item.id} THEN #{item.meaningText}</foreach>
+            END,
+            context_meaning = CASE id
+            <foreach collection="list" item="item">WHEN #{item.id} THEN #{item.contextMeaning}</foreach>
+            END,
+            assessment_json = CASE id
+            <foreach collection="list" item="item">WHEN #{item.id} THEN #{item.assessmentJson}</foreach>
+            END,
+            accepted_spellings_json = CASE id
+            <foreach collection="list" item="item">WHEN #{item.id} THEN #{item.acceptedSpellingsJson}</foreach>
+            END,
+            update_time = #{list[0].updateTime},
+            update_by = #{list[0].updateBy}
+        WHERE id IN
+        <foreach collection="list" item="item" open="(" separator="," close=")">#{item.id}</foreach>
+    </update>
+
+    <select id="selectEntriesWithProgress" resultType="com.chandler.learning.agent.learning.domain.LearningPlanUnitEntryItem">
+        SELECT
+            e.id,
+            e.plan_id AS planId,
+            e.unit_id AS unitId,
+            e.catalog_entry_id AS catalogEntryId,
+            e.wordbook_entry_id AS wordbookEntryId,
+            e.word_progress_id AS wordProgressId,
+            e.source_order AS sourceOrder,
+            e.term,
+            e.normalized_term AS normalizedTerm,
+            e.phonetic,
+            e.meaning_text AS meaningText,
+            e.context_meaning AS contextMeaning,
+            e.tier,
+            e.mastery_requirement AS masteryRequirement,
+            e.accepted_spellings_json AS acceptedSpellingsJson,
+            e.assessment_json AS assessmentJson,
+            e.first_learning AS firstLearning,
+            e.sort_order AS sortOrder,
+            e.create_time AS createTime,
+            e.update_time AS updateTime,
+            e.deleted,
+            e.version,
+            p.learning_state AS progressLearningState,
+            p.recognition_score AS progressRecognitionScore,
+            p.spelling_score AS progressSpellingScore,
+            p.card_status AS progressCardStatus
+        FROM learning_plan_unit_entry e
+        LEFT JOIN learning_word_progress p
+            ON e.word_progress_id = p.id AND p.deleted = 0
+        WHERE e.plan_id = #{planId}
+          AND e.deleted = 0
+          <if test="unitIds != null and !unitIds.isEmpty()">
+              AND e.unit_id IN
+              <foreach collection="unitIds" item="uid" open="(" separator="," close=")">
+                  #{uid}
+              </foreach>
+          </if>
+        ORDER BY e.unit_id ASC, e.sort_order ASC
+    </select>
 </mapper>

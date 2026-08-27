@@ -7,4 +7,45 @@
         FROM learning_plan_unit
         WHERE plan_id = #{planId}
     </select>
+
+    <select id="selectUnitsWithMaterial" resultType="com.chandler.learning.agent.learning.domain.LearningPlanUnitItem">
+        SELECT
+            u.id,
+            u.plan_id AS planId,
+            u.unit_no AS unitNo,
+            u.title,
+            u.scenario_type AS scenarioType,
+            u.summary,
+            u.status,
+            u.core_word_count AS coreWordCount,
+            u.extended_word_count AS extendedWordCount,
+            u.supplementary_word_count AS supplementaryWordCount,
+            u.completed_core_count AS completedCoreCount,
+            u.recommended_date AS recommendedDate,
+            u.scene_material_id AS sceneMaterialId,
+            u.generated_time AS generatedTime,
+            u.started_time AS startedTime,
+            u.completed_time AS completedTime,
+            u.create_time AS createTime,
+            u.update_time AS updateTime,
+            u.deleted,
+            u.version,
+            m.id AS materialId,
+            m.learning_text AS materialLearningText,
+            m.translation AS materialTranslation,
+            m.parsed_json AS materialParsedJson,
+            m.revision_no AS materialRevisionNo
+        FROM learning_plan_unit u
+        LEFT JOIN learning_scene_material m
+            ON u.id = m.unit_id AND m.current_version = 1 AND m.deleted = 0
+        WHERE u.plan_id = #{planId}
+          AND u.deleted = 0
+          <if test="unitIds != null and !unitIds.isEmpty()">
+              AND u.id IN
+              <foreach collection="unitIds" item="uid" open="(" separator="," close=")">
+                  #{uid}
+              </foreach>
+          </if>
+        ORDER BY u.unit_no ASC
+    </select>
 </mapper>

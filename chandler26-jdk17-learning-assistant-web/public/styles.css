@@ -2835,7 +2835,7 @@ input[type="range"] {
   font-weight: 950;
 }
 
-#aiTaskPanel {
+#aiTaskPanel.active {
   display: flex;
   flex-direction: column;
   height: 100%;
@@ -6753,6 +6753,16 @@ input.sr-only:disabled + .file-upload-trigger {
 .unit-status-tag.pending {
   background: rgba(148, 163, 184, 0.12);
   color: var(--muted);
+}
+
+.unit-status-tag.running {
+  background: rgba(59, 130, 246, 0.15);
+  color: #3b82f6;
+  animation: pulse-glow 2s infinite ease-in-out;
+}
+
+.scene-calendar-day.generating-day {
+  border-color: rgba(59, 130, 246, 0.4);
 }
 
 .unit-detail-info {

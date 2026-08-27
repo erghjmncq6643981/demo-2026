@@ -34,9 +34,11 @@ public class LearningPlanUnitEntryResponse {
 
     private String masteryRequirement;
 
-    private List<String> acceptedSpellings;
+    @com.fasterxml.jackson.annotation.JsonRawValue
+    private String acceptedSpellings;
 
-    private Object assessment;
+    @com.fasterxml.jackson.annotation.JsonRawValue
+    private String assessment;
 
     private List<String> passedAssessments;
 

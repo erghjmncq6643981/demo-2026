@@ -23,5 +23,8 @@ public class LearningPlanCalendarDayResponse {
 
     private Integer overdueCount;
 
+    /** 是否正在后台生成场景材料。 */
+    private Boolean generating;
+
     private List<LearningPlanUnitResponse> units;
 }

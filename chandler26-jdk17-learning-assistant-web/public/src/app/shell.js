@@ -136,7 +136,16 @@ export function createAppShell(ctx) {
       loadArticleWords?.()
       loadArticleHistory?.()
     }
-    if (viewId === 'scenePlanView') loadSceneData?.()
+    if (viewId === 'scenePlanView') {
+      loadSceneData?.()
+    }
+    if (viewId === 'profileView') {
+      const activeTab = state.activeProfileTab || 'accountPanel'
+      if (activeTab === 'aiTaskPanel' && elements.aiTaskPanel && elements.profileSections && elements.aiTaskPanel.parentElement !== elements.profileSections) {
+        elements.profileSections.appendChild(elements.aiTaskPanel)
+      }
+      setProfileTab(activeTab)
+    }
     if (viewId === 'systemAdminView') {
       systemManagement?.mountPanels()
       systemManagement?.renderSystemTab(state.activeSystemTab || 'adminUserPanel')
@@ -150,13 +159,17 @@ export function createAppShell(ctx) {
     const fallback = document.querySelector(`[data-profile-tab="${tabId}"]`) ? tabId : 'accountPanel'
     state.activeProfileTab = fallback
     localStorage.setItem('learning.profileTab', fallback)
+    if (fallback === 'aiTaskPanel' && elements.aiTaskPanel && elements.profileSections && elements.aiTaskPanel.parentElement !== elements.profileSections) {
+      elements.aiTaskPanel.classList.add('profile-section')
+      elements.profileSections.appendChild(elements.aiTaskPanel)
+    }
     document.querySelectorAll('[data-profile-tab]').forEach((button) => {
       const active = button.dataset.profileTab === fallback
       button.classList.toggle('active', active)
       if (active) button.scrollIntoView({ behavior: 'smooth', block: 'nearest', inline: 'nearest' })
     })
     document.querySelectorAll('#profileView .profile-section').forEach((section) => section.classList.toggle('active', section.id === fallback))
-    if (fallback === 'aiTaskPanel') loadAiTasks?.()
+    if (fallback === 'aiTaskPanel') loadAiTasks?.({ all: false })
   }
 
   async function loginOrRegister(mode) {
@@ -292,6 +305,76 @@ export function createAppShell(ctx) {
     systemManagement?.renderSystemTab(tabId)
   }
 
+  async function reloadCurrentView() {
+    const viewId = state.activeView || 'profileView'
+    try {
+      switch (viewId) {
+        case 'profileView': {
+          const tab = state.activeProfileTab || 'accountPanel'
+          if (tab === 'aiTaskPanel') {
+            await loadAiTasks?.({ all: false })
+          } else if (tab === 'profileWordbookPanel') {
+            await Promise.allSettled([loadWordbooks?.(), loadWordbookEntries?.()])
+          } else if (tab === 'profileLearningPlanPanel') {
+            await Promise.allSettled([loadLearningSettings?.(), loadWordbooks?.()])
+          } else {
+            await Promise.allSettled([
+              loadActivity?.(),
+              loadWordbooks?.(),
+              loadLearningSettings?.(),
+              loadSpeechPreferences?.(),
+            ])
+            renderProfileMetrics?.()
+            renderActivityHeatmap?.()
+          }
+          toast('已刷新个人中心数据')
+          break
+        }
+        case 'wordbookView': {
+          await Promise.allSettled([loadWordbooks?.(), loadWordbookEntries?.()])
+          toast('已刷新单词本数据')
+          break
+        }
+        case 'scenePlanView': {
+          await loadSceneData?.()
+          toast('已刷新词汇大挑战数据')
+          break
+        }
+        case 'studyView': {
+          await Promise.allSettled([loadWordbooks?.(), loadWordbookEntries?.()])
+          toast('已刷新卡片学习数据')
+          break
+        }
+        case 'articleStudyView': {
+          await Promise.allSettled([loadArticleWords?.(), loadArticleHistory?.()])
+          toast('已刷新语境精读数据')
+          break
+        }
+        case 'reviewView': {
+          await Promise.allSettled([loadWordbooks?.(), loadDueReviews?.()])
+          toast('已刷新复习数据')
+          break
+        }
+        case 'systemAdminView': {
+          await Promise.allSettled([
+            loadAgents?.(),
+            loadModelConfigs?.(),
+            loadPromptTemplates?.(),
+            loadSystemLogs?.(),
+            loadAiTasks?.({ all: true }),
+          ])
+          toast('已刷新系统管理数据')
+          break
+        }
+        default:
+          await loadInitialData()
+          toast('已刷新数据')
+      }
+    } catch (error) {
+      toast(`刷新失败：${error.message}`)
+    }
+  }
+
   return {
     updateAuthView,
     syncSidebarState,
@@ -305,5 +388,6 @@ export function createAppShell(ctx) {
     logout,
     loadInitialData,
     loadPreviewData,
+    reloadCurrentView,
   }
 }

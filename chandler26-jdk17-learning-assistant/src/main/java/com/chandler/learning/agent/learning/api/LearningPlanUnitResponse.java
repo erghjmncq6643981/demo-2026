@@ -43,7 +43,8 @@ public class LearningPlanUnitResponse {
 
     private String translation;
 
-    private Object material;
+    @com.fasterxml.jackson.annotation.JsonRawValue
+    private String material;
 
     /** 当前材料版本号。 */
     private Integer materialRevision;

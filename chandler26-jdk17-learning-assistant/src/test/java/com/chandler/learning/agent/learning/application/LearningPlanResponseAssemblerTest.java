@@ -4,7 +4,9 @@ import com.baomidou.mybatisplus.core.conditions.Wrapper;
 import com.chandler.learning.agent.learning.api.LearningPlanResponse;
 import com.chandler.learning.agent.learning.domain.LearningPlan;
 import com.chandler.learning.agent.learning.domain.LearningPlanUnit;
+import com.chandler.learning.agent.learning.domain.LearningPlanUnitItem;
 import com.chandler.learning.agent.learning.domain.LearningPlanUnitEntry;
+import com.chandler.learning.agent.learning.domain.LearningPlanUnitEntryItem;
 import com.chandler.learning.agent.learning.domain.LearningReviewRecord;
 import com.chandler.learning.agent.learning.domain.LearningSceneMaterial;
 import com.chandler.learning.agent.vocabulary.domain.LearningWordProgress;
@@ -49,24 +51,14 @@ class LearningPlanResponseAssemblerTest {
         plan.setId(10L);
         plan.setStatus("active");
 
-        LearningPlanUnit firstUnit = unit(101L, 10L, 1);
-        LearningPlanUnit secondUnit = unit(102L, 10L, 2);
-        when(unitMapper.selectList(any(Wrapper.class))).thenReturn(List.of(firstUnit, secondUnit));
-
-        LearningSceneMaterial material = new LearningSceneMaterial();
-        material.setUnitId(101L);
-        material.setLearningText("Scene text");
-        material.setParsedJson("{}");
-        when(materialMapper.selectList(any(Wrapper.class))).thenReturn(List.of(material));
+        LearningPlanUnitItem firstUnit = unitItem(101L, 10L, 1, 1001L, "Scene text", "{}");
+        LearningPlanUnitItem secondUnit = unitItem(102L, 10L, 2, null, null, null);
+        when(unitMapper.selectUnitsWithMaterial(10L, null)).thenReturn(List.of(firstUnit, secondUnit));
         when(relatedWordMapper.selectList(any(Wrapper.class))).thenReturn(List.of());
 
-        LearningPlanUnitEntry firstEntry = entry(1001L, 101L, 2001L, 3001L, "airport");
-        LearningPlanUnitEntry secondEntry = entry(1002L, 102L, 2002L, 3002L, "ticket");
-        when(unitEntryMapper.selectList(any(Wrapper.class))).thenReturn(List.of(firstEntry, secondEntry));
-
-        LearningWordProgress firstProgress = progress(3001L, "learning");
-        LearningWordProgress secondProgress = progress(3002L, "learned");
-        when(progressService.findByIds(any())).thenReturn(List.of(firstProgress, secondProgress));
+        LearningPlanUnitEntryItem firstEntry = entryItem(1001L, 101L, 2001L, 3001L, "airport", "learning");
+        LearningPlanUnitEntryItem secondEntry = entryItem(1002L, 102L, 2002L, 3002L, "ticket", "learned");
+        when(unitEntryMapper.selectEntriesWithProgress(any(), any())).thenReturn(List.of(firstEntry, secondEntry));
 
         LearningReviewRecord record = new LearningReviewRecord();
         record.setEntryId(2002L);
@@ -75,7 +67,7 @@ class LearningPlanResponseAssemblerTest {
 
         LearningPlanResponseAssembler assembler = new LearningPlanResponseAssembler(
                 unitMapper, unitEntryMapper, materialMapper, relatedWordMapper,
-                progressService, reviewRecordMapper, new ObjectMapper());
+                progressService, reviewRecordMapper);
 
         LearningPlanResponse response = assembler.toPlanResponse(plan, true);
 
@@ -83,24 +75,27 @@ class LearningPlanResponseAssemblerTest {
         assertThat(response.getUnits().get(0).getLearningText()).isEqualTo("Scene text");
         assertThat(response.getUnits().get(1).getWords().get(0).getPassedAssessments())
                 .containsExactly("meaning_choice");
-        verify(materialMapper).selectList(any(Wrapper.class));
-        verify(unitEntryMapper).selectList(any(Wrapper.class));
-        verify(progressService).findByIds(any());
+        verify(unitMapper).selectUnitsWithMaterial(10L, null);
+        verify(unitEntryMapper).selectEntriesWithProgress(any(), any());
         verify(reviewRecordMapper).selectList(any(Wrapper.class));
     }
 
-    private LearningPlanUnit unit(Long id, Long planId, int unitNo) {
-        LearningPlanUnit unit = new LearningPlanUnit();
+    private LearningPlanUnitItem unitItem(Long id, Long planId, int unitNo,
+                                          Long materialId, String text, String parsedJson) {
+        LearningPlanUnitItem unit = new LearningPlanUnitItem();
         unit.setId(id);
         unit.setPlanId(planId);
         unit.setUnitNo(unitNo);
         unit.setStatus("ready");
+        unit.setMaterialId(materialId);
+        unit.setMaterialLearningText(text);
+        unit.setMaterialParsedJson(parsedJson);
         return unit;
     }
 
-    private LearningPlanUnitEntry entry(Long id, Long unitId, Long wordbookEntryId,
-                                        Long progressId, String term) {
-        LearningPlanUnitEntry entry = new LearningPlanUnitEntry();
+    private LearningPlanUnitEntryItem entryItem(Long id, Long unitId, Long wordbookEntryId,
+                                                Long progressId, String term, String progressState) {
+        LearningPlanUnitEntryItem entry = new LearningPlanUnitEntryItem();
         entry.setId(id);
         entry.setPlanId(10L);
         entry.setUnitId(unitId);
@@ -110,6 +105,7 @@ class LearningPlanResponseAssemblerTest {
         entry.setTier("core");
         entry.setAcceptedSpellingsJson("[]");
         entry.setAssessmentJson("{}");
+        entry.setProgressLearningState(progressState);
         return entry;
     }
 

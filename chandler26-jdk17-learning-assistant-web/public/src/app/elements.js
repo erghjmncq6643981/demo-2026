@@ -113,6 +113,8 @@ export function createElements() {
   openVocabularyImportBtn: $('openVocabularyImportBtn'),
   openProfileScenePlanModalBtn: $('openProfileScenePlanModalBtn'),
   profileLearningPlanList: $('profileLearningPlanList'),
+  profileSections: document.querySelector('#profileView .profile-sections'),
+  aiTaskPanel: $('aiTaskPanel'),
   aiTaskList: $('aiTaskList'),
   aiTaskSummary: $('aiTaskSummary'),
   aiTaskStatusFilter: $('aiTaskStatusFilter'),

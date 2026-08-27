@@ -96,14 +96,44 @@ public class GlobalExceptionHandler {
     }
 
     /**
+     * 客户端主动断开连接或取消请求（如浏览器刷新、AbortController 取消旧请求），属于正常网络事件，不作为系统未预期异常报警。
+     */
+    @ExceptionHandler({
+            org.springframework.web.context.request.async.AsyncRequestNotUsableException.class,
+            org.apache.catalina.connector.ClientAbortException.class
+    })
+    public void handleClientAbort(Exception ex) {
+        log.debug("客户端已断开连接或取消请求: {}", ex.getMessage());
+    }
+
+    /**
      * 处理 {@code handleUnexpected} 相关业务。
      */
     @ExceptionHandler(Exception.class)
     public ResponseEntity<Map<String, String>> handleUnexpected(Exception ex) {
+        if (isClientAbort(ex)) {
+            log.debug("客户端已断开连接: {}", ex.getMessage());
+            return null;
+        }
         log.error("系统发生未预期异常", ex);
         return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).body(Map.of(
                 "message", "系统异常，请稍后重试",
                 "errorCode", LearningConstants.ErrorCode.SYSTEM_UNEXPECTED.getCode()));
+    }
+
+    private boolean isClientAbort(Throwable throwable) {
+        Throwable current = throwable;
+        while (current != null) {
+            String className = current.getClass().getName();
+            String message = current.getMessage();
+            if (className.contains("ClientAbortException")
+                    || className.contains("AsyncRequestNotUsableException")
+                    || (message != null && (message.contains("Broken pipe") || message.contains("Connection reset by peer")))) {
+                return true;
+            }
+            current = current.getCause();
+        }
+        return false;
     }
 
     /**

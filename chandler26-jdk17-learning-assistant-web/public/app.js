@@ -119,6 +119,7 @@ const {
   loginOrRegister,
   logout,
   loadInitialData,
+  reloadCurrentView,
 } = createAppShell({
   state,
   elements,
@@ -311,7 +312,9 @@ bindAppEvents({
   toggleSidebar,
   setSidebarCollapsed,
   handleViewportChange,
+  reloadCurrentView,
   loadAgents: profile.loadAgents,
+  loadWordbooks: profile.loadWordbooks,
   loadModelConfigs: profile.loadModelConfigs,
   loadPromptTemplates: profile.loadPromptTemplates,
   openModelModal: profile.openModelModal,

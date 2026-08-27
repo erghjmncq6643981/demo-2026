@@ -37,12 +37,14 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.util.StringUtils;
 
+import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
 import java.time.LocalDateTime;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
 import java.util.Objects;
+import java.util.Set;
 import java.util.stream.Collectors;
 
 /**
@@ -164,14 +166,44 @@ public class VocabularyImportService {
 
     /** 查询已发布的公共词本，供所有学习者创建计划。 */
     public List<VocabularyCatalogResponse> listPublicCatalogs() {
-        return catalogMapper.selectList(new LambdaQueryWrapper<VocabularyCatalog>()
-                        .eq(VocabularyCatalog::getStatus, LearningConstants.VocabularyImport.CATALOG_STATUS_PUBLISHED)
-                        .eq(VocabularyCatalog::getVisibility, LearningConstants.VocabularyImport.VISIBILITY_PUBLIC)
-                        .eq(VocabularyCatalog::getDeleted, false)
-                        .orderByDesc(VocabularyCatalog::getUpdateTime))
-                .stream()
-                .map(this::toCatalogResponse)
+        List<VocabularyCatalog> catalogs = catalogMapper.selectList(new LambdaQueryWrapper<VocabularyCatalog>()
+                .eq(VocabularyCatalog::getStatus, LearningConstants.VocabularyImport.CATALOG_STATUS_PUBLISHED)
+                .eq(VocabularyCatalog::getVisibility, LearningConstants.VocabularyImport.VISIBILITY_PUBLIC)
+                .eq(VocabularyCatalog::getDeleted, false)
+                .orderByDesc(VocabularyCatalog::getUpdateTime));
+        if (catalogs.isEmpty()) {
+            return List.of();
+        }
+        List<Long> versionIds = catalogs.stream()
+                .map(VocabularyCatalog::getLatestVersionId)
+                .filter(Objects::nonNull)
+                .distinct()
                 .toList();
+        Map<Long, VocabularyCatalogVersion> versionMap = versionIds.isEmpty() ? Map.of()
+                : versionMapper.selectBatchIds(versionIds).stream()
+                .collect(Collectors.toMap(VocabularyCatalogVersion::getId, v -> v, (a, b) -> a));
+        Map<Long, VocabularyImportJob> jobMap = versionIds.isEmpty() ? Map.of()
+                : importJobMapper.selectList(new LambdaQueryWrapper<VocabularyImportJob>()
+                .in(VocabularyImportJob::getCatalogVersionId, versionIds)
+                .eq(VocabularyImportJob::getDeleted, false)
+                .orderByDesc(VocabularyImportJob::getUpdateTime))
+                .stream().collect(Collectors.toMap(VocabularyImportJob::getCatalogVersionId, j -> j, (a, b) -> a));
+
+        return catalogs.stream().map(catalog -> {
+            VocabularyCatalogVersion version = catalog.getLatestVersionId() == null ? null : versionMap.get(catalog.getLatestVersionId());
+            VocabularyImportJob job = version == null ? null : jobMap.get(version.getId());
+            VocabularyCatalogResponse response = new VocabularyCatalogResponse();
+            response.setCatalogId(catalog.getId());
+            response.setCatalogVersionId(catalog.getLatestVersionId());
+            response.setJobId(job == null ? null : job.getId());
+            response.setCatalogName(catalog.getName());
+            response.setSourceType(catalog.getExamType());
+            response.setLearningPurpose(catalog.getLearningPurpose());
+            response.setStatus(catalog.getStatus());
+            response.setTotalCount(version == null ? 0 : version.getTotalCount());
+            response.setPublishedTime(version == null ? null : version.getPublishedTime());
+            return response;
+        }).toList();
     }
 
     /**
@@ -186,42 +218,50 @@ public class VocabularyImportService {
         int resolvedPageSize = Math.max(LearningConstants.FIRST_SEQUENCE,
                 Math.min(pageSize == null ? LearningConstants.VocabularyImport.DEFAULT_PAGE_SIZE : pageSize,
                         LearningConstants.VocabularyImport.MAX_PAGE_SIZE));
-        String normalizedKeyword = normalize(keyword);
-        List<VocabularyCatalogEntry> filtered = catalogEntryMapper.selectList(
-                        new LambdaQueryWrapper<VocabularyCatalogEntry>()
-                                .eq(VocabularyCatalogEntry::getCatalogVersionId, job.getCatalogVersionId())
-                                .eq(warningOnly, VocabularyCatalogEntry::getSuspicious, true)
-                                .eq(VocabularyCatalogEntry::getDeleted, false)
-                                .orderByAsc(VocabularyCatalogEntry::getSourceOrder))
-                .stream()
-                .filter(entry -> !StringUtils.hasText(normalizedKeyword)
-                        || normalize(entry.getOriginalTerm()).contains(normalizedKeyword)
-                        || normalize(entry.getApprovedTerm()).contains(normalizedKeyword)
-                        || normalize(entry.getDefinitionText()).contains(normalizedKeyword))
-                .toList();
-        int offset = (int) Math.min(filtered.size(), (long) (resolvedPage - 1) * resolvedPageSize);
-        int end = Math.min(filtered.size(), offset + resolvedPageSize);
+
+        LambdaQueryWrapper<VocabularyCatalogEntry> wrapper = new LambdaQueryWrapper<VocabularyCatalogEntry>()
+                .eq(VocabularyCatalogEntry::getCatalogVersionId, job.getCatalogVersionId())
+                .eq(warningOnly, VocabularyCatalogEntry::getSuspicious, true)
+                .eq(VocabularyCatalogEntry::getDeleted, false);
+
+        if (StringUtils.hasText(keyword)) {
+            String trimmed = keyword.trim();
+            String normalized = normalize(trimmed);
+            wrapper.and(w -> w.like(VocabularyCatalogEntry::getApprovedTerm, trimmed)
+                    .or().like(VocabularyCatalogEntry::getOriginalTerm, trimmed)
+                    .or().like(VocabularyCatalogEntry::getNormalizedTerm, normalized)
+                    .or().like(VocabularyCatalogEntry::getDefinitionText, trimmed));
+        }
+        wrapper.orderByAsc(VocabularyCatalogEntry::getSourceOrder);
+
+        Page<VocabularyCatalogEntry> pageResult = catalogEntryMapper.selectPage(
+                new Page<>(resolvedPage, resolvedPageSize), wrapper);
 
         VocabularyImportResponse response = baseResponse(job, catalog);
         response.setPage(resolvedPage);
         response.setPageSize(resolvedPageSize);
-        response.setFilteredTotal((long) filtered.size());
-        response.setItems(filtered.subList(offset, end).stream().map(this::toEntryResponse).toList());
+        response.setFilteredTotal(pageResult.getTotal());
+        response.setItems(pageResult.getRecords().stream().map(this::toEntryResponse).toList());
         return response;
     }
 
     /** 查询全部管理员导入历史；调用入口必须先完成管理员鉴权。 */
     public List<VocabularyImportResponse> list(Long userId) {
-        return importJobMapper.selectList(new LambdaQueryWrapper<VocabularyImportJob>()
-                        .eq(VocabularyImportJob::getDeleted, false)
-                        .orderByDesc(VocabularyImportJob::getUpdateTime))
-                .stream()
-                .map(job -> {
-                    VocabularyImportResponse response = baseResponse(job, requireCatalog(userId, job.getCatalogId()));
-                    response.setItems(List.of());
-                    return response;
-                })
-                .toList();
+        List<VocabularyImportJob> jobs = importJobMapper.selectList(new LambdaQueryWrapper<VocabularyImportJob>()
+                .eq(VocabularyImportJob::getDeleted, false)
+                .orderByDesc(VocabularyImportJob::getUpdateTime));
+        if (jobs.isEmpty()) {
+            return List.of();
+        }
+        Set<Long> catalogIds = jobs.stream().map(VocabularyImportJob::getCatalogId).collect(Collectors.toSet());
+        Map<Long, VocabularyCatalog> catalogMap = catalogMapper.selectBatchIds(catalogIds).stream()
+                .collect(Collectors.toMap(VocabularyCatalog::getId, c -> c, (a, b) -> a));
+        return jobs.stream().map(job -> {
+            VocabularyCatalog catalog = catalogMap.get(job.getCatalogId());
+            VocabularyImportResponse response = baseResponse(job, catalog != null ? catalog : new VocabularyCatalog());
+            response.setItems(List.of());
+            return response;
+        }).toList();
     }
 
     /**

@@ -1,8 +1,10 @@
 package com.chandler.learning.agent.config;
 
+import com.baomidou.mybatisplus.annotation.DbType;
 import com.baomidou.mybatisplus.core.handlers.MetaObjectHandler;
 import com.baomidou.mybatisplus.extension.plugins.MybatisPlusInterceptor;
 import com.baomidou.mybatisplus.extension.plugins.inner.OptimisticLockerInnerInterceptor;
+import com.baomidou.mybatisplus.extension.plugins.inner.PaginationInnerInterceptor;
 import com.chandler.learning.agent.security.LearningAuditor;
 import com.chandler.learning.agent.support.LearningConstants;
 import lombok.RequiredArgsConstructor;
@@ -24,11 +26,12 @@ public class MybatisPlusConfig implements MetaObjectHandler {
     private final LearningAuditor learningAuditor;
 
     /**
-     * 启用 MyBatis-Plus 乐观锁拦截器，让 BaseEntity.version 在并发更新时生效。
+     * 启用 MyBatis-Plus 分页拦截器与乐观锁拦截器。
      */
     @Bean
     public MybatisPlusInterceptor mybatisPlusInterceptor() {
         MybatisPlusInterceptor interceptor = new MybatisPlusInterceptor();
+        interceptor.addInnerInterceptor(new PaginationInnerInterceptor(DbType.MYSQL));
         interceptor.addInnerInterceptor(new OptimisticLockerInnerInterceptor());
         return interceptor;
     }

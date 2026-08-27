@@ -58,12 +58,21 @@ public class LearningPlanVocabularySelector {
         if (!analyses.isEmpty()) {
             sortBySemanticRelevance(all, arranged, reviewWords, analyses);
         }
+        List<String> candidateTerms = all.stream()
+                .filter(entry -> !arranged.contains(entry.getId()))
+                .map(VocabularyCatalogEntry::getNormalizedTerm)
+                .filter(StringUtils::hasText)
+                .distinct()
+                .toList();
+        Map<String, LearningWordProgress> progresses = candidateTerms.isEmpty() ? Map.of()
+                : progressService.findByTerms(plan.getUserId(), candidateTerms).stream()
+                        .collect(Collectors.toMap(LearningWordProgress::getNormalizedTerm, p -> p, (a, b) -> a));
         List<VocabularyCatalogEntry> result = new ArrayList<>();
         for (VocabularyCatalogEntry entry : all) {
             if (arranged.contains(entry.getId())) {
                 continue;
             }
-            LearningWordProgress progress = progressService.find(plan.getUserId(), entry.getNormalizedTerm());
+            LearningWordProgress progress = progresses.get(entry.getNormalizedTerm());
             if (progress != null && LearningConstants.ScenePlan.PROGRESS_MASTERED.equals(progress.getLearningState())) {
                 continue;
             }
