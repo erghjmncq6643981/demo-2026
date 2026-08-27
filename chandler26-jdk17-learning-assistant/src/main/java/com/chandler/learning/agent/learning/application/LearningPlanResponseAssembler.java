@@ -39,7 +39,7 @@ import java.util.stream.Collectors;
 /**
  * 学习计划响应装配器。
  * <p>
- * 计划详情按计划一次性加载单元、材料、词条、进度和检测记录，避免逐单元 N+1 查询。
+ * 计划摘要不加载场景大字段；进入具体场景后再批量加载该单元的材料、词条、进度和检测记录。
  */
 @Slf4j
 @Component
@@ -90,6 +90,36 @@ public class LearningPlanResponseAssembler {
         List<Long> unitIds = units.stream().map(LearningPlanUnit::getId).toList();
         List<com.chandler.learning.agent.learning.domain.LearningPlanUnitItem> unitItems = unitMapper.selectUnitsWithMaterial(planId, unitIds);
         return loadUnitResponses(unitItems, planId);
+    }
+
+    /** 装配日历和首页使用的轻量单元摘要，不查询文章、词卡或学习记录。 */
+    public List<LearningPlanUnitResponse> toUnitSummaryResponses(List<LearningPlanUnit> units) {
+        if (units == null || units.isEmpty()) {
+            return List.of();
+        }
+        return units.stream().map(this::toUnitSummaryResponse).toList();
+    }
+
+    private LearningPlanUnitResponse toUnitSummaryResponse(LearningPlanUnit unit) {
+        LearningPlanUnitResponse response = new LearningPlanUnitResponse();
+        response.setId(unit.getId());
+        response.setPlanId(unit.getPlanId());
+        response.setUnitNo(unit.getUnitNo());
+        response.setTitle(unit.getTitle());
+        response.setScenarioType(unit.getScenarioType());
+        response.setSummary(unit.getSummary());
+        response.setStatus(unit.getStatus());
+        response.setCoreWordCount(unit.getCoreWordCount());
+        response.setExtendedWordCount(unit.getExtendedWordCount());
+        response.setSupplementaryWordCount(unit.getSupplementaryWordCount());
+        response.setCompletedCoreCount(unit.getCompletedCoreCount());
+        response.setRecommendedDate(unit.getRecommendedDate());
+        response.setSceneMaterialId(unit.getSceneMaterialId());
+        response.setRelatedWords(List.of());
+        response.setWords(List.of());
+        response.setGeneratedTime(unit.getGeneratedTime());
+        response.setCompletedTime(unit.getCompletedTime());
+        return response;
     }
 
     /** 装配单个词条，适用于提升词汇等单条命令响应。 */

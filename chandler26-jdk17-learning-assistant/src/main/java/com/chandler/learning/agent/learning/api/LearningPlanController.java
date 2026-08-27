@@ -20,6 +20,7 @@ import com.chandler.learning.agent.task.application.AiAsyncTaskService;
 import com.chandler.learning.agent.vocabulary.application.VocabularyCardBatchService;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
+import com.chandler.learning.agent.config.ApiAccessLog;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import org.springframework.format.annotation.DateTimeFormat;
@@ -45,6 +46,7 @@ import java.util.Map;
 @RequiredArgsConstructor
 @RequestMapping("/api/v1/learning/plans")
 @Tag(name = "场景词汇学习计划")
+@ApiAccessLog("场景词汇学习计划")
 public class LearningPlanController {
 
     private final AuthService authService;
@@ -97,6 +99,16 @@ public class LearningPlanController {
             @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate to) {
         LearningUser user = authService.requireUser(authorization);
         return learningPlanService.calendar(user.getId(), planId, from, to);
+    }
+
+    @GetMapping("/{planId}/units/{unitId}")
+    @Operation(summary = "按需加载单个场景的完整学习内容")
+    public LearningPlanUnitResponse unitDetail(
+            @RequestHeader(value = "Authorization", required = false) String authorization,
+            @PathVariable Long planId,
+            @PathVariable Long unitId) {
+        LearningUser user = authService.requireUser(authorization);
+        return learningPlanService.unitDetail(user.getId(), planId, unitId);
     }
 
     @PostMapping("/{planId}/pause")

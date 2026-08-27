@@ -250,7 +250,15 @@ public class LearningPlanService {
     }
 
     public LearningPlanResponse detail(Long userId, Long planId) {
-        return responseAssembler.toPlanResponse(requirePlan(userId, planId), true);
+        return responseAssembler.toPlanResponse(requirePlan(userId, planId), false);
+    }
+
+    /**
+     * 按场景单元加载完整学习内容。权限校验完成后，只装配一个单元的大字段和学习状态。
+     */
+    public LearningPlanUnitResponse unitDetail(Long userId, Long planId, Long unitId) {
+        LearningPlan plan = requirePlan(userId, planId);
+        return responseAssembler.toUnitResponse(requireUnit(plan, unitId));
     }
 
     /**
@@ -300,7 +308,7 @@ public class LearningPlanService {
             day.setCompletedUnitCount(completed);
             day.setOverdueCount(date.isBefore(today) ? pending : LearningConstants.ZERO);
             day.setGenerating(generatingDates.contains(date));
-            day.setUnits(List.of());
+            day.setUnits(responseAssembler.toUnitSummaryResponses(dateUnits));
             result.add(day);
         }
         return result;
@@ -793,7 +801,8 @@ public class LearningPlanService {
         }
         LearningPlanUnit unit = requireUnit(plan, unitId);
         if (LearningConstants.ScenePlan.UNIT_COMPLETED.equals(unit.getStatus())) {
-            return detail(userId, planId);
+            plan.setCurrentUnitId(unit.getId());
+            return responseAssembler.toPlanResponse(plan, false);
         }
         LocalDateTime now = LocalDateTime.now();
         boolean firstStart = unit.getStartedTime() == null;
@@ -826,7 +835,7 @@ public class LearningPlanService {
                 plan.getName() + " / " + unit.getTitle());
         log.info("用户「{}」开始学习计划「{}」中的场景「{}」",
                 userDisplayNameService.userName(userId), plan.getName(), unit.getTitle());
-        return detail(userId, planId);
+        return responseAssembler.toPlanResponse(plan, false);
     }
 
     /**
@@ -961,7 +970,7 @@ public class LearningPlanService {
             log.info("用户「{}」完成了计划「{}」中的场景「{}」，可继续手动生成下一个场景",
                     userDisplayNameService.userName(userId), plan.getName(), unit.getTitle());
         }
-        return detail(userId, planId);
+        return responseAssembler.toPlanResponse(plan, false);
     }
 
     /**

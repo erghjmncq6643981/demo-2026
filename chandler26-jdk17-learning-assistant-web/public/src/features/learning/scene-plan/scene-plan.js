@@ -32,6 +32,11 @@ import {
   unitsForDate,
 } from '/src/features/learning/scene-plan/calendar-model.js'
 import { createScenePlanApi } from '/src/features/learning/scene-plan/api.js'
+import { createPlanManager } from '/src/features/learning/scene-plan/plan-manager.js'
+import { createCalendarView } from '/src/features/learning/scene-plan/calendar-view.js'
+import { createUnitList } from '/src/features/learning/scene-plan/unit-list.js'
+import { createStudyEngine } from '/src/features/learning/scene-plan/study-engine.js'
+import { createAsyncListener } from '/src/features/learning/scene-plan/async-listener.js'
 import { isRequestAbort } from '/src/shared/latest-request.js'
 import { createVocabularyCatalogApi } from '/src/features/vocabulary/catalog/api.js'
 
@@ -53,6 +58,22 @@ export function createScenePlanFeature(ctx) {
   let assessmentFeedback = null
   const api = createScenePlanApi(request)
   const catalogApi = createVocabularyCatalogApi(request)
+  const unitList = createUnitList({ state, api, sameId })
+  const planManager = createPlanManager({ state, api, sameId, loadSceneData, toast, logEvent, confirmAction })
+  const calendarView = createCalendarView({
+    state,
+    render: () => renderCalendar(state.currentLearningPlan),
+    refresh: () => refreshCalendarData(state.currentLearningPlan),
+  })
+  const studyEngine = createStudyEngine({
+    state,
+    elements,
+    activeUnit,
+    applyStage: applySceneStage,
+    renderChallengeWords,
+    renderAssessment,
+  })
+  createAsyncListener({ state, refreshCalendar: refreshCalendarData }).bind()
 
   function setButtonLoading(button, loading, text) {
     if (!button) return
@@ -67,14 +88,7 @@ export function createScenePlanFeature(ctx) {
   }
 
   function activeUnit(plan = state.currentLearningPlan) {
-    if (!plan) return null
-    const units = asArray(plan.units)
-    if (plan.currentUnitId != null) {
-      return units.find((unit) => sameId(unit.id, plan.currentUnitId))
-        || [...units].reverse().find((unit) => unit.status !== 'completed')
-        || null
-    }
-    return [...units].reverse().find((unit) => unit.status !== 'completed') || null
+    return unitList.activeUnit(plan)
   }
 
   function currentSceneWord(unit = activeUnit()) {
@@ -497,7 +511,6 @@ export function createScenePlanFeature(ctx) {
       renderPlanList()
       await loadCalendarData(plan)
       renderCurrentScene()
-      await loadSceneNote(activeUnit(plan))
       if (!options.quiet) logEvent('learning', '切换场景学习计划', plan.name)
     } catch (error) {
       if (isRequestAbort(error)) return
@@ -540,7 +553,10 @@ export function createScenePlanFeature(ctx) {
       const isCurrentRange = sameId(state.currentLearningPlan?.id, plan.id)
         && dateKey(currentDates[0]) === from
         && dateKey(currentDates[currentDates.length - 1]) === to
-      if (isCurrentRange) state.sceneCalendarData = calendarData
+      if (isCurrentRange) {
+        state.sceneCalendarData = calendarData
+        unitList.mergeCalendarUnits(plan, calendarData)
+      }
       return calendarData
     } catch (error) {
       if (isRequestAbort(error)) return null
@@ -931,18 +947,20 @@ export function createScenePlanFeature(ctx) {
             plan.currentUnitId = unitId
           } else if (selectedUnit?.status !== 'completed') {
             const updated = await api.startUnit(plan.id, unitId)
-            state.currentLearningPlan = updated
-            state.learningPlans = state.learningPlans.map((item) => sameId(item.id, updated.id) ? { ...item, ...updated } : item)
-          } else {
-            plan.currentUnitId = unitId
+            const retainedUnits = asArray(plan.units)
+            Object.assign(plan, updated, { units: retainedUnits, currentUnitId: unitId })
+            state.currentLearningPlan = plan
+            state.learningPlans = state.learningPlans.map((item) => sameId(item.id, plan.id) ? plan : item)
           }
-          const active = activeUnit(state.currentLearningPlan)
+          plan.currentUnitId = unitId
+          const detail = await unitList.loadDetail(plan, unitId)
+          const active = detail || activeUnit(state.currentLearningPlan)
           state.currentSceneWordId = asArray(active?.words).find((word) => word.tier === 'core' && !isWordComplete(word))?.id
             || asArray(active?.words).find((word) => word.tier === 'core')?.id
             || null
           renderCurrentScene()
-          await loadSceneNote(selectedUnit)
-          startLearning()
+          await loadSceneNote(active)
+          await startLearning()
         } catch (error) {
           logEvent('error', '开始场景失败', error.message)
           toast(`开始场景失败：${error.message}`)
