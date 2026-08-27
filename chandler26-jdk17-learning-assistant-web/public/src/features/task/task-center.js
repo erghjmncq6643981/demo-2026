@@ -92,6 +92,13 @@ export function createTaskCenterProfileFeature(ctx) {
           state.aiTaskTotal = 0
         }
         renderAiTasks()
+        if (Array.isArray(state.aiTasks)) {
+          state.aiTasks.forEach((task) => {
+            window.dispatchEvent(new CustomEvent('learning:ai-task-updated', {
+              detail: { id: task.id, planId: task.planId, status: task.status, taskType: task.taskType },
+            }))
+          })
+        }
         scheduleRefresh()
         return state.aiTasks
       })
@@ -261,6 +268,12 @@ export function createTaskCenterProfileFeature(ctx) {
         }
       }
       renderAiTasks()
+      const current = state.aiTasks.find((item) => String(item.id) === String(taskId))
+      if (current) {
+        window.dispatchEvent(new CustomEvent('learning:ai-task-updated', {
+          detail: { id: current.id, planId: current.planId, status: current.status, taskType: current.taskType },
+        }))
+      }
       scheduleRefresh()
       toast(action === 'cancel' ? '任务已取消' : action === 'retry' ? '任务已重新排队' : '任务已安排立即执行')
     } catch (error) {
