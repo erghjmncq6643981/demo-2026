@@ -76,7 +76,6 @@ export function createAgentManagementFeature(ctx) {
       elements.agentConfigList.textContent = '暂无学习 Agent'
       return
     }
-    const aliveCount = list.length
     elements.agentConfigList.className = 'model-list'
     elements.agentConfigList.innerHTML = list
       .map((item) => {

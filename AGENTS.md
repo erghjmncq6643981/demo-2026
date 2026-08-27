@@ -32,6 +32,7 @@
 - Do not add new large logic to `public/app.js`; use feature modules and a small facade/wiring layer.
 - Do not open or close modals by directly calling `classList.remove('hidden')` / `classList.add('hidden')`. Use `showModal` / `hideModal` from `/src/shared/modal.js` so scroll position resets.
 - Normalize wordbook ids through `/src/shared/wordbook.js` helpers before API calls or state comparisons.
+- Reject oversized frontend modules. Keep feature files focused on one responsibility and split rendering, data access, state transitions, and interaction orchestration into clear submodules under the owning business domain.
 - Treat every backend `Long`/Snowflake identifier (`id`, `*Id`, `data-*-id`, select values, URL path/query IDs, and request DTO IDs) as an opaque string in the frontend. Never call `Number`, `parseInt`, arithmetic, or numeric sorting on an identifier; use `normalizeId`/`sameId` and `String(...)` when serializing or comparing. JSON request bodies may send the string directly because Spring deserializes it to `Long`.
 - Before committing frontend changes, scan for ID coercion with `rg -n -i "(Number|parseInt|parseFloat)\\([^\\n]*(id|identifier)|\\b(id|[A-Za-z]+Id)\\s*:\\s*(Number|parseInt)" public/src` and manually review every match. Numeric business values such as counts, limits, sequence, indexes, dates, and scores are allowed only when they are not identifiers.
 - All destructive actions and navigation that discards context need a secondary confirmation dialog.
@@ -55,6 +56,8 @@
 - Important user-facing operations should write both server logs and system log table records where appropriate.
 - Avoid magic values. Put shared constants in `LearningConstants` only when the value has clear business meaning.
 - Use MyBatis-Plus wrappers and existing mapper/service patterns.
+- Never execute SQL inside an iteration. Prefer one query outside the loop and in-memory grouping; for homogeneous writes use batch `INSERT`/`UPDATE` statements with bounded chunks.
+- For list and calendar endpoints, return lightweight summary DTOs by default. Load article, card, assessment, and other large fields only from a dedicated single-object detail endpoint.
 
 ## Engineering Governance
 
@@ -63,6 +66,8 @@
 - Long-running or retryable work must have explicit Job/Item state, an atomic claim from `pending` to `running`, idempotent writes, terminal success/partial-failure/failure states, and retry of failed items only.
 - Protect duplicate submissions at the business-resource boundary, preferably by locking the scene/unit row or using an equivalent database uniqueness invariant.
 - Prefer one aggregate SQL query over per-row queries when a list includes counts or related summaries. Use batch insert/update SQL for homogeneous writes and chunk large batches; do not introduce N+1 loops in services.
+- When a read spans multiple tables, prefer a single MyBatis join query or a small, explicitly batched query set rather than per-row lookups.
+- Keep transactions short and bounded. Any operation that can run after persistence must use a Spring event plus asynchronous handling; never hold a transaction open during slow or retryable work.
 - Put custom MyBatis SQL in `src/main/resources/mapper/*.xml`; keep simple CRUD and conditional queries in MyBatis-Plus wrappers. Every custom SQL must have a mapper method, clear parameters, and XML validation coverage.
 - If a schema change may already have been executed, add a new numbered migration instead of rewriting migration history. Keep clean-database schema, seed data, and upgrade migrations separate.
 - `LearningConstants.ErrorCode` is the single source for stable error codes, HTTP status, and default Chinese messages. Prefer `LearningAssistantException.*(code)`; only override a message when dynamic context is genuinely useful.

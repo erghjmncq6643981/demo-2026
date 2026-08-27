@@ -9,7 +9,6 @@ import {
   IMPORT_STATUS_LABELS,
   PLAN_STATUS_LABELS,
   SOURCE_LABELS,
-  TIER_LABELS,
   asArray,
   escapeRegExp,
   localDateKey,
@@ -68,10 +67,17 @@ export function createScenePlanFeature(ctx) {
   const studyEngine = createStudyEngine({
     state,
     elements,
-    activeUnit,
     applyStage: applySceneStage,
     renderChallengeWords,
     renderAssessment,
+    prepareUnit: ensureActiveUnitDetail,
+    coreWords: (unit) => asArray(unit?.words).filter((word) => word.tier === 'core'),
+    isWordComplete,
+    onChallengeStart: (word) => {
+      state.currentSceneWordId = word?.id || null
+      state.sceneAssessmentStartedAt = Date.now()
+      assessmentFeedback = null
+    },
   })
   createAsyncListener({ state, refreshCalendar: refreshCalendarData }).bind()
 
@@ -89,6 +95,19 @@ export function createScenePlanFeature(ctx) {
 
   function activeUnit(plan = state.currentLearningPlan) {
     return unitList.activeUnit(plan)
+  }
+
+  async function ensureActiveUnitDetail() {
+    const plan = state.currentLearningPlan
+    const unit = activeUnit(plan)
+    if (!plan || !unit) return null
+    const detail = await unitList.loadDetail(plan, unit.id)
+    if (detail) {
+      state.currentLearningPlan = plan
+      renderCurrentScene()
+      await loadSceneNote(detail)
+    }
+    return detail || unit
   }
 
   function currentSceneWord(unit = activeUnit()) {
@@ -595,7 +614,10 @@ export function createScenePlanFeature(ctx) {
     let completedTotal = 0
     selectedUnits.forEach((unit) => {
       const coreWords = asArray(unit.words).filter((word) => word.tier === 'core')
-      coreWords.forEach((word) => {
+      const summaryWords = coreWords.length
+        ? coreWords
+        : asArray(unit.pendingChallengeWords).map((word) => typeof word === 'string' ? { term: word, tier: 'core', pending: true } : word)
+      summaryWords.forEach((word) => {
         if (isWordComplete(word)) {
           completedTotal++
         } else {
@@ -616,6 +638,9 @@ export function createScenePlanFeature(ctx) {
     elements.sceneVocabularyPreviewList.innerHTML = selectedUnits.length
       ? selectedUnits.map((unit) => {
           const coreWords = asArray(unit.words).filter((word) => word.tier === 'core')
+          const displayWords = coreWords.length
+            ? coreWords
+            : asArray(unit.pendingChallengeWords).map((word) => typeof word === 'string' ? { term: word, tier: 'core', pending: true } : word)
           return `
             <section class="scene-vocabulary-preview-group">
               <div class="scene-vocabulary-preview-heading">
@@ -623,11 +648,11 @@ export function createScenePlanFeature(ctx) {
                   <strong>${escapeHtml(unit.title || '场景单元')}</strong>
                   <small>Scene ${number(unit.unitNo)} · ${unitStatusLabel(unit)}</small>
                 </div>
-                <span class="mini-pill">${coreWords.length} 核心词</span>
+                <span class="mini-pill">${displayWords.length} 待挑战词</span>
               </div>
-              ${coreWords.length ? `
+              ${displayWords.length ? `
                 <div class="scene-vocabulary-preview-words">
-                  ${coreWords.map((word, index) => {
+                  ${displayWords.map((word, index) => {
                     const complete = isWordComplete(word)
                     return `
                     <div class="scene-vocabulary-preview-word ${complete ? 'completed' : ''}">
@@ -653,7 +678,7 @@ export function createScenePlanFeature(ctx) {
     showModal(elements.sceneVocabularyPreviewModal)
   }
 
-  function isDayGenerating(key, plan) {
+  function isDayGenerating(key, _plan) {
     if (!key) return false
     const dayData = asArray(state.sceneCalendarData)
       .find((item) => String(item?.date || '').slice(0, 10) === key)
@@ -1111,35 +1136,20 @@ export function createScenePlanFeature(ctx) {
     hideModal(elements.sceneRelatedWordsModal)
   }
 
-  function startLearning() {
-    if (!state.currentLearningPlan || !activeUnit()) return
-    applySceneStage('learning')
-    elements.sceneLearningStage.scrollIntoView({ behavior: 'smooth', block: 'start' })
+  async function startLearning() {
+    return studyEngine.startLearning()
   }
 
-  function showChallengeWords() {
-    const unit = activeUnit()
-    if (!unit) return
-    renderChallengeWords(asArray(unit.words).filter((word) => word.tier === 'core'))
-    applySceneStage('challenge')
-    elements.sceneChallengeStage.scrollIntoView({ behavior: 'smooth', block: 'start' })
+  async function showChallengeWords() {
+    return studyEngine.showChallengeWords()
   }
 
-  function startChallenge() {
-    const unit = activeUnit()
-    const coreWords = asArray(unit?.words).filter((word) => word.tier === 'core')
-    if (!coreWords.length) return
-    const firstIncomplete = coreWords.find((word) => !isWordComplete(word)) || coreWords[0]
-    state.currentSceneWordId = firstIncomplete.id
-    state.sceneAssessmentStartedAt = Date.now()
-    assessmentFeedback = null
-    applySceneStage('assessment')
-    renderAssessment(unit)
-    elements.sceneAssessmentPanel.scrollIntoView({ behavior: 'smooth', block: 'start' })
+  async function startChallenge() {
+    return studyEngine.startChallenge()
   }
 
   function backToReading() {
-    applySceneStage('learning')
+    return studyEngine.backToReading()
   }
 
   function backToPlanOverview() {
@@ -1147,34 +1157,15 @@ export function createScenePlanFeature(ctx) {
   }
 
   function changeCalendarRange(range) {
-    if (!['week', 'month'].includes(range)) return
-    state.sceneCalendarRange = range
-    if (!state.sceneCalendarCursorDate) state.sceneCalendarCursorDate = localDateKey()
-    state.sceneCalendarData = null
-    renderCalendar(state.currentLearningPlan)
-    void refreshCalendarData(state.currentLearningPlan)
+    calendarView.changeRange(range)
   }
 
   function changeCalendarOffset(offset) {
-    const plan = state.currentLearningPlan
-    const anchor = dateFromKey(state.sceneCalendarCursorDate || localDateKey())
-    if (state.sceneCalendarRange === 'month') {
-      anchor.setDate(1)
-      anchor.setMonth(anchor.getMonth() + offset)
-    } else {
-      anchor.setDate(anchor.getDate() + offset * 7)
-    }
-    state.sceneCalendarCursorDate = localDateKey(anchor)
-    state.sceneCalendarData = null
-    renderCalendar(plan)
-    void refreshCalendarData(plan)
+    calendarView.changeOffset(offset)
   }
 
   function resetCalendar() {
-    state.sceneCalendarCursorDate = localDateKey()
-    state.sceneCalendarData = null
-    renderCalendar(state.currentLearningPlan)
-    void refreshCalendarData(state.currentLearningPlan)
+    calendarView.reset()
   }
 
   function formatPlanDate(dateStr) {
@@ -2708,9 +2699,7 @@ export function createScenePlanFeature(ctx) {
   }
 
   async function pausePlan(targetPlanId) {
-    const plan = targetPlanId
-      ? asArray(state.learningPlans).find((p) => sameId(p.id, targetPlanId)) || state.currentLearningPlan
-      : state.currentLearningPlan
+    const plan = planManager.targetPlan(targetPlanId)
     if (!plan) return
     try {
       if (state.preview) {
@@ -2729,9 +2718,7 @@ export function createScenePlanFeature(ctx) {
   }
 
   async function resumePlan(targetPlanId) {
-    const plan = targetPlanId
-      ? asArray(state.learningPlans).find((p) => sameId(p.id, targetPlanId)) || state.currentLearningPlan
-      : state.currentLearningPlan
+    const plan = planManager.targetPlan(targetPlanId)
     if (!plan) return
     try {
       if (state.preview) {
@@ -2750,9 +2737,7 @@ export function createScenePlanFeature(ctx) {
   }
 
   async function cancelPlan(targetPlanId) {
-    const plan = targetPlanId
-      ? asArray(state.learningPlans).find((p) => sameId(p.id, targetPlanId)) || state.currentLearningPlan
-      : state.currentLearningPlan
+    const plan = planManager.targetPlan(targetPlanId)
     if (!plan) return
     const confirmed = await confirmAction({
       title: '取消学习计划',

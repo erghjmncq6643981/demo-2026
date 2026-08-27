@@ -3,6 +3,7 @@ package com.chandler.learning.agent.learning.infrastructure;
 import com.baomidou.mybatisplus.core.mapper.BaseMapper;
 import com.chandler.learning.agent.learning.domain.LearningPlanUnitEntry;
 import com.chandler.learning.agent.learning.domain.LearningPlanUnitEntryItem;
+import com.chandler.learning.agent.learning.domain.LearningPlanUnitWordSummaryItem;
 import org.apache.ibatis.annotations.Mapper;
 import org.apache.ibatis.annotations.Param;
 
@@ -17,6 +18,13 @@ public interface LearningPlanUnitEntryMapper extends BaseMapper<LearningPlanUnit
     int updateBatch(@Param("list") List<LearningPlanUnitEntry> list);
 
     List<LearningPlanUnitEntryItem> selectEntriesWithProgress(
+            @Param("planId") Long planId,
+            @Param("unitIds") Collection<Long> unitIds);
+
+    /**
+     * 查询日历摘要所需的核心词面，避免加载词卡和题目 JSON。
+     */
+    List<LearningPlanUnitWordSummaryItem> selectWordSummaries(
             @Param("planId") Long planId,
             @Param("unitIds") Collection<Long> unitIds);
 }

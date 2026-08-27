@@ -290,6 +290,10 @@ public class LearningPlanService {
         Map<LocalDate, List<LearningPlanUnit>> unitsByDate = units.stream()
                 .collect(Collectors.groupingBy(LearningPlanUnit::getRecommendedDate, LinkedHashMap::new,
                         Collectors.toList()));
+        Map<Long, LearningPlanUnitResponse> summariesByUnit = responseAssembler
+                .toUnitSummaryResponses(units, plan.getId())
+                .stream()
+                .collect(Collectors.toMap(LearningPlanUnitResponse::getId, response -> response));
         Set<LocalDate> generatingDates = aiAsyncTaskService.findActiveGeneratingDatesForPlan(userId, plan.getId());
         List<LearningPlanCalendarDayResponse> result = new ArrayList<>();
         for (LocalDate date = resolvedFrom; !date.isAfter(resolvedTo); date = date.plusDays(1)) {
@@ -308,7 +312,11 @@ public class LearningPlanService {
             day.setCompletedUnitCount(completed);
             day.setOverdueCount(date.isBefore(today) ? pending : LearningConstants.ZERO);
             day.setGenerating(generatingDates.contains(date));
-            day.setUnits(responseAssembler.toUnitSummaryResponses(dateUnits));
+            day.setUnits(dateUnits.stream()
+                    .map(LearningPlanUnit::getId)
+                    .map(summariesByUnit::get)
+                    .filter(Objects::nonNull)
+                    .toList());
             result.add(day);
         }
         return result;

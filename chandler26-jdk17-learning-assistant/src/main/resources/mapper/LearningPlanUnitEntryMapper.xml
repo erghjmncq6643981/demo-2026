@@ -82,4 +82,25 @@
           </if>
         ORDER BY e.unit_id ASC, e.sort_order ASC
     </select>
+
+    <select id="selectWordSummaries" resultType="com.chandler.learning.agent.learning.domain.LearningPlanUnitWordSummaryItem">
+        SELECT
+            e.id,
+            e.unit_id AS unitId,
+            e.wordbook_entry_id AS wordbookEntryId,
+            e.term,
+            e.tier,
+            e.mastery_requirement AS masteryRequirement
+        FROM learning_plan_unit_entry e
+        WHERE e.plan_id = #{planId}
+          AND e.deleted = 0
+          AND e.tier = 'core'
+          <if test="unitIds != null and !unitIds.isEmpty()">
+              AND e.unit_id IN
+              <foreach collection="unitIds" item="uid" open="(" separator="," close=")">
+                  #{uid}
+              </foreach>
+          </if>
+        ORDER BY e.unit_id ASC, e.sort_order ASC
+    </select>
 </mapper>

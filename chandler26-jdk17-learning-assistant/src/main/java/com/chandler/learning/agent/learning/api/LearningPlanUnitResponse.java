@@ -39,6 +39,12 @@ public class LearningPlanUnitResponse {
     /** 场景材料主键，用于加载与材料绑定的学习笔记。 */
     private Long sceneMaterialId;
 
+    /** 是否已经生成可学习的场景材料。 */
+    private Boolean materialAvailable;
+
+    /** 日历摘要中的待挑战词汇，不包含词卡、题目和学习详情。 */
+    private List<LearningPlanUnitWordSummaryResponse> pendingChallengeWords;
+
     private String learningText;
 
     private String translation;

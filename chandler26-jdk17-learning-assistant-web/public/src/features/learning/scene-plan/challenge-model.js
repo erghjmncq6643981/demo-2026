@@ -16,5 +16,9 @@ export function isWordComplete(word) {
 }
 
 export function pendingChallengeWords(unit) {
-  return asArray(unit?.words).filter((word) => word.tier === 'core' && !isWordComplete(word))
+  const detailedWords = asArray(unit?.words).filter((word) => word.tier === 'core')
+  if (detailedWords.length) return detailedWords.filter((word) => !isWordComplete(word))
+  return asArray(unit?.pendingChallengeWords).map((word) => typeof word === 'string'
+    ? { term: word, tier: 'core', pending: true }
+    : { ...word, tier: word?.tier || 'core', pending: true })
 }

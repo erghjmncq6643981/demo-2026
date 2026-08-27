@@ -4,12 +4,14 @@ import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import com.chandler.learning.agent.learning.api.LearningPlanResponse;
 import com.chandler.learning.agent.learning.api.LearningPlanUnitEntryResponse;
 import com.chandler.learning.agent.learning.api.LearningPlanUnitResponse;
+import com.chandler.learning.agent.learning.api.LearningPlanUnitWordSummaryResponse;
 import com.chandler.learning.agent.learning.api.SceneRelatedWordResponse;
 import com.chandler.learning.agent.learning.domain.LearningPlan;
 import com.chandler.learning.agent.learning.domain.LearningPlanUnit;
 import com.chandler.learning.agent.learning.domain.LearningPlanUnitEntry;
 import com.chandler.learning.agent.learning.domain.LearningPlanUnitEntryItem;
 import com.chandler.learning.agent.learning.domain.LearningPlanUnitItem;
+import com.chandler.learning.agent.learning.domain.LearningPlanUnitWordSummaryItem;
 import com.chandler.learning.agent.learning.domain.LearningReviewRecord;
 import com.chandler.learning.agent.learning.domain.LearningSceneMaterial;
 import com.chandler.learning.agent.learning.domain.LearningSceneRelatedWord;
@@ -97,10 +99,45 @@ public class LearningPlanResponseAssembler {
         if (units == null || units.isEmpty()) {
             return List.of();
         }
-        return units.stream().map(this::toUnitSummaryResponse).toList();
+        return units.stream().map(unit -> toUnitSummaryResponse(unit, List.of())).toList();
     }
 
-    private LearningPlanUnitResponse toUnitSummaryResponse(LearningPlanUnit unit) {
+    /**
+     * 装配带待挑战词面的日历摘要。只查询词面，避免把场景材料和词卡大字段带到日历接口。
+     */
+    public List<LearningPlanUnitResponse> toUnitSummaryResponses(List<LearningPlanUnit> units, Long planId) {
+        if (units == null || units.isEmpty()) {
+            return List.of();
+        }
+        List<Long> unitIds = units.stream().map(LearningPlanUnit::getId).toList();
+        List<LearningPlanUnitWordSummaryItem> entries = unitEntryMapper.selectWordSummaries(planId, unitIds);
+        List<Long> wordbookEntryIds = entries.stream()
+                .map(LearningPlanUnitWordSummaryItem::getWordbookEntryId)
+                .filter(Objects::nonNull)
+                .distinct()
+                .toList();
+        Map<Long, Set<String>> passedByEntry = wordbookEntryIds.isEmpty()
+                ? Map.of()
+                : reviewRecordMapper.selectList(new LambdaQueryWrapper<LearningReviewRecord>()
+                                .in(LearningReviewRecord::getEntryId, wordbookEntryIds)
+                                .in(LearningReviewRecord::getUnitId, unitIds)
+                                .eq(LearningReviewRecord::getCheckResult, LearningConstants.ScenePlan.CHECK_CORRECT)
+                                .eq(LearningReviewRecord::getDeleted, false))
+                        .stream()
+                        .filter(record -> record.getEntryId() != null && record.getAssessmentType() != null)
+                        .collect(Collectors.groupingBy(LearningReviewRecord::getEntryId,
+                                Collectors.mapping(LearningReviewRecord::getAssessmentType, Collectors.toSet())));
+        Map<Long, List<LearningPlanUnitWordSummaryResponse>> pendingByUnit = entries.stream()
+                .filter(entry -> isPending(entry, passedByEntry))
+                .collect(Collectors.groupingBy(LearningPlanUnitWordSummaryItem::getUnitId,
+                        Collectors.mapping(this::toWordSummaryResponse, Collectors.toList())));
+        return units.stream()
+                .map(unit -> toUnitSummaryResponse(unit, pendingByUnit.getOrDefault(unit.getId(), List.of())))
+                .toList();
+    }
+
+    private LearningPlanUnitResponse toUnitSummaryResponse(
+            LearningPlanUnit unit, List<LearningPlanUnitWordSummaryResponse> pendingWords) {
         LearningPlanUnitResponse response = new LearningPlanUnitResponse();
         response.setId(unit.getId());
         response.setPlanId(unit.getPlanId());
@@ -115,10 +152,30 @@ public class LearningPlanResponseAssembler {
         response.setCompletedCoreCount(unit.getCompletedCoreCount());
         response.setRecommendedDate(unit.getRecommendedDate());
         response.setSceneMaterialId(unit.getSceneMaterialId());
+        response.setMaterialAvailable(unit.getSceneMaterialId() != null);
+        response.setPendingChallengeWords(pendingWords);
         response.setRelatedWords(List.of());
         response.setWords(List.of());
         response.setGeneratedTime(unit.getGeneratedTime());
         response.setCompletedTime(unit.getCompletedTime());
+        return response;
+    }
+
+    private boolean isPending(LearningPlanUnitWordSummaryItem entry, Map<Long, Set<String>> passedByEntry) {
+        Set<String> passed = passedByEntry.getOrDefault(entry.getWordbookEntryId(), Set.of());
+        boolean meaningPassed = passed.contains(LearningConstants.ScenePlan.ASSESSMENT_MEANING_CHOICE);
+        boolean spellingPassed = !LearningConstants.ScenePlan.MASTERY_SPELLING.equals(entry.getMasteryRequirement())
+                || (passed.contains(LearningConstants.ScenePlan.ASSESSMENT_COPY_TYPING)
+                && passed.contains(LearningConstants.ScenePlan.ASSESSMENT_MEANING_SPELLING));
+        return !(meaningPassed && spellingPassed);
+    }
+
+    private LearningPlanUnitWordSummaryResponse toWordSummaryResponse(LearningPlanUnitWordSummaryItem item) {
+        LearningPlanUnitWordSummaryResponse response = new LearningPlanUnitWordSummaryResponse();
+        response.setId(item.getId());
+        response.setTerm(item.getTerm());
+        response.setTier(item.getTier());
+        response.setMasteryRequirement(item.getMasteryRequirement());
         return response;
     }
 
@@ -210,6 +267,8 @@ public class LearningPlanResponseAssembler {
         response.setCompletedCoreCount(unit.getCompletedCoreCount());
         response.setRecommendedDate(unit.getRecommendedDate());
         response.setSceneMaterialId(unit.getSceneMaterialId());
+        response.setMaterialAvailable(unit.getSceneMaterialId() != null && StringUtils.hasText(unit.getMaterialLearningText()));
+        response.setPendingChallengeWords(List.of());
         response.setLearningText(unit.getMaterialLearningText());
         response.setTranslation(unit.getMaterialTranslation());
         response.setMaterial(StringUtils.hasText(unit.getMaterialParsedJson()) ? unit.getMaterialParsedJson() : null);

@@ -1,7 +1,11 @@
 import { asArray } from '/src/features/learning/scene-plan/model.js'
 
 export function createPlanManager({ state, api, sameId, loadSceneData, toast, logEvent, confirmAction }) {
-  function targetPlan() {
+  function targetPlan(planId = null) {
+    if (planId != null) {
+      return asArray(state.learningPlans).find((item) => sameId(item.id, planId))
+        || state.currentLearningPlan
+    }
     return asArray(state.learningPlans).find((item) => sameId(item.id, state.currentPlanEditId))
       || state.currentLearningPlan
       || null

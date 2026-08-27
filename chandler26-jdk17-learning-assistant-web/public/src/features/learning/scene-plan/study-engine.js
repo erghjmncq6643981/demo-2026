@@ -1,32 +1,48 @@
 export function createStudyEngine({
   state,
   elements,
-  activeUnit,
   applyStage,
   renderChallengeWords,
   renderAssessment,
+  prepareUnit,
+  coreWords,
+  isWordComplete,
+  onChallengeStart,
 }) {
-  function startLearning() {
-    state.sceneStage = 'study'
-    applyStage?.('study')
+  async function startLearning() {
+    const unit = await prepareUnit?.()
+    if (!unit) return null
+    state.sceneChallengeStage = 'learning'
+    applyStage?.('learning')
     elements?.sceneDetailSection?.scrollIntoView({ behavior: 'smooth', block: 'start' })
+    elements?.sceneLearningStage?.scrollIntoView({ behavior: 'smooth', block: 'start' })
+    return unit
   }
 
-  function showChallengeWords() {
-    state.sceneStage = 'challenge_words'
-    applyStage?.('challenge_words')
-    renderChallengeWords?.(activeUnit?.())
-  }
-
-  function startChallenge() {
-    state.sceneStage = 'challenge'
+  async function showChallengeWords() {
+    const unit = await prepareUnit?.()
+    if (!unit) return null
+    state.sceneChallengeStage = 'challenge'
     applyStage?.('challenge')
-    renderAssessment?.(activeUnit?.())
+    renderChallengeWords?.(coreWords?.(unit) || [])
+    return unit
+  }
+
+  async function startChallenge() {
+    const unit = await prepareUnit?.()
+    const words = coreWords?.(unit) || []
+    if (!unit || !words.length) return null
+    const firstIncomplete = words.find((word) => !isWordComplete?.(word)) || words[0]
+    onChallengeStart?.(firstIncomplete)
+    state.sceneChallengeStage = 'assessment'
+    applyStage?.('assessment')
+    renderAssessment?.(unit)
+    return unit
   }
 
   function backToReading() {
-    state.sceneStage = 'study'
-    applyStage?.('study')
+    state.sceneChallengeStage = 'learning'
+    applyStage?.('learning')
   }
 
   return {

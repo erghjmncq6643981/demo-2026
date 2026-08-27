@@ -56,7 +56,6 @@ export function createPromptTemplateManagementFeature(ctx) {
       elements.templateConfigList.textContent = '暂无学习 Agent 模板'
       return
     }
-    const aliveCount = list.length
     elements.templateConfigList.className = 'model-list'
     elements.templateConfigList.innerHTML = list
       .map(

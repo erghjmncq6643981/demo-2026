@@ -31,6 +31,8 @@ export function createUnitList({ state, api, sameId }) {
 
   async function loadDetail(plan, unitId) {
     if (!plan || !unitId) return null
+    const cached = asArray(plan.units).find((unit) => sameId(unit.id, unitId))
+    if (cached && asArray(cached.words).length && (cached.learningText || cached.material)) return cached
     const detail = await api.getUnit(plan.id, unitId)
     if (!detail) return null
     const units = asArray(plan.units)
