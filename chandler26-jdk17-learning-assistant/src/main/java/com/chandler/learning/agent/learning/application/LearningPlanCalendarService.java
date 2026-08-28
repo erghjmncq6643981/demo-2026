@@ -2,13 +2,15 @@ package com.chandler.learning.agent.learning.application;
 
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import com.chandler.learning.agent.exception.LearningAssistantException;
-import com.chandler.learning.agent.learning.api.LearningPlanCalendarDayResponse;
-import com.chandler.learning.agent.learning.api.LearningPlanUnitResponse;
-import com.chandler.learning.agent.learning.domain.LearningPlan;
-import com.chandler.learning.agent.learning.domain.LearningPlanUnit;
-import com.chandler.learning.agent.learning.infrastructure.LearningPlanMapper;
-import com.chandler.learning.agent.learning.infrastructure.LearningPlanUnitMapper;
-import com.chandler.learning.agent.support.LearningConstants;
+import com.chandler.learning.agent.learning.api.response.LearningPlanCalendarDayResponse;
+import com.chandler.learning.agent.learning.api.response.LearningPlanUnitResponse;
+import com.chandler.learning.agent.learning.domain.entity.LearningPlan;
+import com.chandler.learning.agent.learning.domain.entity.LearningPlanUnit;
+import com.chandler.learning.agent.learning.infrastructure.mapper.LearningPlanMapper;
+import com.chandler.learning.agent.learning.infrastructure.mapper.LearningPlanUnitMapper;
+import com.chandler.learning.agent.common.constant.CommonConstants;
+import com.chandler.learning.agent.common.exception.LearningErrorCode;
+import com.chandler.learning.agent.learning.domain.constant.ScenePlanConstants;
 import com.chandler.learning.agent.task.application.AiAsyncTaskService;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
@@ -42,12 +44,12 @@ public class LearningPlanCalendarService {
         LocalDate resolvedTo = to == null ? resolvedFrom.plusDays(6) : to;
         if (resolvedTo.isBefore(resolvedFrom)) {
             throw LearningAssistantException.badRequest(
-                    LearningConstants.ErrorCode.LEARNING_PLAN_STATE_ERROR,
+                    LearningErrorCode.LEARNING_PLAN_STATE_ERROR,
                     "日历结束日期不能早于开始日期");
         }
         if (ChronoUnit.DAYS.between(resolvedFrom, resolvedTo) > 62) {
             throw LearningAssistantException.badRequest(
-                    LearningConstants.ErrorCode.LEARNING_PLAN_STATE_ERROR,
+                    LearningErrorCode.LEARNING_PLAN_STATE_ERROR,
                     "单次日历查询不能超过 63 天");
         }
         List<LearningPlanUnit> units = unitMapper.selectList(new LambdaQueryWrapper<LearningPlanUnit>()
@@ -69,7 +71,7 @@ public class LearningPlanCalendarService {
         for (LocalDate date = resolvedFrom; !date.isAfter(resolvedTo); date = date.plusDays(1)) {
             List<LearningPlanUnit> dateUnits = unitsByDate.getOrDefault(date, List.of());
             int planned = dateUnits.stream().mapToInt(unit -> value(unit.getCoreWordCount())).sum();
-            int pending = dateUnits.stream().mapToInt(unit -> Math.max(LearningConstants.ZERO,
+            int pending = dateUnits.stream().mapToInt(unit -> Math.max(CommonConstants.ZERO,
                     value(unit.getCoreWordCount()) - value(unit.getCompletedCoreCount()))).sum();
             LearningPlanCalendarDayResponse day = new LearningPlanCalendarDayResponse();
             day.setDate(date);
@@ -77,8 +79,8 @@ public class LearningPlanCalendarService {
             day.setPendingChallengeCount(pending);
             day.setGeneratedUnitCount(dateUnits.size());
             day.setCompletedUnitCount((int) dateUnits.stream()
-                    .filter(unit -> LearningConstants.ScenePlan.UNIT_COMPLETED.equals(unit.getStatus())).count());
-            day.setOverdueCount(date.isBefore(today) ? pending : LearningConstants.ZERO);
+                    .filter(unit -> ScenePlanConstants.UNIT_COMPLETED.equals(unit.getStatus())).count());
+            day.setOverdueCount(date.isBefore(today) ? pending : CommonConstants.ZERO);
             day.setGenerating(generatingDates.contains(date));
             day.setUnits(dateUnits.stream().map(LearningPlanUnit::getId).map(summariesByUnit::get)
                     .filter(Objects::nonNull).toList());
@@ -92,15 +94,15 @@ public class LearningPlanCalendarService {
                 .eq(LearningPlan::getId, planId)
                 .eq(LearningPlan::getUserId, userId)
                 .eq(LearningPlan::getDeleted, false)
-                .last(LearningConstants.SQL_LIMIT_ONE));
+                .last(CommonConstants.SQL_LIMIT_ONE));
         if (plan == null) {
-            throw LearningAssistantException.notFound(LearningConstants.ErrorCode.LEARNING_PLAN_NOT_FOUND,
+            throw LearningAssistantException.notFound(LearningErrorCode.LEARNING_PLAN_NOT_FOUND,
                     "学习计划不存在: " + planId);
         }
         return plan;
     }
 
     private int value(Integer value) {
-        return value == null ? LearningConstants.ZERO : value;
+        return value == null ? CommonConstants.ZERO : value;
     }
 }

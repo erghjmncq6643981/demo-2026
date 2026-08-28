@@ -1,8 +1,6 @@
 package com.chandler.learning.agent.security;
 
-import com.chandler.learning.agent.support.LearningConstants;
-import org.springframework.security.core.Authentication;
-import org.springframework.security.core.context.SecurityContextHolder;
+import com.chandler.learning.agent.common.constant.PersistenceConstants;
 import org.springframework.stereotype.Component;
 
 /**
@@ -13,20 +11,18 @@ import org.springframework.stereotype.Component;
 @Component
 public class LearningAuditor {
 
+    private final CurrentUserContext currentUserContext;
+
+    public LearningAuditor(CurrentUserContext currentUserContext) {
+        this.currentUserContext = currentUserContext;
+    }
+
     /**
      * 处理 {@code currentUserId} 相关业务。
      */
     public Long currentUserId() {
-        Authentication authentication = SecurityContextHolder.getContext().getAuthentication();
-        if (authentication == null) {
-            return LearningConstants.Audit.SYSTEM_USER_ID;
-        }
-        Object principal = authentication.getPrincipal();
-        if (principal instanceof LearningUserPrincipal learningUserPrincipal
-                && learningUserPrincipal.user() != null
-                && learningUserPrincipal.user().getId() != null) {
-            return learningUserPrincipal.user().getId();
-        }
-        return LearningConstants.Audit.SYSTEM_USER_ID;
+        return currentUserContext.findUser()
+                .map(user -> user.getId())
+                .orElse(PersistenceConstants.SYSTEM_USER_ID);
     }
 }

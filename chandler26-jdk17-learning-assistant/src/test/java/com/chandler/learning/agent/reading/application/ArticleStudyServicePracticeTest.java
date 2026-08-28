@@ -1,6 +1,6 @@
 package com.chandler.learning.agent.reading.application;
 
-import com.chandler.learning.agent.reading.api.ArticleStudyAnswerRequest;
+import com.chandler.learning.agent.reading.api.request.ArticleStudyAnswerRequest;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import org.junit.jupiter.api.Test;

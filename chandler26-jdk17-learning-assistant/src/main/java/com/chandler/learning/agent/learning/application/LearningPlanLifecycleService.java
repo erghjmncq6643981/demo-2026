@@ -2,12 +2,13 @@ package com.chandler.learning.agent.learning.application;
 
 import com.chandler.learning.agent.exception.LearningAssistantException;
 import com.chandler.learning.agent.identity.application.UserDisplayNameService;
-import com.chandler.learning.agent.learning.api.LearningPlanUpdateRequest;
-import com.chandler.learning.agent.learning.domain.LearningPlan;
-import com.chandler.learning.agent.learning.infrastructure.LearningPlanMapper;
-import com.chandler.learning.agent.support.LearningConstants;
+import com.chandler.learning.agent.learning.api.request.LearningPlanUpdateRequest;
+import com.chandler.learning.agent.learning.domain.entity.LearningPlan;
+import com.chandler.learning.agent.learning.infrastructure.mapper.LearningPlanMapper;
+import com.chandler.learning.agent.common.exception.LearningErrorCode;
+import com.chandler.learning.agent.learning.domain.constant.ScenePlanConstants;
 import com.chandler.learning.agent.system.application.SystemLogService;
-import com.chandler.learning.agent.system.domain.SystemLogType;
+import com.chandler.learning.agent.system.domain.enums.SystemLogType;
 import com.chandler.learning.agent.vocabulary.application.WordbookService;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -41,26 +42,26 @@ public class LearningPlanLifecycleService {
         }
         if (request.getStatus() != null && !request.getStatus().trim().equals(plan.getStatus())) {
             String newStatus = request.getStatus().trim();
-            if (LearningConstants.ScenePlan.STATUS_ACTIVE.equals(newStatus)) {
-                if (!LearningConstants.ScenePlan.STATUS_PAUSED.equals(plan.getStatus())
-                        && !LearningConstants.ScenePlan.STATUS_NOT_STARTED.equals(plan.getStatus())) {
+            if (ScenePlanConstants.STATUS_ACTIVE.equals(newStatus)) {
+                if (!ScenePlanConstants.STATUS_PAUSED.equals(plan.getStatus())
+                        && !ScenePlanConstants.STATUS_NOT_STARTED.equals(plan.getStatus())) {
                     throw stateError("只有暂停或未开始的计划才可以恢复/启动");
                 }
-                plan.setStatus(LearningConstants.ScenePlan.STATUS_ACTIVE);
+                plan.setStatus(ScenePlanConstants.STATUS_ACTIVE);
                 generateFirstUnit = plan.getCurrentUnitId() == null;
-            } else if (LearningConstants.ScenePlan.STATUS_PAUSED.equals(newStatus)) {
-                if (!LearningConstants.ScenePlan.STATUS_ACTIVE.equals(plan.getStatus())) {
+            } else if (ScenePlanConstants.STATUS_PAUSED.equals(newStatus)) {
+                if (!ScenePlanConstants.STATUS_ACTIVE.equals(plan.getStatus())) {
                     throw stateError("只有进行中的计划才可以暂停");
                 }
-                plan.setStatus(LearningConstants.ScenePlan.STATUS_PAUSED);
-            } else if (LearningConstants.ScenePlan.STATUS_CANCELLED.equals(newStatus)) {
+                plan.setStatus(ScenePlanConstants.STATUS_PAUSED);
+            } else if (ScenePlanConstants.STATUS_CANCELLED.equals(newStatus)) {
                 ensureNotTerminal(plan, "已完成或已取消的计划无法取消");
-                plan.setStatus(LearningConstants.ScenePlan.STATUS_CANCELLED);
-            } else if (LearningConstants.ScenePlan.STATUS_NOT_STARTED.equals(newStatus)) {
+                plan.setStatus(ScenePlanConstants.STATUS_CANCELLED);
+            } else if (ScenePlanConstants.STATUS_NOT_STARTED.equals(newStatus)) {
                 ensureNotTerminal(plan, "已完成或已取消的计划无法设为未开始");
-                plan.setStatus(LearningConstants.ScenePlan.STATUS_NOT_STARTED);
-            } else if (LearningConstants.ScenePlan.STATUS_COMPLETED.equals(newStatus)) {
-                plan.setStatus(LearningConstants.ScenePlan.STATUS_COMPLETED);
+                plan.setStatus(ScenePlanConstants.STATUS_NOT_STARTED);
+            } else if (ScenePlanConstants.STATUS_COMPLETED.equals(newStatus)) {
+                plan.setStatus(ScenePlanConstants.STATUS_COMPLETED);
             } else {
                 throw stateError("无效的学习计划状态: " + newStatus);
             }
@@ -75,25 +76,25 @@ public class LearningPlanLifecycleService {
     }
 
     public void pause(Long userId, LearningPlan plan) {
-        if (!LearningConstants.ScenePlan.STATUS_ACTIVE.equals(plan.getStatus())) {
+        if (!ScenePlanConstants.STATUS_ACTIVE.equals(plan.getStatus())) {
             throw stateError("只有进行中的计划才可以暂停");
         }
-        plan.setStatus(LearningConstants.ScenePlan.STATUS_PAUSED);
+        plan.setStatus(ScenePlanConstants.STATUS_PAUSED);
         persistAndLog(userId, plan, "暂停场景学习计划");
     }
 
     public void resume(Long userId, LearningPlan plan) {
-        if (!LearningConstants.ScenePlan.STATUS_PAUSED.equals(plan.getStatus())
-                && !LearningConstants.ScenePlan.STATUS_NOT_STARTED.equals(plan.getStatus())) {
+        if (!ScenePlanConstants.STATUS_PAUSED.equals(plan.getStatus())
+                && !ScenePlanConstants.STATUS_NOT_STARTED.equals(plan.getStatus())) {
             throw stateError("只有暂停或未开始的计划才可以恢复/启动");
         }
-        plan.setStatus(LearningConstants.ScenePlan.STATUS_ACTIVE);
+        plan.setStatus(ScenePlanConstants.STATUS_ACTIVE);
         persistAndLog(userId, plan, "恢复场景学习计划");
     }
 
     public void cancel(Long userId, LearningPlan plan) {
         ensureNotTerminal(plan, "已完成或已取消的计划无法取消");
-        plan.setStatus(LearningConstants.ScenePlan.STATUS_CANCELLED);
+        plan.setStatus(ScenePlanConstants.STATUS_CANCELLED);
         persistAndLog(userId, plan, "取消场景学习计划");
     }
 
@@ -106,15 +107,15 @@ public class LearningPlanLifecycleService {
     }
 
     private void ensureNotTerminal(LearningPlan plan, String message) {
-        if (LearningConstants.ScenePlan.STATUS_COMPLETED.equals(plan.getStatus())
-                || LearningConstants.ScenePlan.STATUS_CANCELLED.equals(plan.getStatus())) {
+        if (ScenePlanConstants.STATUS_COMPLETED.equals(plan.getStatus())
+                || ScenePlanConstants.STATUS_CANCELLED.equals(plan.getStatus())) {
             throw stateError(message);
         }
     }
 
     private LearningAssistantException stateError(String message) {
         return LearningAssistantException.badRequest(
-                LearningConstants.ErrorCode.LEARNING_PLAN_STATE_ERROR, message);
+                LearningErrorCode.LEARNING_PLAN_STATE_ERROR, message);
     }
 
     public record UpdateOutcome(boolean generateFirstUnit) {

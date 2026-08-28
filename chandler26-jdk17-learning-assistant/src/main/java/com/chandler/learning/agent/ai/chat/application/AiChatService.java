@@ -8,24 +8,28 @@ import com.chandler.learning.agent.ai.chat.application.codec.AiSceneResponseCode
 import com.chandler.learning.agent.ai.gateway.protocol.ChatMessageParam;
 import com.chandler.learning.agent.ai.gateway.protocol.ModelChatRequest;
 import com.chandler.learning.agent.ai.gateway.protocol.ModelChatResponse;
-import com.chandler.learning.agent.ai.agent.domain.AiAgent;
-import com.chandler.learning.agent.ai.chat.domain.AiChatMessage;
-import com.chandler.learning.agent.ai.chat.domain.AiChatSession;
-import com.chandler.learning.agent.ai.chat.domain.AiModelCallRecord;
-import com.chandler.learning.agent.ai.model.domain.AiModelConfig;
-import com.chandler.learning.agent.ai.chat.domain.AiInvocationScene;
-import com.chandler.learning.agent.ai.model.domain.AiModelDefinition;
-import com.chandler.learning.agent.ai.chat.domain.ChatMessageRole;
-import com.chandler.learning.agent.learning.domain.LearningScene;
+import com.chandler.learning.agent.ai.agent.domain.entity.AiAgent;
+import com.chandler.learning.agent.ai.chat.domain.entity.AiChatMessage;
+import com.chandler.learning.agent.ai.chat.domain.entity.AiChatSession;
+import com.chandler.learning.agent.ai.chat.domain.entity.AiModelCallRecord;
+import com.chandler.learning.agent.ai.model.domain.entity.AiModelConfig;
+import com.chandler.learning.agent.ai.chat.domain.enums.AiInvocationScene;
+import com.chandler.learning.agent.ai.model.domain.enums.AiModelDefinition;
+import com.chandler.learning.agent.ai.chat.domain.enums.ChatMessageRole;
+import com.chandler.learning.agent.learning.domain.enums.LearningScene;
 import com.chandler.learning.agent.exception.LearningAssistantException;
-import com.chandler.learning.agent.ai.chat.infrastructure.AiModelCallRecordMapper;
+import com.chandler.learning.agent.ai.chat.infrastructure.mapper.AiModelCallRecordMapper;
 import com.chandler.learning.agent.identity.application.UserDisplayNameService;
 import com.chandler.learning.agent.ai.gateway.client.AiModelClient;
 import com.chandler.learning.agent.ai.gateway.protocol.AiModelCapabilityResolver;
 import com.chandler.learning.agent.ai.gateway.parser.AiStructuredResponseParseException;
 import com.chandler.learning.agent.ai.gateway.parser.AiStructuredResponseParseResult;
 import com.chandler.learning.agent.ai.gateway.parser.AiStructuredResponseParserRegistry;
-import com.chandler.learning.agent.support.LearningConstants;
+import com.chandler.learning.agent.ai.chat.domain.constant.AiAuditConstants;
+import com.chandler.learning.agent.ai.chat.domain.constant.AiChatConstants;
+import com.chandler.learning.agent.ai.chat.domain.constant.AiContextBudgetConstants;
+import com.chandler.learning.agent.common.constant.CommonConstants;
+import com.chandler.learning.agent.common.exception.LearningErrorCode;
 import com.chandler.learning.agent.ai.prompt.application.PromptRenderer;
 import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.ObjectMapper;
@@ -82,7 +86,7 @@ public class AiChatService {
                 : request.getInvocationScene();
         if (AiInvocationScene.MODEL_CONNECTION_TEST.equals(invocationScene)) {
             throw LearningAssistantException.badRequest(
-                    LearningConstants.ErrorCode.AI_INVOCATION_SCENE_INVALID,
+                    LearningErrorCode.AI_INVOCATION_SCENE_INVALID,
                     "模型连接验证必须在模型管理中直接执行，不能通过 Agent 调用");
         }
         AiAgent agent = getEnabledAgent(request.getAgentCode());
@@ -113,9 +117,9 @@ public class AiChatService {
                 ? defaultOutputTokens(invocationScene)
                 : agent.getMaxTokens();
         int availableOutputTokens = safeContextWindow - estimatedInputTokens;
-        if (availableOutputTokens < LearningConstants.AiContext.MIN_OUTPUT_TOKENS) {
+        if (availableOutputTokens < AiContextBudgetConstants.MIN_OUTPUT_TOKENS) {
             throw LearningAssistantException.badRequest(
-                    LearningConstants.ErrorCode.AI_PROMPT_TOO_LARGE,
+                    LearningErrorCode.AI_PROMPT_TOO_LARGE,
                     "本次「" + invocationScene.getTitle() + "」请求没有足够的安全输出空间，请减少输入后重试");
         }
         modelRequest.setMaxTokens(Math.min(Math.min(configuredMaxTokens, modelDefinition.getMaxOutputTokens()),
@@ -188,7 +192,7 @@ public class AiChatService {
             trySaveFailedRecord(record, ex, costTime);
             String errorCode = ex instanceof LearningAssistantException businessException
                     ? businessException.getErrorCode()
-                    : LearningConstants.ErrorCode.AI_MODEL_CALL_FAILED.getCode();
+                    : LearningErrorCode.AI_MODEL_CALL_FAILED.getCode();
             aiCallMetrics.recordFailure(invocationScene, provider, modelName, errorCode, costTime);
             log.warn("event=ai_call result=failed sessionId={} invocationScene={} agent={} provider={} model={} costMs={} errorCode={} message={}",
                     session.getId(),
@@ -211,12 +215,12 @@ public class AiChatService {
         AiAgent agent = agentService.getByCode(agentCode);
         if (agent == null) {
             throw LearningAssistantException.notFound(
-                    LearningConstants.ErrorCode.AGENT_NOT_FOUND,
+                    LearningErrorCode.AGENT_NOT_FOUND,
                     "Agent 不存在: " + agentCode);
         }
         if (!Boolean.TRUE.equals(agent.getEnabled())) {
             throw LearningAssistantException.badRequest(
-                    LearningConstants.ErrorCode.AGENT_DISABLED,
+                    LearningErrorCode.AGENT_DISABLED,
                     "Agent 已停用: " + agentCode);
         }
         return agent;
@@ -231,7 +235,7 @@ public class AiChatService {
             AiChatSession session = chatSessionService.getOwnedSession(userId, request.getSessionId());
             if (session == null) {
                 throw LearningAssistantException.notFound(
-                        LearningConstants.ErrorCode.CHAT_SESSION_NOT_FOUND,
+                        LearningErrorCode.CHAT_SESSION_NOT_FOUND,
                         "会话不存在: " + request.getSessionId());
             }
             return session;
@@ -313,7 +317,7 @@ public class AiChatService {
      */
     private int estimatePromptTokens(List<ChatMessageParam> messages) {
         int estimatedTokens = messages.stream()
-                .mapToInt(message -> LearningConstants.AiContext.MESSAGE_OVERHEAD_TOKENS
+                .mapToInt(message -> AiContextBudgetConstants.MESSAGE_OVERHEAD_TOKENS
                         + estimateTokens(message.getContent()))
                 .sum();
         return estimatedTokens;
@@ -327,15 +331,15 @@ public class AiChatService {
         String provider = modelDefinition.getProvider().getCode();
         String modelName = modelDefinition.getApiModelId();
         int contextWindow = modelCapabilityResolver.effectiveContextWindowTokens(modelDefinition);
-        int safeLimit = contextWindow * LearningConstants.AiContext.SAFE_USAGE_PERCENT
-                / LearningConstants.PERCENT_BASE;
+        int safeLimit = contextWindow * AiContextBudgetConstants.SAFE_USAGE_PERCENT
+                / CommonConstants.PERCENT_BASE;
         log.debug("AI 请求上下文估算 invocationScene={} provider={} model={} estimatedTokens={} contextWindow={} safeLimit={} messageCount={}",
                 invocationScene.getCode(), provider, modelName, estimatedTokens, contextWindow, safeLimit, messageCount);
-        if (estimatedTokens >= safeLimit - LearningConstants.AiContext.MIN_OUTPUT_TOKENS) {
+        if (estimatedTokens >= safeLimit - AiContextBudgetConstants.MIN_OUTPUT_TOKENS) {
             log.warn("event=ai_context_budget result=rejected invocationScene={} provider={} model={} estimatedTokens={} contextWindow={} safeLimit={}",
                     invocationScene.getCode(), provider, modelName, estimatedTokens, contextWindow, safeLimit);
             throw LearningAssistantException.badRequest(
-                    LearningConstants.ErrorCode.AI_PROMPT_TOO_LARGE,
+                    LearningErrorCode.AI_PROMPT_TOO_LARGE,
                     "本次「" + invocationScene.getTitle() + "」请求预计约 " + estimatedTokens
                             + " Token，已达到安全上限 " + safeLimit
                             + " Token，请减少词汇批次或补充数据后重试");
@@ -355,21 +359,21 @@ public class AiChatService {
 
     private int estimateTokens(String content) {
         if (!StringUtils.hasText(content)) {
-            return LearningConstants.ZERO;
+            return CommonConstants.ZERO;
         }
-        int tokens = LearningConstants.ZERO;
-        int asciiCharacters = LearningConstants.ZERO;
-        for (int index = LearningConstants.ZERO; index < content.length(); index++) {
+        int tokens = CommonConstants.ZERO;
+        int asciiCharacters = CommonConstants.ZERO;
+        for (int index = CommonConstants.ZERO; index < content.length(); index++) {
             char character = content.charAt(index);
             if (character <= 0x7F) {
                 asciiCharacters++;
                 continue;
             }
-            tokens += ceilDivide(asciiCharacters, LearningConstants.AiContext.ASCII_CHARACTERS_PER_TOKEN);
-            asciiCharacters = LearningConstants.ZERO;
-            tokens += LearningConstants.AiContext.NON_ASCII_TOKENS_PER_CHARACTER;
+            tokens += ceilDivide(asciiCharacters, AiContextBudgetConstants.ASCII_CHARACTERS_PER_TOKEN);
+            asciiCharacters = CommonConstants.ZERO;
+            tokens += AiContextBudgetConstants.NON_ASCII_TOKENS_PER_CHARACTER;
         }
-        return tokens + ceilDivide(asciiCharacters, LearningConstants.AiContext.ASCII_CHARACTERS_PER_TOKEN);
+        return tokens + ceilDivide(asciiCharacters, AiContextBudgetConstants.ASCII_CHARACTERS_PER_TOKEN);
     }
 
     /** 依次执行供应商响应解析和调用场景契约解码，业务服务不再重复解析 JSON 文本。 */
@@ -389,18 +393,18 @@ public class AiChatService {
             log.debug("AI structured response parsing failed. provider={} model={} parser={} stage={} repairs={}",
                     modelDefinition.getProvider().getCode(), modelDefinition.getApiModelId(), ex.getParserName(),
                     ex.getParseStage(), ex.getRepairs(), ex);
-            throw LearningAssistantException.of(LearningConstants.ErrorCode.AI_RESPONSE_PARSE_FAILED, ex);
+            throw LearningAssistantException.of(LearningErrorCode.AI_RESPONSE_PARSE_FAILED, ex);
         } catch (Exception ex) {
             log.debug("AI structured response contract validation failed. provider={} model={} error={}",
                     modelDefinition.getProvider().getCode(), modelDefinition.getApiModelId(), ex.getMessage(), ex);
-            throw LearningAssistantException.badRequest(LearningConstants.ErrorCode.AI_RESPONSE_PARSE_FAILED);
+            throw LearningAssistantException.badRequest(LearningErrorCode.AI_RESPONSE_PARSE_FAILED);
         }
     }
 
     private int ceilDivide(int dividend, int divisor) {
-        return dividend == LearningConstants.ZERO
-                ? LearningConstants.ZERO
-                : (dividend + divisor - LearningConstants.SEQUENCE_STEP) / divisor;
+        return dividend == CommonConstants.ZERO
+                ? CommonConstants.ZERO
+                : (dividend + divisor - CommonConstants.SEQUENCE_STEP) / divisor;
     }
 
     /**
@@ -450,7 +454,7 @@ public class AiChatService {
      */
     private void trySaveFailedRecord(AiModelCallRecord record, RuntimeException ex, long costTime) {
         record.setSuccess(false);
-        record.setErrorMessage(limit(ex.getMessage(), LearningConstants.AiAudit.MAX_ERROR_MESSAGE_LENGTH));
+        record.setErrorMessage(limit(ex.getMessage(), AiAuditConstants.MAX_ERROR_MESSAGE_LENGTH));
         record.setLatencyMs(costTime);
         try {
             callRecordMapper.insert(record);
@@ -474,7 +478,7 @@ public class AiChatService {
         diagnostic.put("structuredRepairs", parseException.getRepairs());
         diagnostic.put("parseError", limit(parseException.getCause() == null
                 ? parseException.getMessage() : parseException.getCause().getMessage(),
-                LearningConstants.AiAudit.MAX_ERROR_MESSAGE_LENGTH));
+                AiAuditConstants.MAX_ERROR_MESSAGE_LENGTH));
         record.setResponseJson(toJson(diagnostic));
     }
 
@@ -486,7 +490,7 @@ public class AiChatService {
             return objectMapper.writeValueAsString(value);
         } catch (Exception ex) {
             throw LearningAssistantException.system(
-                    LearningConstants.ErrorCode.JSON_SERIALIZE_FAILED,
+                    LearningErrorCode.JSON_SERIALIZE_FAILED,
                     "模型请求序列化失败",
                     ex);
         }
@@ -504,7 +508,7 @@ public class AiChatService {
             });
         } catch (Exception ex) {
             throw LearningAssistantException.system(
-                    LearningConstants.ErrorCode.JSON_PARSE_FAILED,
+                    LearningErrorCode.JSON_PARSE_FAILED,
                     "AI 会话变量损坏，请新建会话后重试",
                     ex);
         }
@@ -513,9 +517,9 @@ public class AiChatService {
     /** 仅携带最近且不超过字符预算的历史消息，避免上下文无限膨胀。 */
     private List<ChatMessageParam> historyWithinBudget(List<AiChatMessage> history) {
         List<ChatMessageParam> selected = new ArrayList<>();
-        int remaining = LearningConstants.ChatSession.MAX_HISTORY_CHARS;
-        for (int index = history.size() - LearningConstants.SEQUENCE_STEP;
-             index >= LearningConstants.ZERO; index--) {
+        int remaining = AiChatConstants.MAX_HISTORY_CHARS;
+        for (int index = history.size() - CommonConstants.SEQUENCE_STEP;
+             index >= CommonConstants.ZERO; index--) {
             AiChatMessage message = history.get(index);
             if (!ChatMessageRole.conversational(message.getRole()) || !StringUtils.hasText(message.getContent())) {
                 continue;
@@ -554,7 +558,7 @@ public class AiChatService {
         audit.put("messages", requestMessages.stream().map(message -> {
             Map<String, Object> summary = new LinkedHashMap<>();
             summary.put("role", message.getRole());
-            summary.put("characters", message.getContent() == null ? LearningConstants.ZERO : message.getContent().length());
+            summary.put("characters", message.getContent() == null ? CommonConstants.ZERO : message.getContent().length());
             return summary;
         }).toList());
         if (storeAuditContent) {
@@ -568,7 +572,7 @@ public class AiChatService {
         Map<String, Object> audit = new LinkedHashMap<>();
         audit.put("contentStored", storeAuditContent);
         audit.put("contentCharacters", response.getContent() == null
-                ? LearningConstants.ZERO : response.getContent().length());
+                ? CommonConstants.ZERO : response.getContent().length());
         audit.put("promptTokens", response.getPromptTokens());
         audit.put("completionTokens", response.getCompletionTokens());
         audit.put("totalTokens", response.getTotalTokens());
@@ -586,7 +590,7 @@ public class AiChatService {
         if (value == null || value.length() <= maxLength) {
             return value;
         }
-        return value.substring(LearningConstants.ZERO, maxLength);
+        return value.substring(CommonConstants.ZERO, maxLength);
     }
 
     /**

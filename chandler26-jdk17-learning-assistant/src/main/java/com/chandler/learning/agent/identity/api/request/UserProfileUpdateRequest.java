@@ -1,0 +1,27 @@
+package com.chandler.learning.agent.identity.api.request;
+
+import io.swagger.v3.oas.annotations.media.Schema;
+
+import lombok.Data;
+
+/**
+ * UserProfileUpdateRequest 类。
+ */
+@Data
+public class UserProfileUpdateRequest {
+
+    @Schema(description = "名称")
+    private String nickname;
+
+    @Schema(description = "手机号")
+    private String phone;
+
+    @Schema(description = "邮箱")
+    private String email;
+
+    @Schema(description = "当前密码")
+    private String currentPassword;
+
+    @Schema(description = "新密码")
+    private String newPassword;
+}

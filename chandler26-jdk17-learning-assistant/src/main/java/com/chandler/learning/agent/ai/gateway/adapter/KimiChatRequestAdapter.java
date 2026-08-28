@@ -2,7 +2,7 @@ package com.chandler.learning.agent.ai.gateway.adapter;
 
 import com.chandler.learning.agent.ai.gateway.protocol.ModelChatRequest;
 import com.chandler.learning.agent.ai.gateway.protocol.AiApiProtocol;
-import com.chandler.learning.agent.ai.chat.domain.AiInvocationScene;
+import com.chandler.learning.agent.ai.chat.domain.enums.AiInvocationScene;
 import com.chandler.learning.agent.ai.gateway.protocol.AiRequestAdapterType;
 import com.chandler.learning.agent.ai.gateway.protocol.AiPreparedModelRequest;
 import org.springframework.stereotype.Component;

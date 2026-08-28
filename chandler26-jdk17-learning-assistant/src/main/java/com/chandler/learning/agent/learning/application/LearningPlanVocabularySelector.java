@@ -1,16 +1,17 @@
 package com.chandler.learning.agent.learning.application;
 
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
-import com.chandler.learning.agent.learning.domain.LearningPlan;
-import com.chandler.learning.agent.learning.domain.LearningPlanUnitEntry;
-import com.chandler.learning.agent.vocabulary.domain.LearningWordProgress;
-import com.chandler.learning.agent.vocabulary.domain.VocabularyCatalogEntry;
-import com.chandler.learning.agent.vocabulary.domain.VocabularyCatalogEntryAnalysis;
-import com.chandler.learning.agent.learning.infrastructure.LearningPlanUnitEntryMapper;
+import com.chandler.learning.agent.learning.domain.entity.LearningPlan;
+import com.chandler.learning.agent.learning.domain.entity.LearningPlanUnitEntry;
+import com.chandler.learning.agent.vocabulary.domain.entity.LearningWordProgress;
+import com.chandler.learning.agent.vocabulary.domain.entity.VocabularyCatalogEntry;
+import com.chandler.learning.agent.vocabulary.domain.entity.VocabularyCatalogEntryAnalysis;
+import com.chandler.learning.agent.learning.infrastructure.mapper.LearningPlanUnitEntryMapper;
 import com.chandler.learning.agent.vocabulary.application.LearningWordProgressService;
 import com.chandler.learning.agent.vocabulary.application.VocabularyCatalogAnalysisService;
 import com.chandler.learning.agent.vocabulary.application.VocabularyCatalogQueryService;
-import com.chandler.learning.agent.support.LearningConstants;
+import com.chandler.learning.agent.common.constant.CommonConstants;
+import com.chandler.learning.agent.learning.domain.constant.ScenePlanConstants;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Component;
 import org.springframework.util.StringUtils;
@@ -53,7 +54,7 @@ public class LearningPlanVocabularySelector {
                 .map(LearningPlanUnitEntry::getCatalogEntryId)
                 .collect(Collectors.toSet());
         List<VocabularyCatalogEntry> all = catalogQueryService.listPublishedEntries(plan.getCatalogVersionId());
-        int candidateLimit = Math.max(LearningConstants.SEQUENCE_STEP, requestedLimit);
+        int candidateLimit = Math.max(CommonConstants.SEQUENCE_STEP, requestedLimit);
         List<VocabularyCatalogEntryAnalysis> analyses = catalogAnalysisService.readyEntries(plan.getCatalogVersionId());
         if (!analyses.isEmpty()) {
             sortBySemanticRelevance(all, arranged, reviewWords, analyses);
@@ -73,7 +74,7 @@ public class LearningPlanVocabularySelector {
                 continue;
             }
             LearningWordProgress progress = progresses.get(entry.getNormalizedTerm());
-            if (progress != null && LearningConstants.ScenePlan.PROGRESS_MASTERED.equals(progress.getLearningState())) {
+            if (progress != null && ScenePlanConstants.PROGRESS_MASTERED.equals(progress.getLearningState())) {
                 continue;
             }
             result.add(entry);
@@ -89,7 +90,7 @@ public class LearningPlanVocabularySelector {
         List<LearningPlanUnitEntry> previousEntries = unitEntryMapper.selectList(
                 new LambdaQueryWrapper<LearningPlanUnitEntry>()
                         .eq(LearningPlanUnitEntry::getPlanId, plan.getId())
-                        .eq(LearningPlanUnitEntry::getTier, LearningConstants.ScenePlan.TIER_CORE)
+                        .eq(LearningPlanUnitEntry::getTier, ScenePlanConstants.TIER_CORE)
                         .isNotNull(LearningPlanUnitEntry::getCatalogEntryId)
                         .eq(LearningPlanUnitEntry::getDeleted, false)
                         .orderByDesc(LearningPlanUnitEntry::getUpdateTime));
@@ -118,14 +119,14 @@ public class LearningPlanVocabularySelector {
         Set<Long> seen = new HashSet<>();
         for (LearningPlanUnitEntry previous : previousEntries) {
             LearningWordProgress progress = progressByTerm.get(previous.getNormalizedTerm());
-            if (progress != null && LearningConstants.ScenePlan.PROGRESS_MASTERED.equals(progress.getLearningState())) {
+            if (progress != null && ScenePlanConstants.PROGRESS_MASTERED.equals(progress.getLearningState())) {
                 continue;
             }
             VocabularyCatalogEntry entry = catalogEntries.get(previous.getCatalogEntryId());
             if (entry != null && seen.add(entry.getId())) {
                 result.add(entry);
             }
-            if (result.size() >= Math.min(limit, LearningConstants.ScenePlan.MAX_REVIEW_WORDS)) {
+            if (result.size() >= Math.min(limit, ScenePlanConstants.MAX_REVIEW_WORDS)) {
                 break;
             }
         }
@@ -150,7 +151,7 @@ public class LearningPlanVocabularySelector {
                 .filter(java.util.Objects::nonNull)
                 .filter(item -> StringUtils.hasText(item.getPrimaryGroupCode()))
                 .collect(Collectors.groupingBy(VocabularyCatalogEntryAnalysis::getPrimaryGroupCode,
-                        Collectors.summingInt(item -> LearningConstants.SEQUENCE_STEP)));
+                        Collectors.summingInt(item -> CommonConstants.SEQUENCE_STEP)));
         entries.sort((left, right) -> Integer.compare(
                 candidateScore(right, analysisByEntry, preferredGroups, groupSize),
                 candidateScore(left, analysisByEntry, preferredGroups, groupSize)));
@@ -161,14 +162,14 @@ public class LearningPlanVocabularySelector {
                                Set<String> preferredGroups, Map<String, Integer> groupSize) {
         VocabularyCatalogEntryAnalysis analysis = analysisByEntry.get(entry.getId());
         if (analysis == null) {
-            return LearningConstants.ZERO;
+            return CommonConstants.ZERO;
         }
-        int score = groupSize.getOrDefault(analysis.getPrimaryGroupCode(), LearningConstants.ZERO);
+        int score = groupSize.getOrDefault(analysis.getPrimaryGroupCode(), CommonConstants.ZERO);
         if (preferredGroups.contains(analysis.getPrimaryGroupCode())) {
-            score += LearningConstants.ScenePlan.PREFERRED_GROUP_SCORE;
+            score += ScenePlanConstants.PREFERRED_GROUP_SCORE;
         }
         if (StringUtils.hasText(analysis.getSubTopicCode())) {
-            score += LearningConstants.ScenePlan.SUB_TOPIC_SCORE;
+            score += ScenePlanConstants.SUB_TOPIC_SCORE;
         }
         return score;
     }

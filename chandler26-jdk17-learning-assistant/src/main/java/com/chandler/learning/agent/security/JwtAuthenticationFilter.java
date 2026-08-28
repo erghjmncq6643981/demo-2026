@@ -1,8 +1,9 @@
 package com.chandler.learning.agent.security;
 
-import com.chandler.learning.agent.identity.domain.LearningUser;
-import com.chandler.learning.agent.identity.infrastructure.LearningUserMapper;
-import com.chandler.learning.agent.support.LearningConstants;
+import com.chandler.learning.agent.identity.domain.entity.LearningUser;
+import com.chandler.learning.agent.identity.infrastructure.mapper.LearningUserMapper;
+import com.chandler.learning.agent.common.constant.CommonConstants;
+import com.chandler.learning.agent.security.constant.AuthConstants;
 import jakarta.servlet.FilterChain;
 import jakarta.servlet.ServletException;
 import jakarta.servlet.http.HttpServletRequest;
@@ -63,9 +64,9 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
             return "";
         }
         String value = authorization.trim();
-        return value.regionMatches(true, LearningConstants.ZERO,
-                LearningConstants.Auth.BEARER_PREFIX, LearningConstants.ZERO, LearningConstants.Auth.BEARER_PREFIX_LENGTH)
-                ? value.substring(LearningConstants.Auth.BEARER_PREFIX_LENGTH).trim()
+        return value.regionMatches(true, CommonConstants.ZERO,
+                AuthConstants.BEARER_PREFIX, CommonConstants.ZERO, AuthConstants.BEARER_PREFIX_LENGTH)
+                ? value.substring(AuthConstants.BEARER_PREFIX_LENGTH).trim()
                 : value;
     }
 }

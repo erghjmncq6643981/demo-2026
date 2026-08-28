@@ -1,8 +1,10 @@
 package com.chandler.learning.agent.security;
 
-import com.chandler.learning.agent.config.LearningSecurityProperties;
+import com.chandler.learning.agent.config.security.LearningSecurityProperties;
 import com.chandler.learning.agent.exception.LearningAssistantException;
-import com.chandler.learning.agent.support.LearningConstants;
+import com.chandler.learning.agent.common.constant.CommonConstants;
+import com.chandler.learning.agent.common.exception.LearningErrorCode;
+import com.chandler.learning.agent.security.constant.JwtConstants;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 import org.springframework.util.StringUtils;
@@ -33,8 +35,8 @@ public class JwtTokenService {
      */
     public String createToken(Long userId, String username) {
         Instant now = Instant.now();
-        Instant expiresAt = now.plusSeconds(Math.max(LearningConstants.FIRST_SEQUENCE, properties.getJwtExpireDays())
-                * LearningConstants.Jwt.SECONDS_PER_DAY);
+        Instant expiresAt = now.plusSeconds(Math.max(CommonConstants.FIRST_SEQUENCE, properties.getJwtExpireDays())
+                * JwtConstants.SECONDS_PER_DAY);
         Map<String, Object> header = new LinkedHashMap<>();
         header.put("alg", "HS256");
         header.put("typ", "JWT");
@@ -55,25 +57,25 @@ public class JwtTokenService {
      */
     public JwtClaims parse(String token) {
         if (!StringUtils.hasText(token)) {
-            throw LearningAssistantException.unauthorized(LearningConstants.ErrorCode.JWT_INVALID, "JWT 为空");
+            throw LearningAssistantException.unauthorized(LearningErrorCode.JWT_INVALID, "JWT 为空");
         }
         String[] parts = token.split("\\.");
-        if (parts.length != LearningConstants.Jwt.TOKEN_PART_COUNT) {
-            throw LearningAssistantException.unauthorized(LearningConstants.ErrorCode.JWT_INVALID, "JWT 格式错误");
+        if (parts.length != JwtConstants.TOKEN_PART_COUNT) {
+            throw LearningAssistantException.unauthorized(LearningErrorCode.JWT_INVALID, "JWT 格式错误");
         }
-        String unsigned = parts[LearningConstants.ZERO] + "." + parts[LearningConstants.FIRST_SEQUENCE];
-        if (!constantTimeEquals(sign(unsigned), parts[LearningConstants.Jwt.SIGNATURE_PART_INDEX])) {
-            throw LearningAssistantException.unauthorized(LearningConstants.ErrorCode.JWT_INVALID, "JWT 签名无效");
+        String unsigned = parts[CommonConstants.ZERO] + "." + parts[CommonConstants.FIRST_SEQUENCE];
+        if (!constantTimeEquals(sign(unsigned), parts[JwtConstants.SIGNATURE_PART_INDEX])) {
+            throw LearningAssistantException.unauthorized(LearningErrorCode.JWT_INVALID, "JWT 签名无效");
         }
 
         Map<String, Object> payload = JsonSupport.fromJson(new String(Base64.getUrlDecoder()
-                .decode(parts[LearningConstants.FIRST_SEQUENCE]), StandardCharsets.UTF_8));
+                .decode(parts[CommonConstants.FIRST_SEQUENCE]), StandardCharsets.UTF_8));
         if (!properties.getJwtIssuer().equals(String.valueOf(payload.get("iss")))) {
-            throw LearningAssistantException.unauthorized(LearningConstants.ErrorCode.JWT_INVALID, "JWT issuer 无效");
+            throw LearningAssistantException.unauthorized(LearningErrorCode.JWT_INVALID, "JWT issuer 无效");
         }
         long expiresAt = readLong(payload.get("exp"));
         if (expiresAt <= Instant.now().getEpochSecond()) {
-            throw LearningAssistantException.unauthorized(LearningConstants.ErrorCode.AUTH_EXPIRED, "JWT 已过期");
+            throw LearningAssistantException.unauthorized(LearningErrorCode.AUTH_EXPIRED, "JWT 已过期");
         }
         Long userId = readLong(payload.get("sub"));
         String username = String.valueOf(payload.getOrDefault("username", ""));
@@ -91,7 +93,7 @@ public class JwtTokenService {
             return Base64.getUrlEncoder().withoutPadding().encodeToString(mac.doFinal(unsigned.getBytes(StandardCharsets.UTF_8)));
         } catch (Exception ex) {
             throw LearningAssistantException.system(
-                    LearningConstants.ErrorCode.JWT_SIGN_FAILED,
+                    LearningErrorCode.JWT_SIGN_FAILED,
                     "JWT 签名失败",
                     ex);
         }

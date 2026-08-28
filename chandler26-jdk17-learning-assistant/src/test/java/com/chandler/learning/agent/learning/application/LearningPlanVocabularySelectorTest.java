@@ -1,11 +1,11 @@
 package com.chandler.learning.agent.learning.application;
 
 import com.baomidou.mybatisplus.core.conditions.Wrapper;
-import com.chandler.learning.agent.learning.domain.LearningPlan;
-import com.chandler.learning.agent.learning.domain.LearningPlanUnitEntry;
-import com.chandler.learning.agent.vocabulary.domain.LearningWordProgress;
-import com.chandler.learning.agent.vocabulary.domain.VocabularyCatalogEntry;
-import com.chandler.learning.agent.learning.infrastructure.LearningPlanUnitEntryMapper;
+import com.chandler.learning.agent.learning.domain.entity.LearningPlan;
+import com.chandler.learning.agent.learning.domain.entity.LearningPlanUnitEntry;
+import com.chandler.learning.agent.vocabulary.domain.entity.LearningWordProgress;
+import com.chandler.learning.agent.vocabulary.domain.entity.VocabularyCatalogEntry;
+import com.chandler.learning.agent.learning.infrastructure.mapper.LearningPlanUnitEntryMapper;
 import com.chandler.learning.agent.vocabulary.application.VocabularyCatalogAnalysisService;
 import com.chandler.learning.agent.vocabulary.application.LearningWordProgressService;
 import com.chandler.learning.agent.vocabulary.application.VocabularyCatalogQueryService;

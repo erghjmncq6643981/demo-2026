@@ -34,7 +34,9 @@ class MapperXmlValidationTest {
                 "mapper/LearningVocabularyTagMapper.xml",
                 "mapper/LearningVocabularyRelationMapper.xml",
                 "mapper/LearningUserPreferenceMapper.xml",
-                "mapper/VocabularyCardGenerationJobItemMapper.xml");
+                "mapper/VocabularyCardGenerationJobItemMapper.xml",
+                "mapper/LearningSystemLogMapper.xml",
+                "mapper/LearningSystemLogOutboxMapper.xml");
 
         for (String resource : resources) {
             try (InputStream input = Resources.getResourceAsStream(resource)) {
@@ -44,76 +46,82 @@ class MapperXmlValidationTest {
         }
 
         assertThat(configuration.hasStatement(
-                "com.chandler.learning.agent.learning.infrastructure.LearningPlanMapper.claimGenerationLock")).isTrue();
+                "com.chandler.learning.agent.learning.infrastructure.mapper.LearningPlanMapper.claimGenerationLock")).isTrue();
         assertThat(configuration.hasStatement(
-                "com.chandler.learning.agent.learning.infrastructure.LearningPlanUnitMapper.selectMaxUnitNoIncludingDeleted"))
+                "com.chandler.learning.agent.learning.infrastructure.mapper.LearningPlanUnitMapper.selectMaxUnitNoIncludingDeleted"))
                 .isTrue();
         assertThat(configuration.hasStatement(
-                "com.chandler.learning.agent.learning.infrastructure.LearningPlanUnitMapper.selectUnitsWithMaterial"))
+                "com.chandler.learning.agent.learning.infrastructure.mapper.LearningPlanUnitMapper.selectUnitsWithMaterial"))
                 .isTrue();
         assertThat(configuration.hasStatement(
-                "com.chandler.learning.agent.learning.infrastructure.LearningPlanUnitEntryMapper.selectEntriesWithProgress"))
+                "com.chandler.learning.agent.learning.infrastructure.mapper.LearningPlanUnitEntryMapper.selectEntriesWithProgress"))
                 .isTrue();
         assertThat(configuration.hasStatement(
-                "com.chandler.learning.agent.learning.infrastructure.LearningPlanUnitEntryMapper.insertBatch"))
+                "com.chandler.learning.agent.learning.infrastructure.mapper.LearningPlanUnitEntryMapper.insertBatch"))
                 .isTrue();
         assertThat(configuration.hasStatement(
-                "com.chandler.learning.agent.ai.chat.infrastructure.AiChatMessageMapper.selectNextSequence"))
+                "com.chandler.learning.agent.ai.chat.infrastructure.mapper.AiChatMessageMapper.selectNextSequence"))
                 .isTrue();
         assertThat(configuration.hasStatement(
-                "com.chandler.learning.agent.ai.chat.infrastructure.AiChatSessionMapper.selectSessionSummaries"))
+                "com.chandler.learning.agent.ai.chat.infrastructure.mapper.AiChatSessionMapper.selectSessionSummaries"))
                 .isTrue();
         assertThat(configuration.hasStatement(
-                "com.chandler.learning.agent.ai.chat.infrastructure.AiModelCallRecordMapper.selectUsageSummaries"))
+                "com.chandler.learning.agent.ai.chat.infrastructure.mapper.AiModelCallRecordMapper.selectUsageSummaries"))
                 .isTrue();
         assertThat(configuration.hasStatement(
-                "com.chandler.learning.agent.task.infrastructure.AiAsyncTaskStepMapper.claim")).isTrue();
+                "com.chandler.learning.agent.task.infrastructure.mapper.AiAsyncTaskStepMapper.claim")).isTrue();
         assertThat(configuration.hasStatement(
-                "com.chandler.learning.agent.task.infrastructure.AiAsyncTaskStepMapper.renew")).isTrue();
+                "com.chandler.learning.agent.task.infrastructure.mapper.AiAsyncTaskStepMapper.renew")).isTrue();
         assertThat(configuration.hasStatement(
-                "com.chandler.learning.agent.task.infrastructure.AiAsyncTaskStepMapper.recoverExpired")).isTrue();
+                "com.chandler.learning.agent.task.infrastructure.mapper.AiAsyncTaskStepMapper.recoverExpired")).isTrue();
         assertThat(configuration.hasStatement(
-                "com.chandler.learning.agent.task.infrastructure.AiAsyncTaskStepMapper.insertBatch")).isTrue();
+                "com.chandler.learning.agent.task.infrastructure.mapper.AiAsyncTaskStepMapper.insertBatch")).isTrue();
         assertThat(configuration.hasStatement(
-                "com.chandler.learning.agent.learning.infrastructure.LearningSceneRelatedWordMapper.insertBatch"))
+                "com.chandler.learning.agent.learning.infrastructure.mapper.LearningSceneRelatedWordMapper.insertBatch"))
                 .isTrue();
         assertThat(configuration.hasStatement(
-                "com.chandler.learning.agent.learning.infrastructure.LearningPlanMapper.releaseGenerationLock")).isTrue();
+                "com.chandler.learning.agent.learning.infrastructure.mapper.LearningPlanMapper.releaseGenerationLock")).isTrue();
         assertThat(configuration.hasStatement(
-                "com.chandler.learning.agent.vocabulary.infrastructure.VocabularyCatalogAnalysisBatchMapper.insertBatch"))
+                "com.chandler.learning.agent.vocabulary.infrastructure.mapper.VocabularyCatalogAnalysisBatchMapper.insertBatch"))
                 .isTrue();
         assertThat(configuration.hasStatement(
-                "com.chandler.learning.agent.vocabulary.infrastructure.VocabularyCatalogEntryAnalysisMapper.insertBatch"))
+                "com.chandler.learning.agent.vocabulary.infrastructure.mapper.VocabularyCatalogEntryAnalysisMapper.insertBatch"))
                 .isTrue();
         assertThat(configuration.hasStatement(
-                "com.chandler.learning.agent.vocabulary.infrastructure.VocabularyCatalogEntryMapper.selectUnanalyzedPublished"))
+                "com.chandler.learning.agent.vocabulary.infrastructure.mapper.VocabularyCatalogEntryMapper.selectUnanalyzedPublished"))
                 .isTrue();
         assertThat(configuration.hasStatement(
-                "com.chandler.learning.agent.vocabulary.infrastructure.LearningWordProgressMapper.updateBatch"))
+                "com.chandler.learning.agent.vocabulary.infrastructure.mapper.LearningWordProgressMapper.updateBatch"))
                 .isTrue();
         assertThat(configuration.hasStatement(
-                "com.chandler.learning.agent.vocabulary.infrastructure.LearningWordbookEntryMapper.upsertLearningBatch"))
+                "com.chandler.learning.agent.vocabulary.infrastructure.mapper.LearningWordbookEntryMapper.upsertLearningBatch"))
                 .isTrue();
         assertThat(configuration.hasStatement(
-                "com.chandler.learning.agent.vocabulary.infrastructure.LearningWordbookEntryMapper.updateVocabularyCardBatch"))
+                "com.chandler.learning.agent.vocabulary.infrastructure.mapper.LearningWordbookEntryMapper.updateVocabularyCardBatch"))
                 .isTrue();
         assertThat(configuration.hasStatement(
-                "com.chandler.learning.agent.vocabulary.infrastructure.LearningWordbookMapper.selectWordbookSummaries"))
+                "com.chandler.learning.agent.vocabulary.infrastructure.mapper.LearningWordbookMapper.selectWordbookSummaries"))
                 .isTrue();
         assertThat(configuration.hasStatement(
-                "com.chandler.learning.agent.vocabulary.infrastructure.VocabularyCardGenerationJobItemMapper.selectProgress"))
+                "com.chandler.learning.agent.vocabulary.infrastructure.mapper.VocabularyCardGenerationJobItemMapper.selectProgress"))
                 .isTrue();
         assertThat(configuration.hasStatement(
-                "com.chandler.learning.agent.vocabulary.infrastructure.EnglishVocabularyStudyRecordMapper.insertBatchIgnore"))
+                "com.chandler.learning.agent.vocabulary.infrastructure.mapper.EnglishVocabularyStudyRecordMapper.insertBatchIgnore"))
                 .isTrue();
         assertThat(configuration.hasStatement(
-                "com.chandler.learning.agent.vocabulary.infrastructure.LearningVocabularyTagMapper.selectByVocabularyIds"))
+                "com.chandler.learning.agent.vocabulary.infrastructure.mapper.LearningVocabularyTagMapper.selectByVocabularyIds"))
                 .isTrue();
         assertThat(configuration.hasStatement(
-                "com.chandler.learning.agent.vocabulary.infrastructure.LearningVocabularyRelationMapper.selectByNormalizedTerms"))
+                "com.chandler.learning.agent.vocabulary.infrastructure.mapper.LearningVocabularyRelationMapper.selectByNormalizedTerms"))
                 .isTrue();
         assertThat(configuration.hasStatement(
-                "com.chandler.learning.agent.identity.infrastructure.LearningUserPreferenceMapper.upsertBatch"))
+                "com.chandler.learning.agent.identity.infrastructure.mapper.LearningUserPreferenceMapper.upsertBatch"))
+                .isTrue();
+        assertThat(configuration.hasStatement(
+                "com.chandler.learning.agent.system.infrastructure.mapper.LearningSystemLogMapper.insertBatch"))
+                .isTrue();
+        assertThat(configuration.hasStatement(
+                "com.chandler.learning.agent.system.infrastructure.mapper.LearningSystemLogOutboxMapper.claimPendingBatch"))
                 .isTrue();
     }
 }

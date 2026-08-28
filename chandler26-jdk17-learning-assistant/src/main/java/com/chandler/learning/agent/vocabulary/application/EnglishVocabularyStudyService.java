@@ -3,21 +3,25 @@ package com.chandler.learning.agent.vocabulary.application;
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import com.chandler.learning.agent.ai.chat.application.AgentChatRequest;
 import com.chandler.learning.agent.ai.chat.application.AgentChatResponse;
-import com.chandler.learning.agent.vocabulary.api.VocabularyBestMatchResponse;
-import com.chandler.learning.agent.vocabulary.api.VocabularyStudyRequest;
-import com.chandler.learning.agent.vocabulary.api.VocabularyStudyResponse;
-import com.chandler.learning.agent.vocabulary.domain.EnglishVocabularyStudyRecord;
-import com.chandler.learning.agent.ai.chat.domain.AiInvocationScene;
-import com.chandler.learning.agent.learning.domain.LearningScene;
-import com.chandler.learning.agent.system.domain.SystemLogType;
-import com.chandler.learning.agent.vocabulary.domain.VocabularyMatchType;
+import com.chandler.learning.agent.vocabulary.api.response.VocabularyBestMatchResponse;
+import com.chandler.learning.agent.vocabulary.api.request.VocabularyStudyRequest;
+import com.chandler.learning.agent.vocabulary.api.response.VocabularyStudyResponse;
+import com.chandler.learning.agent.vocabulary.domain.entity.EnglishVocabularyStudyRecord;
+import com.chandler.learning.agent.ai.chat.domain.enums.AiInvocationScene;
+import com.chandler.learning.agent.learning.domain.enums.LearningScene;
+import com.chandler.learning.agent.system.domain.enums.SystemLogType;
+import com.chandler.learning.agent.vocabulary.domain.enums.VocabularyMatchType;
 import com.chandler.learning.agent.exception.LearningAssistantException;
-import com.chandler.learning.agent.vocabulary.infrastructure.EnglishVocabularyStudyRecordMapper;
+import com.chandler.learning.agent.vocabulary.infrastructure.mapper.EnglishVocabularyStudyRecordMapper;
 import com.chandler.learning.agent.ai.chat.application.AiChatService;
 import com.chandler.learning.agent.system.application.SystemLogService;
 import com.chandler.learning.agent.identity.application.UserDisplayNameService;
 import com.chandler.learning.agent.vocabulary.application.VocabularyInsightService;
-import com.chandler.learning.agent.support.LearningConstants;
+import com.chandler.learning.agent.ai.agent.domain.constant.AiScenarioConstants;
+import com.chandler.learning.agent.ai.chat.domain.constant.AiChatConstants;
+import com.chandler.learning.agent.common.constant.CommonConstants;
+import com.chandler.learning.agent.common.exception.LearningErrorCode;
+import com.chandler.learning.agent.vocabulary.domain.constant.VocabularyConstants;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.node.ArrayNode;
@@ -58,7 +62,7 @@ public class EnglishVocabularyStudyService {
         String normalizedTerm = normalize(request.getTerm());
         if (!StringUtils.hasText(normalizedTerm)) {
             throw LearningAssistantException.badRequest(
-                    LearningConstants.ErrorCode.VOCABULARY_EMPTY,
+                    LearningErrorCode.VOCABULARY_EMPTY,
                     "单词不能为空");
         }
 
@@ -96,8 +100,8 @@ public class EnglishVocabularyStudyService {
         record.setTokenUsage(chatResponse.getTokenUsage());
         record.setCostTime(chatResponse.getCostTime());
         record.setLookupCount(existing == null || existing.getLookupCount() == null
-                ? LearningConstants.Vocabulary.DEFAULT_LOOKUP_COUNT
-                : existing.getLookupCount() + LearningConstants.Vocabulary.DEFAULT_LOOKUP_COUNT);
+                ? VocabularyConstants.DEFAULT_LOOKUP_COUNT
+                : existing.getLookupCount() + VocabularyConstants.DEFAULT_LOOKUP_COUNT);
         record.setLastLookupTime(LocalDateTime.now());
         record.setUpdateTime(LocalDateTime.now());
 
@@ -142,19 +146,19 @@ public class EnglishVocabularyStudyService {
         EnglishVocabularyStudyRecord exact = findByNormalizedTerm(normalizedTerm);
         if (exact != null) {
             log.debug("词汇最匹配查询命中精确结果 query={} recordId={}", normalizedTerm, exact.getId());
-            return toBestMatchResponse(normalizedTerm, exact, LearningConstants.Vocabulary.EXACT_MATCH_SCORE,
+            return toBestMatchResponse(normalizedTerm, exact, VocabularyConstants.EXACT_MATCH_SCORE,
                     VocabularyMatchType.EXACT.getCode());
         }
 
         List<EnglishVocabularyStudyRecord> candidates = recordMapper.selectList(new LambdaQueryWrapper<EnglishVocabularyStudyRecord>()
                 .orderByDesc(EnglishVocabularyStudyRecord::getUpdateTime)
-                .last("LIMIT " + LearningConstants.Vocabulary.FUZZY_MATCH_CANDIDATE_LIMIT));
+                .last("LIMIT " + VocabularyConstants.FUZZY_MATCH_CANDIDATE_LIMIT));
         VocabularyBestMatchResponse response = candidates.stream()
                 .map(candidate -> new MatchCandidate(candidate, matchScore(normalizedTerm, candidate.getNormalizedTerm())))
-                .filter(candidate -> candidate.score() >= LearningConstants.Vocabulary.FUZZY_MATCH_MIN_SCORE)
+                .filter(candidate -> candidate.score() >= VocabularyConstants.FUZZY_MATCH_MIN_SCORE)
                 .max(Comparator.comparingInt(MatchCandidate::score)
                         .thenComparing(candidate -> candidate.record().getLookupCount() == null
-                                ? LearningConstants.ZERO
+                                ? CommonConstants.ZERO
                                 : candidate.record().getLookupCount()))
                 .map(candidate -> toBestMatchResponse(normalizedTerm, candidate.record(), candidate.score(),
                         VocabularyMatchType.FUZZY.getCode()))
@@ -179,7 +183,7 @@ public class EnglishVocabularyStudyService {
         chatRequest.setTemplateCode(resolveTemplateCode(request));
         chatRequest.setModelConfigId(request.getModelConfigId());
         chatRequest.setTitle("Vocabulary - " + normalizedTerm);
-        chatRequest.setBusinessType(LearningConstants.ChatSession.BUSINESS_TYPE_LEARNING);
+        chatRequest.setBusinessType(AiChatConstants.BUSINESS_TYPE_LEARNING);
         chatRequest.setBusinessId(LearningScene.ENGLISH_VOCABULARY.getCode());
         chatRequest.setSceneCode(LearningScene.ENGLISH_VOCABULARY.getCode());
         chatRequest.setMessage("请生成英语词汇「" + normalizedTerm + "」的结构化学习卡片。");
@@ -196,7 +200,7 @@ public class EnglishVocabularyStudyService {
         }
         return recordMapper.selectOne(new LambdaQueryWrapper<EnglishVocabularyStudyRecord>()
                 .eq(EnglishVocabularyStudyRecord::getNormalizedTerm, normalizedTerm)
-                .last(LearningConstants.SQL_LIMIT_ONE));
+                .last(CommonConstants.SQL_LIMIT_ONE));
     }
 
     /**
@@ -204,8 +208,8 @@ public class EnglishVocabularyStudyService {
      */
     private void touch(EnglishVocabularyStudyRecord record) {
         record.setLookupCount(record.getLookupCount() == null
-                ? LearningConstants.Vocabulary.DEFAULT_LOOKUP_COUNT
-                : record.getLookupCount() + LearningConstants.Vocabulary.DEFAULT_LOOKUP_COUNT);
+                ? VocabularyConstants.DEFAULT_LOOKUP_COUNT
+                : record.getLookupCount() + VocabularyConstants.DEFAULT_LOOKUP_COUNT);
         record.setLastLookupTime(LocalDateTime.now());
         record.setUpdateTime(LocalDateTime.now());
         recordMapper.updateById(record);
@@ -292,7 +296,7 @@ public class EnglishVocabularyStudyService {
             return objectMapper.writeValueAsString(root);
         } catch (Exception ex) {
             throw LearningAssistantException.system(
-                    LearningConstants.ErrorCode.JSON_SERIALIZE_FAILED,
+                    LearningErrorCode.JSON_SERIALIZE_FAILED,
                     "词卡结构化响应标准化失败",
                     ex);
         }
@@ -330,21 +334,21 @@ public class EnglishVocabularyStudyService {
     /** 词卡只有通过最小结构校验后才能写入共享缓存，避免坏响应污染后续学习。 */
     private void validateCardPayload(String parsedJson) {
         if (!StringUtils.hasText(parsedJson)) {
-            throw LearningAssistantException.badRequest(LearningConstants.ErrorCode.AI_RESPONSE_PARSE_FAILED, "AI 返回内容不是有效 JSON");
+            throw LearningAssistantException.badRequest(LearningErrorCode.AI_RESPONSE_PARSE_FAILED, "AI 返回内容不是有效 JSON");
         }
         try {
             JsonNode root = objectMapper.readTree(parsedJson);
             if (!root.isObject() || !StringUtils.hasText(root.path("term").asText())) {
-                throw LearningAssistantException.badRequest(LearningConstants.ErrorCode.AI_RESPONSE_PARSE_FAILED, "AI 返回内容缺少单词 term 字段");
+                throw LearningAssistantException.badRequest(LearningErrorCode.AI_RESPONSE_PARSE_FAILED, "AI 返回内容缺少单词 term 字段");
             }
             if (!root.path("definitions").isArray() || root.path("definitions").isEmpty()) {
-                throw LearningAssistantException.badRequest(LearningConstants.ErrorCode.AI_RESPONSE_PARSE_FAILED, "AI 返回内容缺少 definitions 释义列表");
+                throw LearningAssistantException.badRequest(LearningErrorCode.AI_RESPONSE_PARSE_FAILED, "AI 返回内容缺少 definitions 释义列表");
             }
         } catch (LearningAssistantException ex) {
             throw ex;
         } catch (Exception ex) {
             throw LearningAssistantException.system(
-                    LearningConstants.ErrorCode.JSON_PARSE_FAILED,
+                    LearningErrorCode.JSON_PARSE_FAILED,
                     "词汇学习卡片解析失败",
                     ex);
         }
@@ -362,50 +366,50 @@ public class EnglishVocabularyStudyService {
      */
     private int matchScore(String query, String candidate) {
         if (!StringUtils.hasText(query) || !StringUtils.hasText(candidate)) {
-            return LearningConstants.Vocabulary.MIN_MATCH_SCORE;
+            return VocabularyConstants.MIN_MATCH_SCORE;
         }
         if (query.equals(candidate)) {
-            return LearningConstants.Vocabulary.EXACT_MATCH_SCORE;
+            return VocabularyConstants.EXACT_MATCH_SCORE;
         }
         int distance = levenshtein(query, candidate);
         int maxLength = Math.max(query.length(), candidate.length());
-        int score = Math.max(LearningConstants.Vocabulary.MIN_MATCH_SCORE,
-                (int) Math.round((1D - (double) distance / maxLength) * LearningConstants.Vocabulary.EXACT_MATCH_SCORE));
+        int score = Math.max(VocabularyConstants.MIN_MATCH_SCORE,
+                (int) Math.round((1D - (double) distance / maxLength) * VocabularyConstants.EXACT_MATCH_SCORE));
         if (candidate.startsWith(query) || query.startsWith(candidate)) {
-            score += LearningConstants.Vocabulary.PREFIX_SCORE_BOOST;
+            score += VocabularyConstants.PREFIX_SCORE_BOOST;
         }
         if (query.charAt(0) == candidate.charAt(0)) {
-            score += LearningConstants.Vocabulary.SAME_INITIAL_SCORE_BOOST;
+            score += VocabularyConstants.SAME_INITIAL_SCORE_BOOST;
         }
-        if (commonPrefixLength(query, candidate) >= LearningConstants.Vocabulary.COMMON_PREFIX_MIN_LENGTH) {
-            score += LearningConstants.Vocabulary.COMMON_PREFIX_SCORE_BOOST;
+        if (commonPrefixLength(query, candidate) >= VocabularyConstants.COMMON_PREFIX_MIN_LENGTH) {
+            score += VocabularyConstants.COMMON_PREFIX_SCORE_BOOST;
         }
         if (candidate.contains(query) || query.contains(candidate)) {
-            score += LearningConstants.Vocabulary.CONTAINS_SCORE_BOOST;
+            score += VocabularyConstants.CONTAINS_SCORE_BOOST;
         }
-        return Math.min(score, LearningConstants.Vocabulary.FUZZY_MATCH_MAX_SCORE);
+        return Math.min(score, VocabularyConstants.FUZZY_MATCH_MAX_SCORE);
     }
 
     /**
      * 处理 {@code levenshtein} 相关业务。
      */
     private int levenshtein(String left, String right) {
-        int[] previous = new int[right.length() + LearningConstants.Vocabulary.EDIT_DISTANCE_INSERT_DELETE_COST];
-        int[] current = new int[right.length() + LearningConstants.Vocabulary.EDIT_DISTANCE_INSERT_DELETE_COST];
+        int[] previous = new int[right.length() + VocabularyConstants.EDIT_DISTANCE_INSERT_DELETE_COST];
+        int[] current = new int[right.length() + VocabularyConstants.EDIT_DISTANCE_INSERT_DELETE_COST];
         for (int index = 0; index <= right.length(); index++) {
             previous[index] = index;
         }
         for (int row = 1; row <= left.length(); row++) {
-            current[LearningConstants.ZERO] = row;
+            current[CommonConstants.ZERO] = row;
             for (int column = 1; column <= right.length(); column++) {
-                int cost = left.charAt(row - LearningConstants.Vocabulary.EDIT_DISTANCE_INSERT_DELETE_COST)
-                        == right.charAt(column - LearningConstants.Vocabulary.EDIT_DISTANCE_INSERT_DELETE_COST)
-                        ? LearningConstants.Vocabulary.EDIT_DISTANCE_SAME_COST
-                        : LearningConstants.Vocabulary.EDIT_DISTANCE_REPLACE_COST;
+                int cost = left.charAt(row - VocabularyConstants.EDIT_DISTANCE_INSERT_DELETE_COST)
+                        == right.charAt(column - VocabularyConstants.EDIT_DISTANCE_INSERT_DELETE_COST)
+                        ? VocabularyConstants.EDIT_DISTANCE_SAME_COST
+                        : VocabularyConstants.EDIT_DISTANCE_REPLACE_COST;
                 current[column] = Math.min(Math.min(
-                        current[column - LearningConstants.Vocabulary.EDIT_DISTANCE_INSERT_DELETE_COST] + LearningConstants.Vocabulary.EDIT_DISTANCE_INSERT_DELETE_COST,
-                        previous[column] + LearningConstants.Vocabulary.EDIT_DISTANCE_INSERT_DELETE_COST),
-                        previous[column - LearningConstants.Vocabulary.EDIT_DISTANCE_INSERT_DELETE_COST] + cost);
+                        current[column - VocabularyConstants.EDIT_DISTANCE_INSERT_DELETE_COST] + VocabularyConstants.EDIT_DISTANCE_INSERT_DELETE_COST,
+                        previous[column] + VocabularyConstants.EDIT_DISTANCE_INSERT_DELETE_COST),
+                        previous[column - VocabularyConstants.EDIT_DISTANCE_INSERT_DELETE_COST] + cost);
             }
             int[] temp = previous;
             previous = current;
@@ -419,7 +423,7 @@ public class EnglishVocabularyStudyService {
      */
     private int commonPrefixLength(String left, String right) {
         int length = Math.min(left.length(), right.length());
-        int index = LearningConstants.ZERO;
+        int index = CommonConstants.ZERO;
         while (index < length && left.charAt(index) == right.charAt(index)) {
             index++;
         }
@@ -430,14 +434,14 @@ public class EnglishVocabularyStudyService {
      * 处理 {@code resolveAgentCode} 相关业务。
      */
     private String resolveAgentCode(VocabularyStudyRequest request) {
-        return StringUtils.hasText(request.getAgentCode()) ? request.getAgentCode() : LearningConstants.VOCABULARY_AGENT_CODE;
+        return StringUtils.hasText(request.getAgentCode()) ? request.getAgentCode() : AiScenarioConstants.VOCABULARY_AGENT_CODE;
     }
 
     /**
      * 处理 {@code resolveTemplateCode} 相关业务。
      */
     private String resolveTemplateCode(VocabularyStudyRequest request) {
-        return StringUtils.hasText(request.getTemplateCode()) ? request.getTemplateCode() : LearningConstants.VOCABULARY_TEMPLATE_CODE;
+        return StringUtils.hasText(request.getTemplateCode()) ? request.getTemplateCode() : AiScenarioConstants.VOCABULARY_TEMPLATE_CODE;
     }
 
     /**

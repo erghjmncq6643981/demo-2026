@@ -1,5 +1,6 @@
 package com.chandler.learning.agent.ai.chat.domain;
 
+import com.chandler.learning.agent.ai.chat.domain.enums.AiInvocationScene;
 import com.chandler.learning.agent.exception.LearningAssistantException;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import org.junit.jupiter.api.Test;

@@ -1,18 +1,19 @@
 package com.chandler.learning.agent.ai.agent.application;
 
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
-import com.chandler.learning.agent.ai.agent.api.AgentSaveRequest;
-import com.chandler.learning.agent.ai.agent.domain.AiAgent;
-import com.chandler.learning.agent.ai.model.domain.AiModelConfig;
+import com.chandler.learning.agent.ai.agent.api.request.AgentSaveRequest;
+import com.chandler.learning.agent.ai.agent.domain.entity.AiAgent;
+import com.chandler.learning.agent.ai.model.domain.entity.AiModelConfig;
 import com.chandler.learning.agent.ai.model.application.AiModelConfigService;
-import com.chandler.learning.agent.ai.agent.domain.AiAgentType;
-import com.chandler.learning.agent.ai.model.domain.AiModelDefinition;
-import com.chandler.learning.agent.system.domain.SystemLogType;
+import com.chandler.learning.agent.ai.agent.domain.enums.AiAgentType;
+import com.chandler.learning.agent.ai.model.domain.enums.AiModelDefinition;
+import com.chandler.learning.agent.system.domain.enums.SystemLogType;
 import com.chandler.learning.agent.exception.LearningAssistantException;
-import com.chandler.learning.agent.ai.agent.infrastructure.AiAgentMapper;
+import com.chandler.learning.agent.ai.agent.infrastructure.mapper.AiAgentMapper;
 import com.chandler.learning.agent.system.application.SystemLogService;
 import com.chandler.learning.agent.identity.application.UserDisplayNameService;
-import com.chandler.learning.agent.support.LearningConstants;
+import com.chandler.learning.agent.common.constant.CommonConstants;
+import com.chandler.learning.agent.common.exception.LearningErrorCode;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
@@ -44,7 +45,7 @@ public class AiAgentService {
         return agentMapper.selectOne(new LambdaQueryWrapper<AiAgent>()
                 .eq(AiAgent::getCode, code)
                 .eq(AiAgent::getDeleted, false)
-                .last(LearningConstants.SQL_LIMIT_ONE));
+                .last(CommonConstants.SQL_LIMIT_ONE));
     }
 
     /**
@@ -81,7 +82,7 @@ public class AiAgentService {
         AiAgent existing = getByCode(request.getCode());
         if (existing != null) {
             throw LearningAssistantException.badRequest(
-                    LearningConstants.ErrorCode.AGENT_CODE_EXISTS,
+                    LearningErrorCode.AGENT_CODE_EXISTS,
                     "Agent 编码已存在: " + request.getCode());
         }
 
@@ -104,13 +105,13 @@ public class AiAgentService {
         AiAgent agent = agentMapper.selectById(id);
         if (agent == null || Boolean.TRUE.equals(agent.getDeleted())) {
             throw LearningAssistantException.notFound(
-                    LearningConstants.ErrorCode.AGENT_NOT_FOUND,
+                    LearningErrorCode.AGENT_NOT_FOUND,
                     "Agent 不存在: " + id);
         }
         AiAgent existing = getByCode(request.getCode());
         if (existing != null && !existing.getId().equals(id)) {
             throw LearningAssistantException.badRequest(
-                    LearningConstants.ErrorCode.AGENT_CODE_EXISTS,
+                    LearningErrorCode.AGENT_CODE_EXISTS,
                     "Agent 编码已存在: " + request.getCode());
         }
 
@@ -145,7 +146,7 @@ public class AiAgentService {
                 .eq(AiAgent::getDeleted, false));
         if (aliveCount <= 1) {
             throw LearningAssistantException.badRequest(
-                    LearningConstants.ErrorCode.AGENT_LAST_NOT_DELETABLE,
+                    LearningErrorCode.AGENT_LAST_NOT_DELETABLE,
                     "最后一个学习 Agent 不能删除");
         }
         AiAgent agent = requireAgent(id);
@@ -164,7 +165,7 @@ public class AiAgentService {
         AiAgent source = agentMapper.selectById(id);
         if (source == null || Boolean.TRUE.equals(source.getDeleted())) {
             throw LearningAssistantException.notFound(
-                    LearningConstants.ErrorCode.AGENT_NOT_FOUND,
+                    LearningErrorCode.AGENT_NOT_FOUND,
                     "Agent 不存在: " + id);
         }
         modelConfigService.requireEnabled(source.getModelConfigId());
@@ -213,7 +214,7 @@ public class AiAgentService {
         agent.setTemperature(request.getTemperature());
         agent.setMaxTokens(request.getMaxTokens());
         agent.setPresetCommands(request.getPresetCommands());
-        agent.setSequence(request.getSequence() == null ? LearningConstants.DEFAULT_SEQUENCE : request.getSequence());
+        agent.setSequence(request.getSequence() == null ? CommonConstants.DEFAULT_SEQUENCE : request.getSequence());
     }
 
     /**
@@ -223,7 +224,7 @@ public class AiAgentService {
         AiAgent agent = agentMapper.selectById(id);
         if (agent == null || Boolean.TRUE.equals(agent.getDeleted())) {
             throw LearningAssistantException.notFound(
-                    LearningConstants.ErrorCode.AGENT_NOT_FOUND,
+                    LearningErrorCode.AGENT_NOT_FOUND,
                     "Agent 不存在: " + id);
         }
         return agent;
@@ -233,7 +234,7 @@ public class AiAgentService {
     public AiAgent requireEnabled(String code) {
         AiAgent agent = getByCode(code);
         if (agent == null || !Boolean.TRUE.equals(agent.getEnabled())) {
-            throw LearningAssistantException.badRequest(LearningConstants.ErrorCode.AGENT_NOT_FOUND);
+            throw LearningAssistantException.badRequest(LearningErrorCode.AGENT_NOT_FOUND);
         }
         return agent;
     }

@@ -1,7 +1,7 @@
 package com.chandler.learning.agent.security;
 
 import com.chandler.learning.agent.exception.LearningAssistantException;
-import com.chandler.learning.agent.support.LearningConstants;
+import com.chandler.learning.agent.common.exception.LearningErrorCode;
 import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.ObjectMapper;
 
@@ -30,7 +30,7 @@ final class JsonSupport {
             return OBJECT_MAPPER.writeValueAsString(value);
         } catch (Exception ex) {
             throw LearningAssistantException.system(
-                    LearningConstants.ErrorCode.JSON_SERIALIZE_FAILED,
+                    LearningErrorCode.JSON_SERIALIZE_FAILED,
                     "JSON 序列化失败",
                     ex);
         }
@@ -44,7 +44,7 @@ final class JsonSupport {
             return OBJECT_MAPPER.readValue(value, MAP_TYPE);
         } catch (Exception ex) {
             throw LearningAssistantException.badRequest(
-                    LearningConstants.ErrorCode.JSON_PARSE_FAILED,
+                    LearningErrorCode.JSON_PARSE_FAILED,
                     "JSON 解析失败");
         }
     }

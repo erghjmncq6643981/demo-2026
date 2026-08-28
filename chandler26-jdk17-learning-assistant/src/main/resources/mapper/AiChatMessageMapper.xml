@@ -1,6 +1,6 @@
 <?xml version="1.0" encoding="UTF-8" ?>
 <!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "https://mybatis.org/dtd/mybatis-3-mapper.dtd">
-<mapper namespace="com.chandler.learning.agent.ai.chat.infrastructure.AiChatMessageMapper">
+<mapper namespace="com.chandler.learning.agent.ai.chat.infrastructure.mapper.AiChatMessageMapper">
     <select id="selectNextSequence" resultType="int">
         SELECT COALESCE(MAX(sequence), 0) + 1
         FROM ai_chat_message

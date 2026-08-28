@@ -1,0 +1,43 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "https://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.chandler.learning.agent.system.infrastructure.mapper.LearningSystemLogOutboxMapper">
+    <update id="claimByIds">
+        UPDATE learning_system_log_outbox
+        SET status = 'processing', claim_token = #{claimToken}, update_time = CURRENT_TIMESTAMP
+        WHERE deleted = 0
+          AND status = 'pending'
+          AND id IN
+        <foreach collection="ids" item="id" open="(" separator="," close=")">
+            #{id}
+        </foreach>
+    </update>
+
+    <update id="claimPendingBatch">
+        UPDATE learning_system_log_outbox
+        SET status = 'processing', claim_token = #{claimToken}, update_time = CURRENT_TIMESTAMP
+        WHERE deleted = 0
+          AND status = 'pending'
+        ORDER BY create_time ASC, id ASC
+        LIMIT #{limit}
+    </update>
+
+    <select id="selectByClaimToken" resultType="com.chandler.learning.agent.system.domain.entity.LearningSystemLogOutbox">
+        SELECT id, user_id, log_type, title, detail, source, business_type, business_id,
+               occurred_at, trace_id, status, claim_token, processed_time,
+               create_by, create_time, update_by, update_time, deleted, version
+        FROM learning_system_log_outbox
+        WHERE deleted = 0
+          AND status = 'processing'
+          AND claim_token = #{claimToken}
+        ORDER BY create_time ASC, id ASC
+    </select>
+
+    <update id="markSucceededByClaimToken">
+        UPDATE learning_system_log_outbox
+        SET status = 'succeeded', claim_token = NULL, processed_time = CURRENT_TIMESTAMP,
+            update_time = CURRENT_TIMESTAMP
+        WHERE deleted = 0
+          AND status = 'processing'
+          AND claim_token = #{claimToken}
+    </update>
+</mapper>

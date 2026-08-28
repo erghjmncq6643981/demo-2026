@@ -4,12 +4,16 @@ import cn.hutool.core.util.StrUtil;
 import com.chandler.learning.agent.ai.chat.application.AgentChatRequest;
 import com.chandler.learning.agent.ai.chat.application.AgentChatResponse;
 import com.chandler.learning.agent.ai.chat.application.AiChatService;
-import com.chandler.learning.agent.ai.chat.domain.AiInvocationScene;
-import com.chandler.learning.agent.learning.domain.LearningPlan;
-import com.chandler.learning.agent.learning.domain.LearningScene;
-import com.chandler.learning.agent.support.LearningConstants;
+import com.chandler.learning.agent.ai.chat.domain.enums.AiInvocationScene;
+import com.chandler.learning.agent.learning.domain.entity.LearningPlan;
+import com.chandler.learning.agent.learning.domain.enums.LearningScene;
+import com.chandler.learning.agent.ai.agent.domain.constant.AiScenarioConstants;
+import com.chandler.learning.agent.ai.chat.domain.constant.AiChatConstants;
+import com.chandler.learning.agent.common.constant.CommonConstants;
+import com.chandler.learning.agent.common.exception.LearningErrorCode;
+import com.chandler.learning.agent.learning.domain.constant.ScenePlanConstants;
 import com.chandler.learning.agent.exception.LearningAssistantException;
-import com.chandler.learning.agent.vocabulary.domain.VocabularyCatalogEntry;
+import com.chandler.learning.agent.vocabulary.domain.entity.VocabularyCatalogEntry;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import lombok.RequiredArgsConstructor;
@@ -71,11 +75,11 @@ public class LearningPlanSceneContentService {
         AgentChatRequest request = new AgentChatRequest();
         request.setUserId(plan.getUserId());
         request.setInvocationScene(AiInvocationScene.VOCABULARY_SCENE_UNIT);
-        request.setAgentCode(LearningConstants.VOCABULARY_PLAN_AGENT_CODE);
-        request.setTemplateCode(LearningConstants.VOCABULARY_PLAN_TEMPLATE_CODE);
+        request.setAgentCode(AiScenarioConstants.VOCABULARY_PLAN_AGENT_CODE);
+        request.setTemplateCode(AiScenarioConstants.VOCABULARY_PLAN_TEMPLATE_CODE);
         request.setSessionId(plan.getAiSessionId());
         request.setTitle(LearningScene.ENGLISH_VOCABULARY_PLAN.getTitle());
-        request.setBusinessType(LearningConstants.ChatSession.BUSINESS_TYPE_LEARNING);
+        request.setBusinessType(AiChatConstants.BUSINESS_TYPE_LEARNING);
         request.setBusinessId(LearningScene.ENGLISH_VOCABULARY_PLAN.getCode());
         request.setSceneCode(LearningScene.ENGLISH_VOCABULARY_PLAN.getCode());
         request.setModelConfigId(modelConfigId);
@@ -103,7 +107,7 @@ public class LearningPlanSceneContentService {
         if (vocabulary == null || !vocabulary.isArray() || vocabulary.isEmpty()) {
             throw sceneInvalid("AI 场景结果缺少 vocabulary 数组");
         }
-        int coreCount = LearningConstants.ZERO;
+        int coreCount = CommonConstants.ZERO;
         List<JsonNode> result = new ArrayList<>();
         Set<String> seen = new HashSet<>();
         Set<String> candidateTerms = candidateInputTerms.stream().map(this::normalize).collect(Collectors.toSet());
@@ -120,14 +124,14 @@ public class LearningPlanSceneContentService {
             if (matchedCandidate != null) {
                 if (word instanceof com.fasterxml.jackson.databind.node.ObjectNode obj) {
                     obj.put("term", matchedCandidate);
-                    obj.put("tier", LearningConstants.ScenePlan.TIER_CORE);
+                    obj.put("tier", ScenePlanConstants.TIER_CORE);
                 }
                 coreCount++;
                 result.add(word);
             } else if (matchedReview != null) {
                 if (word instanceof com.fasterxml.jackson.databind.node.ObjectNode obj) {
                     obj.put("term", matchedReview);
-                    obj.put("tier", LearningConstants.ScenePlan.TIER_REVIEW);
+                    obj.put("tier", ScenePlanConstants.TIER_REVIEW);
                 }
                 result.add(word);
             } else {
@@ -140,9 +144,9 @@ public class LearningPlanSceneContentService {
         if (coreCount < acceptableMinimum) {
             throw sceneInvalid("核心词数量不足，期望至少 " + acceptableMinimum + " 个，实际为 " + coreCount + " 个");
         }
-        if (coreCount > LearningConstants.ScenePlan.MAX_CORE_WORDS_PER_UNIT) {
+        if (coreCount > ScenePlanConstants.MAX_CORE_WORDS_PER_UNIT) {
             throw sceneInvalid("单篇场景材料最多包含 "
-                    + LearningConstants.ScenePlan.MAX_CORE_WORDS_PER_UNIT + " 个待挑战词，实际为 " + coreCount + " 个");
+                    + ScenePlanConstants.MAX_CORE_WORDS_PER_UNIT + " 个待挑战词，实际为 " + coreCount + " 个");
         }
         return result;
     }
@@ -235,7 +239,7 @@ public class LearningPlanSceneContentService {
 
     private LearningAssistantException sceneInvalid(String message) {
         return LearningAssistantException.badRequest(
-                LearningConstants.ErrorCode.LEARNING_SCENE_PARSE_FAILED, message);
+                LearningErrorCode.LEARNING_SCENE_PARSE_FAILED, message);
     }
 
     /** 模型候选词的精简传输对象，避免把词表实体和内部字段传给模型。 */

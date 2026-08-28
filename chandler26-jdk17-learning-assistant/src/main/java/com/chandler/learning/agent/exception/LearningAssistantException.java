@@ -1,6 +1,6 @@
 package com.chandler.learning.agent.exception;
 
-import com.chandler.learning.agent.support.LearningConstants;
+import com.chandler.learning.agent.common.exception.LearningErrorCode;
 import org.springframework.http.HttpStatus;
 
 /**
@@ -33,12 +33,12 @@ public class LearningAssistantException extends RuntimeException {
     }
 
     /** 使用错误码默认 HTTP 状态和中文提示创建业务异常。 */
-    public static LearningAssistantException badRequest(LearningConstants.ErrorCode code) {
+    public static LearningAssistantException badRequest(LearningErrorCode code) {
         return from(code, code.getDefaultMessage(), null);
     }
 
     /** 使用错误码并覆盖用户提示；覆盖消息只用于确实需要上下文的场景。 */
-    public static LearningAssistantException badRequest(LearningConstants.ErrorCode code, String message) {
+    public static LearningAssistantException badRequest(LearningErrorCode code, String message) {
         return from(code, message, null);
     }
 
@@ -50,12 +50,12 @@ public class LearningAssistantException extends RuntimeException {
     }
 
     /** 使用错误码默认提示创建未授权异常。 */
-    public static LearningAssistantException unauthorized(LearningConstants.ErrorCode code) {
+    public static LearningAssistantException unauthorized(LearningErrorCode code) {
         return from(code, code.getDefaultMessage(), null);
     }
 
     /** 使用错误码并覆盖用户提示创建未授权异常。 */
-    public static LearningAssistantException unauthorized(LearningConstants.ErrorCode code, String message) {
+    public static LearningAssistantException unauthorized(LearningErrorCode code, String message) {
         return from(code, message, null);
     }
 
@@ -67,12 +67,12 @@ public class LearningAssistantException extends RuntimeException {
     }
 
     /** 使用错误码默认提示创建资源不存在异常。 */
-    public static LearningAssistantException notFound(LearningConstants.ErrorCode code) {
+    public static LearningAssistantException notFound(LearningErrorCode code) {
         return from(code, code.getDefaultMessage(), null);
     }
 
     /** 使用错误码并覆盖用户提示创建资源不存在异常。 */
-    public static LearningAssistantException notFound(LearningConstants.ErrorCode code, String message) {
+    public static LearningAssistantException notFound(LearningErrorCode code, String message) {
         return from(code, message, null);
     }
 
@@ -85,7 +85,7 @@ public class LearningAssistantException extends RuntimeException {
     }
 
     /** 使用错误码记录外部服务异常，保留底层异常作为技术诊断信息。 */
-    public static LearningAssistantException externalService(LearningConstants.ErrorCode code,
+    public static LearningAssistantException externalService(LearningErrorCode code,
                                                              String message, Throwable cause) {
         return from(code, message, cause);
     }
@@ -99,25 +99,25 @@ public class LearningAssistantException extends RuntimeException {
     }
 
     /** 使用错误码记录系统异常，默认提示不暴露技术细节。 */
-    public static LearningAssistantException system(LearningConstants.ErrorCode code,
+    public static LearningAssistantException system(LearningErrorCode code,
                                                     String message, Throwable cause) {
         return from(code, message, cause);
     }
 
     /** 按错误码定义的默认 HTTP 状态和中文提示创建异常。 */
-    public static LearningAssistantException of(LearningConstants.ErrorCode code) {
+    public static LearningAssistantException of(LearningErrorCode code) {
         return new LearningAssistantException(code.getStatus(), code.getCode(), code.getDefaultMessage(),
                 code.getDefaultMessage(), null);
     }
 
     /** 按错误码默认定义创建异常，并保留底层原因。 */
-    public static LearningAssistantException of(LearningConstants.ErrorCode code, Throwable cause) {
+    public static LearningAssistantException of(LearningErrorCode code, Throwable cause) {
         String debugMessage = cause == null ? code.getDefaultMessage() : cause.getMessage();
         return new LearningAssistantException(code.getStatus(), code.getCode(), code.getDefaultMessage(),
                 debugMessage, cause);
     }
 
-    private static LearningAssistantException from(LearningConstants.ErrorCode code, String message, Throwable cause) {
+    private static LearningAssistantException from(LearningErrorCode code, String message, Throwable cause) {
         String resolvedMessage = message == null ? code.getDefaultMessage() : message;
         String debugMessage = cause == null ? resolvedMessage : cause.getMessage();
         return new LearningAssistantException(code.getStatus(), code.getCode(), resolvedMessage, debugMessage, cause);

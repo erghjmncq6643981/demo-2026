@@ -4,21 +4,23 @@ import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import com.baomidou.mybatisplus.core.conditions.update.LambdaUpdateWrapper;
 import com.chandler.learning.agent.ai.agent.application.AiAgentBindingService;
 import com.chandler.learning.agent.ai.chat.application.AiModelUsageQueryService;
-import com.chandler.learning.agent.ai.model.api.AiModelConfigResponse;
-import com.chandler.learning.agent.ai.model.api.AiModelConfigSaveRequest;
-import com.chandler.learning.agent.ai.model.domain.AiModelUsageSummary;
-import com.chandler.learning.agent.ai.model.api.AiModelOptionResponse;
-import com.chandler.learning.agent.ai.agent.domain.AiAgent;
-import com.chandler.learning.agent.ai.model.domain.AiModelConfig;
-import com.chandler.learning.agent.ai.model.domain.AiModelDefinition;
-import com.chandler.learning.agent.system.domain.SystemLogType;
+import com.chandler.learning.agent.ai.model.api.response.AiModelConfigResponse;
+import com.chandler.learning.agent.ai.model.api.request.AiModelConfigSaveRequest;
+import com.chandler.learning.agent.ai.model.domain.bo.AiModelUsageSummary;
+import com.chandler.learning.agent.ai.model.api.response.AiModelOptionResponse;
+import com.chandler.learning.agent.ai.agent.domain.entity.AiAgent;
+import com.chandler.learning.agent.ai.model.domain.entity.AiModelConfig;
+import com.chandler.learning.agent.ai.model.domain.enums.AiModelDefinition;
+import com.chandler.learning.agent.system.domain.enums.SystemLogType;
 import com.chandler.learning.agent.exception.LearningAssistantException;
-import com.chandler.learning.agent.ai.model.infrastructure.AiModelConfigMapper;
+import com.chandler.learning.agent.ai.model.infrastructure.mapper.AiModelConfigMapper;
 import com.chandler.learning.agent.security.ApiKeyCryptoService;
 import com.chandler.learning.agent.system.application.SystemLogService;
 import com.chandler.learning.agent.identity.application.UserDisplayNameService;
 import com.chandler.learning.agent.ai.gateway.protocol.AiModelConnectionConfig;
-import com.chandler.learning.agent.support.LearningConstants;
+import com.chandler.learning.agent.ai.gateway.constant.AiGatewayConstants;
+import com.chandler.learning.agent.common.constant.CommonConstants;
+import com.chandler.learning.agent.common.exception.LearningErrorCode;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
@@ -94,7 +96,7 @@ public class AiModelConfigService {
         return modelConfigMapper.selectOne(new LambdaQueryWrapper<AiModelConfig>()
                 .eq(AiModelConfig::getId, id)
                 .eq(AiModelConfig::getDeleted, false)
-                .last(LearningConstants.SQL_LIMIT_ONE));
+                .last(CommonConstants.SQL_LIMIT_ONE));
     }
 
     /** 批量查询 Agent 绑定的模型配置，避免 Agent 列表产生 N+1 查询。 */
@@ -112,14 +114,14 @@ public class AiModelConfigService {
     /** 返回可以被 Agent 调用的具体模型配置。 */
     public AiModelConfig requireEnabled(Long id) {
         if (id == null) {
-            throw LearningAssistantException.badRequest(LearningConstants.ErrorCode.MODEL_CONFIG_NOT_BOUND);
+            throw LearningAssistantException.badRequest(LearningErrorCode.MODEL_CONFIG_NOT_BOUND);
         }
         AiModelConfig config = getById(id);
         if (config == null) {
-            throw LearningAssistantException.notFound(LearningConstants.ErrorCode.MODEL_CONFIG_NOT_FOUND);
+            throw LearningAssistantException.notFound(LearningErrorCode.MODEL_CONFIG_NOT_FOUND);
         }
         if (!Boolean.TRUE.equals(config.getEnabled())) {
-            throw LearningAssistantException.badRequest(LearningConstants.ErrorCode.AI_PROVIDER_DISABLED);
+            throw LearningAssistantException.badRequest(LearningErrorCode.AI_PROVIDER_DISABLED);
         }
         AiModelDefinition.resolve(config.getProvider(), config.getModelName());
         return config;
@@ -148,7 +150,7 @@ public class AiModelConfigService {
     public AiModelConfigResponse create(AiModelConfigSaveRequest request) {
         if (!StringUtils.hasText(request.getApiKey())) {
             throw LearningAssistantException.badRequest(
-                    LearningConstants.ErrorCode.API_KEY_REQUIRED,
+                    LearningErrorCode.API_KEY_REQUIRED,
                     "API Key 不能为空");
         }
         AiModelConfig config = new AiModelConfig();
@@ -182,7 +184,7 @@ public class AiModelConfigService {
         AiModelConfig config = getById(id);
         if (config == null) {
             throw LearningAssistantException.notFound(
-                    LearningConstants.ErrorCode.MODEL_CONFIG_NOT_FOUND,
+                    LearningErrorCode.MODEL_CONFIG_NOT_FOUND,
                     "模型配置不存在: " + id);
         }
         if (!Boolean.TRUE.equals(request.getEnabled())) {
@@ -217,7 +219,7 @@ public class AiModelConfigService {
         AiModelConfig config = getById(id);
         if (config == null) {
             throw LearningAssistantException.notFound(
-                    LearningConstants.ErrorCode.MODEL_CONFIG_NOT_FOUND,
+                    LearningErrorCode.MODEL_CONFIG_NOT_FOUND,
                     "模型配置不存在: " + id);
         }
         if (enabled) {
@@ -245,13 +247,13 @@ public class AiModelConfigService {
         AiModelConfig config = getById(id);
         if (config == null) {
             throw LearningAssistantException.notFound(
-                    LearningConstants.ErrorCode.MODEL_CONFIG_NOT_FOUND,
+                    LearningErrorCode.MODEL_CONFIG_NOT_FOUND,
                     "模型配置不存在: " + id);
         }
         if (Boolean.TRUE.equals(isDefault)) {
             AiModelDefinition.resolve(config.getProvider(), config.getModelName());
         }
-        config.setSequence(sequence == null ? LearningConstants.DEFAULT_SEQUENCE : sequence);
+        config.setSequence(sequence == null ? CommonConstants.DEFAULT_SEQUENCE : sequence);
         config.setIsDefault(Boolean.TRUE.equals(isDefault));
         config.setUpdateTime(LocalDateTime.now());
         if (Boolean.TRUE.equals(config.getIsDefault())) {
@@ -305,11 +307,11 @@ public class AiModelConfigService {
         AiModelConfig config = getById(modelConfigId);
         if (config == null) {
             throw LearningAssistantException.notFound(
-                    LearningConstants.ErrorCode.MODEL_CONFIG_NOT_FOUND,
+                    LearningErrorCode.MODEL_CONFIG_NOT_FOUND,
                     "模型配置不存在: " + modelConfigId);
         }
         if (!Boolean.TRUE.equals(config.getEnabled())) {
-            throw LearningAssistantException.badRequest(LearningConstants.ErrorCode.AI_PROVIDER_DISABLED);
+            throw LearningAssistantException.badRequest(LearningErrorCode.AI_PROVIDER_DISABLED);
         }
         AiModelDefinition.resolve(config.getProvider(), config.getModelName());
         return toConnectionConfig(config);
@@ -321,7 +323,7 @@ public class AiModelConfigService {
     public AiModelConnectionConfig resolveProviderConfigForTest(Long modelConfigId) {
         AiModelConfig config = getById(modelConfigId);
         if (config == null) {
-            throw LearningAssistantException.notFound(LearningConstants.ErrorCode.MODEL_CONFIG_NOT_FOUND);
+            throw LearningAssistantException.notFound(LearningErrorCode.MODEL_CONFIG_NOT_FOUND);
         }
         AiModelDefinition.resolve(config.getProvider(), config.getModelName());
         return toConnectionConfig(config);
@@ -402,13 +404,13 @@ public class AiModelConfigService {
         config.setProvider(modelDefinition.getProvider().getCode());
         config.setModelName(modelDefinition.getApiModelId());
         config.setBaseUrl(request.getBaseUrl().trim());
-        config.setChatPath(StringUtils.hasText(request.getChatPath()) ? request.getChatPath().trim() : LearningConstants.DEFAULT_CHAT_PATH);
+        config.setChatPath(StringUtils.hasText(request.getChatPath()) ? request.getChatPath().trim() : AiGatewayConstants.DEFAULT_CHAT_PATH);
         if (create || StringUtils.hasText(request.getApiKey())) {
             config.setApiKey(apiKeyCryptoService.encrypt(request.getApiKey().trim()));
         }
         config.setEnabled(Boolean.TRUE.equals(request.getEnabled()));
         config.setIsDefault(Boolean.TRUE.equals(request.getIsDefault()));
-        config.setSequence(request.getSequence() == null ? LearningConstants.DEFAULT_SEQUENCE : request.getSequence());
+        config.setSequence(request.getSequence() == null ? CommonConstants.DEFAULT_SEQUENCE : request.getSequence());
     }
 
     /**
@@ -513,7 +515,7 @@ public class AiModelConfigService {
         }
         String names = agents.stream().map(AiAgent::getName).collect(Collectors.joining("、"));
         throw LearningAssistantException.badRequest(
-                LearningConstants.ErrorCode.MODEL_CONFIG_IN_USE,
+                LearningErrorCode.MODEL_CONFIG_IN_USE,
                 "模型配置正在被 Agent「" + names + "」使用，请先更换 Agent 模型后再" + operation);
     }
 

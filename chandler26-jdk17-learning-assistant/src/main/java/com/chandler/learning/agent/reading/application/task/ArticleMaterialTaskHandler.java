@@ -1,16 +1,16 @@
 package com.chandler.learning.agent.reading.application.task;
 
-import com.chandler.learning.agent.reading.api.ArticleStudyRequest;
-import com.chandler.learning.agent.reading.api.ArticleStudyResponse;
+import com.chandler.learning.agent.reading.api.request.ArticleStudyRequest;
+import com.chandler.learning.agent.reading.api.response.ArticleStudyResponse;
 import com.chandler.learning.agent.reading.application.ArticleStudyService;
-import com.chandler.learning.agent.support.LearningConstants;
+import com.chandler.learning.agent.task.domain.constant.AiTaskConstants;
 import com.chandler.learning.agent.task.application.AiAsyncTaskService;
 import com.chandler.learning.agent.task.application.AiTaskExecutionService;
 import com.chandler.learning.agent.task.application.contract.AiTaskHandler;
 import com.chandler.learning.agent.task.application.contract.AiTaskPayload;
 import com.chandler.learning.agent.task.application.contract.AiTaskStepDefinition;
-import com.chandler.learning.agent.task.domain.AiAsyncTask;
-import com.chandler.learning.agent.task.domain.AiTaskType;
+import com.chandler.learning.agent.task.domain.entity.AiAsyncTask;
+import com.chandler.learning.agent.task.domain.enums.AiTaskType;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Component;
@@ -50,6 +50,6 @@ public class ArticleMaterialTaskHandler implements AiTaskHandler {
                     return request.getWordbookId();
                 });
         taskService.updateProgress(task.getId(), 1, 1, 0);
-        taskService.complete(task.getId(), LearningConstants.AiTask.STATUS_COMPLETED, null);
+        taskService.complete(task.getId(), AiTaskConstants.STATUS_COMPLETED, null);
     }
 }

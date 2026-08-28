@@ -2,13 +2,15 @@ package com.chandler.learning.agent.vocabulary.application;
 
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import com.chandler.learning.agent.exception.LearningAssistantException;
-import com.chandler.learning.agent.support.LearningConstants;
-import com.chandler.learning.agent.vocabulary.domain.VocabularyCatalog;
-import com.chandler.learning.agent.vocabulary.domain.VocabularyCatalogEntry;
-import com.chandler.learning.agent.vocabulary.domain.VocabularyCatalogVersion;
-import com.chandler.learning.agent.vocabulary.infrastructure.VocabularyCatalogEntryMapper;
-import com.chandler.learning.agent.vocabulary.infrastructure.VocabularyCatalogMapper;
-import com.chandler.learning.agent.vocabulary.infrastructure.VocabularyCatalogVersionMapper;
+import com.chandler.learning.agent.common.constant.CommonConstants;
+import com.chandler.learning.agent.common.exception.LearningErrorCode;
+import com.chandler.learning.agent.vocabulary.domain.constant.VocabularyImportConstants;
+import com.chandler.learning.agent.vocabulary.domain.entity.VocabularyCatalog;
+import com.chandler.learning.agent.vocabulary.domain.entity.VocabularyCatalogEntry;
+import com.chandler.learning.agent.vocabulary.domain.entity.VocabularyCatalogVersion;
+import com.chandler.learning.agent.vocabulary.infrastructure.mapper.VocabularyCatalogEntryMapper;
+import com.chandler.learning.agent.vocabulary.infrastructure.mapper.VocabularyCatalogMapper;
+import com.chandler.learning.agent.vocabulary.infrastructure.mapper.VocabularyCatalogVersionMapper;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 
@@ -28,12 +30,12 @@ public class VocabularyCatalogQueryService {
     public VocabularyCatalogVersion requirePublishedVersion(Long userId, Long versionId) {
         VocabularyCatalogVersion version = versionMapper.selectOne(new LambdaQueryWrapper<VocabularyCatalogVersion>()
                 .eq(VocabularyCatalogVersion::getId, versionId)
-                .eq(VocabularyCatalogVersion::getStatus, LearningConstants.VocabularyImport.VERSION_STATUS_PUBLISHED)
+                .eq(VocabularyCatalogVersion::getStatus, VocabularyImportConstants.VERSION_STATUS_PUBLISHED)
                 .eq(VocabularyCatalogVersion::getDeleted, false)
-                .last(LearningConstants.SQL_LIMIT_ONE));
+                .last(CommonConstants.SQL_LIMIT_ONE));
         if (version == null) {
             throw LearningAssistantException.notFound(
-                    LearningConstants.ErrorCode.VOCABULARY_CATALOG_NOT_FOUND,
+                    LearningErrorCode.VOCABULARY_CATALOG_NOT_FOUND,
                     "已发布词表版本不存在: " + versionId);
         }
         requireAccessibleCatalog(userId, version.getCatalogId());
@@ -46,12 +48,12 @@ public class VocabularyCatalogQueryService {
                 .eq(VocabularyCatalog::getId, catalogId)
                 .and(wrapper -> wrapper.eq(VocabularyCatalog::getOwnerUserId, userId)
                         .or().eq(VocabularyCatalog::getVisibility,
-                                LearningConstants.VocabularyImport.VISIBILITY_PUBLIC))
+                                VocabularyImportConstants.VISIBILITY_PUBLIC))
                 .eq(VocabularyCatalog::getDeleted, false)
-                .last(LearningConstants.SQL_LIMIT_ONE));
+                .last(CommonConstants.SQL_LIMIT_ONE));
         if (catalog == null) {
             throw LearningAssistantException.notFound(
-                    LearningConstants.ErrorCode.VOCABULARY_CATALOG_NOT_FOUND,
+                    LearningErrorCode.VOCABULARY_CATALOG_NOT_FOUND,
                     "词表不存在: " + catalogId);
         }
         return catalog;

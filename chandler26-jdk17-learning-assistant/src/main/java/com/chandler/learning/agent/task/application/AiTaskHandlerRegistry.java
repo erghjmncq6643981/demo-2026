@@ -1,9 +1,9 @@
 package com.chandler.learning.agent.task.application;
 
 import com.chandler.learning.agent.exception.LearningAssistantException;
-import com.chandler.learning.agent.support.LearningConstants;
+import com.chandler.learning.agent.common.exception.LearningErrorCode;
 import com.chandler.learning.agent.task.application.contract.AiTaskHandler;
-import com.chandler.learning.agent.task.domain.AiTaskType;
+import com.chandler.learning.agent.task.domain.enums.AiTaskType;
 import org.springframework.stereotype.Component;
 
 import java.util.EnumMap;
@@ -32,7 +32,7 @@ public class AiTaskHandlerRegistry {
         AiTaskHandler handler = handlers.get(type);
         if (handler == null) {
             throw LearningAssistantException.badRequest(
-                    LearningConstants.ErrorCode.AI_ASYNC_TASK_TYPE_INVALID,
+                    LearningErrorCode.AI_ASYNC_TASK_TYPE_INVALID,
                     "AI 任务尚未配置处理器: " + taskType);
         }
         return handler;

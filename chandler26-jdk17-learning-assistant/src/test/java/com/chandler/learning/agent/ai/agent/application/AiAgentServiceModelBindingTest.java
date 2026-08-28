@@ -1,11 +1,11 @@
 package com.chandler.learning.agent.ai.agent.application;
 
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
-import com.chandler.learning.agent.ai.agent.api.AgentSaveRequest;
-import com.chandler.learning.agent.ai.agent.domain.AiAgent;
-import com.chandler.learning.agent.ai.model.domain.AiModelConfig;
+import com.chandler.learning.agent.ai.agent.api.request.AgentSaveRequest;
+import com.chandler.learning.agent.ai.agent.domain.entity.AiAgent;
+import com.chandler.learning.agent.ai.model.domain.entity.AiModelConfig;
 import com.chandler.learning.agent.ai.model.application.AiModelConfigService;
-import com.chandler.learning.agent.ai.agent.infrastructure.AiAgentMapper;
+import com.chandler.learning.agent.ai.agent.infrastructure.mapper.AiAgentMapper;
 import com.chandler.learning.agent.system.application.SystemLogService;
 import com.chandler.learning.agent.identity.application.UserDisplayNameService;
 import org.junit.jupiter.api.Test;

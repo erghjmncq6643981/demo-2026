@@ -4,7 +4,7 @@ import com.chandler.learning.agent.ai.gateway.protocol.ModelChatRequest;
 import com.chandler.learning.agent.ai.gateway.protocol.AiRequestAdapterType;
 import com.chandler.learning.agent.ai.gateway.protocol.AiPreparedModelRequest;
 import com.chandler.learning.agent.exception.LearningAssistantException;
-import com.chandler.learning.agent.support.LearningConstants;
+import com.chandler.learning.agent.common.exception.LearningErrorCode;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Component;
 
@@ -28,7 +28,7 @@ public class AiModelRequestAdapterRegistry {
                 .filter(adapter -> adapter.type() == adapterType)
                 .findFirst()
                 .orElseThrow(() -> LearningAssistantException.system(
-                        LearningConstants.ErrorCode.SYSTEM_UNEXPECTED,
+                        LearningErrorCode.SYSTEM_UNEXPECTED,
                         "模型请求适配器未注册：" + adapterType,
                         null))
                 .prepare(request);

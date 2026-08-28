@@ -1,6 +1,6 @@
 package com.chandler.learning.agent.ai.chat.application;
 
-import com.chandler.learning.agent.ai.chat.domain.AiInvocationScene;
+import com.chandler.learning.agent.ai.chat.domain.enums.AiInvocationScene;
 import io.micrometer.core.instrument.simple.SimpleMeterRegistry;
 import org.junit.jupiter.api.Test;
 

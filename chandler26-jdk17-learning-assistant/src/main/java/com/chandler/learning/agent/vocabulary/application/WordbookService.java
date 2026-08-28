@@ -3,41 +3,46 @@ package com.chandler.learning.agent.vocabulary.application;
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import com.baomidou.mybatisplus.core.conditions.update.LambdaUpdateWrapper;
 import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
-import com.chandler.learning.agent.vocabulary.api.AddWordbookEntryRequest;
-import com.chandler.learning.agent.identity.api.LearningActivityDayResponse;
-import com.chandler.learning.agent.identity.api.LearningActivityResponse;
-import com.chandler.learning.agent.vocabulary.api.ReviewSubmitRequest;
-import com.chandler.learning.agent.vocabulary.api.ReviewSubmitResponse;
-import com.chandler.learning.agent.vocabulary.api.VocabularyRelationResponse;
-import com.chandler.learning.agent.vocabulary.api.VocabularyTagResponse;
-import com.chandler.learning.agent.vocabulary.api.WordbookEntryTransferRequest;
-import com.chandler.learning.agent.vocabulary.api.WordbookEntryResponse;
-import com.chandler.learning.agent.vocabulary.api.WordbookEntryPageResponse;
-import com.chandler.learning.agent.vocabulary.api.WordbookEntrySummaryResponse;
-import com.chandler.learning.agent.vocabulary.api.WordbookEntryUpdateRequest;
-import com.chandler.learning.agent.vocabulary.api.WordbookResponse;
-import com.chandler.learning.agent.vocabulary.api.WordbookSaveRequest;
-import com.chandler.learning.agent.vocabulary.api.VocabularyStudyRequest;
-import com.chandler.learning.agent.vocabulary.api.VocabularyStudyResponse;
-import com.chandler.learning.agent.learning.domain.ReviewResult;
-import com.chandler.learning.agent.learning.domain.ReviewStatus;
-import com.chandler.learning.agent.system.domain.SystemLogType;
-import com.chandler.learning.agent.vocabulary.domain.LearningWordbook;
-import com.chandler.learning.agent.vocabulary.domain.LearningWordbookEntry;
-import com.chandler.learning.agent.vocabulary.domain.EnglishVocabularyStudyRecord;
+import com.chandler.learning.agent.vocabulary.api.request.AddWordbookEntryRequest;
+import com.chandler.learning.agent.identity.api.response.LearningActivityDayResponse;
+import com.chandler.learning.agent.identity.api.response.LearningActivityResponse;
+import com.chandler.learning.agent.vocabulary.api.request.ReviewSubmitRequest;
+import com.chandler.learning.agent.vocabulary.api.response.ReviewSubmitResponse;
+import com.chandler.learning.agent.vocabulary.api.response.VocabularyRelationResponse;
+import com.chandler.learning.agent.vocabulary.api.response.VocabularyTagResponse;
+import com.chandler.learning.agent.vocabulary.api.request.WordbookEntryTransferRequest;
+import com.chandler.learning.agent.vocabulary.api.response.WordbookEntryResponse;
+import com.chandler.learning.agent.vocabulary.api.response.WordbookEntryPageResponse;
+import com.chandler.learning.agent.vocabulary.api.response.WordbookEntrySummaryResponse;
+import com.chandler.learning.agent.vocabulary.api.request.WordbookEntryUpdateRequest;
+import com.chandler.learning.agent.vocabulary.api.response.WordbookResponse;
+import com.chandler.learning.agent.vocabulary.api.request.WordbookSaveRequest;
+import com.chandler.learning.agent.vocabulary.api.request.VocabularyStudyRequest;
+import com.chandler.learning.agent.vocabulary.api.response.VocabularyStudyResponse;
+import com.chandler.learning.agent.learning.domain.enums.ReviewResult;
+import com.chandler.learning.agent.learning.domain.enums.ReviewStatus;
+import com.chandler.learning.agent.system.domain.enums.SystemLogType;
+import com.chandler.learning.agent.vocabulary.domain.entity.LearningWordbook;
+import com.chandler.learning.agent.vocabulary.domain.entity.LearningWordbookEntry;
+import com.chandler.learning.agent.vocabulary.domain.entity.EnglishVocabularyStudyRecord;
 import com.chandler.learning.agent.exception.LearningAssistantException;
 import com.chandler.learning.agent.identity.application.UserDisplayNameService;
 import com.chandler.learning.agent.learning.application.ReviewSchedulePolicy;
 import com.chandler.learning.agent.learning.application.LearningReviewService;
-import com.chandler.learning.agent.learning.domain.LearningReviewRecord;
-import com.chandler.learning.agent.vocabulary.domain.LearningWordProgress;
-import com.chandler.learning.agent.vocabulary.domain.VocabularyCatalogEntry;
+import com.chandler.learning.agent.learning.domain.entity.LearningReviewRecord;
+import com.chandler.learning.agent.vocabulary.domain.entity.LearningWordProgress;
+import com.chandler.learning.agent.vocabulary.domain.entity.VocabularyCatalogEntry;
 import com.chandler.learning.agent.system.application.SystemLogService;
-import com.chandler.learning.agent.vocabulary.infrastructure.LearningWordbookEntryMapper;
-import com.chandler.learning.agent.vocabulary.infrastructure.LearningWordbookMapper;
-import com.chandler.learning.agent.vocabulary.infrastructure.EnglishVocabularyStudyRecordMapper;
+import com.chandler.learning.agent.vocabulary.infrastructure.mapper.LearningWordbookEntryMapper;
+import com.chandler.learning.agent.vocabulary.infrastructure.mapper.LearningWordbookMapper;
+import com.chandler.learning.agent.vocabulary.infrastructure.mapper.EnglishVocabularyStudyRecordMapper;
 import com.chandler.learning.agent.vocabulary.application.EnglishVocabularyStudyService;
-import com.chandler.learning.agent.support.LearningConstants;
+import com.chandler.learning.agent.ai.agent.domain.constant.AiScenarioConstants;
+import com.chandler.learning.agent.common.constant.CommonConstants;
+import com.chandler.learning.agent.common.exception.LearningErrorCode;
+import com.chandler.learning.agent.identity.domain.constant.LearningActivityConstants;
+import com.chandler.learning.agent.vocabulary.domain.constant.ReviewConstants;
+import com.chandler.learning.agent.vocabulary.domain.constant.VocabularyCardConstants;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -155,7 +160,7 @@ public class WordbookService {
                     source == null ? command.term() : source.effectiveTerm(), command.normalizedTerm(),
                     responseAssembler.basicSnapshot(source, command.term()), now);
             if (command.cardRequired()) {
-                entry.setCardStatus(LearningConstants.VocabularyCard.STATUS_MISSING);
+                entry.setCardStatus(VocabularyCardConstants.STATUS_MISSING);
             }
             upserts.add(entry);
         }
@@ -177,7 +182,7 @@ public class WordbookService {
                 .eq(LearningWordbook::getUserId, userId)
                 .eq(LearningWordbook::getIsDefault, true)
                 .eq(LearningWordbook::getDeleted, false)
-                .last(LearningConstants.SQL_LIMIT_ONE));
+                .last(CommonConstants.SQL_LIMIT_ONE));
         if (existing != null) {
             return existing;
         }
@@ -248,7 +253,7 @@ public class WordbookService {
                 .eq(LearningWordbookEntry::getDeleted, false));
         if (entryCount > 0) {
             throw LearningAssistantException.badRequest(
-                    LearningConstants.ErrorCode.WORDBOOK_NOT_EMPTY,
+                    LearningErrorCode.WORDBOOK_NOT_EMPTY,
                     "单词本中还有单词，不能删除");
         }
         LocalDateTime now = LocalDateTime.now();
@@ -267,7 +272,7 @@ public class WordbookService {
                 .eq(LearningWordbook::getUserId, userId)
                 .eq(LearningWordbook::getDeleted, false)
                 .orderByAsc(LearningWordbook::getCreateTime)
-                .last(LearningConstants.SQL_LIMIT_ONE));
+                .last(CommonConstants.SQL_LIMIT_ONE));
         if (nextDefault != null) {
             nextDefault.changeDefault(true, now);
             wordbookMapper.updateById(nextDefault);
@@ -316,7 +321,7 @@ public class WordbookService {
      * 处理 {@code activity} 相关业务。
      */
     public LearningActivityResponse activity(Long userId, int days) {
-        int resolvedDays = Math.max(LearningConstants.Activity.MIN_DAYS, Math.min(days, LearningConstants.Activity.MAX_DAYS));
+        int resolvedDays = Math.max(LearningActivityConstants.MIN_DAYS, Math.min(days, LearningActivityConstants.MAX_DAYS));
         LocalDate endDate = LocalDate.now();
         LocalDate startDate = endDate.minusDays(resolvedDays - 1L);
         LocalDateTime startTime = startDate.atStartOfDay();
@@ -339,7 +344,7 @@ public class WordbookService {
             LocalDate date = entry.getCreateTime() == null ? null : entry.getCreateTime().toLocalDate();
             LearningActivityDayResponse item = dayMap.get(date);
             if (item != null) {
-                item.setLearnedCount(nullToZero(item.getLearnedCount()) + LearningConstants.SEQUENCE_STEP);
+                item.setLearnedCount(nullToZero(item.getLearnedCount()) + CommonConstants.SEQUENCE_STEP);
             }
         }
 
@@ -348,7 +353,7 @@ public class WordbookService {
             LocalDate date = review.getCreateTime() == null ? null : review.getCreateTime().toLocalDate();
             LearningActivityDayResponse item = dayMap.get(date);
             if (item != null) {
-                item.setReviewCount(nullToZero(item.getReviewCount()) + LearningConstants.SEQUENCE_STEP);
+                item.setReviewCount(nullToZero(item.getReviewCount()) + CommonConstants.SEQUENCE_STEP);
             }
         }
 
@@ -378,7 +383,7 @@ public class WordbookService {
         String normalizedTerm = normalize(request.getTerm());
         if (!StringUtils.hasText(normalizedTerm)) {
             throw LearningAssistantException.badRequest(
-                    LearningConstants.ErrorCode.VOCABULARY_EMPTY,
+                    LearningErrorCode.VOCABULARY_EMPTY,
                     "单词不能为空");
         }
 
@@ -419,7 +424,7 @@ public class WordbookService {
         }
         if (vocabulary == null) {
             throw LearningAssistantException.notFound(
-                    LearningConstants.ErrorCode.VOCABULARY_RECORD_NOT_FOUND,
+                    LearningErrorCode.VOCABULARY_RECORD_NOT_FOUND,
                     "词汇学习记录不存在: " + normalizedTerm);
         }
 
@@ -487,9 +492,9 @@ public class WordbookService {
      */
     public List<WordbookEntrySummaryResponse> listDueEntries(Long userId, Long wordbookId, Integer limit) {
         Long resolvedWordbookId = wordbookId == null ? ensureDefaultWordbook(userId).getId() : wordbookId;
-        int resolvedLimit = Math.max(LearningConstants.Review.DUE_MIN_LIMIT,
-                Math.min(limit == null ? LearningConstants.Review.DUE_DEFAULT_LIMIT : limit,
-                        LearningConstants.Review.DUE_MAX_LIMIT));
+        int resolvedLimit = Math.max(ReviewConstants.DUE_MIN_LIMIT,
+                Math.min(limit == null ? ReviewConstants.DUE_DEFAULT_LIMIT : limit,
+                        ReviewConstants.DUE_MAX_LIMIT));
         LocalDateTime now = LocalDateTime.now();
         List<LearningWordbookEntry> entries = entryMapper.selectList(new LambdaQueryWrapper<LearningWordbookEntry>()
                 .select(LearningWordbookEntry::getId,
@@ -539,9 +544,9 @@ public class WordbookService {
      */
     public List<WordbookEntrySummaryResponse> listRestartReviewEntries(Long userId, Long wordbookId, Integer limit) {
         LearningWordbook wordbook = wordbookId == null ? ensureDefaultWordbook(userId) : requireWordbook(userId, wordbookId);
-        int resolvedLimit = Math.max(LearningConstants.Review.RESTART_MIN_LIMIT,
-                Math.min(limit == null ? LearningConstants.Review.RESTART_DEFAULT_LIMIT : limit,
-                        LearningConstants.Review.RESTART_MAX_LIMIT));
+        int resolvedLimit = Math.max(ReviewConstants.RESTART_MIN_LIMIT,
+                Math.min(limit == null ? ReviewConstants.RESTART_DEFAULT_LIMIT : limit,
+                        ReviewConstants.RESTART_MAX_LIMIT));
         List<LearningWordbookEntry> entries = entryMapper.selectList(new LambdaQueryWrapper<LearningWordbookEntry>()
                 .select(LearningWordbookEntry::getId,
                         LearningWordbookEntry::getWordbookId,
@@ -621,7 +626,7 @@ public class WordbookService {
         LearningWordbookEntry entry = entryMapper.selectById(entryId);
         if (entry == null || Boolean.TRUE.equals(entry.getDeleted()) || !entry.getUserId().equals(userId)) {
             throw LearningAssistantException.notFound(
-                    LearningConstants.ErrorCode.ENTRY_NOT_FOUND,
+                    LearningErrorCode.ENTRY_NOT_FOUND,
                     "单词本词条不存在: " + entryId);
         }
         ReviewResult result = ReviewResult.of(request.getResult());
@@ -744,8 +749,8 @@ public class WordbookService {
         LearningWordbookEntry entry = requireEntry(userId, entryId);
         VocabularyStudyRequest studyRequest = new VocabularyStudyRequest();
         studyRequest.setTerm(entry.getTerm());
-        studyRequest.setAgentCode(LearningConstants.VOCABULARY_AGENT_CODE);
-        studyRequest.setTemplateCode(LearningConstants.VOCABULARY_TEMPLATE_CODE);
+        studyRequest.setAgentCode(AiScenarioConstants.VOCABULARY_AGENT_CODE);
+        studyRequest.setTemplateCode(AiScenarioConstants.VOCABULARY_TEMPLATE_CODE);
         studyRequest.setForceRefresh(forceRefresh);
         VocabularyStudyResponse studyResponse = vocabularyStudyService.study(studyRequest);
 
@@ -768,7 +773,7 @@ public class WordbookService {
         LearningWordbook wordbook = wordbookMapper.selectById(wordbookId);
         if (wordbook == null || Boolean.TRUE.equals(wordbook.getDeleted()) || !wordbook.getUserId().equals(userId)) {
             throw LearningAssistantException.notFound(
-                    LearningConstants.ErrorCode.WORDBOOK_NOT_FOUND,
+                    LearningErrorCode.WORDBOOK_NOT_FOUND,
                     "单词本不存在: " + wordbookId);
         }
         return wordbook;
@@ -790,7 +795,7 @@ public class WordbookService {
         LearningWordbookEntry entry = entryMapper.selectById(entryId);
         if (entry == null || Boolean.TRUE.equals(entry.getDeleted()) || !entry.getUserId().equals(userId)) {
             throw LearningAssistantException.notFound(
-                    LearningConstants.ErrorCode.ENTRY_NOT_FOUND,
+                    LearningErrorCode.ENTRY_NOT_FOUND,
                     "单词本词条不存在: " + entryId);
         }
         return entry;
@@ -802,7 +807,7 @@ public class WordbookService {
     private EnglishVocabularyStudyRecord findVocabulary(String normalizedTerm) {
         return vocabularyMapper.selectOne(new LambdaQueryWrapper<EnglishVocabularyStudyRecord>()
                 .eq(EnglishVocabularyStudyRecord::getNormalizedTerm, normalizedTerm)
-                .last(LearningConstants.SQL_LIMIT_ONE));
+                .last(CommonConstants.SQL_LIMIT_ONE));
     }
 
     /**

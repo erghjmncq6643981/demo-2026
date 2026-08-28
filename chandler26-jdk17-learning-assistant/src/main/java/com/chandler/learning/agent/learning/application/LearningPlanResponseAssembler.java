@@ -1,28 +1,28 @@
 package com.chandler.learning.agent.learning.application;
 
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
-import com.chandler.learning.agent.learning.api.LearningPlanResponse;
-import com.chandler.learning.agent.learning.api.LearningPlanUnitEntryResponse;
-import com.chandler.learning.agent.learning.api.LearningPlanUnitResponse;
-import com.chandler.learning.agent.learning.api.LearningPlanUnitWordSummaryResponse;
-import com.chandler.learning.agent.learning.api.SceneRelatedWordResponse;
-import com.chandler.learning.agent.learning.domain.LearningPlan;
-import com.chandler.learning.agent.learning.domain.LearningPlanUnit;
-import com.chandler.learning.agent.learning.domain.LearningPlanUnitEntry;
-import com.chandler.learning.agent.learning.domain.LearningPlanUnitEntryItem;
-import com.chandler.learning.agent.learning.domain.LearningPlanUnitItem;
-import com.chandler.learning.agent.learning.domain.LearningPlanUnitWordSummaryItem;
-import com.chandler.learning.agent.learning.domain.LearningReviewRecord;
-import com.chandler.learning.agent.learning.domain.LearningSceneMaterial;
-import com.chandler.learning.agent.learning.domain.LearningSceneRelatedWord;
-import com.chandler.learning.agent.vocabulary.domain.LearningWordProgress;
-import com.chandler.learning.agent.learning.infrastructure.LearningPlanUnitEntryMapper;
-import com.chandler.learning.agent.learning.infrastructure.LearningPlanUnitMapper;
-import com.chandler.learning.agent.learning.infrastructure.LearningReviewRecordMapper;
-import com.chandler.learning.agent.learning.infrastructure.LearningSceneMaterialMapper;
-import com.chandler.learning.agent.learning.infrastructure.LearningSceneRelatedWordMapper;
+import com.chandler.learning.agent.learning.api.response.LearningPlanResponse;
+import com.chandler.learning.agent.learning.api.response.LearningPlanUnitEntryResponse;
+import com.chandler.learning.agent.learning.api.response.LearningPlanUnitResponse;
+import com.chandler.learning.agent.learning.api.response.LearningPlanUnitWordSummaryResponse;
+import com.chandler.learning.agent.learning.api.response.SceneRelatedWordResponse;
+import com.chandler.learning.agent.learning.domain.entity.LearningPlan;
+import com.chandler.learning.agent.learning.domain.entity.LearningPlanUnit;
+import com.chandler.learning.agent.learning.domain.entity.LearningPlanUnitEntry;
+import com.chandler.learning.agent.learning.domain.bo.LearningPlanUnitEntryItem;
+import com.chandler.learning.agent.learning.domain.bo.LearningPlanUnitItem;
+import com.chandler.learning.agent.learning.domain.bo.LearningPlanUnitWordSummaryItem;
+import com.chandler.learning.agent.learning.domain.entity.LearningReviewRecord;
+import com.chandler.learning.agent.learning.domain.entity.LearningSceneMaterial;
+import com.chandler.learning.agent.learning.domain.entity.LearningSceneRelatedWord;
+import com.chandler.learning.agent.vocabulary.domain.entity.LearningWordProgress;
+import com.chandler.learning.agent.learning.infrastructure.mapper.LearningPlanUnitEntryMapper;
+import com.chandler.learning.agent.learning.infrastructure.mapper.LearningPlanUnitMapper;
+import com.chandler.learning.agent.learning.infrastructure.mapper.LearningReviewRecordMapper;
+import com.chandler.learning.agent.learning.infrastructure.mapper.LearningSceneMaterialMapper;
+import com.chandler.learning.agent.learning.infrastructure.mapper.LearningSceneRelatedWordMapper;
 import com.chandler.learning.agent.vocabulary.application.LearningWordProgressService;
-import com.chandler.learning.agent.support.LearningConstants;
+import com.chandler.learning.agent.learning.domain.constant.ScenePlanConstants;
 import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import lombok.RequiredArgsConstructor;
@@ -72,7 +72,7 @@ public class LearningPlanResponseAssembler {
         response.setCompletedUnitCount(plan.getCompletedUnitCount());
         response.setCurrentUnitId(plan.getCurrentUnitId());
         response.setAiSessionId(plan.getAiSessionId());
-        response.setCanGenerateNext(LearningConstants.ScenePlan.STATUS_ACTIVE.equals(plan.getStatus()));
+        response.setCanGenerateNext(ScenePlanConstants.STATUS_ACTIVE.equals(plan.getStatus()));
         response.setUnits(includeUnits ? loadUnits(plan.getId()) : List.of());
         response.setCreateTime(plan.getCreateTime());
         response.setUpdateTime(plan.getUpdateTime());
@@ -90,7 +90,7 @@ public class LearningPlanResponseAssembler {
             return List.of();
         }
         List<Long> unitIds = units.stream().map(LearningPlanUnit::getId).toList();
-        List<com.chandler.learning.agent.learning.domain.LearningPlanUnitItem> unitItems = unitMapper.selectUnitsWithMaterial(planId, unitIds);
+        List<LearningPlanUnitItem> unitItems = unitMapper.selectUnitsWithMaterial(planId, unitIds);
         return loadUnitResponses(unitItems, planId);
     }
 
@@ -121,7 +121,7 @@ public class LearningPlanResponseAssembler {
                 : reviewRecordMapper.selectList(new LambdaQueryWrapper<LearningReviewRecord>()
                                 .in(LearningReviewRecord::getEntryId, wordbookEntryIds)
                                 .in(LearningReviewRecord::getUnitId, unitIds)
-                                .eq(LearningReviewRecord::getCheckResult, LearningConstants.ScenePlan.CHECK_CORRECT)
+                                .eq(LearningReviewRecord::getCheckResult, ScenePlanConstants.CHECK_CORRECT)
                                 .eq(LearningReviewRecord::getDeleted, false))
                         .stream()
                         .filter(record -> record.getEntryId() != null && record.getAssessmentType() != null)
@@ -163,10 +163,10 @@ public class LearningPlanResponseAssembler {
 
     private boolean isPending(LearningPlanUnitWordSummaryItem entry, Map<Long, Set<String>> passedByEntry) {
         Set<String> passed = passedByEntry.getOrDefault(entry.getWordbookEntryId(), Set.of());
-        boolean meaningPassed = passed.contains(LearningConstants.ScenePlan.ASSESSMENT_MEANING_CHOICE);
-        boolean spellingPassed = !LearningConstants.ScenePlan.MASTERY_SPELLING.equals(entry.getMasteryRequirement())
-                || (passed.contains(LearningConstants.ScenePlan.ASSESSMENT_COPY_TYPING)
-                && passed.contains(LearningConstants.ScenePlan.ASSESSMENT_MEANING_SPELLING));
+        boolean meaningPassed = passed.contains(ScenePlanConstants.ASSESSMENT_MEANING_CHOICE);
+        boolean spellingPassed = !ScenePlanConstants.MASTERY_SPELLING.equals(entry.getMasteryRequirement())
+                || (passed.contains(ScenePlanConstants.ASSESSMENT_COPY_TYPING)
+                && passed.contains(ScenePlanConstants.ASSESSMENT_MEANING_SPELLING));
         return !(meaningPassed && spellingPassed);
     }
 
@@ -189,7 +189,7 @@ public class LearningPlanResponseAssembler {
                                 new LambdaQueryWrapper<LearningReviewRecord>()
                                         .eq(LearningReviewRecord::getUnitId, entry.getUnitId())
                                         .eq(LearningReviewRecord::getEntryId, entry.getWordbookEntryId())
-                                        .eq(LearningReviewRecord::getCheckResult, LearningConstants.ScenePlan.CHECK_CORRECT)
+                                        .eq(LearningReviewRecord::getCheckResult, ScenePlanConstants.CHECK_CORRECT)
                                         .eq(LearningReviewRecord::getDeleted, false))
                         .stream()
                         .map(LearningReviewRecord::getAssessmentType)
@@ -200,12 +200,12 @@ public class LearningPlanResponseAssembler {
     }
 
     private List<LearningPlanUnitResponse> loadUnits(Long planId) {
-        List<com.chandler.learning.agent.learning.domain.LearningPlanUnitItem> unitItems = unitMapper.selectUnitsWithMaterial(planId, null);
+        List<LearningPlanUnitItem> unitItems = unitMapper.selectUnitsWithMaterial(planId, null);
         return loadUnitResponses(unitItems, planId);
     }
 
     private List<LearningPlanUnitResponse> loadUnitResponses(
-            List<com.chandler.learning.agent.learning.domain.LearningPlanUnitItem> unitItems, Long planId) {
+            List<LearningPlanUnitItem> unitItems, Long planId) {
         if (unitItems == null || unitItems.isEmpty()) {
             return List.of();
         }
@@ -221,9 +221,9 @@ public class LearningPlanResponseAssembler {
                 .stream().collect(Collectors.groupingBy(LearningSceneRelatedWord::getUnitId));
 
         // 2. 联表查询词条 + 词汇进度
-        List<com.chandler.learning.agent.learning.domain.LearningPlanUnitEntryItem> entries =
+        List<LearningPlanUnitEntryItem> entries =
                 unitEntryMapper.selectEntriesWithProgress(planId, unitIds);
-        Map<Long, List<com.chandler.learning.agent.learning.domain.LearningPlanUnitEntryItem>> entriesByUnit = entries.stream()
+        Map<Long, List<LearningPlanUnitEntryItem>> entriesByUnit = entries.stream()
                 .collect(Collectors.groupingBy(LearningPlanUnitEntry::getUnitId));
 
         // 3. 评测通过记录
@@ -238,7 +238,7 @@ public class LearningPlanResponseAssembler {
                         new LambdaQueryWrapper<LearningReviewRecord>()
                                 .in(LearningReviewRecord::getEntryId, wordbookEntryIds)
                                 .in(LearningReviewRecord::getUnitId, unitIds)
-                                .eq(LearningReviewRecord::getCheckResult, LearningConstants.ScenePlan.CHECK_CORRECT)
+                                .eq(LearningReviewRecord::getCheckResult, ScenePlanConstants.CHECK_CORRECT)
                                 .eq(LearningReviewRecord::getDeleted, false))
                 .stream()
                 .filter(record -> record.getEntryId() != null && record.getAssessmentType() != null)
@@ -256,9 +256,9 @@ public class LearningPlanResponseAssembler {
     }
 
     private LearningPlanUnitResponse toUnitResponse(
-            com.chandler.learning.agent.learning.domain.LearningPlanUnitItem unit,
+            LearningPlanUnitItem unit,
             List<LearningSceneRelatedWord> relatedWords,
-            List<com.chandler.learning.agent.learning.domain.LearningPlanUnitEntryItem> entries,
+            List<LearningPlanUnitEntryItem> entries,
             Map<Long, List<String>> passedByEntry) {
         LearningPlanUnitResponse response = new LearningPlanUnitResponse();
         response.setId(unit.getId());

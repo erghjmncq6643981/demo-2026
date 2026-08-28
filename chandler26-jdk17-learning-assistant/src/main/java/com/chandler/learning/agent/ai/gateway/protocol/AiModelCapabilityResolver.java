@@ -1,7 +1,8 @@
 package com.chandler.learning.agent.ai.gateway.protocol;
 
-import com.chandler.learning.agent.ai.model.domain.AiModelDefinition;
-import com.chandler.learning.agent.support.LearningConstants;
+import com.chandler.learning.agent.ai.model.domain.enums.AiModelDefinition;
+import com.chandler.learning.agent.ai.chat.domain.constant.AiContextBudgetConstants;
+import com.chandler.learning.agent.common.constant.CommonConstants;
 import org.springframework.stereotype.Component;
 
 /**
@@ -30,7 +31,7 @@ public class AiModelCapabilityResolver {
      */
     public int safeContextWindowTokens(String provider, String modelName) {
         return effectiveContextWindowTokens(resolve(provider, modelName))
-                * LearningConstants.AiContext.SAFE_USAGE_PERCENT / LearningConstants.PERCENT_BASE;
+                * AiContextBudgetConstants.SAFE_USAGE_PERCENT / CommonConstants.PERCENT_BASE;
     }
 
     /**

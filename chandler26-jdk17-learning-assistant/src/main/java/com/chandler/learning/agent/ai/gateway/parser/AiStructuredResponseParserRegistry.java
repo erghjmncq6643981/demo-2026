@@ -1,6 +1,6 @@
 package com.chandler.learning.agent.ai.gateway.parser;
 
-import com.chandler.learning.agent.ai.chat.domain.AiInvocationScene;
+import com.chandler.learning.agent.ai.chat.domain.enums.AiInvocationScene;
 import com.chandler.learning.agent.ai.gateway.protocol.AiResponseParserType;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import org.springframework.stereotype.Component;

@@ -1,7 +1,7 @@
 package com.chandler.learning.agent.identity.application;
 
-import com.chandler.learning.agent.identity.domain.LearningUser;
-import com.chandler.learning.agent.identity.infrastructure.LearningUserMapper;
+import com.chandler.learning.agent.identity.domain.entity.LearningUser;
+import com.chandler.learning.agent.identity.infrastructure.mapper.LearningUserMapper;
 import com.chandler.learning.agent.security.LearningUserPrincipal;
 import lombok.RequiredArgsConstructor;
 import org.springframework.security.core.Authentication;

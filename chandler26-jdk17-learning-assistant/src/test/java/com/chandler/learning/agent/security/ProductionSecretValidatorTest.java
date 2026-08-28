@@ -1,6 +1,6 @@
 package com.chandler.learning.agent.security;
 
-import com.chandler.learning.agent.config.LearningSecurityProperties;
+import com.chandler.learning.agent.config.security.LearningSecurityProperties;
 import org.junit.jupiter.api.Test;
 import org.springframework.mock.env.MockEnvironment;
 

@@ -1,7 +1,7 @@
 package com.chandler.learning.agent.task.application.contract;
 
-import com.chandler.learning.agent.task.domain.AiAsyncTask;
-import com.chandler.learning.agent.task.domain.AiTaskType;
+import com.chandler.learning.agent.task.domain.entity.AiAsyncTask;
+import com.chandler.learning.agent.task.domain.enums.AiTaskType;
 
 import java.util.List;
 import java.util.Map;

@@ -2,19 +2,18 @@ package com.chandler.learning.agent.vocabulary.application;
 
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import com.chandler.learning.agent.exception.LearningAssistantException;
-import com.chandler.learning.agent.support.LearningConstants;
-import com.chandler.learning.agent.vocabulary.api.VocabularyRelationResponse;
-import com.chandler.learning.agent.vocabulary.api.VocabularyTagResponse;
-import com.chandler.learning.agent.vocabulary.api.WordbookEntryResponse;
-import com.chandler.learning.agent.vocabulary.api.WordbookEntrySummaryResponse;
-import com.chandler.learning.agent.vocabulary.api.WordbookResponse;
-import com.chandler.learning.agent.vocabulary.domain.EnglishVocabularyStudyRecord;
-import com.chandler.learning.agent.vocabulary.domain.LearningWordbook;
-import com.chandler.learning.agent.vocabulary.domain.LearningWordbookEntry;
-import com.chandler.learning.agent.vocabulary.domain.VocabularyCatalogEntry;
-import com.chandler.learning.agent.vocabulary.infrastructure.EnglishVocabularyStudyRecordMapper;
-import com.chandler.learning.agent.vocabulary.infrastructure.LearningWordbookEntryMapper;
-import com.chandler.learning.agent.vocabulary.infrastructure.LearningWordbookMapper;
+import com.chandler.learning.agent.vocabulary.api.response.VocabularyRelationResponse;
+import com.chandler.learning.agent.vocabulary.api.response.VocabularyTagResponse;
+import com.chandler.learning.agent.vocabulary.api.response.WordbookEntryResponse;
+import com.chandler.learning.agent.vocabulary.api.response.WordbookEntrySummaryResponse;
+import com.chandler.learning.agent.vocabulary.api.response.WordbookResponse;
+import com.chandler.learning.agent.vocabulary.domain.entity.EnglishVocabularyStudyRecord;
+import com.chandler.learning.agent.vocabulary.domain.entity.LearningWordbook;
+import com.chandler.learning.agent.vocabulary.domain.entity.LearningWordbookEntry;
+import com.chandler.learning.agent.vocabulary.domain.entity.VocabularyCatalogEntry;
+import com.chandler.learning.agent.vocabulary.infrastructure.mapper.EnglishVocabularyStudyRecordMapper;
+import com.chandler.learning.agent.vocabulary.infrastructure.mapper.LearningWordbookEntryMapper;
+import com.chandler.learning.agent.vocabulary.infrastructure.mapper.LearningWordbookMapper;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -215,7 +214,7 @@ public class WordbookResponseAssembler {
     }
 
     private String inferStatus(LearningWordbookEntry entry) {
-        return com.chandler.learning.agent.learning.domain.ReviewStatus
+        return com.chandler.learning.agent.learning.domain.enums.ReviewStatus
                 .infer(entry.getMasteryScore(), entry.getWrongCount(), entry.getCorrectCount()).getCode();
     }
 }

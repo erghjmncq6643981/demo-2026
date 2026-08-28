@@ -2,9 +2,12 @@ package com.chandler.learning.agent.vocabulary.application;
 
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import com.baomidou.mybatisplus.core.toolkit.IdWorker;
-import com.chandler.learning.agent.vocabulary.domain.LearningWordProgress;
-import com.chandler.learning.agent.vocabulary.infrastructure.LearningWordProgressMapper;
-import com.chandler.learning.agent.support.LearningConstants;
+import com.chandler.learning.agent.vocabulary.domain.entity.LearningWordProgress;
+import com.chandler.learning.agent.vocabulary.infrastructure.mapper.LearningWordProgressMapper;
+import com.chandler.learning.agent.common.constant.CommonConstants;
+import com.chandler.learning.agent.learning.domain.constant.ScenePlanConstants;
+import com.chandler.learning.agent.vocabulary.domain.constant.ReviewConstants;
+import com.chandler.learning.agent.vocabulary.domain.constant.VocabularyCardConstants;
 import lombok.RequiredArgsConstructor;
 import org.springframework.dao.DuplicateKeyException;
 import org.springframework.stereotype.Service;
@@ -38,9 +41,9 @@ public class LearningWordProgressService {
         String normalizedTerm = normalize(term);
         LearningWordProgress existing = find(userId, normalizedTerm);
         if (existing != null) {
-            if (LearningConstants.ScenePlan.MASTERY_SPELLING.equals(masteryRequirement)
-                    && !LearningConstants.ScenePlan.MASTERY_SPELLING.equals(existing.getMasteryRequirement())) {
-                existing.setMasteryRequirement(LearningConstants.ScenePlan.MASTERY_SPELLING);
+            if (ScenePlanConstants.MASTERY_SPELLING.equals(masteryRequirement)
+                    && !ScenePlanConstants.MASTERY_SPELLING.equals(existing.getMasteryRequirement())) {
+                existing.setMasteryRequirement(ScenePlanConstants.MASTERY_SPELLING);
                 existing.setUpdateTime(LocalDateTime.now());
                 progressMapper.updateById(existing);
             }
@@ -88,7 +91,7 @@ public class LearningWordProgressService {
         List<LearningWordProgress> missing = normalizedTerms.stream()
                 .filter(normalizedTerm -> !result.containsKey(normalizedTerm))
                 .map(normalizedTerm -> newProgress(userId, normalizedTerm,
-                        LearningConstants.ScenePlan.MASTERY_RECOGNITION))
+                        ScenePlanConstants.MASTERY_RECOGNITION))
                 .toList();
         for (int start = 0; start < missing.size(); start += WRITE_BATCH_SIZE) {
             int end = Math.min(start + WRITE_BATCH_SIZE, missing.size());
@@ -145,19 +148,19 @@ public class LearningWordProgressService {
         progress.setUserId(userId);
         progress.setTerm(term == null ? normalizedTerm : term.trim());
         progress.setNormalizedTerm(normalizedTerm);
-        progress.setLearningState(LearningConstants.ScenePlan.PROGRESS_UNSEEN);
+        progress.setLearningState(ScenePlanConstants.PROGRESS_UNSEEN);
         progress.setMasteryRequirement(resolveRequirement(masteryRequirement));
-        progress.setRecognitionScore(LearningConstants.ZERO);
-        progress.setRecognitionStage(LearningConstants.ZERO);
-        progress.setRecognitionCorrectCount(LearningConstants.ZERO);
-        progress.setRecognitionWrongCount(LearningConstants.ZERO);
-        progress.setSpellingScore(LearningConstants.ZERO);
-        progress.setSpellingStage(LearningConstants.ZERO);
-        progress.setSpellingCorrectCount(LearningConstants.ZERO);
-        progress.setSpellingWrongCount(LearningConstants.ZERO);
-        progress.setExposureCount(LearningConstants.ZERO);
-        progress.setSceneCount(LearningConstants.ZERO);
-        progress.setCardStatus(LearningConstants.VocabularyCard.STATUS_NOT_REQUIRED);
+        progress.setRecognitionScore(CommonConstants.ZERO);
+        progress.setRecognitionStage(CommonConstants.ZERO);
+        progress.setRecognitionCorrectCount(CommonConstants.ZERO);
+        progress.setRecognitionWrongCount(CommonConstants.ZERO);
+        progress.setSpellingScore(CommonConstants.ZERO);
+        progress.setSpellingStage(CommonConstants.ZERO);
+        progress.setSpellingCorrectCount(CommonConstants.ZERO);
+        progress.setSpellingWrongCount(CommonConstants.ZERO);
+        progress.setExposureCount(CommonConstants.ZERO);
+        progress.setSceneCount(CommonConstants.ZERO);
+        progress.setCardStatus(VocabularyCardConstants.STATUS_NOT_REQUIRED);
         progress.setDeleted(false);
         progress.setCreateTime(now);
         progress.setUpdateTime(now);
@@ -186,8 +189,8 @@ public class LearningWordProgressService {
                 .toList();
         Map<String, LearningWordProgress> progressMap = getOrCreateAll(userId, terms);
         Set<String> initiallyUnseenTerms = progressMap.values().stream()
-                .filter(progress -> LearningConstants.ScenePlan.PROGRESS_UNSEEN.equals(progress.getLearningState())
-                        || LearningConstants.ScenePlan.PROGRESS_EXPOSED.equals(progress.getLearningState()))
+                .filter(progress -> ScenePlanConstants.PROGRESS_UNSEEN.equals(progress.getLearningState())
+                        || ScenePlanConstants.PROGRESS_EXPOSED.equals(progress.getLearningState()))
                 .map(LearningWordProgress::getNormalizedTerm)
                 .collect(Collectors.toCollection(LinkedHashSet::new));
         LocalDateTime now = LocalDateTime.now();
@@ -195,27 +198,27 @@ public class LearningWordProgressService {
             String norm = normalize(cmd.term());
             LearningWordProgress progress = progressMap.get(norm);
             if (progress != null) {
-                boolean core = LearningConstants.ScenePlan.TIER_CORE.equals(cmd.tier());
+                boolean core = ScenePlanConstants.TIER_CORE.equals(cmd.tier());
                 progress.setTerm(cmd.term().trim());
                 if (recordExposure) {
-                    progress.setExposureCount(value(progress.getExposureCount()) + LearningConstants.SEQUENCE_STEP);
-                    progress.setSceneCount(value(progress.getSceneCount()) + LearningConstants.SEQUENCE_STEP);
+                    progress.setExposureCount(value(progress.getExposureCount()) + CommonConstants.SEQUENCE_STEP);
+                    progress.setSceneCount(value(progress.getSceneCount()) + CommonConstants.SEQUENCE_STEP);
                     progress.setLatestPlanId(cmd.planId());
                     progress.setLatestUnitId(cmd.unitId());
                     progress.setLastLearnedTime(now);
                     if (core) {
-                        if (!LearningConstants.ScenePlan.PROGRESS_MASTERED.equals(progress.getLearningState())) {
-                            progress.setLearningState(LearningConstants.ScenePlan.PROGRESS_LEARNING);
+                        if (!ScenePlanConstants.PROGRESS_MASTERED.equals(progress.getLearningState())) {
+                            progress.setLearningState(ScenePlanConstants.PROGRESS_LEARNING);
                         }
-                        if (LearningConstants.VocabularyCard.STATUS_NOT_REQUIRED.equals(progress.getCardStatus())) {
-                            progress.setCardStatus(LearningConstants.VocabularyCard.STATUS_MISSING);
+                        if (VocabularyCardConstants.STATUS_NOT_REQUIRED.equals(progress.getCardStatus())) {
+                            progress.setCardStatus(VocabularyCardConstants.STATUS_MISSING);
                         }
-                    } else if (LearningConstants.ScenePlan.PROGRESS_UNSEEN.equals(progress.getLearningState())) {
-                        progress.setLearningState(LearningConstants.ScenePlan.PROGRESS_EXPOSED);
+                    } else if (ScenePlanConstants.PROGRESS_UNSEEN.equals(progress.getLearningState())) {
+                        progress.setLearningState(ScenePlanConstants.PROGRESS_EXPOSED);
                     }
                 }
-                if (LearningConstants.ScenePlan.MASTERY_SPELLING.equals(cmd.masteryRequirement())) {
-                    progress.setMasteryRequirement(LearningConstants.ScenePlan.MASTERY_SPELLING);
+                if (ScenePlanConstants.MASTERY_SPELLING.equals(cmd.masteryRequirement())) {
+                    progress.setMasteryRequirement(ScenePlanConstants.MASTERY_SPELLING);
                 }
                 progress.setUpdateTime(now);
                 progress.setUpdateBy(userId);
@@ -232,25 +235,25 @@ public class LearningWordProgressService {
     public LearningWordProgress recordSceneExposure(Long userId, String term, String masteryRequirement,
                                                      String tier, Long planId, Long unitId) {
         LearningWordProgress progress = getOrCreate(userId, term, masteryRequirement);
-        boolean core = LearningConstants.ScenePlan.TIER_CORE.equals(tier);
+        boolean core = ScenePlanConstants.TIER_CORE.equals(tier);
         progress.setTerm(term.trim());
-        progress.setExposureCount(value(progress.getExposureCount()) + LearningConstants.SEQUENCE_STEP);
-        progress.setSceneCount(value(progress.getSceneCount()) + LearningConstants.SEQUENCE_STEP);
+        progress.setExposureCount(value(progress.getExposureCount()) + CommonConstants.SEQUENCE_STEP);
+        progress.setSceneCount(value(progress.getSceneCount()) + CommonConstants.SEQUENCE_STEP);
         progress.setLatestPlanId(planId);
         progress.setLatestUnitId(unitId);
         progress.setLastLearnedTime(LocalDateTime.now());
         if (core) {
-            if (!LearningConstants.ScenePlan.PROGRESS_MASTERED.equals(progress.getLearningState())) {
-                progress.setLearningState(LearningConstants.ScenePlan.PROGRESS_LEARNING);
+            if (!ScenePlanConstants.PROGRESS_MASTERED.equals(progress.getLearningState())) {
+                progress.setLearningState(ScenePlanConstants.PROGRESS_LEARNING);
             }
-            if (LearningConstants.VocabularyCard.STATUS_NOT_REQUIRED.equals(progress.getCardStatus())) {
-                progress.setCardStatus(LearningConstants.VocabularyCard.STATUS_MISSING);
+            if (VocabularyCardConstants.STATUS_NOT_REQUIRED.equals(progress.getCardStatus())) {
+                progress.setCardStatus(VocabularyCardConstants.STATUS_MISSING);
             }
-        } else if (LearningConstants.ScenePlan.PROGRESS_UNSEEN.equals(progress.getLearningState())) {
-            progress.setLearningState(LearningConstants.ScenePlan.PROGRESS_EXPOSED);
+        } else if (ScenePlanConstants.PROGRESS_UNSEEN.equals(progress.getLearningState())) {
+            progress.setLearningState(ScenePlanConstants.PROGRESS_EXPOSED);
         }
-        if (LearningConstants.ScenePlan.MASTERY_SPELLING.equals(masteryRequirement)) {
-            progress.setMasteryRequirement(LearningConstants.ScenePlan.MASTERY_SPELLING);
+        if (ScenePlanConstants.MASTERY_SPELLING.equals(masteryRequirement)) {
+            progress.setMasteryRequirement(ScenePlanConstants.MASTERY_SPELLING);
         }
         progress.setUpdateTime(LocalDateTime.now());
         progressMapper.updateById(progress);
@@ -262,14 +265,14 @@ public class LearningWordProgressService {
      */
     public LearningWordProgress recordArticleExposure(Long userId, String term) {
         LearningWordProgress progress = getOrCreate(
-                userId, term, LearningConstants.ScenePlan.MASTERY_RECOGNITION);
+                userId, term, ScenePlanConstants.MASTERY_RECOGNITION);
         LocalDateTime now = LocalDateTime.now();
         progress.setTerm(term.trim());
-        progress.setExposureCount(value(progress.getExposureCount()) + LearningConstants.SEQUENCE_STEP);
+        progress.setExposureCount(value(progress.getExposureCount()) + CommonConstants.SEQUENCE_STEP);
         progress.setLastLearnedTime(now);
-        if (LearningConstants.ScenePlan.PROGRESS_UNSEEN.equals(progress.getLearningState())
-                || LearningConstants.ScenePlan.PROGRESS_EXPOSED.equals(progress.getLearningState())) {
-            progress.setLearningState(LearningConstants.ScenePlan.PROGRESS_LEARNING);
+        if (ScenePlanConstants.PROGRESS_UNSEEN.equals(progress.getLearningState())
+                || ScenePlanConstants.PROGRESS_EXPOSED.equals(progress.getLearningState())) {
+            progress.setLearningState(ScenePlanConstants.PROGRESS_LEARNING);
         }
         progress.setUpdateTime(now);
         progressMapper.updateById(progress);
@@ -284,11 +287,11 @@ public class LearningWordProgressService {
         Map<String, LearningWordProgress> progressMap = getOrCreateAll(userId, terms);
         LocalDateTime now = LocalDateTime.now();
         progressMap.values().forEach(progress -> {
-            progress.setExposureCount(value(progress.getExposureCount()) + LearningConstants.SEQUENCE_STEP);
+            progress.setExposureCount(value(progress.getExposureCount()) + CommonConstants.SEQUENCE_STEP);
             progress.setLastLearnedTime(now);
-            if (LearningConstants.ScenePlan.PROGRESS_UNSEEN.equals(progress.getLearningState())
-                    || LearningConstants.ScenePlan.PROGRESS_EXPOSED.equals(progress.getLearningState())) {
-                progress.setLearningState(LearningConstants.ScenePlan.PROGRESS_LEARNING);
+            if (ScenePlanConstants.PROGRESS_UNSEEN.equals(progress.getLearningState())
+                    || ScenePlanConstants.PROGRESS_EXPOSED.equals(progress.getLearningState())) {
+                progress.setLearningState(ScenePlanConstants.PROGRESS_LEARNING);
             }
             progress.setUpdateTime(now);
             progress.setUpdateBy(userId);
@@ -311,19 +314,19 @@ public class LearningWordProgressService {
     public LearningWordProgress recordAssessment(Long progressId, String assessmentType, boolean correct,
                                                   LocalDateTime nextReviewTime) {
         LearningWordProgress progress = progressMapper.selectById(progressId);
-        boolean spelling = LearningConstants.ScenePlan.ASSESSMENT_COPY_TYPING.equals(assessmentType)
-                || LearningConstants.ScenePlan.ASSESSMENT_MEANING_SPELLING.equals(assessmentType);
-        int delta = correct ? LearningConstants.Review.REMEMBERED_MASTERY_DELTA
-                : -LearningConstants.Review.FORGOTTEN_MASTERY_DELTA;
+        boolean spelling = ScenePlanConstants.ASSESSMENT_COPY_TYPING.equals(assessmentType)
+                || ScenePlanConstants.ASSESSMENT_MEANING_SPELLING.equals(assessmentType);
+        int delta = correct ? ReviewConstants.REMEMBERED_MASTERY_DELTA
+                : -ReviewConstants.FORGOTTEN_MASTERY_DELTA;
         if (spelling) {
             progress.setSpellingScore(clamp(value(progress.getSpellingScore()) + delta));
-            progress.setSpellingStage(correct ? value(progress.getSpellingStage()) + 1 : LearningConstants.ZERO);
+            progress.setSpellingStage(correct ? value(progress.getSpellingStage()) + 1 : CommonConstants.ZERO);
             progress.setSpellingDueTime(nextReviewTime);
             progress.setSpellingCorrectCount(value(progress.getSpellingCorrectCount()) + (correct ? 1 : 0));
             progress.setSpellingWrongCount(value(progress.getSpellingWrongCount()) + (correct ? 0 : 1));
         } else {
             progress.setRecognitionScore(clamp(value(progress.getRecognitionScore()) + delta));
-            progress.setRecognitionStage(correct ? value(progress.getRecognitionStage()) + 1 : LearningConstants.ZERO);
+            progress.setRecognitionStage(correct ? value(progress.getRecognitionStage()) + 1 : CommonConstants.ZERO);
             progress.setRecognitionDueTime(nextReviewTime);
             progress.setRecognitionCorrectCount(value(progress.getRecognitionCorrectCount()) + (correct ? 1 : 0));
             progress.setRecognitionWrongCount(value(progress.getRecognitionWrongCount()) + (correct ? 0 : 1));
@@ -343,7 +346,7 @@ public class LearningWordProgressService {
                 .eq(LearningWordProgress::getUserId, userId)
                 .eq(LearningWordProgress::getNormalizedTerm, normalizedTerm)
                 .eq(LearningWordProgress::getDeleted, false)
-                .last(LearningConstants.SQL_LIMIT_ONE));
+                .last(CommonConstants.SQL_LIMIT_ONE));
     }
 
     /** 按进度主键批量查询，供其他业务域装配学习状态。 */
@@ -368,20 +371,20 @@ public class LearningWordProgressService {
     }
 
     private String resolveLearningState(LearningWordProgress progress) {
-        boolean recognitionReady = value(progress.getRecognitionScore()) >= LearningConstants.ScenePlan.RECOGNITION_PASS_SCORE;
-        boolean spellingReady = value(progress.getSpellingScore()) >= LearningConstants.ScenePlan.SPELLING_PASS_SCORE;
-        if (recognitionReady && (!LearningConstants.ScenePlan.MASTERY_SPELLING.equals(progress.getMasteryRequirement()) || spellingReady)) {
-            return LearningConstants.ScenePlan.PROGRESS_MASTERED;
+        boolean recognitionReady = value(progress.getRecognitionScore()) >= ScenePlanConstants.RECOGNITION_PASS_SCORE;
+        boolean spellingReady = value(progress.getSpellingScore()) >= ScenePlanConstants.SPELLING_PASS_SCORE;
+        if (recognitionReady && (!ScenePlanConstants.MASTERY_SPELLING.equals(progress.getMasteryRequirement()) || spellingReady)) {
+            return ScenePlanConstants.PROGRESS_MASTERED;
         }
         return progress.getRecognitionStage() != null && progress.getRecognitionStage() > 0
-                ? LearningConstants.ScenePlan.PROGRESS_REVIEWING
-                : LearningConstants.ScenePlan.PROGRESS_LEARNING;
+                ? ScenePlanConstants.PROGRESS_REVIEWING
+                : ScenePlanConstants.PROGRESS_LEARNING;
     }
 
     private String resolveRequirement(String requirement) {
-        return LearningConstants.ScenePlan.MASTERY_SPELLING.equals(requirement)
-                ? LearningConstants.ScenePlan.MASTERY_SPELLING
-                : LearningConstants.ScenePlan.MASTERY_RECOGNITION;
+        return ScenePlanConstants.MASTERY_SPELLING.equals(requirement)
+                ? ScenePlanConstants.MASTERY_SPELLING
+                : ScenePlanConstants.MASTERY_RECOGNITION;
     }
 
     private String normalize(String term) {
@@ -389,10 +392,10 @@ public class LearningWordProgressService {
     }
 
     private int value(Integer value) {
-        return value == null ? LearningConstants.ZERO : value;
+        return value == null ? CommonConstants.ZERO : value;
     }
 
     private int clamp(int value) {
-        return Math.max(LearningConstants.Review.MIN_MASTERY, Math.min(value, LearningConstants.Review.MAX_MASTERY));
+        return Math.max(ReviewConstants.MIN_MASTERY, Math.min(value, ReviewConstants.MAX_MASTERY));
     }
 }

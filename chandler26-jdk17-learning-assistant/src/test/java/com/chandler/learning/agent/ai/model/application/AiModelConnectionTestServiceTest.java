@@ -1,15 +1,15 @@
 package com.chandler.learning.agent.ai.model.application;
 
-import com.chandler.learning.agent.ai.model.api.AiModelConnectionTestResponse;
+import com.chandler.learning.agent.ai.model.api.response.AiModelConnectionTestResponse;
 import com.chandler.learning.agent.ai.gateway.protocol.ModelChatRequest;
 import com.chandler.learning.agent.ai.gateway.protocol.ModelChatResponse;
-import com.chandler.learning.agent.ai.model.domain.AiModelConfig;
-import com.chandler.learning.agent.ai.chat.domain.AiInvocationScene;
+import com.chandler.learning.agent.ai.model.domain.entity.AiModelConfig;
+import com.chandler.learning.agent.ai.chat.domain.enums.AiInvocationScene;
 import com.chandler.learning.agent.exception.LearningAssistantException;
 import com.chandler.learning.agent.system.application.SystemLogService;
 import com.chandler.learning.agent.identity.application.UserDisplayNameService;
 import com.chandler.learning.agent.ai.gateway.client.AiModelClient;
-import com.chandler.learning.agent.support.LearningConstants;
+import com.chandler.learning.agent.common.exception.LearningErrorCode;
 import org.junit.jupiter.api.Test;
 import org.mockito.ArgumentCaptor;
 
@@ -77,7 +77,7 @@ class AiModelConnectionTestServiceTest {
         when(modelConfigService.getById(11L)).thenReturn(config());
         when(modelClient.testConnection(org.mockito.ArgumentMatchers.any())).thenThrow(
                 LearningAssistantException.externalService(
-                        LearningConstants.ErrorCode.AI_MODEL_CALL_FAILED,
+                        LearningErrorCode.AI_MODEL_CALL_FAILED,
                         "API Key 无效",
                         null));
 

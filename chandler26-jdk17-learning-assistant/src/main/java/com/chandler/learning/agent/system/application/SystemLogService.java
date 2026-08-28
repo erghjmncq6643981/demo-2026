@@ -1,18 +1,20 @@
 package com.chandler.learning.agent.system.application;
 
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
-import com.chandler.learning.agent.system.api.SystemLogRequest;
-import com.chandler.learning.agent.system.api.SystemLogResponse;
-import com.chandler.learning.agent.system.domain.LearningSystemLog;
-import com.chandler.learning.agent.system.domain.SystemLogSource;
-import com.chandler.learning.agent.system.domain.SystemLogType;
-import com.chandler.learning.agent.system.infrastructure.LearningSystemLogMapper;
-import com.chandler.learning.agent.security.LearningUserPrincipal;
-import com.chandler.learning.agent.support.LearningConstants;
+import com.chandler.learning.agent.system.api.response.SystemLogResponse;
+import com.chandler.learning.agent.system.domain.entity.LearningSystemLog;
+import com.chandler.learning.agent.system.domain.entity.LearningSystemLogOutbox;
+import com.chandler.learning.agent.system.domain.enums.SystemLogOutboxStatus;
+import com.chandler.learning.agent.system.domain.enums.SystemLogSource;
+import com.chandler.learning.agent.system.domain.enums.SystemLogType;
+import com.chandler.learning.agent.system.infrastructure.mapper.LearningSystemLogMapper;
+import com.chandler.learning.agent.system.infrastructure.mapper.LearningSystemLogOutboxMapper;
+import com.chandler.learning.agent.security.CurrentUserContext;
+import com.chandler.learning.agent.system.domain.constant.SystemLogConstants;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
-import org.springframework.security.core.Authentication;
-import org.springframework.security.core.context.SecurityContextHolder;
+import org.slf4j.MDC;
+import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.stereotype.Service;
 import org.springframework.util.StringUtils;
 
@@ -30,58 +32,69 @@ import java.util.List;
 public class SystemLogService {
 
     private final LearningSystemLogMapper systemLogMapper;
+    private final LearningSystemLogOutboxMapper systemLogOutboxMapper;
+    private final ApplicationEventPublisher eventPublisher;
+    private final CurrentUserContext currentUserContext;
 
     /**
      * 更新 {@code record} 相关业务。
      */
     public void record(Long userId, SystemLogType type, String title, String detail) {
-        record(userId, type.getCode(), title, detail);
+        record(userId, type == null ? null : type.getCode(), title, detail);
     }
 
     /**
      * 更新 {@code record} 相关业务。
      */
     public void record(Long userId, String type, String title, String detail) {
-        SystemLogRequest request = new SystemLogRequest();
-        request.setType(SystemLogType.of(type).getCode());
-        request.setTitle(title);
-        request.setDetail(detail);
-        request.setSource(SystemLogSource.SERVER.getCode());
-        create(userId, request);
+        publish(userId, type, title, detail, SystemLogSource.SERVER.getCode(), null, null);
     }
 
     /**
-     * 创建或保存 {@code create} 相关业务。
+     * 接收前端交互日志。来源由服务端固定为 {@code client}，避免客户端伪造服务端业务日志。
      */
-    public SystemLogResponse create(Long userId, SystemLogRequest request) {
+    public void recordClient(Long userId, String type, String title, String detail,
+                             String businessType, String businessId) {
+        publish(userId, type, title, detail, SystemLogSource.CLIENT.getCode(), businessType, businessId);
+    }
+
+    private void publish(Long userId, String type, String title, String detail, String source,
+                         String businessType, String businessId) {
         Long resolvedUserId = userId == null ? currentUserId() : userId;
         if (resolvedUserId == null) {
-            return null;
+            log.debug("event=system_log_persistence result=ignored reason=missing_user type={} title={}", type, title);
+            return;
         }
-        LearningSystemLog entity = new LearningSystemLog();
-        entity.setUserId(resolvedUserId);
-        entity.setLogType(SystemLogType.of(request.getType()).getCode());
-        entity.setTitle(trimOrDefault(request.getTitle(), LearningConstants.SystemLog.DEFAULT_TITLE));
-        entity.setDetail(trimToNull(request.getDetail()));
-        entity.setSource(SystemLogSource.of(request.getSource()).getCode());
-        entity.setBusinessType(trimToNull(request.getBusinessType()));
-        entity.setBusinessId(trimToNull(request.getBusinessId()));
-        entity.setCreateTime(LocalDateTime.now());
-        systemLogMapper.insert(entity);
-        log.debug("系统日志已入库 userId={} type={} title={} businessType={} businessId={}",
-                resolvedUserId,
-                entity.getLogType(),
-                entity.getTitle(),
-                entity.getBusinessType(),
-                entity.getBusinessId());
-        return toResponse(entity);
+        LearningSystemLogOutbox outbox = new LearningSystemLogOutbox();
+        outbox.setUserId(resolvedUserId);
+        outbox.setLogType(SystemLogType.of(type).getCode());
+        outbox.setTitle(trimOrDefault(title, SystemLogConstants.DEFAULT_TITLE,
+                SystemLogConstants.MAX_TITLE_LENGTH));
+        outbox.setDetail(trimToNull(detail, SystemLogConstants.MAX_DETAIL_LENGTH));
+        outbox.setSource(SystemLogSource.of(source).getCode());
+        outbox.setBusinessType(trimToNull(businessType, SystemLogConstants.MAX_BUSINESS_TYPE_LENGTH));
+        outbox.setBusinessId(trimToNull(businessId, SystemLogConstants.MAX_BUSINESS_ID_LENGTH));
+        outbox.setOccurredAt(LocalDateTime.now());
+        outbox.setTraceId(currentTraceId());
+        outbox.setStatus(SystemLogOutboxStatus.PENDING.getCode());
+        try {
+            systemLogOutboxMapper.insert(outbox);
+            eventPublisher.publishEvent(new SystemLogRecordedEvent(
+                    outbox.getId(), outbox.getUserId(), outbox.getLogType(), outbox.getTitle(), outbox.getDetail(),
+                    outbox.getSource(), outbox.getBusinessType(), outbox.getBusinessId(), outbox.getOccurredAt(),
+                    outbox.getTraceId()));
+        } catch (RuntimeException ex) {
+            log.warn("event=system_log_outbox result=failed userId={} type={} error={}",
+                    resolvedUserId, outbox.getLogType(), ex.getClass().getSimpleName());
+            log.debug("系统日志 Outbox 写入或发布失败 userId={} type={}", resolvedUserId, outbox.getLogType(), ex);
+        }
     }
 
     /**
      * 查询 {@code list} 相关业务。
      */
     public List<SystemLogResponse> list(Long userId, int limit) {
-        int resolvedLimit = Math.max(LearningConstants.SystemLog.MIN_LIMIT, Math.min(limit, LearningConstants.SystemLog.MAX_LIMIT));
+        int resolvedLimit = Math.max(SystemLogConstants.MIN_LIMIT, Math.min(limit, SystemLogConstants.MAX_LIMIT));
         return systemLogMapper.selectList(new LambdaQueryWrapper<LearningSystemLog>()
                         .eq(LearningSystemLog::getUserId, userId)
                         .orderByDesc(LearningSystemLog::getCreateTime)
@@ -119,28 +132,31 @@ public class SystemLogService {
     /**
      * 处理 {@code trimToNull} 相关业务。
      */
-    private String trimToNull(String value) {
-        return StringUtils.hasText(value) ? value.trim() : null;
+    private String trimToNull(String value, int maxLength) {
+        if (!StringUtils.hasText(value)) {
+            return null;
+        }
+        String normalized = value.trim();
+        return normalized.length() <= maxLength ? normalized : normalized.substring(0, maxLength);
     }
 
     /**
      * 处理 {@code trimOrDefault} 相关业务。
      */
-    private String trimOrDefault(String value, String fallback) {
-        return StringUtils.hasText(value) ? value.trim() : fallback;
+    private String trimOrDefault(String value, String fallback, int maxLength) {
+        String normalized = trimToNull(value, maxLength);
+        return normalized == null ? fallback : normalized;
+    }
+
+    private String currentTraceId() {
+        String traceId = trimToNull(MDC.get("traceId"), SystemLogConstants.MAX_TRACE_ID_LENGTH);
+        return traceId == null ? "-" : traceId;
     }
 
     /**
      * 处理 {@code currentUserId} 相关业务。
      */
     private Long currentUserId() {
-        Authentication authentication = SecurityContextHolder.getContext().getAuthentication();
-        if (authentication == null || !authentication.isAuthenticated()) {
-            return null;
-        }
-        if (authentication.getPrincipal() instanceof LearningUserPrincipal principal) {
-            return principal.user().getId();
-        }
-        return null;
+        return currentUserContext.findUser().map(user -> user.getId()).orElse(null);
     }
 }

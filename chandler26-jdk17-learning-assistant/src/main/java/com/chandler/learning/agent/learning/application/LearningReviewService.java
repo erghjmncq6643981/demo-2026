@@ -1,8 +1,8 @@
 package com.chandler.learning.agent.learning.application;
 
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
-import com.chandler.learning.agent.learning.domain.LearningReviewRecord;
-import com.chandler.learning.agent.learning.infrastructure.LearningReviewRecordMapper;
+import com.chandler.learning.agent.learning.domain.entity.LearningReviewRecord;
+import com.chandler.learning.agent.learning.infrastructure.mapper.LearningReviewRecordMapper;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 

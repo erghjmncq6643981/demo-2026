@@ -1,9 +1,9 @@
 package com.chandler.learning.agent.task.application;
 
 import com.chandler.learning.agent.task.application.contract.AiTaskStepDefinition;
-import com.chandler.learning.agent.task.domain.AiAsyncTaskStep;
-import com.chandler.learning.agent.task.infrastructure.AiAsyncTaskAttemptMapper;
-import com.chandler.learning.agent.task.infrastructure.AiAsyncTaskStepMapper;
+import com.chandler.learning.agent.task.domain.entity.AiAsyncTaskStep;
+import com.chandler.learning.agent.task.infrastructure.mapper.AiAsyncTaskAttemptMapper;
+import com.chandler.learning.agent.task.infrastructure.mapper.AiAsyncTaskStepMapper;
 import org.junit.jupiter.api.Test;
 import org.mockito.ArgumentCaptor;
 

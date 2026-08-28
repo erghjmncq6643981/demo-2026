@@ -1,15 +1,16 @@
 package com.chandler.learning.agent.ai.prompt.application;
 
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
-import com.chandler.learning.agent.ai.prompt.api.PromptTemplateSaveRequest;
-import com.chandler.learning.agent.ai.prompt.domain.AiPromptTemplate;
-import com.chandler.learning.agent.ai.prompt.domain.PromptTemplateType;
-import com.chandler.learning.agent.system.domain.SystemLogType;
+import com.chandler.learning.agent.ai.prompt.api.request.PromptTemplateSaveRequest;
+import com.chandler.learning.agent.ai.prompt.domain.entity.AiPromptTemplate;
+import com.chandler.learning.agent.ai.prompt.domain.enums.PromptTemplateType;
+import com.chandler.learning.agent.system.domain.enums.SystemLogType;
 import com.chandler.learning.agent.exception.LearningAssistantException;
-import com.chandler.learning.agent.ai.prompt.infrastructure.AiPromptTemplateMapper;
+import com.chandler.learning.agent.ai.prompt.infrastructure.mapper.AiPromptTemplateMapper;
 import com.chandler.learning.agent.system.application.SystemLogService;
 import com.chandler.learning.agent.identity.application.UserDisplayNameService;
-import com.chandler.learning.agent.support.LearningConstants;
+import com.chandler.learning.agent.common.constant.CommonConstants;
+import com.chandler.learning.agent.common.exception.LearningErrorCode;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
@@ -40,14 +41,14 @@ public class AiPromptTemplateService {
         return templateMapper.selectOne(new LambdaQueryWrapper<AiPromptTemplate>()
                 .eq(AiPromptTemplate::getCode, code)
                 .eq(AiPromptTemplate::getDeleted, false)
-                .last(LearningConstants.SQL_LIMIT_ONE));
+                .last(CommonConstants.SQL_LIMIT_ONE));
     }
 
     /** 校验提示词模板存在且已启用，供其他业务域保存配置时调用。 */
     public AiPromptTemplate requireEnabled(String code) {
         AiPromptTemplate template = getByCode(code);
         if (template == null || !Boolean.TRUE.equals(template.getEnabled())) {
-            throw LearningAssistantException.badRequest(LearningConstants.ErrorCode.PROMPT_TEMPLATE_NOT_FOUND);
+            throw LearningAssistantException.badRequest(LearningErrorCode.PROMPT_TEMPLATE_NOT_FOUND);
         }
         return template;
     }
@@ -78,7 +79,7 @@ public class AiPromptTemplateService {
         AiPromptTemplate existing = getByCode(request.getCode());
         if (existing != null) {
             throw LearningAssistantException.badRequest(
-                    LearningConstants.ErrorCode.PROMPT_TEMPLATE_CODE_EXISTS,
+                    LearningErrorCode.PROMPT_TEMPLATE_CODE_EXISTS,
                     "模板编码已存在: " + request.getCode());
         }
         AiPromptTemplate template = new AiPromptTemplate();
@@ -100,13 +101,13 @@ public class AiPromptTemplateService {
         AiPromptTemplate template = templateMapper.selectById(id);
         if (template == null || Boolean.TRUE.equals(template.getDeleted())) {
             throw LearningAssistantException.notFound(
-                    LearningConstants.ErrorCode.PROMPT_TEMPLATE_NOT_FOUND,
+                    LearningErrorCode.PROMPT_TEMPLATE_NOT_FOUND,
                     "模板不存在: " + id);
         }
         AiPromptTemplate existing = getByCode(request.getCode());
         if (existing != null && !existing.getId().equals(id)) {
             throw LearningAssistantException.badRequest(
-                    LearningConstants.ErrorCode.PROMPT_TEMPLATE_CODE_EXISTS,
+                    LearningErrorCode.PROMPT_TEMPLATE_CODE_EXISTS,
                     "模板编码已存在: " + request.getCode());
         }
         copy(request, template);
@@ -125,13 +126,13 @@ public class AiPromptTemplateService {
                 .eq(AiPromptTemplate::getDeleted, false));
         if (aliveCount <= 1) {
             throw LearningAssistantException.badRequest(
-                    LearningConstants.ErrorCode.PROMPT_TEMPLATE_LAST_NOT_DELETABLE,
+                    LearningErrorCode.PROMPT_TEMPLATE_LAST_NOT_DELETABLE,
                     "最后一个学习 Agent 模板不能删除");
         }
         AiPromptTemplate template = templateMapper.selectById(id);
         if (template == null || Boolean.TRUE.equals(template.getDeleted())) {
             throw LearningAssistantException.notFound(
-                    LearningConstants.ErrorCode.PROMPT_TEMPLATE_NOT_FOUND,
+                    LearningErrorCode.PROMPT_TEMPLATE_NOT_FOUND,
                     "模板不存在: " + id);
         }
         template.setDeleted(true);
@@ -149,7 +150,7 @@ public class AiPromptTemplateService {
         AiPromptTemplate source = templateMapper.selectById(id);
         if (source == null || Boolean.TRUE.equals(source.getDeleted())) {
             throw LearningAssistantException.notFound(
-                    LearningConstants.ErrorCode.PROMPT_TEMPLATE_NOT_FOUND,
+                    LearningErrorCode.PROMPT_TEMPLATE_NOT_FOUND,
                     "模板不存在: " + id);
         }
         String cloneCode = source.getCode() + "-" + LocalDateTime.now().getNano();
@@ -185,12 +186,12 @@ public class AiPromptTemplateService {
         AiPromptTemplate template = getByCode(code);
         if (template == null) {
             throw LearningAssistantException.notFound(
-                    LearningConstants.ErrorCode.PROMPT_TEMPLATE_NOT_FOUND,
+                    LearningErrorCode.PROMPT_TEMPLATE_NOT_FOUND,
                     "提示词模板不存在: " + code);
         }
         if (!Boolean.TRUE.equals(template.getEnabled())) {
             throw LearningAssistantException.badRequest(
-                    LearningConstants.ErrorCode.PROMPT_TEMPLATE_DISABLED,
+                    LearningErrorCode.PROMPT_TEMPLATE_DISABLED,
                     "提示词模板已禁用: " + code);
         }
         return promptRenderer.render(template.getContent(), variables);
@@ -210,6 +211,6 @@ public class AiPromptTemplateService {
         template.setExampleInput(request.getExampleInput());
         template.setExampleOutput(request.getExampleOutput());
         template.setPublicTemplate(Boolean.TRUE.equals(request.getPublicTemplate()));
-        template.setSequence(request.getSequence() == null ? LearningConstants.DEFAULT_SEQUENCE : request.getSequence());
+        template.setSequence(request.getSequence() == null ? CommonConstants.DEFAULT_SEQUENCE : request.getSequence());
     }
 }

@@ -1,6 +1,6 @@
 package com.chandler.learning.agent.ai.chat.application;
 
-import com.chandler.learning.agent.ai.chat.domain.AiInvocationScene;
+import com.chandler.learning.agent.ai.chat.domain.enums.AiInvocationScene;
 import io.swagger.v3.oas.annotations.media.Schema;
 import jakarta.validation.constraints.NotBlank;
 import lombok.Data;

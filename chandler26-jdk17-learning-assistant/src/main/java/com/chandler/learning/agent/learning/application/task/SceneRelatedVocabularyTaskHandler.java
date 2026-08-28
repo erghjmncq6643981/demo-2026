@@ -1,14 +1,14 @@
 package com.chandler.learning.agent.learning.application.task;
 
 import com.chandler.learning.agent.learning.application.LearningSceneRelatedVocabularyService;
-import com.chandler.learning.agent.support.LearningConstants;
+import com.chandler.learning.agent.task.domain.constant.AiTaskConstants;
 import com.chandler.learning.agent.task.application.AiAsyncTaskService;
 import com.chandler.learning.agent.task.application.AiTaskExecutionService;
 import com.chandler.learning.agent.task.application.contract.AiTaskHandler;
 import com.chandler.learning.agent.task.application.contract.AiTaskPayload;
 import com.chandler.learning.agent.task.application.contract.AiTaskStepDefinition;
-import com.chandler.learning.agent.task.domain.AiAsyncTask;
-import com.chandler.learning.agent.task.domain.AiTaskType;
+import com.chandler.learning.agent.task.domain.entity.AiAsyncTask;
+import com.chandler.learning.agent.task.domain.enums.AiTaskType;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Component;
 
@@ -43,6 +43,6 @@ public class SceneRelatedVocabularyTaskHandler implements AiTaskHandler {
                 () -> relatedVocabularyService.generate(task.getOwnerUserId(), task.getPlanId(), task.getUnitId(),
                         modelConfigId, targetCount));
         taskService.updateProgress(task.getId(), targetCount, targetCount, 0);
-        taskService.complete(task.getId(), LearningConstants.AiTask.STATUS_COMPLETED, null);
+        taskService.complete(task.getId(), AiTaskConstants.STATUS_COMPLETED, null);
     }
 }

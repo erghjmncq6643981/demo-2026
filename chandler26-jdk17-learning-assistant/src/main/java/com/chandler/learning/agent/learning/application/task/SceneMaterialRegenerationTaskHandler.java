@@ -1,17 +1,17 @@
 package com.chandler.learning.agent.learning.application.task;
 
-import com.chandler.learning.agent.learning.api.LearningPlanResponse;
-import com.chandler.learning.agent.learning.api.LearningPlanUnitResponse;
+import com.chandler.learning.agent.learning.api.response.LearningPlanResponse;
+import com.chandler.learning.agent.learning.api.response.LearningPlanUnitResponse;
 import com.chandler.learning.agent.learning.application.LearningPlanService;
 import com.chandler.learning.agent.learning.application.LearningSceneRelatedVocabularyService;
-import com.chandler.learning.agent.support.LearningConstants;
+import com.chandler.learning.agent.task.domain.constant.AiTaskConstants;
 import com.chandler.learning.agent.task.application.AiAsyncTaskService;
 import com.chandler.learning.agent.task.application.AiTaskExecutionService;
 import com.chandler.learning.agent.task.application.contract.AiTaskHandler;
 import com.chandler.learning.agent.task.application.contract.AiTaskPayload;
 import com.chandler.learning.agent.task.application.contract.AiTaskStepDefinition;
-import com.chandler.learning.agent.task.domain.AiAsyncTask;
-import com.chandler.learning.agent.task.domain.AiTaskType;
+import com.chandler.learning.agent.task.domain.entity.AiAsyncTask;
+import com.chandler.learning.agent.task.domain.enums.AiTaskType;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Component;
 
@@ -64,6 +64,6 @@ public class SceneMaterialRegenerationTaskHandler implements AiTaskHandler {
         executionService.execute(task.getId(), "publish_revision", task.getOperatorUserId(), null,
                 () -> planService.detail(task.getOwnerUserId(), task.getPlanId()));
         taskService.updateProgress(task.getId(), 3, 3, 0);
-        taskService.complete(task.getId(), LearningConstants.AiTask.STATUS_COMPLETED, null);
+        taskService.complete(task.getId(), AiTaskConstants.STATUS_COMPLETED, null);
     }
 }

@@ -1,7 +1,7 @@
 package com.chandler.learning.agent.vocabulary.application;
 
 import com.chandler.learning.agent.ai.chat.application.AiChatService;
-import com.chandler.learning.agent.vocabulary.infrastructure.EnglishVocabularyStudyRecordMapper;
+import com.chandler.learning.agent.vocabulary.infrastructure.mapper.EnglishVocabularyStudyRecordMapper;
 import com.chandler.learning.agent.system.application.SystemLogService;
 import com.chandler.learning.agent.identity.application.UserDisplayNameService;
 import com.chandler.learning.agent.vocabulary.application.VocabularyInsightService;

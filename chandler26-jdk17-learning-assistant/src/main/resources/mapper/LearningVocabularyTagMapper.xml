@@ -1,6 +1,6 @@
 <?xml version="1.0" encoding="UTF-8" ?>
 <!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "https://mybatis.org/dtd/mybatis-3-mapper.dtd">
-<mapper namespace="com.chandler.learning.agent.vocabulary.infrastructure.LearningVocabularyTagMapper">
+<mapper namespace="com.chandler.learning.agent.vocabulary.infrastructure.mapper.LearningVocabularyTagMapper">
     <delete id="physicalDeleteByVocabularyId">
         DELETE FROM learning_vocabulary_tag WHERE vocabulary_id = #{vocabularyId}
     </delete>
@@ -10,7 +10,7 @@
         <foreach collection="vocabularyIds" item="id" open="(" separator="," close=")">#{id}</foreach>
     </delete>
     <select id="selectByVocabularyIds"
-            resultType="com.chandler.learning.agent.vocabulary.domain.LearningVocabularyTag">
+            resultType="com.chandler.learning.agent.vocabulary.domain.entity.LearningVocabularyTag">
         SELECT *
         FROM learning_vocabulary_tag
         WHERE deleted = 0

@@ -1,6 +1,6 @@
 <?xml version="1.0" encoding="UTF-8" ?>
 <!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "https://mybatis.org/dtd/mybatis-3-mapper.dtd">
-<mapper namespace="com.chandler.learning.agent.task.infrastructure.AiAsyncTaskStepMapper">
+<mapper namespace="com.chandler.learning.agent.task.infrastructure.mapper.AiAsyncTaskStepMapper">
     <insert id="insertBatch">
         INSERT INTO learning_ai_async_task_step
         (id, task_id, step_code, step_name, step_order, status, completed_count, total_count,

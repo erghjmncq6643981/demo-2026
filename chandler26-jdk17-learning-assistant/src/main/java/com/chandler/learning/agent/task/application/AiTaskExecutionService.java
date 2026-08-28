@@ -4,15 +4,17 @@ import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import com.baomidou.mybatisplus.core.conditions.update.LambdaUpdateWrapper;
 import com.baomidou.mybatisplus.core.toolkit.IdWorker;
 import com.chandler.learning.agent.exception.LearningAssistantException;
-import com.chandler.learning.agent.support.LearningConstants;
-import com.chandler.learning.agent.task.api.AiAsyncTaskAttemptResponse;
-import com.chandler.learning.agent.task.api.AiAsyncTaskStepResponse;
+import com.chandler.learning.agent.common.constant.CommonConstants;
+import com.chandler.learning.agent.common.exception.LearningErrorCode;
+import com.chandler.learning.agent.task.domain.constant.AiTaskConstants;
+import com.chandler.learning.agent.task.api.response.AiAsyncTaskAttemptResponse;
+import com.chandler.learning.agent.task.api.response.AiAsyncTaskStepResponse;
 import com.chandler.learning.agent.task.application.contract.AiTaskStepDefinition;
-import com.chandler.learning.agent.task.domain.AiAsyncTaskAttempt;
-import com.chandler.learning.agent.task.domain.AiAsyncTaskStep;
-import com.chandler.learning.agent.task.domain.AiTaskStepStatus;
-import com.chandler.learning.agent.task.infrastructure.AiAsyncTaskAttemptMapper;
-import com.chandler.learning.agent.task.infrastructure.AiAsyncTaskStepMapper;
+import com.chandler.learning.agent.task.domain.entity.AiAsyncTaskAttempt;
+import com.chandler.learning.agent.task.domain.entity.AiAsyncTaskStep;
+import com.chandler.learning.agent.task.domain.enums.AiTaskStepStatus;
+import com.chandler.learning.agent.task.infrastructure.mapper.AiAsyncTaskAttemptMapper;
+import com.chandler.learning.agent.task.infrastructure.mapper.AiAsyncTaskStepMapper;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
@@ -56,16 +58,16 @@ public class AiTaskExecutionService {
             step.setStepName(definition.name());
             step.setStepOrder(definition.order());
             step.setStatus(AiTaskStepStatus.PENDING.getCode());
-            step.setCompletedCount(LearningConstants.ZERO);
+            step.setCompletedCount(CommonConstants.ZERO);
             step.setTotalCount(Math.max(1, definition.totalCount()));
-            step.setAttemptCount(LearningConstants.ZERO);
-            step.setMaxAttemptCount(LearningConstants.AiTask.DEFAULT_MAX_RETRY_COUNT + 1);
+            step.setAttemptCount(CommonConstants.ZERO);
+            step.setMaxAttemptCount(AiTaskConstants.DEFAULT_MAX_RETRY_COUNT + 1);
             step.setCreateBy(operatorUserId == null ? 0L : operatorUserId);
             step.setUpdateBy(operatorUserId == null ? 0L : operatorUserId);
             step.setCreateTime(now);
             step.setUpdateTime(now);
             step.setDeleted(false);
-            step.setVersion(LearningConstants.ZERO);
+            step.setVersion(CommonConstants.ZERO);
             steps.add(step);
         }
         stepMapper.insertBatch(steps);
@@ -80,11 +82,11 @@ public class AiTaskExecutionService {
         }
         String leaseToken = UUID.randomUUID().toString();
         LocalDateTime now = LocalDateTime.now();
-        LocalDateTime leaseUntil = now.plusMinutes(LearningConstants.AiTask.STEP_LEASE_MINUTES);
+        LocalDateTime leaseUntil = now.plusMinutes(AiTaskConstants.STEP_LEASE_MINUTES);
         if (stepMapper.claim(step.getId(), leaseToken, now,
-                leaseUntil) == LearningConstants.ZERO) {
+                leaseUntil) == CommonConstants.ZERO) {
             throw LearningAssistantException.badRequest(
-                    LearningConstants.ErrorCode.LEARNING_PLAN_GENERATION_IN_PROGRESS,
+                    LearningErrorCode.LEARNING_PLAN_GENERATION_IN_PROGRESS,
                     "任务步骤正在由其他执行器处理: " + step.getStepName());
         }
         int attemptNo = value(step.getAttemptCount()) + 1;
@@ -105,13 +107,13 @@ public class AiTaskExecutionService {
     }
 
     private ScheduledFuture<?> startHeartbeat(Long stepId, String leaseToken) {
-        long interval = Math.max(10L, LearningConstants.AiTask.STEP_HEARTBEAT_INTERVAL_SECONDS);
+        long interval = Math.max(10L, AiTaskConstants.STEP_HEARTBEAT_INTERVAL_SECONDS);
         return leaseScheduler.scheduleAtFixedRate(() -> {
             LocalDateTime heartbeatTime = LocalDateTime.now();
             try {
                 int renewed = stepMapper.renew(stepId, leaseToken, heartbeatTime,
-                        heartbeatTime.plusMinutes(LearningConstants.AiTask.STEP_LEASE_MINUTES));
-                if (renewed == LearningConstants.ZERO) {
+                        heartbeatTime.plusMinutes(AiTaskConstants.STEP_LEASE_MINUTES));
+                if (renewed == CommonConstants.ZERO) {
                     // 令牌失效时让当前动作尽快结束，调度器会负责恢复步骤。
                     log.warn("AI 任务步骤续租失败 stepId={}，租约可能已被回收", stepId);
                 }
@@ -195,9 +197,9 @@ public class AiTaskExecutionService {
                 .eq(AiAsyncTaskStep::getTaskId, taskId)
                 .eq(AiAsyncTaskStep::getStepCode, stepCode)
                 .eq(AiAsyncTaskStep::getDeleted, false)
-                .last(LearningConstants.SQL_LIMIT_ONE));
+                .last(CommonConstants.SQL_LIMIT_ONE));
         if (step == null) {
-            throw LearningAssistantException.notFound(LearningConstants.ErrorCode.AI_ASYNC_TASK_STEP_NOT_FOUND);
+            throw LearningAssistantException.notFound(LearningErrorCode.AI_ASYNC_TASK_STEP_NOT_FOUND);
         }
         return step;
     }
@@ -217,7 +219,7 @@ public class AiTaskExecutionService {
         attempt.setCreateTime(now);
         attempt.setUpdateTime(now);
         attempt.setDeleted(false);
-        attempt.setVersion(LearningConstants.ZERO);
+        attempt.setVersion(CommonConstants.ZERO);
         attemptMapper.insert(attempt);
         return attempt;
     }
@@ -289,7 +291,7 @@ public class AiTaskExecutionService {
     }
 
     private int value(Integer value) {
-        return value == null ? LearningConstants.ZERO : value;
+        return value == null ? CommonConstants.ZERO : value;
     }
 
     private String limit(String value) {

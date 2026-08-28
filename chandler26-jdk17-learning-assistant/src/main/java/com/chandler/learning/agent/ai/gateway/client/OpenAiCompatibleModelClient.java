@@ -8,7 +8,9 @@ import com.chandler.learning.agent.ai.gateway.protocol.AiModelConnectionConfig;
 import com.chandler.learning.agent.ai.gateway.protocol.AiPreparedModelRequest;
 import com.chandler.learning.agent.exception.LearningAssistantException;
 import com.chandler.learning.agent.ai.model.application.AiModelConfigService;
-import com.chandler.learning.agent.support.LearningConstants;
+import com.chandler.learning.agent.ai.gateway.constant.AiGatewayConstants;
+import com.chandler.learning.agent.common.constant.CommonConstants;
+import com.chandler.learning.agent.common.exception.LearningErrorCode;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import lombok.RequiredArgsConstructor;
@@ -63,28 +65,28 @@ public class OpenAiCompatibleModelClient implements AiModelClient {
                 : modelConfigService.resolveDefaultProvider();
         if (!StringUtils.hasText(provider)) {
             throw LearningAssistantException.badRequest(
-                    LearningConstants.ErrorCode.MODEL_CONFIG_NOT_FOUND,
+                    LearningErrorCode.MODEL_CONFIG_NOT_FOUND,
                     "未配置可用 AI 模型，请先在个人信息 - Agent管理 - 模型管理中新增并启用模型");
         }
         AiModelConnectionConfig providerConfig = resolveProviderConfig(request, provider, connectionTest);
         if (providerConfig == null) {
             throw LearningAssistantException.badRequest(
-                    LearningConstants.ErrorCode.AI_PROVIDER_MISSING,
+                    LearningErrorCode.AI_PROVIDER_MISSING,
                     "数据库中未找到可用 AI 模型配置: " + provider);
         }
         if (!connectionTest && !Boolean.TRUE.equals(providerConfig.getEnabled())) {
             throw LearningAssistantException.badRequest(
-                    LearningConstants.ErrorCode.AI_PROVIDER_DISABLED,
+                    LearningErrorCode.AI_PROVIDER_DISABLED,
                     "AI 供应商已禁用: " + provider);
         }
         if (!StringUtils.hasText(providerConfig.getApiKey())) {
             throw LearningAssistantException.badRequest(
-                    LearningConstants.ErrorCode.AI_PROVIDER_API_KEY_MISSING,
+                    LearningErrorCode.AI_PROVIDER_API_KEY_MISSING,
                     "AI 供应商 API Key 为空: " + provider);
         }
         if (!StringUtils.hasText(providerConfig.getBaseUrl())) {
             throw LearningAssistantException.badRequest(
-                    LearningConstants.ErrorCode.AI_PROVIDER_BASE_URL_MISSING,
+                    LearningErrorCode.AI_PROVIDER_BASE_URL_MISSING,
                     "AI 供应商 Base URL 为空: " + provider);
         }
 
@@ -93,14 +95,14 @@ public class OpenAiCompatibleModelClient implements AiModelClient {
                 : providerConfig.getModelName();
         if (!StringUtils.hasText(model)) {
             throw LearningAssistantException.badRequest(
-                    LearningConstants.ErrorCode.AI_MODEL_NAME_MISSING,
+                    LearningErrorCode.AI_MODEL_NAME_MISSING,
                     "AI 模型名称为空: " + provider);
         }
 
         AiPreparedModelRequest preparedRequest = requestAdapterRegistry.prepare(request);
         if (preparedRequest.protocol() != AiApiProtocol.OPENAI_CHAT_COMPLETIONS) {
             throw LearningAssistantException.badRequest(
-                    LearningConstants.ErrorCode.AI_PROVIDER_UNSUPPORTED,
+                    LearningErrorCode.AI_PROVIDER_UNSUPPORTED,
                     "当前模型客户端不支持 API 协议：" + preparedRequest.protocol().getTitle());
         }
         Map<String, Object> payload = preparedRequest.payload();
@@ -117,13 +119,13 @@ public class OpenAiCompatibleModelClient implements AiModelClient {
                 preparedRequest.protocol().getCode(),
                 preparedRequest.adapterType().getCode(),
                 url,
-                request.getMessages() == null ? LearningConstants.ModelClient.EMPTY_SIZE : request.getMessages().size());
+                request.getMessages() == null ? AiGatewayConstants.EMPTY_SIZE : request.getMessages().size());
         String responseBody = callModel(url, payload, headers, provider, model, startTime);
         log.debug("模型 HTTP 响应 provider={} model={} cost={}ms responseCharacters={}",
                 provider,
                 model,
                 System.currentTimeMillis() - startTime,
-                responseBody == null ? LearningConstants.ZERO : responseBody.length());
+                responseBody == null ? CommonConstants.ZERO : responseBody.length());
         return parseResponse(responseBody);
     }
 
@@ -154,7 +156,7 @@ public class OpenAiCompatibleModelClient implements AiModelClient {
                     System.currentTimeMillis() - startTime,
                     ex.getMessage());
             throw LearningAssistantException.externalService(
-                    LearningConstants.ErrorCode.AI_MODEL_CALL_FAILED,
+                    LearningErrorCode.AI_MODEL_CALL_FAILED,
                     "AI 模型连接失败，请稍后重试或切换可用模型",
                     ex);
         }
@@ -180,7 +182,7 @@ public class OpenAiCompatibleModelClient implements AiModelClient {
         String baseUrl = providerConfig.getBaseUrl();
         String chatPath = StringUtils.hasText(providerConfig.getChatPath())
                 ? providerConfig.getChatPath()
-                : LearningConstants.DEFAULT_CHAT_PATH;
+                : AiGatewayConstants.DEFAULT_CHAT_PATH;
         if (baseUrl.endsWith("/") && chatPath.startsWith("/")) {
             return baseUrl.substring(0, baseUrl.length() - 1) + chatPath;
         }
@@ -199,12 +201,12 @@ public class OpenAiCompatibleModelClient implements AiModelClient {
             JsonNode choices = root.path("choices");
             if (!choices.isArray() || choices.isEmpty()) {
                 throw LearningAssistantException.system(
-                        LearningConstants.ErrorCode.AI_RESPONSE_PARSE_FAILED,
+                        LearningErrorCode.AI_RESPONSE_PARSE_FAILED,
                         "AI 响应缺少 choices 字段",
                         null);
             }
 
-            JsonNode firstChoice = choices.get(LearningConstants.ModelClient.FIRST_CHOICE_INDEX);
+            JsonNode firstChoice = choices.get(AiGatewayConstants.FIRST_CHOICE_INDEX);
             JsonNode message = firstChoice.path("message");
             String content = message.isMissingNode() ? null : message.path("content").asText(null);
             if (content == null) {
@@ -213,19 +215,19 @@ public class OpenAiCompatibleModelClient implements AiModelClient {
             String finishReason = firstChoice.path("finish_reason").asText(null);
             if ("length".equalsIgnoreCase(finishReason)) {
                 throw LearningAssistantException.externalService(
-                        LearningConstants.ErrorCode.AI_RESPONSE_PARSE_FAILED,
+                        LearningErrorCode.AI_RESPONSE_PARSE_FAILED,
                         "AI 输出达到长度上限，请减少本次输入后重试",
                         null);
             }
             if ("content_filter".equalsIgnoreCase(finishReason)) {
                 throw LearningAssistantException.externalService(
-                        LearningConstants.ErrorCode.AI_RESPONSE_PARSE_FAILED,
+                        LearningErrorCode.AI_RESPONSE_PARSE_FAILED,
                         "AI 输出被供应商内容安全策略拦截",
                         null);
             }
             if (!StringUtils.hasText(content)) {
                 throw LearningAssistantException.externalService(
-                        LearningConstants.ErrorCode.AI_RESPONSE_PARSE_FAILED,
+                        LearningErrorCode.AI_RESPONSE_PARSE_FAILED,
                         "AI 未返回有效内容，请稍后重试或切换模型",
                         null);
             }
@@ -246,7 +248,7 @@ public class OpenAiCompatibleModelClient implements AiModelClient {
                 throw learningAssistantException;
             }
             throw LearningAssistantException.system(
-                    LearningConstants.ErrorCode.AI_RESPONSE_PARSE_FAILED,
+                    LearningErrorCode.AI_RESPONSE_PARSE_FAILED,
                     "AI 响应解析失败",
                     ex);
         }
@@ -294,10 +296,10 @@ public class OpenAiCompatibleModelClient implements AiModelClient {
     /**
      * 处理 {@code resolveModelCallErrorCode} 相关业务。
      */
-    private LearningConstants.ErrorCode resolveModelCallErrorCode(String upstreamMessage) {
+    private LearningErrorCode resolveModelCallErrorCode(String upstreamMessage) {
         return isInsufficientBalance(upstreamMessage)
-                ? LearningConstants.ErrorCode.AI_MODEL_BALANCE_INSUFFICIENT
-                : LearningConstants.ErrorCode.AI_MODEL_CALL_FAILED;
+                ? LearningErrorCode.AI_MODEL_BALANCE_INSUFFICIENT
+                : LearningErrorCode.AI_MODEL_CALL_FAILED;
     }
 
     /**

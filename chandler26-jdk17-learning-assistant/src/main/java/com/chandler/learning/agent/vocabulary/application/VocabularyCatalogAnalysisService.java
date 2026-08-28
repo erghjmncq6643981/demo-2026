@@ -4,29 +4,34 @@ import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import com.baomidou.mybatisplus.core.conditions.update.LambdaUpdateWrapper;
 import com.chandler.learning.agent.ai.chat.application.AgentChatRequest;
 import com.chandler.learning.agent.ai.chat.application.AgentChatResponse;
-import com.chandler.learning.agent.vocabulary.api.VocabularyCatalogAnalysisRequest;
-import com.chandler.learning.agent.vocabulary.api.VocabularyCatalogAnalysisResponse;
-import com.chandler.learning.agent.task.domain.AiAsyncTask;
-import com.chandler.learning.agent.vocabulary.domain.VocabularyCatalog;
-import com.chandler.learning.agent.vocabulary.domain.VocabularyCatalogAnalysisBatch;
-import com.chandler.learning.agent.vocabulary.domain.VocabularyCatalogAnalysisJob;
-import com.chandler.learning.agent.vocabulary.domain.VocabularyCatalogEntry;
-import com.chandler.learning.agent.vocabulary.domain.VocabularyCatalogEntryAnalysis;
-import com.chandler.learning.agent.vocabulary.domain.VocabularyCatalogVersion;
-import com.chandler.learning.agent.ai.chat.domain.AiInvocationScene;
-import com.chandler.learning.agent.system.domain.SystemLogType;
+import com.chandler.learning.agent.vocabulary.api.request.VocabularyCatalogAnalysisRequest;
+import com.chandler.learning.agent.vocabulary.api.response.VocabularyCatalogAnalysisResponse;
+import com.chandler.learning.agent.task.domain.entity.AiAsyncTask;
+import com.chandler.learning.agent.vocabulary.domain.entity.VocabularyCatalog;
+import com.chandler.learning.agent.vocabulary.domain.entity.VocabularyCatalogAnalysisBatch;
+import com.chandler.learning.agent.vocabulary.domain.entity.VocabularyCatalogAnalysisJob;
+import com.chandler.learning.agent.vocabulary.domain.entity.VocabularyCatalogEntry;
+import com.chandler.learning.agent.vocabulary.domain.entity.VocabularyCatalogEntryAnalysis;
+import com.chandler.learning.agent.vocabulary.domain.entity.VocabularyCatalogVersion;
+import com.chandler.learning.agent.ai.chat.domain.enums.AiInvocationScene;
+import com.chandler.learning.agent.system.domain.enums.SystemLogType;
 import com.chandler.learning.agent.exception.LearningAssistantException;
-import com.chandler.learning.agent.vocabulary.infrastructure.VocabularyCatalogAnalysisBatchMapper;
-import com.chandler.learning.agent.vocabulary.infrastructure.VocabularyCatalogAnalysisJobMapper;
-import com.chandler.learning.agent.vocabulary.infrastructure.VocabularyCatalogEntryAnalysisMapper;
-import com.chandler.learning.agent.vocabulary.infrastructure.VocabularyCatalogEntryMapper;
-import com.chandler.learning.agent.vocabulary.infrastructure.VocabularyCatalogMapper;
-import com.chandler.learning.agent.vocabulary.infrastructure.VocabularyCatalogVersionMapper;
+import com.chandler.learning.agent.vocabulary.infrastructure.mapper.VocabularyCatalogAnalysisBatchMapper;
+import com.chandler.learning.agent.vocabulary.infrastructure.mapper.VocabularyCatalogAnalysisJobMapper;
+import com.chandler.learning.agent.vocabulary.infrastructure.mapper.VocabularyCatalogEntryAnalysisMapper;
+import com.chandler.learning.agent.vocabulary.infrastructure.mapper.VocabularyCatalogEntryMapper;
+import com.chandler.learning.agent.vocabulary.infrastructure.mapper.VocabularyCatalogMapper;
+import com.chandler.learning.agent.vocabulary.infrastructure.mapper.VocabularyCatalogVersionMapper;
 import com.chandler.learning.agent.ai.chat.application.AiChatService;
 import com.chandler.learning.agent.task.application.AiAsyncTaskService;
 import com.chandler.learning.agent.system.application.SystemLogService;
 import com.chandler.learning.agent.identity.application.UserDisplayNameService;
-import com.chandler.learning.agent.support.LearningConstants;
+import com.chandler.learning.agent.ai.agent.domain.constant.AiScenarioConstants;
+import com.chandler.learning.agent.common.constant.CommonConstants;
+import com.chandler.learning.agent.common.exception.LearningErrorCode;
+import com.chandler.learning.agent.task.domain.constant.AiTaskConstants;
+import com.chandler.learning.agent.vocabulary.domain.constant.VocabularyCatalogAnalysisConstants;
+import com.chandler.learning.agent.vocabulary.domain.constant.VocabularyImportConstants;
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.JsonNode;
@@ -88,13 +93,13 @@ public class VocabularyCatalogAnalysisService {
         boolean force = Boolean.TRUE.equals(resolved.getForce());
         VocabularyCatalogAnalysisJob latest = latestJob(catalogVersionId);
         if (!force && latest != null) {
-            if (List.of(LearningConstants.VocabularyAnalysis.STATUS_PENDING,
-                    LearningConstants.VocabularyAnalysis.STATUS_RUNNING).contains(latest.getStatus())) {
+            if (List.of(VocabularyCatalogAnalysisConstants.STATUS_PENDING,
+                    VocabularyCatalogAnalysisConstants.STATUS_RUNNING).contains(latest.getStatus())) {
                 return toResponse(latest);
             }
-            if (List.of(LearningConstants.VocabularyAnalysis.STATUS_COMPLETED,
-                    LearningConstants.VocabularyAnalysis.STATUS_PARTIAL_FAILED,
-                    LearningConstants.VocabularyAnalysis.STATUS_FAILED).contains(latest.getStatus())
+            if (List.of(VocabularyCatalogAnalysisConstants.STATUS_COMPLETED,
+                    VocabularyCatalogAnalysisConstants.STATUS_PARTIAL_FAILED,
+                    VocabularyCatalogAnalysisConstants.STATUS_FAILED).contains(latest.getStatus())
                     && !hasUnanalyzedEntries(version.getId())) {
                 return toResponse(latest);
             }
@@ -111,7 +116,7 @@ public class VocabularyCatalogAnalysisService {
             return toResponse(latest);
         }
         if (entries.isEmpty()) {
-            throw LearningAssistantException.badRequest(LearningConstants.ErrorCode.LEARNING_PLAN_NO_WORDS,
+            throw LearningAssistantException.badRequest(LearningErrorCode.LEARNING_PLAN_NO_WORDS,
                     "公共词本中没有可分析词条");
         }
 
@@ -129,7 +134,7 @@ public class VocabularyCatalogAnalysisService {
             throw ex;
         }
         if (job == null) {
-            throw LearningAssistantException.badRequest(LearningConstants.ErrorCode.SYSTEM_UNEXPECTED,
+            throw LearningAssistantException.badRequest(LearningErrorCode.SYSTEM_UNEXPECTED,
                     "创建词本分析任务失败");
         }
         systemLogService.record(userId, SystemLogType.AI, "创建公共词本关联分析任务",
@@ -159,22 +164,22 @@ public class VocabularyCatalogAnalysisService {
     public void executeJob(Long userId, Long jobId, Long modelConfigId) {
         VocabularyCatalogAnalysisJob job = jobMapper.selectById(jobId);
         if (job == null || !job.getUserId().equals(userId)) {
-            throw LearningAssistantException.notFound(LearningConstants.ErrorCode.AI_ASYNC_TASK_NOT_FOUND);
+            throw LearningAssistantException.notFound(LearningErrorCode.AI_ASYNC_TASK_NOT_FOUND);
         }
         int claimed = jobMapper.update(null, new LambdaUpdateWrapper<VocabularyCatalogAnalysisJob>()
                 .eq(VocabularyCatalogAnalysisJob::getId, jobId)
                 .in(VocabularyCatalogAnalysisJob::getStatus, List.of(
-                        LearningConstants.VocabularyAnalysis.STATUS_PENDING,
-                        LearningConstants.VocabularyAnalysis.STATUS_RUNNING,
-                        LearningConstants.VocabularyAnalysis.STATUS_PARTIAL_FAILED,
-                        LearningConstants.VocabularyAnalysis.STATUS_FAILED,
-                        LearningConstants.VocabularyAnalysis.STATUS_CANCELLED))
-                .set(VocabularyCatalogAnalysisJob::getStatus, LearningConstants.VocabularyAnalysis.STATUS_RUNNING)
-                .set(VocabularyCatalogAnalysisJob::getFailedCount, LearningConstants.ZERO)
+                        VocabularyCatalogAnalysisConstants.STATUS_PENDING,
+                        VocabularyCatalogAnalysisConstants.STATUS_RUNNING,
+                        VocabularyCatalogAnalysisConstants.STATUS_PARTIAL_FAILED,
+                        VocabularyCatalogAnalysisConstants.STATUS_FAILED,
+                        VocabularyCatalogAnalysisConstants.STATUS_CANCELLED))
+                .set(VocabularyCatalogAnalysisJob::getStatus, VocabularyCatalogAnalysisConstants.STATUS_RUNNING)
+                .set(VocabularyCatalogAnalysisJob::getFailedCount, CommonConstants.ZERO)
                 .set(VocabularyCatalogAnalysisJob::getStartedTime, LocalDateTime.now())
                 .set(VocabularyCatalogAnalysisJob::getFinishedTime, null)
                 .set(VocabularyCatalogAnalysisJob::getUpdateTime, LocalDateTime.now()));
-        if (claimed == LearningConstants.ZERO) {
+        if (claimed == CommonConstants.ZERO) {
             return;
         }
 
@@ -187,9 +192,9 @@ public class VocabularyCatalogAnalysisService {
                 new LambdaQueryWrapper<VocabularyCatalogAnalysisBatch>()
                         .eq(VocabularyCatalogAnalysisBatch::getJobId, jobId)
                         .in(VocabularyCatalogAnalysisBatch::getStatus, List.of(
-                                LearningConstants.VocabularyAnalysis.ITEM_PENDING,
-                                LearningConstants.VocabularyAnalysis.ITEM_RUNNING,
-                                LearningConstants.VocabularyAnalysis.ITEM_FAILED))
+                                VocabularyCatalogAnalysisConstants.ITEM_PENDING,
+                                VocabularyCatalogAnalysisConstants.ITEM_RUNNING,
+                                VocabularyCatalogAnalysisConstants.ITEM_FAILED))
                         .eq(VocabularyCatalogAnalysisBatch::getDeleted, false)
                         .orderByAsc(VocabularyCatalogAnalysisBatch::getBatchNo));
         int successCount = value(job.getSuccessCount());
@@ -201,15 +206,15 @@ public class VocabularyCatalogAnalysisService {
             }
             markBatchRunning(batch, userId);
             List<Long> unresolvedEntryIds = new ArrayList<>();
-            int batchSuccessCount = LearningConstants.ZERO;
-            int batchFailedCount = LearningConstants.ZERO;
+            int batchSuccessCount = CommonConstants.ZERO;
+            int batchFailedCount = CommonConstants.ZERO;
             try {
                 List<Long> entryIds = readIds(batch.getEntryIdsJson());
                 List<VocabularyCatalogEntry> entries = entryMapper.selectBatchIds(entryIds);
                 Map<Long, VocabularyCatalogEntry> entryMap = entries.stream()
                         .collect(Collectors.toMap(VocabularyCatalogEntry::getId, item -> item));
                 if (entryMap.size() != entryIds.size()) {
-                    throw LearningAssistantException.badRequest(LearningConstants.ErrorCode.JSON_PARSE_FAILED);
+                    throw LearningAssistantException.badRequest(LearningErrorCode.JSON_PARSE_FAILED);
                 }
 
                 Set<Long> alreadyAnalyzedIds = entryAnalysisMapper.selectList(
@@ -226,13 +231,13 @@ public class VocabularyCatalogAnalysisService {
                         .toList();
 
                 if (pendingEntries.isEmpty()) {
-                    batch.setStatus(LearningConstants.VocabularyAnalysis.ITEM_COMPLETED);
+                    batch.setStatus(VocabularyCatalogAnalysisConstants.ITEM_COMPLETED);
                     batch.setErrorMessage(null);
                     batch.setFinishedTime(LocalDateTime.now());
                     batch.setUpdateTime(LocalDateTime.now());
                     batchMapper.updateById(batch);
                 } else {
-                    int chunkSize = LearningConstants.VocabularyAnalysis.DEFAULT_BATCH_SIZE;
+                    int chunkSize = VocabularyCatalogAnalysisConstants.DEFAULT_BATCH_SIZE;
                     for (int i = 0; i < pendingEntries.size(); i += chunkSize) {
                         List<VocabularyCatalogEntry> chunk = pendingEntries.subList(
                                 i, Math.min(pendingEntries.size(), i + chunkSize));
@@ -267,8 +272,8 @@ public class VocabularyCatalogAnalysisService {
                     boolean batchFullyCompleted = unresolvedEntryIds.isEmpty()
                             && (alreadyAnalyzedIds.size() + batchSuccessCount) >= entries.size();
                     batch.setStatus(batchFullyCompleted
-                            ? LearningConstants.VocabularyAnalysis.ITEM_COMPLETED
-                            : LearningConstants.VocabularyAnalysis.ITEM_FAILED);
+                            ? VocabularyCatalogAnalysisConstants.ITEM_COMPLETED
+                            : VocabularyCatalogAnalysisConstants.ITEM_FAILED);
                     batch.setErrorMessage(batchFullyCompleted
                             ? null : partialBatchError(entries, unresolvedEntryIds));
                     batch.setFinishedTime(LocalDateTime.now());
@@ -289,7 +294,7 @@ public class VocabularyCatalogAnalysisService {
                                 .eq(VocabularyCatalogEntryAnalysis::getDeleted, false)).intValue();
                 successCount = jobSuccessCount;
                 failedCount = Math.max(0, value(job.getTotalCount()) - successCount);
-                batch.setStatus(LearningConstants.VocabularyAnalysis.ITEM_FAILED);
+                batch.setStatus(VocabularyCatalogAnalysisConstants.ITEM_FAILED);
                 batch.setErrorMessage(limitError(ex.getMessage()));
                 batch.setFinishedTime(LocalDateTime.now());
                 batch.setUpdateTime(LocalDateTime.now());
@@ -315,16 +320,16 @@ public class VocabularyCatalogAnalysisService {
         int remaining = batchMapper.selectCount(new LambdaQueryWrapper<VocabularyCatalogAnalysisBatch>()
                 .eq(VocabularyCatalogAnalysisBatch::getJobId, jobId)
                 .in(VocabularyCatalogAnalysisBatch::getStatus, List.of(
-                        LearningConstants.VocabularyAnalysis.ITEM_PENDING,
-                        LearningConstants.VocabularyAnalysis.ITEM_RUNNING,
-                        LearningConstants.VocabularyAnalysis.ITEM_FAILED))
+                        VocabularyCatalogAnalysisConstants.ITEM_PENDING,
+                        VocabularyCatalogAnalysisConstants.ITEM_RUNNING,
+                        VocabularyCatalogAnalysisConstants.ITEM_FAILED))
                 .eq(VocabularyCatalogAnalysisBatch::getDeleted, false)).intValue();
         String finalStatus = failedCount > 0
-                ? (successCount > 0 ? LearningConstants.VocabularyAnalysis.STATUS_PARTIAL_FAILED
-                : LearningConstants.VocabularyAnalysis.STATUS_FAILED)
-                : LearningConstants.VocabularyAnalysis.STATUS_COMPLETED;
+                ? (successCount > 0 ? VocabularyCatalogAnalysisConstants.STATUS_PARTIAL_FAILED
+                : VocabularyCatalogAnalysisConstants.STATUS_FAILED)
+                : VocabularyCatalogAnalysisConstants.STATUS_COMPLETED;
         if (remaining > 0 && failedCount == 0) {
-            finalStatus = LearningConstants.VocabularyAnalysis.STATUS_PARTIAL_FAILED;
+            finalStatus = VocabularyCatalogAnalysisConstants.STATUS_PARTIAL_FAILED;
         }
         job.setStatus(finalStatus);
         job.setGroupCount(distinctGroupCount(jobId));
@@ -343,8 +348,8 @@ public class VocabularyCatalogAnalysisService {
                 new LambdaQueryWrapper<VocabularyCatalogAnalysisJob>()
                         .eq(VocabularyCatalogAnalysisJob::getCatalogVersionId, catalogVersionId)
                         .in(VocabularyCatalogAnalysisJob::getStatus, List.of(
-                                LearningConstants.VocabularyAnalysis.STATUS_COMPLETED,
-                                LearningConstants.VocabularyAnalysis.STATUS_PARTIAL_FAILED))
+                                VocabularyCatalogAnalysisConstants.STATUS_COMPLETED,
+                                VocabularyCatalogAnalysisConstants.STATUS_PARTIAL_FAILED))
                         .eq(VocabularyCatalogAnalysisJob::getDeleted, false)
                         .orderByDesc(VocabularyCatalogAnalysisJob::getAnalysisVersion));
         if (jobs.isEmpty()) {
@@ -356,8 +361,8 @@ public class VocabularyCatalogAnalysisService {
                         .in(VocabularyCatalogEntryAnalysis::getJobId, jobVersion.keySet())
                         .eq(VocabularyCatalogEntryAnalysis::getDeleted, false)
                         .in(VocabularyCatalogEntryAnalysis::getStatus, List.of(
-                                LearningConstants.VocabularyAnalysis.ENTRY_READY,
-                                LearningConstants.VocabularyAnalysis.ENTRY_LOW_CONFIDENCE)))
+                                VocabularyCatalogAnalysisConstants.ENTRY_READY,
+                                VocabularyCatalogAnalysisConstants.ENTRY_LOW_CONFIDENCE)))
                 .stream()
                 .sorted((left, right) -> Integer.compare(
                         jobVersion.getOrDefault(right.getJobId(), 0),
@@ -377,22 +382,22 @@ public class VocabularyCatalogAnalysisService {
         job.setCatalogId(catalog.getId());
         job.setCatalogVersionId(version.getId());
         job.setAnalysisVersion(nextAnalysisVersion(version.getId()));
-        job.setStatus(LearningConstants.VocabularyAnalysis.STATUS_PENDING);
+        job.setStatus(VocabularyCatalogAnalysisConstants.STATUS_PENDING);
         job.setBatchSize(batchSize);
         job.setTotalCount(entries.size());
-        job.setSuccessCount(LearningConstants.ZERO);
-        job.setFailedCount(LearningConstants.ZERO);
-        job.setGroupCount(LearningConstants.ZERO);
+        job.setSuccessCount(CommonConstants.ZERO);
+        job.setFailedCount(CommonConstants.ZERO);
+        job.setGroupCount(CommonConstants.ZERO);
         job.setCreateBy(userId);
         job.setUpdateBy(userId);
         job.setCreateTime(now);
         job.setUpdateTime(now);
         job.setDeleted(false);
-        job.setVersion(LearningConstants.ZERO);
+        job.setVersion(CommonConstants.ZERO);
         jobMapper.insert(job);
 
         List<VocabularyCatalogAnalysisBatch> batches = new ArrayList<>();
-        int batchNo = LearningConstants.FIRST_SEQUENCE;
+        int batchNo = CommonConstants.FIRST_SEQUENCE;
         for (int offset = 0; offset < entries.size(); offset += batchSize) {
             List<VocabularyCatalogEntry> batchEntries = entries.subList(offset,
                     Math.min(entries.size(), offset + batchSize));
@@ -402,14 +407,14 @@ public class VocabularyCatalogAnalysisService {
             batch.setBatchNo(batchNo++);
             batch.setEntryCount(batchEntries.size());
             batch.setEntryIdsJson(writeJson(batchEntries.stream().map(VocabularyCatalogEntry::getId).toList()));
-            batch.setStatus(LearningConstants.VocabularyAnalysis.ITEM_PENDING);
-            batch.setAttemptCount(LearningConstants.ZERO);
+            batch.setStatus(VocabularyCatalogAnalysisConstants.ITEM_PENDING);
+            batch.setAttemptCount(CommonConstants.ZERO);
             batch.setCreateBy(userId);
             batch.setUpdateBy(userId);
             batch.setCreateTime(now);
             batch.setUpdateTime(now);
             batch.setDeleted(false);
-            batch.setVersion(LearningConstants.ZERO);
+            batch.setVersion(CommonConstants.ZERO);
             batches.add(batch);
         }
         batchMapper.insertBatch(batches);
@@ -418,10 +423,10 @@ public class VocabularyCatalogAnalysisService {
         payload.put("analysisJobId", job.getId());
         payload.put("modelConfigId", request.getModelConfigId() == null ? "" : request.getModelConfigId());
         AiAsyncTask task = asyncTaskService.create(userId,
-                LearningConstants.AiTask.TYPE_VOCABULARY_CATALOG_ANALYSIS,
+                AiTaskConstants.TYPE_VOCABULARY_CATALOG_ANALYSIS,
                 "公共词本关联分析",
                 null, null, job.getId(), request.getExecutionMode(), null,
-                LearningConstants.AiTask.DEFAULT_PRIORITY, entries.size(), payload);
+                AiTaskConstants.DEFAULT_PRIORITY, entries.size(), payload);
         job.setAsyncTaskId(task.getId());
         job.setUpdateTime(LocalDateTime.now());
         jobMapper.updateById(job);
@@ -445,8 +450,8 @@ public class VocabularyCatalogAnalysisService {
         AgentChatRequest request = new AgentChatRequest();
         request.setUserId(job.getUserId());
         request.setInvocationScene(AiInvocationScene.VOCABULARY_CATALOG_ANALYSIS);
-        request.setAgentCode(LearningConstants.VOCABULARY_ANALYSIS_AGENT_CODE);
-        request.setTemplateCode(LearningConstants.VOCABULARY_ANALYSIS_TEMPLATE_CODE);
+        request.setAgentCode(AiScenarioConstants.VOCABULARY_ANALYSIS_AGENT_CODE);
+        request.setTemplateCode(AiScenarioConstants.VOCABULARY_ANALYSIS_TEMPLATE_CODE);
         request.setTitle("公共词本关联分析");
         request.setBusinessType("vocabulary_catalog_analysis");
         request.setBusinessId(String.valueOf(job.getCatalogVersionId()));
@@ -464,7 +469,7 @@ public class VocabularyCatalogAnalysisService {
         JsonNode root = response.requireStructuredRoot(AiInvocationScene.VOCABULARY_CATALOG_ANALYSIS);
         JsonNode array = root.path("entries");
         if (!array.isArray()) {
-            throw LearningAssistantException.badRequest(LearningConstants.ErrorCode.AI_RESPONSE_PARSE_FAILED);
+            throw LearningAssistantException.badRequest(LearningErrorCode.AI_RESPONSE_PARSE_FAILED);
         }
         Map<Long, VocabularyCatalogEntry> sourceById = entries.stream()
                 .collect(Collectors.toMap(VocabularyCatalogEntry::getId, item -> item));
@@ -520,16 +525,16 @@ public class VocabularyCatalogAnalysisService {
             analysis.setPrimaryGroupName(text(item, "primary_group_name", "primaryGroupName", "group_name"));
             analysis.setDomainCode(text(item, "domain", "domain_code", "domainCode"));
             analysis.setSubTopicCode(text(item, "sub_topic", "sub_topic_code", "subTopicCode"));
-            analysis.setTagsJson(writeJson(textList(item.path("tags"), LearningConstants.VocabularyAnalysis.MAX_TAG_COUNT)));
+            analysis.setTagsJson(writeJson(textList(item.path("tags"), VocabularyCatalogAnalysisConstants.MAX_TAG_COUNT)));
             analysis.setRelatedEntryIdsJson(writeJson(longList(item.path("related_entry_ids"),
-                    LearningConstants.VocabularyAnalysis.MAX_RELATED_COUNT, sourceById.keySet())));
+                    VocabularyCatalogAnalysisConstants.MAX_RELATED_COUNT, sourceById.keySet())));
             analysis.setDifficultyLevel(text(item, "difficulty_level", "difficulty"));
             double confidence = number(item, "confidence");
             analysis.setConfidence(confidence);
-            analysis.setStatus(confidence < LearningConstants.VocabularyAnalysis.LOW_CONFIDENCE_THRESHOLD
-                    ? LearningConstants.VocabularyAnalysis.ENTRY_LOW_CONFIDENCE
-                    : LearningConstants.VocabularyAnalysis.ENTRY_READY);
-            analysis.setSource(LearningConstants.VocabularyAnalysis.SOURCE_AI);
+            analysis.setStatus(confidence < VocabularyCatalogAnalysisConstants.LOW_CONFIDENCE_THRESHOLD
+                    ? VocabularyCatalogAnalysisConstants.ENTRY_LOW_CONFIDENCE
+                    : VocabularyCatalogAnalysisConstants.ENTRY_READY);
+            analysis.setSource(VocabularyCatalogAnalysisConstants.SOURCE_AI);
             analysis.setAnalysisVersion(job.getAnalysisVersion());
             analysis.setRawResultJson(writeJson(item));
             analysis.setCreateBy(job.getUserId());
@@ -537,7 +542,7 @@ public class VocabularyCatalogAnalysisService {
             analysis.setCreateTime(now);
             analysis.setUpdateTime(now);
             analysis.setDeleted(false);
-            analysis.setVersion(LearningConstants.ZERO);
+            analysis.setVersion(CommonConstants.ZERO);
             analyses.add(analysis);
             resolvedEntryIds.add(entry.getId());
         }
@@ -563,14 +568,14 @@ public class VocabularyCatalogAnalysisService {
                 || !StringUtils.hasText(text(item, "difficulty_level", "difficulty"))
                 || !item.path("tags").isArray()
                 || !item.path("related_entry_ids").isArray()) {
-            throw LearningAssistantException.badRequest(LearningConstants.ErrorCode.AI_RESPONSE_PARSE_FAILED);
+            throw LearningAssistantException.badRequest(LearningErrorCode.AI_RESPONSE_PARSE_FAILED);
         }
         JsonNode confidence = item.path("confidence");
         if (!confidence.isNumber()
                 || !Double.isFinite(confidence.doubleValue())
                 || confidence.doubleValue() < 0.0D
                 || confidence.doubleValue() > 1.0D) {
-            throw LearningAssistantException.badRequest(LearningConstants.ErrorCode.AI_RESPONSE_PARSE_FAILED);
+            throw LearningAssistantException.badRequest(LearningErrorCode.AI_RESPONSE_PARSE_FAILED);
         }
     }
 
@@ -597,8 +602,8 @@ public class VocabularyCatalogAnalysisService {
     }
 
     private void markBatchRunning(VocabularyCatalogAnalysisBatch batch, Long userId) {
-        batch.setStatus(LearningConstants.VocabularyAnalysis.ITEM_RUNNING);
-        batch.setAttemptCount(value(batch.getAttemptCount()) + LearningConstants.SEQUENCE_STEP);
+        batch.setStatus(VocabularyCatalogAnalysisConstants.ITEM_RUNNING);
+        batch.setAttemptCount(value(batch.getAttemptCount()) + CommonConstants.SEQUENCE_STEP);
         batch.setStartedTime(LocalDateTime.now());
         batch.setFinishedTime(null);
         batch.setUpdateBy(userId);
@@ -615,16 +620,16 @@ public class VocabularyCatalogAnalysisService {
                                        int successCount, int failedCount) {
         LocalDateTime now = LocalDateTime.now();
         if (activeBatch != null
-                && LearningConstants.VocabularyAnalysis.ITEM_RUNNING.equals(activeBatch.getStatus())) {
-            activeBatch.setStatus(LearningConstants.VocabularyAnalysis.ITEM_FAILED);
+                && VocabularyCatalogAnalysisConstants.ITEM_RUNNING.equals(activeBatch.getStatus())) {
+            activeBatch.setStatus(VocabularyCatalogAnalysisConstants.ITEM_FAILED);
             activeBatch.setErrorMessage("任务已取消，未完成词条将在下次分析任务中重试");
             activeBatch.setFinishedTime(now);
             activeBatch.setUpdateTime(now);
             batchMapper.updateById(activeBatch);
         }
-        job.setStatus(LearningConstants.VocabularyAnalysis.STATUS_CANCELLED);
-        job.setSuccessCount(Math.max(LearningConstants.ZERO, successCount));
-        job.setFailedCount(Math.max(LearningConstants.ZERO, failedCount));
+        job.setStatus(VocabularyCatalogAnalysisConstants.STATUS_CANCELLED);
+        job.setSuccessCount(Math.max(CommonConstants.ZERO, successCount));
+        job.setFailedCount(Math.max(CommonConstants.ZERO, failedCount));
         job.setErrorMessage("用户已取消分析任务");
         job.setFinishedTime(now);
         job.setUpdateTime(now);
@@ -636,18 +641,18 @@ public class VocabularyCatalogAnalysisService {
                 .eq(VocabularyCatalogAnalysisJob::getCatalogVersionId, catalogVersionId)
                 .eq(VocabularyCatalogAnalysisJob::getDeleted, false)
                 .orderByDesc(VocabularyCatalogAnalysisJob::getAnalysisVersion)
-                .last(LearningConstants.SQL_LIMIT_ONE));
+                .last(CommonConstants.SQL_LIMIT_ONE));
     }
 
     private VocabularyCatalogAnalysisJob latestCompletedJob(Long catalogVersionId) {
         return jobMapper.selectOne(new LambdaQueryWrapper<VocabularyCatalogAnalysisJob>()
                 .eq(VocabularyCatalogAnalysisJob::getCatalogVersionId, catalogVersionId)
                 .in(VocabularyCatalogAnalysisJob::getStatus, List.of(
-                        LearningConstants.VocabularyAnalysis.STATUS_COMPLETED,
-                        LearningConstants.VocabularyAnalysis.STATUS_PARTIAL_FAILED))
+                        VocabularyCatalogAnalysisConstants.STATUS_COMPLETED,
+                        VocabularyCatalogAnalysisConstants.STATUS_PARTIAL_FAILED))
                 .eq(VocabularyCatalogAnalysisJob::getDeleted, false)
                 .orderByDesc(VocabularyCatalogAnalysisJob::getAnalysisVersion)
-                .last(LearningConstants.SQL_LIMIT_ONE));
+                .last(CommonConstants.SQL_LIMIT_ONE));
     }
 
     /** 只有词本版本所有已发布词条均有有效分析结果时，才认为无需再次触发。 */
@@ -657,7 +662,7 @@ public class VocabularyCatalogAnalysisService {
 
     private int nextAnalysisVersion(Long catalogVersionId) {
         VocabularyCatalogAnalysisJob latest = latestJob(catalogVersionId);
-        return latest == null ? LearningConstants.FIRST_SEQUENCE : value(latest.getAnalysisVersion()) + 1;
+        return latest == null ? CommonConstants.FIRST_SEQUENCE : value(latest.getAnalysisVersion()) + 1;
     }
 
     private int distinctGroupCount(Long jobId) {
@@ -671,7 +676,7 @@ public class VocabularyCatalogAnalysisService {
     private String latestBatchError(Long jobId) {
         return batchMapper.selectList(new LambdaQueryWrapper<VocabularyCatalogAnalysisBatch>()
                         .eq(VocabularyCatalogAnalysisBatch::getJobId, jobId)
-                        .eq(VocabularyCatalogAnalysisBatch::getStatus, LearningConstants.VocabularyAnalysis.ITEM_FAILED)
+                        .eq(VocabularyCatalogAnalysisBatch::getStatus, VocabularyCatalogAnalysisConstants.ITEM_FAILED)
                         .eq(VocabularyCatalogAnalysisBatch::getDeleted, false)
                         .orderByDesc(VocabularyCatalogAnalysisBatch::getBatchNo))
                 .stream().map(VocabularyCatalogAnalysisBatch::getErrorMessage)
@@ -681,11 +686,11 @@ public class VocabularyCatalogAnalysisService {
     private VocabularyCatalogVersion requirePublishedVersion(Long versionId) {
         VocabularyCatalogVersion version = versionMapper.selectOne(new LambdaQueryWrapper<VocabularyCatalogVersion>()
                 .eq(VocabularyCatalogVersion::getId, versionId)
-                .eq(VocabularyCatalogVersion::getStatus, LearningConstants.VocabularyImport.VERSION_STATUS_PUBLISHED)
+                .eq(VocabularyCatalogVersion::getStatus, VocabularyImportConstants.VERSION_STATUS_PUBLISHED)
                 .eq(VocabularyCatalogVersion::getDeleted, false)
-                .last(LearningConstants.SQL_LIMIT_ONE));
+                .last(CommonConstants.SQL_LIMIT_ONE));
         if (version == null) {
-            throw LearningAssistantException.notFound(LearningConstants.ErrorCode.VOCABULARY_CATALOG_NOT_FOUND);
+            throw LearningAssistantException.notFound(LearningErrorCode.VOCABULARY_CATALOG_NOT_FOUND);
         }
         return version;
     }
@@ -694,12 +699,12 @@ public class VocabularyCatalogAnalysisService {
         VocabularyCatalog catalog = catalogMapper.selectOne(new LambdaQueryWrapper<VocabularyCatalog>()
                 .eq(VocabularyCatalog::getId, catalogId)
                 .and(wrapper -> wrapper.eq(VocabularyCatalog::getOwnerUserId, userId)
-                        .or().eq(VocabularyCatalog::getVisibility, LearningConstants.VocabularyImport.VISIBILITY_PUBLIC))
-                .eq(VocabularyCatalog::getStatus, LearningConstants.VocabularyImport.CATALOG_STATUS_PUBLISHED)
+                        .or().eq(VocabularyCatalog::getVisibility, VocabularyImportConstants.VISIBILITY_PUBLIC))
+                .eq(VocabularyCatalog::getStatus, VocabularyImportConstants.CATALOG_STATUS_PUBLISHED)
                 .eq(VocabularyCatalog::getDeleted, false)
-                .last(LearningConstants.SQL_LIMIT_ONE));
+                .last(CommonConstants.SQL_LIMIT_ONE));
         if (catalog == null) {
-            throw LearningAssistantException.notFound(LearningConstants.ErrorCode.VOCABULARY_CATALOG_NOT_FOUND);
+            throw LearningAssistantException.notFound(LearningErrorCode.VOCABULARY_CATALOG_NOT_FOUND);
         }
     }
 
@@ -736,12 +741,12 @@ public class VocabularyCatalogAnalysisService {
         response.setAnalyzedCount(analyzedCount);
         response.setUnanalyzedCount(unanalyzedCount);
         if (publishedCount > 0 && unanalyzedCount == 0) {
-            response.setStatus(LearningConstants.VocabularyAnalysis.STATUS_COMPLETED);
+            response.setStatus(VocabularyCatalogAnalysisConstants.STATUS_COMPLETED);
             response.setCanTrigger(false);
         } else {
             response.setCanTrigger(response.getUnanalyzedCount() > 0
-                    && !List.of(LearningConstants.VocabularyAnalysis.STATUS_PENDING,
-                    LearningConstants.VocabularyAnalysis.STATUS_RUNNING).contains(response.getStatus()));
+                    && !List.of(VocabularyCatalogAnalysisConstants.STATUS_PENDING,
+                    VocabularyCatalogAnalysisConstants.STATUS_RUNNING).contains(response.getStatus()));
         }
     }
 
@@ -750,7 +755,7 @@ public class VocabularyCatalogAnalysisService {
             return objectMapper.readValue(json == null ? "[]" : json, new TypeReference<>() {
             });
         } catch (JsonProcessingException ex) {
-            throw LearningAssistantException.badRequest(LearningConstants.ErrorCode.JSON_PARSE_FAILED);
+            throw LearningAssistantException.badRequest(LearningErrorCode.JSON_PARSE_FAILED);
         }
     }
 
@@ -811,14 +816,14 @@ public class VocabularyCatalogAnalysisService {
         try {
             return objectMapper.writeValueAsString(value);
         } catch (JsonProcessingException ex) {
-            throw LearningAssistantException.badRequest(LearningConstants.ErrorCode.JSON_SERIALIZE_FAILED);
+            throw LearningAssistantException.badRequest(LearningErrorCode.JSON_SERIALIZE_FAILED);
         }
     }
 
     private int resolveBatchSize(Integer value) {
-        int requested = value == null ? LearningConstants.VocabularyAnalysis.DEFAULT_BATCH_SIZE : value;
-        return Math.max(LearningConstants.VocabularyAnalysis.MIN_BATCH_SIZE,
-                Math.min(requested, LearningConstants.VocabularyAnalysis.MAX_BATCH_SIZE));
+        int requested = value == null ? VocabularyCatalogAnalysisConstants.DEFAULT_BATCH_SIZE : value;
+        return Math.max(VocabularyCatalogAnalysisConstants.MIN_BATCH_SIZE,
+                Math.min(requested, VocabularyCatalogAnalysisConstants.MAX_BATCH_SIZE));
     }
 
     private int value(Integer value) {

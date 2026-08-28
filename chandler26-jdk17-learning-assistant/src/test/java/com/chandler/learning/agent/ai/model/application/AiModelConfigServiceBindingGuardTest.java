@@ -1,11 +1,11 @@
 package com.chandler.learning.agent.ai.model.application;
 
 import com.chandler.learning.agent.ai.agent.application.AiAgentBindingService;
-import com.chandler.learning.agent.ai.agent.domain.AiAgent;
+import com.chandler.learning.agent.ai.agent.domain.entity.AiAgent;
 import com.chandler.learning.agent.ai.chat.application.AiModelUsageQueryService;
-import com.chandler.learning.agent.ai.model.domain.AiModelConfig;
+import com.chandler.learning.agent.ai.model.domain.entity.AiModelConfig;
 import com.chandler.learning.agent.exception.LearningAssistantException;
-import com.chandler.learning.agent.ai.model.infrastructure.AiModelConfigMapper;
+import com.chandler.learning.agent.ai.model.infrastructure.mapper.AiModelConfigMapper;
 import com.chandler.learning.agent.security.ApiKeyCryptoService;
 import com.chandler.learning.agent.system.application.SystemLogService;
 import com.chandler.learning.agent.identity.application.UserDisplayNameService;

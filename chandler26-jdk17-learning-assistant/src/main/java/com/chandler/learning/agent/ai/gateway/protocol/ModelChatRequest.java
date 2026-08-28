@@ -1,6 +1,6 @@
 package com.chandler.learning.agent.ai.gateway.protocol;
 
-import com.chandler.learning.agent.ai.chat.domain.AiInvocationScene;
+import com.chandler.learning.agent.ai.chat.domain.enums.AiInvocationScene;
 import com.chandler.learning.agent.ai.gateway.protocol.AiApiProtocol;
 import com.chandler.learning.agent.ai.gateway.protocol.AiRequestAdapterType;
 import com.chandler.learning.agent.ai.gateway.protocol.AiResponseParserType;

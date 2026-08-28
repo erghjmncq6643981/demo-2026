@@ -3,15 +3,16 @@ package com.chandler.learning.agent.identity.application;
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import com.chandler.learning.agent.ai.agent.application.AiAgentService;
 import com.chandler.learning.agent.ai.prompt.application.AiPromptTemplateService;
-import com.chandler.learning.agent.identity.api.SpeechPreferenceRequest;
-import com.chandler.learning.agent.identity.api.SpeechPreferenceResponse;
-import com.chandler.learning.agent.identity.api.LearningSettingsRequest;
-import com.chandler.learning.agent.identity.api.LearningSettingsResponse;
-import com.chandler.learning.agent.identity.domain.LearningUserPreference;
-import com.chandler.learning.agent.identity.domain.SpeechVoiceType;
-import com.chandler.learning.agent.system.domain.SystemLogType;
-import com.chandler.learning.agent.identity.infrastructure.LearningUserPreferenceMapper;
-import com.chandler.learning.agent.support.LearningConstants;
+import com.chandler.learning.agent.identity.api.request.SpeechPreferenceRequest;
+import com.chandler.learning.agent.identity.api.response.SpeechPreferenceResponse;
+import com.chandler.learning.agent.identity.api.request.LearningSettingsRequest;
+import com.chandler.learning.agent.identity.api.response.LearningSettingsResponse;
+import com.chandler.learning.agent.identity.domain.entity.LearningUserPreference;
+import com.chandler.learning.agent.identity.domain.enums.SpeechVoiceType;
+import com.chandler.learning.agent.system.domain.enums.SystemLogType;
+import com.chandler.learning.agent.identity.infrastructure.mapper.LearningUserPreferenceMapper;
+import com.chandler.learning.agent.common.constant.CommonConstants;
+import com.chandler.learning.agent.identity.domain.constant.UserPreferenceConstants;
 import com.chandler.learning.agent.system.application.SystemLogService;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -48,9 +49,9 @@ public class UserPreferenceService {
         Map<String, String> preferences = loadPreferences(userId);
         LearningSettingsResponse response = new LearningSettingsResponse();
         response.setAgentCode(valueOrDefault(preferences,
-                LearningConstants.UserPreference.KEY_LEARNING_AGENT_CODE, ""));
+                UserPreferenceConstants.KEY_LEARNING_AGENT_CODE, ""));
         response.setTemplateCode(valueOrDefault(preferences,
-                LearningConstants.UserPreference.KEY_LEARNING_TEMPLATE_CODE, ""));
+                UserPreferenceConstants.KEY_LEARNING_TEMPLATE_CODE, ""));
         return response;
     }
 
@@ -64,8 +65,8 @@ public class UserPreferenceService {
         requireEnabledAgent(agentCode);
         requireEnabledTemplate(templateCode);
         upsertBatch(userId, Map.of(
-                LearningConstants.UserPreference.KEY_LEARNING_AGENT_CODE, agentCode,
-                LearningConstants.UserPreference.KEY_LEARNING_TEMPLATE_CODE, templateCode));
+                UserPreferenceConstants.KEY_LEARNING_AGENT_CODE, agentCode,
+                UserPreferenceConstants.KEY_LEARNING_TEMPLATE_CODE, templateCode));
 
         systemLogService.record(userId, SystemLogType.PREFERENCE, "更新学习设置",
                 "默认 Agent " + agentCode + "，默认模板 " + templateCode);
@@ -94,30 +95,30 @@ public class UserPreferenceService {
         SpeechPreferenceRequest resolvedRequest = request == null ? new SpeechPreferenceRequest() : request;
 
         String voiceType = resolvedRequest.getVoiceType() == null
-                ? valueOrDefault(preferences, LearningConstants.UserPreference.KEY_SPEECH_VOICE_TYPE,
+                ? valueOrDefault(preferences, UserPreferenceConstants.KEY_SPEECH_VOICE_TYPE,
                 SpeechVoiceType.US.getCode())
                 : normalizeVoiceType(resolvedRequest.getVoiceType());
         String sentenceVoiceName = resolvedRequest.getSentenceVoiceName() == null
-                ? valueOrDefault(preferences, LearningConstants.UserPreference.KEY_SPEECH_SENTENCE_VOICE_NAME, "")
+                ? valueOrDefault(preferences, UserPreferenceConstants.KEY_SPEECH_SENTENCE_VOICE_NAME, "")
                 : trimToEmpty(resolvedRequest.getSentenceVoiceName());
         double sentenceRate = resolvedRequest.getSentenceRate() == null
-                ? numberOrDefault(preferences, LearningConstants.UserPreference.KEY_SPEECH_SENTENCE_RATE,
-                LearningConstants.UserPreference.SENTENCE_RATE_DEFAULT)
+                ? numberOrDefault(preferences, UserPreferenceConstants.KEY_SPEECH_SENTENCE_RATE,
+                UserPreferenceConstants.SENTENCE_RATE_DEFAULT)
                 : clamp(resolvedRequest.getSentenceRate(),
-                LearningConstants.UserPreference.SENTENCE_RATE_MIN,
-                LearningConstants.UserPreference.SENTENCE_RATE_MAX);
+                UserPreferenceConstants.SENTENCE_RATE_MIN,
+                UserPreferenceConstants.SENTENCE_RATE_MAX);
         double sentencePitch = resolvedRequest.getSentencePitch() == null
-                ? numberOrDefault(preferences, LearningConstants.UserPreference.KEY_SPEECH_SENTENCE_PITCH,
-                LearningConstants.UserPreference.SENTENCE_PITCH_DEFAULT)
+                ? numberOrDefault(preferences, UserPreferenceConstants.KEY_SPEECH_SENTENCE_PITCH,
+                UserPreferenceConstants.SENTENCE_PITCH_DEFAULT)
                 : clamp(resolvedRequest.getSentencePitch(),
-                LearningConstants.UserPreference.SENTENCE_PITCH_MIN,
-                LearningConstants.UserPreference.SENTENCE_PITCH_MAX);
+                UserPreferenceConstants.SENTENCE_PITCH_MIN,
+                UserPreferenceConstants.SENTENCE_PITCH_MAX);
 
         upsertBatch(userId, Map.of(
-                LearningConstants.UserPreference.KEY_SPEECH_VOICE_TYPE, voiceType,
-                LearningConstants.UserPreference.KEY_SPEECH_SENTENCE_VOICE_NAME, sentenceVoiceName,
-                LearningConstants.UserPreference.KEY_SPEECH_SENTENCE_RATE, formatNumber(sentenceRate),
-                LearningConstants.UserPreference.KEY_SPEECH_SENTENCE_PITCH, formatNumber(sentencePitch)));
+                UserPreferenceConstants.KEY_SPEECH_VOICE_TYPE, voiceType,
+                UserPreferenceConstants.KEY_SPEECH_SENTENCE_VOICE_NAME, sentenceVoiceName,
+                UserPreferenceConstants.KEY_SPEECH_SENTENCE_RATE, formatNumber(sentenceRate),
+                UserPreferenceConstants.KEY_SPEECH_SENTENCE_PITCH, formatNumber(sentencePitch)));
 
         systemLogService.record(userId, SystemLogType.PREFERENCE, "更新发音设置",
                 "默认发音 " + voiceType + "，句子语速 " + formatNumber(sentenceRate)
@@ -143,20 +144,20 @@ public class UserPreferenceService {
     private SpeechPreferenceResponse toSpeechResponse(Map<String, String> preferences) {
         SpeechPreferenceResponse response = new SpeechPreferenceResponse();
         response.setVoiceType(normalizeVoiceType(valueOrDefault(preferences,
-                LearningConstants.UserPreference.KEY_SPEECH_VOICE_TYPE,
+                UserPreferenceConstants.KEY_SPEECH_VOICE_TYPE,
                 SpeechVoiceType.US.getCode())));
         response.setSentenceVoiceName(valueOrDefault(preferences,
-                LearningConstants.UserPreference.KEY_SPEECH_SENTENCE_VOICE_NAME, ""));
+                UserPreferenceConstants.KEY_SPEECH_SENTENCE_VOICE_NAME, ""));
         response.setSentenceRate(clamp(numberOrDefault(preferences,
-                        LearningConstants.UserPreference.KEY_SPEECH_SENTENCE_RATE,
-                        LearningConstants.UserPreference.SENTENCE_RATE_DEFAULT),
-                LearningConstants.UserPreference.SENTENCE_RATE_MIN,
-                LearningConstants.UserPreference.SENTENCE_RATE_MAX));
+                        UserPreferenceConstants.KEY_SPEECH_SENTENCE_RATE,
+                        UserPreferenceConstants.SENTENCE_RATE_DEFAULT),
+                UserPreferenceConstants.SENTENCE_RATE_MIN,
+                UserPreferenceConstants.SENTENCE_RATE_MAX));
         response.setSentencePitch(clamp(numberOrDefault(preferences,
-                        LearningConstants.UserPreference.KEY_SPEECH_SENTENCE_PITCH,
-                        LearningConstants.UserPreference.SENTENCE_PITCH_DEFAULT),
-                LearningConstants.UserPreference.SENTENCE_PITCH_MIN,
-                LearningConstants.UserPreference.SENTENCE_PITCH_MAX));
+                        UserPreferenceConstants.KEY_SPEECH_SENTENCE_PITCH,
+                        UserPreferenceConstants.SENTENCE_PITCH_DEFAULT),
+                UserPreferenceConstants.SENTENCE_PITCH_MIN,
+                UserPreferenceConstants.SENTENCE_PITCH_MAX));
         return response;
     }
 
@@ -193,7 +194,7 @@ public class UserPreferenceService {
             preference.setCreateTime(now);
             preference.setUpdateTime(now);
             preference.setDeleted(false);
-            preference.setVersion(LearningConstants.ZERO);
+            preference.setVersion(CommonConstants.ZERO);
             preferences.add(preference);
         }
         preferenceMapper.upsertBatch(preferences);

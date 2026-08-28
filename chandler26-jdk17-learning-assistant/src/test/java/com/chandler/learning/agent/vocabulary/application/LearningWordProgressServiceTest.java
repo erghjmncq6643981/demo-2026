@@ -1,7 +1,7 @@
 package com.chandler.learning.agent.vocabulary.application;
 
-import com.chandler.learning.agent.vocabulary.domain.LearningWordProgress;
-import com.chandler.learning.agent.vocabulary.infrastructure.LearningWordProgressMapper;
+import com.chandler.learning.agent.vocabulary.domain.entity.LearningWordProgress;
+import com.chandler.learning.agent.vocabulary.infrastructure.mapper.LearningWordProgressMapper;
 import org.junit.jupiter.api.Test;
 
 import java.util.ArrayList;

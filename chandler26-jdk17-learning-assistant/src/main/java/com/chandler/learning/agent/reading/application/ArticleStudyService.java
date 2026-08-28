@@ -6,30 +6,34 @@ import cn.hutool.crypto.digest.DigestUtil;
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import com.chandler.learning.agent.ai.chat.application.AgentChatRequest;
 import com.chandler.learning.agent.ai.chat.application.AgentChatResponse;
-import com.chandler.learning.agent.reading.api.ArticleStudyAnswerRequest;
-import com.chandler.learning.agent.reading.api.ArticleStudyCompleteRequest;
-import com.chandler.learning.agent.reading.api.ArticleStudyProgressRequest;
-import com.chandler.learning.agent.reading.api.ArticleStudyRequest;
-import com.chandler.learning.agent.reading.api.ArticleStudyResponse;
-import com.chandler.learning.agent.reading.api.ArticleStudyPageResponse;
-import com.chandler.learning.agent.reading.api.ArticleStudySummaryResponse;
+import com.chandler.learning.agent.reading.api.request.ArticleStudyAnswerRequest;
+import com.chandler.learning.agent.reading.api.request.ArticleStudyCompleteRequest;
+import com.chandler.learning.agent.reading.api.request.ArticleStudyProgressRequest;
+import com.chandler.learning.agent.reading.api.request.ArticleStudyRequest;
+import com.chandler.learning.agent.reading.api.response.ArticleStudyResponse;
+import com.chandler.learning.agent.reading.api.response.ArticleStudyPageResponse;
+import com.chandler.learning.agent.reading.api.response.ArticleStudySummaryResponse;
 import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
-import com.chandler.learning.agent.reading.api.ArticleStudyWordResponse;
-import com.chandler.learning.agent.reading.domain.LearningArticleStudyRecord;
-import com.chandler.learning.agent.vocabulary.domain.LearningWordbook;
-import com.chandler.learning.agent.vocabulary.domain.LearningWordbookEntry;
-import com.chandler.learning.agent.reading.domain.ArticleDifficulty;
-import com.chandler.learning.agent.reading.domain.ArticleWordCountRange;
-import com.chandler.learning.agent.ai.chat.domain.AiInvocationScene;
-import com.chandler.learning.agent.learning.domain.LearningScene;
-import com.chandler.learning.agent.learning.domain.ReviewStatus;
-import com.chandler.learning.agent.system.domain.SystemLogType;
+import com.chandler.learning.agent.reading.api.response.ArticleStudyWordResponse;
+import com.chandler.learning.agent.reading.domain.entity.LearningArticleStudyRecord;
+import com.chandler.learning.agent.vocabulary.domain.entity.LearningWordbook;
+import com.chandler.learning.agent.vocabulary.domain.entity.LearningWordbookEntry;
+import com.chandler.learning.agent.reading.domain.enums.ArticleDifficulty;
+import com.chandler.learning.agent.reading.domain.enums.ArticleWordCountRange;
+import com.chandler.learning.agent.ai.chat.domain.enums.AiInvocationScene;
+import com.chandler.learning.agent.learning.domain.enums.LearningScene;
+import com.chandler.learning.agent.learning.domain.enums.ReviewStatus;
+import com.chandler.learning.agent.system.domain.enums.SystemLogType;
 import com.chandler.learning.agent.exception.LearningAssistantException;
 import com.chandler.learning.agent.identity.application.UserDisplayNameService;
-import com.chandler.learning.agent.reading.infrastructure.LearningArticleStudyRecordMapper;
+import com.chandler.learning.agent.reading.infrastructure.mapper.LearningArticleStudyRecordMapper;
 import com.chandler.learning.agent.vocabulary.application.WordbookService;
 import com.chandler.learning.agent.ai.chat.application.AiChatService;
-import com.chandler.learning.agent.support.LearningConstants;
+import com.chandler.learning.agent.ai.agent.domain.constant.AiScenarioConstants;
+import com.chandler.learning.agent.ai.chat.domain.constant.AiChatConstants;
+import com.chandler.learning.agent.common.constant.CommonConstants;
+import com.chandler.learning.agent.common.exception.LearningErrorCode;
+import com.chandler.learning.agent.reading.domain.constant.ArticleConstants;
 import com.chandler.learning.agent.system.application.SystemLogService;
 import com.chandler.learning.agent.vocabulary.application.LearningWordProgressService;
 import com.fasterxml.jackson.core.type.TypeReference;
@@ -201,8 +205,8 @@ public class ArticleStudyService {
     public ArticleStudyResponse updateProgress(Long userId, Long recordId, ArticleStudyProgressRequest request) {
         LearningArticleStudyRecord record = requireRecord(userId, recordId);
         String stage = normalizeStage(request.getStage());
-        boolean firstStart = !LearningConstants.Article.STATUS_IN_PROGRESS.equals(record.getStudyStatus())
-                && !LearningConstants.Article.STATUS_COMPLETED.equals(record.getStudyStatus());
+        boolean firstStart = !ArticleConstants.STATUS_IN_PROGRESS.equals(record.getStudyStatus())
+                && !ArticleConstants.STATUS_COMPLETED.equals(record.getStudyStatus());
         record.moveToStage(stage, LocalDateTime.now());
         articleStudyRecordMapper.updateById(record);
         if (firstStart) {
@@ -220,14 +224,14 @@ public class ArticleStudyService {
     @Transactional(rollbackFor = Exception.class)
     public ArticleStudyResponse complete(Long userId, Long recordId, ArticleStudyCompleteRequest request) {
         LearningArticleStudyRecord record = requireRecord(userId, recordId);
-        if (LearningConstants.Article.STATUS_COMPLETED.equals(record.getStudyStatus())) {
+        if (ArticleConstants.STATUS_COMPLETED.equals(record.getStudyStatus())) {
             return toResponse(record, true);
         }
         PracticeScore result = scorePractice(readParsedNode(record),
                 request.getAnswers() == null ? List.of() : request.getAnswers());
         if (result.answered() < result.total()) {
             throw LearningAssistantException.badRequest(
-                    LearningConstants.ErrorCode.ARTICLE_PRACTICE_INCOMPLETE,
+                    LearningErrorCode.ARTICLE_PRACTICE_INCOMPLETE,
                     "请完成全部阅读检测后再结束本次精读");
         }
         LocalDateTime now = LocalDateTime.now();
@@ -270,7 +274,7 @@ public class ArticleStudyService {
         chatRequest.setTemplateCode(resolveTemplateCode(request));
         chatRequest.setModelConfigId(request.getModelConfigId());
         chatRequest.setTitle(LearningScene.ENGLISH_ARTICLE.getTitle());
-        chatRequest.setBusinessType(LearningConstants.ChatSession.BUSINESS_TYPE_LEARNING);
+        chatRequest.setBusinessType(AiChatConstants.BUSINESS_TYPE_LEARNING);
         chatRequest.setBusinessId(LearningScene.ENGLISH_ARTICLE.getCode());
         chatRequest.setSceneCode(LearningScene.ENGLISH_ARTICLE.getCode());
         chatRequest.setMessage("请基于用户选择的目标词生成英语语境精读材料。");
@@ -288,7 +292,7 @@ public class ArticleStudyService {
                 .eq(LearningArticleStudyRecord::getSelectedTermHash, selectedTermHash)
                 .eq(LearningArticleStudyRecord::getDeleted, false)
                 .orderByDesc(LearningArticleStudyRecord::getUpdateTime)
-                .last(LearningConstants.SQL_LIMIT_ONE));
+                .last(CommonConstants.SQL_LIMIT_ONE));
     }
 
     /**
@@ -297,22 +301,22 @@ public class ArticleStudyService {
     private List<Long> normalizeEntryIds(List<Long> entryIds) {
         if (CollUtil.isEmpty(entryIds)) {
             throw LearningAssistantException.badRequest(
-                    LearningConstants.ErrorCode.ARTICLE_WORDS_EMPTY,
+                    LearningErrorCode.ARTICLE_WORDS_EMPTY,
                     "请选择要生成文章的单词");
         }
         List<Long> normalized = entryIds.stream()
                 .filter(Objects::nonNull)
                 .distinct()
                 .toList();
-        if (normalized.size() < LearningConstants.Article.MIN_SELECTED_WORDS) {
+        if (normalized.size() < ArticleConstants.MIN_SELECTED_WORDS) {
             throw LearningAssistantException.badRequest(
-                    LearningConstants.ErrorCode.ARTICLE_WORDS_EMPTY,
+                    LearningErrorCode.ARTICLE_WORDS_EMPTY,
                     "请选择要生成文章的单词");
         }
-        if (normalized.size() > LearningConstants.Article.MAX_SELECTED_WORDS) {
+        if (normalized.size() > ArticleConstants.MAX_SELECTED_WORDS) {
             throw LearningAssistantException.badRequest(
-                    LearningConstants.ErrorCode.ARTICLE_WORD_LIMIT_EXCEEDED,
-                    "一次最多选择 " + LearningConstants.Article.MAX_SELECTED_WORDS + " 个单词生成文章");
+                    LearningErrorCode.ARTICLE_WORD_LIMIT_EXCEEDED,
+                    "一次最多选择 " + ArticleConstants.MAX_SELECTED_WORDS + " 个单词生成文章");
         }
         return normalized;
     }
@@ -330,7 +334,7 @@ public class ArticleStudyService {
                 .toList();
         if (ordered.size() != entryIds.size()) {
             throw LearningAssistantException.badRequest(
-                    LearningConstants.ErrorCode.ARTICLE_WORDS_INVALID,
+                    LearningErrorCode.ARTICLE_WORDS_INVALID,
                     "存在不属于当前单词本的词汇，请刷新后重新选择");
         }
         return ordered;
@@ -444,9 +448,9 @@ public class ArticleStudyService {
         response.setCostTime(record.getCostTime());
         response.setLookupCount(record.getLookupCount());
         response.setStudyStatus(StringUtils.hasText(record.getStudyStatus())
-                ? record.getStudyStatus() : LearningConstants.Article.STATUS_GENERATED);
+                ? record.getStudyStatus() : ArticleConstants.STATUS_GENERATED);
         response.setCurrentStage(StringUtils.hasText(record.getCurrentStage())
-                ? record.getCurrentStage() : LearningConstants.Article.STAGE_READING);
+                ? record.getCurrentStage() : ArticleConstants.STAGE_READING);
         response.setPracticeTotal(record.getPracticeTotal());
         response.setPracticeCorrect(record.getPracticeCorrect());
         response.setPracticeScore(record.getPracticeScore());
@@ -517,7 +521,7 @@ public class ArticleStudyService {
             return objectMapper.writeValueAsString(parsed);
         } catch (Exception ex) {
             throw LearningAssistantException.system(
-                    LearningConstants.ErrorCode.JSON_SERIALIZE_FAILED,
+                    LearningErrorCode.JSON_SERIALIZE_FAILED,
                     "语境精读材料序列化失败",
                     ex);
         }
@@ -552,8 +556,8 @@ public class ArticleStudyService {
             }
         }
         JsonNode practice = parsed.path("practice");
-        if (!practice.isArray() || practice.size() != LearningConstants.Article.PRACTICE_QUESTION_COUNT) {
-            throw articleInvalid("阅读检测必须包含 " + LearningConstants.Article.PRACTICE_QUESTION_COUNT + " 道题");
+        if (!practice.isArray() || practice.size() != ArticleConstants.PRACTICE_QUESTION_COUNT) {
+            throw articleInvalid("阅读检测必须包含 " + ArticleConstants.PRACTICE_QUESTION_COUNT + " 道题");
         }
         for (JsonNode question : practice) {
             requiredText(question, "question", "stem");
@@ -578,17 +582,17 @@ public class ArticleStudyService {
     static PracticeScore scorePractice(JsonNode parsed, List<ArticleStudyAnswerRequest> answers) {
         JsonNode practice = parsed == null ? null : parsed.path("practice");
         if (practice == null || !practice.isArray()) {
-            return new PracticeScore(LearningConstants.ZERO, LearningConstants.ZERO,
-                    LearningConstants.ZERO, LearningConstants.ZERO);
+            return new PracticeScore(CommonConstants.ZERO, CommonConstants.ZERO,
+                    CommonConstants.ZERO, CommonConstants.ZERO);
         }
         Map<Integer, String> submitted = answers.stream()
                 .filter(Objects::nonNull)
                 .filter(answer -> answer.getQuestionIndex() != null && StringUtils.hasText(answer.getAnswer()))
                 .collect(Collectors.toMap(ArticleStudyAnswerRequest::getQuestionIndex,
                         ArticleStudyAnswerRequest::getAnswer, (left, right) -> right, LinkedHashMap::new));
-        int answered = LearningConstants.ZERO;
-        int correct = LearningConstants.ZERO;
-        for (int index = LearningConstants.ZERO; index < practice.size(); index++) {
+        int answered = CommonConstants.ZERO;
+        int correct = CommonConstants.ZERO;
+        for (int index = CommonConstants.ZERO; index < practice.size(); index++) {
             String answer = submitted.get(index);
             if (!StringUtils.hasText(answer)) {
                 continue;
@@ -600,8 +604,8 @@ public class ArticleStudyService {
             }
         }
         int total = practice.size();
-        int score = total == LearningConstants.ZERO
-                ? LearningConstants.ZERO
+        int score = total == CommonConstants.ZERO
+                ? CommonConstants.ZERO
                 : (int) Math.round(correct * 100.0 / total);
         return new PracticeScore(total, answered, correct, score);
     }
@@ -612,10 +616,10 @@ public class ArticleStudyService {
                         .eq(LearningArticleStudyRecord::getId, recordId)
                         .eq(LearningArticleStudyRecord::getUserId, userId)
                         .eq(LearningArticleStudyRecord::getDeleted, false)
-                        .last(LearningConstants.SQL_LIMIT_ONE));
+                        .last(CommonConstants.SQL_LIMIT_ONE));
         if (record == null) {
             throw LearningAssistantException.notFound(
-                    LearningConstants.ErrorCode.ARTICLE_RECORD_NOT_FOUND,
+                    LearningErrorCode.ARTICLE_RECORD_NOT_FOUND,
                     "语境精读记录不存在: " + recordId);
         }
         return record;
@@ -634,11 +638,11 @@ public class ArticleStudyService {
 
     private String normalizeStage(String value) {
         String stage = value == null ? "" : value.trim().toLowerCase(Locale.ROOT);
-        if (!List.of(LearningConstants.Article.STAGE_READING,
-                LearningConstants.Article.STAGE_VOCABULARY,
-                LearningConstants.Article.STAGE_CHECK).contains(stage)) {
+        if (!List.of(ArticleConstants.STAGE_READING,
+                ArticleConstants.STAGE_VOCABULARY,
+                ArticleConstants.STAGE_CHECK).contains(stage)) {
             throw LearningAssistantException.badRequest(
-                    LearningConstants.ErrorCode.ARTICLE_STAGE_INVALID,
+                    LearningErrorCode.ARTICLE_STAGE_INVALID,
                     "不支持的语境精读阶段: " + value);
         }
         return stage;
@@ -679,7 +683,7 @@ public class ArticleStudyService {
 
     private LearningAssistantException articleInvalid(String message) {
         return LearningAssistantException.externalService(
-                LearningConstants.ErrorCode.ARTICLE_AI_RESPONSE_INVALID,
+                LearningErrorCode.ARTICLE_AI_RESPONSE_INVALID,
                 message,
                 null);
     }
@@ -692,7 +696,7 @@ public class ArticleStudyService {
             return objectMapper.writeValueAsString(value);
         } catch (Exception ex) {
             throw LearningAssistantException.system(
-                    LearningConstants.ErrorCode.JSON_SERIALIZE_FAILED,
+                    LearningErrorCode.JSON_SERIALIZE_FAILED,
                     errorMessage,
                     ex);
         }
@@ -709,14 +713,14 @@ public class ArticleStudyService {
      * 处理 {@code resolveAgentCode} 相关业务。
      */
     private String resolveAgentCode(ArticleStudyRequest request) {
-        return StringUtils.hasText(request.getAgentCode()) ? request.getAgentCode() : LearningConstants.ARTICLE_AGENT_CODE;
+        return StringUtils.hasText(request.getAgentCode()) ? request.getAgentCode() : AiScenarioConstants.ARTICLE_AGENT_CODE;
     }
 
     /**
      * 处理 {@code resolveTemplateCode} 相关业务。
      */
     private String resolveTemplateCode(ArticleStudyRequest request) {
-        return StringUtils.hasText(request.getTemplateCode()) ? request.getTemplateCode() : LearningConstants.ARTICLE_TEMPLATE_CODE;
+        return StringUtils.hasText(request.getTemplateCode()) ? request.getTemplateCode() : AiScenarioConstants.ARTICLE_TEMPLATE_CODE;
     }
 
     /**

@@ -1,24 +1,26 @@
 package com.chandler.learning.agent.ai.chat.application;
 
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
-import com.chandler.learning.agent.ai.chat.api.ChatMessageResponse;
-import com.chandler.learning.agent.ai.chat.api.ChatSessionResponse;
-import com.chandler.learning.agent.ai.chat.api.AdminAiSessionDetailResponse;
-import com.chandler.learning.agent.ai.chat.api.AdminAiSessionPageResponse;
-import com.chandler.learning.agent.ai.chat.api.AdminAiSessionResponse;
-import com.chandler.learning.agent.ai.chat.api.AiModelCallRecordResponse;
-import com.chandler.learning.agent.ai.chat.domain.AiChatMessage;
-import com.chandler.learning.agent.ai.chat.domain.AiChatSession;
-import com.chandler.learning.agent.ai.chat.domain.AiModelCallRecord;
-import com.chandler.learning.agent.identity.domain.LearningUser;
-import com.chandler.learning.agent.ai.chat.domain.ChatMessageRole;
-import com.chandler.learning.agent.learning.domain.LearningScene;
+import com.chandler.learning.agent.ai.chat.api.response.ChatMessageResponse;
+import com.chandler.learning.agent.ai.chat.api.response.ChatSessionResponse;
+import com.chandler.learning.agent.ai.chat.api.response.AdminAiSessionDetailResponse;
+import com.chandler.learning.agent.ai.chat.api.response.AdminAiSessionPageResponse;
+import com.chandler.learning.agent.ai.chat.api.response.AdminAiSessionResponse;
+import com.chandler.learning.agent.ai.chat.api.response.AiModelCallRecordResponse;
+import com.chandler.learning.agent.ai.chat.domain.entity.AiChatMessage;
+import com.chandler.learning.agent.ai.chat.domain.entity.AiChatSession;
+import com.chandler.learning.agent.ai.chat.domain.entity.AiModelCallRecord;
+import com.chandler.learning.agent.identity.domain.entity.LearningUser;
+import com.chandler.learning.agent.ai.chat.domain.enums.ChatMessageRole;
+import com.chandler.learning.agent.learning.domain.enums.LearningScene;
 import com.chandler.learning.agent.exception.LearningAssistantException;
-import com.chandler.learning.agent.ai.chat.infrastructure.AiChatMessageMapper;
-import com.chandler.learning.agent.ai.chat.infrastructure.AiChatSessionMapper;
-import com.chandler.learning.agent.ai.chat.infrastructure.AiModelCallRecordMapper;
+import com.chandler.learning.agent.ai.chat.infrastructure.mapper.AiChatMessageMapper;
+import com.chandler.learning.agent.ai.chat.infrastructure.mapper.AiChatSessionMapper;
+import com.chandler.learning.agent.ai.chat.infrastructure.mapper.AiModelCallRecordMapper;
 import com.chandler.learning.agent.security.LearningUserPrincipal;
-import com.chandler.learning.agent.support.LearningConstants;
+import com.chandler.learning.agent.ai.chat.domain.constant.AiChatConstants;
+import com.chandler.learning.agent.common.constant.CommonConstants;
+import com.chandler.learning.agent.common.exception.LearningErrorCode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import lombok.RequiredArgsConstructor;
 import org.springframework.security.core.Authentication;
@@ -58,7 +60,7 @@ public class AiChatSessionService {
         Long resolvedUserId = userId == null ? currentUserId() : userId;
         if (resolvedUserId == null) {
             throw LearningAssistantException.unauthorized(
-                    LearningConstants.ErrorCode.AUTH_REQUIRED,
+                    LearningErrorCode.AUTH_REQUIRED,
                     "请先登录");
         }
         String resolvedSceneCode = resolveSceneCode(sceneCode, businessType, businessId, agentCode);
@@ -106,7 +108,7 @@ public class AiChatSessionService {
         return sessionMapper.selectOne(new LambdaQueryWrapper<AiChatSession>()
                 .eq(AiChatSession::getId, sessionId)
                 .eq(AiChatSession::getDeleted, false)
-                .last(LearningConstants.SQL_LIMIT_ONE));
+                .last(CommonConstants.SQL_LIMIT_ONE));
     }
 
     /**
@@ -120,7 +122,7 @@ public class AiChatSessionService {
                 .eq(AiChatSession::getId, sessionId)
                 .eq(AiChatSession::getUserId, userId)
                 .eq(AiChatSession::getDeleted, false)
-                .last(LearningConstants.SQL_LIMIT_ONE));
+                .last(CommonConstants.SQL_LIMIT_ONE));
     }
 
     /**
@@ -130,7 +132,7 @@ public class AiChatSessionService {
         return messageMapper.selectList(new LambdaQueryWrapper<AiChatMessage>()
                 .eq(AiChatMessage::getSessionId, sessionId)
                 .orderByDesc(AiChatMessage::getSequence)
-                .last("LIMIT " + LearningConstants.ChatSession.MAX_HISTORY_SIZE))
+                .last("LIMIT " + AiChatConstants.MAX_HISTORY_SIZE))
                 .stream()
                 .sorted((left, right) -> Integer.compare(left.getSequence(), right.getSequence()))
                 .toList();
@@ -178,7 +180,7 @@ public class AiChatSessionService {
         Long userId = currentUserId();
         if (userId == null || getOwnedSession(userId, sessionId) == null) {
             throw LearningAssistantException.notFound(
-                    LearningConstants.ErrorCode.CHAT_SESSION_NOT_FOUND,
+                    LearningErrorCode.CHAT_SESSION_NOT_FOUND,
                     "会话不存在: " + sessionId);
         }
         return messageMapper.selectList(new LambdaQueryWrapper<AiChatMessage>()
@@ -196,7 +198,7 @@ public class AiChatSessionService {
         Long userId = currentUserId();
         if (userId == null || getOwnedSession(userId, sessionId) == null) {
             throw LearningAssistantException.notFound(
-                    LearningConstants.ErrorCode.CHAT_SESSION_NOT_FOUND,
+                    LearningErrorCode.CHAT_SESSION_NOT_FOUND,
                     "会话不存在: " + sessionId);
         }
         AiChatSession session = new AiChatSession();
@@ -213,7 +215,7 @@ public class AiChatSessionService {
         Long userId = currentUserId();
         if (userId == null || getOwnedSession(userId, sessionId) == null) {
             throw LearningAssistantException.notFound(
-                    LearningConstants.ErrorCode.CHAT_SESSION_NOT_FOUND,
+                    LearningErrorCode.CHAT_SESSION_NOT_FOUND,
                     "会话不存在: " + sessionId);
         }
         AiChatSession session = new AiChatSession();
@@ -242,8 +244,8 @@ public class AiChatSessionService {
         message.setCreateTime(LocalDateTime.now());
         DuplicateKeyException lastConflict = null;
         boolean inserted = false;
-        for (int attempt = LearningConstants.FIRST_SEQUENCE;
-             attempt <= LearningConstants.ChatSession.MESSAGE_SEQUENCE_RETRY_COUNT; attempt++) {
+        for (int attempt = CommonConstants.FIRST_SEQUENCE;
+             attempt <= AiChatConstants.MESSAGE_SEQUENCE_RETRY_COUNT; attempt++) {
             message.setSequence(getNextSequence(sessionId));
             try {
                 messageMapper.insert(message);
@@ -255,7 +257,7 @@ public class AiChatSessionService {
         }
         if (!inserted) {
             throw LearningAssistantException.of(
-                    LearningConstants.ErrorCode.CHAT_MESSAGE_SEQUENCE_CONFLICT,
+                    LearningErrorCode.CHAT_MESSAGE_SEQUENCE_CONFLICT,
                     lastConflict);
         }
 
@@ -301,7 +303,7 @@ public class AiChatSessionService {
     public AdminAiSessionDetailResponse adminDetail(Long sessionId) {
         AdminAiSessionResponse session = sessionMapper.selectAdminSession(sessionId);
         if (session == null) {
-            throw LearningAssistantException.notFound(LearningConstants.ErrorCode.CHAT_SESSION_NOT_FOUND);
+            throw LearningAssistantException.notFound(LearningErrorCode.CHAT_SESSION_NOT_FOUND);
         }
         List<ChatMessageResponse> messages = messageMapper.selectList(new LambdaQueryWrapper<AiChatMessage>()
                         .eq(AiChatMessage::getSessionId, sessionId)
@@ -421,7 +423,7 @@ public class AiChatSessionService {
                 .eq(AiChatSession::getSceneCode, sceneCode)
                 .eq(AiChatSession::getDeleted, false)
                 .orderByDesc(AiChatSession::getUpdateTime)
-                .last(LearningConstants.SQL_LIMIT_ONE));
+                .last(CommonConstants.SQL_LIMIT_ONE));
     }
 
     /**
@@ -431,7 +433,7 @@ public class AiChatSessionService {
         if (StringUtils.hasText(sceneCode)) {
             return sceneCode.trim();
         }
-        if (LearningConstants.ChatSession.BUSINESS_TYPE_LEARNING.equalsIgnoreCase(StringUtils.hasText(businessType) ? businessType.trim() : "")) {
+        if (AiChatConstants.BUSINESS_TYPE_LEARNING.equalsIgnoreCase(StringUtils.hasText(businessType) ? businessType.trim() : "")) {
             if (StringUtils.hasText(businessId)) {
                 return businessId.trim();
             }
@@ -456,7 +458,7 @@ public class AiChatSessionService {
             return objectMapper.writeValueAsString(variables);
         } catch (Exception ex) {
             throw LearningAssistantException.system(
-                    LearningConstants.ErrorCode.JSON_SERIALIZE_FAILED,
+                    LearningErrorCode.JSON_SERIALIZE_FAILED,
                     "会话变量序列化失败",
                     ex);
         }

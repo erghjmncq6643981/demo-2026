@@ -1,7 +1,8 @@
 package com.chandler.learning.agent.learning.application;
 
 import com.chandler.learning.agent.exception.LearningAssistantException;
-import com.chandler.learning.agent.support.LearningConstants;
+import com.chandler.learning.agent.common.exception.LearningErrorCode;
+import com.chandler.learning.agent.learning.domain.constant.ScenePlanConstants;
 import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
@@ -23,9 +24,9 @@ public class LearningPlanAssessmentSupport {
     /** 将外部检查类型限制在系统支持的枚举值内。 */
     public String normalizeAssessmentType(String type) {
         String normalized = normalize(type);
-        if (LearningConstants.ScenePlan.ASSESSMENT_MEANING_CHOICE.equals(normalized)
-                || LearningConstants.ScenePlan.ASSESSMENT_COPY_TYPING.equals(normalized)
-                || LearningConstants.ScenePlan.ASSESSMENT_MEANING_SPELLING.equals(normalized)) {
+        if (ScenePlanConstants.ASSESSMENT_MEANING_CHOICE.equals(normalized)
+                || ScenePlanConstants.ASSESSMENT_COPY_TYPING.equals(normalized)
+                || ScenePlanConstants.ASSESSMENT_MEANING_SPELLING.equals(normalized)) {
             return normalized;
         }
         throw assessmentInvalid("不支持的检查类型: " + type);
@@ -212,6 +213,6 @@ public class LearningPlanAssessmentSupport {
 
     private LearningAssistantException assessmentInvalid(String message) {
         return LearningAssistantException.badRequest(
-                LearningConstants.ErrorCode.LEARNING_ASSESSMENT_INVALID, message);
+                LearningErrorCode.LEARNING_ASSESSMENT_INVALID, message);
     }
 }

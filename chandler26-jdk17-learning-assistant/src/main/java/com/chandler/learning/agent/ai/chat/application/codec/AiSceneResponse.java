@@ -1,6 +1,6 @@
 package com.chandler.learning.agent.ai.chat.application.codec;
 
-import com.chandler.learning.agent.ai.chat.domain.AiInvocationScene;
+import com.chandler.learning.agent.ai.chat.domain.enums.AiInvocationScene;
 import com.fasterxml.jackson.databind.JsonNode;
 
 import java.util.List;

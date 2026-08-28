@@ -5,33 +5,39 @@ import com.baomidou.mybatisplus.core.conditions.update.LambdaUpdateWrapper;
 import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
 import com.chandler.learning.agent.ai.chat.application.AgentChatRequest;
 import com.chandler.learning.agent.ai.chat.application.AgentChatResponse;
-import com.chandler.learning.agent.vocabulary.api.VocabularyCardGenerationItemResponse;
-import com.chandler.learning.agent.vocabulary.api.VocabularyCardGenerationRequest;
-import com.chandler.learning.agent.vocabulary.api.VocabularyCardGenerationResponse;
-import com.chandler.learning.agent.task.domain.AiAsyncTask;
-import com.chandler.learning.agent.learning.domain.LearningPlan;
-import com.chandler.learning.agent.learning.domain.LearningPlanUnitEntry;
-import com.chandler.learning.agent.vocabulary.domain.LearningWordProgress;
-import com.chandler.learning.agent.vocabulary.domain.EnglishVocabularyStudyRecord;
-import com.chandler.learning.agent.vocabulary.domain.VocabularyCardGenerationJob;
-import com.chandler.learning.agent.vocabulary.domain.VocabularyCardGenerationJobItem;
-import com.chandler.learning.agent.vocabulary.domain.VocabularyCardGenerationProgress;
-import com.chandler.learning.agent.ai.chat.domain.AiInvocationScene;
-import com.chandler.learning.agent.learning.domain.LearningScene;
-import com.chandler.learning.agent.system.domain.SystemLogType;
+import com.chandler.learning.agent.vocabulary.api.response.VocabularyCardGenerationItemResponse;
+import com.chandler.learning.agent.vocabulary.api.request.VocabularyCardGenerationRequest;
+import com.chandler.learning.agent.vocabulary.api.response.VocabularyCardGenerationResponse;
+import com.chandler.learning.agent.task.domain.entity.AiAsyncTask;
+import com.chandler.learning.agent.learning.domain.entity.LearningPlan;
+import com.chandler.learning.agent.learning.domain.entity.LearningPlanUnitEntry;
+import com.chandler.learning.agent.vocabulary.domain.entity.LearningWordProgress;
+import com.chandler.learning.agent.vocabulary.domain.entity.EnglishVocabularyStudyRecord;
+import com.chandler.learning.agent.vocabulary.domain.entity.VocabularyCardGenerationJob;
+import com.chandler.learning.agent.vocabulary.domain.entity.VocabularyCardGenerationJobItem;
+import com.chandler.learning.agent.vocabulary.domain.bo.VocabularyCardGenerationProgress;
+import com.chandler.learning.agent.ai.chat.domain.enums.AiInvocationScene;
+import com.chandler.learning.agent.learning.domain.enums.LearningScene;
+import com.chandler.learning.agent.system.domain.enums.SystemLogType;
 import com.chandler.learning.agent.exception.LearningAssistantException;
 import com.chandler.learning.agent.learning.application.LearningPlanAccessService;
-import com.chandler.learning.agent.vocabulary.infrastructure.LearningWordProgressMapper;
-import com.chandler.learning.agent.vocabulary.infrastructure.EnglishVocabularyStudyRecordMapper;
-import com.chandler.learning.agent.vocabulary.infrastructure.VocabularyCardGenerationJobItemMapper;
-import com.chandler.learning.agent.vocabulary.infrastructure.VocabularyCardGenerationJobMapper;
+import com.chandler.learning.agent.vocabulary.infrastructure.mapper.LearningWordProgressMapper;
+import com.chandler.learning.agent.vocabulary.infrastructure.mapper.EnglishVocabularyStudyRecordMapper;
+import com.chandler.learning.agent.vocabulary.infrastructure.mapper.VocabularyCardGenerationJobItemMapper;
+import com.chandler.learning.agent.vocabulary.infrastructure.mapper.VocabularyCardGenerationJobMapper;
 import com.chandler.learning.agent.ai.chat.application.AiChatService;
 import com.chandler.learning.agent.task.application.AiAsyncTaskService;
 import com.chandler.learning.agent.system.application.SystemLogService;
 import com.chandler.learning.agent.identity.application.UserDisplayNameService;
 import com.chandler.learning.agent.vocabulary.application.VocabularyInsightService;
 import com.chandler.learning.agent.vocabulary.application.WordbookService;
-import com.chandler.learning.agent.support.LearningConstants;
+import com.chandler.learning.agent.ai.agent.domain.constant.AiScenarioConstants;
+import com.chandler.learning.agent.ai.chat.domain.constant.AiChatConstants;
+import com.chandler.learning.agent.common.constant.CommonConstants;
+import com.chandler.learning.agent.common.exception.LearningErrorCode;
+import com.chandler.learning.agent.task.domain.constant.AiTaskConstants;
+import com.chandler.learning.agent.vocabulary.domain.constant.VocabularyCardConstants;
+import com.chandler.learning.agent.vocabulary.domain.constant.VocabularyConstants;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import lombok.RequiredArgsConstructor;
@@ -98,11 +104,11 @@ public class VocabularyCardBatchService {
                             .eq(VocabularyCardGenerationJob::getUserId, userId)
                             .eq(VocabularyCardGenerationJob::getUnitId, unitId)
                             .in(VocabularyCardGenerationJob::getStatus,
-                                    List.of(LearningConstants.VocabularyCard.JOB_PENDING,
-                                            LearningConstants.VocabularyCard.JOB_RUNNING))
+                                    List.of(VocabularyCardConstants.JOB_PENDING,
+                                            VocabularyCardConstants.JOB_RUNNING))
                             .eq(VocabularyCardGenerationJob::getDeleted, false)
                             .orderByDesc(VocabularyCardGenerationJob::getCreateTime)
-                            .last(LearningConstants.SQL_LIMIT_ONE));
+                            .last(CommonConstants.SQL_LIMIT_ONE));
             if (activeJob != null) {
                 return new GenerationSubmission(activeJob, 0, true);
             }
@@ -112,11 +118,11 @@ public class VocabularyCardBatchService {
             job.setUserId(userId);
             job.setPlanId(planId);
             job.setUnitId(unitId);
-            job.setStatus(LearningConstants.VocabularyCard.JOB_PENDING);
+            job.setStatus(VocabularyCardConstants.JOB_PENDING);
             job.setBatchSize(batchSize);
             job.setTotalCount(unique.size());
-            job.setSuccessCount(LearningConstants.ZERO);
-            job.setFailedCount(LearningConstants.ZERO);
+            job.setSuccessCount(CommonConstants.ZERO);
+            job.setFailedCount(CommonConstants.ZERO);
             job.setDeleted(false);
             job.setCreateTime(now);
             job.setUpdateTime(now);
@@ -130,12 +136,12 @@ public class VocabularyCardBatchService {
                 item.setWordbookEntryId(entry.getWordbookEntryId());
                 item.setTerm(entry.getTerm());
                 item.setNormalizedTerm(entry.getNormalizedTerm());
-                item.setStatus(LearningConstants.VocabularyCard.ITEM_PENDING);
-                item.setAttemptCount(LearningConstants.ZERO);
+                item.setStatus(VocabularyCardConstants.ITEM_PENDING);
+                item.setAttemptCount(CommonConstants.ZERO);
                 item.setCreateBy(userId);
                 item.setUpdateBy(userId);
                 item.setDeleted(false);
-                item.setVersion(LearningConstants.ZERO);
+                item.setVersion(CommonConstants.ZERO);
                 item.setCreateTime(now);
                 item.setUpdateTime(now);
                 items.add(item);
@@ -144,7 +150,7 @@ public class VocabularyCardBatchService {
                 itemMapper.insertBatch(items);
             }
             AiAsyncTask task = aiAsyncTaskService.create(userId,
-                    LearningConstants.AiTask.TYPE_VOCABULARY_CARD,
+                    AiTaskConstants.TYPE_VOCABULARY_CARD,
                     "批量生成场景词卡",
                     planId,
                     unitId,
@@ -178,7 +184,7 @@ public class VocabularyCardBatchService {
         List<VocabularyCardGenerationJobItem> failed = itemMapper.selectList(
                 new LambdaQueryWrapper<VocabularyCardGenerationJobItem>()
                         .eq(VocabularyCardGenerationJobItem::getJobId, jobId)
-                        .eq(VocabularyCardGenerationJobItem::getStatus, LearningConstants.VocabularyCard.ITEM_FAILED)
+                        .eq(VocabularyCardGenerationJobItem::getStatus, VocabularyCardConstants.ITEM_FAILED)
                         .eq(VocabularyCardGenerationJobItem::getDeleted, false));
         if (failed.isEmpty()) {
             return toResponse(job);
@@ -189,14 +195,14 @@ public class VocabularyCardBatchService {
                 Map<String, Object> payload = modelConfigId == null
                         ? null : Map.of("modelConfigId", modelConfigId);
                 AiAsyncTask task = aiAsyncTaskService.retry(userId, job.getAsyncTaskId(), payload);
-                if (!LearningConstants.AiTask.STATUS_PENDING.equals(task.getStatus())) {
+                if (!AiTaskConstants.STATUS_PENDING.equals(task.getStatus())) {
                     return false;
                 }
             }
             if (request != null && request.getBatchSize() != null) {
                 job.setBatchSize(resolveBatchSize(request.getBatchSize()));
             }
-            job.setStatus(LearningConstants.VocabularyCard.JOB_PENDING);
+            job.setStatus(VocabularyCardConstants.JOB_PENDING);
             job.setFinishedTime(null);
             job.setUpdateTime(LocalDateTime.now());
             jobMapper.updateById(job);
@@ -217,16 +223,16 @@ public class VocabularyCardBatchService {
         int claimed = jobMapper.update(null, new LambdaUpdateWrapper<VocabularyCardGenerationJob>()
                 .eq(VocabularyCardGenerationJob::getId, jobId)
                 .in(VocabularyCardGenerationJob::getStatus,
-                        List.of(LearningConstants.VocabularyCard.JOB_PENDING,
-                                LearningConstants.VocabularyCard.JOB_RUNNING,
-                                LearningConstants.VocabularyCard.JOB_FAILED,
-                                LearningConstants.VocabularyCard.JOB_PARTIAL_FAILED,
-                                LearningConstants.VocabularyCard.JOB_CANCELLED))
-                .set(VocabularyCardGenerationJob::getStatus, LearningConstants.VocabularyCard.JOB_RUNNING)
+                        List.of(VocabularyCardConstants.JOB_PENDING,
+                                VocabularyCardConstants.JOB_RUNNING,
+                                VocabularyCardConstants.JOB_FAILED,
+                                VocabularyCardConstants.JOB_PARTIAL_FAILED,
+                                VocabularyCardConstants.JOB_CANCELLED))
+                .set(VocabularyCardGenerationJob::getStatus, VocabularyCardConstants.JOB_RUNNING)
                 .set(VocabularyCardGenerationJob::getStartedTime, LocalDateTime.now())
                 .set(VocabularyCardGenerationJob::getFinishedTime, null)
                 .set(VocabularyCardGenerationJob::getUpdateTime, LocalDateTime.now()));
-        if (claimed == LearningConstants.ZERO) {
+        if (claimed == CommonConstants.ZERO) {
             return;
         }
         VocabularyCardGenerationJob job = requireJob(userId, jobId);
@@ -234,9 +240,9 @@ public class VocabularyCardBatchService {
                 new LambdaQueryWrapper<VocabularyCardGenerationJobItem>()
                         .eq(VocabularyCardGenerationJobItem::getJobId, jobId)
                         .in(VocabularyCardGenerationJobItem::getStatus,
-                                List.of(LearningConstants.VocabularyCard.ITEM_PENDING,
-                                        LearningConstants.VocabularyCard.ITEM_GENERATING,
-                                        LearningConstants.VocabularyCard.ITEM_FAILED))
+                                List.of(VocabularyCardConstants.ITEM_PENDING,
+                                        VocabularyCardConstants.ITEM_GENERATING,
+                                        VocabularyCardConstants.ITEM_FAILED))
                         .eq(VocabularyCardGenerationJobItem::getDeleted, false)
                         .orderByAsc(VocabularyCardGenerationJobItem::getCreateTime));
         try {
@@ -248,20 +254,20 @@ public class VocabularyCardBatchService {
                         job.getStatus(), job.getErrorMessage());
             }
         } catch (RuntimeException ex) {
-            job.setStatus(LearningConstants.VocabularyCard.JOB_FAILED);
+            job.setStatus(VocabularyCardConstants.JOB_FAILED);
             job.setErrorMessage(limitError(ex.getMessage()));
             job.setFinishedTime(LocalDateTime.now());
             job.setUpdateTime(LocalDateTime.now());
             jobMapper.updateById(job);
             if (job.getAsyncTaskId() != null) {
-                aiAsyncTaskService.complete(job.getAsyncTaskId(), LearningConstants.AiTask.STATUS_FAILED, ex.getMessage());
+                aiAsyncTaskService.complete(job.getAsyncTaskId(), AiTaskConstants.STATUS_FAILED, ex.getMessage());
             }
             throw ex;
         }
     }
 
     public VocabularyCardGenerationResponse detail(Long userId, Long jobId) {
-        return detail(userId, jobId, 1, LearningConstants.VocabularyCard.DEFAULT_ITEM_PAGE_SIZE);
+        return detail(userId, jobId, 1, VocabularyCardConstants.DEFAULT_ITEM_PAGE_SIZE);
     }
 
     /** 分页查询词卡任务明细，避免任务规模较大时返回超大响应。 */
@@ -269,15 +275,15 @@ public class VocabularyCardBatchService {
         VocabularyCardGenerationJob job = requireJob(userId, jobId);
         int resolvedPage = page == null || page < 1 ? 1 : page;
         int resolvedPageSize = pageSize == null
-                ? LearningConstants.VocabularyCard.DEFAULT_ITEM_PAGE_SIZE
-                : Math.max(1, Math.min(pageSize, LearningConstants.VocabularyCard.MAX_ITEM_PAGE_SIZE));
+                ? VocabularyCardConstants.DEFAULT_ITEM_PAGE_SIZE
+                : Math.max(1, Math.min(pageSize, VocabularyCardConstants.MAX_ITEM_PAGE_SIZE));
         return toResponse(job, resolvedPage, resolvedPageSize);
     }
 
     private void process(Long userId, VocabularyCardGenerationJob job,
                          List<VocabularyCardGenerationJobItem> items, Long modelConfigId) {
         LocalDateTime now = LocalDateTime.now();
-        job.setStatus(LearningConstants.VocabularyCard.JOB_RUNNING);
+        job.setStatus(VocabularyCardConstants.JOB_RUNNING);
         if (job.getStartedTime() == null) {
             job.setStartedTime(now);
         }
@@ -293,11 +299,11 @@ public class VocabularyCardBatchService {
         List<VocabularyCardGenerationJobItem> misses = new ArrayList<>();
         Map<VocabularyCardGenerationJobItem, EnglishVocabularyStudyRecord> cacheHits = new LinkedHashMap<>();
         for (VocabularyCardGenerationJobItem item : items) {
-            item.setAttemptCount(value(item.getAttemptCount()) + LearningConstants.SEQUENCE_STEP);
+            item.setAttemptCount(value(item.getAttemptCount()) + CommonConstants.SEQUENCE_STEP);
             item.setErrorMessage(null);
             EnglishVocabularyStudyRecord record = cached.get(item.getNormalizedTerm());
             if (record == null) {
-                item.setStatus(LearningConstants.VocabularyCard.ITEM_PENDING);
+                item.setStatus(VocabularyCardConstants.ITEM_PENDING);
                 misses.add(item);
             } else {
                 cacheHits.put(item, record);
@@ -307,7 +313,7 @@ public class VocabularyCardBatchService {
         if (!misses.isEmpty()) {
             itemMapper.updateBatch(misses);
         }
-        attachResults(userId, cacheHits, LearningConstants.VocabularyCard.ITEM_CACHE_HIT);
+        attachResults(userId, cacheHits, VocabularyCardConstants.ITEM_CACHE_HIT);
         refreshJobProgress(job, false);
         if (isCancelled(job)) {
             cancelJob(job);
@@ -317,7 +323,7 @@ public class VocabularyCardBatchService {
         int batchSize = resolveBatchSize(job.getBatchSize());
         for (int offset = 0; offset < misses.size(); offset += batchSize) {
             List<VocabularyCardGenerationJobItem> batch = misses.subList(offset, Math.min(misses.size(), offset + batchSize));
-            updateItemStatuses(batch, LearningConstants.VocabularyCard.ITEM_GENERATING, null);
+            updateItemStatuses(batch, VocabularyCardConstants.ITEM_GENERATING, null);
             try {
                 AgentChatResponse response = requestBatch(userId, batch, modelConfigId);
                 Map<String, JsonNode> cards = parseCards(response);
@@ -334,23 +340,23 @@ public class VocabularyCardBatchService {
                     generatedCards.put(item, card);
                     successfulItems.add(item);
                 }
-                updateItemStatuses(failedItems, LearningConstants.VocabularyCard.ITEM_FAILED, null);
+                updateItemStatuses(failedItems, VocabularyCardConstants.ITEM_FAILED, null);
                 try {
                     Map<VocabularyCardGenerationJobItem, EnglishVocabularyStudyRecord> persisted =
                             saveCards(generatedCards, response, batch.size());
-                    attachResults(userId, persisted, LearningConstants.VocabularyCard.ITEM_COMPLETED);
+                    attachResults(userId, persisted, VocabularyCardConstants.ITEM_COMPLETED);
                     List<VocabularyCardGenerationJobItem> persistenceFailures = successfulItems.stream()
                             .filter(item -> !persisted.containsKey(item))
                             .toList();
-                    updateItemStatuses(persistenceFailures, LearningConstants.VocabularyCard.ITEM_FAILED,
+                    updateItemStatuses(persistenceFailures, VocabularyCardConstants.ITEM_FAILED,
                             "词卡保存后未能读取持久化记录");
                 } catch (RuntimeException ex) {
                     log.debug("批量词卡保存失败 jobId={} batchOffset={} error={}", job.getId(), offset, ex.getMessage());
-                    updateItemStatuses(successfulItems, LearningConstants.VocabularyCard.ITEM_FAILED, ex.getMessage());
+                    updateItemStatuses(successfulItems, VocabularyCardConstants.ITEM_FAILED, ex.getMessage());
                 }
             } catch (RuntimeException ex) {
                 log.debug("批量词卡调用失败 jobId={} batchOffset={} error={}", job.getId(), offset, ex.getMessage());
-                updateItemStatuses(batch, LearningConstants.VocabularyCard.ITEM_FAILED, ex.getMessage());
+                updateItemStatuses(batch, VocabularyCardConstants.ITEM_FAILED, ex.getMessage());
             }
             refreshJobProgress(job, false);
             if (isCancelled(job)) {
@@ -368,10 +374,10 @@ public class VocabularyCardBatchService {
         AgentChatRequest request = new AgentChatRequest();
         request.setUserId(userId);
         request.setInvocationScene(AiInvocationScene.VOCABULARY_CARD_BATCH);
-        request.setAgentCode(LearningConstants.VOCABULARY_AGENT_CODE);
-        request.setTemplateCode(LearningConstants.VOCABULARY_BATCH_TEMPLATE_CODE);
+        request.setAgentCode(AiScenarioConstants.VOCABULARY_AGENT_CODE);
+        request.setTemplateCode(AiScenarioConstants.VOCABULARY_BATCH_TEMPLATE_CODE);
         request.setTitle(LearningScene.ENGLISH_VOCABULARY.getTitle());
-        request.setBusinessType(LearningConstants.ChatSession.BUSINESS_TYPE_LEARNING);
+        request.setBusinessType(AiChatConstants.BUSINESS_TYPE_LEARNING);
         request.setBusinessId(LearningScene.ENGLISH_VOCABULARY.getCode());
         request.setSceneCode(LearningScene.ENGLISH_VOCABULARY.getCode());
         request.setModelConfigId(modelConfigId);
@@ -395,8 +401,8 @@ public class VocabularyCardBatchService {
             record.setId(com.baomidou.mybatisplus.core.toolkit.IdWorker.getId());
             record.setTerm(text(card, "term") == null ? item.getTerm() : text(card, "term"));
             record.setNormalizedTerm(item.getNormalizedTerm());
-            record.setAgentCode(LearningConstants.VOCABULARY_AGENT_CODE);
-            record.setTemplateCode(LearningConstants.VOCABULARY_BATCH_TEMPLATE_CODE);
+            record.setAgentCode(AiScenarioConstants.VOCABULARY_AGENT_CODE);
+            record.setTemplateCode(AiScenarioConstants.VOCABULARY_BATCH_TEMPLATE_CODE);
             record.setProvider(response.getModelProvider());
             record.setModelName(response.getModelName());
             record.setSessionId(response.getSessionId());
@@ -404,12 +410,12 @@ public class VocabularyCardBatchService {
             record.setParsedJson(writeJson(card));
             record.setTokenUsage(response.getTokenUsage() == null ? null : response.getTokenUsage() / Math.max(1, batchSize));
             record.setCostTime(response.getCostTime() == null ? null : response.getCostTime() / Math.max(1, batchSize));
-            record.setLookupCount(LearningConstants.Vocabulary.DEFAULT_LOOKUP_COUNT);
+            record.setLookupCount(VocabularyConstants.DEFAULT_LOOKUP_COUNT);
             record.setLastLookupTime(now);
             record.setDeleted(false);
             record.setCreateBy(0L);
             record.setUpdateBy(0L);
-            record.setVersion(LearningConstants.ZERO);
+            record.setVersion(CommonConstants.ZERO);
             record.setCreateTime(now);
             record.setUpdateTime(now);
             records.add(record);
@@ -458,7 +464,7 @@ public class VocabularyCardBatchService {
         itemMapper.updateBatch(items);
         if (!progressIds.isEmpty()) {
             progressMapper.updateCardStatusBatch(progressIds.stream().distinct().toList(),
-                    LearningConstants.VocabularyCard.STATUS_READY, now);
+                    VocabularyCardConstants.STATUS_READY, now);
         }
     }
 
@@ -480,7 +486,7 @@ public class VocabularyCardBatchService {
         JsonNode cards = root.path("cards");
         if (!cards.isArray()) {
             throw LearningAssistantException.badRequest(
-                    LearningConstants.ErrorCode.AI_RESPONSE_PARSE_FAILED,
+                    LearningErrorCode.AI_RESPONSE_PARSE_FAILED,
                     "批量词卡响应缺少 cards 数组");
         }
         Map<String, JsonNode> result = new LinkedHashMap<>();
@@ -507,11 +513,11 @@ public class VocabularyCardBatchService {
         job.setSuccessCount(success);
         job.setFailedCount(failed);
         if (finished) {
-            job.setStatus(failed == LearningConstants.ZERO
-                    ? LearningConstants.VocabularyCard.JOB_COMPLETED
-                    : success == LearningConstants.ZERO
-                    ? LearningConstants.VocabularyCard.JOB_FAILED
-                    : LearningConstants.VocabularyCard.JOB_PARTIAL_FAILED);
+            job.setStatus(failed == CommonConstants.ZERO
+                    ? VocabularyCardConstants.JOB_COMPLETED
+                    : success == CommonConstants.ZERO
+                    ? VocabularyCardConstants.JOB_FAILED
+                    : VocabularyCardConstants.JOB_PARTIAL_FAILED);
             job.setFinishedTime(LocalDateTime.now());
         }
         job.setUpdateTime(LocalDateTime.now());
@@ -526,7 +532,7 @@ public class VocabularyCardBatchService {
     }
 
     private void cancelJob(VocabularyCardGenerationJob job) {
-        job.setStatus(LearningConstants.VocabularyCard.JOB_CANCELLED);
+        job.setStatus(VocabularyCardConstants.JOB_CANCELLED);
         job.setFinishedTime(LocalDateTime.now());
         job.setUpdateTime(LocalDateTime.now());
         jobMapper.updateById(job);
@@ -552,15 +558,15 @@ public class VocabularyCardBatchService {
         if (!progressIds.isEmpty()) {
             progressMapper.updateCardStatusBatch(
                     progressIds,
-                    LearningConstants.VocabularyCard.ITEM_FAILED.equals(status)
-                            ? LearningConstants.VocabularyCard.STATUS_FAILED
-                            : LearningConstants.VocabularyCard.STATUS_GENERATING,
+                    VocabularyCardConstants.ITEM_FAILED.equals(status)
+                            ? VocabularyCardConstants.STATUS_FAILED
+                            : VocabularyCardConstants.STATUS_GENERATING,
                     now);
         }
     }
 
     private VocabularyCardGenerationResponse toResponse(VocabularyCardGenerationJob job) {
-        return toResponse(job, 1, LearningConstants.VocabularyCard.DEFAULT_ITEM_PAGE_SIZE);
+        return toResponse(job, 1, VocabularyCardConstants.DEFAULT_ITEM_PAGE_SIZE);
     }
 
     private VocabularyCardGenerationResponse toResponse(VocabularyCardGenerationJob job, int page, int pageSize) {
@@ -607,19 +613,19 @@ public class VocabularyCardBatchService {
                 .eq(VocabularyCardGenerationJob::getId, jobId)
                 .eq(VocabularyCardGenerationJob::getUserId, userId)
                 .eq(VocabularyCardGenerationJob::getDeleted, false)
-                .last(LearningConstants.SQL_LIMIT_ONE));
+                .last(CommonConstants.SQL_LIMIT_ONE));
         if (job == null) {
             throw LearningAssistantException.notFound(
-                    LearningConstants.ErrorCode.VOCABULARY_RECORD_NOT_FOUND,
+                    LearningErrorCode.VOCABULARY_RECORD_NOT_FOUND,
                     "词卡生成任务不存在: " + jobId);
         }
         return job;
     }
 
     private int resolveBatchSize(Integer value) {
-        int resolved = value == null ? LearningConstants.VocabularyCard.DEFAULT_BATCH_SIZE : value;
-        return Math.max(LearningConstants.VocabularyCard.MIN_BATCH_SIZE,
-                Math.min(resolved, LearningConstants.VocabularyCard.MAX_BATCH_SIZE));
+        int resolved = value == null ? VocabularyCardConstants.DEFAULT_BATCH_SIZE : value;
+        return Math.max(VocabularyCardConstants.MIN_BATCH_SIZE,
+                Math.min(resolved, VocabularyCardConstants.MAX_BATCH_SIZE));
     }
 
     private String text(JsonNode node, String key) {
@@ -634,7 +640,7 @@ public class VocabularyCardBatchService {
             return objectMapper.writeValueAsString(value);
         } catch (Exception ex) {
             throw LearningAssistantException.system(
-                    LearningConstants.ErrorCode.JSON_SERIALIZE_FAILED,
+                    LearningErrorCode.JSON_SERIALIZE_FAILED,
                     "批量词卡序列化失败",
                     ex);
         }
@@ -645,7 +651,7 @@ public class VocabularyCardBatchService {
     }
 
     private int value(Integer value) {
-        return value == null ? LearningConstants.ZERO : value;
+        return value == null ? CommonConstants.ZERO : value;
     }
 
     private String limitError(String error) {

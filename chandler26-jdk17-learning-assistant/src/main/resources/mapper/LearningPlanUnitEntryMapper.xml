@@ -1,6 +1,6 @@
 <?xml version="1.0" encoding="UTF-8" ?>
 <!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "https://mybatis.org/dtd/mybatis-3-mapper.dtd">
-<mapper namespace="com.chandler.learning.agent.learning.infrastructure.LearningPlanUnitEntryMapper">
+<mapper namespace="com.chandler.learning.agent.learning.infrastructure.mapper.LearningPlanUnitEntryMapper">
     <insert id="insertBatch">
         INSERT INTO learning_plan_unit_entry
         (id, plan_id, unit_id, catalog_entry_id, wordbook_entry_id, word_progress_id,
@@ -41,7 +41,7 @@
         <foreach collection="list" item="item" open="(" separator="," close=")">#{item.id}</foreach>
     </update>
 
-    <select id="selectEntriesWithProgress" resultType="com.chandler.learning.agent.learning.domain.LearningPlanUnitEntryItem">
+    <select id="selectEntriesWithProgress" resultType="com.chandler.learning.agent.learning.domain.bo.LearningPlanUnitEntryItem">
         SELECT
             e.id,
             e.plan_id AS planId,
@@ -83,7 +83,7 @@
         ORDER BY e.unit_id ASC, e.sort_order ASC
     </select>
 
-    <select id="selectWordSummaries" resultType="com.chandler.learning.agent.learning.domain.LearningPlanUnitWordSummaryItem">
+    <select id="selectWordSummaries" resultType="com.chandler.learning.agent.learning.domain.bo.LearningPlanUnitWordSummaryItem">
         SELECT
             e.id,
             e.unit_id AS unitId,

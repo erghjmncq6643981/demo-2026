@@ -1,7 +1,7 @@
 package com.chandler.learning.agent.common.web;
 
 import com.chandler.learning.agent.exception.LearningAssistantException;
-import com.chandler.learning.agent.support.LearningConstants;
+import com.chandler.learning.agent.common.exception.LearningErrorCode;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import jakarta.validation.ConstraintViolationException;
@@ -92,7 +92,7 @@ public class GlobalExceptionHandler {
         log.debug("外部服务异常技术堆栈 status={}", ex.getStatusCode().value(), ex);
         return ResponseEntity.status(HttpStatus.BAD_GATEWAY).body(Map.of(
                 "message", message,
-                "errorCode", LearningConstants.ErrorCode.EXTERNAL_SERVICE_CALL_FAILED.getCode()));
+                "errorCode", LearningErrorCode.EXTERNAL_SERVICE_CALL_FAILED.getCode()));
     }
 
     /**
@@ -118,7 +118,7 @@ public class GlobalExceptionHandler {
         log.error("系统发生未预期异常", ex);
         return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).body(Map.of(
                 "message", "系统异常，请稍后重试",
-                "errorCode", LearningConstants.ErrorCode.SYSTEM_UNEXPECTED.getCode()));
+                "errorCode", LearningErrorCode.SYSTEM_UNEXPECTED.getCode()));
     }
 
     private boolean isClientAbort(Throwable throwable) {

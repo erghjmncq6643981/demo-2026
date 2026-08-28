@@ -1,6 +1,6 @@
 package com.chandler.learning.agent.exception;
 
-import com.chandler.learning.agent.support.LearningConstants;
+import com.chandler.learning.agent.common.exception.LearningErrorCode;
 import org.junit.jupiter.api.Test;
 import org.springframework.http.HttpStatus;
 
@@ -11,7 +11,7 @@ class LearningAssistantExceptionTest {
     @Test
     void shouldUseStatusAndMessageDefinedByErrorCode() {
         LearningAssistantException exception = LearningAssistantException.badRequest(
-                LearningConstants.ErrorCode.AUTH_INVALID_CREDENTIALS);
+                LearningErrorCode.AUTH_INVALID_CREDENTIALS);
 
         assertThat(exception.getStatus()).isEqualTo(HttpStatus.UNAUTHORIZED);
         assertThat(exception.getErrorCode()).isEqualTo("AUTH_INVALID_CREDENTIALS");

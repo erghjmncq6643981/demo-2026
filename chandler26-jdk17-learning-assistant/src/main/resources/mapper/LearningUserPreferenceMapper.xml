@@ -1,6 +1,6 @@
 <?xml version="1.0" encoding="UTF-8" ?>
 <!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "https://mybatis.org/dtd/mybatis-3-mapper.dtd">
-<mapper namespace="com.chandler.learning.agent.identity.infrastructure.LearningUserPreferenceMapper">
+<mapper namespace="com.chandler.learning.agent.identity.infrastructure.mapper.LearningUserPreferenceMapper">
     <insert id="upsertBatch">
         INSERT INTO learning_user_preference
         (id, create_by, update_by, user_id, preference_key, preference_value,

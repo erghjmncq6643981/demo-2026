@@ -16,7 +16,7 @@ class AiPackageArchitectureTest {
     static final ArchRule AI_CONTROLLERS_STAY_IN_API = classes()
             .that().areAnnotatedWith(RestController.class)
             .and().resideInAPackage("..ai..")
-            .should().resideInAPackage("..api..");
+            .should().resideInAPackage("..api.controller..");
 
     @ArchTest
     static final ArchRule API_DOES_NOT_ACCESS_MAPPERS = noClasses()

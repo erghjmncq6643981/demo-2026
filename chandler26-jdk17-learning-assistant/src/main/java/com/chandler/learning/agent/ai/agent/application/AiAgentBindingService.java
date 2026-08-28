@@ -2,8 +2,8 @@ package com.chandler.learning.agent.ai.agent.application;
 
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import com.baomidou.mybatisplus.core.conditions.update.LambdaUpdateWrapper;
-import com.chandler.learning.agent.ai.agent.domain.AiAgent;
-import com.chandler.learning.agent.ai.agent.infrastructure.AiAgentMapper;
+import com.chandler.learning.agent.ai.agent.domain.entity.AiAgent;
+import com.chandler.learning.agent.ai.agent.infrastructure.mapper.AiAgentMapper;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 

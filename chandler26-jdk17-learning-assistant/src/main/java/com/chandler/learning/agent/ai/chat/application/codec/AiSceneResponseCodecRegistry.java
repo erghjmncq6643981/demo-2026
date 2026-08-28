@@ -1,9 +1,9 @@
 package com.chandler.learning.agent.ai.chat.application.codec;
 
-import com.chandler.learning.agent.ai.chat.domain.AiInvocationScene;
+import com.chandler.learning.agent.ai.chat.domain.enums.AiInvocationScene;
 import com.chandler.learning.agent.ai.gateway.parser.AiStructuredResponseParseResult;
 import com.chandler.learning.agent.exception.LearningAssistantException;
-import com.chandler.learning.agent.support.LearningConstants;
+import com.chandler.learning.agent.common.exception.LearningErrorCode;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.node.ObjectNode;
@@ -34,7 +34,7 @@ public class AiSceneResponseCodecRegistry {
         }
         JsonNode root = parsed == null || parsed.root() == null ? null : parsed.root().deepCopy();
         if (root == null || !root.isObject()) {
-            throw LearningAssistantException.badRequest(LearningConstants.ErrorCode.AI_RESPONSE_PARSE_FAILED);
+            throw LearningAssistantException.badRequest(LearningErrorCode.AI_RESPONSE_PARSE_FAILED);
         }
         normalizeAliases(root, invocationScene.getRequiredRootFields());
         if (!containsRequiredFields(root, invocationScene.getRequiredRootFields())) {
@@ -47,7 +47,7 @@ public class AiSceneResponseCodecRegistry {
                 .toList();
         if (!missingFields.isEmpty()) {
             throw LearningAssistantException.badRequest(
-                    LearningConstants.ErrorCode.AI_RESPONSE_PARSE_FAILED,
+                    LearningErrorCode.AI_RESPONSE_PARSE_FAILED,
                     "AI 返回内容缺少必要字段：" + String.join("、", missingFields));
         }
         try {
@@ -55,7 +55,7 @@ public class AiSceneResponseCodecRegistry {
                     parsed.parserName(), parsed.parseStage(), List.copyOf(parsed.repairs()));
         } catch (Exception ex) {
             throw LearningAssistantException.system(
-                    LearningConstants.ErrorCode.JSON_SERIALIZE_FAILED,
+                    LearningErrorCode.JSON_SERIALIZE_FAILED,
                     "AI 场景响应标准化失败",
                     ex);
         }

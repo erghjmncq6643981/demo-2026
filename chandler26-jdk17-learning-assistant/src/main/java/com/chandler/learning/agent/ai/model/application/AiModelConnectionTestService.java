@@ -1,13 +1,13 @@
 package com.chandler.learning.agent.ai.model.application;
 
-import com.chandler.learning.agent.ai.model.api.AiModelConnectionTestResponse;
+import com.chandler.learning.agent.ai.model.api.response.AiModelConnectionTestResponse;
 import com.chandler.learning.agent.ai.gateway.protocol.ChatMessageParam;
 import com.chandler.learning.agent.ai.gateway.protocol.ModelChatRequest;
 import com.chandler.learning.agent.ai.gateway.protocol.ModelChatResponse;
-import com.chandler.learning.agent.ai.model.domain.AiModelConfig;
-import com.chandler.learning.agent.ai.chat.domain.AiInvocationScene;
-import com.chandler.learning.agent.ai.model.domain.AiModelDefinition;
-import com.chandler.learning.agent.system.domain.SystemLogType;
+import com.chandler.learning.agent.ai.model.domain.entity.AiModelConfig;
+import com.chandler.learning.agent.ai.chat.domain.enums.AiInvocationScene;
+import com.chandler.learning.agent.ai.model.domain.enums.AiModelDefinition;
+import com.chandler.learning.agent.system.domain.enums.SystemLogType;
 import com.chandler.learning.agent.exception.LearningAssistantException;
 import com.chandler.learning.agent.system.application.SystemLogService;
 import com.chandler.learning.agent.identity.application.UserDisplayNameService;

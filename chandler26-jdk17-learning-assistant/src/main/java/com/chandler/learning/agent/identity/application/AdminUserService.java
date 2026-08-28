@@ -2,19 +2,21 @@ package com.chandler.learning.agent.identity.application;
 
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
-import com.chandler.learning.agent.identity.api.AdminUserPageResponse;
-import com.chandler.learning.agent.identity.api.AdminUserResetPasswordRequest;
-import com.chandler.learning.agent.identity.api.AdminUserResponse;
-import com.chandler.learning.agent.identity.api.AdminUserSaveRequest;
-import com.chandler.learning.agent.identity.api.AdminUserUpdateRequest;
-import com.chandler.learning.agent.identity.domain.LearningUser;
-import com.chandler.learning.agent.system.domain.SystemLogType;
-import com.chandler.learning.agent.identity.domain.UserRole;
+import com.chandler.learning.agent.identity.api.response.AdminUserPageResponse;
+import com.chandler.learning.agent.identity.api.request.AdminUserResetPasswordRequest;
+import com.chandler.learning.agent.identity.api.response.AdminUserResponse;
+import com.chandler.learning.agent.identity.api.request.AdminUserSaveRequest;
+import com.chandler.learning.agent.identity.api.request.AdminUserUpdateRequest;
+import com.chandler.learning.agent.identity.domain.entity.LearningUser;
+import com.chandler.learning.agent.system.domain.enums.SystemLogType;
+import com.chandler.learning.agent.identity.domain.enums.UserRole;
 import com.chandler.learning.agent.exception.LearningAssistantException;
-import com.chandler.learning.agent.identity.infrastructure.LearningUserMapper;
+import com.chandler.learning.agent.identity.infrastructure.mapper.LearningUserMapper;
 import com.chandler.learning.agent.learning.application.LearningPlanAccessService;
 import com.chandler.learning.agent.vocabulary.application.WordbookService;
-import com.chandler.learning.agent.support.LearningConstants;
+import com.chandler.learning.agent.common.constant.CommonConstants;
+import com.chandler.learning.agent.common.constant.PersistenceConstants;
+import com.chandler.learning.agent.common.exception.LearningErrorCode;
 import com.chandler.learning.agent.system.application.SystemLogService;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -81,7 +83,7 @@ public class AdminUserService {
         String username = normalizeUsername(request.getUsername());
         if (userMapper.selectCount(new LambdaQueryWrapper<LearningUser>()
                 .eq(LearningUser::getUsername, username)) > 0) {
-            throw LearningAssistantException.of(LearningConstants.ErrorCode.USER_ALREADY_EXISTS);
+            throw LearningAssistantException.of(LearningErrorCode.USER_ALREADY_EXISTS);
         }
         LocalDateTime now = LocalDateTime.now();
         LearningUser user = new LearningUser();
@@ -95,7 +97,7 @@ public class AdminUserService {
         user.setCreateTime(now);
         user.setUpdateTime(now);
         user.setDeleted(false);
-        user.setVersion(LearningConstants.Audit.INITIAL_VERSION);
+        user.setVersion(PersistenceConstants.INITIAL_VERSION);
         userMapper.insert(user);
         wordbookService.ensureDefaultWordbook(user.getId());
         writeAudit(operator, "新增用户", user);
@@ -143,7 +145,7 @@ public class AdminUserService {
     @Transactional(rollbackFor = Exception.class)
     public void delete(LearningUser operator, Long userId) {
         if (operator.getId().equals(userId)) {
-            throw LearningAssistantException.of(LearningConstants.ErrorCode.ADMIN_SELF_OPERATION_FORBIDDEN);
+            throw LearningAssistantException.of(LearningErrorCode.ADMIN_SELF_OPERATION_FORBIDDEN);
         }
         LearningUser user = requireActiveUser(userId);
         protectLastEnabledAdmin(user, UserRole.of(user.getRoleCode()), false);
@@ -207,9 +209,9 @@ public class AdminUserService {
         LearningUser user = userMapper.selectOne(new LambdaQueryWrapper<LearningUser>()
                 .eq(LearningUser::getId, userId)
                 .eq(LearningUser::getDeleted, false)
-                .last(LearningConstants.SQL_LIMIT_ONE));
+                .last(CommonConstants.SQL_LIMIT_ONE));
         if (user == null) {
-            throw LearningAssistantException.of(LearningConstants.ErrorCode.USER_NOT_FOUND);
+            throw LearningAssistantException.of(LearningErrorCode.USER_NOT_FOUND);
         }
         return user;
     }
@@ -223,7 +225,7 @@ public class AdminUserService {
                 return role;
             }
         }
-        throw LearningAssistantException.badRequest(LearningConstants.ErrorCode.SYSTEM_UNEXPECTED, "用户角色不正确");
+        throw LearningAssistantException.badRequest(LearningErrorCode.SYSTEM_UNEXPECTED, "用户角色不正确");
     }
 
     private void protectLastEnabledAdmin(LearningUser user, UserRole targetRole, boolean targetEnabled) {
@@ -238,7 +240,7 @@ public class AdminUserService {
                 .eq(LearningUser::getEnabled, true)
                 .eq(LearningUser::getDeleted, false));
         if (enabledAdminCount <= 1) {
-            throw LearningAssistantException.of(LearningConstants.ErrorCode.LAST_ADMIN_REQUIRED);
+            throw LearningAssistantException.of(LearningErrorCode.LAST_ADMIN_REQUIRED);
         }
     }
 

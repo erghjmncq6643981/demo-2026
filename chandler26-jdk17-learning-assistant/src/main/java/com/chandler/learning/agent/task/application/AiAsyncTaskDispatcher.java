@@ -1,6 +1,6 @@
 package com.chandler.learning.agent.task.application;
 
-import com.chandler.learning.agent.task.domain.AiAsyncTask;
+import com.chandler.learning.agent.task.domain.entity.AiAsyncTask;
 import com.chandler.learning.agent.exception.AiAsyncTaskCancelledException;
 import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.ObjectMapper;

@@ -9,35 +9,38 @@ import com.chandler.learning.agent.vocabulary.application.VocabularyCatalogQuery
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import com.baomidou.mybatisplus.core.conditions.update.LambdaUpdateWrapper;
 import com.chandler.learning.agent.ai.chat.application.AgentChatResponse;
-import com.chandler.learning.agent.learning.api.LearningAssessmentSubmitRequest;
-import com.chandler.learning.agent.learning.api.LearningAssessmentSubmitResponse;
-import com.chandler.learning.agent.learning.api.LearningPlanCreateRequest;
-import com.chandler.learning.agent.learning.api.LearningPlanCalendarDayResponse;
-import com.chandler.learning.agent.learning.api.LearningPlanResponse;
-import com.chandler.learning.agent.learning.api.LearningPlanUpdateRequest;
-import com.chandler.learning.agent.learning.api.LearningPlanUnitEntryResponse;
-import com.chandler.learning.agent.learning.api.LearningPlanUnitResponse;
-import com.chandler.learning.agent.vocabulary.api.ReviewSubmitRequest;
-import com.chandler.learning.agent.vocabulary.api.ReviewSubmitResponse;
-import com.chandler.learning.agent.learning.domain.LearningPlan;
-import com.chandler.learning.agent.learning.domain.LearningPlanUnit;
-import com.chandler.learning.agent.learning.domain.LearningPlanUnitEntry;
-import com.chandler.learning.agent.learning.domain.LearningReviewRecord;
-import com.chandler.learning.agent.vocabulary.domain.LearningWordProgress;
-import com.chandler.learning.agent.vocabulary.domain.LearningWordbook;
-import com.chandler.learning.agent.vocabulary.domain.LearningWordbookEntry;
-import com.chandler.learning.agent.vocabulary.domain.VocabularyCatalog;
-import com.chandler.learning.agent.vocabulary.domain.VocabularyCatalogEntry;
-import com.chandler.learning.agent.vocabulary.domain.VocabularyCatalogVersion;
-import com.chandler.learning.agent.ai.chat.domain.AiInvocationScene;
-import com.chandler.learning.agent.system.domain.SystemLogType;
+import com.chandler.learning.agent.learning.api.request.LearningAssessmentSubmitRequest;
+import com.chandler.learning.agent.learning.api.response.LearningAssessmentSubmitResponse;
+import com.chandler.learning.agent.learning.api.request.LearningPlanCreateRequest;
+import com.chandler.learning.agent.learning.api.response.LearningPlanCalendarDayResponse;
+import com.chandler.learning.agent.learning.api.response.LearningPlanResponse;
+import com.chandler.learning.agent.learning.api.request.LearningPlanUpdateRequest;
+import com.chandler.learning.agent.learning.api.response.LearningPlanUnitEntryResponse;
+import com.chandler.learning.agent.learning.api.response.LearningPlanUnitResponse;
+import com.chandler.learning.agent.vocabulary.api.request.ReviewSubmitRequest;
+import com.chandler.learning.agent.vocabulary.api.response.ReviewSubmitResponse;
+import com.chandler.learning.agent.learning.domain.entity.LearningPlan;
+import com.chandler.learning.agent.learning.domain.entity.LearningPlanUnit;
+import com.chandler.learning.agent.learning.domain.entity.LearningPlanUnitEntry;
+import com.chandler.learning.agent.learning.domain.entity.LearningReviewRecord;
+import com.chandler.learning.agent.vocabulary.domain.entity.LearningWordProgress;
+import com.chandler.learning.agent.vocabulary.domain.entity.LearningWordbook;
+import com.chandler.learning.agent.vocabulary.domain.entity.LearningWordbookEntry;
+import com.chandler.learning.agent.vocabulary.domain.entity.VocabularyCatalog;
+import com.chandler.learning.agent.vocabulary.domain.entity.VocabularyCatalogEntry;
+import com.chandler.learning.agent.vocabulary.domain.entity.VocabularyCatalogVersion;
+import com.chandler.learning.agent.ai.chat.domain.enums.AiInvocationScene;
+import com.chandler.learning.agent.system.domain.enums.SystemLogType;
 import com.chandler.learning.agent.exception.AiAsyncTaskCancelledException;
 import com.chandler.learning.agent.exception.LearningAssistantException;
-import com.chandler.learning.agent.learning.infrastructure.LearningPlanMapper;
-import com.chandler.learning.agent.learning.infrastructure.LearningPlanUnitEntryMapper;
-import com.chandler.learning.agent.learning.infrastructure.LearningPlanUnitMapper;
-import com.chandler.learning.agent.learning.infrastructure.LearningReviewRecordMapper;
-import com.chandler.learning.agent.support.LearningConstants;
+import com.chandler.learning.agent.learning.infrastructure.mapper.LearningPlanMapper;
+import com.chandler.learning.agent.learning.infrastructure.mapper.LearningPlanUnitEntryMapper;
+import com.chandler.learning.agent.learning.infrastructure.mapper.LearningPlanUnitMapper;
+import com.chandler.learning.agent.learning.infrastructure.mapper.LearningReviewRecordMapper;
+import com.chandler.learning.agent.common.constant.CommonConstants;
+import com.chandler.learning.agent.common.exception.LearningErrorCode;
+import com.chandler.learning.agent.learning.domain.constant.ScenePlanConstants;
+import com.chandler.learning.agent.vocabulary.domain.constant.ReviewConstants;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import lombok.RequiredArgsConstructor;
@@ -93,7 +96,7 @@ public class LearningPlanService {
      */
     public LearningPlanResponse create(Long userId, LearningPlanCreateRequest request) {
         LearningPlan plan = Objects.requireNonNull(transactionTemplate.execute(status -> createPlan(userId, request)));
-        if (LearningConstants.ScenePlan.STATUS_ACTIVE.equals(plan.getStatus())
+        if (ScenePlanConstants.STATUS_ACTIVE.equals(plan.getStatus())
                 && !Boolean.FALSE.equals(request.getGenerateFirstUnit())) {
             generateNextUnit(userId, plan.getId(), request.getModelConfigId(), null);
         }
@@ -108,9 +111,9 @@ public class LearningPlanService {
                 ? wordbookService.ensureDefaultWordbook(userId).getId()
                 : requireWordbook(userId, request.getWordbookId()).getId();
         int totalWords = catalogQueryService.countPublishedEntries(version.getId());
-        if (totalWords == LearningConstants.ZERO) {
+        if (totalWords == CommonConstants.ZERO) {
             throw LearningAssistantException.badRequest(
-                    LearningConstants.ErrorCode.LEARNING_PLAN_NO_WORDS,
+                    LearningErrorCode.LEARNING_PLAN_NO_WORDS,
                     "已发布词表中没有可学习词汇");
         }
 
@@ -127,13 +130,13 @@ public class LearningPlanService {
         plan.setStartTime(request.getStartTime());
         plan.setEndTime(request.getEndTime());
         if (request.getStartTime() != null && request.getStartTime().isAfter(now)) {
-            plan.setStatus(LearningConstants.ScenePlan.STATUS_NOT_STARTED);
+            plan.setStatus(ScenePlanConstants.STATUS_NOT_STARTED);
         } else {
-            plan.setStatus(LearningConstants.ScenePlan.STATUS_ACTIVE);
+            plan.setStatus(ScenePlanConstants.STATUS_ACTIVE);
         }
         plan.setTotalCatalogWords(totalWords);
-        plan.setLearnedCoreWords(LearningConstants.ZERO);
-        plan.setCompletedUnitCount(LearningConstants.ZERO);
+        plan.setLearnedCoreWords(CommonConstants.ZERO);
+        plan.setCompletedUnitCount(CommonConstants.ZERO);
         plan.setDeleted(false);
         plan.setCreateTime(now);
         plan.setUpdateTime(now);
@@ -205,10 +208,10 @@ public class LearningPlanService {
         String lockToken = UUID.randomUUID().toString();
         LocalDateTime now = LocalDateTime.now();
         int claimed = planMapper.claimGenerationLock(planId, lockToken, now,
-                now.plusMinutes(LearningConstants.ScenePlan.GENERATION_LOCK_MINUTES));
-        if (claimed == LearningConstants.ZERO) {
+                now.plusMinutes(ScenePlanConstants.GENERATION_LOCK_MINUTES));
+        if (claimed == CommonConstants.ZERO) {
             throw LearningAssistantException.of(
-                    LearningConstants.ErrorCode.LEARNING_PLAN_GENERATION_IN_PROGRESS);
+                    LearningErrorCode.LEARNING_PLAN_GENERATION_IN_PROGRESS);
         }
         try {
             return generateNextUnitWithLock(userId, planId, modelConfigId, recommendedDate,
@@ -225,23 +228,23 @@ public class LearningPlanService {
     public List<LearningPlanUnitResponse> regenerateDayUnits(Long userId, Long planId, Long modelConfigId,
                                                              LocalDate recommendedDate) {
         LearningPlan plan = requirePlan(userId, planId);
-        if (LearningConstants.ScenePlan.STATUS_COMPLETED.equals(plan.getStatus())) {
+        if (ScenePlanConstants.STATUS_COMPLETED.equals(plan.getStatus())) {
             throw LearningAssistantException.badRequest(
-                    LearningConstants.ErrorCode.LEARNING_PLAN_COMPLETED,
+                    LearningErrorCode.LEARNING_PLAN_COMPLETED,
                     "学习计划已经完成");
         }
         if (recommendedDate == null) {
             throw LearningAssistantException.badRequest(
-                    LearningConstants.ErrorCode.LEARNING_PLAN_STATE_ERROR,
+                    LearningErrorCode.LEARNING_PLAN_STATE_ERROR,
                     "请指定要重新生成的日期");
         }
         String lockToken = UUID.randomUUID().toString();
         LocalDateTime now = LocalDateTime.now();
         int claimed = planMapper.claimGenerationLock(planId, lockToken, now,
-                now.plusMinutes(LearningConstants.ScenePlan.GENERATION_LOCK_MINUTES));
-        if (claimed == LearningConstants.ZERO) {
+                now.plusMinutes(ScenePlanConstants.GENERATION_LOCK_MINUTES));
+        if (claimed == CommonConstants.ZERO) {
             throw LearningAssistantException.of(
-                    LearningConstants.ErrorCode.LEARNING_PLAN_GENERATION_IN_PROGRESS);
+                    LearningErrorCode.LEARNING_PLAN_GENERATION_IN_PROGRESS);
         }
         try {
             return regenerateDayUnitsWithLock(userId, plan, modelConfigId, recommendedDate, lockToken);
@@ -264,7 +267,7 @@ public class LearningPlanService {
 
         if (existingUnits.isEmpty()) {
             throw LearningAssistantException.badRequest(
-                    LearningConstants.ErrorCode.LEARNING_PLAN_STATE_ERROR,
+                    LearningErrorCode.LEARNING_PLAN_STATE_ERROR,
                     "指定日期没有可重新生成的场景材料");
         }
         List<LearningPlanUnitResponse> generatedUnits = new ArrayList<>();
@@ -287,23 +290,23 @@ public class LearningPlanService {
                 new LambdaQueryWrapper<LearningPlanUnitEntry>()
                         .eq(LearningPlanUnitEntry::getUnitId, unit.getId())
                         .in(LearningPlanUnitEntry::getTier, List.of(
-                                LearningConstants.ScenePlan.TIER_CORE,
-                                LearningConstants.ScenePlan.TIER_REVIEW))
+                                ScenePlanConstants.TIER_CORE,
+                                ScenePlanConstants.TIER_REVIEW))
                         .eq(LearningPlanUnitEntry::getDeleted, false)
                         .orderByAsc(LearningPlanUnitEntry::getSortOrder));
         List<LearningPlanSceneContentService.SceneCandidate> coreWords = entries.stream()
-                .filter(entry -> LearningConstants.ScenePlan.TIER_CORE.equals(entry.getTier()))
+                .filter(entry -> ScenePlanConstants.TIER_CORE.equals(entry.getTier()))
                 .map(entry -> new LearningPlanSceneContentService.SceneCandidate(
                         entry.getTerm(), entry.getPhonetic(), entry.getMeaningText()))
                 .toList();
         List<LearningPlanSceneContentService.SceneCandidate> reviewWords = entries.stream()
-                .filter(entry -> LearningConstants.ScenePlan.TIER_REVIEW.equals(entry.getTier()))
+                .filter(entry -> ScenePlanConstants.TIER_REVIEW.equals(entry.getTier()))
                 .map(entry -> new LearningPlanSceneContentService.SceneCandidate(
                         entry.getTerm(), entry.getPhonetic(), entry.getMeaningText()))
                 .toList();
         if (coreWords.isEmpty()) {
             throw LearningAssistantException.badRequest(
-                    LearningConstants.ErrorCode.LEARNING_PLAN_STATE_ERROR,
+                    LearningErrorCode.LEARNING_PLAN_STATE_ERROR,
                     "场景核心词为空，无法保持原词组重新生成");
         }
         AgentChatResponse aiResponse = sceneContentService.generateSceneWithWords(
@@ -322,21 +325,21 @@ public class LearningPlanService {
                                                                    LocalDate recommendedDate, Long asyncTaskId,
                                                                    String lockToken) {
         LearningPlan plan = requirePlan(userId, planId);
-        if (LearningConstants.ScenePlan.STATUS_COMPLETED.equals(plan.getStatus())) {
+        if (ScenePlanConstants.STATUS_COMPLETED.equals(plan.getStatus())) {
             throw LearningAssistantException.badRequest(
-                    LearningConstants.ErrorCode.LEARNING_PLAN_COMPLETED,
+                    LearningErrorCode.LEARNING_PLAN_COMPLETED,
                     "学习计划已经完成");
         }
 
         LocalDate today = LocalDate.now();
         if (plan.getStartTime() != null && today.isBefore(plan.getStartTime().toLocalDate())) {
             throw LearningAssistantException.badRequest(
-                    LearningConstants.ErrorCode.LEARNING_PLAN_STATE_ERROR,
+                    LearningErrorCode.LEARNING_PLAN_STATE_ERROR,
                     "学习计划尚未开始，暂不可生成场景");
         }
         if (plan.getEndTime() != null && today.isAfter(plan.getEndTime().toLocalDate())) {
             throw LearningAssistantException.badRequest(
-                    LearningConstants.ErrorCode.LEARNING_PLAN_STATE_ERROR,
+                    LearningErrorCode.LEARNING_PLAN_STATE_ERROR,
                     "学习计划已超出结束日期，不可继续生成场景");
         }
 
@@ -347,12 +350,12 @@ public class LearningPlanService {
         if (candidates.isEmpty()) {
             if (hasIncompleteUnit(plan.getId())) {
                 throw LearningAssistantException.badRequest(
-                        LearningConstants.ErrorCode.LEARNING_PLAN_STATE_ERROR,
+                        LearningErrorCode.LEARNING_PLAN_STATE_ERROR,
                         "词表中的词已经全部安排到场景中，请完成已生成的待学习场景");
             }
             markPlanCompleted(plan);
             throw LearningAssistantException.badRequest(
-                    LearningConstants.ErrorCode.LEARNING_PLAN_COMPLETED,
+                    LearningErrorCode.LEARNING_PLAN_COMPLETED,
                     "词表中的词已经全部安排到场景中");
         }
         int totalToGenerate = Math.min(dailyTarget, candidates.size());
@@ -376,16 +379,16 @@ public class LearningPlanService {
     }
 
     static List<Integer> splitMaterialWordCounts(int totalWordCount) {
-        if (totalWordCount <= LearningConstants.ZERO) {
+        if (totalWordCount <= CommonConstants.ZERO) {
             return List.of();
         }
-        int materialCount = (totalWordCount + LearningConstants.ScenePlan.MAX_CORE_WORDS_PER_UNIT - 1)
-                / LearningConstants.ScenePlan.MAX_CORE_WORDS_PER_UNIT;
+        int materialCount = (totalWordCount + ScenePlanConstants.MAX_CORE_WORDS_PER_UNIT - 1)
+                / ScenePlanConstants.MAX_CORE_WORDS_PER_UNIT;
         int baseSize = totalWordCount / materialCount;
         int remainder = totalWordCount % materialCount;
         List<Integer> result = new ArrayList<>(materialCount);
-        for (int index = LearningConstants.ZERO; index < materialCount; index++) {
-            result.add(baseSize + (index < remainder ? LearningConstants.SEQUENCE_STEP : LearningConstants.ZERO));
+        for (int index = CommonConstants.ZERO; index < materialCount; index++) {
+            result.add(baseSize + (index < remainder ? CommonConstants.SEQUENCE_STEP : CommonConstants.ZERO));
         }
         return List.copyOf(result);
     }
@@ -416,10 +419,10 @@ public class LearningPlanService {
 
     private void renewGenerationLock(Long planId, String lockToken) {
         int renewed = planMapper.renewGenerationLock(planId, lockToken,
-                LocalDateTime.now().plusMinutes(LearningConstants.ScenePlan.GENERATION_LOCK_MINUTES));
-        if (renewed == LearningConstants.ZERO) {
+                LocalDateTime.now().plusMinutes(ScenePlanConstants.GENERATION_LOCK_MINUTES));
+        if (renewed == CommonConstants.ZERO) {
             throw LearningAssistantException.of(
-                    LearningConstants.ErrorCode.LEARNING_PLAN_GENERATION_IN_PROGRESS);
+                    LearningErrorCode.LEARNING_PLAN_GENERATION_IN_PROGRESS);
         }
     }
 
@@ -429,13 +432,13 @@ public class LearningPlanService {
     @Transactional(rollbackFor = Exception.class)
     public LearningPlanResponse startUnit(Long userId, Long planId, Long unitId) {
         LearningPlan plan = requirePlan(userId, planId);
-        if (!LearningConstants.ScenePlan.STATUS_ACTIVE.equals(plan.getStatus())) {
+        if (!ScenePlanConstants.STATUS_ACTIVE.equals(plan.getStatus())) {
             throw LearningAssistantException.badRequest(
-                    LearningConstants.ErrorCode.LEARNING_PLAN_STATE_ERROR,
+                    LearningErrorCode.LEARNING_PLAN_STATE_ERROR,
                     "只有学习中的计划可以开始场景");
         }
         LearningPlanUnit unit = requireUnit(plan, unitId);
-        if (LearningConstants.ScenePlan.UNIT_COMPLETED.equals(unit.getStatus())) {
+        if (ScenePlanConstants.UNIT_COMPLETED.equals(unit.getStatus())) {
             plan.setCurrentUnitId(unit.getId());
             return responseAssembler.toPlanResponse(plan, false);
         }
@@ -443,13 +446,13 @@ public class LearningPlanService {
         boolean firstStart = unit.getStartedTime() == null;
         if (plan.getCurrentUnitId() != null && !Objects.equals(plan.getCurrentUnitId(), unitId)) {
             LearningPlanUnit current = unitMapper.selectById(plan.getCurrentUnitId());
-            if (current != null && LearningConstants.ScenePlan.UNIT_IN_PROGRESS.equals(current.getStatus())) {
-                current.setStatus(LearningConstants.ScenePlan.UNIT_READY);
+            if (current != null && ScenePlanConstants.UNIT_IN_PROGRESS.equals(current.getStatus())) {
+                current.setStatus(ScenePlanConstants.UNIT_READY);
                 current.setUpdateTime(now);
                 unitMapper.updateById(current);
             }
         }
-        unit.setStatus(LearningConstants.ScenePlan.UNIT_IN_PROGRESS);
+        unit.setStatus(ScenePlanConstants.UNIT_IN_PROGRESS);
         if (firstStart) {
             unit.setStartedTime(now);
         }
@@ -477,13 +480,13 @@ public class LearningPlanService {
                 .eq(LearningPlanUnitEntry::getId, request.getUnitEntryId())
                 .eq(LearningPlanUnitEntry::getUnitId, unit.getId())
                 .eq(LearningPlanUnitEntry::getDeleted, false)
-                .last(LearningConstants.SQL_LIMIT_ONE));
+                .last(CommonConstants.SQL_LIMIT_ONE));
         if (entry == null || entry.getWordbookEntryId() == null) {
             throw assessmentInvalid("该词当前仅用于场景展示，提升为核心词后才能参加检查");
         }
         String type = assessmentSupport.normalizeAssessmentType(request.getAssessmentType());
-        if (!LearningConstants.ScenePlan.MASTERY_SPELLING.equals(entry.getMasteryRequirement())
-                && !LearningConstants.ScenePlan.ASSESSMENT_MEANING_CHOICE.equals(type)) {
+        if (!ScenePlanConstants.MASTERY_SPELLING.equals(entry.getMasteryRequirement())
+                && !ScenePlanConstants.ASSESSMENT_MEANING_CHOICE.equals(type)) {
             throw assessmentInvalid("该词的掌握要求是认识，不需要拼写检查");
         }
 
@@ -491,7 +494,7 @@ public class LearningPlanService {
         String correctAnswer;
         boolean correct;
         double typingAccuracy = 100D;
-        if (LearningConstants.ScenePlan.ASSESSMENT_MEANING_CHOICE.equals(type)) {
+        if (ScenePlanConstants.ASSESSMENT_MEANING_CHOICE.equals(type)) {
             correctAnswer = requiredText(question, "correct_answer", "correctAnswer", "answer");
             correct = assessmentSupport.normalizeAnswer(request.getAnswer()).equals(assessmentSupport.normalizeAnswer(correctAnswer));
         } else {
@@ -507,9 +510,9 @@ public class LearningPlanService {
 
         ReviewSubmitRequest reviewRequest = new ReviewSubmitRequest();
         reviewRequest.setResult(correct
-                ? LearningConstants.Review.RESULT_REMEMBERED
-                : LearningConstants.Review.RESULT_FORGOTTEN);
-        reviewRequest.setScore(correct ? LearningConstants.Review.MAX_MASTERY : LearningConstants.Review.MIN_MASTERY);
+                ? ReviewConstants.RESULT_REMEMBERED
+                : ReviewConstants.RESULT_FORGOTTEN);
+        reviewRequest.setScore(correct ? ReviewConstants.MAX_MASTERY : ReviewConstants.MIN_MASTERY);
         reviewRequest.setDurationSeconds(request.getDurationMillis() == null
                 ? null
                 : Math.toIntExact(Math.min(Integer.MAX_VALUE, request.getDurationMillis() / 1000L)));
@@ -521,8 +524,8 @@ public class LearningPlanService {
         reviewRequest.setAnswerText(request.getAnswer());
         reviewRequest.setCorrectAnswer(correctAnswer);
         reviewRequest.setCheckResult(correct
-                ? LearningConstants.ScenePlan.CHECK_CORRECT
-                : LearningConstants.ScenePlan.CHECK_INCORRECT);
+                ? ScenePlanConstants.CHECK_CORRECT
+                : ScenePlanConstants.CHECK_INCORRECT);
         reviewRequest.setTypingAccuracy(typingAccuracy);
         reviewRequest.setHintLevel(request.getHintLevel());
         reviewRequest.setAttemptCount(request.getAttemptCount());
@@ -558,27 +561,27 @@ public class LearningPlanService {
         int completedCore = refreshCompletedCoreCount(unit);
         if (completedCore < value(unit.getCoreWordCount())) {
             throw LearningAssistantException.badRequest(
-                    LearningConstants.ErrorCode.LEARNING_PLAN_UNIT_INCOMPLETE,
+                    LearningErrorCode.LEARNING_PLAN_UNIT_INCOMPLETE,
                     "还有 " + (value(unit.getCoreWordCount()) - completedCore) + " 个核心词未通过本场景检查");
         }
-        if (!LearningConstants.ScenePlan.UNIT_COMPLETED.equals(unit.getStatus())) {
+        if (!ScenePlanConstants.UNIT_COMPLETED.equals(unit.getStatus())) {
             LocalDateTime now = LocalDateTime.now();
-            unit.setStatus(LearningConstants.ScenePlan.UNIT_COMPLETED);
+            unit.setStatus(ScenePlanConstants.UNIT_COMPLETED);
             unit.setCompletedTime(now);
             unit.setUpdateTime(now);
             unitMapper.updateById(unit);
             int newlyLearned = unitEntryMapper.selectCount(new LambdaQueryWrapper<LearningPlanUnitEntry>()
                     .eq(LearningPlanUnitEntry::getUnitId, unit.getId())
-                    .eq(LearningPlanUnitEntry::getTier, LearningConstants.ScenePlan.TIER_CORE)
+                    .eq(LearningPlanUnitEntry::getTier, ScenePlanConstants.TIER_CORE)
                     .eq(LearningPlanUnitEntry::getFirstLearning, true)
                     .eq(LearningPlanUnitEntry::getDeleted, false)).intValue();
             plan.setLearnedCoreWords(value(plan.getLearnedCoreWords()) + newlyLearned);
-            plan.setCompletedUnitCount(value(plan.getCompletedUnitCount()) + LearningConstants.SEQUENCE_STEP);
+            plan.setCompletedUnitCount(value(plan.getCompletedUnitCount()) + CommonConstants.SEQUENCE_STEP);
             if (Objects.equals(plan.getCurrentUnitId(), unit.getId()) || plan.getCurrentUnitId() == null) {
                 LearningPlanUnit nextUnit = findNextIncompleteUnit(plan.getId(), unit.getId());
                 plan.setCurrentUnitId(nextUnit == null ? null : nextUnit.getId());
-                if (nextUnit != null && !LearningConstants.ScenePlan.UNIT_IN_PROGRESS.equals(nextUnit.getStatus())) {
-                    nextUnit.setStatus(LearningConstants.ScenePlan.UNIT_IN_PROGRESS);
+                if (nextUnit != null && !ScenePlanConstants.UNIT_IN_PROGRESS.equals(nextUnit.getStatus())) {
+                    nextUnit.setStatus(ScenePlanConstants.UNIT_IN_PROGRESS);
                     if (nextUnit.getStartedTime() == null) {
                         nextUnit.setStartedTime(now);
                     }
@@ -588,7 +591,7 @@ public class LearningPlanService {
             }
             if (vocabularySelector.nextCandidates(plan, targetWordCount(plan)).isEmpty()
                     && !hasIncompleteUnit(plan.getId())) {
-                plan.setStatus(LearningConstants.ScenePlan.STATUS_COMPLETED);
+                plan.setStatus(ScenePlanConstants.STATUS_COMPLETED);
             }
             plan.setUpdateTime(now);
             planMapper.updateById(plan);
@@ -611,31 +614,31 @@ public class LearningPlanService {
                 .eq(LearningPlanUnitEntry::getId, unitEntryId)
                 .eq(LearningPlanUnitEntry::getUnitId, unitId)
                 .eq(LearningPlanUnitEntry::getDeleted, false)
-                .last(LearningConstants.SQL_LIMIT_ONE));
+                .last(CommonConstants.SQL_LIMIT_ONE));
         if (entry == null) {
             throw assessmentInvalid("场景词汇不存在");
         }
-        if (!LearningConstants.ScenePlan.TIER_CORE.equals(entry.getTier())) {
+        if (!ScenePlanConstants.TIER_CORE.equals(entry.getTier())) {
             String previousTier = entry.getTier();
             LearningWordProgress progress = progressService.recordSceneExposure(
-                    userId, entry.getTerm(), LearningConstants.ScenePlan.MASTERY_RECOGNITION,
-                    LearningConstants.ScenePlan.TIER_CORE, planId, unitId);
+                    userId, entry.getTerm(), ScenePlanConstants.MASTERY_RECOGNITION,
+                    ScenePlanConstants.TIER_CORE, planId, unitId);
             VocabularyCatalogEntry source = entry.getCatalogEntryId() == null
                     ? null
                     : catalogQueryService.findEntry(entry.getCatalogEntryId());
             LearningWordbookEntry wordbookEntry = wordbookService.ensureLearningEntry(
                     userId, plan.getWordbookId(), source, progress, entry.getTerm(), entry.getNormalizedTerm(),
                     true, LocalDateTime.now());
-            entry.setTier(LearningConstants.ScenePlan.TIER_CORE);
-            entry.setMasteryRequirement(LearningConstants.ScenePlan.MASTERY_RECOGNITION);
+            entry.setTier(ScenePlanConstants.TIER_CORE);
+            entry.setMasteryRequirement(ScenePlanConstants.MASTERY_RECOGNITION);
             entry.setWordProgressId(progress.getId());
             entry.setWordbookEntryId(wordbookEntry == null ? null : wordbookEntry.getId());
             entry.setFirstLearning(true);
             ensurePromotionAssessment(entry, unit);
             entry.setUpdateTime(LocalDateTime.now());
             unitEntryMapper.updateById(entry);
-            unit.setCoreWordCount(value(unit.getCoreWordCount()) + LearningConstants.SEQUENCE_STEP);
-            if (LearningConstants.ScenePlan.TIER_SUPPLEMENTARY.equals(previousTier)) {
+            unit.setCoreWordCount(value(unit.getCoreWordCount()) + CommonConstants.SEQUENCE_STEP);
+            if (ScenePlanConstants.TIER_SUPPLEMENTARY.equals(previousTier)) {
                 unit.setSupplementaryWordCount(Math.max(0, value(unit.getSupplementaryWordCount()) - 1));
             } else {
                 unit.setExtendedWordCount(Math.max(0, value(unit.getExtendedWordCount()) - 1));
@@ -674,7 +677,7 @@ public class LearningPlanService {
     }
 
     private int targetWordCount(LearningPlan plan) {
-        int target = LearningConstants.ScenePlan.MIN_CORE_WORDS;
+        int target = ScenePlanConstants.MIN_CORE_WORDS;
         if (plan.getEndTime() != null) {
             LocalDate today = LocalDate.now();
             LocalDate planStart = plan.getStartTime() != null ? plan.getStartTime().toLocalDate() : today;
@@ -696,34 +699,34 @@ public class LearningPlanService {
                     .eq(LearningPlanUnit::getPlanId, plan.getId())
                     .eq(LearningPlanUnit::getDeleted, false)
                     .orderByDesc(LearningPlanUnit::getUnitNo)
-                    .last(LearningConstants.SQL_LIMIT_ONE));
+                    .last(CommonConstants.SQL_LIMIT_ONE));
             if (latestUnit != null) {
                 target = value(latestUnit.getCoreWordCount());
             }
         }
-        return Math.max(LearningConstants.ScenePlan.MIN_CORE_WORDS, target);
+        return Math.max(ScenePlanConstants.MIN_CORE_WORDS, target);
     }
 
     private int refreshCompletedCoreCount(LearningPlanUnit unit) {
         List<LearningPlanUnitEntry> coreEntries = unitEntryMapper.selectList(
                 new LambdaQueryWrapper<LearningPlanUnitEntry>()
                         .eq(LearningPlanUnitEntry::getUnitId, unit.getId())
-                        .eq(LearningPlanUnitEntry::getTier, LearningConstants.ScenePlan.TIER_CORE)
+                        .eq(LearningPlanUnitEntry::getTier, ScenePlanConstants.TIER_CORE)
                         .eq(LearningPlanUnitEntry::getDeleted, false));
         List<LearningReviewRecord> records = reviewRecordMapper.selectList(new LambdaQueryWrapper<LearningReviewRecord>()
                 .eq(LearningReviewRecord::getUnitId, unit.getId())
-                .eq(LearningReviewRecord::getCheckResult, LearningConstants.ScenePlan.CHECK_CORRECT)
+                .eq(LearningReviewRecord::getCheckResult, ScenePlanConstants.CHECK_CORRECT)
                 .eq(LearningReviewRecord::getDeleted, false));
         Map<Long, Set<String>> passedTypes = records.stream()
                 .collect(Collectors.groupingBy(LearningReviewRecord::getEntryId,
                         Collectors.mapping(LearningReviewRecord::getAssessmentType, Collectors.toSet())));
-        int completed = LearningConstants.ZERO;
+        int completed = CommonConstants.ZERO;
         for (LearningPlanUnitEntry entry : coreEntries) {
             Set<String> passed = passedTypes.getOrDefault(entry.getWordbookEntryId(), Set.of());
-            boolean meaningPassed = passed.contains(LearningConstants.ScenePlan.ASSESSMENT_MEANING_CHOICE);
-            boolean spellingPassed = !LearningConstants.ScenePlan.MASTERY_SPELLING.equals(entry.getMasteryRequirement())
-                    || (passed.contains(LearningConstants.ScenePlan.ASSESSMENT_COPY_TYPING)
-                    && passed.contains(LearningConstants.ScenePlan.ASSESSMENT_MEANING_SPELLING));
+            boolean meaningPassed = passed.contains(ScenePlanConstants.ASSESSMENT_MEANING_CHOICE);
+            boolean spellingPassed = !ScenePlanConstants.MASTERY_SPELLING.equals(entry.getMasteryRequirement())
+                    || (passed.contains(ScenePlanConstants.ASSESSMENT_COPY_TYPING)
+                    && passed.contains(ScenePlanConstants.ASSESSMENT_MEANING_SPELLING));
             if (meaningPassed && spellingPassed) {
                 completed++;
             }
@@ -739,10 +742,10 @@ public class LearningPlanService {
                 .eq(LearningPlan::getId, planId)
                 .eq(LearningPlan::getUserId, userId)
                 .eq(LearningPlan::getDeleted, false)
-                .last(LearningConstants.SQL_LIMIT_ONE));
+                .last(CommonConstants.SQL_LIMIT_ONE));
         if (plan == null) {
             throw LearningAssistantException.notFound(
-                    LearningConstants.ErrorCode.LEARNING_PLAN_NOT_FOUND,
+                    LearningErrorCode.LEARNING_PLAN_NOT_FOUND,
                     "学习计划不存在: " + planId);
         }
         return plan;
@@ -753,10 +756,10 @@ public class LearningPlanService {
                 .eq(LearningPlanUnit::getId, unitId)
                 .eq(LearningPlanUnit::getPlanId, plan.getId())
                 .eq(LearningPlanUnit::getDeleted, false)
-                .last(LearningConstants.SQL_LIMIT_ONE));
+                .last(CommonConstants.SQL_LIMIT_ONE));
         if (unit == null) {
             throw LearningAssistantException.notFound(
-                    LearningConstants.ErrorCode.LEARNING_PLAN_UNIT_NOT_FOUND,
+                    LearningErrorCode.LEARNING_PLAN_UNIT_NOT_FOUND,
                     "场景学习单元不存在: " + unitId);
         }
         return unit;
@@ -766,12 +769,12 @@ public class LearningPlanService {
         LocalDate resolved = requested == null ? today : requested;
         if (plan.getStartTime() != null && resolved.isBefore(plan.getStartTime().toLocalDate())) {
             throw LearningAssistantException.badRequest(
-                    LearningConstants.ErrorCode.LEARNING_PLAN_STATE_ERROR,
+                    LearningErrorCode.LEARNING_PLAN_STATE_ERROR,
                     "场景日期不能早于学习计划开始日期");
         }
         if (plan.getEndTime() != null && resolved.isAfter(plan.getEndTime().toLocalDate())) {
             throw LearningAssistantException.badRequest(
-                    LearningConstants.ErrorCode.LEARNING_PLAN_STATE_ERROR,
+                    LearningErrorCode.LEARNING_PLAN_STATE_ERROR,
                     "场景日期不能晚于学习计划结束日期");
         }
         return resolved;
@@ -779,13 +782,13 @@ public class LearningPlanService {
 
     private int pendingCoreCount(LearningPlanUnitResponse unit) {
         if (unit.getWords() == null || unit.getWords().isEmpty()) {
-            return Math.max(LearningConstants.ZERO,
+            return Math.max(CommonConstants.ZERO,
                     value(unit.getCoreWordCount()) - value(unit.getCompletedCoreCount()));
         }
         return (int) unit.getWords().stream()
-                .filter(word -> LearningConstants.ScenePlan.TIER_CORE.equals(word.getTier()))
+                .filter(word -> ScenePlanConstants.TIER_CORE.equals(word.getTier()))
                 .filter(word -> {
-                    int required = LearningConstants.ScenePlan.MASTERY_SPELLING.equals(word.getMasteryRequirement())
+                    int required = ScenePlanConstants.MASTERY_SPELLING.equals(word.getMasteryRequirement())
                             ? 3 : 1;
                     return word.getPassedAssessments() == null || word.getPassedAssessments().size() < required;
                 })
@@ -796,21 +799,21 @@ public class LearningPlanService {
         return unitMapper.selectOne(new LambdaQueryWrapper<LearningPlanUnit>()
                 .eq(LearningPlanUnit::getPlanId, planId)
                 .ne(excludedUnitId != null, LearningPlanUnit::getId, excludedUnitId)
-                .ne(LearningPlanUnit::getStatus, LearningConstants.ScenePlan.UNIT_COMPLETED)
+                .ne(LearningPlanUnit::getStatus, ScenePlanConstants.UNIT_COMPLETED)
                 .eq(LearningPlanUnit::getDeleted, false)
                 .orderByAsc(LearningPlanUnit::getUnitNo)
-                .last(LearningConstants.SQL_LIMIT_ONE));
+                .last(CommonConstants.SQL_LIMIT_ONE));
     }
 
     private boolean hasIncompleteUnit(Long planId) {
         return unitMapper.selectCount(new LambdaQueryWrapper<LearningPlanUnit>()
                 .eq(LearningPlanUnit::getPlanId, planId)
-                .ne(LearningPlanUnit::getStatus, LearningConstants.ScenePlan.UNIT_COMPLETED)
-                .eq(LearningPlanUnit::getDeleted, false)) > LearningConstants.ZERO;
+                .ne(LearningPlanUnit::getStatus, ScenePlanConstants.UNIT_COMPLETED)
+                .eq(LearningPlanUnit::getDeleted, false)) > CommonConstants.ZERO;
     }
 
     private void markPlanCompleted(LearningPlan plan) {
-        plan.setStatus(LearningConstants.ScenePlan.STATUS_COMPLETED);
+        plan.setStatus(ScenePlanConstants.STATUS_COMPLETED);
         plan.setCurrentUnitId(null);
         plan.setUpdateTime(LocalDateTime.now());
         planMapper.updateById(plan);
@@ -818,7 +821,7 @@ public class LearningPlanService {
 
     private int nextUnitNo(Long planId) {
         Integer maxUnitNo = unitMapper.selectMaxUnitNoIncludingDeleted(planId);
-        return maxUnitNo == null ? LearningConstants.FIRST_SEQUENCE : maxUnitNo + 1;
+        return maxUnitNo == null ? CommonConstants.FIRST_SEQUENCE : maxUnitNo + 1;
     }
 
     private VocabularyCatalogVersion requirePublishedVersion(Long userId, Long versionId) {
@@ -866,25 +869,25 @@ public class LearningPlanService {
             return objectMapper.writeValueAsString(value);
         } catch (Exception ex) {
             throw LearningAssistantException.system(
-                    LearningConstants.ErrorCode.JSON_SERIALIZE_FAILED,
+                    LearningErrorCode.JSON_SERIALIZE_FAILED,
                     "场景学习数据序列化失败",
                     ex);
         }
     }
 
     private int value(Integer value) {
-        return value == null ? LearningConstants.ZERO : value;
+        return value == null ? CommonConstants.ZERO : value;
     }
 
     private LearningAssistantException sceneInvalid(String message) {
         return LearningAssistantException.badRequest(
-                LearningConstants.ErrorCode.LEARNING_SCENE_PARSE_FAILED,
+                LearningErrorCode.LEARNING_SCENE_PARSE_FAILED,
                 message);
     }
 
     private LearningAssistantException assessmentInvalid(String message) {
         return LearningAssistantException.badRequest(
-                LearningConstants.ErrorCode.LEARNING_ASSESSMENT_INVALID,
+                LearningErrorCode.LEARNING_ASSESSMENT_INVALID,
                 message);
     }
 

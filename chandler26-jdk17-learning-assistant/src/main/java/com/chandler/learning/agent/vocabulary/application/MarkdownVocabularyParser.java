@@ -1,7 +1,8 @@
 package com.chandler.learning.agent.vocabulary.application;
 
 import com.chandler.learning.agent.exception.LearningAssistantException;
-import com.chandler.learning.agent.support.LearningConstants;
+import com.chandler.learning.agent.common.exception.LearningErrorCode;
+import com.chandler.learning.agent.vocabulary.domain.constant.VocabularyImportConstants;
 import org.springframework.stereotype.Component;
 import org.springframework.util.StringUtils;
 
@@ -90,7 +91,7 @@ public class MarkdownVocabularyParser {
         String suggestion = suggestSplitCorrection(term);
         boolean suspicious = suggestion != null && !suggestion.equals(term);
         List<String> warnings = suspicious
-                ? List.of(LearningConstants.VocabularyImport.WARNING_SUSPICIOUS_SPLIT)
+                ? List.of(VocabularyImportConstants.WARNING_SUSPICIOUS_SPLIT)
                 : List.of();
         return new ParsedVocabulary(
                 sourceOrder,
@@ -185,7 +186,7 @@ public class MarkdownVocabularyParser {
 
     private LearningAssistantException invalid(String message) {
         return LearningAssistantException.badRequest(
-                LearningConstants.ErrorCode.VOCABULARY_IMPORT_INVALID,
+                LearningErrorCode.VOCABULARY_IMPORT_INVALID,
                 message);
     }
 

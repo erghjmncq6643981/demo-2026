@@ -3,17 +3,19 @@ package com.chandler.learning.agent.task.application;
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import com.baomidou.mybatisplus.core.conditions.update.LambdaUpdateWrapper;
 import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
-import com.chandler.learning.agent.task.api.AiAsyncTaskPageResponse;
-import com.chandler.learning.agent.task.api.AiAsyncTaskResponse;
-import com.chandler.learning.agent.task.domain.AiAsyncTask;
-import com.chandler.learning.agent.task.domain.AiTaskTriggerType;
-import com.chandler.learning.agent.task.domain.AiTaskType;
-import com.chandler.learning.agent.system.domain.SystemLogType;
+import com.chandler.learning.agent.task.api.response.AiAsyncTaskPageResponse;
+import com.chandler.learning.agent.task.api.response.AiAsyncTaskResponse;
+import com.chandler.learning.agent.task.domain.entity.AiAsyncTask;
+import com.chandler.learning.agent.task.domain.enums.AiTaskTriggerType;
+import com.chandler.learning.agent.task.domain.enums.AiTaskType;
+import com.chandler.learning.agent.system.domain.enums.SystemLogType;
 import com.chandler.learning.agent.exception.LearningAssistantException;
 import com.chandler.learning.agent.identity.application.UserDisplayNameService;
 import com.chandler.learning.agent.system.application.SystemLogService;
-import com.chandler.learning.agent.task.infrastructure.AiAsyncTaskMapper;
-import com.chandler.learning.agent.support.LearningConstants;
+import com.chandler.learning.agent.task.infrastructure.mapper.AiAsyncTaskMapper;
+import com.chandler.learning.agent.common.constant.CommonConstants;
+import com.chandler.learning.agent.common.exception.LearningErrorCode;
+import com.chandler.learning.agent.task.domain.constant.AiTaskConstants;
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
@@ -85,31 +87,31 @@ public class AiAsyncTaskService {
         task.setUnitId(unitId);
         task.setRelatedJobId(relatedJobId);
         task.setIdempotencyKey(limitIdempotencyKey(idempotencyKey));
-        task.setStatus(LearningConstants.AiTask.STATUS_PENDING);
+        task.setStatus(AiTaskConstants.STATUS_PENDING);
         task.setExecutionMode(mode);
         task.setScheduledTime(executeAt);
-        task.setPriority(priority == null ? LearningConstants.AiTask.DEFAULT_PRIORITY : priority);
-        task.setTotalCount(totalCount == null ? LearningConstants.ZERO : totalCount);
-        task.setSuccessCount(LearningConstants.ZERO);
-        task.setFailedCount(LearningConstants.ZERO);
-        task.setProgressPercent(LearningConstants.ZERO);
-        task.setRetryCount(LearningConstants.ZERO);
-        task.setMaxRetryCount(LearningConstants.AiTask.DEFAULT_MAX_RETRY_COUNT);
+        task.setPriority(priority == null ? AiTaskConstants.DEFAULT_PRIORITY : priority);
+        task.setTotalCount(totalCount == null ? CommonConstants.ZERO : totalCount);
+        task.setSuccessCount(CommonConstants.ZERO);
+        task.setFailedCount(CommonConstants.ZERO);
+        task.setProgressPercent(CommonConstants.ZERO);
+        task.setRetryCount(CommonConstants.ZERO);
+        task.setMaxRetryCount(AiTaskConstants.DEFAULT_MAX_RETRY_COUNT);
         task.setPayloadJson(writeJson(payload));
         task.setCreateBy(userId);
         task.setUpdateBy(userId);
         task.setCreateTime(now);
         task.setUpdateTime(now);
         task.setDeleted(false);
-        task.setVersion(LearningConstants.ZERO);
+        task.setVersion(CommonConstants.ZERO);
         taskMapper.insert(task);
         return task;
     }
 
     public AiAsyncTaskPageResponse page(Long userId, String status, Integer page, Integer pageSize) {
         int current = page == null || page < 1 ? 1 : page;
-        int size = pageSize == null || pageSize < 1 ? LearningConstants.AiTask.DEFAULT_PAGE_SIZE
-                : Math.min(pageSize, LearningConstants.AiTask.MAX_PAGE_SIZE);
+        int size = pageSize == null || pageSize < 1 ? AiTaskConstants.DEFAULT_PAGE_SIZE
+                : Math.min(pageSize, AiTaskConstants.MAX_PAGE_SIZE);
         LambdaQueryWrapper<AiAsyncTask> wrapper = new LambdaQueryWrapper<AiAsyncTask>()
                 .eq(AiAsyncTask::getOwnerUserId, userId)
                 .eq(AiAsyncTask::getDeleted, false)
@@ -129,8 +131,8 @@ public class AiAsyncTaskService {
     /** 管理员分页查询所有用户的 AI 异步任务。 */
     public AiAsyncTaskPageResponse pageAll(String status, Integer page, Integer pageSize) {
         int current = page == null || page < 1 ? 1 : page;
-        int size = pageSize == null || pageSize < 1 ? LearningConstants.AiTask.DEFAULT_PAGE_SIZE
-                : Math.min(pageSize, LearningConstants.AiTask.MAX_PAGE_SIZE);
+        int size = pageSize == null || pageSize < 1 ? AiTaskConstants.DEFAULT_PAGE_SIZE
+                : Math.min(pageSize, AiTaskConstants.MAX_PAGE_SIZE);
         LambdaQueryWrapper<AiAsyncTask> wrapper = new LambdaQueryWrapper<AiAsyncTask>()
                 .eq(AiAsyncTask::getDeleted, false)
                 .orderByDesc(AiAsyncTask::getCreateTime);
@@ -147,8 +149,8 @@ public class AiAsyncTaskService {
     }
 
     public List<AiAsyncTaskResponse> list(Long userId, String status, Integer limit) {
-        int resolvedLimit = limit == null ? LearningConstants.AiTask.DEFAULT_PAGE_SIZE
-                : Math.max(1, Math.min(limit, LearningConstants.AiTask.MAX_PAGE_SIZE));
+        int resolvedLimit = limit == null ? AiTaskConstants.DEFAULT_PAGE_SIZE
+                : Math.max(1, Math.min(limit, AiTaskConstants.MAX_PAGE_SIZE));
         LambdaQueryWrapper<AiAsyncTask> wrapper = new LambdaQueryWrapper<AiAsyncTask>()
                 .eq(AiAsyncTask::getOwnerUserId, userId)
                 .eq(AiAsyncTask::getDeleted, false)
@@ -162,8 +164,8 @@ public class AiAsyncTaskService {
 
     /** 管理员查询所有用户的 AI 异步任务。 */
     public List<AiAsyncTaskResponse> listAll(String status, Integer limit) {
-        int resolvedLimit = limit == null ? LearningConstants.AiTask.DEFAULT_PAGE_SIZE
-                : Math.max(1, Math.min(limit, LearningConstants.AiTask.MAX_PAGE_SIZE));
+        int resolvedLimit = limit == null ? AiTaskConstants.DEFAULT_PAGE_SIZE
+                : Math.max(1, Math.min(limit, AiTaskConstants.MAX_PAGE_SIZE));
         LambdaQueryWrapper<AiAsyncTask> wrapper = new LambdaQueryWrapper<AiAsyncTask>()
                 .eq(AiAsyncTask::getDeleted, false)
                 .orderByDesc(AiAsyncTask::getCreateTime)
@@ -179,9 +181,9 @@ public class AiAsyncTaskService {
                 .eq(AiAsyncTask::getId, taskId)
                 .eq(AiAsyncTask::getOwnerUserId, userId)
                 .eq(AiAsyncTask::getDeleted, false)
-                .last(LearningConstants.SQL_LIMIT_ONE));
+                .last(CommonConstants.SQL_LIMIT_ONE));
         if (task == null) {
-            throw LearningAssistantException.notFound(LearningConstants.ErrorCode.AI_ASYNC_TASK_NOT_FOUND);
+            throw LearningAssistantException.notFound(LearningErrorCode.AI_ASYNC_TASK_NOT_FOUND);
         }
         return task;
     }
@@ -191,20 +193,20 @@ public class AiAsyncTaskService {
         AiAsyncTask task = taskMapper.selectOne(new LambdaQueryWrapper<AiAsyncTask>()
                 .eq(AiAsyncTask::getId, taskId)
                 .eq(AiAsyncTask::getDeleted, false)
-                .last(LearningConstants.SQL_LIMIT_ONE));
+                .last(CommonConstants.SQL_LIMIT_ONE));
         if (task == null) {
-            throw LearningAssistantException.notFound(LearningConstants.ErrorCode.AI_ASYNC_TASK_NOT_FOUND);
+            throw LearningAssistantException.notFound(LearningErrorCode.AI_ASYNC_TASK_NOT_FOUND);
         }
         return task;
     }
 
     /** 同一计划同一日期只保留一个待执行或运行中的场景材料任务。 */
     public AiAsyncTask findActiveSceneMaterialTask(Long userId, Long planId) {
-        return findActive(userId, LearningConstants.AiTask.TYPE_SCENE_MATERIAL, planId, null);
+        return findActive(userId, AiTaskConstants.TYPE_SCENE_MATERIAL, planId, null);
     }
 
     public AiAsyncTask findActiveSceneMaterialTask(Long userId, Long planId, String idempotencyKey) {
-        return findActiveByKey(userId, LearningConstants.AiTask.TYPE_SCENE_MATERIAL, planId, idempotencyKey);
+        return findActiveByKey(userId, AiTaskConstants.TYPE_SCENE_MATERIAL, planId, idempotencyKey);
     }
 
     /** 查询同一业务资源的有效任务，防止重复提交和重复模型成本。 */
@@ -214,12 +216,12 @@ public class AiAsyncTaskService {
                 .eq(AiAsyncTask::getTaskType, taskType)
                 .eq(AiAsyncTask::getPlanId, planId)
                 .in(AiAsyncTask::getStatus, List.of(
-                        LearningConstants.AiTask.STATUS_PENDING,
-                        LearningConstants.AiTask.STATUS_RUNNING,
-                        LearningConstants.AiTask.STATUS_RETRY_WAIT))
+                        AiTaskConstants.STATUS_PENDING,
+                        AiTaskConstants.STATUS_RUNNING,
+                        AiTaskConstants.STATUS_RETRY_WAIT))
                 .eq(AiAsyncTask::getDeleted, false)
                 .orderByDesc(AiAsyncTask::getCreateTime)
-                .last(LearningConstants.SQL_LIMIT_ONE);
+                .last(CommonConstants.SQL_LIMIT_ONE);
         if (unitId != null) wrapper.eq(AiAsyncTask::getUnitId, unitId);
         return taskMapper.selectOne(wrapper);
     }
@@ -234,12 +236,12 @@ public class AiAsyncTaskService {
                 .eq(AiAsyncTask::getTaskType, taskType)
                 .eq(AiAsyncTask::getIdempotencyKey, limitIdempotencyKey(idempotencyKey))
                 .in(AiAsyncTask::getStatus, List.of(
-                        LearningConstants.AiTask.STATUS_PENDING,
-                        LearningConstants.AiTask.STATUS_RUNNING,
-                        LearningConstants.AiTask.STATUS_RETRY_WAIT))
+                        AiTaskConstants.STATUS_PENDING,
+                        AiTaskConstants.STATUS_RUNNING,
+                        AiTaskConstants.STATUS_RETRY_WAIT))
                 .eq(AiAsyncTask::getDeleted, false)
                 .orderByDesc(AiAsyncTask::getCreateTime)
-                .last(LearningConstants.SQL_LIMIT_ONE);
+                .last(CommonConstants.SQL_LIMIT_ONE);
         if (planId == null) wrapper.isNull(AiAsyncTask::getPlanId);
         else wrapper.eq(AiAsyncTask::getPlanId, planId);
         return taskMapper.selectOne(wrapper);
@@ -251,12 +253,12 @@ public class AiAsyncTaskService {
                 .eq(AiAsyncTask::getOwnerUserId, ownerUserId)
                 .eq(AiAsyncTask::getPlanId, planId)
                 .in(AiAsyncTask::getTaskType, List.of(
-                        LearningConstants.AiTask.TYPE_SCENE_MATERIAL,
-                        LearningConstants.AiTask.TYPE_SCENE_MATERIAL_REGENERATION))
+                        AiTaskConstants.TYPE_SCENE_MATERIAL,
+                        AiTaskConstants.TYPE_SCENE_MATERIAL_REGENERATION))
                 .in(AiAsyncTask::getStatus, List.of(
-                        LearningConstants.AiTask.STATUS_PENDING,
-                        LearningConstants.AiTask.STATUS_RUNNING,
-                        LearningConstants.AiTask.STATUS_RETRY_WAIT))
+                        AiTaskConstants.STATUS_PENDING,
+                        AiTaskConstants.STATUS_RUNNING,
+                        AiTaskConstants.STATUS_RETRY_WAIT))
                 .eq(AiAsyncTask::getDeleted, false));
         Set<LocalDate> dates = new HashSet<>();
         for (AiAsyncTask task : tasks) {
@@ -294,9 +296,9 @@ public class AiAsyncTaskService {
     public boolean claim(Long taskId) {
         int updated = taskMapper.update(null, new LambdaUpdateWrapper<AiAsyncTask>()
                 .eq(AiAsyncTask::getId, taskId)
-                .eq(AiAsyncTask::getStatus, LearningConstants.AiTask.STATUS_PENDING)
+                .eq(AiAsyncTask::getStatus, AiTaskConstants.STATUS_PENDING)
                 .eq(AiAsyncTask::getDeleted, false)
-                .set(AiAsyncTask::getStatus, LearningConstants.AiTask.STATUS_RUNNING)
+                .set(AiAsyncTask::getStatus, AiTaskConstants.STATUS_RUNNING)
                 .set(AiAsyncTask::getStartedTime, LocalDateTime.now())
                 .set(AiAsyncTask::getUpdateTime, LocalDateTime.now()));
         return updated > 0;
@@ -306,9 +308,9 @@ public class AiAsyncTaskService {
     public void releaseClaim(Long taskId, LocalDateTime scheduledTime) {
         taskMapper.update(null, new LambdaUpdateWrapper<AiAsyncTask>()
                 .eq(AiAsyncTask::getId, taskId)
-                .eq(AiAsyncTask::getStatus, LearningConstants.AiTask.STATUS_RUNNING)
+                .eq(AiAsyncTask::getStatus, AiTaskConstants.STATUS_RUNNING)
                 .eq(AiAsyncTask::getDeleted, false)
-                .set(AiAsyncTask::getStatus, LearningConstants.AiTask.STATUS_PENDING)
+                .set(AiAsyncTask::getStatus, AiTaskConstants.STATUS_PENDING)
                 .set(AiAsyncTask::getScheduledTime, scheduledTime)
                 .set(AiAsyncTask::getStartedTime, null)
                 .set(AiAsyncTask::getUpdateTime, LocalDateTime.now()));
@@ -320,7 +322,7 @@ public class AiAsyncTaskService {
         int progress = resolvedTotal == 0 ? 0 : Math.min(100, finished * 100 / resolvedTotal);
         taskMapper.update(null, new LambdaUpdateWrapper<AiAsyncTask>()
                 .eq(AiAsyncTask::getId, taskId)
-                .eq(AiAsyncTask::getStatus, LearningConstants.AiTask.STATUS_RUNNING)
+                .eq(AiAsyncTask::getStatus, AiTaskConstants.STATUS_RUNNING)
                 .eq(AiAsyncTask::getDeleted, false)
                 .set(AiAsyncTask::getTotalCount, resolvedTotal)
                 .set(AiAsyncTask::getSuccessCount, Math.max(0, success))
@@ -343,13 +345,13 @@ public class AiAsyncTaskService {
         AiAsyncTask task = taskMapper.selectById(taskId);
         LambdaUpdateWrapper<AiAsyncTask> wrapper = new LambdaUpdateWrapper<AiAsyncTask>()
                 .eq(AiAsyncTask::getId, taskId)
-                .eq(AiAsyncTask::getStatus, LearningConstants.AiTask.STATUS_RUNNING)
+                .eq(AiAsyncTask::getStatus, AiTaskConstants.STATUS_RUNNING)
                 .eq(AiAsyncTask::getDeleted, false)
                 .set(AiAsyncTask::getStatus, status)
                 .set(AiAsyncTask::getErrorMessage, limitError(errorMessage))
                 .set(AiAsyncTask::getFinishedTime, LocalDateTime.now())
                 .set(AiAsyncTask::getUpdateTime, LocalDateTime.now());
-        if (LearningConstants.AiTask.STATUS_COMPLETED.equals(status)) {
+        if (AiTaskConstants.STATUS_COMPLETED.equals(status)) {
             wrapper.set(AiAsyncTask::getProgressPercent, 100);
         }
         int updated = taskMapper.update(null, wrapper);
@@ -364,11 +366,11 @@ public class AiAsyncTaskService {
     @Transactional(rollbackFor = Exception.class)
     public AiAsyncTask cancel(Long userId, Long taskId) {
         AiAsyncTask task = require(userId, taskId);
-        if (List.of(LearningConstants.AiTask.STATUS_COMPLETED,
-                LearningConstants.AiTask.STATUS_PARTIAL_FAILED,
-                LearningConstants.AiTask.STATUS_ATTENTION_REQUIRED,
-                LearningConstants.AiTask.STATUS_FAILED,
-                LearningConstants.AiTask.STATUS_CANCELLED).contains(task.getStatus())) {
+        if (List.of(AiTaskConstants.STATUS_COMPLETED,
+                AiTaskConstants.STATUS_PARTIAL_FAILED,
+                AiTaskConstants.STATUS_ATTENTION_REQUIRED,
+                AiTaskConstants.STATUS_FAILED,
+                AiTaskConstants.STATUS_CANCELLED).contains(task.getStatus())) {
             return task;
         }
         LocalDateTime now = LocalDateTime.now();
@@ -376,10 +378,10 @@ public class AiAsyncTaskService {
                 .eq(AiAsyncTask::getId, taskId)
                 .eq(AiAsyncTask::getOwnerUserId, userId)
                 .in(AiAsyncTask::getStatus, List.of(
-                        LearningConstants.AiTask.STATUS_PENDING,
-                        LearningConstants.AiTask.STATUS_RUNNING))
+                        AiTaskConstants.STATUS_PENDING,
+                        AiTaskConstants.STATUS_RUNNING))
                 .eq(AiAsyncTask::getDeleted, false)
-                .set(AiAsyncTask::getStatus, LearningConstants.AiTask.STATUS_CANCELLED)
+                .set(AiAsyncTask::getStatus, AiTaskConstants.STATUS_CANCELLED)
                 .set(AiAsyncTask::getCancelledTime, now)
                 .set(AiAsyncTask::getFinishedTime, now)
                 .set(AiAsyncTask::getUpdateBy, userId)
@@ -400,10 +402,10 @@ public class AiAsyncTaskService {
     @Transactional(rollbackFor = Exception.class)
     public AiAsyncTask retry(Long userId, Long taskId, Map<String, Object> payload) {
         AiAsyncTask task = require(userId, taskId);
-        if (!List.of(LearningConstants.AiTask.STATUS_FAILED,
-                LearningConstants.AiTask.STATUS_PARTIAL_FAILED,
-                LearningConstants.AiTask.STATUS_ATTENTION_REQUIRED,
-                LearningConstants.AiTask.STATUS_CANCELLED).contains(task.getStatus())) {
+        if (!List.of(AiTaskConstants.STATUS_FAILED,
+                AiTaskConstants.STATUS_PARTIAL_FAILED,
+                AiTaskConstants.STATUS_ATTENTION_REQUIRED,
+                AiTaskConstants.STATUS_CANCELLED).contains(task.getStatus())) {
             return task;
         }
         int total = task.getTotalCount() == null ? 0 : Math.max(0, task.getTotalCount());
@@ -414,15 +416,15 @@ public class AiAsyncTaskService {
                 .eq(AiAsyncTask::getId, taskId)
                 .eq(AiAsyncTask::getOwnerUserId, userId)
                 .in(AiAsyncTask::getStatus, List.of(
-                        LearningConstants.AiTask.STATUS_FAILED,
-                        LearningConstants.AiTask.STATUS_PARTIAL_FAILED,
-                        LearningConstants.AiTask.STATUS_ATTENTION_REQUIRED,
-                        LearningConstants.AiTask.STATUS_CANCELLED))
+                        AiTaskConstants.STATUS_FAILED,
+                        AiTaskConstants.STATUS_PARTIAL_FAILED,
+                        AiTaskConstants.STATUS_ATTENTION_REQUIRED,
+                        AiTaskConstants.STATUS_CANCELLED))
                 .eq(AiAsyncTask::getDeleted, false)
-                .set(AiAsyncTask::getRetryCount, LearningConstants.ZERO)
-                .set(AiAsyncTask::getStatus, LearningConstants.AiTask.STATUS_PENDING)
-                .set(AiAsyncTask::getExecutionMode, LearningConstants.AiTask.EXECUTION_IMMEDIATE)
-                .set(AiAsyncTask::getFailedCount, LearningConstants.ZERO)
+                .set(AiAsyncTask::getRetryCount, CommonConstants.ZERO)
+                .set(AiAsyncTask::getStatus, AiTaskConstants.STATUS_PENDING)
+                .set(AiAsyncTask::getExecutionMode, AiTaskConstants.EXECUTION_IMMEDIATE)
+                .set(AiAsyncTask::getFailedCount, CommonConstants.ZERO)
                 .set(AiAsyncTask::getProgressPercent, progress)
                 .set(AiAsyncTask::getErrorMessage, null)
                 .set(AiAsyncTask::getStartedTime, null)
@@ -444,14 +446,14 @@ public class AiAsyncTaskService {
     @Transactional(rollbackFor = Exception.class)
     public AiAsyncTask runNow(Long userId, Long taskId) {
         AiAsyncTask task = require(userId, taskId);
-        if (LearningConstants.AiTask.STATUS_PENDING.equals(task.getStatus())) {
+        if (AiTaskConstants.STATUS_PENDING.equals(task.getStatus())) {
             LocalDateTime now = LocalDateTime.now();
             taskMapper.update(null, new LambdaUpdateWrapper<AiAsyncTask>()
                     .eq(AiAsyncTask::getId, taskId)
                     .eq(AiAsyncTask::getOwnerUserId, userId)
-                    .eq(AiAsyncTask::getStatus, LearningConstants.AiTask.STATUS_PENDING)
+                    .eq(AiAsyncTask::getStatus, AiTaskConstants.STATUS_PENDING)
                     .eq(AiAsyncTask::getDeleted, false)
-                    .set(AiAsyncTask::getExecutionMode, LearningConstants.AiTask.EXECUTION_IMMEDIATE)
+                    .set(AiAsyncTask::getExecutionMode, AiTaskConstants.EXECUTION_IMMEDIATE)
                     .set(AiAsyncTask::getScheduledTime, now)
                     .set(AiAsyncTask::getOperatorUserId, userId)
                     .set(AiAsyncTask::getUpdateBy, userId)
@@ -464,22 +466,22 @@ public class AiAsyncTaskService {
     @Transactional(rollbackFor = Exception.class)
     public AiAsyncTask cancelAsAdmin(Long operatorUserId, Long taskId) {
         AiAsyncTask task = requireAny(taskId);
-        if (List.of(LearningConstants.AiTask.STATUS_COMPLETED,
-                LearningConstants.AiTask.STATUS_PARTIAL_FAILED,
-                LearningConstants.AiTask.STATUS_ATTENTION_REQUIRED,
-                LearningConstants.AiTask.STATUS_FAILED,
-                LearningConstants.AiTask.STATUS_CANCELLED).contains(task.getStatus())) {
+        if (List.of(AiTaskConstants.STATUS_COMPLETED,
+                AiTaskConstants.STATUS_PARTIAL_FAILED,
+                AiTaskConstants.STATUS_ATTENTION_REQUIRED,
+                AiTaskConstants.STATUS_FAILED,
+                AiTaskConstants.STATUS_CANCELLED).contains(task.getStatus())) {
             return task;
         }
         LocalDateTime now = LocalDateTime.now();
         taskMapper.update(null, new LambdaUpdateWrapper<AiAsyncTask>()
                 .eq(AiAsyncTask::getId, taskId)
                 .in(AiAsyncTask::getStatus, List.of(
-                        LearningConstants.AiTask.STATUS_PENDING,
-                        LearningConstants.AiTask.STATUS_RUNNING,
-                        LearningConstants.AiTask.STATUS_RETRY_WAIT))
+                        AiTaskConstants.STATUS_PENDING,
+                        AiTaskConstants.STATUS_RUNNING,
+                        AiTaskConstants.STATUS_RETRY_WAIT))
                 .eq(AiAsyncTask::getDeleted, false)
-                .set(AiAsyncTask::getStatus, LearningConstants.AiTask.STATUS_CANCELLED)
+                .set(AiAsyncTask::getStatus, AiTaskConstants.STATUS_CANCELLED)
                 .set(AiAsyncTask::getCancelledTime, now)
                 .set(AiAsyncTask::getFinishedTime, now)
                 .set(AiAsyncTask::getOperatorUserId, operatorUserId)
@@ -534,16 +536,16 @@ public class AiAsyncTaskService {
 
     private void deleteInternal(Long operatorUserId, AiAsyncTask task) {
         LocalDateTime now = LocalDateTime.now();
-        if (List.of(LearningConstants.AiTask.STATUS_PENDING,
-                LearningConstants.AiTask.STATUS_RUNNING,
-                LearningConstants.AiTask.STATUS_RETRY_WAIT).contains(task.getStatus())) {
+        if (List.of(AiTaskConstants.STATUS_PENDING,
+                AiTaskConstants.STATUS_RUNNING,
+                AiTaskConstants.STATUS_RETRY_WAIT).contains(task.getStatus())) {
             executionService.cancelPendingSteps(task.getId(), operatorUserId);
         }
         taskMapper.update(null, new LambdaUpdateWrapper<AiAsyncTask>()
                 .eq(AiAsyncTask::getId, task.getId())
                 .eq(AiAsyncTask::getDeleted, false)
                 .set(AiAsyncTask::getDeleted, true)
-                .set(AiAsyncTask::getStatus, LearningConstants.AiTask.STATUS_CANCELLED)
+                .set(AiAsyncTask::getStatus, AiTaskConstants.STATUS_CANCELLED)
                 .set(AiAsyncTask::getOperatorUserId, operatorUserId)
                 .set(AiAsyncTask::getUpdateBy, operatorUserId)
                 .set(AiAsyncTask::getUpdateTime, now));
@@ -621,24 +623,24 @@ public class AiAsyncTaskService {
     /** 根据错误码决定自动重试还是转人工处理，并回收失败步骤作为断点。 */
     public void failFromException(Long taskId, RuntimeException exception) {
         AiAsyncTask task = taskMapper.selectById(taskId);
-        if (task == null || !LearningConstants.AiTask.STATUS_RUNNING.equals(task.getStatus())) return;
+        if (task == null || !AiTaskConstants.STATUS_RUNNING.equals(task.getStatus())) return;
         String code = exception instanceof LearningAssistantException business
                 ? business.getErrorCode() : null;
         boolean attention = ATTENTION_ERROR_CODES.contains(code);
         int retryCount = task.getRetryCount() == null ? 0 : task.getRetryCount();
         int maxRetry = task.getMaxRetryCount() == null
-                ? LearningConstants.AiTask.DEFAULT_MAX_RETRY_COUNT : task.getMaxRetryCount();
+                ? AiTaskConstants.DEFAULT_MAX_RETRY_COUNT : task.getMaxRetryCount();
         boolean retryable = !attention && retryCount < maxRetry;
         LocalDateTime now = LocalDateTime.now();
         String message = limitError(exception.getMessage());
         LambdaUpdateWrapper<AiAsyncTask> wrapper = new LambdaUpdateWrapper<AiAsyncTask>()
                 .eq(AiAsyncTask::getId, taskId)
-                .eq(AiAsyncTask::getStatus, LearningConstants.AiTask.STATUS_RUNNING)
+                .eq(AiAsyncTask::getStatus, AiTaskConstants.STATUS_RUNNING)
                 .eq(AiAsyncTask::getDeleted, false)
                 .set(AiAsyncTask::getStatus, retryable
-                        ? LearningConstants.AiTask.STATUS_RETRY_WAIT
-                        : (attention ? LearningConstants.AiTask.STATUS_ATTENTION_REQUIRED
-                        : LearningConstants.AiTask.STATUS_FAILED))
+                        ? AiTaskConstants.STATUS_RETRY_WAIT
+                        : (attention ? AiTaskConstants.STATUS_ATTENTION_REQUIRED
+                        : AiTaskConstants.STATUS_FAILED))
                 .set(AiAsyncTask::getErrorMessage, message)
                 .set(AiAsyncTask::getFinishedTime, retryable ? null : now)
                 .set(AiAsyncTask::getRetryCount, retryable ? retryCount + 1 : retryCount)
@@ -649,9 +651,9 @@ public class AiAsyncTaskService {
             executionService.resetRecoverableSteps(taskId, task.getOperatorUserId());
         }
         log.info("AI 异步任务异常 taskId={} type={} errorCode={} status={} retryCount={}",
-                taskId, task.getTaskType(), code, retryable ? LearningConstants.AiTask.STATUS_RETRY_WAIT
-                        : (attention ? LearningConstants.AiTask.STATUS_ATTENTION_REQUIRED
-                        : LearningConstants.AiTask.STATUS_FAILED), retryable ? retryCount + 1 : retryCount);
+                taskId, task.getTaskType(), code, retryable ? AiTaskConstants.STATUS_RETRY_WAIT
+                        : (attention ? AiTaskConstants.STATUS_ATTENTION_REQUIRED
+                        : AiTaskConstants.STATUS_FAILED), retryable ? retryCount + 1 : retryCount);
     }
 
     /** 详情按需加载步骤和执行尝试，避免任务列表产生 N+1。 */
@@ -665,27 +667,27 @@ public class AiAsyncTaskService {
     public boolean isCancelled(Long taskId) {
         return taskMapper.selectCount(new LambdaQueryWrapper<AiAsyncTask>()
                 .eq(AiAsyncTask::getId, taskId)
-                .eq(AiAsyncTask::getStatus, LearningConstants.AiTask.STATUS_CANCELLED)
+                .eq(AiAsyncTask::getStatus, AiTaskConstants.STATUS_CANCELLED)
                 .eq(AiAsyncTask::getDeleted, false)) > 0;
     }
 
     private String resolveExecutionMode(String executionMode) {
         String mode = StringUtils.hasText(executionMode)
-                ? executionMode.trim() : LearningConstants.AiTask.EXECUTION_IMMEDIATE;
-        if (!List.of(LearningConstants.AiTask.EXECUTION_IMMEDIATE,
-                LearningConstants.AiTask.EXECUTION_SCHEDULED,
-                LearningConstants.AiTask.EXECUTION_LOW_COST_WINDOW).contains(mode)) {
+                ? executionMode.trim() : AiTaskConstants.EXECUTION_IMMEDIATE;
+        if (!List.of(AiTaskConstants.EXECUTION_IMMEDIATE,
+                AiTaskConstants.EXECUTION_SCHEDULED,
+                AiTaskConstants.EXECUTION_LOW_COST_WINDOW).contains(mode)) {
             throw LearningAssistantException.badRequest(
-                    LearningConstants.ErrorCode.AI_ASYNC_TASK_EXECUTION_MODE_INVALID);
+                    LearningErrorCode.AI_ASYNC_TASK_EXECUTION_MODE_INVALID);
         }
         return mode;
     }
 
     private LocalDateTime resolveScheduledTime(String mode, LocalDateTime scheduledTime, LocalDateTime now) {
-        if (LearningConstants.AiTask.EXECUTION_SCHEDULED.equals(mode) && scheduledTime != null) {
+        if (AiTaskConstants.EXECUTION_SCHEDULED.equals(mode) && scheduledTime != null) {
             return scheduledTime.isBefore(now) ? now : scheduledTime;
         }
-        if (LearningConstants.AiTask.EXECUTION_LOW_COST_WINDOW.equals(mode)) {
+        if (AiTaskConstants.EXECUTION_LOW_COST_WINDOW.equals(mode)) {
             LocalDateTime lowCostStart = now.toLocalDate().atStartOfDay();
             return now.isBefore(lowCostStart.plusHours(6)) ? lowCostStart : lowCostStart.plusDays(1);
         }
@@ -697,7 +699,7 @@ public class AiAsyncTaskService {
         try {
             return objectMapper.writeValueAsString(payload);
         } catch (JsonProcessingException ex) {
-            throw LearningAssistantException.badRequest(LearningConstants.ErrorCode.JSON_PARSE_FAILED);
+            throw LearningAssistantException.badRequest(LearningErrorCode.JSON_PARSE_FAILED);
         }
     }
 
@@ -713,23 +715,23 @@ public class AiAsyncTaskService {
     }
 
     private long retryDelaySeconds(int retryCount) {
-        return Math.min(LearningConstants.AiTask.MAX_RETRY_DELAY_SECONDS,
-                LearningConstants.AiTask.RETRY_BASE_DELAY_SECONDS * (1L << Math.min(retryCount, 6)));
+        return Math.min(AiTaskConstants.MAX_RETRY_DELAY_SECONDS,
+                AiTaskConstants.RETRY_BASE_DELAY_SECONDS * (1L << Math.min(retryCount, 6)));
     }
 
     private static final Set<String> ATTENTION_ERROR_CODES = Set.of(
-            LearningConstants.ErrorCode.MODEL_CONFIG_NOT_FOUND.getCode(),
-            LearningConstants.ErrorCode.MODEL_CONFIG_NOT_BOUND.getCode(),
-            LearningConstants.ErrorCode.AI_PROVIDER_MISSING.getCode(),
-            LearningConstants.ErrorCode.AI_PROVIDER_DISABLED.getCode(),
-            LearningConstants.ErrorCode.AI_PROVIDER_API_KEY_MISSING.getCode(),
-            LearningConstants.ErrorCode.AI_PROVIDER_BASE_URL_MISSING.getCode(),
-            LearningConstants.ErrorCode.AI_MODEL_NAME_MISSING.getCode(),
-            LearningConstants.ErrorCode.AI_MODEL_UNSUPPORTED.getCode(),
-            LearningConstants.ErrorCode.AI_MODEL_BALANCE_INSUFFICIENT.getCode(),
-            LearningConstants.ErrorCode.AI_PROMPT_TOO_LARGE.getCode(),
-            LearningConstants.ErrorCode.AI_RESPONSE_PARSE_FAILED.getCode(),
-            LearningConstants.ErrorCode.AI_ASYNC_TASK_TYPE_INVALID.getCode(),
-            LearningConstants.ErrorCode.AI_ASYNC_TASK_STEP_NOT_FOUND.getCode(),
-            LearningConstants.ErrorCode.JSON_PARSE_FAILED.getCode());
+            LearningErrorCode.MODEL_CONFIG_NOT_FOUND.getCode(),
+            LearningErrorCode.MODEL_CONFIG_NOT_BOUND.getCode(),
+            LearningErrorCode.AI_PROVIDER_MISSING.getCode(),
+            LearningErrorCode.AI_PROVIDER_DISABLED.getCode(),
+            LearningErrorCode.AI_PROVIDER_API_KEY_MISSING.getCode(),
+            LearningErrorCode.AI_PROVIDER_BASE_URL_MISSING.getCode(),
+            LearningErrorCode.AI_MODEL_NAME_MISSING.getCode(),
+            LearningErrorCode.AI_MODEL_UNSUPPORTED.getCode(),
+            LearningErrorCode.AI_MODEL_BALANCE_INSUFFICIENT.getCode(),
+            LearningErrorCode.AI_PROMPT_TOO_LARGE.getCode(),
+            LearningErrorCode.AI_RESPONSE_PARSE_FAILED.getCode(),
+            LearningErrorCode.AI_ASYNC_TASK_TYPE_INVALID.getCode(),
+            LearningErrorCode.AI_ASYNC_TASK_STEP_NOT_FOUND.getCode(),
+            LearningErrorCode.JSON_PARSE_FAILED.getCode());
 }

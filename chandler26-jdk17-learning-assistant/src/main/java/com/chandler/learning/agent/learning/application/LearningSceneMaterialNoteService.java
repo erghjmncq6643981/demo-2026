@@ -1,20 +1,21 @@
 package com.chandler.learning.agent.learning.application;
 
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
-import com.chandler.learning.agent.learning.api.SceneMaterialNoteRequest;
-import com.chandler.learning.agent.learning.api.SceneMaterialNoteResponse;
-import com.chandler.learning.agent.learning.domain.LearningPlan;
-import com.chandler.learning.agent.learning.domain.LearningPlanUnit;
-import com.chandler.learning.agent.learning.domain.LearningSceneMaterial;
-import com.chandler.learning.agent.learning.domain.LearningSceneMaterialNote;
-import com.chandler.learning.agent.system.domain.SystemLogType;
+import com.chandler.learning.agent.learning.api.request.SceneMaterialNoteRequest;
+import com.chandler.learning.agent.learning.api.response.SceneMaterialNoteResponse;
+import com.chandler.learning.agent.learning.domain.entity.LearningPlan;
+import com.chandler.learning.agent.learning.domain.entity.LearningPlanUnit;
+import com.chandler.learning.agent.learning.domain.entity.LearningSceneMaterial;
+import com.chandler.learning.agent.learning.domain.entity.LearningSceneMaterialNote;
+import com.chandler.learning.agent.system.domain.enums.SystemLogType;
 import com.chandler.learning.agent.exception.LearningAssistantException;
 import com.chandler.learning.agent.identity.application.UserDisplayNameService;
-import com.chandler.learning.agent.learning.infrastructure.LearningPlanMapper;
-import com.chandler.learning.agent.learning.infrastructure.LearningPlanUnitMapper;
-import com.chandler.learning.agent.learning.infrastructure.LearningSceneMaterialMapper;
-import com.chandler.learning.agent.learning.infrastructure.LearningSceneMaterialNoteMapper;
-import com.chandler.learning.agent.support.LearningConstants;
+import com.chandler.learning.agent.learning.infrastructure.mapper.LearningPlanMapper;
+import com.chandler.learning.agent.learning.infrastructure.mapper.LearningPlanUnitMapper;
+import com.chandler.learning.agent.learning.infrastructure.mapper.LearningSceneMaterialMapper;
+import com.chandler.learning.agent.learning.infrastructure.mapper.LearningSceneMaterialNoteMapper;
+import com.chandler.learning.agent.common.constant.CommonConstants;
+import com.chandler.learning.agent.common.exception.LearningErrorCode;
 import com.chandler.learning.agent.system.application.SystemLogService;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -64,7 +65,7 @@ public class LearningSceneMaterialNoteService {
             note.setCreateBy(userId);
             note.setCreateTime(now);
             note.setDeleted(false);
-            note.setVersion(LearningConstants.ZERO);
+            note.setVersion(CommonConstants.ZERO);
         }
         note.setContent(content);
         note.setContentFormat(MARKDOWN);
@@ -87,17 +88,17 @@ public class LearningSceneMaterialNoteService {
                 .eq(LearningPlan::getId, planId)
                 .eq(LearningPlan::getUserId, userId)
                 .eq(LearningPlan::getDeleted, false)
-                .last(LearningConstants.SQL_LIMIT_ONE));
+                .last(CommonConstants.SQL_LIMIT_ONE));
         if (plan == null) {
-            throw LearningAssistantException.notFound(LearningConstants.ErrorCode.LEARNING_PLAN_NOT_FOUND);
+            throw LearningAssistantException.notFound(LearningErrorCode.LEARNING_PLAN_NOT_FOUND);
         }
         LearningPlanUnit unit = unitMapper.selectOne(new LambdaQueryWrapper<LearningPlanUnit>()
                 .eq(LearningPlanUnit::getId, unitId)
                 .eq(LearningPlanUnit::getPlanId, planId)
                 .eq(LearningPlanUnit::getDeleted, false)
-                .last(LearningConstants.SQL_LIMIT_ONE));
+                .last(CommonConstants.SQL_LIMIT_ONE));
         if (unit == null || unit.getSceneMaterialId() == null) {
-            throw LearningAssistantException.notFound(LearningConstants.ErrorCode.LEARNING_PLAN_UNIT_NOT_FOUND);
+            throw LearningAssistantException.notFound(LearningErrorCode.LEARNING_PLAN_UNIT_NOT_FOUND);
         }
         LearningSceneMaterial material = materialMapper.selectOne(new LambdaQueryWrapper<LearningSceneMaterial>()
                 .eq(LearningSceneMaterial::getId, unit.getSceneMaterialId())
@@ -105,9 +106,9 @@ public class LearningSceneMaterialNoteService {
                 .eq(LearningSceneMaterial::getPlanId, planId)
                 .eq(LearningSceneMaterial::getUserId, userId)
                 .eq(LearningSceneMaterial::getDeleted, false)
-                .last(LearningConstants.SQL_LIMIT_ONE));
+                .last(CommonConstants.SQL_LIMIT_ONE));
         if (material == null) {
-            throw LearningAssistantException.notFound(LearningConstants.ErrorCode.LEARNING_SCENE_MATERIAL_NOT_FOUND);
+            throw LearningAssistantException.notFound(LearningErrorCode.LEARNING_SCENE_MATERIAL_NOT_FOUND);
         }
         return material;
     }
@@ -119,7 +120,7 @@ public class LearningSceneMaterialNoteService {
                 .eq(LearningSceneMaterialNote::getUnitId, unitId)
                 .eq(LearningSceneMaterialNote::getSceneMaterialId, materialId)
                 .eq(LearningSceneMaterialNote::getDeleted, false)
-                .last(LearningConstants.SQL_LIMIT_ONE));
+                .last(CommonConstants.SQL_LIMIT_ONE));
     }
 
     private SceneMaterialNoteResponse toResponse(LearningSceneMaterialNote note,

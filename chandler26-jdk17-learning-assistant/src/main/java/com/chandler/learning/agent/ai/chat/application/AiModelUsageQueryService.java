@@ -1,7 +1,7 @@
 package com.chandler.learning.agent.ai.chat.application;
 
-import com.chandler.learning.agent.ai.chat.infrastructure.AiModelCallRecordMapper;
-import com.chandler.learning.agent.ai.model.domain.AiModelUsageSummary;
+import com.chandler.learning.agent.ai.chat.infrastructure.mapper.AiModelCallRecordMapper;
+import com.chandler.learning.agent.ai.model.domain.bo.AiModelUsageSummary;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 

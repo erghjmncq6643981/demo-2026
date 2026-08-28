@@ -2,34 +2,37 @@ package com.chandler.learning.agent.vocabulary.application;
 
 import cn.hutool.crypto.digest.DigestUtil;
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
-import com.chandler.learning.agent.vocabulary.api.VocabularyImportBatchConfirmRequest;
-import com.chandler.learning.agent.vocabulary.api.VocabularyImportEntryResponse;
-import com.chandler.learning.agent.vocabulary.api.VocabularyImportEntryUpdateRequest;
-import com.chandler.learning.agent.vocabulary.api.VocabularyImportPublishRequest;
-import com.chandler.learning.agent.vocabulary.api.VocabularyImportMetadataUpdateRequest;
-import com.chandler.learning.agent.vocabulary.api.VocabularyImportResponse;
-import com.chandler.learning.agent.vocabulary.api.VocabularyImportPageResponse;
-import com.chandler.learning.agent.vocabulary.api.VocabularyCatalogResponse;
-import com.chandler.learning.agent.vocabulary.api.VocabularyMarkdownImportRequest;
-import com.chandler.learning.agent.vocabulary.domain.LearningWordProgress;
-import com.chandler.learning.agent.vocabulary.domain.LearningWordbook;
-import com.chandler.learning.agent.vocabulary.domain.LearningWordbookEntry;
-import com.chandler.learning.agent.vocabulary.domain.VocabularyCatalog;
-import com.chandler.learning.agent.vocabulary.domain.VocabularyCatalogEntry;
-import com.chandler.learning.agent.vocabulary.domain.VocabularyCatalogVersion;
-import com.chandler.learning.agent.vocabulary.domain.VocabularyImportJob;
-import com.chandler.learning.agent.system.domain.SystemLogType;
+import com.chandler.learning.agent.vocabulary.api.request.VocabularyImportBatchConfirmRequest;
+import com.chandler.learning.agent.vocabulary.api.response.VocabularyImportEntryResponse;
+import com.chandler.learning.agent.vocabulary.api.request.VocabularyImportEntryUpdateRequest;
+import com.chandler.learning.agent.vocabulary.api.request.VocabularyImportPublishRequest;
+import com.chandler.learning.agent.vocabulary.api.request.VocabularyImportMetadataUpdateRequest;
+import com.chandler.learning.agent.vocabulary.api.response.VocabularyImportResponse;
+import com.chandler.learning.agent.vocabulary.api.response.VocabularyImportPageResponse;
+import com.chandler.learning.agent.vocabulary.api.response.VocabularyCatalogResponse;
+import com.chandler.learning.agent.vocabulary.api.request.VocabularyMarkdownImportRequest;
+import com.chandler.learning.agent.vocabulary.domain.entity.LearningWordProgress;
+import com.chandler.learning.agent.vocabulary.domain.entity.LearningWordbook;
+import com.chandler.learning.agent.vocabulary.domain.entity.LearningWordbookEntry;
+import com.chandler.learning.agent.vocabulary.domain.entity.VocabularyCatalog;
+import com.chandler.learning.agent.vocabulary.domain.entity.VocabularyCatalogEntry;
+import com.chandler.learning.agent.vocabulary.domain.entity.VocabularyCatalogVersion;
+import com.chandler.learning.agent.vocabulary.domain.entity.VocabularyImportJob;
+import com.chandler.learning.agent.system.domain.enums.SystemLogType;
 import com.chandler.learning.agent.exception.LearningAssistantException;
-import com.chandler.learning.agent.vocabulary.infrastructure.LearningWordbookEntryMapper;
-import com.chandler.learning.agent.vocabulary.infrastructure.LearningWordbookMapper;
-import com.chandler.learning.agent.vocabulary.infrastructure.VocabularyCatalogEntryMapper;
-import com.chandler.learning.agent.vocabulary.infrastructure.VocabularyCatalogMapper;
-import com.chandler.learning.agent.vocabulary.infrastructure.VocabularyCatalogVersionMapper;
-import com.chandler.learning.agent.vocabulary.infrastructure.VocabularyImportJobMapper;
+import com.chandler.learning.agent.vocabulary.infrastructure.mapper.LearningWordbookEntryMapper;
+import com.chandler.learning.agent.vocabulary.infrastructure.mapper.LearningWordbookMapper;
+import com.chandler.learning.agent.vocabulary.infrastructure.mapper.VocabularyCatalogEntryMapper;
+import com.chandler.learning.agent.vocabulary.infrastructure.mapper.VocabularyCatalogMapper;
+import com.chandler.learning.agent.vocabulary.infrastructure.mapper.VocabularyCatalogVersionMapper;
+import com.chandler.learning.agent.vocabulary.infrastructure.mapper.VocabularyImportJobMapper;
 import com.chandler.learning.agent.vocabulary.application.LearningWordProgressService;
 import com.chandler.learning.agent.system.application.SystemLogService;
 import com.chandler.learning.agent.identity.application.UserDisplayNameService;
-import com.chandler.learning.agent.support.LearningConstants;
+import com.chandler.learning.agent.common.constant.CommonConstants;
+import com.chandler.learning.agent.common.exception.LearningErrorCode;
+import com.chandler.learning.agent.vocabulary.domain.constant.VocabularyCardConstants;
+import com.chandler.learning.agent.vocabulary.domain.constant.VocabularyImportConstants;
 import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import lombok.RequiredArgsConstructor;
@@ -82,8 +85,8 @@ public class VocabularyImportService {
         catalog.setName(request.getCatalogName().trim());
         catalog.setLearningPurpose(trimToNull(request.getLearningPurpose()));
         catalog.setExamType(sourceType);
-        catalog.setStatus(LearningConstants.VocabularyImport.CATALOG_STATUS_DRAFT);
-        catalog.setVisibility(LearningConstants.VocabularyImport.VISIBILITY_PUBLIC);
+        catalog.setStatus(VocabularyImportConstants.CATALOG_STATUS_DRAFT);
+        catalog.setVisibility(VocabularyImportConstants.VISIBILITY_PUBLIC);
         catalog.setDeleted(false);
         catalog.setCreateTime(now);
         catalog.setUpdateTime(now);
@@ -92,14 +95,14 @@ public class VocabularyImportService {
         int warningCount = (int) parsed.stream().filter(MarkdownVocabularyParser.ParsedVocabulary::suspicious).count();
         VocabularyCatalogVersion version = new VocabularyCatalogVersion();
         version.setCatalogId(catalog.getId());
-        version.setVersionNo(LearningConstants.FIRST_SEQUENCE);
-        version.setStatus(LearningConstants.VocabularyImport.VERSION_STATUS_REVIEWING);
-        version.setSourceFormat(LearningConstants.VocabularyImport.FORMAT_MARKDOWN);
+        version.setVersionNo(CommonConstants.FIRST_SEQUENCE);
+        version.setStatus(VocabularyImportConstants.VERSION_STATUS_REVIEWING);
+        version.setSourceFormat(VocabularyImportConstants.FORMAT_MARKDOWN);
         version.setSourceFileName(trimToNull(request.getFileName()));
         version.setSourceHash(DigestUtil.sha256Hex(request.getContent()));
         version.setTotalCount(parsed.size());
         version.setWarningCount(warningCount);
-        version.setReviewedWarningCount(LearningConstants.ZERO);
+        version.setReviewedWarningCount(CommonConstants.ZERO);
         version.setDeleted(false);
         version.setCreateTime(now);
         version.setUpdateTime(now);
@@ -109,12 +112,12 @@ public class VocabularyImportService {
         job.setUserId(userId);
         job.setCatalogId(catalog.getId());
         job.setCatalogVersionId(version.getId());
-        job.setSourceFormat(LearningConstants.VocabularyImport.FORMAT_MARKDOWN);
+        job.setSourceFormat(VocabularyImportConstants.FORMAT_MARKDOWN);
         job.setSourceFileName(trimToNull(request.getFileName()));
-        job.setStatus(LearningConstants.VocabularyImport.STATUS_REVIEWING);
+        job.setStatus(VocabularyImportConstants.STATUS_REVIEWING);
         job.setTotalCount(parsed.size());
         job.setWarningCount(warningCount);
-        job.setReviewedWarningCount(LearningConstants.ZERO);
+        job.setReviewedWarningCount(CommonConstants.ZERO);
         job.setFinishedTime(now);
         job.setDeleted(false);
         job.setCreateTime(now);
@@ -136,15 +139,15 @@ public class VocabularyImportService {
             entry.setWarningCodes(writeJson(item.warnings()));
             entry.setSuspicious(item.suspicious());
             entry.setReviewStatus(item.suspicious()
-                    ? LearningConstants.VocabularyImport.REVIEW_PENDING
-                    : LearningConstants.VocabularyImport.REVIEW_NOT_REQUIRED);
+                    ? VocabularyImportConstants.REVIEW_PENDING
+                    : VocabularyImportConstants.REVIEW_NOT_REQUIRED);
             entry.setPublished(false);
             entry.setCreateBy(userId);
             entry.setUpdateBy(userId);
             entry.setCreateTime(now);
             entry.setUpdateTime(now);
             entry.setDeleted(false);
-            entry.setVersion(LearningConstants.ZERO);
+            entry.setVersion(CommonConstants.ZERO);
 
             batchList.add(entry);
             if (batchList.size() >= 500) {
@@ -161,15 +164,15 @@ public class VocabularyImportService {
         log.info("用户「{}」导入了词表「{}」，共 {} 个词，其中 {} 个需要人工确认",
                 userDisplayNameService.userName(userId), catalog.getName(), parsed.size(), warningCount);
         return detail(userId, job.getId(), warningCount > 0, null,
-                LearningConstants.VocabularyImport.DEFAULT_PAGE,
-                LearningConstants.VocabularyImport.DEFAULT_PAGE_SIZE);
+                VocabularyImportConstants.DEFAULT_PAGE,
+                VocabularyImportConstants.DEFAULT_PAGE_SIZE);
     }
 
     /** 查询已发布的公共词本，供所有学习者创建计划。 */
     public List<VocabularyCatalogResponse> listPublicCatalogs() {
         List<VocabularyCatalog> catalogs = catalogMapper.selectList(new LambdaQueryWrapper<VocabularyCatalog>()
-                .eq(VocabularyCatalog::getStatus, LearningConstants.VocabularyImport.CATALOG_STATUS_PUBLISHED)
-                .eq(VocabularyCatalog::getVisibility, LearningConstants.VocabularyImport.VISIBILITY_PUBLIC)
+                .eq(VocabularyCatalog::getStatus, VocabularyImportConstants.CATALOG_STATUS_PUBLISHED)
+                .eq(VocabularyCatalog::getVisibility, VocabularyImportConstants.VISIBILITY_PUBLIC)
                 .eq(VocabularyCatalog::getDeleted, false)
                 .orderByDesc(VocabularyCatalog::getUpdateTime));
         if (catalogs.isEmpty()) {
@@ -214,11 +217,11 @@ public class VocabularyImportService {
                                            Integer page, Integer pageSize) {
         VocabularyImportJob job = requireJob(userId, jobId);
         VocabularyCatalog catalog = requireCatalog(userId, job.getCatalogId());
-        int resolvedPage = Math.max(LearningConstants.VocabularyImport.DEFAULT_PAGE,
-                page == null ? LearningConstants.VocabularyImport.DEFAULT_PAGE : page);
-        int resolvedPageSize = Math.max(LearningConstants.FIRST_SEQUENCE,
-                Math.min(pageSize == null ? LearningConstants.VocabularyImport.DEFAULT_PAGE_SIZE : pageSize,
-                        LearningConstants.VocabularyImport.MAX_PAGE_SIZE));
+        int resolvedPage = Math.max(VocabularyImportConstants.DEFAULT_PAGE,
+                page == null ? VocabularyImportConstants.DEFAULT_PAGE : page);
+        int resolvedPageSize = Math.max(CommonConstants.FIRST_SEQUENCE,
+                Math.min(pageSize == null ? VocabularyImportConstants.DEFAULT_PAGE_SIZE : pageSize,
+                        VocabularyImportConstants.MAX_PAGE_SIZE));
 
         LambdaQueryWrapper<VocabularyCatalogEntry> wrapper = new LambdaQueryWrapper<VocabularyCatalogEntry>()
                 .eq(VocabularyCatalogEntry::getCatalogVersionId, job.getCatalogVersionId())
@@ -248,11 +251,11 @@ public class VocabularyImportService {
 
     /** 分页查询管理员导入历史；调用入口必须先完成管理员鉴权。 */
     public VocabularyImportPageResponse list(Long userId, Integer page, Integer pageSize) {
-        int resolvedPage = Math.max(LearningConstants.VocabularyImport.DEFAULT_PAGE,
-                page == null ? LearningConstants.VocabularyImport.DEFAULT_PAGE : page);
-        int resolvedPageSize = Math.max(LearningConstants.FIRST_SEQUENCE,
-                Math.min(pageSize == null ? LearningConstants.VocabularyImport.DEFAULT_PAGE_SIZE : pageSize,
-                        LearningConstants.VocabularyImport.MAX_PAGE_SIZE));
+        int resolvedPage = Math.max(VocabularyImportConstants.DEFAULT_PAGE,
+                page == null ? VocabularyImportConstants.DEFAULT_PAGE : page);
+        int resolvedPageSize = Math.max(CommonConstants.FIRST_SEQUENCE,
+                Math.min(pageSize == null ? VocabularyImportConstants.DEFAULT_PAGE_SIZE : pageSize,
+                        VocabularyImportConstants.MAX_PAGE_SIZE));
         Page<VocabularyImportJob> pageResult = importJobMapper.selectPage(
                 new Page<>(resolvedPage, resolvedPageSize),
                 new LambdaQueryWrapper<VocabularyImportJob>()
@@ -291,7 +294,7 @@ public class VocabularyImportService {
         entry.setApprovedTerm(approvedTerm);
         entry.setNormalizedTerm(normalize(approvedTerm));
         if (Boolean.TRUE.equals(entry.getSuspicious())) {
-            entry.setReviewStatus(LearningConstants.VocabularyImport.REVIEW_CONFIRMED);
+            entry.setReviewStatus(VocabularyImportConstants.REVIEW_CONFIRMED);
         }
         entry.setUpdateTime(LocalDateTime.now());
         catalogEntryMapper.updateById(entry);
@@ -313,7 +316,7 @@ public class VocabularyImportService {
                 new LambdaQueryWrapper<VocabularyCatalogEntry>()
                         .eq(VocabularyCatalogEntry::getCatalogVersionId, job.getCatalogVersionId())
                         .eq(VocabularyCatalogEntry::getSuspicious, true)
-                        .eq(VocabularyCatalogEntry::getReviewStatus, LearningConstants.VocabularyImport.REVIEW_PENDING)
+                        .eq(VocabularyCatalogEntry::getReviewStatus, VocabularyImportConstants.REVIEW_PENDING)
                         .eq(VocabularyCatalogEntry::getDeleted, false)
                         .in(resolvedRequest.getEntryIds() != null && !resolvedRequest.getEntryIds().isEmpty(),
                                 VocabularyCatalogEntry::getId, resolvedRequest.getEntryIds()));
@@ -325,7 +328,7 @@ public class VocabularyImportService {
                     : entry.getOriginalTerm();
             entry.setApprovedTerm(approved);
             entry.setNormalizedTerm(normalize(approved));
-            entry.setReviewStatus(LearningConstants.VocabularyImport.REVIEW_CONFIRMED);
+            entry.setReviewStatus(VocabularyImportConstants.REVIEW_CONFIRMED);
             entry.setUpdateBy(userId);
             entry.setUpdateTime(now);
         }
@@ -336,8 +339,8 @@ public class VocabularyImportService {
         log.info("用户「{}」批量确认了词表导入任务 {} 中的 {} 个疑似断词",
                 userDisplayNameService.userName(userId), jobId, pending.size());
         return detail(userId, jobId, true, null,
-                LearningConstants.VocabularyImport.DEFAULT_PAGE,
-                LearningConstants.VocabularyImport.DEFAULT_PAGE_SIZE);
+                VocabularyImportConstants.DEFAULT_PAGE,
+                VocabularyImportConstants.DEFAULT_PAGE_SIZE);
     }
 
     /**
@@ -376,8 +379,8 @@ public class VocabularyImportService {
 
         log.info("用户「{}」更新了词表导入任务 {} 的元数据", userDisplayNameService.userName(userId), jobId);
         return detail(userId, jobId, false, null,
-                LearningConstants.VocabularyImport.DEFAULT_PAGE,
-                LearningConstants.VocabularyImport.DEFAULT_PAGE_SIZE);
+                VocabularyImportConstants.DEFAULT_PAGE,
+                VocabularyImportConstants.DEFAULT_PAGE_SIZE);
     }
 
     /**
@@ -389,7 +392,7 @@ public class VocabularyImportService {
         refreshReviewedCounts(job);
         if (!Objects.equals(job.getWarningCount(), job.getReviewedWarningCount())) {
             throw LearningAssistantException.badRequest(
-                    LearningConstants.ErrorCode.VOCABULARY_IMPORT_NOT_REVIEWED,
+                    LearningErrorCode.VOCABULARY_IMPORT_NOT_REVIEWED,
                     "仍有 " + (value(job.getWarningCount()) - value(job.getReviewedWarningCount())) + " 个疑似断词未确认");
         }
         LearningWordbook wordbook = request == null || request.getWordbookId() == null
@@ -415,7 +418,7 @@ public class VocabularyImportService {
                         (left, right) -> left,
                         LinkedHashMap::new));
         LocalDateTime now = LocalDateTime.now();
-        int inserted = LearningConstants.ZERO;
+        int inserted = CommonConstants.ZERO;
         List<LearningWordbookEntry> newWordbookEntries = new java.util.ArrayList<>();
         List<LearningWordbookEntry> existingWordbookEntries = new java.util.ArrayList<>();
         List<Long> publishedEntryIds = new java.util.ArrayList<>();
@@ -441,7 +444,7 @@ public class VocabularyImportService {
                         wordbookEntry.setSnapshotTime(now);
                     }
                     if (!StringUtils.hasText(wordbookEntry.getCardStatus())) {
-                        wordbookEntry.setCardStatus(LearningConstants.VocabularyCard.STATUS_NOT_REQUIRED);
+                        wordbookEntry.setCardStatus(VocabularyCardConstants.STATUS_NOT_REQUIRED);
                     }
                     wordbookEntry.setUpdateBy(userId);
                     wordbookEntry.setUpdateTime(now);
@@ -460,15 +463,15 @@ public class VocabularyImportService {
             catalogEntryMapper.markPublishedBatch(chunk, now, userId);
         }
 
-        version.setStatus(LearningConstants.VocabularyImport.VERSION_STATUS_PUBLISHED);
+        version.setStatus(VocabularyImportConstants.VERSION_STATUS_PUBLISHED);
         version.setPublishedTime(now);
         version.setUpdateTime(now);
         versionMapper.updateById(version);
         catalog.setLatestVersionId(version.getId());
-        catalog.setStatus(LearningConstants.VocabularyImport.CATALOG_STATUS_PUBLISHED);
+        catalog.setStatus(VocabularyImportConstants.CATALOG_STATUS_PUBLISHED);
         catalog.setUpdateTime(now);
         catalogMapper.updateById(catalog);
-        job.setStatus(LearningConstants.VocabularyImport.STATUS_PUBLISHED);
+        job.setStatus(VocabularyImportConstants.STATUS_PUBLISHED);
         job.setFinishedTime(now);
         job.setUpdateTime(now);
         importJobMapper.updateById(job);
@@ -479,15 +482,15 @@ public class VocabularyImportService {
         log.info("用户「{}」发布了公共词本「{}」，目标 {}，词表共 {} 个词，新增个人词条 {} 个",
                 userDisplayNameService.userName(userId), catalog.getName(), target, entries.size(), inserted);
         return detail(userId, jobId, false, null,
-                LearningConstants.VocabularyImport.DEFAULT_PAGE,
-                LearningConstants.VocabularyImport.DEFAULT_PAGE_SIZE);
+                VocabularyImportConstants.DEFAULT_PAGE,
+                VocabularyImportConstants.DEFAULT_PAGE_SIZE);
     }
 
     private void refreshReviewedCounts(VocabularyImportJob job) {
         int reviewed = catalogEntryMapper.selectCount(new LambdaQueryWrapper<VocabularyCatalogEntry>()
                 .eq(VocabularyCatalogEntry::getCatalogVersionId, job.getCatalogVersionId())
                 .eq(VocabularyCatalogEntry::getSuspicious, true)
-                .eq(VocabularyCatalogEntry::getReviewStatus, LearningConstants.VocabularyImport.REVIEW_CONFIRMED)
+                .eq(VocabularyCatalogEntry::getReviewStatus, VocabularyImportConstants.REVIEW_CONFIRMED)
                 .eq(VocabularyCatalogEntry::getDeleted, false)).intValue();
         job.setReviewedWarningCount(reviewed);
         job.setUpdateTime(LocalDateTime.now());
@@ -525,7 +528,7 @@ public class VocabularyImportService {
         response.setTotalCount(job.getTotalCount());
         response.setWarningCount(job.getWarningCount());
         response.setReviewedWarningCount(job.getReviewedWarningCount());
-        response.setPendingWarningCount(Math.max(LearningConstants.ZERO,
+        response.setPendingWarningCount(Math.max(CommonConstants.ZERO,
                 value(job.getWarningCount()) - value(job.getReviewedWarningCount())));
         response.setCreateTime(job.getCreateTime());
         return response;
@@ -551,24 +554,24 @@ public class VocabularyImportService {
         VocabularyImportJob job = importJobMapper.selectOne(new LambdaQueryWrapper<VocabularyImportJob>()
                 .eq(VocabularyImportJob::getId, identifier)
                 .eq(VocabularyImportJob::getDeleted, false)
-                .last(LearningConstants.SQL_LIMIT_ONE));
+                .last(CommonConstants.SQL_LIMIT_ONE));
         if (job == null) {
             job = importJobMapper.selectOne(new LambdaQueryWrapper<VocabularyImportJob>()
                     .eq(VocabularyImportJob::getCatalogVersionId, identifier)
                     .eq(VocabularyImportJob::getDeleted, false)
                     .orderByDesc(VocabularyImportJob::getUpdateTime)
-                    .last(LearningConstants.SQL_LIMIT_ONE));
+                    .last(CommonConstants.SQL_LIMIT_ONE));
         }
         if (job == null) {
             job = importJobMapper.selectOne(new LambdaQueryWrapper<VocabularyImportJob>()
                     .eq(VocabularyImportJob::getCatalogId, identifier)
                     .eq(VocabularyImportJob::getDeleted, false)
                     .orderByDesc(VocabularyImportJob::getUpdateTime)
-                    .last(LearningConstants.SQL_LIMIT_ONE));
+                    .last(CommonConstants.SQL_LIMIT_ONE));
         }
         if (job == null) {
             throw LearningAssistantException.notFound(
-                    LearningConstants.ErrorCode.VOCABULARY_IMPORT_NOT_FOUND,
+                    LearningErrorCode.VOCABULARY_IMPORT_NOT_FOUND,
                     "词表导入任务不存在: " + identifier);
         }
         return job;
@@ -576,9 +579,9 @@ public class VocabularyImportService {
 
     private VocabularyImportJob requireReviewingJob(Long userId, Long jobId) {
         VocabularyImportJob job = requireJob(userId, jobId);
-        if (LearningConstants.VocabularyImport.STATUS_PUBLISHED.equals(job.getStatus())) {
+        if (VocabularyImportConstants.STATUS_PUBLISHED.equals(job.getStatus())) {
             throw LearningAssistantException.badRequest(
-                    LearningConstants.ErrorCode.VOCABULARY_IMPORT_ALREADY_PUBLISHED,
+                    LearningErrorCode.VOCABULARY_IMPORT_ALREADY_PUBLISHED,
                     "词表已经发布，不能继续修改本次导入");
         }
         return job;
@@ -588,10 +591,10 @@ public class VocabularyImportService {
         VocabularyCatalog catalog = catalogMapper.selectOne(new LambdaQueryWrapper<VocabularyCatalog>()
                 .eq(VocabularyCatalog::getId, catalogId)
                 .eq(VocabularyCatalog::getDeleted, false)
-                .last(LearningConstants.SQL_LIMIT_ONE));
+                .last(CommonConstants.SQL_LIMIT_ONE));
         if (catalog == null) {
             throw LearningAssistantException.notFound(
-                    LearningConstants.ErrorCode.VOCABULARY_CATALOG_NOT_FOUND,
+                    LearningErrorCode.VOCABULARY_CATALOG_NOT_FOUND,
                     "词表不存在: " + catalogId);
         }
         return catalog;
@@ -602,10 +605,10 @@ public class VocabularyImportService {
                 .eq(VocabularyCatalogEntry::getId, entryId)
                 .eq(VocabularyCatalogEntry::getCatalogVersionId, job.getCatalogVersionId())
                 .eq(VocabularyCatalogEntry::getDeleted, false)
-                .last(LearningConstants.SQL_LIMIT_ONE));
+                .last(CommonConstants.SQL_LIMIT_ONE));
         if (entry == null) {
             throw LearningAssistantException.notFound(
-                    LearningConstants.ErrorCode.VOCABULARY_IMPORT_NOT_FOUND,
+                    LearningErrorCode.VOCABULARY_IMPORT_NOT_FOUND,
                     "导入词条不存在: " + entryId);
         }
         return entry;
@@ -616,10 +619,10 @@ public class VocabularyImportService {
                 .eq(LearningWordbook::getId, wordbookId)
                 .eq(LearningWordbook::getUserId, userId)
                 .eq(LearningWordbook::getDeleted, false)
-                .last(LearningConstants.SQL_LIMIT_ONE));
+                .last(CommonConstants.SQL_LIMIT_ONE));
         if (wordbook == null) {
             throw LearningAssistantException.notFound(
-                    LearningConstants.ErrorCode.WORDBOOK_NOT_FOUND,
+                    LearningErrorCode.WORDBOOK_NOT_FOUND,
                     "单词本不存在: " + wordbookId);
         }
         return wordbook;
@@ -634,7 +637,7 @@ public class VocabularyImportService {
                     true));
         } catch (Exception ex) {
             throw LearningAssistantException.system(
-                    LearningConstants.ErrorCode.JSON_SERIALIZE_FAILED,
+                    LearningErrorCode.JSON_SERIALIZE_FAILED,
                     "导入词条基础快照生成失败",
                     ex);
         }
@@ -645,7 +648,7 @@ public class VocabularyImportService {
             return objectMapper.writeValueAsString(value);
         } catch (Exception ex) {
             throw LearningAssistantException.system(
-                    LearningConstants.ErrorCode.JSON_SERIALIZE_FAILED,
+                    LearningErrorCode.JSON_SERIALIZE_FAILED,
                     "导入警告序列化失败",
                     ex);
         }
@@ -671,20 +674,20 @@ public class VocabularyImportService {
     private String normalizeSourceType(String sourceType, String legacyExamType) {
         String value = StringUtils.hasText(sourceType) ? sourceType.trim().toLowerCase(Locale.ROOT)
                 : trimToNull(legacyExamType);
-        if ("自考".equals(value) || LearningConstants.VocabularyImport.SOURCE_SELF_STUDY.equals(value)) {
-            return LearningConstants.VocabularyImport.SOURCE_SELF_STUDY;
+        if ("自考".equals(value) || VocabularyImportConstants.SOURCE_SELF_STUDY.equals(value)) {
+            return VocabularyImportConstants.SOURCE_SELF_STUDY;
         }
-        if ("四级".equals(value) || LearningConstants.VocabularyImport.SOURCE_CET4.equals(value)) {
-            return LearningConstants.VocabularyImport.SOURCE_CET4;
+        if ("四级".equals(value) || VocabularyImportConstants.SOURCE_CET4.equals(value)) {
+            return VocabularyImportConstants.SOURCE_CET4;
         }
-        if ("六级".equals(value) || LearningConstants.VocabularyImport.SOURCE_CET6.equals(value)) {
-            return LearningConstants.VocabularyImport.SOURCE_CET6;
+        if ("六级".equals(value) || VocabularyImportConstants.SOURCE_CET6.equals(value)) {
+            return VocabularyImportConstants.SOURCE_CET6;
         }
-        if ("雅思".equals(value) || LearningConstants.VocabularyImport.SOURCE_IELTS.equals(value)) {
-            return LearningConstants.VocabularyImport.SOURCE_IELTS;
+        if ("雅思".equals(value) || VocabularyImportConstants.SOURCE_IELTS.equals(value)) {
+            return VocabularyImportConstants.SOURCE_IELTS;
         }
         throw LearningAssistantException.badRequest(
-                LearningConstants.ErrorCode.VOCABULARY_IMPORT_INVALID,
+                LearningErrorCode.VOCABULARY_IMPORT_INVALID,
                 "数据源类型仅支持自考、四级、六级或雅思");
     }
 
@@ -696,7 +699,7 @@ public class VocabularyImportService {
                         .eq(VocabularyImportJob::getCatalogVersionId, version.getId())
                         .eq(VocabularyImportJob::getDeleted, false)
                         .orderByDesc(VocabularyImportJob::getUpdateTime)
-                        .last(LearningConstants.SQL_LIMIT_ONE));
+                        .last(CommonConstants.SQL_LIMIT_ONE));
         VocabularyCatalogResponse response = new VocabularyCatalogResponse();
         response.setCatalogId(catalog.getId());
         response.setCatalogVersionId(catalog.getLatestVersionId());
@@ -715,7 +718,7 @@ public class VocabularyImportService {
     }
 
     private int value(Integer value) {
-        return value == null ? LearningConstants.ZERO : value;
+        return value == null ? CommonConstants.ZERO : value;
     }
 
     private record BasicVocabularyCard(String term, String phonetic, List<BasicDefinition> definitions,

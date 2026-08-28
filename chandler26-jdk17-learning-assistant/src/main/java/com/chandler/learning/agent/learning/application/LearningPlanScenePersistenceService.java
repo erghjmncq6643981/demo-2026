@@ -2,26 +2,28 @@ package com.chandler.learning.agent.learning.application;
 
 import com.baomidou.mybatisplus.core.toolkit.IdWorker;
 import com.chandler.learning.agent.ai.chat.application.AgentChatResponse;
-import com.chandler.learning.agent.learning.api.LearningPlanUnitResponse;
-import com.chandler.learning.agent.learning.domain.LearningPlan;
-import com.chandler.learning.agent.learning.domain.LearningPlanUnit;
-import com.chandler.learning.agent.learning.domain.LearningPlanUnitEntry;
-import com.chandler.learning.agent.learning.domain.LearningSceneMaterial;
-import com.chandler.learning.agent.learning.infrastructure.LearningPlanUnitEntryMapper;
-import com.chandler.learning.agent.learning.infrastructure.LearningPlanUnitMapper;
-import com.chandler.learning.agent.learning.infrastructure.LearningSceneMaterialMapper;
-import com.chandler.learning.agent.learning.infrastructure.LearningPlanMapper;
+import com.chandler.learning.agent.learning.api.response.LearningPlanUnitResponse;
+import com.chandler.learning.agent.learning.domain.entity.LearningPlan;
+import com.chandler.learning.agent.learning.domain.entity.LearningPlanUnit;
+import com.chandler.learning.agent.learning.domain.entity.LearningPlanUnitEntry;
+import com.chandler.learning.agent.learning.domain.entity.LearningSceneMaterial;
+import com.chandler.learning.agent.learning.infrastructure.mapper.LearningPlanUnitEntryMapper;
+import com.chandler.learning.agent.learning.infrastructure.mapper.LearningPlanUnitMapper;
+import com.chandler.learning.agent.learning.infrastructure.mapper.LearningSceneMaterialMapper;
+import com.chandler.learning.agent.learning.infrastructure.mapper.LearningPlanMapper;
 import com.chandler.learning.agent.system.application.SystemLogService;
-import com.chandler.learning.agent.system.domain.SystemLogType;
+import com.chandler.learning.agent.system.domain.enums.SystemLogType;
 import com.chandler.learning.agent.identity.application.UserDisplayNameService;
 import com.chandler.learning.agent.exception.LearningAssistantException;
-import com.chandler.learning.agent.support.LearningConstants;
+import com.chandler.learning.agent.common.constant.CommonConstants;
+import com.chandler.learning.agent.common.exception.LearningErrorCode;
+import com.chandler.learning.agent.learning.domain.constant.ScenePlanConstants;
 import com.chandler.learning.agent.vocabulary.application.LearningWordProgressService;
 import com.chandler.learning.agent.vocabulary.application.VocabularyCatalogQueryService;
 import com.chandler.learning.agent.vocabulary.application.WordbookService;
-import com.chandler.learning.agent.vocabulary.domain.LearningWordProgress;
-import com.chandler.learning.agent.vocabulary.domain.LearningWordbookEntry;
-import com.chandler.learning.agent.vocabulary.domain.VocabularyCatalogEntry;
+import com.chandler.learning.agent.vocabulary.domain.entity.LearningWordProgress;
+import com.chandler.learning.agent.vocabulary.domain.entity.LearningWordbookEntry;
+import com.chandler.learning.agent.vocabulary.domain.entity.VocabularyCatalogEntry;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import lombok.RequiredArgsConstructor;
@@ -70,7 +72,7 @@ public class LearningPlanScenePersistenceService {
         LocalDateTime now = LocalDateTime.now();
         LearningSceneMaterial previous = materialMapper.selectById(unit.getSceneMaterialId());
         int revision = previous == null || previous.getRevisionNo() == null
-                ? LearningConstants.FIRST_SEQUENCE : previous.getRevisionNo() + 1;
+                ? CommonConstants.FIRST_SEQUENCE : previous.getRevisionNo() + 1;
         if (previous != null) {
             previous.setCurrentVersion(false);
             previous.setMaterialStatus("archived");
@@ -113,8 +115,8 @@ public class LearningPlanScenePersistenceService {
             entry.setContextMeaning(firstText(text(generated, "context_meaning", "contextMeaning"),
                     entry.getContextMeaning()));
             JsonNode question = node(generated, "meaning_question", "meaningQuestion", "assessment");
-            if (LearningConstants.ScenePlan.TIER_CORE.equals(entry.getTier())
-                    || LearningConstants.ScenePlan.TIER_REVIEW.equals(entry.getTier())) {
+            if (ScenePlanConstants.TIER_CORE.equals(entry.getTier())
+                    || ScenePlanConstants.TIER_REVIEW.equals(entry.getTier())) {
                 question = assessmentSupport.ensureMeaningQuestion(generated, entry.getTerm(), question,
                         entry.getMeaningText());
             }
@@ -130,7 +132,7 @@ public class LearningPlanScenePersistenceService {
         unit.setSummary(text(scene, "summary", "description"));
         unit.setSceneMaterialId(material.getId());
         unit.setGeneratedTime(now);
-        unit.setSupplementaryWordCount(LearningConstants.ZERO);
+        unit.setSupplementaryWordCount(CommonConstants.ZERO);
         unit.setUpdateTime(now);
         unitMapper.updateById(unit);
         return responseAssembler.toUnitResponse(unit);
@@ -151,12 +153,12 @@ public class LearningPlanScenePersistenceService {
         unit.setScenarioType(text(scene, "scenario_type", "scenarioType"));
         unit.setSummary(text(scene, "summary", "description"));
         boolean startImmediately = plan.getCurrentUnitId() == null && !resolvedRecommendedDate.isAfter(today);
-        unit.setStatus(startImmediately ? LearningConstants.ScenePlan.UNIT_IN_PROGRESS
-                : LearningConstants.ScenePlan.UNIT_READY);
-        unit.setCoreWordCount(LearningConstants.ZERO);
-        unit.setExtendedWordCount(LearningConstants.ZERO);
-        unit.setSupplementaryWordCount(LearningConstants.ZERO);
-        unit.setCompletedCoreCount(LearningConstants.ZERO);
+        unit.setStatus(startImmediately ? ScenePlanConstants.UNIT_IN_PROGRESS
+                : ScenePlanConstants.UNIT_READY);
+        unit.setCoreWordCount(CommonConstants.ZERO);
+        unit.setExtendedWordCount(CommonConstants.ZERO);
+        unit.setSupplementaryWordCount(CommonConstants.ZERO);
+        unit.setCompletedCoreCount(CommonConstants.ZERO);
         unit.setGeneratedTime(now);
         unit.setStartedTime(startImmediately ? now : null);
         unit.setRecommendedDate(resolvedRecommendedDate);
@@ -169,7 +171,7 @@ public class LearningPlanScenePersistenceService {
         material.setUserId(userId);
         material.setPlanId(plan.getId());
         material.setUnitId(unit.getId());
-        material.setRevisionNo(LearningConstants.FIRST_SEQUENCE);
+        material.setRevisionNo(CommonConstants.FIRST_SEQUENCE);
         material.setMaterialStatus("published");
         material.setCurrentVersion(true);
         material.setSessionId(aiResponse.getSessionId());
@@ -219,21 +221,21 @@ public class LearningPlanScenePersistenceService {
             LearningWordProgress progress = progressBatch.progresses().get(normalizedTerm);
             preparedWords.add(new PreparedSceneWord(word, command.term(), normalizedTerm,
                     candidateMap.get(normalizedTerm), command.tier(), command.masteryRequirement(), progress,
-                    LearningConstants.ScenePlan.TIER_CORE.equals(command.tier())
+                    ScenePlanConstants.TIER_CORE.equals(command.tier())
                             && progressBatch.initiallyUnseenTerms().contains(normalizedTerm)));
         }
         List<WordbookService.LearningEntryCommand> wordbookCommands = preparedWords.stream()
-                .filter(prepared -> !LearningConstants.ScenePlan.TIER_SUPPLEMENTARY.equals(prepared.tier()))
+                .filter(prepared -> !ScenePlanConstants.TIER_SUPPLEMENTARY.equals(prepared.tier()))
                 .map(prepared -> new WordbookService.LearningEntryCommand(prepared.source(), prepared.progress(),
                         prepared.term(), prepared.normalizedTerm(),
-                        LearningConstants.ScenePlan.TIER_CORE.equals(prepared.tier())
-                                || LearningConstants.ScenePlan.TIER_REVIEW.equals(prepared.tier())))
+                        ScenePlanConstants.TIER_CORE.equals(prepared.tier())
+                                || ScenePlanConstants.TIER_REVIEW.equals(prepared.tier())))
                 .toList();
         Map<String, LearningWordbookEntry> wordbookEntries = wordbookService.ensureLearningEntries(
                 userId, plan.getWordbookId(), wordbookCommands, now);
 
         List<LearningPlanUnitEntry> unitEntries = new ArrayList<>(words.size());
-        int coreCount = 0, extendedCount = 0, supplementaryCount = 0, sortOrder = LearningConstants.FIRST_SEQUENCE;
+        int coreCount = 0, extendedCount = 0, supplementaryCount = 0, sortOrder = CommonConstants.FIRST_SEQUENCE;
         for (PreparedSceneWord prepared : preparedWords) {
             JsonNode word = prepared.word();
             String term = prepared.term();
@@ -243,8 +245,8 @@ public class LearningPlanScenePersistenceService {
             String fallbackMeaning = firstText(text(word, "meaning", "definition"),
                     source == null ? null : source.getDefinitionText());
             JsonNode question = node(word, "meaning_question", "meaningQuestion", "assessment");
-            if (LearningConstants.ScenePlan.TIER_CORE.equals(tier)
-                    || LearningConstants.ScenePlan.TIER_REVIEW.equals(tier)) {
+            if (ScenePlanConstants.TIER_CORE.equals(tier)
+                    || ScenePlanConstants.TIER_REVIEW.equals(tier)) {
                 question = assessmentSupport.ensureMeaningQuestion(word, term, question, fallbackMeaning);
             }
             LearningPlanUnitEntry entry = new LearningPlanUnitEntry();
@@ -269,12 +271,12 @@ public class LearningPlanScenePersistenceService {
             entry.setFirstLearning(prepared.firstLearning());
             entry.setSortOrder(sortOrder++);
             entry.setDeleted(false);
-            entry.setVersion(LearningConstants.ZERO);
+            entry.setVersion(CommonConstants.ZERO);
             entry.setCreateTime(now);
             entry.setUpdateTime(now);
             unitEntries.add(entry);
-            if (LearningConstants.ScenePlan.TIER_CORE.equals(tier)) coreCount++;
-            else if (LearningConstants.ScenePlan.TIER_SUPPLEMENTARY.equals(tier)) supplementaryCount++;
+            if (ScenePlanConstants.TIER_CORE.equals(tier)) coreCount++;
+            else if (ScenePlanConstants.TIER_SUPPLEMENTARY.equals(tier)) supplementaryCount++;
             else extendedCount++;
         }
         if (!unitEntries.isEmpty()) unitEntryMapper.insertBatch(unitEntries);
@@ -297,16 +299,16 @@ public class LearningPlanScenePersistenceService {
     }
 
     private String normalizeTier(String tier) {
-        if (LearningConstants.ScenePlan.TIER_CORE.equals(tier)
-                || LearningConstants.ScenePlan.TIER_EXTENDED.equals(tier)
-                || LearningConstants.ScenePlan.TIER_SUPPLEMENTARY.equals(tier)
-                || LearningConstants.ScenePlan.TIER_REVIEW.equals(tier)) return tier;
-        return LearningConstants.ScenePlan.TIER_EXTENDED;
+        if (ScenePlanConstants.TIER_CORE.equals(tier)
+                || ScenePlanConstants.TIER_EXTENDED.equals(tier)
+                || ScenePlanConstants.TIER_SUPPLEMENTARY.equals(tier)
+                || ScenePlanConstants.TIER_REVIEW.equals(tier)) return tier;
+        return ScenePlanConstants.TIER_EXTENDED;
     }
 
     private String normalizeRequirement(String requirement) {
-        return LearningConstants.ScenePlan.MASTERY_SPELLING.equals(requirement)
-                ? LearningConstants.ScenePlan.MASTERY_SPELLING : LearningConstants.ScenePlan.MASTERY_RECOGNITION;
+        return ScenePlanConstants.MASTERY_SPELLING.equals(requirement)
+                ? ScenePlanConstants.MASTERY_SPELLING : ScenePlanConstants.MASTERY_RECOGNITION;
     }
 
     private JsonNode node(JsonNode source, String... keys) {
@@ -321,7 +323,7 @@ public class LearningPlanScenePersistenceService {
     private String requiredText(JsonNode source, String... keys) {
         String value = text(source, keys);
         if (!StringUtils.hasText(value)) {
-            throw LearningAssistantException.badRequest(LearningConstants.ErrorCode.LEARNING_SCENE_PARSE_FAILED,
+            throw LearningAssistantException.badRequest(LearningErrorCode.LEARNING_SCENE_PARSE_FAILED,
                     "AI 场景结果缺少字段: " + String.join("/", keys));
         }
         return value;
@@ -345,7 +347,7 @@ public class LearningPlanScenePersistenceService {
         try {
             return objectMapper.writeValueAsString(value);
         } catch (Exception ex) {
-            throw LearningAssistantException.system(LearningConstants.ErrorCode.JSON_SERIALIZE_FAILED,
+            throw LearningAssistantException.system(LearningErrorCode.JSON_SERIALIZE_FAILED,
                     "场景学习数据序列化失败", ex);
         }
     }

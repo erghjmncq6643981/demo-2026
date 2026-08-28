@@ -1,6 +1,6 @@
 package com.chandler.learning.agent.ai.gateway.protocol;
 
-import com.chandler.learning.agent.support.LearningConstants;
+import com.chandler.learning.agent.ai.gateway.constant.AiGatewayConstants;
 import lombok.Data;
 
 /**
@@ -29,7 +29,7 @@ public class AiModelConnectionConfig {
     /**
      * Chat Completions 接口路径。
      */
-    private String chatPath = LearningConstants.DEFAULT_CHAT_PATH;
+    private String chatPath = AiGatewayConstants.DEFAULT_CHAT_PATH;
 
     /**
      * 模型明细名称。

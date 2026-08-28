@@ -37,6 +37,7 @@ class DatabaseSchemaIntegrationTest {
 
             assertThat(tableExists(connection, "learning_plan")).isTrue();
             assertThat(tableExists(connection, "ai_model_call_record")).isTrue();
+            assertThat(tableExists(connection, "learning_system_log_outbox")).isTrue();
             assertThat(queryCount(connection, "SELECT COUNT(*) FROM ai_agent")).isGreaterThan(0);
             assertThat(queryCount(connection, "SELECT COUNT(*) FROM learning_user WHERE role_code = 'ADMIN'"))
                     .isGreaterThan(0);

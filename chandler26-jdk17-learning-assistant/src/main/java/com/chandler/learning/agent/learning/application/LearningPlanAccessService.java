@@ -3,13 +3,15 @@ package com.chandler.learning.agent.learning.application;
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import com.baomidou.mybatisplus.core.conditions.query.QueryWrapper;
 import com.chandler.learning.agent.exception.LearningAssistantException;
-import com.chandler.learning.agent.learning.domain.LearningPlan;
-import com.chandler.learning.agent.learning.domain.LearningPlanUnit;
-import com.chandler.learning.agent.learning.domain.LearningPlanUnitEntry;
-import com.chandler.learning.agent.learning.infrastructure.LearningPlanMapper;
-import com.chandler.learning.agent.learning.infrastructure.LearningPlanUnitEntryMapper;
-import com.chandler.learning.agent.learning.infrastructure.LearningPlanUnitMapper;
-import com.chandler.learning.agent.support.LearningConstants;
+import com.chandler.learning.agent.learning.domain.entity.LearningPlan;
+import com.chandler.learning.agent.learning.domain.entity.LearningPlanUnit;
+import com.chandler.learning.agent.learning.domain.entity.LearningPlanUnitEntry;
+import com.chandler.learning.agent.learning.infrastructure.mapper.LearningPlanMapper;
+import com.chandler.learning.agent.learning.infrastructure.mapper.LearningPlanUnitEntryMapper;
+import com.chandler.learning.agent.learning.infrastructure.mapper.LearningPlanUnitMapper;
+import com.chandler.learning.agent.common.constant.CommonConstants;
+import com.chandler.learning.agent.common.exception.LearningErrorCode;
+import com.chandler.learning.agent.learning.domain.constant.ScenePlanConstants;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 
@@ -56,10 +58,10 @@ public class LearningPlanAccessService {
                 .eq(LearningPlan::getId, planId)
                 .eq(LearningPlan::getUserId, userId)
                 .eq(LearningPlan::getDeleted, false)
-                .last(LearningConstants.SQL_LIMIT_ONE));
+                .last(CommonConstants.SQL_LIMIT_ONE));
         if (plan == null) {
             throw LearningAssistantException.notFound(
-                    LearningConstants.ErrorCode.LEARNING_PLAN_NOT_FOUND,
+                    LearningErrorCode.LEARNING_PLAN_NOT_FOUND,
                     "学习计划不存在: " + planId);
         }
         return plan;
@@ -71,10 +73,10 @@ public class LearningPlanAccessService {
                 .eq(LearningPlanUnit::getId, unitId)
                 .eq(LearningPlanUnit::getPlanId, plan.getId())
                 .eq(LearningPlanUnit::getDeleted, false)
-                .last(LearningConstants.SQL_LIMIT_ONE));
+                .last(CommonConstants.SQL_LIMIT_ONE));
         if (unit == null) {
             throw LearningAssistantException.notFound(
-                    LearningConstants.ErrorCode.LEARNING_PLAN_UNIT_NOT_FOUND,
+                    LearningErrorCode.LEARNING_PLAN_UNIT_NOT_FOUND,
                     "场景学习单元不存在: " + unitId);
         }
         return unit;
@@ -86,10 +88,10 @@ public class LearningPlanAccessService {
                 .eq(LearningPlanUnit::getId, unitId)
                 .eq(LearningPlanUnit::getPlanId, planId)
                 .eq(LearningPlanUnit::getDeleted, false)
-                .last(LearningConstants.SQL_LIMIT_ONE + " FOR UPDATE"));
+                .last(CommonConstants.SQL_LIMIT_ONE + " FOR UPDATE"));
         if (unit == null) {
             throw LearningAssistantException.notFound(
-                    LearningConstants.ErrorCode.LEARNING_PLAN_UNIT_NOT_FOUND,
+                    LearningErrorCode.LEARNING_PLAN_UNIT_NOT_FOUND,
                     "场景学习单元不存在: " + unitId);
         }
         return unit;
@@ -100,7 +102,7 @@ public class LearningPlanAccessService {
         return unitEntryMapper.selectList(new LambdaQueryWrapper<LearningPlanUnitEntry>()
                 .eq(LearningPlanUnitEntry::getUnitId, unitId)
                 .in(LearningPlanUnitEntry::getTier,
-                        List.of(LearningConstants.ScenePlan.TIER_CORE, LearningConstants.ScenePlan.TIER_REVIEW))
+                        List.of(ScenePlanConstants.TIER_CORE, ScenePlanConstants.TIER_REVIEW))
                 .isNotNull(LearningPlanUnitEntry::getWordbookEntryId)
                 .eq(LearningPlanUnitEntry::getDeleted, false)
                 .orderByAsc(LearningPlanUnitEntry::getSortOrder));

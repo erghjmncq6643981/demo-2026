@@ -2,9 +2,10 @@ package com.chandler.learning.agent.task.application;
 
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import com.baomidou.mybatisplus.core.conditions.update.LambdaUpdateWrapper;
-import com.chandler.learning.agent.task.domain.AiAsyncTask;
-import com.chandler.learning.agent.task.infrastructure.AiAsyncTaskMapper;
-import com.chandler.learning.agent.support.LearningConstants;
+import com.chandler.learning.agent.task.domain.entity.AiAsyncTask;
+import com.chandler.learning.agent.task.infrastructure.mapper.AiAsyncTaskMapper;
+import com.chandler.learning.agent.common.constant.CommonConstants;
+import com.chandler.learning.agent.task.domain.constant.AiTaskConstants;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.core.task.TaskRejectedException;
@@ -33,7 +34,7 @@ public class AiAsyncTaskScheduler {
         recoverStaleTasks(now);
         promoteDueRetries(now);
         List<AiAsyncTask> tasks = taskMapper.selectList(new LambdaQueryWrapper<AiAsyncTask>()
-                .eq(AiAsyncTask::getStatus, LearningConstants.AiTask.STATUS_PENDING)
+                .eq(AiAsyncTask::getStatus, AiTaskConstants.STATUS_PENDING)
                 .eq(AiAsyncTask::getDeleted, false)
                 .le(AiAsyncTask::getScheduledTime, now)
                 .orderByDesc(AiAsyncTask::getPriority)
@@ -45,7 +46,7 @@ public class AiAsyncTaskScheduler {
                     dispatcher.dispatch(task);
                 } catch (TaskRejectedException ex) {
                     taskService.releaseClaim(task.getId(), now.plusSeconds(
-                            LearningConstants.AiTask.QUEUE_RETRY_DELAY_SECONDS));
+                            AiTaskConstants.QUEUE_RETRY_DELAY_SECONDS));
                     log.info("AI 任务队列已满，任务稍后重试 taskId={} type={}",
                             task.getId(), task.getTaskType());
                     log.debug("AI 任务提交线程池失败 taskId={}", task.getId(), ex);
@@ -57,10 +58,10 @@ public class AiAsyncTaskScheduler {
     /** 到达退避时间后重新放入待领取队列，失败步骤会在 Worker 中断点续跑。 */
     private void promoteDueRetries(LocalDateTime now) {
         int promoted = taskMapper.update(null, new LambdaUpdateWrapper<AiAsyncTask>()
-                .eq(AiAsyncTask::getStatus, LearningConstants.AiTask.STATUS_RETRY_WAIT)
+                .eq(AiAsyncTask::getStatus, AiTaskConstants.STATUS_RETRY_WAIT)
                 .eq(AiAsyncTask::getDeleted, false)
                 .le(AiAsyncTask::getScheduledTime, now)
-                .set(AiAsyncTask::getStatus, LearningConstants.AiTask.STATUS_PENDING)
+                .set(AiAsyncTask::getStatus, AiTaskConstants.STATUS_PENDING)
                 .set(AiAsyncTask::getStartedTime, null)
                 .set(AiAsyncTask::getFinishedTime, null)
                 .set(AiAsyncTask::getUpdateTime, now));
@@ -71,17 +72,17 @@ public class AiAsyncTaskScheduler {
     void recoverStaleTasks(LocalDateTime now) {
         int recoveredSteps = executionService.recoverExpired(now);
         int recovered = taskMapper.update(null, new LambdaUpdateWrapper<AiAsyncTask>()
-                .eq(AiAsyncTask::getStatus, LearningConstants.AiTask.STATUS_RUNNING)
+                .eq(AiAsyncTask::getStatus, AiTaskConstants.STATUS_RUNNING)
                 .eq(AiAsyncTask::getDeleted, false)
                 .lt(AiAsyncTask::getUpdateTime,
-                        now.minusMinutes(LearningConstants.AiTask.RUNNING_TIMEOUT_MINUTES))
-                .set(AiAsyncTask::getStatus, LearningConstants.AiTask.STATUS_PENDING)
+                        now.minusMinutes(AiTaskConstants.RUNNING_TIMEOUT_MINUTES))
+                .set(AiAsyncTask::getStatus, AiTaskConstants.STATUS_PENDING)
                 .set(AiAsyncTask::getErrorMessage, "执行进程中断，系统将从未完成步骤继续")
                 .set(AiAsyncTask::getScheduledTime, now)
                 .set(AiAsyncTask::getStartedTime, null)
                 .set(AiAsyncTask::getFinishedTime, null)
                 .set(AiAsyncTask::getUpdateTime, now));
-        if (recovered > LearningConstants.ZERO || recoveredSteps > LearningConstants.ZERO) {
+        if (recovered > CommonConstants.ZERO || recoveredSteps > CommonConstants.ZERO) {
             log.info("回收中断 AI 异步任务 taskCount={} stepCount={}，将从未完成步骤自动继续", recovered, recoveredSteps);
         }
     }

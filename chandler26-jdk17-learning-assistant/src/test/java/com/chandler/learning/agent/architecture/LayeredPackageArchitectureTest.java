@@ -1,15 +1,51 @@
 package com.chandler.learning.agent.architecture;
 
+import com.baomidou.mybatisplus.annotation.TableName;
 import com.tngtech.archunit.junit.AnalyzeClasses;
 import com.tngtech.archunit.junit.ArchTest;
 import com.tngtech.archunit.lang.ArchRule;
 import org.springframework.web.bind.annotation.RestController;
 
+import static com.tngtech.archunit.lang.syntax.ArchRuleDefinition.classes;
 import static com.tngtech.archunit.lang.syntax.ArchRuleDefinition.noClasses;
 
 /** 非 AI 业务域共同遵守的依赖方向。 */
 @AnalyzeClasses(packages = "com.chandler.learning.agent")
 class LayeredPackageArchitectureTest {
+
+    @ArchTest
+    static final ArchRule REST_CONTROLLERS_STAY_IN_API_CONTROLLER = classes()
+            .that().areAnnotatedWith(RestController.class)
+            .should().resideInAPackage("..api.controller..");
+
+    @ArchTest
+    static final ArchRule API_REQUESTS_STAY_IN_REQUEST_PACKAGE = classes()
+            .that().resideInAPackage("..api.request..")
+            .should().haveSimpleNameEndingWith("Request");
+
+    @ArchTest
+    static final ArchRule API_RESPONSES_STAY_IN_RESPONSE_PACKAGE = classes()
+            .that().resideInAPackage("..api.response..")
+            .should().haveSimpleNameEndingWith("Response");
+
+    @ArchTest
+    static final ArchRule PERSISTENCE_ENTITIES_STAY_IN_DOMAIN_ENTITY = classes()
+            .that().areAnnotatedWith(TableName.class)
+            .should().resideInAPackage("..domain.entity..");
+
+    @ArchTest
+    static final ArchRule DOMAIN_ENUMS_STAY_IN_ENUMS_PACKAGE = classes()
+            .that().areEnums()
+            .and().resideInAnyPackage("..identity.domain..", "..vocabulary.domain..", "..learning.domain..",
+                    "..reading.domain..", "..task.domain..", "..system.domain..", "..ai..domain..")
+            .should().resideInAPackage("..domain.enums..");
+
+    @ArchTest
+    static final ArchRule MAPPERS_STAY_IN_INFRASTRUCTURE_MAPPER = classes()
+            .that().haveSimpleNameEndingWith("Mapper")
+            .and().resideInAnyPackage("..identity..", "..vocabulary..", "..learning..", "..reading..",
+                    "..task..", "..system..", "..ai..")
+            .should().resideInAPackage("..infrastructure.mapper..");
 
     @ArchTest
     static final ArchRule CONTROLLERS_DO_NOT_ACCESS_PERSISTENCE = noClasses()

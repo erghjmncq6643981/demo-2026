@@ -5,18 +5,22 @@ import com.baomidou.mybatisplus.core.toolkit.IdWorker;
 import com.chandler.learning.agent.ai.chat.application.AgentChatRequest;
 import com.chandler.learning.agent.ai.chat.application.AgentChatResponse;
 import com.chandler.learning.agent.ai.chat.application.AiChatService;
-import com.chandler.learning.agent.ai.chat.domain.AiInvocationScene;
+import com.chandler.learning.agent.ai.chat.domain.enums.AiInvocationScene;
 import com.chandler.learning.agent.exception.LearningAssistantException;
-import com.chandler.learning.agent.learning.domain.LearningPlan;
-import com.chandler.learning.agent.learning.domain.LearningPlanUnit;
-import com.chandler.learning.agent.learning.domain.LearningPlanUnitEntry;
-import com.chandler.learning.agent.learning.domain.LearningScene;
-import com.chandler.learning.agent.learning.domain.LearningSceneMaterial;
-import com.chandler.learning.agent.learning.domain.LearningSceneRelatedWord;
-import com.chandler.learning.agent.learning.infrastructure.LearningPlanUnitEntryMapper;
-import com.chandler.learning.agent.learning.infrastructure.LearningSceneMaterialMapper;
-import com.chandler.learning.agent.learning.infrastructure.LearningSceneRelatedWordMapper;
-import com.chandler.learning.agent.support.LearningConstants;
+import com.chandler.learning.agent.learning.domain.entity.LearningPlan;
+import com.chandler.learning.agent.learning.domain.entity.LearningPlanUnit;
+import com.chandler.learning.agent.learning.domain.entity.LearningPlanUnitEntry;
+import com.chandler.learning.agent.learning.domain.enums.LearningScene;
+import com.chandler.learning.agent.learning.domain.entity.LearningSceneMaterial;
+import com.chandler.learning.agent.learning.domain.entity.LearningSceneRelatedWord;
+import com.chandler.learning.agent.learning.infrastructure.mapper.LearningPlanUnitEntryMapper;
+import com.chandler.learning.agent.learning.infrastructure.mapper.LearningSceneMaterialMapper;
+import com.chandler.learning.agent.learning.infrastructure.mapper.LearningSceneRelatedWordMapper;
+import com.chandler.learning.agent.ai.agent.domain.constant.AiScenarioConstants;
+import com.chandler.learning.agent.ai.chat.domain.constant.AiChatConstants;
+import com.chandler.learning.agent.common.constant.CommonConstants;
+import com.chandler.learning.agent.common.exception.LearningErrorCode;
+import com.chandler.learning.agent.learning.domain.constant.ScenePlanConstants;
 import com.fasterxml.jackson.databind.JsonNode;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -65,9 +69,9 @@ public class LearningSceneRelatedVocabularyService {
         while (current < target) {
             int batchTarget = Math.min(BATCH_SIZE, target - current);
             int inserted = generateBatch(plan, unit, material, modelConfigId, batchTarget);
-            if (inserted == LearningConstants.ZERO) {
+            if (inserted == CommonConstants.ZERO) {
                 throw LearningAssistantException.badRequest(
-                        LearningConstants.ErrorCode.LEARNING_SCENE_PARSE_FAILED,
+                        LearningErrorCode.LEARNING_SCENE_PARSE_FAILED,
                         "AI 未返回可保存的场景相关词汇，可继续任务重试当前批次");
             }
             current += inserted;
@@ -86,7 +90,7 @@ public class LearningSceneRelatedVocabularyService {
         List<LearningPlanUnitEntry> coreEntries = entryMapper.selectList(
                 new LambdaQueryWrapper<LearningPlanUnitEntry>()
                         .eq(LearningPlanUnitEntry::getUnitId, unit.getId())
-                        .eq(LearningPlanUnitEntry::getTier, LearningConstants.ScenePlan.TIER_CORE)
+                        .eq(LearningPlanUnitEntry::getTier, ScenePlanConstants.TIER_CORE)
                         .eq(LearningPlanUnitEntry::getDeleted, false)
                         .orderByAsc(LearningPlanUnitEntry::getSortOrder));
         List<LearningSceneRelatedWord> existing = relatedWordMapper.selectList(
@@ -105,12 +109,12 @@ public class LearningSceneRelatedVocabularyService {
         AgentChatRequest request = new AgentChatRequest();
         request.setUserId(plan.getUserId());
         request.setInvocationScene(AiInvocationScene.VOCABULARY_SCENE_RELATED_WORDS);
-        request.setAgentCode(LearningConstants.VOCABULARY_PLAN_AGENT_CODE);
-        request.setTemplateCode(LearningConstants.VOCABULARY_SCENE_RELATED_TEMPLATE_CODE);
+        request.setAgentCode(AiScenarioConstants.VOCABULARY_PLAN_AGENT_CODE);
+        request.setTemplateCode(AiScenarioConstants.VOCABULARY_SCENE_RELATED_TEMPLATE_CODE);
         // 场景相关词是独立动作，保留审计关联但不带入长期会话历史。
         request.setSessionId(null);
         request.setTitle(LearningScene.ENGLISH_VOCABULARY_PLAN.getTitle());
-        request.setBusinessType(LearningConstants.ChatSession.BUSINESS_TYPE_LEARNING);
+        request.setBusinessType(AiChatConstants.BUSINESS_TYPE_LEARNING);
         request.setBusinessId(String.valueOf(material.getId()));
         request.setSceneCode(LearningScene.ENGLISH_VOCABULARY_PLAN.getCode());
         request.setModelConfigId(modelConfigId);
@@ -119,7 +123,7 @@ public class LearningSceneRelatedVocabularyService {
         AgentChatResponse response = aiChatService.chat(request);
         JsonNode root = response.requireStructuredRoot(AiInvocationScene.VOCABULARY_SCENE_RELATED_WORDS);
         JsonNode words = root.get("related_words");
-        if (words == null || !words.isArray()) return LearningConstants.ZERO;
+        if (words == null || !words.isArray()) return CommonConstants.ZERO;
 
         Set<String> excluded = new HashSet<>();
         coreEntries.stream().map(LearningPlanUnitEntry::getNormalizedTerm).filter(StringUtils::hasText)
@@ -155,10 +159,10 @@ public class LearningSceneRelatedVocabularyService {
             entity.setCreateTime(now);
             entity.setUpdateTime(now);
             entity.setDeleted(false);
-            entity.setVersion(LearningConstants.ZERO);
+            entity.setVersion(CommonConstants.ZERO);
             batch.add(entity);
         }
-        if (batch.isEmpty()) return LearningConstants.ZERO;
+        if (batch.isEmpty()) return CommonConstants.ZERO;
         Objects.requireNonNull(transactionTemplate.execute(status -> relatedWordMapper.insertBatch(batch)));
         log.info("用户场景相关词汇批次已保存 userId={} planId={} unitId={} materialId={} count={}",
                 plan.getUserId(), plan.getId(), unit.getId(), material.getId(), batch.size());
@@ -172,9 +176,9 @@ public class LearningSceneRelatedVocabularyService {
                 .eq(LearningSceneMaterial::getPlanId, planId)
                 .eq(LearningSceneMaterial::getUnitId, unit.getId())
                 .eq(LearningSceneMaterial::getDeleted, false)
-                .last(LearningConstants.SQL_LIMIT_ONE));
+                .last(CommonConstants.SQL_LIMIT_ONE));
         if (material == null) {
-            throw LearningAssistantException.notFound(LearningConstants.ErrorCode.LEARNING_SCENE_MATERIAL_NOT_FOUND);
+            throw LearningAssistantException.notFound(LearningErrorCode.LEARNING_SCENE_MATERIAL_NOT_FOUND);
         }
         return material;
     }

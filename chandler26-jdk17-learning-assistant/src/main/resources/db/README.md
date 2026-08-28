@@ -12,7 +12,7 @@
 
 - 空数据库执行 Java 基线迁移 `V1__BaselineSchema`，按下述顺序加载当前 schema 和种子数据。
 - 未接入 Flyway 的存量非空数据库自动建立 `107` 基线，后续执行 `V108` 及更高版本迁移。
-- 新增存量库变更必须创建 `V108__*.sql` 及后续文件，不再新增根目录手工脚本。
+- 新增存量库变更必须创建 `V109__*` 及后续 Flyway 迁移，不再新增根目录手工脚本。
 - 生产部署禁止 Flyway clean；部署前仍需备份数据库。
 
 ## 手工初始化
@@ -52,6 +52,7 @@
 17. `106_ai_model_catalog_agent_defaults_mysql.sql`
 18. `107_agent_model_config_binding_mysql.sql`
 19. Java 迁移 `V108__RecoverableAiTasksAndSceneMaterials`：可恢复任务步骤、执行尝试、材料版本和场景相关词
+20. Java 迁移 `V109__SystemLogOutbox`：系统日志可靠异步投递 Outbox
 
 迁移脚本都设计为可重复执行，但仍建议在执行前备份数据库并记录已执行版本。
 
@@ -60,7 +61,7 @@
 | 脚本 | 内容 |
 | --- | --- |
 | `00_ai_schema` | Agent、Prompt、会话、消息、模型调用记录、模型配置 |
-| `10_learning_core_schema` | 用户、公共词卡缓存、个人单词本、复习记录、系统日志 |
+| `10_learning_core_schema` | 用户、公共词卡缓存、个人单词本、复习记录、系统日志及日志 Outbox |
 | `20_vocabulary_plan_schema` | Markdown/CSV 等词表导入、学习计划、场景单元、逐词进度、批量词卡任务 |
 | `30_article_reading_schema` | 语境精读记录、阶段进度、阅读检测成绩 |
 

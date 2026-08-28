@@ -1,9 +1,9 @@
 package com.chandler.learning.agent.ai.chat.application;
 
-import com.chandler.learning.agent.ai.chat.domain.AiInvocationScene;
+import com.chandler.learning.agent.ai.chat.domain.enums.AiInvocationScene;
 import com.chandler.learning.agent.ai.chat.application.codec.AiSceneResponse;
 import com.chandler.learning.agent.exception.LearningAssistantException;
-import com.chandler.learning.agent.support.LearningConstants;
+import com.chandler.learning.agent.common.exception.LearningErrorCode;
 import com.fasterxml.jackson.annotation.JsonIgnore;
 import com.fasterxml.jackson.databind.JsonNode;
 import io.swagger.v3.oas.annotations.media.Schema;
@@ -41,7 +41,7 @@ public class AgentChatResponse {
         if (structuredResponse == null
                 || structuredResponse.root() == null
                 || structuredResponse.invocationScene() != expectedScene) {
-            throw LearningAssistantException.badRequest(LearningConstants.ErrorCode.AI_RESPONSE_PARSE_FAILED);
+            throw LearningAssistantException.badRequest(LearningErrorCode.AI_RESPONSE_PARSE_FAILED);
         }
         return structuredResponse.root().deepCopy();
     }
