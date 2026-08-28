@@ -63,6 +63,25 @@ const systemManagement = createSystemManagementFeature({
   confirmDelete,
 })
 
+function setGlobalFocusMode(viewId, active) {
+  const enabled = Boolean(active)
+  state.focusModeView = enabled ? viewId : null
+  elements.productShell?.classList.toggle('focus-mode-active', enabled)
+  if (!enabled) {
+    state.articleFocusMode = false
+    state.reviewFocusMode = false
+    elements.articleStudyToolbar?.classList.remove('hidden')
+    elements.articleHistoryPanel?.classList.remove('hidden')
+    elements.articleStudyLayout?.classList.remove('article-focus-layout')
+    elements.toggleArticleFocusModeBtn?.classList.remove('active')
+    if (elements.toggleArticleFocusModeBtn) elements.toggleArticleFocusModeBtn.textContent = '专注模式'
+    elements.reviewHeaderPanel?.classList.remove('hidden')
+    elements.reviewLayout?.classList.remove('review-focus-layout')
+    elements.toggleReviewFocusModeBtn?.classList.remove('active')
+    if (elements.toggleReviewFocusModeBtn) elements.toggleReviewFocusModeBtn.textContent = '专注模式'
+  }
+}
+
 const speechFeature = createSpeechFeature({
   state,
   elements,
@@ -91,6 +110,7 @@ articleFeature = createWordbookArticleFeature({
   logEvent,
   confirmAction,
   speakSentence,
+  setFocusMode: setGlobalFocusMode,
 })
 
 scenePlanFeature = createScenePlanFeature({
@@ -138,6 +158,7 @@ const {
   loadSystemLogs: profile.loadSystemLogs,
   loadAiTasks: profile.loadAiTasks,
   systemManagement,
+  clearFocusMode: () => setGlobalFocusMode(null, false),
   loadDueReviews: review.loadDueReviews,
   loadWordbookEntries: profile.loadWordbookEntries,
   changeWordbookPage: profile.changeWordbookPage,
@@ -251,6 +272,7 @@ reviewFeature = createReviewFeature({
   currentVoiceType,
   reviewResultToStatus,
   statusLabel,
+  setFocusMode: setGlobalFocusMode,
 })
 
 const {
@@ -260,6 +282,7 @@ const {
   closeReviewModal,
   closeForgottenDetailModal,
   submitReview,
+  toggleReviewFocusMode,
   closeReviewNoteModal,
   toggleReviewNotePreview,
   saveReviewNote,
@@ -417,6 +440,7 @@ bindAppEvents({
   renderWordbookEntries: profile.renderWordbookEntries,
   toggleWordbookFocusMode: profile.toggleWordbookFocusMode,
   toggleArticleFocusMode: article.toggleArticleFocusMode,
+  toggleReviewFocusMode,
   loadSystemLogs: profile.loadSystemLogs,
   loadAiTasks: profile.loadAiTasks,
   renderAiTasks: profile.renderAiTasks,

@@ -401,6 +401,18 @@ textarea:focus {
   pointer-events: none;
 }
 
+.product-shell.focus-mode-active {
+  grid-template-columns: minmax(0, 1fr);
+}
+
+.product-shell.focus-mode-active .sidebar {
+  display: none;
+}
+
+.product-shell.focus-mode-active .content-topbar {
+  display: none;
+}
+
 .sidebar-backdrop {
   display: none;
 }
@@ -647,8 +659,20 @@ textarea:focus {
 .review-layout > .panel {
   display: grid;
   min-height: 0;
-  grid-template-rows: minmax(0, 1fr);
+  grid-template-rows: auto minmax(0, 1fr);
   overflow: hidden;
+}
+
+.review-focus-heading {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding-bottom: 12px;
+}
+
+.review-focus-heading h3 {
+  margin: 3px 0 0;
 }
 
 #reviewFocus {
@@ -3799,8 +3823,8 @@ input[type="range"] {
   background: var(--bg-panel-solid, #1f2937);
 }
 
-.wordbook-card-modal {
-  width: min(880px, 94vw);
+.config-modal.wordbook-card-modal {
+  width: min(1080px, 96vw);
   max-height: min(860px, calc(100vh - 40px));
   display: flex;
   flex-direction: column;
@@ -5664,6 +5688,7 @@ input.sr-only:disabled + .file-upload-trigger {
   .review-layout > .panel {
     max-height: none;
     overflow: visible;
+    grid-template-rows: auto minmax(0, 1fr);
   }
 
   #wordbookEntryList,

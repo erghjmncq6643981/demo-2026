@@ -60,10 +60,6 @@
               <span>个人信息</span>
               <small>账户、词本与设置</small>
             </button>
-            <button class="nav-item" type="button" data-view="wordbookView">
-              <span>单词本</span>
-              <small>词表与掌握状态</small>
-            </button>
             <button class="nav-item" type="button" data-view="scenePlanView">
               <span>词汇大挑战</span>
               <small>计划、日历与词汇挑战</small>
@@ -75,6 +71,10 @@
             <button class="nav-item" type="button" data-view="articleStudyView">
               <span>语境精读</span>
               <small>选词生成阅读材料</small>
+            </button>
+            <button class="nav-item" type="button" data-view="wordbookView">
+              <span>单词本</span>
+              <small>词表与掌握状态</small>
             </button>
             <button class="nav-item" type="button" data-view="reviewView">
               <span>复习</span>
@@ -100,7 +100,7 @@
         <button class="sidebar-backdrop" id="sidebarBackdrop" type="button" aria-label="隐藏导航"></button>
 
         <section class="content">
-          <header class="content-topbar">
+          <header class="content-topbar" id="contentTopbar">
             <div class="topbar-title">
               <button class="icon-button nav-toggle" id="toggleSidebarBtn" type="button" title="隐藏导航" aria-label="隐藏导航" aria-expanded="true">☰</button>
               <div>
@@ -683,7 +683,7 @@
           </section>
 
           <section class="view" id="reviewView">
-            <section class="review-header panel">
+            <section class="review-header panel" id="reviewHeaderPanel">
               <div class="review-start-controls">
                 <label class="compact-field">
                   <span>单词本</span>
@@ -697,8 +697,15 @@
               </div>
             </section>
 
-            <div class="review-layout">
+            <div class="review-layout" id="reviewLayout">
               <section class="panel review-focus">
+                <div class="review-focus-heading">
+                  <div>
+                    <p class="eyebrow">Focused Review</p>
+                    <h3>专注复习</h3>
+                  </div>
+                  <button class="secondary-button compact" id="toggleReviewFocusModeBtn" type="button" disabled>专注模式</button>
+                </div>
                 <div id="reviewFocus" class="empty">选择词书和数量后开始复习</div>
               </section>
             </div>

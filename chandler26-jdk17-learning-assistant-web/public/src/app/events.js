@@ -111,6 +111,7 @@ export function bindAppEvents(ctx) {
     renderWordbookEntries,
     toggleWordbookFocusMode,
     toggleArticleFocusMode,
+    toggleReviewFocusMode,
     loadSystemLogs,
     loadAiTasks,
     renderAiTasks,
@@ -262,6 +263,7 @@ elements.articleStatusFilter?.addEventListener('change', () => {
   loadArticleWords()
 })
 elements.toggleArticleFocusModeBtn?.addEventListener('click', toggleArticleFocusMode)
+elements.toggleReviewFocusModeBtn?.addEventListener('click', toggleReviewFocusMode)
 elements.articlePrefixInput?.addEventListener('input', () => {
   state.articlePrefixFilter = elements.articlePrefixInput.value.trim()
   state.articleWordPage = 1

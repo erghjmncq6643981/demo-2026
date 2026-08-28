@@ -20,6 +20,7 @@ export function createAppShell(ctx) {
     loadSystemLogs,
     loadAiTasks,
     systemManagement,
+    clearFocusMode,
     loadDueReviews,
     loadWordbookEntries,
     loadArticleWords,
@@ -120,6 +121,7 @@ export function createAppShell(ctx) {
     if (viewId === 'systemAdminView' && !systemManagement?.isAdmin()) {
       viewId = 'profileView'
     }
+    if (state.focusModeView && state.focusModeView !== viewId) clearFocusMode?.()
     state.activeView = viewId
     localStorage.setItem('learning.activeView', viewId)
     document.querySelectorAll('.view').forEach((view) => view.classList.toggle('active', view.id === viewId))
@@ -204,6 +206,7 @@ export function createAppShell(ctx) {
   }
 
   async function logout() {
+    clearFocusMode?.()
     if (state.token) {
       try {
         await request('/api/v1/learning/auth/logout', { method: 'POST' })

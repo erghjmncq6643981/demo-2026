@@ -32,6 +32,7 @@ export function createReviewFeature(ctx) {
     renderCollocationMini,
     speakSentence,
     speak,
+    setFocusMode,
     bindStudyTermCards,
     bindInlineAudio,
     reviewResultToStatus,
@@ -180,6 +181,9 @@ export function createReviewFeature(ctx) {
   }
 
   function renderReviewQueue(entries) {
+    if (elements.toggleReviewFocusModeBtn) {
+      elements.toggleReviewFocusModeBtn.disabled = !entries.length && !state.reviewFocusMode
+    }
     if (!state.token) {
       state.reviewEntries = []
       state.currentReviewIndex = 0
@@ -360,6 +364,18 @@ export function createReviewFeature(ctx) {
     }
   }
 
+  function toggleReviewFocusMode(forceState = null) {
+    const next = typeof forceState === 'boolean' ? forceState : !state.reviewFocusMode
+    state.reviewFocusMode = next
+    setFocusMode?.('reviewView', next)
+    elements.reviewHeaderPanel?.classList.toggle('hidden', next)
+    elements.reviewLayout?.classList.toggle('review-focus-layout', next)
+    if (elements.toggleReviewFocusModeBtn) {
+      elements.toggleReviewFocusModeBtn.textContent = next ? '退出专注' : '专注模式'
+      elements.toggleReviewFocusModeBtn.classList.toggle('active', next)
+    }
+  }
+
   const typingFeature = createReviewTypingFeature({
     state,
     elements,
@@ -403,6 +419,7 @@ export function createReviewFeature(ctx) {
     selectReviewEntry,
     renderReviewFocus,
     submitReview,
+    toggleReviewFocusMode,
     ...typingFeature,
     ...modalFeature,
   })

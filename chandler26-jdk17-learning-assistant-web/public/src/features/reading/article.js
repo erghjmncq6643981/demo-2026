@@ -34,6 +34,7 @@ export function createWordbookArticleFeature(ctx) {
     logEvent,
     confirmAction,
     speakSentence,
+    setFocusMode,
   } = ctx
   const api = createArticleApi(request)
   let articleTaskPollTimer = null
@@ -927,6 +928,7 @@ export function createWordbookArticleFeature(ctx) {
   function toggleArticleFocusMode(forceState = null) {
     const next = typeof forceState === 'boolean' ? forceState : !state.articleFocusMode
     state.articleFocusMode = next
+    setFocusMode?.('articleStudyView', next)
     elements.articleStudyToolbar?.classList.toggle('hidden', next)
     elements.articleHistoryPanel?.classList.toggle('hidden', next)
     elements.articleStudyLayout?.classList.toggle('article-focus-layout', next)
