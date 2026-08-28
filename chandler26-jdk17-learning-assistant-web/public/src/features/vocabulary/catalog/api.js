@@ -6,7 +6,9 @@ export function createVocabularyCatalogApi(request) {
   const id = (value) => encodeURIComponent(value)
   return {
     cancelAll: requests.cancelAll,
-    listImports: () => requests.latest('imports', '/api/v1/vocabulary-imports'),
+    listImports: (page = 1, pageSize = 20) => requests.latest(
+      'imports', `/api/v1/vocabulary-imports?page=${encodeURIComponent(page)}&pageSize=${encodeURIComponent(pageSize)}`,
+    ),
     importMarkdown: (payload) => request('/api/v1/vocabulary-imports/markdown', {
       method: 'POST', body: JSON.stringify(payload),
     }),
