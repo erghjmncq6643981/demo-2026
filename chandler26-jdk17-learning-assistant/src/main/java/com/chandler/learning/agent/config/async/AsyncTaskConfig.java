@@ -57,6 +57,19 @@ public class AsyncTaskConfig {
                 discardWithWarning);
     }
 
+    /** 学习域领域事件异步执行池，使用 CallerRunsPolicy 保证极端高负载下状态仍可靠执行。 */
+    @Bean("learningEventExecutor")
+    public Executor learningEventExecutor() {
+        return createExecutor(
+                2,
+                8,
+                200,
+                60,
+                30,
+                "learning-event-",
+                new ThreadPoolExecutor.CallerRunsPolicy());
+    }
+
     private ThreadPoolTaskExecutor createExecutor(
             int corePoolSize,
             int maxPoolSize,

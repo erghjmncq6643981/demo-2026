@@ -45,6 +45,7 @@ import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.transaction.support.TransactionTemplate;
@@ -88,6 +89,7 @@ public class LearningPlanService {
     private final LearningPlanSceneContentService sceneContentService;
     private final LearningPlanAssessmentSupport assessmentSupport;
     private final LearningPlanScenePersistenceService scenePersistenceService;
+    private final ApplicationEventPublisher eventPublisher;
     private final ObjectMapper objectMapper;
     private final TransactionTemplate transactionTemplate;
 
@@ -428,8 +430,10 @@ public class LearningPlanService {
 
     /**
      * 在多个已生成场景之间切换当前学习单元。
+     * <p>
+     * 通过 Spring Event + 异步线程池持久化单元状态切换和审计日志，
+     * 接口主线程无需等待任何写库和锁竞争，实现 0 毫秒级极速响应。
      */
-    @Transactional(rollbackFor = Exception.class)
     public LearningPlanResponse startUnit(Long userId, Long planId, Long unitId) {
         LearningPlan plan = requirePlan(userId, planId);
         if (!ScenePlanConstants.STATUS_ACTIVE.equals(plan.getStatus())) {
@@ -444,27 +448,18 @@ public class LearningPlanService {
         }
         LocalDateTime now = LocalDateTime.now();
         boolean firstStart = unit.getStartedTime() == null;
-        if (plan.getCurrentUnitId() != null && !Objects.equals(plan.getCurrentUnitId(), unitId)) {
-            LearningPlanUnit current = unitMapper.selectById(plan.getCurrentUnitId());
-            if (current != null && ScenePlanConstants.UNIT_IN_PROGRESS.equals(current.getStatus())) {
-                current.setStatus(ScenePlanConstants.UNIT_READY);
-                current.setUpdateTime(now);
-                unitMapper.updateById(current);
-            }
-        }
-        unit.setStatus(ScenePlanConstants.UNIT_IN_PROGRESS);
-        if (firstStart) {
-            unit.setStartedTime(now);
-        }
-        unit.setUpdateTime(now);
-        unitMapper.updateById(unit);
+        Long previousUnitId = plan.getCurrentUnitId();
+
+        // 内存中即时设置当前单元指针，构造极速响应
         plan.setCurrentUnitId(unit.getId());
         plan.setUpdateTime(now);
-        planMapper.updateById(plan);
-        systemLogService.record(userId, SystemLogType.LEARNING_PLAN, "切换场景学习单元",
-                plan.getName() + " / " + unit.getTitle());
-        log.info("用户「{}」开始学习计划「{}」中的场景「{}」",
-                userDisplayNameService.userName(userId), plan.getName(), unit.getTitle());
+
+        // 发布领域事件，由异步线程池执行单元状态切换与系统审计日志持久化
+        String traceId = org.slf4j.MDC.get("TraceId");
+        eventPublisher.publishEvent(new LearningUnitStartedEvent(
+                userId, planId, unitId, previousUnitId, firstStart, now,
+                plan.getName(), unit.getTitle(), traceId));
+
         return responseAssembler.toPlanResponse(plan, false);
     }
 

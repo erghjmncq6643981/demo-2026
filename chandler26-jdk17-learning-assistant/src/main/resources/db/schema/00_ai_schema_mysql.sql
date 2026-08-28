@@ -51,8 +51,7 @@ CREATE TABLE IF NOT EXISTS ai_agent (
     UNIQUE KEY uk_ai_agent_code (code),
     KEY idx_ai_agent_type (type),
     KEY idx_ai_agent_enabled (enabled, deleted, sequence),
-    KEY idx_ai_agent_model_config (model_config_id, deleted),
-    CONSTRAINT fk_ai_agent_model_config FOREIGN KEY (model_config_id) REFERENCES ai_model_config (id)
+    KEY idx_ai_agent_model_config (model_config_id, deleted)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci COMMENT='AI Agent';
 
 CREATE TABLE IF NOT EXISTS ai_prompt_template (
@@ -120,8 +119,7 @@ CREATE TABLE IF NOT EXISTS ai_chat_message (
     deleted TINYINT(1) NOT NULL DEFAULT 0 COMMENT '是否逻辑删除',
     version INT NOT NULL DEFAULT 0 COMMENT '乐观锁版本号',
     PRIMARY KEY (id),
-    UNIQUE KEY uk_ai_chat_message_session_sequence (session_id, sequence),
-    CONSTRAINT fk_ai_chat_message_session FOREIGN KEY (session_id) REFERENCES ai_chat_session (id)
+    UNIQUE KEY uk_ai_chat_message_session_sequence (session_id, sequence)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci COMMENT='AI 对话消息';
 
 CREATE TABLE IF NOT EXISTS ai_model_call_record (

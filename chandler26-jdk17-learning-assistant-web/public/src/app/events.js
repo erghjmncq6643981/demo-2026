@@ -36,6 +36,7 @@ export function bindAppEvents(ctx) {
     saveAccountSecurity,
     updateAccountPasswordStrength,
     loadWordbookEntries,
+    searchWordbookEntries,
     changeWordbookPage,
     changeArticleWordbook,
     loadSceneData,
@@ -209,7 +210,17 @@ elements.saveAccountSecurityBtn.addEventListener('click', saveAccountSecurity)
 elements.reloadWordbookEntriesBtn.addEventListener('click', () => Promise.allSettled([loadWordbooks?.(), loadWordbookEntries?.()]))
 elements.openVocabularyImportBtn?.addEventListener('click', openVocabularyImport)
 elements.openProfileScenePlanModalBtn?.addEventListener('click', openScenePlanModal)
-elements.reloadWordbookViewBtn.addEventListener('click', loadWordbookEntries)
+elements.reloadWordbookViewBtn.addEventListener('click', () => {
+  if (typeof searchWordbookEntries === 'function') searchWordbookEntries()
+  else loadWordbookEntries()
+})
+elements.wordPrefixInput?.addEventListener('keydown', (event) => {
+  if (event.key === 'Enter') {
+    event.preventDefault()
+    if (typeof searchWordbookEntries === 'function') searchWordbookEntries()
+    else loadWordbookEntries()
+  }
+})
 elements.wordbookPrevBtn?.addEventListener('click', () => changeWordbookPage(-1))
 elements.wordbookNextBtn?.addEventListener('click', () => changeWordbookPage(1))
 elements.openWordbookModalBtn.addEventListener('click', () => openWordbookModal())
@@ -236,18 +247,14 @@ elements.saveSpeechBtn?.addEventListener('click', async () => {
   const saved = speechSaved !== false && learningSaved !== false
   if (saved !== false) closeLearningConfigModal()
 })
-elements.wordbookSelect.addEventListener('change', () => changeWordbook(elements.wordbookSelect.value))
-elements.wordStatusFilter.addEventListener('change', () => {
+elements.wordbookSelect.addEventListener('change', () => {
+  if (elements.wordStatusFilter) elements.wordStatusFilter.value = ''
+  if (elements.wordPrefixInput) elements.wordPrefixInput.value = ''
+  state.wordPrefixFilter = ''
   state.wordbookPage = 1
-  loadWordbookEntries()
+  changeWordbook(elements.wordbookSelect.value)
 })
 elements.toggleWordbookFocusModeBtn?.addEventListener('click', toggleWordbookFocusMode)
-elements.wordPrefixInput?.addEventListener('input', () => {
-  state.wordPrefixFilter = elements.wordPrefixInput.value.trim()
-  state.wordbookPage = 1
-  if (!state.preview) loadWordbookEntries()
-  renderWordbookEntries()
-})
 elements.articleWordbookSelect?.addEventListener('change', () => changeArticleWordbook(elements.articleWordbookSelect.value))
 elements.articleStatusFilter?.addEventListener('change', () => {
   state.articleWordPage = 1

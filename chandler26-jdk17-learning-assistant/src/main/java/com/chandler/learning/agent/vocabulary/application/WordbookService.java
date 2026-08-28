@@ -452,8 +452,10 @@ public class WordbookService {
         LambdaQueryWrapper<LearningWordbookEntry> wrapper = new LambdaQueryWrapper<LearningWordbookEntry>()
                 .select(LearningWordbookEntry::getId,
                         LearningWordbookEntry::getWordbookId,
+                        LearningWordbookEntry::getVocabularyId,
                         LearningWordbookEntry::getTerm,
                         LearningWordbookEntry::getNormalizedTerm,
+                        LearningWordbookEntry::getSnapshotParsedJson,
                         LearningWordbookEntry::getStatus,
                         LearningWordbookEntry::getReviewStage,
                         LearningWordbookEntry::getMasteryScore,
@@ -499,8 +501,10 @@ public class WordbookService {
         List<LearningWordbookEntry> entries = entryMapper.selectList(new LambdaQueryWrapper<LearningWordbookEntry>()
                 .select(LearningWordbookEntry::getId,
                         LearningWordbookEntry::getWordbookId,
+                        LearningWordbookEntry::getVocabularyId,
                         LearningWordbookEntry::getTerm,
                         LearningWordbookEntry::getNormalizedTerm,
+                        LearningWordbookEntry::getSnapshotParsedJson,
                         LearningWordbookEntry::getStatus,
                         LearningWordbookEntry::getReviewStage,
                         LearningWordbookEntry::getMasteryScore,

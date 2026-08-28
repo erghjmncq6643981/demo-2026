@@ -215,6 +215,19 @@ export function statusLabel(status) {
   )
 }
 
+export function cardStatusLabel(status) {
+  return (
+    {
+      ready: '已就绪',
+      generating: '生成中',
+      queued: '排队中',
+      missing: '未生成',
+      failed: '生成失败',
+      not_required: '无需生成',
+    }[status] || '未生成'
+  )
+}
+
 export function reviewResultToStatus(result) {
   return (
     {

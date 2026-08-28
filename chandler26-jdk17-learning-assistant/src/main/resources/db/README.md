@@ -53,6 +53,8 @@
 18. `107_agent_model_config_binding_mysql.sql`
 19. Java 迁移 `V108__RecoverableAiTasksAndSceneMaterials`：可恢复任务步骤、执行尝试、材料版本和场景相关词
 20. Java 迁移 `V109__SystemLogOutbox`：系统日志可靠异步投递 Outbox
+21. Java 迁移 `V110__WordbookEntrySortIndex`：个人单词本词条列表复合排序索引，消除 Filesort
+22. Java 迁移 `V111__DropAiForeignKeys`：移除 AI 模块物理外键约束，转为代码逻辑与事务保证数据完整性
 
 迁移脚本都设计为可重复执行，但仍建议在执行前备份数据库并记录已执行版本。
 

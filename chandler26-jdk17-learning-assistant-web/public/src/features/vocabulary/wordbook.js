@@ -1,7 +1,7 @@
 import { normalizeId, sameId } from '/src/shared/ids.js'
 import { hideModal, showModal } from '/src/shared/modal.js'
 import { escapeHtml, formatDateTime } from '/src/shared/text.js'
-import { statusLabel } from '/src/shared/vocabulary.js'
+import { cardStatusLabel, statusLabel } from '/src/shared/vocabulary.js'
 import { normalizeWordbooks, resolveSelectedWordbookId, syncCurrentWordbookId } from '/src/shared/wordbook.js'
 import { createWordbookDetailFeature } from '/src/features/vocabulary/wordbook-detail.js'
 
@@ -337,10 +337,17 @@ export function createWordbookProfileFeature(ctx) {
       })
   }
 
+  function searchWordbookEntries() {
+    state.wordbookPage = 1
+    return loadWordbookEntries()
+  }
+
   function changeWordbookPage(delta) {
-    const maxPage = Math.max(1, Math.ceil((state.wordbookTotal || 0) / (state.wordbookPageSize || 30)))
-    const next = Math.max(1, Math.min(maxPage, (state.wordbookPage || 1) + delta))
-    if (next === (state.wordbookPage || 1)) return
+    const totalCount = Number(state.wordbookTotal ?? state.wordbookEntries.length)
+    const maxPage = Math.max(1, Math.ceil(totalCount / (state.wordbookPageSize || 30)))
+    const currentPage = Number(state.wordbookPage || 1)
+    const next = Math.max(1, Math.min(maxPage, currentPage + delta))
+    if (next === currentPage) return
     state.wordbookPage = next
     loadWordbookEntries()
   }
@@ -416,23 +423,37 @@ export function createWordbookProfileFeature(ctx) {
   }
 
   function renderWordbookEntries() {
-    const filter = elements.wordStatusFilter?.value || ''
-    const keyword = String(state.wordPrefixFilter || elements.wordPrefixInput?.value || '').trim().toLowerCase()
-    const statusFiltered = filter && state.preview ? state.wordbookEntries.filter((entry) => (entry.status || 'vague') === filter) : state.wordbookEntries
-    const entries = keyword ? statusFiltered.filter((entry) => entryMatchesKeyword(entry, keyword)) : statusFiltered
+    let entries = state.wordbookEntries
+    if (state.preview) {
+      const filter = elements.wordStatusFilter?.value || ''
+      const keyword = String(elements.wordPrefixInput?.value || '').trim().toLowerCase()
+      if (filter) {
+        entries = entries.filter((entry) => (entry.status || 'vague') === filter)
+      }
+      if (keyword) {
+        entries = entries.filter((entry) => entryMatchesKeyword(entry, keyword))
+      }
+    }
 
+    const totalCount = Number(state.wordbookTotal ?? entries.length)
     if (elements.wordbookCountSummary) {
-      elements.wordbookCountSummary.textContent = `共 ${state.wordbookTotal || entries.length} 个单词`
-      const maxPage = Math.max(1, Math.ceil((state.wordbookTotal || entries.length) / (state.wordbookPageSize || 30)))
-      elements.wordbookPageInfo.textContent = `第 ${state.wordbookPage || 1} / ${maxPage} 页`
-      elements.wordbookPrevBtn.disabled = (state.wordbookPage || 1) <= 1
-      elements.wordbookNextBtn.disabled = (state.wordbookPage || 1) >= maxPage
+      elements.wordbookCountSummary.textContent = `共 ${totalCount} 个单词`
+      const maxPage = Math.max(1, Math.ceil(totalCount / (state.wordbookPageSize || 30)))
+      const currentPage = Number(state.wordbookPage || 1)
+      elements.wordbookPageInfo.textContent = `第 ${currentPage} / ${maxPage} 页`
+      if (elements.wordbookPrevBtn) {
+        elements.wordbookPrevBtn.disabled = currentPage <= 1
+      }
+      if (elements.wordbookNextBtn) {
+        elements.wordbookNextBtn.disabled = currentPage >= maxPage
+      }
     }
 
     if (!entries.length) {
+      const keyword = String(elements.wordPrefixInput?.value || '').trim()
       elements.wordbookEntryList.innerHTML = `
         <tr>
-          <td colspan="7" class="empty" style="text-align: center; padding: 48px 16px;">
+          <td colspan="8" class="empty" style="text-align: center; padding: 48px 16px;">
             ${keyword ? '没有匹配搜索条件的单词' : state.token ? '当前单词本还没有单词' : '登录后查看单词本'}
           </td>
         </tr>
@@ -469,6 +490,8 @@ export function createWordbookProfileFeature(ctx) {
               })
               .join('； ')
           : entry.meaningText || entry.definition || '-'
+        const cardCode = entry.cardStatus || 'missing'
+        const cardText = cardStatusLabel(cardCode)
         const stateCode = entry.status || 'vague'
         const stateText = statusLabel(stateCode)
         const stageText = `阶段 ${entry.reviewStage ?? 0}`
@@ -487,6 +510,9 @@ export function createWordbookProfileFeature(ctx) {
             </td>
             <td class="cell-meaning">
               <span class="meaning-text expandable" data-toggle-expand title="点击展开/收起完整释义">${escapeHtml(meaningSummary)}</span>
+            </td>
+            <td class="cell-card-status">
+              <span class="card-status-pill card-status-${escapeHtml(cardCode)}">${escapeHtml(cardText)}</span>
             </td>
             <td class="cell-status">
               <span class="status-pill status-${escapeHtml(stateCode)}">${escapeHtml(stateText)} · ${escapeHtml(stageText)}</span>
@@ -604,6 +630,7 @@ export function createWordbookProfileFeature(ctx) {
     resetWordbookForm,
     deleteWordbook,
     loadWordbookEntries,
+    searchWordbookEntries,
     changeWordbookPage,
     loadWordbookEntryDetail,
     renderWordbookEntries,

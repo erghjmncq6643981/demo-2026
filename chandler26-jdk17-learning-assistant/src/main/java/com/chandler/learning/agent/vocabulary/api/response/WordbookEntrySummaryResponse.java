@@ -22,6 +22,12 @@ public class WordbookEntrySummaryResponse {
     /** 归一化词条。 */
     @Schema(description = "标准化词汇")
     private String normalizedTerm;
+    /** 词条音标。 */
+    @Schema(description = "音标")
+    private String phonetic;
+    /** 核心释义摘要。 */
+    @Schema(description = "释义摘要")
+    private String meaningText;
     /** 学习状态。 */
     @Schema(description = "状态")
     private String status;

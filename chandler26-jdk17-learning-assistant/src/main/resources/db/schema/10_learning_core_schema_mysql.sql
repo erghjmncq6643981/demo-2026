@@ -127,7 +127,8 @@ CREATE TABLE IF NOT EXISTS learning_wordbook_entry (
     KEY idx_learning_wordbook_entry_vocabulary (vocabulary_id),
     KEY idx_learning_wordbook_entry_status (wordbook_id, status, deleted),
     KEY idx_learning_wordbook_entry_progress (progress_id, deleted),
-    KEY idx_learning_wordbook_entry_catalog (catalog_entry_id, deleted)
+    KEY idx_learning_wordbook_entry_catalog (catalog_entry_id, deleted),
+    KEY idx_learning_wordbook_entry_wb_due_order (user_id, wordbook_id, deleted, next_review_time, create_time)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci COMMENT='个人单词本词条与复习状态';
 
 CREATE TABLE IF NOT EXISTS learning_vocabulary_tag (

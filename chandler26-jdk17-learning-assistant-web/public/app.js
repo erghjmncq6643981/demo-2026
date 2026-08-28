@@ -339,6 +339,8 @@ bindAppEvents({
   saveAccountSecurity: profile.saveAccountSecurity,
   updateAccountPasswordStrength: profile.updateAccountPasswordStrength,
   loadWordbookEntries: profile.loadWordbookEntries,
+  searchWordbookEntries: profile.searchWordbookEntries,
+  changeWordbookPage: profile.changeWordbookPage,
   changeArticleWordbook: article.changeArticleWordbook,
   changeArticleWordPage: article.changeArticleWordPage,
   loadArticleWords: article.loadArticleWords,

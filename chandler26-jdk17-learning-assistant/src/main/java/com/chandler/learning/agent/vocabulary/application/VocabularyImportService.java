@@ -59,6 +59,8 @@ import java.util.stream.Collectors;
 @RequiredArgsConstructor
 public class VocabularyImportService {
 
+    private static final TypeReference<List<String>> STRING_LIST_TYPE = new TypeReference<>() {};
+
     private final MarkdownVocabularyParser markdownParser;
     private final VocabularyCatalogMapper catalogMapper;
     private final VocabularyCatalogVersionMapper versionMapper;
@@ -223,12 +225,28 @@ public class VocabularyImportService {
                 Math.min(pageSize == null ? VocabularyImportConstants.DEFAULT_PAGE_SIZE : pageSize,
                         VocabularyImportConstants.MAX_PAGE_SIZE));
 
+        boolean hasKeyword = StringUtils.hasText(keyword);
+        Page<VocabularyCatalogEntry> pageParam = new Page<>(resolvedPage, resolvedPageSize, hasKeyword);
+
         LambdaQueryWrapper<VocabularyCatalogEntry> wrapper = new LambdaQueryWrapper<VocabularyCatalogEntry>()
+                .select(
+                        VocabularyCatalogEntry::getId,
+                        VocabularyCatalogEntry::getSourceOrder,
+                        VocabularyCatalogEntry::getOriginalTerm,
+                        VocabularyCatalogEntry::getNormalizedTerm,
+                        VocabularyCatalogEntry::getSuggestedTerm,
+                        VocabularyCatalogEntry::getApprovedTerm,
+                        VocabularyCatalogEntry::getPhonetic,
+                        VocabularyCatalogEntry::getDefinitionText,
+                        VocabularyCatalogEntry::getWarningCodes,
+                        VocabularyCatalogEntry::getSuspicious,
+                        VocabularyCatalogEntry::getReviewStatus
+                )
                 .eq(VocabularyCatalogEntry::getCatalogVersionId, job.getCatalogVersionId())
                 .eq(warningOnly, VocabularyCatalogEntry::getSuspicious, true)
                 .eq(VocabularyCatalogEntry::getDeleted, false);
 
-        if (StringUtils.hasText(keyword)) {
+        if (hasKeyword) {
             String trimmed = keyword.trim();
             String normalized = normalize(trimmed);
             wrapper.and(w -> w.like(VocabularyCatalogEntry::getApprovedTerm, trimmed)
@@ -238,13 +256,21 @@ public class VocabularyImportService {
         }
         wrapper.orderByAsc(VocabularyCatalogEntry::getSourceOrder);
 
-        Page<VocabularyCatalogEntry> pageResult = catalogEntryMapper.selectPage(
-                new Page<>(resolvedPage, resolvedPageSize), wrapper);
+        Page<VocabularyCatalogEntry> pageResult = catalogEntryMapper.selectPage(pageParam, wrapper);
+
+        long total;
+        if (hasKeyword) {
+            total = pageResult.getTotal();
+        } else if (warningOnly) {
+            total = value(job.getWarningCount());
+        } else {
+            total = value(job.getTotalCount());
+        }
 
         VocabularyImportResponse response = baseResponse(job, catalog);
         response.setPage(resolvedPage);
         response.setPageSize(resolvedPageSize);
-        response.setFilteredTotal(pageResult.getTotal());
+        response.setFilteredTotal(total);
         response.setItems(pageResult.getRecords().stream().map(this::toEntryResponse).toList());
         return response;
     }
@@ -658,9 +684,12 @@ public class VocabularyImportService {
         if (!StringUtils.hasText(value)) {
             return List.of();
         }
+        String trimmed = value.trim();
+        if ("[]".equals(trimmed) || "{}".equals(trimmed)) {
+            return List.of();
+        }
         try {
-            return objectMapper.readValue(value, new TypeReference<List<String>>() {
-            });
+            return objectMapper.readValue(trimmed, STRING_LIST_TYPE);
         } catch (Exception ex) {
             log.debug("导入警告 JSON 读取失败 value={} error={}", value, ex.getMessage());
             return List.of();

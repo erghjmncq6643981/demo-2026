@@ -14,6 +14,7 @@ import com.chandler.learning.agent.vocabulary.domain.entity.VocabularyCatalogEnt
 import com.chandler.learning.agent.vocabulary.infrastructure.mapper.EnglishVocabularyStudyRecordMapper;
 import com.chandler.learning.agent.vocabulary.infrastructure.mapper.LearningWordbookEntryMapper;
 import com.chandler.learning.agent.vocabulary.infrastructure.mapper.LearningWordbookMapper;
+import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -21,6 +22,7 @@ import org.springframework.stereotype.Component;
 import org.springframework.util.StringUtils;
 
 import java.time.LocalDateTime;
+import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
@@ -106,7 +108,78 @@ public class WordbookResponseAssembler {
         response.setWrongCount(entry.getWrongCount());
         response.setCardStatus(entry.getCardStatus());
         response.setCreateTime(entry.getCreateTime());
+        populateSummaryCardInfo(response, entry);
         return response;
+    }
+
+    private void populateSummaryCardInfo(WordbookEntrySummaryResponse response, LearningWordbookEntry entry) {
+        String json = entry.getSnapshotParsedJson();
+        if (!StringUtils.hasText(json) && entry.getVocabularyId() != null) {
+            EnglishVocabularyStudyRecord record = vocabularyMapper.selectById(entry.getVocabularyId());
+            if (record != null) {
+                json = record.getParsedJson();
+            }
+        }
+        if (!StringUtils.hasText(json)) {
+            return;
+        }
+        try {
+            JsonNode root = objectMapper.readTree(json);
+            if (root == null || root.isNull()) {
+                return;
+            }
+            JsonNode phoneticNode = root.get("phonetic");
+            String phonetic = null;
+            if (phoneticNode != null && phoneticNode.isObject()) {
+                phonetic = firstText(phoneticNode, "uk", "us", "uk_phonetic", "us_phonetic");
+            } else if (phoneticNode != null && phoneticNode.isTextual()) {
+                phonetic = phoneticNode.asText();
+            }
+            if (!StringUtils.hasText(phonetic)) {
+                phonetic = firstText(root, "phonetic_uk", "phoneticUk", "phonetic_us", "phoneticUs");
+            }
+            response.setPhonetic(StringUtils.hasText(phonetic) ? phonetic : null);
+
+            JsonNode defsNode = root.get("definitions");
+            if (defsNode != null && defsNode.isArray() && !defsNode.isEmpty()) {
+                List<String> defTexts = new ArrayList<>();
+                for (JsonNode def : defsNode) {
+                    String pos = firstText(def, "pos", "partOfSpeech");
+                    String meaning = firstText(def, "meaning", "cn", "en", "explanation", "definition");
+                    if (StringUtils.hasText(meaning)) {
+                        if (StringUtils.hasText(pos) && !"pos".equalsIgnoreCase(pos) && !"meaning".equalsIgnoreCase(pos)) {
+                            String normalizedPos = pos.endsWith(".") ? pos : pos + ".";
+                            defTexts.add(meaning.startsWith(normalizedPos) ? meaning : normalizedPos + " " + meaning);
+                        } else {
+                            defTexts.add(meaning);
+                        }
+                    }
+                }
+                if (!defTexts.isEmpty()) {
+                    response.setMeaningText(String.join("； ", defTexts));
+                }
+            } else {
+                String meaning = firstText(root, "meaning", "definition", "translation", "explanation");
+                if (StringUtils.hasText(meaning)) {
+                    response.setMeaningText(meaning);
+                }
+            }
+        } catch (Exception ex) {
+            log.debug("解析词条摘要 JSON 失败 entryId={} error={}", entry.getId(), ex.getMessage());
+        }
+    }
+
+    private String firstText(JsonNode node, String... fieldNames) {
+        if (node == null || !node.isObject()) {
+            return null;
+        }
+        for (String name : fieldNames) {
+            JsonNode child = node.get(name);
+            if (child != null && child.isTextual() && StringUtils.hasText(child.asText())) {
+                return child.asText().trim();
+            }
+        }
+        return null;
     }
 
     public void applyVocabularySnapshot(LearningWordbookEntry entry, EnglishVocabularyStudyRecord vocabulary,
