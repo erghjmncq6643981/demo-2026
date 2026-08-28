@@ -3643,43 +3643,122 @@ input[type="range"] {
 }
 
 .wordbook-table .cell-card-status .card-status-pill {
-  display: inline-block;
-  padding: 2px 8px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 4px;
+  padding: 3px 8px;
   border-radius: 6px;
   font-size: 12px;
   font-weight: 500;
   white-space: nowrap;
+  line-height: 1.4;
+  border: 1px solid transparent;
+  background: transparent;
 }
 
-.card-status-pill.card-status-ready {
-  background: rgba(59, 130, 246, 0.15);
-  color: #60a5fa;
-  border: 1px solid rgba(59, 130, 246, 0.3);
+.wordbook-table .cell-card-status .card-status-btn {
+  cursor: pointer;
+  outline: none;
+  font-family: inherit;
+  user-select: none;
+  transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
 }
 
-.card-status-pill.card-status-generating,
-.card-status-pill.card-status-queued {
-  background: rgba(234, 179, 8, 0.15);
-  color: #facc15;
-  border: 1px solid rgba(234, 179, 8, 0.3);
+.wordbook-table .cell-card-status .card-status-btn:hover {
+  transform: translateY(-1px);
+  filter: brightness(1.15);
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.25);
+}
+
+.wordbook-table .cell-card-status .card-status-btn:active {
+  transform: translateY(0);
+}
+
+.wordbook-table .cell-card-status .card-action-hint {
+  font-size: 10px;
+  opacity: 0.85;
+}
+
+/* 未生成高亮（突出视觉提示，鼓励点击生成） */
+@keyframes card-status-pulse {
+  0%, 100% {
+    box-shadow: 0 0 0 0 rgba(245, 158, 11, 0.4);
+  }
+  50% {
+    box-shadow: 0 0 0 4px rgba(245, 158, 11, 0.15);
+  }
 }
 
 .card-status-pill.card-status-missing {
-  background: rgba(148, 163, 184, 0.12);
-  color: #94a3b8;
-  border: 1px solid rgba(148, 163, 184, 0.25);
+  background: rgba(245, 158, 11, 0.16);
+  color: #fbbf24;
+  border-color: rgba(245, 158, 11, 0.55);
+  font-weight: 600;
+  animation: card-status-pulse 2.5s infinite;
 }
 
+.card-status-btn.card-status-missing:hover {
+  background: rgba(245, 158, 11, 0.28);
+  border-color: rgba(245, 158, 11, 0.8);
+  color: #fef08a;
+}
+
+/* 静态导入基础词（支持按需触发 AI 词卡生成） */
+.card-status-pill.card-status-not_required {
+  background: rgba(148, 163, 184, 0.1);
+  color: #94a3b8;
+  border-color: rgba(148, 163, 184, 0.25);
+}
+
+.card-status-btn.card-status-not_required:hover {
+  background: rgba(59, 130, 246, 0.16);
+  color: #93c5fd;
+  border-color: rgba(59, 130, 246, 0.45);
+}
+
+/* 已就绪 */
+.card-status-pill.card-status-ready {
+  background: rgba(59, 130, 246, 0.15);
+  color: #60a5fa;
+  border-color: rgba(59, 130, 246, 0.3);
+}
+
+/* 生成中 / 排队中 */
+.card-status-pill.card-status-generating,
+.card-status-pill.card-status-queued {
+  background: rgba(168, 85, 247, 0.16);
+  color: #c084fc;
+  border-color: rgba(168, 85, 247, 0.35);
+}
+
+/* 失败（支持点击重试） */
 .card-status-pill.card-status-failed {
   background: rgba(239, 68, 68, 0.15);
   color: #f87171;
-  border: 1px solid rgba(239, 68, 68, 0.3);
+  border-color: rgba(239, 68, 68, 0.35);
 }
 
-.card-status-pill.card-status-not_required {
-  background: rgba(148, 163, 184, 0.08);
-  color: #64748b;
-  border: 1px solid rgba(148, 163, 184, 0.2);
+.card-status-btn.card-status-failed:hover {
+  background: rgba(239, 68, 68, 0.25);
+  color: #fca5a5;
+  border-color: rgba(239, 68, 68, 0.6);
+}
+
+/* 按钮内加载菊花 */
+@keyframes card-spin {
+  to { transform: rotate(360deg); }
+}
+
+.card-loading-spinner {
+  display: inline-block;
+  width: 10px;
+  height: 10px;
+  border: 2px solid rgba(255, 255, 255, 0.3);
+  border-top-color: currentColor;
+  border-radius: 50%;
+  animation: card-spin 0.8s linear infinite;
+  margin-right: 4px;
 }
 
 .wordbook-table .cell-status .status-pill {

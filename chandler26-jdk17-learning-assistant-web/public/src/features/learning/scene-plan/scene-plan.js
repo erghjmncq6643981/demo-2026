@@ -27,7 +27,7 @@ import { isRequestAbort } from '/src/shared/latest-request.js'
 import { createVocabularyCatalogApi } from '/src/features/vocabulary/catalog/api.js'
 
 export function createScenePlanFeature(ctx) {
-  const { state, elements, request, toast, logEvent, confirmAction, escapeHtml, sameId, speakSentence, loadWordbooks } = ctx
+  const { state, elements, request, toast, logEvent, confirmAction, escapeHtml, sameId, speak, speakSentence, loadWordbooks } = ctx
   const api = createScenePlanApi(request)
   const catalogApi = createVocabularyCatalogApi(request)
   let sceneStudy
@@ -305,7 +305,7 @@ export function createScenePlanFeature(ctx) {
 
   sceneNote = createSceneNote({ state, elements, api, activeUnit, sameId, toast, logEvent })
   sceneActions = createSceneActions({ state, elements, api, request, activeUnit, selectPlan, loadSceneData, renderSceneView, renderCurrentScene, setButtonLoading, confirmAction, toast, logEvent, sameId, createPreviewCookingUnit })
-  sceneStudy = createSceneStudy({ state, elements, api, activeUnit, renderCurrentScene, setButtonLoading, escapeHtml, sameId, toast, logEvent, completeCurrentUnit: (...args) => sceneActions.completeCurrentUnit(...args), backToReading: () => studyEngine.backToReading(), generateRelatedWords: (...args) => sceneActions.generateRelatedWords?.(...args), promoteWord: (...args) => sceneActions.promoteWord(...args) })
+  sceneStudy = createSceneStudy({ state, elements, api, activeUnit, renderCurrentScene, setButtonLoading, escapeHtml, sameId, toast, logEvent, completeCurrentUnit: (...args) => sceneActions.completeCurrentUnit(...args), backToReading: () => studyEngine.backToReading(), generateRelatedWords: (...args) => sceneActions.generateRelatedWords?.(...args), promoteWord: (...args) => sceneActions.promoteWord(...args), speak: (...args) => ctx.speak?.(...args) })
   sceneOverview = createSceneOverview({ state, elements, api, unitList, activeUnit, calendarDates, calendarTitle, dateFromKey, formatCalendarDate, unitDateKey, unitStatusLabel, unitsForDate, createPreviewCookingUnit, loadSceneData, loadSceneNote: sceneNote.load, startLearning: studyEngine.startLearning, renderCurrentScene, setButtonLoading, confirmAction, toast, logEvent, escapeHtml, sameId, preview: state.preview })
   planWorkflow = createPlanWorkflow({ state, elements, api, loadSceneData, renderSourceOptions, changeSelectedPlan, targetPlan: planManager.targetPlan, setButtonLoading, toast, logEvent, confirmAction, escapeHtml, sameId })
   createAsyncListener({ state, refreshCalendar: refreshCalendarData }).bind()
@@ -320,5 +320,6 @@ export function createScenePlanFeature(ctx) {
     changeCalendarRange, changeCalendarOffset: calendarView.changeOffset, resetCalendar: calendarView.reset, changeSelectedPlan, pausePlan: planWorkflow.pausePlan, resumePlan: planWorkflow.resumePlan, cancelPlan: planWorkflow.cancelPlan,
     speakCurrentScene: () => speakSentence(activeUnit()?.learningText || ''), loadSceneNote: sceneNote.load, renderSceneNote: sceneNote.render, saveSceneNote: sceneNote.save, toggleSceneNotePreview: sceneNote.togglePreview, openSceneNoteModal: sceneNote.openModal, closeSceneNoteModal: sceneNote.closeModal,
     closeSceneVocabularyPreview: sceneOverview.closeVocabularyPreview, openCoreWordsModal: sceneStudy.openCoreWordsModal, closeCoreWordsModal: sceneStudy.closeCoreWordsModal, openRelatedWordsModal: sceneStudy.openRelatedWordsModal, closeRelatedWordsModal: sceneStudy.closeRelatedWordsModal, generateRelatedWords: () => sceneActions.generateRelatedWords?.(),
+    handleSceneChallengeKeydown: (event) => sceneStudy?.handleChallengeKeydown?.(event),
   }
 }

@@ -103,6 +103,7 @@ scenePlanFeature = createScenePlanFeature({
   confirmAction,
   escapeHtml,
   sameId,
+  speak,
   speakSentence,
   loadWordbooks: profile.loadWordbooks,
 })
@@ -444,6 +445,7 @@ bindAppEvents({
   setSystemTab,
   systemManagement,
   handleReviewKeydown,
+  handleSceneChallengeKeydown: (...args) => scenePlanFeature.handleSceneChallengeKeydown(...args),
 })
 exposeDebugGlobals({ state, renderRecord: studyFacade.renderRecord, renderReviewCompleteModal, speak, setView, setProfileTab })
 

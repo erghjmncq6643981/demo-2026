@@ -13,6 +13,7 @@ export function createWordbookProfileFeature(ctx) {
     setLoading,
     toast,
     logEvent,
+    confirmAction,
     confirmDelete,
     loadDueReviews: loadDueReviewsFromCtx,
     openEntryTransferModal,
@@ -492,6 +493,16 @@ export function createWordbookProfileFeature(ctx) {
           : entry.meaningText || entry.definition || '-'
         const cardCode = entry.cardStatus || 'missing'
         const cardText = cardStatusLabel(cardCode)
+        const isClickable = ['missing', 'not_required', 'failed'].includes(cardCode)
+        const cardTitle = cardCode === 'missing'
+          ? '未生成 AI 完整词卡，点击二次确认触发生成'
+          : cardCode === 'failed'
+            ? 'AI 词卡生成失败，点击二次确认重新生成'
+            : cardCode === 'not_required'
+              ? '基础静态词条，点击二次确认生成 AI 深度词卡'
+              : cardCode === 'ready'
+                ? 'AI 完整词卡已就绪'
+                : '词卡生成中...'
         const stateCode = entry.status || 'vague'
         const stateText = statusLabel(stateCode)
         const stageText = `阶段 ${entry.reviewStage ?? 0}`
@@ -512,7 +523,12 @@ export function createWordbookProfileFeature(ctx) {
               <span class="meaning-text expandable" data-toggle-expand title="点击展开/收起完整释义">${escapeHtml(meaningSummary)}</span>
             </td>
             <td class="cell-card-status">
-              <span class="card-status-pill card-status-${escapeHtml(cardCode)}">${escapeHtml(cardText)}</span>
+              ${isClickable
+                ? `<button class="card-status-pill card-status-btn card-status-${escapeHtml(cardCode)}" type="button" data-generate-entry-card="${escapeHtml(entry.id)}" title="${escapeHtml(cardTitle)}">
+                    ${escapeHtml(cardText)}<span class="card-action-hint">⚡</span>
+                   </button>`
+                : `<span class="card-status-pill card-status-${escapeHtml(cardCode)}" title="${escapeHtml(cardTitle)}">${escapeHtml(cardText)}</span>`
+              }
             </td>
             <td class="cell-status">
               <span class="status-pill status-${escapeHtml(stateCode)}">${escapeHtml(stateText)} · ${escapeHtml(stageText)}</span>
@@ -535,6 +551,17 @@ export function createWordbookProfileFeature(ctx) {
       .join('')
 
     elements.wordbookEntryList.onclick = (e) => {
+      const generateCardBtn = e.target.closest('[data-generate-entry-card]')
+      if (generateCardBtn) {
+        e.stopPropagation()
+        const entryId = generateCardBtn.getAttribute('data-generate-entry-card')
+        const entry = state.wordbookEntries.find((item) => sameId(item.id, entryId))
+        if (entry) {
+          generateEntryCardWithConfirm(entry, generateCardBtn)
+        }
+        return
+      }
+
       const deleteBtn = e.target.closest('[data-entry-delete]')
       if (deleteBtn) {
         e.stopPropagation()
@@ -578,6 +605,60 @@ export function createWordbookProfileFeature(ctx) {
 
     renderWordbookFocus(selectedEntry)
     ctx.renderNotes(selectedEntry)
+  }
+
+  async function generateEntryCardWithConfirm(entry, button) {
+    const term = entry.term || entry.normalizedTerm || '该单词'
+    const confirmed = typeof confirmAction === 'function'
+      ? await confirmAction({
+          title: '生成 AI 词卡',
+          message: `确定要为单词「${term}」调用 AI 大模型生成完整结构化词卡（音标、释义、权威例句、场景搭配、助记）吗？`,
+          acceptText: '立即生成',
+          danger: false,
+        })
+      : window.confirm(`确定要为单词「${term}」生成 AI 词卡吗？`)
+    if (!confirmed) return
+
+    if (state.preview) {
+      entry.cardStatus = 'ready'
+      renderWordbookEntries()
+      toast?.(`设计预览：已模拟为「${term}」生成 AI 词卡`)
+      return
+    }
+
+    if (button) {
+      button.disabled = true
+      button.classList.add('generating')
+      button.innerHTML = `<span class="card-loading-spinner"></span>生成中...`
+    }
+    try {
+      const updated = await request(`/api/v1/learning/wordbook-entries/${encodeURIComponent(entry.id)}/generate-card?forceRefresh=true`, {
+        method: 'POST',
+      })
+      if (updated) {
+        const idx = state.wordbookEntries.findIndex((item) => sameId(item.id, entry.id))
+        if (idx >= 0) {
+          state.wordbookEntries[idx] = {
+            ...state.wordbookEntries[idx],
+            ...updated,
+            cardStatus: updated.cardStatus || 'ready',
+            phonetic: updated.phonetic || state.wordbookEntries[idx].phonetic,
+            meaningText: updated.meaningText || state.wordbookEntries[idx].meaningText,
+          }
+        }
+        if (sameId(state.selectedEntry?.id, entry.id)) {
+          state.selectedEntry = state.wordbookEntries[idx] || updated
+          renderWordbookFocus(state.selectedEntry)
+        }
+        renderWordbookEntries()
+        logEvent?.('ai', '生成词卡成功', term)
+        toast?.(`单词「${term}」AI 词卡生成成功！`)
+      }
+    } catch (err) {
+      logEvent?.('error', '生成词卡失败', err.message)
+      toast?.(`生成词卡失败：${err.message}`)
+      renderWordbookEntries()
+    }
   }
 
   function entryMatchesKeyword(entry, keyword) {

@@ -1,4 +1,5 @@
 import { hideModal, showModal } from '/src/shared/modal.js'
+import { playUiTone } from '/src/shared/audio.js'
 import {
   ASSESSMENT_LABELS,
   asArray,
@@ -21,6 +22,7 @@ export function createSceneStudy({
   backToReading,
   generateRelatedWords,
   promoteWord,
+  speak,
 }) {
   let assessmentFeedback = null
 
@@ -31,6 +33,7 @@ export function createSceneStudy({
 
   function resetAssessment() {
     assessmentFeedback = null
+    state.sceneTypingTyped = ''
   }
 
   function beginAssessment(word) {
@@ -207,13 +210,134 @@ export function createSceneStudy({
     })
   }
 
+  function renderTypingLetters(term, typed = '') {
+    return [...String(term || '')]
+      .map((letter, index) => {
+        const className = index < typed.length ? 'typed' : index === typed.length ? 'current' : ''
+        const label = letter === ' ' ? 'Space' : letter
+        return `<span class="${className}">${escapeHtml(label)}</span>`
+      })
+      .join('')
+  }
+
+  function shakeTypingBoard() {
+    const board = elements.sceneAssessment?.querySelector('.typing-board')
+    if (!board) return
+    board.classList.remove('shake')
+    void board.offsetWidth
+    board.classList.add('shake')
+  }
+
+  function handleSceneTypingKeydown(event, word) {
+    const term = String(word?.term || '').trim()
+    if (!term) return
+    if (event.key === 'Backspace') {
+      event.preventDefault()
+      state.sceneTypingTyped = String(state.sceneTypingTyped || '').slice(0, -1)
+      renderAssessment(activeUnit())
+      return
+    }
+    if (event.key === 'Escape') {
+      event.preventDefault()
+      state.sceneTypingTyped = ''
+      renderAssessment(activeUnit())
+      return
+    }
+    if (event.key.length !== 1) return
+    const typed = String(state.sceneTypingTyped || '')
+    const expected = term[typed.length]
+    if (!expected) return
+    event.preventDefault()
+    if (event.key.toLowerCase() === expected.toLowerCase()) {
+      state.sceneTypingTyped = typed + expected
+      playUiTone('correct')
+      renderAssessment(activeUnit())
+      if (state.sceneTypingTyped.length === term.length) {
+        playUiTone('success')
+        window.setTimeout(() => {
+          const finishedTerm = state.sceneTypingTyped
+          state.sceneTypingTyped = ''
+          submitAssessment(finishedTerm)
+        }, 120)
+      }
+      return
+    }
+    playUiTone('wrong')
+    shakeTypingBoard()
+  }
+
+  function handleChallengeKeydown(event) {
+    if (state.activeView !== 'scenePlanView' || state.sceneChallengeStage !== 'challenge') return
+    if (elements.sceneCoreWordsModal && !elements.sceneCoreWordsModal.classList.contains('hidden')) return
+    if (elements.sceneRelatedWordsModal && !elements.sceneRelatedWordsModal.classList.contains('hidden')) return
+
+    const activeTag = document.activeElement?.tagName?.toLowerCase()
+    const isTypingInInput = ['input', 'textarea'].includes(activeTag)
+
+    const unit = activeUnit()
+    if (!unit) return
+    const coreWords = asArray(unit.words).filter((item) => item.tier === 'core')
+    const completedWords = coreWords.filter(isWordComplete)
+
+    if (coreWords.length && completedWords.length === coreWords.length) {
+      if (event.key === 'Enter') {
+        event.preventDefault()
+        completeCurrentUnit()
+      }
+      return
+    }
+
+    const word = currentSceneWord(unit)
+    if (!word) return
+    const type = nextAssessment(word)
+
+    if ((event.key === 'r' || event.key === 'R' || (event.altKey && (event.key === 'p' || event.key === 'P'))) && !isTypingInInput) {
+      event.preventDefault()
+      if (typeof speak === 'function') {
+        speak(word.term)
+      }
+      return
+    }
+
+    if (!type) {
+      if (event.key === ' ' || event.key === 'Enter') {
+        event.preventDefault()
+        selectNextCoreWord()
+      }
+      return
+    }
+
+    if (type === 'copy_typing') {
+      if (isTypingInInput) return
+      handleSceneTypingKeydown(event, word)
+      return
+    }
+
+    if (type === 'meaning_choice' && !isTypingInInput) {
+      const assessment = word.assessment || {}
+      const options = asArray(assessment.options)
+      let chosenIndex = -1
+      if (event.key >= '1' && event.key <= '4') {
+        chosenIndex = Number(event.key) - 1
+      } else if (['a', 'b', 'c', 'd'].includes(event.key.toLowerCase())) {
+        chosenIndex = event.key.toLowerCase().charCodeAt(0) - 97
+      }
+      if (chosenIndex >= 0 && chosenIndex < options.length) {
+        event.preventDefault()
+        playUiTone('correct')
+        submitAssessment(options[chosenIndex])
+      }
+      return
+    }
+  }
+
   function renderAssessment(unit) {
     const coreWords = asArray(unit?.words).filter((item) => item.tier === 'core')
     const completedWords = coreWords.filter(isWordComplete)
     if (coreWords.length && completedWords.length === coreWords.length) {
       elements.sceneAssessmentStage.textContent = `${coreWords.length} / ${coreWords.length}`
       elements.sceneAssessment.className = 'scene-assessment'
-      elements.sceneAssessment.innerHTML = `<div class="scene-assessment-complete scene-unit-complete"><span class="scene-check-mark">✓</span><strong>本轮 ${coreWords.length} 个词已全部通过</strong><p>含义识别和要求掌握的拼写项目已写入学习记录。</p><div class="scene-complete-actions"><button class="secondary-button compact" type="button" data-return-reading>回看场景</button><button class="primary-button compact-primary" type="button" data-finish-challenge>完成本场景</button></div></div>`
+      elements.sceneAssessment.innerHTML = `<div class="scene-assessment-complete scene-unit-complete"><span class="scene-check-mark">✓</span><strong>本轮 ${coreWords.length} 个词已全部通过</strong><p>含义识别和要求掌握的拼写项目已写入学习记录。</p><div class="scene-complete-actions"><button class="secondary-button compact" type="button" data-return-reading>回看场景</button><button class="primary-button compact-primary" type="button" data-finish-challenge>完成本场景 (Enter)</button></div></div>`
       elements.sceneAssessment.querySelector('[data-return-reading]')?.addEventListener('click', backToReading)
       elements.sceneAssessment.querySelector('[data-finish-challenge]')?.addEventListener('click', completeCurrentUnit)
       return
@@ -231,7 +355,7 @@ export function createSceneStudy({
     elements.sceneAssessmentStage.textContent = type ? `第 ${wordIndex}/${coreWords.length} 词 · ${passedCount + 1}/${requiredAssessments(word).length}` : '已通过'
     elements.sceneAssessment.className = 'scene-assessment'
     if (!type) {
-      elements.sceneAssessment.innerHTML = `<div class="scene-assessment-complete"><span class="scene-check-mark">✓</span><strong>${escapeHtml(word.term)} 已完成当前场景检查</strong><p>${escapeHtml(word.meaning || word.contextMeaning || '')}</p><button class="secondary-button compact" type="button" data-next-core-word>检查下一个词</button></div>`
+      elements.sceneAssessment.innerHTML = `<div class="scene-assessment-complete"><span class="scene-check-mark">✓</span><strong>${escapeHtml(word.term)} 已完成当前场景检查</strong><p>${escapeHtml(word.meaning || word.contextMeaning || '')}</p><button class="secondary-button compact" type="button" data-next-core-word>检查下一个词 (Space / Enter)</button></div>`
       elements.sceneAssessment.querySelector('[data-next-core-word]')?.addEventListener('click', selectNextCoreWord)
       return
     }
@@ -241,12 +365,23 @@ export function createSceneStudy({
     if (type === 'meaning_choice') {
       const assessment = word.assessment || {}
       const options = asArray(assessment.options)
-      elements.sceneAssessment.innerHTML = `<div class="scene-assessment-prompt"><span class="mini-pill">${ASSESSMENT_LABELS[type]}</span><h4>${escapeHtml(assessment.prompt || `请选择 ${word.term} 在当前场景中的含义`)}</h4><p class="phonetic">${escapeHtml(word.phonetic || '暂无音标')}</p></div><div class="scene-choice-list">${options.map((option, index) => `<button type="button" data-scene-answer="${escapeHtml(option)}"><span>${String.fromCharCode(65 + index)}</span>${escapeHtml(option)}</button>`).join('')}</div>${feedback}`
-      elements.sceneAssessment.querySelectorAll('[data-scene-answer]').forEach((button) => button.addEventListener('click', () => submitAssessment(button.dataset.sceneAnswer)))
+      elements.sceneAssessment.innerHTML = `<div class="scene-assessment-prompt"><span class="mini-pill">${ASSESSMENT_LABELS[type]}</span><h4>${escapeHtml(assessment.prompt || `请选择 ${word.term} 在当前场景中的含义`)}</h4><p class="phonetic">${escapeHtml(word.phonetic ? `/${word.phonetic}/` : '暂无音标')}</p></div><div class="scene-choice-list">${options.map((option, index) => `<button type="button" data-scene-answer="${escapeHtml(option)}" data-choice-index="${index}"><span>${String.fromCharCode(65 + index)}</span>${escapeHtml(option)}</button>`).join('')}</div><p class="typing-hint">可按 1~4 或 A~D 键快捷选择 · 按 R 键发音</p>${feedback}`
+      elements.sceneAssessment.querySelectorAll('[data-scene-answer]').forEach((button) => button.addEventListener('click', () => {
+        playUiTone('correct')
+        submitAssessment(button.dataset.sceneAnswer)
+      }))
       return
     }
-    const copyTyping = type === 'copy_typing'
-    elements.sceneAssessment.innerHTML = `<div class="scene-assessment-prompt"><span class="mini-pill">${ASSESSMENT_LABELS[type]}</span><h4>${copyTyping ? `跟敲 ${escapeHtml(word.term)}` : escapeHtml(word.contextMeaning || word.meaning || '根据含义拼写单词')}</h4><p>${copyTyping ? '按显示内容完整输入单词或短语' : '输入对应的英文单词或短语'}</p></div><form class="scene-spelling-form" data-scene-spelling-form><input data-scene-spelling-input autocomplete="off" autocapitalize="off" spellcheck="false" aria-label="${ASSESSMENT_LABELS[type]}答案" /><button class="primary-button compact-primary" type="submit">提交</button></form>${feedback}`
+    if (type === 'copy_typing') {
+      const term = String(word.term || '').trim()
+      const typed = String(state.sceneTypingTyped || '')
+      const progressPercent = term.length ? Math.min(100, Math.round((typed.length / term.length) * 100)) : 0
+      elements.sceneAssessment.innerHTML = `<div class="scene-assessment-prompt"><span class="mini-pill">${ASSESSMENT_LABELS[type]}</span><h4>${escapeHtml(word.term)}</h4><p class="phonetic">${escapeHtml(word.phonetic ? `/${word.phonetic}/` : '')} ${escapeHtml(word.contextMeaning || word.meaning || '')}</p></div><div class="typing-board" tabindex="0" aria-label="跟敲单词 ${escapeHtml(word.term)}"><div class="typing-letters">${renderTypingLetters(term, typed)}</div><div class="typing-progress"><span style="width: ${progressPercent}%;"></span></div><p class="typing-hint">键盘直接输入字母 · Backspace 回退 · 按 R 键发音</p></div>${feedback}`
+      const board = elements.sceneAssessment.querySelector('.typing-board')
+      board?.addEventListener('click', () => board.focus())
+      return
+    }
+    elements.sceneAssessment.innerHTML = `<div class="scene-assessment-prompt"><span class="mini-pill">${ASSESSMENT_LABELS[type]}</span><h4>${escapeHtml(word.contextMeaning || word.meaning || '根据含义拼写单词')}</h4><p>${escapeHtml(word.phonetic ? `/${word.phonetic}/` : '')} 请输入对应的英文单词或短语</p></div><form class="scene-spelling-form" data-scene-spelling-form><input data-scene-spelling-input autocomplete="off" autocapitalize="off" spellcheck="false" placeholder="输入英文单词后回车提交" aria-label="${ASSESSMENT_LABELS[type]}答案" /><button class="primary-button compact-primary" type="submit">提交 (Enter)</button></form><p class="typing-hint">输入完成后按 Enter 提交 · 按 R 键发音</p>${feedback}`
     const form = elements.sceneAssessment.querySelector('[data-scene-spelling-form]')
     const input = elements.sceneAssessment.querySelector('[data-scene-spelling-input]')
     form?.addEventListener('submit', (event) => {
@@ -304,9 +439,11 @@ export function createSceneStudy({
         word.passedAssessments = [...new Set([...asArray(word.passedAssessments), type])]
         assessmentFeedback = { correct: true, message: '回答正确，已记录本词学习情况' }
         state.sceneAssessmentStartedAt = Date.now()
+        state.sceneTypingTyped = ''
         renderCurrentScene()
       } else {
         assessmentFeedback = { correct: false, message: `还未答对，正确答案：${result.correctAnswer || word.term}` }
+        state.sceneTypingTyped = ''
         renderAssessment(unit)
       }
       logEvent('learning', '提交场景词汇检查', `${word.term} · ${ASSESSMENT_LABELS[type]} · ${result.correct ? '正确' : '错误'}`)
@@ -354,5 +491,6 @@ export function createSceneStudy({
     closeCoreWordsModal,
     openRelatedWordsModal,
     closeRelatedWordsModal,
+    handleChallengeKeydown,
   }
 }

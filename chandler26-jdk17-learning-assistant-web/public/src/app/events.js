@@ -138,6 +138,7 @@ export function bindAppEvents(ctx) {
     setSystemTab,
     systemManagement,
     handleReviewKeydown,
+    handleSceneChallengeKeydown,
   } = ctx
 
 elements.loginBtn.addEventListener('click', () => loginOrRegister('login'))
@@ -465,7 +466,10 @@ elements.aiSessionPrevBtn?.addEventListener('click', () => systemManagement?.cha
 elements.aiSessionNextBtn?.addEventListener('click', () => systemManagement?.changeAiSessionPage(1))
 elements.closeAiSessionDetailBtn?.addEventListener('click', () => systemManagement?.closeDetail())
 elements.aiSessionDetailModal?.addEventListener('click', (event) => { if (event.target === elements.aiSessionDetailModal) systemManagement?.closeDetail() })
-  document.addEventListener('keydown', handleReviewKeydown)
+  document.addEventListener('keydown', (event) => {
+    handleReviewKeydown?.(event)
+    handleSceneChallengeKeydown?.(event)
+  })
 
   window.addEventListener('unhandledrejection', (event) => {
     const error = event.reason
