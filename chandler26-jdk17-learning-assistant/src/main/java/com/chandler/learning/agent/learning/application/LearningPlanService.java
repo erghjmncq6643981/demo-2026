@@ -451,14 +451,6 @@ public class LearningPlanService {
         }
         unit.setStatus(LearningConstants.ScenePlan.UNIT_IN_PROGRESS);
         if (firstStart) {
-            List<LearningPlanUnitEntry> entries = unitEntryMapper.selectList(new LambdaQueryWrapper<LearningPlanUnitEntry>()
-                    .eq(LearningPlanUnitEntry::getUnitId, unit.getId())
-                    .eq(LearningPlanUnitEntry::getDeleted, false));
-            List<LearningWordProgressService.SceneExposureCommand> commands = entries.stream()
-                    .map(entry -> new LearningWordProgressService.SceneExposureCommand(
-                            entry.getTerm(), entry.getMasteryRequirement(), entry.getTier(), planId, unitId))
-                    .toList();
-            progressService.recordSceneExposures(userId, commands);
             unit.setStartedTime(now);
         }
         unit.setUpdateTime(now);

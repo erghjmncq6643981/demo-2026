@@ -263,7 +263,8 @@ export function createVocabularyImportWorkflow({
       if (keyword) params.set('keyword', keyword)
       state.currentVocabularyImport = await catalogApi.getImport(jobId, params)
       renderReview()
-      if (state.currentVocabularyImport.status === 'published') {
+      const canManageCatalogs = state.preview || state.user?.roleCode === 'ADMIN'
+      if (canManageCatalogs && state.currentVocabularyImport.status === 'published') {
         await loadAnalysis(state.currentVocabularyImport.catalogVersionId, { quiet: true })
       }
     } catch (error) {
@@ -367,6 +368,8 @@ export function createVocabularyImportWorkflow({
 
   async function loadAnalysis(catalogVersionId, options = {}) {
     if (!catalogVersionId) return null
+    const canManageCatalogs = state.preview || state.user?.roleCode === 'ADMIN'
+    if (!canManageCatalogs) return null
     if (state.preview) {
       renderAnalysis()
       return state.currentVocabularyAnalysis
@@ -384,6 +387,8 @@ export function createVocabularyImportWorkflow({
   }
 
   async function triggerAnalysis() {
+    const canManageCatalogs = state.preview || state.user?.roleCode === 'ADMIN'
+    if (!canManageCatalogs) return
     const current = state.currentVocabularyImport
     if (!current || current.status !== 'published') return
     const pending = number(state.currentVocabularyAnalysis?.unanalyzedCount) || number(current.totalCount)
@@ -461,6 +466,8 @@ export function createVocabularyImportWorkflow({
   }
 
   async function publish() {
+    const canManageCatalogs = state.preview || state.user?.roleCode === 'ADMIN'
+    if (!canManageCatalogs) return
     const current = state.currentVocabularyImport
     if (!current || current.status === 'published') return
     if (number(current.pendingWarningCount) > 0) {
@@ -483,7 +490,10 @@ export function createVocabularyImportWorkflow({
         state.currentVocabularyAnalysis = { catalogId: current.catalogId, catalogVersionId: current.catalogVersionId, status: 'not_started', publishedCount: number(current.totalCount), analyzedCount: 0, unanalyzedCount: number(current.totalCount), canTrigger: number(current.totalCount) > 0 }
       } else {
         state.currentVocabularyImport = await catalogApi.publish(current.jobId)
-        await loadAnalysis(state.currentVocabularyImport.catalogVersionId, { quiet: true })
+        const canManageCatalogs = state.preview || state.user?.roleCode === 'ADMIN'
+        if (canManageCatalogs && state.currentVocabularyImport.status === 'published') {
+          await loadAnalysis(state.currentVocabularyImport.catalogVersionId, { quiet: true })
+        }
       }
       await Promise.allSettled([reloadHistory(), loadWordbooks?.()])
       renderReview()

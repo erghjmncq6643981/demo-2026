@@ -227,9 +227,16 @@ public class LearningPlanResponseAssembler {
                 .collect(Collectors.groupingBy(LearningPlanUnitEntry::getUnitId));
 
         // 3. 评测通过记录
-        Map<Long, List<String>> passedByEntry = reviewRecordMapper.selectList(
+        List<Long> wordbookEntryIds = entries.stream()
+                .map(LearningPlanUnitEntryItem::getWordbookEntryId)
+                .filter(Objects::nonNull)
+                .distinct()
+                .toList();
+        Map<Long, List<String>> passedByEntry = wordbookEntryIds.isEmpty()
+                ? Map.of()
+                : reviewRecordMapper.selectList(
                         new LambdaQueryWrapper<LearningReviewRecord>()
-                                .eq(LearningReviewRecord::getPlanId, planId)
+                                .in(LearningReviewRecord::getEntryId, wordbookEntryIds)
                                 .in(LearningReviewRecord::getUnitId, unitIds)
                                 .eq(LearningReviewRecord::getCheckResult, LearningConstants.ScenePlan.CHECK_CORRECT)
                                 .eq(LearningReviewRecord::getDeleted, false))
