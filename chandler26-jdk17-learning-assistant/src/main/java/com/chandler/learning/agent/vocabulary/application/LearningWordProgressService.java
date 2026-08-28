@@ -1,6 +1,7 @@
 package com.chandler.learning.agent.vocabulary.application;
 
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
+import com.baomidou.mybatisplus.core.toolkit.IdWorker;
 import com.chandler.learning.agent.vocabulary.domain.LearningWordProgress;
 import com.chandler.learning.agent.vocabulary.infrastructure.LearningWordProgressMapper;
 import com.chandler.learning.agent.support.LearningConstants;
@@ -11,10 +12,12 @@ import org.springframework.util.StringUtils;
 
 import java.time.LocalDateTime;
 import java.util.LinkedHashMap;
+import java.util.LinkedHashSet;
 import java.util.Collection;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
+import java.util.Set;
 import java.util.stream.Collectors;
 
 /**
@@ -23,6 +26,8 @@ import java.util.stream.Collectors;
 @Service
 @RequiredArgsConstructor
 public class LearningWordProgressService {
+
+    private static final int WRITE_BATCH_SIZE = 200;
 
     private final LearningWordProgressMapper progressMapper;
 
@@ -50,6 +55,10 @@ public class LearningWordProgressService {
      */
     public record SceneExposureCommand(String term, String masteryRequirement, String tier, Long planId, Long unitId) {}
 
+    /** 场景词进度的批量装配结果，保留写入前状态用于判断是否首次学习。 */
+    public record SceneProgressBatch(Map<String, LearningWordProgress> progresses,
+                                     Set<String> initiallyUnseenTerms) {}
+
     /**
      * 批量导入时一次预加载已有进度，只为真正缺失的归一化词插入新行。
      */
@@ -76,22 +85,65 @@ public class LearningWordProgressService {
                         progress -> progress,
                         (left, right) -> left,
                         LinkedHashMap::new));
-        for (String term : terms) {
-            String normalizedTerm = normalize(term);
-            if (StringUtils.hasText(normalizedTerm) && !result.containsKey(normalizedTerm)) {
-                result.put(normalizedTerm, createNew(
-                        userId, term, LearningConstants.ScenePlan.MASTERY_RECOGNITION));
+        List<LearningWordProgress> missing = normalizedTerms.stream()
+                .filter(normalizedTerm -> !result.containsKey(normalizedTerm))
+                .map(normalizedTerm -> newProgress(userId, normalizedTerm,
+                        LearningConstants.ScenePlan.MASTERY_RECOGNITION))
+                .toList();
+        for (int start = 0; start < missing.size(); start += WRITE_BATCH_SIZE) {
+            int end = Math.min(start + WRITE_BATCH_SIZE, missing.size());
+            List<LearningWordProgress> chunk = missing.subList(start, end);
+            try {
+                progressMapper.insertBatch(chunk);
+                chunk.forEach(progress -> result.put(progress.getNormalizedTerm(), progress));
+            } catch (DuplicateKeyException ex) {
+                // 并发请求可能先创建了其中一部分，统一回读后继续装配，不逐条重试。
+                List<LearningWordProgress> refreshed = findAll(userId, normalizedTerms);
+                refreshed.forEach(progress -> result.put(progress.getNormalizedTerm(), progress));
+                List<LearningWordProgress> unresolved = chunk.stream()
+                        .filter(progress -> !result.containsKey(progress.getNormalizedTerm()))
+                        .toList();
+                if (!unresolved.isEmpty()) {
+                    try {
+                        progressMapper.insertBatch(unresolved);
+                        unresolved.forEach(progress -> result.put(progress.getNormalizedTerm(), progress));
+                    } catch (DuplicateKeyException retryConflict) {
+                        findAll(userId, normalizedTerms).forEach(progress ->
+                                result.put(progress.getNormalizedTerm(), progress));
+                    }
+                }
             }
         }
         return result;
     }
 
+    private List<LearningWordProgress> findAll(Long userId, List<String> normalizedTerms) {
+        return progressMapper.selectList(new LambdaQueryWrapper<LearningWordProgress>()
+                .eq(LearningWordProgress::getUserId, userId)
+                .in(LearningWordProgress::getNormalizedTerm, normalizedTerms)
+                .eq(LearningWordProgress::getDeleted, false));
+    }
+
     private LearningWordProgress createNew(Long userId, String term, String masteryRequirement) {
+        LearningWordProgress progress = newProgress(userId, term, masteryRequirement);
+        try {
+            progressMapper.insert(progress);
+            return progress;
+        } catch (DuplicateKeyException ex) {
+            return find(userId, progress.getNormalizedTerm());
+        }
+    }
+
+    /** 在内存中构造进度实体，供单条和批量持久化复用。 */
+    private LearningWordProgress newProgress(Long userId, String term, String masteryRequirement) {
         String normalizedTerm = normalize(term);
         LocalDateTime now = LocalDateTime.now();
         LearningWordProgress progress = new LearningWordProgress();
+        progress.setId(IdWorker.getId());
+        progress.setCreateBy(userId);
+        progress.setUpdateBy(userId);
         progress.setUserId(userId);
-        progress.setTerm(term.trim());
+        progress.setTerm(term == null ? normalizedTerm : term.trim());
         progress.setNormalizedTerm(normalizedTerm);
         progress.setLearningState(LearningConstants.ScenePlan.PROGRESS_UNSEEN);
         progress.setMasteryRequirement(resolveRequirement(masteryRequirement));
@@ -109,20 +161,23 @@ public class LearningWordProgressService {
         progress.setDeleted(false);
         progress.setCreateTime(now);
         progress.setUpdateTime(now);
-        try {
-            progressMapper.insert(progress);
-            return progress;
-        } catch (DuplicateKeyException ex) {
-            return find(userId, normalizedTerm);
-        }
+        return progress;
     }
 
     /**
      * 批量记录词汇被一个新场景展示；核心词进入正式学习并按需等待词卡。
      */
     public void recordSceneExposures(Long userId, List<SceneExposureCommand> commands) {
+        prepareSceneProgresses(userId, commands, true);
+    }
+
+    /**
+     * 一次预加载并批量准备场景词进度；未来场景只提升掌握要求，开始学习的场景同时记录曝光。
+     */
+    public SceneProgressBatch prepareSceneProgresses(Long userId, List<SceneExposureCommand> commands,
+                                                     boolean recordExposure) {
         if (commands == null || commands.isEmpty()) {
-            return;
+            return new SceneProgressBatch(Map.of(), Set.of());
         }
         List<String> terms = commands.stream()
                 .map(SceneExposureCommand::term)
@@ -130,6 +185,11 @@ public class LearningWordProgressService {
                 .distinct()
                 .toList();
         Map<String, LearningWordProgress> progressMap = getOrCreateAll(userId, terms);
+        Set<String> initiallyUnseenTerms = progressMap.values().stream()
+                .filter(progress -> LearningConstants.ScenePlan.PROGRESS_UNSEEN.equals(progress.getLearningState())
+                        || LearningConstants.ScenePlan.PROGRESS_EXPOSED.equals(progress.getLearningState()))
+                .map(LearningWordProgress::getNormalizedTerm)
+                .collect(Collectors.toCollection(LinkedHashSet::new));
         LocalDateTime now = LocalDateTime.now();
         for (SceneExposureCommand cmd : commands) {
             String norm = normalize(cmd.term());
@@ -137,31 +197,33 @@ public class LearningWordProgressService {
             if (progress != null) {
                 boolean core = LearningConstants.ScenePlan.TIER_CORE.equals(cmd.tier());
                 progress.setTerm(cmd.term().trim());
-                progress.setExposureCount(value(progress.getExposureCount()) + LearningConstants.SEQUENCE_STEP);
-                progress.setSceneCount(value(progress.getSceneCount()) + LearningConstants.SEQUENCE_STEP);
-                progress.setLatestPlanId(cmd.planId());
-                progress.setLatestUnitId(cmd.unitId());
-                progress.setLastLearnedTime(now);
-                if (core) {
-                    if (!LearningConstants.ScenePlan.PROGRESS_MASTERED.equals(progress.getLearningState())) {
-                        progress.setLearningState(LearningConstants.ScenePlan.PROGRESS_LEARNING);
+                if (recordExposure) {
+                    progress.setExposureCount(value(progress.getExposureCount()) + LearningConstants.SEQUENCE_STEP);
+                    progress.setSceneCount(value(progress.getSceneCount()) + LearningConstants.SEQUENCE_STEP);
+                    progress.setLatestPlanId(cmd.planId());
+                    progress.setLatestUnitId(cmd.unitId());
+                    progress.setLastLearnedTime(now);
+                    if (core) {
+                        if (!LearningConstants.ScenePlan.PROGRESS_MASTERED.equals(progress.getLearningState())) {
+                            progress.setLearningState(LearningConstants.ScenePlan.PROGRESS_LEARNING);
+                        }
+                        if (LearningConstants.VocabularyCard.STATUS_NOT_REQUIRED.equals(progress.getCardStatus())) {
+                            progress.setCardStatus(LearningConstants.VocabularyCard.STATUS_MISSING);
+                        }
+                    } else if (LearningConstants.ScenePlan.PROGRESS_UNSEEN.equals(progress.getLearningState())) {
+                        progress.setLearningState(LearningConstants.ScenePlan.PROGRESS_EXPOSED);
                     }
-                    if (LearningConstants.VocabularyCard.STATUS_NOT_REQUIRED.equals(progress.getCardStatus())) {
-                        progress.setCardStatus(LearningConstants.VocabularyCard.STATUS_MISSING);
-                    }
-                } else if (LearningConstants.ScenePlan.PROGRESS_UNSEEN.equals(progress.getLearningState())) {
-                    progress.setLearningState(LearningConstants.ScenePlan.PROGRESS_EXPOSED);
                 }
                 if (LearningConstants.ScenePlan.MASTERY_SPELLING.equals(cmd.masteryRequirement())) {
                     progress.setMasteryRequirement(LearningConstants.ScenePlan.MASTERY_SPELLING);
                 }
                 progress.setUpdateTime(now);
+                progress.setUpdateBy(userId);
             }
         }
         List<LearningWordProgress> toUpdate = progressMap.values().stream().filter(p -> p.getId() != null).toList();
-        if (!toUpdate.isEmpty()) {
-            progressMapper.updateBatch(toUpdate);
-        }
+        updateInChunks(toUpdate);
+        return new SceneProgressBatch(Map.copyOf(progressMap), Set.copyOf(initiallyUnseenTerms));
     }
 
     /**
@@ -212,6 +274,35 @@ public class LearningWordProgressService {
         progress.setUpdateTime(now);
         progressMapper.updateById(progress);
         return progress;
+    }
+
+    /** 批量记录文章目标词曝光，避免精读完成时逐词更新数据库。 */
+    public void recordArticleExposures(Long userId, List<String> terms) {
+        if (terms == null || terms.isEmpty()) {
+            return;
+        }
+        Map<String, LearningWordProgress> progressMap = getOrCreateAll(userId, terms);
+        LocalDateTime now = LocalDateTime.now();
+        progressMap.values().forEach(progress -> {
+            progress.setExposureCount(value(progress.getExposureCount()) + LearningConstants.SEQUENCE_STEP);
+            progress.setLastLearnedTime(now);
+            if (LearningConstants.ScenePlan.PROGRESS_UNSEEN.equals(progress.getLearningState())
+                    || LearningConstants.ScenePlan.PROGRESS_EXPOSED.equals(progress.getLearningState())) {
+                progress.setLearningState(LearningConstants.ScenePlan.PROGRESS_LEARNING);
+            }
+            progress.setUpdateTime(now);
+            progress.setUpdateBy(userId);
+        });
+        List<LearningWordProgress> updates = progressMap.values().stream().toList();
+        updateInChunks(updates);
+    }
+
+    /** 按固定大小拆分批量更新，避免词汇任务生成过长 SQL。 */
+    private void updateInChunks(List<LearningWordProgress> updates) {
+        for (int start = 0; start < updates.size(); start += WRITE_BATCH_SIZE) {
+            int end = Math.min(start + WRITE_BATCH_SIZE, updates.size());
+            progressMapper.updateBatch(updates.subList(start, end));
+        }
     }
 
     /**

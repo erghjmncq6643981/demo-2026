@@ -6,6 +6,7 @@ import com.chandler.learning.agent.vocabulary.api.VocabularyImportEntryUpdateReq
 import com.chandler.learning.agent.vocabulary.api.VocabularyImportPublishRequest;
 import com.chandler.learning.agent.vocabulary.api.VocabularyImportMetadataUpdateRequest;
 import com.chandler.learning.agent.vocabulary.api.VocabularyImportResponse;
+import com.chandler.learning.agent.vocabulary.api.VocabularyImportPageResponse;
 import com.chandler.learning.agent.vocabulary.api.VocabularyCatalogResponse;
 import com.chandler.learning.agent.vocabulary.api.VocabularyMarkdownImportRequest;
 import com.chandler.learning.agent.identity.domain.LearningUser;
@@ -52,10 +53,12 @@ public class VocabularyImportController {
 
     @GetMapping
     @Operation(summary = "词表导入历史")
-    public List<VocabularyImportResponse> list(
-            @RequestHeader(value = "Authorization", required = false) String authorization) {
+    public VocabularyImportPageResponse list(
+            @RequestHeader(value = "Authorization", required = false) String authorization,
+            @RequestParam(defaultValue = "1") Integer page,
+            @RequestParam(defaultValue = "20") Integer pageSize) {
         LearningUser user = authService.requireAdmin(authorization);
-        return importService.list(user.getId());
+        return importService.list(user.getId(), page, pageSize);
     }
 
     @GetMapping("/public")

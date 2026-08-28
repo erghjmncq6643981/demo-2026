@@ -41,6 +41,9 @@ public class AiChatSessionService {
     private static final int DEFAULT_ADMIN_PAGE = 1;
     private static final int DEFAULT_ADMIN_PAGE_SIZE = 20;
     private static final int MAX_ADMIN_PAGE_SIZE = 100;
+    private static final int MAX_SESSION_LIST_SIZE = 100;
+    private static final int MAX_ADMIN_DETAIL_MESSAGES = 200;
+    private static final int MAX_ADMIN_DETAIL_CALLS = 200;
 
     private final AiChatSessionMapper sessionMapper;
     private final AiChatMessageMapper messageMapper;
@@ -303,7 +306,8 @@ public class AiChatSessionService {
         List<ChatMessageResponse> messages = messageMapper.selectList(new LambdaQueryWrapper<AiChatMessage>()
                         .eq(AiChatMessage::getSessionId, sessionId)
                         .orderByDesc(AiChatMessage::getCreateTime)
-                        .orderByDesc(AiChatMessage::getSequence))
+                        .orderByDesc(AiChatMessage::getSequence)
+                        .last("LIMIT " + MAX_ADMIN_DETAIL_MESSAGES))
                 .stream()
                 .map(this::toMessageResponse)
                 .toList();
@@ -311,7 +315,8 @@ public class AiChatSessionService {
                         new LambdaQueryWrapper<AiModelCallRecord>()
                                 .eq(AiModelCallRecord::getSessionId, sessionId)
                                 .orderByDesc(AiModelCallRecord::getCreateTime)
-                                .orderByDesc(AiModelCallRecord::getId))
+                                .orderByDesc(AiModelCallRecord::getId)
+                                .last("LIMIT " + MAX_ADMIN_DETAIL_CALLS))
                 .stream()
                 .map(this::toCallRecordResponse)
                 .toList();

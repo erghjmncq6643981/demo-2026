@@ -26,6 +26,8 @@ import org.springframework.util.StringUtils;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.util.HashSet;
+import java.util.ArrayList;
+import java.util.Collection;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
@@ -117,7 +119,7 @@ public class AiAsyncTaskService {
         }
         Page<AiAsyncTask> taskPage = taskMapper.selectPage(new Page<>(current, size), wrapper);
         AiAsyncTaskPageResponse response = new AiAsyncTaskPageResponse();
-        response.setItems(taskPage.getRecords().stream().map(this::toResponse).toList());
+        response.setItems(toResponses(taskPage.getRecords()));
         response.setTotal(taskPage.getTotal());
         response.setPage((int) taskPage.getCurrent());
         response.setPageSize((int) taskPage.getSize());
@@ -137,7 +139,7 @@ public class AiAsyncTaskService {
         }
         Page<AiAsyncTask> taskPage = taskMapper.selectPage(new Page<>(current, size), wrapper);
         AiAsyncTaskPageResponse response = new AiAsyncTaskPageResponse();
-        response.setItems(taskPage.getRecords().stream().map(this::toResponse).toList());
+        response.setItems(toResponses(taskPage.getRecords()));
         response.setTotal(taskPage.getTotal());
         response.setPage((int) taskPage.getCurrent());
         response.setPageSize((int) taskPage.getSize());
@@ -155,7 +157,7 @@ public class AiAsyncTaskService {
         if (StringUtils.hasText(status)) {
             wrapper.eq(AiAsyncTask::getStatus, status.trim());
         }
-        return taskMapper.selectList(wrapper).stream().map(this::toResponse).toList();
+        return toResponses(taskMapper.selectList(wrapper));
     }
 
     /** 管理员查询所有用户的 AI 异步任务。 */
@@ -169,7 +171,7 @@ public class AiAsyncTaskService {
         if (StringUtils.hasText(status)) {
             wrapper.eq(AiAsyncTask::getStatus, status.trim());
         }
-        return taskMapper.selectList(wrapper).stream().map(this::toResponse).toList();
+        return toResponses(taskMapper.selectList(wrapper));
     }
 
     public AiAsyncTask require(Long userId, Long taskId) {
@@ -555,17 +557,34 @@ public class AiAsyncTaskService {
     }
 
     public AiAsyncTaskResponse toResponse(AiAsyncTask task) {
+        return toResponse(task, userDisplayNameService.userNames(List.of(
+                task.getOwnerUserId(), task.getTriggerUserId(), task.getOperatorUserId())));
+    }
+
+    private List<AiAsyncTaskResponse> toResponses(Collection<AiAsyncTask> tasks) {
+        if (tasks == null || tasks.isEmpty()) {
+            return List.of();
+        }
+        List<AiAsyncTask> values = new ArrayList<>(tasks);
+        List<Long> userIds = values.stream()
+                .flatMap(task -> java.util.stream.Stream.of(task.getOwnerUserId(), task.getTriggerUserId(), task.getOperatorUserId()))
+                .filter(java.util.Objects::nonNull).distinct().toList();
+        Map<Long, String> names = userDisplayNameService.userNames(userIds);
+        return values.stream().map(task -> toResponse(task, names)).toList();
+    }
+
+    private AiAsyncTaskResponse toResponse(AiAsyncTask task, Map<Long, String> names) {
         AiAsyncTaskResponse response = new AiAsyncTaskResponse();
         response.setId(task.getId());
         response.setUserId(task.getUserId());
         response.setOwnerUserId(task.getOwnerUserId());
-        response.setUserName(userDisplayNameService.userName(task.getOwnerUserId()));
+        response.setUserName(resolveName(names, task.getOwnerUserId()));
         response.setTriggerUserId(task.getTriggerUserId());
         response.setTriggerUserName(task.getTriggerUserId() == null
-                ? "系统" : userDisplayNameService.userName(task.getTriggerUserId()));
+                ? "系统" : resolveName(names, task.getTriggerUserId()));
         response.setOperatorUserId(task.getOperatorUserId());
         response.setOperatorUserName(task.getOperatorUserId() == null
-                ? null : userDisplayNameService.userName(task.getOperatorUserId()));
+                ? null : resolveName(names, task.getOperatorUserId()));
         response.setTriggerType(task.getTriggerType());
         response.setVisibility(task.getVisibility());
         response.setTaskType(task.getTaskType());
@@ -593,6 +612,10 @@ public class AiAsyncTaskService {
         response.setUpdateTime(task.getUpdateTime());
         response.setSteps(List.of());
         return response;
+    }
+
+    private String resolveName(Map<Long, String> names, Long userId) {
+        return names.getOrDefault(userId, "用户#" + userId);
     }
 
     /** 根据错误码决定自动重试还是转人工处理，并回收失败步骤作为断点。 */

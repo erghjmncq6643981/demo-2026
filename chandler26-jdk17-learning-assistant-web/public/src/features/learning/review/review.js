@@ -38,6 +38,7 @@ export function createReviewFeature(ctx) {
     statusLabel,
   } = ctx
   const feature = {}
+  const detailLoads = new Map()
 
   function getReviewLimit() {
     const rawLimit = Number(elements.reviewLimitInput?.value || 10)
@@ -69,6 +70,7 @@ export function createReviewFeature(ctx) {
     try {
       applyReviewWordbookSelection(selectedWordbookId)
       const params = new URLSearchParams()
+      params.set('limit', String(limit))
       if (selectedWordbookId) params.set('wordbookId', selectedWordbookId)
       const query = params.toString() ? `?${params.toString()}` : ''
       const entries = await request(`/api/v1/learning/reviews/due${query}`)
@@ -148,7 +150,33 @@ export function createReviewFeature(ctx) {
     setView('reviewView', { skipReviewReload: true })
     feature.renderReviewQueue(state.reviewEntries)
     renderNotes(entry)
+    feature.loadReviewEntryDetail(state.currentReviewEntry)
     toast(`已进入「${entry.term || entry.normalizedTerm}」复习`)
+  }
+
+  async function loadReviewEntryDetail(entry) {
+    if (!entry || entry.detailLoaded || state.preview || !state.token) return entry
+    const entryId = String(entry.id || '')
+    if (!entryId) return entry
+    if (detailLoads.has(entryId)) return detailLoads.get(entryId)
+    const pending = request(`/api/v1/learning/wordbook-entries/${encodeURIComponent(entryId)}`)
+      .then((detail) => {
+        const resolved = { ...entry, ...detail, detailLoaded: true }
+        state.reviewEntries = state.reviewEntries.map((item) => (sameId(item.id, entryId) ? resolved : item))
+        if (state.currentReviewEntry && sameId(state.currentReviewEntry.id, entryId)) {
+          state.currentReviewEntry = resolved
+          feature.renderReviewFocus(resolved)
+          renderNotes(resolved)
+        }
+        return resolved
+      })
+      .catch((error) => {
+        logEvent('error', '复习词条详情加载失败', `${entryId}: ${error.message}`)
+        return entry
+      })
+      .finally(() => detailLoads.delete(entryId))
+    detailLoads.set(entryId, pending)
+    return pending
   }
 
   function renderReviewQueue(entries) {
@@ -178,6 +206,7 @@ export function createReviewFeature(ctx) {
     feature.renderReviewFocus(selectedEntry)
     renderNotes(selectedEntry)
     feature.updateReviewProgressBadge()
+    feature.loadReviewEntryDetail(selectedEntry)
   }
 
   function selectReviewEntry(entry) {
@@ -197,6 +226,7 @@ export function createReviewFeature(ctx) {
     feature.renderReviewFocus(entry)
     renderNotes(entry)
     feature.updateReviewProgressBadge()
+    feature.loadReviewEntryDetail(entry)
   }
 
   function renderReviewFocus(entryOrRecord) {
@@ -205,8 +235,8 @@ export function createReviewFeature(ctx) {
       elements.reviewFocus.textContent = '选择词书和数量后开始复习'
       return
     }
-    const parsed = entryOrRecord.parsed || state.currentRecord?.parsed || null
-    const term = parsed?.term || entryOrRecord.term || entryOrRecord.normalizedTerm || state.currentRecord?.normalizedTerm || 'Ready'
+    const parsed = entryOrRecord.parsed || null
+    const term = parsed?.term || entryOrRecord.term || entryOrRecord.normalizedTerm || 'Ready'
     const definitions = normalizeDefinitions(parsed).slice(0, 3)
     const letters = feature.renderTypingLetters(term, state.reviewTyped)
     const progress = term ? Math.round((state.reviewTyped.length / term.length) * 100) : 0
@@ -368,6 +398,7 @@ export function createReviewFeature(ctx) {
     restartReviewTasks,
     startReview,
     openEntryInReview,
+    loadReviewEntryDetail,
     renderReviewQueue,
     selectReviewEntry,
     renderReviewFocus,

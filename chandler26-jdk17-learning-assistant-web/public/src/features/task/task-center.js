@@ -95,7 +95,10 @@ export function createTaskCenterProfileFeature(ctx) {
         if (Array.isArray(state.aiTasks)) {
           state.aiTasks.forEach((task) => {
             window.dispatchEvent(new CustomEvent('learning:ai-task-updated', {
-              detail: { id: task.id, planId: task.planId, status: task.status, taskType: task.taskType },
+              detail: {
+                id: task.id, planId: task.planId, status: task.status, taskType: task.taskType,
+                businessType: task.businessType, businessId: task.businessId, errorMessage: task.errorMessage,
+              },
             }))
           })
         }
@@ -271,7 +274,10 @@ export function createTaskCenterProfileFeature(ctx) {
       const current = state.aiTasks.find((item) => String(item.id) === String(taskId))
       if (current) {
         window.dispatchEvent(new CustomEvent('learning:ai-task-updated', {
-          detail: { id: current.id, planId: current.planId, status: current.status, taskType: current.taskType },
+          detail: {
+            id: current.id, planId: current.planId, status: current.status, taskType: current.taskType,
+            businessType: current.businessType, businessId: current.businessId, errorMessage: current.errorMessage,
+          },
         }))
       }
       scheduleRefresh()

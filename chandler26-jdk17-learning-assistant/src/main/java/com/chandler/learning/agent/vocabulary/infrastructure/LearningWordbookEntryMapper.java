@@ -24,6 +24,11 @@ public interface LearningWordbookEntryMapper extends BaseMapper<LearningWordbook
      */
     List<LearningWordbookEntry> selectAllIncludingDeleted(@Param("wordbookId") Long wordbookId);
 
+    /** 按归一化词批量读取单词本词条，包含已逻辑删除的数据。 */
+    List<LearningWordbookEntry> selectByNormalizedTermsIncludingDeleted(
+            @Param("wordbookId") Long wordbookId,
+            @Param("normalizedTerms") List<String> normalizedTerms);
+
     /**
      * MyBatis-Plus 的逻辑删除条件会阻止 updateById 恢复旧行，先显式撤销删除标记。
      */
@@ -34,4 +39,10 @@ public interface LearningWordbookEntryMapper extends BaseMapper<LearningWordbook
 
     /** 批量刷新已存在的个人单词本词条及其快照信息。 */
     int updateImportedBatch(@Param("list") List<LearningWordbookEntry> list);
+
+    /** 批量创建或恢复场景学习使用的个人词条。 */
+    int upsertLearningBatch(@Param("list") List<LearningWordbookEntry> list);
+
+    /** 批量冻结个人词条的词卡快照。 */
+    int updateVocabularyCardBatch(@Param("list") List<LearningWordbookEntry> list);
 }

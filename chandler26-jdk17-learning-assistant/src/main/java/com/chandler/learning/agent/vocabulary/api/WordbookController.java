@@ -107,14 +107,17 @@ public class WordbookController {
      */
     @GetMapping("/wordbooks/{wordbookId}/entries")
     @Operation(summary = "单词本词条列表")
-    public List<WordbookEntryResponse> listEntries(
+    public WordbookEntryPageResponse listEntries(
             @RequestHeader(value = "Authorization", required = false) String authorization,
             @PathVariable Long wordbookId,
             @RequestParam(defaultValue = "false") Boolean dueOnly,
             @RequestParam(required = false) String status,
-            @RequestParam(required = false) String keyword) {
+            @RequestParam(required = false) String keyword,
+            @RequestParam(defaultValue = "1") Integer page,
+            @RequestParam(defaultValue = "30") Integer pageSize) {
         LearningUser user = authService.requireUser(authorization);
-        return wordbookService.listEntries(user.getId(), wordbookId, Boolean.TRUE.equals(dueOnly), status, keyword);
+        return wordbookService.pageEntries(user.getId(), wordbookId, Boolean.TRUE.equals(dueOnly), status, keyword,
+                page, pageSize);
     }
 
     /**
@@ -153,6 +156,16 @@ public class WordbookController {
         return wordbookService.generateCard(user.getId(), entryId, forceRefresh);
     }
 
+    /** 按需返回单个词条的完整词卡详情。 */
+    @GetMapping("/wordbook-entries/{entryId}")
+    @Operation(summary = "查看单词本词条详情")
+    public WordbookEntryResponse detailEntry(
+            @RequestHeader(value = "Authorization", required = false) String authorization,
+            @PathVariable Long entryId) {
+        LearningUser user = authService.requireUser(authorization);
+        return wordbookService.detailEntry(user.getId(), entryId);
+    }
+
     /**
      * 更新 {@code deleteEntry} 相关业务。
      */
@@ -183,11 +196,12 @@ public class WordbookController {
      */
     @GetMapping("/reviews/due")
     @Operation(summary = "待复习词条")
-    public List<WordbookEntryResponse> dueEntries(
+    public List<WordbookEntrySummaryResponse> dueEntries(
             @RequestHeader(value = "Authorization", required = false) String authorization,
-            @RequestParam(required = false) Long wordbookId) {
+            @RequestParam(required = false) Long wordbookId,
+            @RequestParam(defaultValue = LearningConstants.Review.DUE_DEFAULT_LIMIT_PARAM) Integer limit) {
         LearningUser user = authService.requireUser(authorization);
-        return wordbookService.listDueEntries(user.getId(), wordbookId);
+        return wordbookService.listDueEntries(user.getId(), wordbookId, limit);
     }
 
     /**
@@ -195,7 +209,7 @@ public class WordbookController {
      */
     @GetMapping("/reviews/restart")
     @Operation(summary = "重新生成本轮复习任务")
-    public List<WordbookEntryResponse> restartReviews(
+    public List<WordbookEntrySummaryResponse> restartReviews(
             @RequestHeader(value = "Authorization", required = false) String authorization,
             @RequestParam(required = false) Long wordbookId,
             @RequestParam(defaultValue = LearningConstants.Review.RESTART_DEFAULT_LIMIT_PARAM) Integer limit) {

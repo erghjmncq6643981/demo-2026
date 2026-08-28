@@ -35,6 +35,7 @@
         GROUP BY s.id, s.user_id, s.agent_code, s.business_type, s.business_id,
                  s.scene_code, s.title, s.create_time, s.update_time
         ORDER BY s.update_time DESC
+        LIMIT 100
     </select>
 
     <sql id="adminSessionFilters">

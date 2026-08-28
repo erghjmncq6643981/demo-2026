@@ -6,7 +6,9 @@ export function createScenePlanApi(request) {
 
   return {
     cancelAll: requests.cancelAll,
-    listImports: () => requests.latest('imports', '/api/v1/vocabulary-imports'),
+    listImports: (page = 1, pageSize = 20) => requests.latest(
+      'imports', `/api/v1/vocabulary-imports?page=${encodeURIComponent(page)}&pageSize=${encodeURIComponent(pageSize)}`,
+    ),
     listPublicCatalogs: () => requests.latest('public-catalogs', '/api/v1/vocabulary-imports/public'),
     listPlans: () => requests.latest('plans', '/api/v1/learning/plans'),
     getPlan: (planId) => requests.latest('plan-detail', `/api/v1/learning/plans/${id(planId)}`),

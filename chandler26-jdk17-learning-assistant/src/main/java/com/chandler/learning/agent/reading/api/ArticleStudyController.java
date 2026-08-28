@@ -79,12 +79,13 @@ public class ArticleStudyController {
      */
     @GetMapping
     @Operation(summary = "语境精读历史记录")
-    public List<ArticleStudyResponse> listRecords(
+    public ArticleStudyPageResponse listRecords(
             @RequestHeader(value = "Authorization", required = false) String authorization,
             @RequestParam(required = false) Long wordbookId,
-            @RequestParam(defaultValue = LearningConstants.Article.DEFAULT_HISTORY_LIMIT_PARAM) Integer limit) {
+            @RequestParam(defaultValue = "1") Integer page,
+            @RequestParam(defaultValue = "10") Integer pageSize) {
         LearningUser user = authService.requireUser(authorization);
-        return articleStudyService.listRecords(user.getId(), wordbookId, limit);
+        return articleStudyService.listRecords(user.getId(), wordbookId, page, pageSize);
     }
 
     /**

@@ -1,6 +1,27 @@
 <?xml version="1.0" encoding="UTF-8" ?>
 <!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "https://mybatis.org/dtd/mybatis-3-mapper.dtd">
 <mapper namespace="com.chandler.learning.agent.vocabulary.infrastructure.LearningWordProgressMapper">
+    <insert id="insertBatch">
+        INSERT INTO learning_word_progress
+        (id, create_by, update_by, user_id, term, normalized_term, learning_state,
+         mastery_requirement, recognition_score, recognition_stage, recognition_due_time,
+         recognition_correct_count, recognition_wrong_count, spelling_score, spelling_stage,
+         spelling_due_time, spelling_correct_count, spelling_wrong_count, exposure_count,
+         scene_count, latest_plan_id, latest_unit_id, card_status, last_learned_time,
+         create_time, update_time, deleted, version)
+        VALUES
+        <foreach collection="list" item="item" separator=",">
+            (#{item.id}, #{item.createBy}, #{item.updateBy}, #{item.userId}, #{item.term},
+             #{item.normalizedTerm}, #{item.learningState}, #{item.masteryRequirement},
+             #{item.recognitionScore}, #{item.recognitionStage}, #{item.recognitionDueTime},
+             #{item.recognitionCorrectCount}, #{item.recognitionWrongCount}, #{item.spellingScore},
+             #{item.spellingStage}, #{item.spellingDueTime}, #{item.spellingCorrectCount},
+             #{item.spellingWrongCount}, #{item.exposureCount}, #{item.sceneCount}, #{item.latestPlanId},
+             #{item.latestUnitId}, #{item.cardStatus}, #{item.lastLearnedTime}, #{item.createTime},
+             #{item.updateTime}, #{item.deleted}, #{item.version})
+        </foreach>
+    </insert>
+
     <update id="updateCardStatusBatch">
         UPDATE learning_word_progress
         SET card_status = #{cardStatus},
@@ -13,139 +34,112 @@
     <update id="updateBatch">
         UPDATE learning_word_progress
         <trim prefix="SET" suffixOverrides=",">
-            <trim prefix="learning_state = CASE" suffix="END,">
-                <foreach collection="items" item="item">
-                    <if test="item.learningState != null">
-                        WHEN id = #{item.id} THEN #{item.learningState}
-                    </if>
-                </foreach>
-            </trim>
-            <trim prefix="mastery_requirement = CASE" suffix="END,">
-                <foreach collection="items" item="item">
-                    <if test="item.masteryRequirement != null">
-                        WHEN id = #{item.id} THEN #{item.masteryRequirement}
-                    </if>
-                </foreach>
-            </trim>
-            <trim prefix="recognition_score = CASE" suffix="END,">
-                <foreach collection="items" item="item">
-                    <if test="item.recognitionScore != null">
-                        WHEN id = #{item.id} THEN #{item.recognitionScore}
-                    </if>
-                </foreach>
-            </trim>
-            <trim prefix="recognition_stage = CASE" suffix="END,">
-                <foreach collection="items" item="item">
-                    <if test="item.recognitionStage != null">
-                        WHEN id = #{item.id} THEN #{item.recognitionStage}
-                    </if>
-                </foreach>
-            </trim>
-            <trim prefix="recognition_due_time = CASE" suffix="END,">
-                <foreach collection="items" item="item">
-                    <if test="item.recognitionDueTime != null">
-                        WHEN id = #{item.id} THEN #{item.recognitionDueTime}
-                    </if>
-                </foreach>
-            </trim>
-            <trim prefix="recognition_correct_count = CASE" suffix="END,">
-                <foreach collection="items" item="item">
-                    <if test="item.recognitionCorrectCount != null">
-                        WHEN id = #{item.id} THEN #{item.recognitionCorrectCount}
-                    </if>
-                </foreach>
-            </trim>
-            <trim prefix="recognition_wrong_count = CASE" suffix="END,">
-                <foreach collection="items" item="item">
-                    <if test="item.recognitionWrongCount != null">
-                        WHEN id = #{item.id} THEN #{item.recognitionWrongCount}
-                    </if>
-                </foreach>
-            </trim>
-            <trim prefix="spelling_score = CASE" suffix="END,">
-                <foreach collection="items" item="item">
-                    <if test="item.spellingScore != null">
-                        WHEN id = #{item.id} THEN #{item.spellingScore}
-                    </if>
-                </foreach>
-            </trim>
-            <trim prefix="spelling_stage = CASE" suffix="END,">
-                <foreach collection="items" item="item">
-                    <if test="item.spellingStage != null">
-                        WHEN id = #{item.id} THEN #{item.spellingStage}
-                    </if>
-                </foreach>
-            </trim>
-            <trim prefix="spelling_due_time = CASE" suffix="END,">
-                <foreach collection="items" item="item">
-                    <if test="item.spellingDueTime != null">
-                        WHEN id = #{item.id} THEN #{item.spellingDueTime}
-                    </if>
-                </foreach>
-            </trim>
-            <trim prefix="spelling_correct_count = CASE" suffix="END,">
-                <foreach collection="items" item="item">
-                    <if test="item.spellingCorrectCount != null">
-                        WHEN id = #{item.id} THEN #{item.spellingCorrectCount}
-                    </if>
-                </foreach>
-            </trim>
-            <trim prefix="spelling_wrong_count = CASE" suffix="END,">
-                <foreach collection="items" item="item">
-                    <if test="item.spellingWrongCount != null">
-                        WHEN id = #{item.id} THEN #{item.spellingWrongCount}
-                    </if>
-                </foreach>
-            </trim>
-            <trim prefix="exposure_count = CASE" suffix="END,">
-                <foreach collection="items" item="item">
-                    <if test="item.exposureCount != null">
-                        WHEN id = #{item.id} THEN #{item.exposureCount}
-                    </if>
-                </foreach>
-            </trim>
-            <trim prefix="scene_count = CASE" suffix="END,">
-                <foreach collection="items" item="item">
-                    <if test="item.sceneCount != null">
-                        WHEN id = #{item.id} THEN #{item.sceneCount}
-                    </if>
-                </foreach>
-            </trim>
-            <trim prefix="latest_plan_id = CASE" suffix="END,">
-                <foreach collection="items" item="item">
-                    <if test="item.latestPlanId != null">
-                        WHEN id = #{item.id} THEN #{item.latestPlanId}
-                    </if>
-                </foreach>
-            </trim>
-            <trim prefix="latest_unit_id = CASE" suffix="END,">
-                <foreach collection="items" item="item">
-                    <if test="item.latestUnitId != null">
-                        WHEN id = #{item.id} THEN #{item.latestUnitId}
-                    </if>
-                </foreach>
-            </trim>
-            <trim prefix="card_status = CASE" suffix="END,">
-                <foreach collection="items" item="item">
-                    <if test="item.cardStatus != null">
-                        WHEN id = #{item.id} THEN #{item.cardStatus}
-                    </if>
-                </foreach>
-            </trim>
-            <trim prefix="last_learned_time = CASE" suffix="END,">
-                <foreach collection="items" item="item">
-                    <if test="item.lastLearnedTime != null">
-                        WHEN id = #{item.id} THEN #{item.lastLearnedTime}
-                    </if>
-                </foreach>
-            </trim>
-            <trim prefix="update_time = CASE" suffix="END,">
-                <foreach collection="items" item="item">
-                    <if test="item.updateTime != null">
-                        WHEN id = #{item.id} THEN #{item.updateTime}
-                    </if>
-                </foreach>
-            </trim>
+            term = CASE
+            <foreach collection="items" item="item">
+                WHEN id = #{item.id} THEN COALESCE(#{item.term}, term)
+            </foreach>
+            ELSE term END,
+            learning_state = CASE
+            <foreach collection="items" item="item">
+                WHEN id = #{item.id} THEN COALESCE(#{item.learningState}, learning_state)
+            </foreach>
+            ELSE learning_state END,
+            mastery_requirement = CASE
+            <foreach collection="items" item="item">
+                WHEN id = #{item.id} THEN COALESCE(#{item.masteryRequirement}, mastery_requirement)
+            </foreach>
+            ELSE mastery_requirement END,
+            recognition_score = CASE
+            <foreach collection="items" item="item">
+                WHEN id = #{item.id} THEN COALESCE(#{item.recognitionScore}, recognition_score)
+            </foreach>
+            ELSE recognition_score END,
+            recognition_stage = CASE
+            <foreach collection="items" item="item">
+                WHEN id = #{item.id} THEN COALESCE(#{item.recognitionStage}, recognition_stage)
+            </foreach>
+            ELSE recognition_stage END,
+            recognition_due_time = CASE
+            <foreach collection="items" item="item">
+                WHEN id = #{item.id} THEN COALESCE(#{item.recognitionDueTime}, recognition_due_time)
+            </foreach>
+            ELSE recognition_due_time END,
+            recognition_correct_count = CASE
+            <foreach collection="items" item="item">
+                WHEN id = #{item.id} THEN COALESCE(#{item.recognitionCorrectCount}, recognition_correct_count)
+            </foreach>
+            ELSE recognition_correct_count END,
+            recognition_wrong_count = CASE
+            <foreach collection="items" item="item">
+                WHEN id = #{item.id} THEN COALESCE(#{item.recognitionWrongCount}, recognition_wrong_count)
+            </foreach>
+            ELSE recognition_wrong_count END,
+            spelling_score = CASE
+            <foreach collection="items" item="item">
+                WHEN id = #{item.id} THEN COALESCE(#{item.spellingScore}, spelling_score)
+            </foreach>
+            ELSE spelling_score END,
+            spelling_stage = CASE
+            <foreach collection="items" item="item">
+                WHEN id = #{item.id} THEN COALESCE(#{item.spellingStage}, spelling_stage)
+            </foreach>
+            ELSE spelling_stage END,
+            spelling_due_time = CASE
+            <foreach collection="items" item="item">
+                WHEN id = #{item.id} THEN COALESCE(#{item.spellingDueTime}, spelling_due_time)
+            </foreach>
+            ELSE spelling_due_time END,
+            spelling_correct_count = CASE
+            <foreach collection="items" item="item">
+                WHEN id = #{item.id} THEN COALESCE(#{item.spellingCorrectCount}, spelling_correct_count)
+            </foreach>
+            ELSE spelling_correct_count END,
+            spelling_wrong_count = CASE
+            <foreach collection="items" item="item">
+                WHEN id = #{item.id} THEN COALESCE(#{item.spellingWrongCount}, spelling_wrong_count)
+            </foreach>
+            ELSE spelling_wrong_count END,
+            exposure_count = CASE
+            <foreach collection="items" item="item">
+                WHEN id = #{item.id} THEN COALESCE(#{item.exposureCount}, exposure_count)
+            </foreach>
+            ELSE exposure_count END,
+            scene_count = CASE
+            <foreach collection="items" item="item">
+                WHEN id = #{item.id} THEN COALESCE(#{item.sceneCount}, scene_count)
+            </foreach>
+            ELSE scene_count END,
+            latest_plan_id = CASE
+            <foreach collection="items" item="item">
+                WHEN id = #{item.id} THEN COALESCE(#{item.latestPlanId}, latest_plan_id)
+            </foreach>
+            ELSE latest_plan_id END,
+            latest_unit_id = CASE
+            <foreach collection="items" item="item">
+                WHEN id = #{item.id} THEN COALESCE(#{item.latestUnitId}, latest_unit_id)
+            </foreach>
+            ELSE latest_unit_id END,
+            card_status = CASE
+            <foreach collection="items" item="item">
+                WHEN id = #{item.id} THEN COALESCE(#{item.cardStatus}, card_status)
+            </foreach>
+            ELSE card_status END,
+            last_learned_time = CASE
+            <foreach collection="items" item="item">
+                WHEN id = #{item.id} THEN COALESCE(#{item.lastLearnedTime}, last_learned_time)
+            </foreach>
+            ELSE last_learned_time END,
+            update_time = CASE
+            <foreach collection="items" item="item">
+                WHEN id = #{item.id} THEN COALESCE(#{item.updateTime}, update_time)
+            </foreach>
+            ELSE update_time END,
+            update_by = CASE
+            <foreach collection="items" item="item">
+                WHEN id = #{item.id} THEN COALESCE(#{item.updateBy}, update_by)
+            </foreach>
+            ELSE update_by END,
+            version = version + 1,
         </trim>
         WHERE deleted = 0
           AND id IN

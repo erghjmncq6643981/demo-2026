@@ -17,6 +17,15 @@
         WHERE wordbook_id = #{wordbookId}
     </select>
 
+    <select id="selectByNormalizedTermsIncludingDeleted"
+            resultType="com.chandler.learning.agent.vocabulary.domain.LearningWordbookEntry">
+        SELECT *
+        FROM learning_wordbook_entry
+        WHERE wordbook_id = #{wordbookId}
+          AND normalized_term IN
+        <foreach collection="normalizedTerms" item="term" open="(" separator="," close=")">#{term}</foreach>
+    </select>
+
     <update id="restoreDeletedById">
         UPDATE learning_wordbook_entry
         SET deleted = 0
@@ -45,6 +54,39 @@
         </foreach>
     </insert>
 
+    <insert id="upsertLearningBatch">
+        INSERT INTO learning_wordbook_entry
+        (id, user_id, wordbook_id, progress_id, catalog_entry_id, vocabulary_id, term, normalized_term,
+         note, snapshot_raw_content, snapshot_parsed_json, snapshot_tags_json, snapshot_relations_json,
+         snapshot_provider, snapshot_model_name, snapshot_session_id, snapshot_time, card_status,
+         card_error_message, card_generated_time, status, review_stage, mastery_score, first_review_time,
+         last_review_time, next_review_time, due_count, review_count, correct_count, wrong_count,
+         create_by, create_time, update_by, update_time, deleted, version)
+        VALUES
+        <foreach collection="list" item="item" separator=",">
+            (#{item.id}, #{item.userId}, #{item.wordbookId}, #{item.progressId}, #{item.catalogEntryId},
+             #{item.vocabularyId}, #{item.term}, #{item.normalizedTerm}, #{item.note}, #{item.snapshotRawContent},
+             #{item.snapshotParsedJson}, #{item.snapshotTagsJson}, #{item.snapshotRelationsJson},
+             #{item.snapshotProvider}, #{item.snapshotModelName}, #{item.snapshotSessionId}, #{item.snapshotTime},
+             #{item.cardStatus}, #{item.cardErrorMessage}, #{item.cardGeneratedTime}, #{item.status},
+             #{item.reviewStage}, #{item.masteryScore}, #{item.firstReviewTime}, #{item.lastReviewTime},
+             #{item.nextReviewTime}, #{item.dueCount}, #{item.reviewCount}, #{item.correctCount}, #{item.wrongCount},
+             #{item.createBy}, #{item.createTime}, #{item.updateBy}, #{item.updateTime}, #{item.deleted}, #{item.version})
+        </foreach>
+        ON DUPLICATE KEY UPDATE
+            progress_id = VALUES(progress_id),
+            catalog_entry_id = COALESCE(VALUES(catalog_entry_id), catalog_entry_id),
+            card_status = CASE
+                WHEN card_status = 'ready' THEN card_status
+                WHEN VALUES(card_status) = 'missing' THEN VALUES(card_status)
+                ELSE card_status
+            END,
+            deleted = 0,
+            update_by = VALUES(update_by),
+            update_time = VALUES(update_time),
+            version = version + 1
+    </insert>
+
     <update id="updateImportedBatch">
         UPDATE learning_wordbook_entry
         SET progress_id = CASE id
@@ -66,6 +108,58 @@
             update_time = #{list[0].updateTime},
             update_by = #{list[0].updateBy}
         WHERE id IN
+        <foreach collection="list" item="item" open="(" separator="," close=")">#{item.id}</foreach>
+    </update>
+
+    <update id="updateVocabularyCardBatch">
+        UPDATE learning_wordbook_entry
+        SET vocabulary_id = CASE id
+            <foreach collection="list" item="item">WHEN #{item.id} THEN #{item.vocabularyId}</foreach>
+            END,
+            term = CASE id
+            <foreach collection="list" item="item">WHEN #{item.id} THEN #{item.term}</foreach>
+            END,
+            normalized_term = CASE id
+            <foreach collection="list" item="item">WHEN #{item.id} THEN #{item.normalizedTerm}</foreach>
+            END,
+            snapshot_raw_content = CASE id
+            <foreach collection="list" item="item">WHEN #{item.id} THEN #{item.snapshotRawContent}</foreach>
+            END,
+            snapshot_parsed_json = CASE id
+            <foreach collection="list" item="item">WHEN #{item.id} THEN #{item.snapshotParsedJson}</foreach>
+            END,
+            snapshot_tags_json = CASE id
+            <foreach collection="list" item="item">WHEN #{item.id} THEN #{item.snapshotTagsJson}</foreach>
+            END,
+            snapshot_relations_json = CASE id
+            <foreach collection="list" item="item">WHEN #{item.id} THEN #{item.snapshotRelationsJson}</foreach>
+            END,
+            snapshot_provider = CASE id
+            <foreach collection="list" item="item">WHEN #{item.id} THEN #{item.snapshotProvider}</foreach>
+            END,
+            snapshot_model_name = CASE id
+            <foreach collection="list" item="item">WHEN #{item.id} THEN #{item.snapshotModelName}</foreach>
+            END,
+            snapshot_session_id = CASE id
+            <foreach collection="list" item="item">WHEN #{item.id} THEN #{item.snapshotSessionId}</foreach>
+            END,
+            snapshot_time = CASE id
+            <foreach collection="list" item="item">WHEN #{item.id} THEN #{item.snapshotTime}</foreach>
+            END,
+            card_status = CASE id
+            <foreach collection="list" item="item">WHEN #{item.id} THEN #{item.cardStatus}</foreach>
+            END,
+            card_error_message = CASE id
+            <foreach collection="list" item="item">WHEN #{item.id} THEN #{item.cardErrorMessage}</foreach>
+            END,
+            card_generated_time = CASE id
+            <foreach collection="list" item="item">WHEN #{item.id} THEN #{item.cardGeneratedTime}</foreach>
+            END,
+            update_time = #{list[0].updateTime},
+            update_by = #{list[0].updateBy},
+            version = version + 1
+        WHERE deleted = 0
+          AND id IN
         <foreach collection="list" item="item" open="(" separator="," close=")">#{item.id}</foreach>
     </update>
 </mapper>

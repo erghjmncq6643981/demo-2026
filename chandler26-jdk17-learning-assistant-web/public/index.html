@@ -385,6 +385,7 @@
               <section class="panel profile-section system-section" id="adminVocabularyPanel">
                 <div class="panel-heading"><div><p class="eyebrow">Public Vocabulary</p><h3>公共词本管理</h3><p class="panel-description">导入、审核、关联分析和发布公共词本。普通用户只可在学习计划中选择已发布词本。</p></div><button class="primary-button compact-primary" id="openAdminVocabularyImportBtn" type="button">导入公共词本</button></div>
                 <div id="sceneImportList" class="scene-import-list empty">暂无公共词本管理记录</div>
+                <div class="admin-user-pagination scene-import-pagination"><span id="vocabularyImportHistoryPageInfo">第 1 页</span><div class="inline-actions"><button class="icon-action-button" id="vocabularyImportHistoryPrevBtn" type="button" title="上一页" aria-label="上一页">←</button><button class="icon-action-button" id="vocabularyImportHistoryNextBtn" type="button" title="下一页" aria-label="下一页">→</button></div></div>
               </section>
               <div id="systemManagedPanels"></div>
             </div>
@@ -443,6 +444,7 @@
                 </div>
                 <div class="wordbook-table-footer">
                   <span id="wordbookCountSummary">共 0 个单词</span>
+                  <span class="pagination-actions"><button class="secondary-button compact" id="wordbookPrevBtn" type="button">上一页</button><span id="wordbookPageInfo">第 1 页</span><button class="secondary-button compact" id="wordbookNextBtn" type="button">下一页</button></span>
                 </div>
               </section>
             </section>
@@ -588,6 +590,7 @@
                   <button class="secondary-button compact" id="articleReloadHistoryBtn" type="button">刷新</button>
                 </div>
                 <div id="articleHistoryList" class="article-history-list empty">暂无精读记录</div>
+                <div class="pagination-actions article-history-pagination"><button class="secondary-button compact" id="articleHistoryPrevBtn" type="button">上一页</button><span id="articleHistoryPageInfo">第 1 页</span><button class="secondary-button compact" id="articleHistoryNextBtn" type="button">下一页</button></div>
               </section>
 
               <section class="panel article-result-panel">
@@ -1332,6 +1335,11 @@
             </div>
           </div>
           <div id="articleWordGrid" class="article-word-grid empty">暂无单词</div>
+          <div class="pagination-actions article-word-pagination">
+            <button class="secondary-button compact" id="articleWordPrevBtn" type="button">上一页</button>
+            <span id="articleWordPageInfo">第 1 / 1 页</span>
+            <button class="secondary-button compact" id="articleWordNextBtn" type="button">下一页</button>
+          </div>
         </section>
 
         <section class="article-modal-section article-modal-settings">

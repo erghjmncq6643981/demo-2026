@@ -14,8 +14,15 @@ import {
   normalizeArticleStage,
   readArticleError,
   scoreArticlePractice,
-  splitArticleLines,
 } from '/src/features/reading/article-model.js'
+import {
+  buildPreviewArticleRecord,
+  renderArticleError,
+  renderBilingualArticle,
+  renderGrammarPoints,
+  renderSimpleList,
+  renderVocabularyFocus,
+} from '/src/features/reading/article-render.js'
 
 export function createWordbookArticleFeature(ctx) {
   const {
@@ -29,12 +36,117 @@ export function createWordbookArticleFeature(ctx) {
     speakSentence,
   } = ctx
   const api = createArticleApi(request)
+  let articleTaskPollTimer = null
+  let articleTaskResultLoadingId = null
+
+  const ACTIVE_TASK_STATUSES = ['pending', 'running', 'retry_wait']
+  const TERMINAL_TASK_STATUSES = ['completed', 'partial_failed', 'attention_required', 'failed', 'cancelled']
+
+  function clearArticleTaskPoll() {
+    if (articleTaskPollTimer) {
+      window.clearTimeout(articleTaskPollTimer)
+      articleTaskPollTimer = null
+    }
+  }
+
+  function isActiveArticleTask(status) {
+    return ACTIVE_TASK_STATUSES.includes(status)
+  }
+
+  function isTerminalArticleTask(status) {
+    return TERMINAL_TASK_STATUSES.includes(status)
+  }
+
+  function startArticleTaskPoll(taskId) {
+    clearArticleTaskPoll()
+    if (state.preview || !taskId) return
+    const poll = () => {
+      if (!state.articleGenerationTask || !sameId(state.articleGenerationTask.id, taskId)) return
+      api.getTask(taskId)
+        .then((task) => {
+          if (!state.articleGenerationTask || !sameId(state.articleGenerationTask.id, taskId)) return
+          applyArticleTaskUpdate({ ...task, id: task.id || taskId })
+          if (isActiveArticleTask(task.status)) {
+            articleTaskPollTimer = window.setTimeout(poll, 4000)
+          } else {
+            clearArticleTaskPoll()
+          }
+        })
+        .catch((error) => {
+          if (isRequestAbort(error)) return
+          logEvent('error', '精读任务状态查询失败', error.message)
+          // 网络短暂失败不改变任务状态，下一轮继续查询。
+          articleTaskPollTimer = window.setTimeout(poll, 6000)
+        })
+    }
+    poll()
+  }
+
+  function applyArticleTaskUpdate(detail) {
+    if (!detail || detail.taskType !== 'article_material' || !state.articleGenerationTask
+      || !sameId(detail.id, state.articleGenerationTask.id)) return
+    const status = detail.status || state.articleGenerationTask.status
+    state.articleGenerationTask = { ...state.articleGenerationTask, ...detail, status }
+    if (isActiveArticleTask(status)) {
+      state.articlePreviewLoading = true
+      renderArticleModalPreview(null)
+      return
+    }
+    state.articlePreviewLoading = false
+    if (status === 'completed') {
+      if (!detail.businessId) {
+        state.articlePreviewError = normalizeArticleError(new Error('精读任务已完成，但未关联材料记录，请在任务中心查看详情'))
+        renderArticleModalPreview(null)
+        toast(state.articlePreviewError.message)
+        return
+      }
+      if (articleTaskResultLoadingId && sameId(articleTaskResultLoadingId, detail.id)) return
+      if (state.articleDraftRecord && sameId(state.articleDraftRecord.id, detail.businessId)) return
+      articleTaskResultLoadingId = detail.id
+      state.articlePreviewLoading = true
+      renderArticleModalPreview(null)
+      api.getRecord(detail.businessId)
+        .then((record) => {
+          if (!state.articleGenerationTask || !sameId(state.articleGenerationTask.id, detail.id)) return
+          state.articleDraftRecord = record
+          state.articleGenerationTask = { ...state.articleGenerationTask, businessId: detail.businessId, resultLoaded: true }
+          state.articlePreviewLoading = false
+          renderArticleModalPreview(record)
+          loadArticleHistory()
+          toast('精读材料已生成，可开始学习')
+        })
+        .catch((error) => {
+          state.articlePreviewLoading = false
+          logEvent('error', '精读材料结果加载失败', error.message)
+          toast(`精读材料已生成，但详情加载失败：${error.message}`)
+          renderArticleModalPreview(null)
+        })
+        .finally(() => {
+          articleTaskResultLoadingId = null
+        })
+      return
+    }
+    if (['failed', 'partial_failed', 'attention_required', 'cancelled'].includes(status)) {
+      state.articlePreviewError = normalizeArticleError(new Error(detail.errorMessage || '精读材料生成任务未完成'))
+      renderArticleModalPreview(null)
+      toast(status === 'cancelled' ? '精读材料生成任务已取消' : '精读材料生成失败，可在任务中心重试')
+    }
+  }
+
+  window.addEventListener('learning:ai-task-updated', (event) => {
+    applyArticleTaskUpdate(event?.detail || {})
+  })
 
   async function changeArticleWordbook(wordbookId) {
     syncCurrentWordbookId(state, elements, wordbookId)
+    state.articleHistoryPage = 1
+    state.articleWordPage = 1
     state.selectedArticleEntryIds = []
     state.currentArticleRecord = null
     state.articleDraftRecord = null
+    clearArticleTaskPoll()
+    articleTaskResultLoadingId = null
+    state.articleGenerationTask = null
     state.articleStage = 'reading'
     state.articleAnswerSets = {}
     state.articleCheckedRecords = {}
@@ -55,6 +167,10 @@ export function createWordbookArticleFeature(ctx) {
     state.articleModalOpen = true
     state.articleDraftRecord = null
     state.articlePreviewError = ''
+    if (state.articleGenerationTask && isTerminalArticleTask(state.articleGenerationTask.status)) {
+      state.articleGenerationTask = null
+      articleTaskResultLoadingId = null
+    }
     renderArticleModalPreview(null)
     showModal(elements.articleStudyModal)
     await loadArticleWords()
@@ -70,21 +186,26 @@ export function createWordbookArticleFeature(ctx) {
   function loadArticleWords() {
     if (state.preview) {
       state.articleEntries = state.wordbookEntries.slice()
-      pruneSelectedArticleEntries()
+      state.articleWordTotal = state.articleEntries.length
       renderArticleWords()
       return Promise.resolve()
     }
     if (!state.token || !state.currentWordbookId) {
       state.articleEntries = []
+      state.articleWordTotal = 0
       state.selectedArticleEntryIds = []
       renderArticleWords()
       return Promise.resolve()
     }
     const status = elements.articleStatusFilter?.value || ''
-    return api.listEntries(state.currentWordbookId, status)
-      .then((entries) => {
+    const keyword = state.articlePrefixFilter || elements.articlePrefixInput?.value?.trim() || ''
+    return api.listEntries(state.currentWordbookId, status, state.articleWordPage || 1,
+      state.articleWordPageSize || 50, keyword)
+      .then((result) => {
+        const entries = Array.isArray(result) ? result : result?.items
         state.articleEntries = Array.isArray(entries) ? entries : []
-        pruneSelectedArticleEntries()
+        state.articleWordTotal = Number(result?.total || state.articleEntries.length)
+        state.articleWordPage = Number(result?.page || state.articleWordPage || 1)
         renderArticleWords()
       })
       .catch((error) => {
@@ -97,7 +218,7 @@ export function createWordbookArticleFeature(ctx) {
   function loadArticleHistory() {
     if (state.preview) {
       if (!state.articleRecords.length) {
-        state.articleRecords = [previewArticleRecord()]
+        state.articleRecords = [buildPreviewArticleRecord(state)]
         state.currentArticleRecord = state.articleRecords[0]
       }
       renderArticleHistory()
@@ -110,9 +231,12 @@ export function createWordbookArticleFeature(ctx) {
       renderArticleResult(null)
       return Promise.resolve()
     }
-    return api.listRecords(state.currentWordbookId)
-      .then((records) => {
+    return api.listRecords(state.currentWordbookId, state.articleHistoryPage || 1, state.articleHistoryPageSize || 10)
+      .then((result) => {
+        const records = Array.isArray(result) ? result : result?.items
         state.articleRecords = Array.isArray(records) ? records : []
+        state.articleHistoryTotal = Number(result?.total || state.articleRecords.length)
+        state.articleHistoryPage = Number(result?.page || state.articleHistoryPage || 1)
         renderArticleHistory()
         if (!state.articleRecords.length) {
           renderArticleResult(null)
@@ -126,10 +250,30 @@ export function createWordbookArticleFeature(ctx) {
       })
   }
 
+  function changeArticleWordPage(delta) {
+    const maxPage = Math.max(1, Math.ceil((state.articleWordTotal || 0) / (state.articleWordPageSize || 50)))
+    const next = Math.max(1, Math.min(maxPage, (state.articleWordPage || 1) + delta))
+    if (next === (state.articleWordPage || 1)) return
+    state.articleWordPage = next
+    loadArticleWords()
+  }
+
+  function changeArticleHistoryPage(delta) {
+    const maxPage = Math.max(1, Math.ceil((state.articleHistoryTotal || 0) / (state.articleHistoryPageSize || 10)))
+    const next = Math.max(1, Math.min(maxPage, (state.articleHistoryPage || 1) + delta))
+    if (next === (state.articleHistoryPage || 1)) return
+    state.articleHistoryPage = next
+    loadArticleHistory()
+  }
+
   function renderArticleWords() {
     if (!elements.articleWordGrid) return
     const entries = filteredArticleEntries()
     elements.articleSelectedCount.textContent = `已选 ${state.selectedArticleEntryIds.length}`
+    const maxPage = Math.max(1, Math.ceil((state.articleWordTotal || entries.length) / (state.articleWordPageSize || 50)))
+    if (elements.articleWordPageInfo) elements.articleWordPageInfo.textContent = `第 ${state.articleWordPage || 1} / ${maxPage} 页 · 共 ${state.articleWordTotal || entries.length} 个`
+    if (elements.articleWordPrevBtn) elements.articleWordPrevBtn.disabled = (state.articleWordPage || 1) <= 1
+    if (elements.articleWordNextBtn) elements.articleWordNextBtn.disabled = (state.articleWordPage || 1) >= maxPage
     if (!entries.length) {
       elements.articleWordGrid.className = 'article-word-grid empty'
       elements.articleWordGrid.textContent = state.token ? '当前筛选下暂无单词' : '登录后查看单词本词汇'
@@ -240,18 +384,23 @@ export function createWordbookArticleFeature(ctx) {
     updateArticlePreviewControls()
     try {
       if (state.preview) {
-        const record = previewArticleRecord(payload)
+        const record = buildPreviewArticleRecord(state, payload)
         record.cacheHit = !forceRefresh
         state.articleDraftRecord = record
         renderArticleModalPreview(record)
         toast(forceRefresh ? '设计预览：已模拟重新生成文章' : '设计预览：已生成文章预览')
         return
       }
-      const record = await api.createStudy(payload)
-      state.articleDraftRecord = record
-      renderArticleModalPreview(record)
-      logEvent(record.cacheHit ? 'cache' : 'ai', record.cacheHit ? '读取语境精读缓存' : 'AI 生成语境精读材料', selectedWordsText(record))
-      toast(record.cacheHit ? '已读取精读材料缓存' : '精读材料已生成')
+      const task = await api.createStudyAsync(payload)
+      state.articleGenerationTask = task
+      articleTaskResultLoadingId = null
+      state.articlePreviewLoading = false
+      renderArticleModalPreview(null)
+      startArticleTaskPoll(task?.id)
+      logEvent('ai', '提交语境精读材料任务', selectedWordsText({
+        selectedWords: state.articleEntries.filter((entry) => state.selectedArticleEntryIds.some((id) => sameId(id, entry.id))),
+      }))
+      toast(task?.status === 'completed' ? '精读材料任务已完成' : '精读材料生成任务已提交，可在任务中心查看进度')
     } catch (error) {
       state.articleDraftRecord = null
       state.articlePreviewError = normalizeArticleError(error)
@@ -267,6 +416,10 @@ export function createWordbookArticleFeature(ctx) {
 
   async function saveArticleStudy() {
     if (!state.articleDraftRecord) {
+      if (state.articleGenerationTask && !state.articleGenerationTask.businessId) {
+        toast('精读材料正在生成，请等待任务完成')
+        return
+      }
       toast('请先生成文章预览')
       return
     }
@@ -324,9 +477,16 @@ export function createWordbookArticleFeature(ctx) {
     if (!records.length) {
       elements.articleHistoryList.className = 'article-history-list empty'
       elements.articleHistoryList.textContent = '暂无精读记录'
+      elements.articleHistoryPageInfo.textContent = '第 1 / 1 页'
+      elements.articleHistoryPrevBtn.disabled = true
+      elements.articleHistoryNextBtn.disabled = true
       return
     }
     elements.articleHistoryList.className = 'article-history-list'
+    const maxPage = Math.max(1, Math.ceil((state.articleHistoryTotal || records.length) / (state.articleHistoryPageSize || 10)))
+    elements.articleHistoryPageInfo.textContent = `第 ${state.articleHistoryPage || 1} / ${maxPage} 页`
+    elements.articleHistoryPrevBtn.disabled = (state.articleHistoryPage || 1) <= 1
+    elements.articleHistoryNextBtn.disabled = (state.articleHistoryPage || 1) >= maxPage
     elements.articleHistoryList.innerHTML = records
       .map((record) => {
         const title = readText(record.parsed, ['title']) || selectedWordsText(record) || '语境精读'
@@ -366,12 +526,19 @@ export function createWordbookArticleFeature(ctx) {
     if (!record) {
       const articleError = readArticleError(state.articlePreviewError)
       const errorMessage = articleError?.message || ''
-      elements.articleModalPreviewBadge.textContent = errorMessage ? '生成失败' : state.articlePreviewLoading ? '生成中' : '等待生成'
+      const taskStatus = state.articleGenerationTask?.status
+      elements.articleModalPreviewBadge.textContent = errorMessage
+        ? '生成失败'
+        : state.articlePreviewLoading || ['pending', 'running', 'retry_wait'].includes(taskStatus)
+          ? '任务生成中'
+          : '等待生成'
       elements.articleModalPreview.className = errorMessage ? 'article-result empty article-result-error' : 'article-result empty'
       if (articleError) {
         elements.articleModalPreview.innerHTML = renderArticleError(articleError)
       } else {
-        elements.articleModalPreview.textContent = '选择目标词并生成精读材料'
+        elements.articleModalPreview.textContent = taskStatus && ['pending', 'running', 'retry_wait'].includes(taskStatus)
+          ? '精读材料正在生成，完成后会自动加载。你也可以在任务中心查看进度。'
+          : '选择目标词并生成精读材料'
       }
       updateArticlePreviewControls()
       return
@@ -382,8 +549,9 @@ export function createWordbookArticleFeature(ctx) {
 
   function updateArticlePreviewControls() {
     if (elements.articlePreviewGenerateBtn) {
-      elements.articlePreviewGenerateBtn.disabled = state.articlePreviewLoading
-      elements.articlePreviewGenerateBtn.textContent = state.articlePreviewLoading ? '生成中...' : '生成学习材料'
+      const taskPending = ['pending', 'running', 'retry_wait'].includes(state.articleGenerationTask?.status)
+      elements.articlePreviewGenerateBtn.disabled = state.articlePreviewLoading || taskPending
+      elements.articlePreviewGenerateBtn.textContent = state.articlePreviewLoading || taskPending ? '任务生成中...' : '生成学习材料'
     }
     if (elements.saveArticleStudyBtn) {
       elements.saveArticleStudyBtn.disabled = state.articlePreviewLoading || !state.articleDraftRecord
@@ -726,143 +894,6 @@ export function createWordbookArticleFeature(ctx) {
     return window.CSS?.escape ? window.CSS.escape(String(value || '')) : String(value || '').replace(/["\\]/g, '\\$&')
   }
 
-  function renderArticleError(error) {
-    const meta = [
-      error.errorCode ? `错误码：${error.errorCode}` : '',
-      error.status ? `HTTP：${error.status}` : '',
-    ].filter(Boolean)
-    return `
-      <div class="article-error-content">
-        <strong>精读材料生成失败</strong>
-        <p>${escapeHtml(error.message)}</p>
-        ${error.suggestion ? `<small>${escapeHtml(error.suggestion)}</small>` : ''}
-        ${meta.length ? `<span>${escapeHtml(meta.join(' · '))}</span>` : ''}
-      </div>
-    `
-  }
-
-  function renderVocabularyFocus(items, selectedWords = []) {
-    if (!items.length) return ''
-    return `
-      <section class="article-section">
-        <h5>目标词精讲</h5>
-        <div class="article-vocabulary-list">
-          ${items
-            .map((item) => {
-              const word = readText(item, ['word', 'term']) || stringifyValue(item)
-              const meaning = readText(item, ['meaning', 'translation', 'cn'])
-              const usage = readText(item, ['usage', 'explanation', 'tip'])
-              const sentence = readText(item, ['sentence', 'example'])
-              const translation = readText(item, ['translation', 'sentence_translation', 'sentenceTranslation', 'zh'])
-              const selectedWord = selectedWords.find((entry) => normalizeAnswerValue(entry.term || entry.normalizedTerm) === normalizeAnswerValue(word))
-              return `
-                <article class="article-vocabulary-row" data-article-focus-word="${escapeHtml(word)}">
-                  <header><strong>${escapeHtml(word)}</strong><span>${escapeHtml(selectedWord?.partOfSpeech || '')}</span></header>
-                  <p>${escapeHtml(meaning || selectedWord?.meaning || '暂无核心含义')}</p>
-                  ${usage ? `<div>${escapeHtml(usage)}</div>` : ''}
-                  ${sentence ? `<small>${escapeHtml(sentence)}</small>` : ''}
-                  ${translation && translation !== meaning ? `<small>${escapeHtml(translation)}</small>` : ''}
-                </article>
-              `
-            })
-            .join('')}
-        </div>
-      </section>
-    `
-  }
-
-  function renderGrammarPoints(items) {
-    if (!items.length) return ''
-    return `
-      <section class="article-section">
-        <h5>语法知识点</h5>
-        <div class="article-stack">
-          ${items
-            .map((item) => {
-              const examples = normalizeArray(item?.examples || [])
-              return `
-                <div class="article-info-block">
-                  <strong>${escapeHtml(readText(item, ['title', 'name']) || '语法点')}</strong>
-                  <p>${escapeHtml(readText(item, ['explanation', 'description', 'content']) || stringifyValue(item))}</p>
-                  ${
-                    examples.length
-                      ? examples
-                          .map((example) => {
-                            const sentence = readText(example, ['sentence', 'example', 'text'])
-                            const translation = readText(example, ['translation', 'cn', 'zh'])
-                            return `<small>${escapeHtml([sentence, translation].filter(Boolean).join(' / '))}</small>`
-                          })
-                          .join('')
-                      : ''
-                  }
-                </div>
-              `
-            })
-            .join('')}
-        </div>
-      </section>
-    `
-  }
-
-  function renderSimpleList(title, items) {
-    if (!items.length) return ''
-    return `
-      <section class="article-section">
-        <h5>${escapeHtml(title)}</h5>
-        <ul class="article-point-list">
-          ${items.map((item) => `<li>${escapeHtml(typeof item === 'string' ? item : stringifyValue(item))}</li>`).join('')}
-        </ul>
-      </section>
-    `
-  }
-
-  function renderBilingualArticle(article, translation, options = {}) {
-    const englishLines = splitArticleLines(article, 'en')
-    const chineseLines = splitArticleLines(translation, 'zh')
-    const showTranslation = options.showTranslation !== false
-    const lineCount = showTranslation ? Math.max(englishLines.length, chineseLines.length) : englishLines.length
-    if (!lineCount) {
-      return '<div class="empty">暂无文章内容</div>'
-    }
-    return `
-      <div class="article-bilingual-lines">
-        ${Array.from({ length: lineCount })
-          .map((_, index) => {
-            const english = englishLines[index] || ''
-            const chinese = showTranslation ? chineseLines[index] || '' : ''
-            return `
-              <div class="article-bilingual-pair">
-                ${english ? `<p class="article-line-en">${renderHighlightedArticleText(english, options.selectedWords)}</p>` : ''}
-                ${chinese ? `<p class="article-line-zh">${escapeHtml(chinese)}</p>` : ''}
-              </div>
-            `
-          })
-          .join('')}
-      </div>
-    `
-  }
-
-  function renderHighlightedArticleText(text, selectedWords) {
-    const words = (Array.isArray(selectedWords) ? selectedWords : [])
-      .filter((item) => String(item.term || item.normalizedTerm || '').trim())
-      .sort((left, right) => String(right.term || right.normalizedTerm).length - String(left.term || left.normalizedTerm).length)
-    if (!words.length) return escapeHtml(text)
-    const byTerm = new Map(words.map((item) => [normalizeAnswerValue(item.term || item.normalizedTerm), item]))
-    const source = words.map((item) => String(item.term || item.normalizedTerm).replace(/[.*+?^${}()|[\]\\]/g, '\\$&')).join('|')
-    const pattern = new RegExp(`(${source})`, 'gi')
-    return String(text).split(pattern).map((part) => {
-      const word = byTerm.get(normalizeAnswerValue(part))
-      if (!word) return escapeHtml(part)
-      const term = word.term || word.normalizedTerm
-      const hint = [term, word.partOfSpeech, word.meaning].filter(Boolean).join(' · ')
-      return `<button class="article-target-word" type="button" data-article-target="${escapeHtml(term)}" title="${escapeHtml(hint)}">${escapeHtml(part)}</button>`
-    }).join('')
-  }
-
-  function pruneSelectedArticleEntries() {
-    state.selectedArticleEntryIds = state.selectedArticleEntryIds.filter((id) => state.articleEntries.some((entry) => sameId(entry.id, id)))
-  }
-
   function entryMatchesFilter(entry, prefix) {
     const definitions = normalizeDefinitions(entry.parsed || {})
     const meaning = definitions.map((item) => `${item.pos || ''} ${item.cn || ''} ${item.en || ''}`).join(' ')
@@ -893,80 +924,6 @@ export function createWordbookArticleFeature(ctx) {
     )
   }
 
-  function previewArticleRecord(payload = {}) {
-    const selectedEntries = state.articleEntries.filter((entry) => state.selectedArticleEntryIds.some((id) => sameId(id, entry.id)))
-    const selectedWords = (selectedEntries.length ? selectedEntries : state.wordbookEntries.slice(0, 3)).map((entry) => {
-      const definition = normalizeDefinitions(entry.parsed || {})[0] || {}
-      return {
-        entryId: entry.id,
-        term: entry.term || entry.normalizedTerm,
-        normalizedTerm: entry.normalizedTerm,
-        status: entry.status || 'vague',
-        partOfSpeech: definition.pos || 'meaning',
-        meaning: definition.cn || '核心含义',
-      }
-    })
-    return {
-      id: payload.forceRefresh ? String(Date.now()) : 'preview-article',
-      wordbookId: state.currentWordbookId || '1',
-      selectedWords,
-      wordCountRange: payload.wordCountRange || '300-500',
-      difficulty: payload.difficulty || 'medium',
-      remark: payload.remark || '偏日常语境，突出语法点。',
-      cacheHit: false,
-      studyStatus: 'generated',
-      currentStage: 'reading',
-      practiceTotal: 0,
-      practiceCorrect: 0,
-      practiceScore: 0,
-      provider: 'preview',
-      modelName: 'mock-article',
-      sessionId: 'preview',
-      updateTime: new Date().toISOString(),
-      parsed: {
-        title: 'A Choice That Changed the Plan',
-        article: 'Mia had to abandon an old plan, but she decided to maintain her confidence. Instead of giving up, she compared several options and found a clear contrast between fear and careful action.',
-        translation: '米娅不得不放弃一个旧计划，但她决定保持自信。她没有直接放弃，而是比较了几个选择，并看清了恐惧和谨慎行动之间的差别。',
-        vocabulary_focus: selectedWords.map((word) => ({
-          word: word.term,
-          meaning: word.meaning,
-          usage: '文章中用于真实语境复现',
-          sentence: `Try to use ${word.term} in your own sentence.`,
-          translation: `尝试用 ${word.term} 写一个自己的句子。`,
-        })),
-        grammar_points: [
-          {
-            title: 'Instead of + doing',
-            explanation: 'instead of 后面常接名词或动名词，用来表达“不是……而是……”。',
-            examples: [{ sentence: 'Instead of giving up, she tried again.', translation: '她没有放弃，而是又试了一次。' }],
-          },
-        ],
-        key_points: ['把词汇放进连续文章，更容易记住语境。', '注意文章中的转折连接词。'],
-        practice: [
-          {
-            question: 'What did Mia decide to maintain?',
-            options: ['Her confidence.', 'Her old plan.', 'Her fear.', 'Her schedule.'],
-            correct_answer: 'Her confidence.',
-            explanation: '文章第一句说明她决定保持自信。',
-          },
-          {
-            question: 'What did Mia abandon?',
-            options: ['An old plan.', 'A new job.', 'A travel guide.', 'A class.'],
-            correct_answer: 'An old plan.',
-            explanation: '文章开头说明她不得不放弃旧计划。',
-          },
-          {
-            question: 'What contrast did Mia notice?',
-            options: ['Fear and careful action.', 'Work and travel.', 'Day and night.', 'Success and money.'],
-            correct_answer: 'Fear and careful action.',
-            explanation: '文章结尾比较了恐惧与谨慎行动。',
-          },
-        ],
-        study_tips: ['先朗读英文文章，再看中文译文。', '把所选词汇各写一个新句子。'],
-      },
-    }
-  }
-
   function toggleArticleFocusMode(forceState = null) {
     const next = typeof forceState === 'boolean' ? forceState : !state.articleFocusMode
     state.articleFocusMode = next
@@ -983,6 +940,8 @@ export function createWordbookArticleFeature(ctx) {
     changeArticleWordbook,
     loadArticleWords,
     loadArticleHistory,
+    changeArticleWordPage,
+    changeArticleHistoryPage,
     renderArticleWords,
     renderArticleHistory,
     renderArticleResult,

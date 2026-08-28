@@ -361,6 +361,10 @@ public final class LearningConstants {
         public static final int SLEEP_START_HOUR = 0;
         public static final int SLEEP_END_HOUR = 6;
         public static final int DAY_END_HOUR = 24;
+        public static final int DUE_DEFAULT_LIMIT = 10;
+        public static final String DUE_DEFAULT_LIMIT_PARAM = "10";
+        public static final int DUE_MIN_LIMIT = 1;
+        public static final int DUE_MAX_LIMIT = 100;
         public static final int RESTART_DEFAULT_LIMIT = 10;
         public static final String RESTART_DEFAULT_LIMIT_PARAM = "10";
         public static final int RESTART_MIN_LIMIT = 1;
@@ -511,6 +515,8 @@ public final class LearningConstants {
         public static final int DEFAULT_BATCH_SIZE = 15;
         public static final int MIN_BATCH_SIZE = 10;
         public static final int MAX_BATCH_SIZE = 20;
+        public static final int DEFAULT_ITEM_PAGE_SIZE = 100;
+        public static final int MAX_ITEM_PAGE_SIZE = 200;
 
         private VocabularyCard() {
         }
@@ -542,6 +548,8 @@ public final class LearningConstants {
         public static final int RUNNING_TIMEOUT_MINUTES = 5;
         public static final int QUEUE_RETRY_DELAY_SECONDS = 10;
         public static final int STEP_LEASE_MINUTES = 5;
+        /** AI 步骤租约续期间隔，必须明显短于租约时长。 */
+        public static final int STEP_HEARTBEAT_INTERVAL_SECONDS = 60;
         public static final int RETRY_BASE_DELAY_SECONDS = 30;
         public static final int MAX_RETRY_DELAY_SECONDS = 1800;
         public static final String RUNNING_TIMEOUT_MESSAGE = "AI 任务执行超时，已转为失败，可手动重试";

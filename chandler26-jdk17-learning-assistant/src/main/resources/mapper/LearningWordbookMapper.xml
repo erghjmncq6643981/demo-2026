@@ -1,0 +1,22 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "https://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.chandler.learning.agent.vocabulary.infrastructure.LearningWordbookMapper">
+    <select id="selectWordbookSummaries"
+            resultType="com.chandler.learning.agent.vocabulary.api.WordbookResponse">
+        SELECT w.id,
+               w.name,
+               w.description,
+               w.is_default AS isDefault,
+               COUNT(e.id) AS entryCount,
+               COALESCE(SUM(CASE WHEN e.next_review_time &lt;= CURRENT_TIMESTAMP THEN 1 ELSE 0 END), 0) AS dueCount,
+               w.create_time AS createTime
+        FROM learning_wordbook w
+        LEFT JOIN learning_wordbook_entry e
+               ON e.wordbook_id = w.id
+              AND e.deleted = 0
+        WHERE w.user_id = #{userId}
+          AND w.deleted = 0
+        GROUP BY w.id, w.name, w.description, w.is_default, w.create_time
+        ORDER BY w.is_default DESC, w.create_time ASC
+    </select>
+</mapper>

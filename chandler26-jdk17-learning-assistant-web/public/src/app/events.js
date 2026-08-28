@@ -36,6 +36,7 @@ export function bindAppEvents(ctx) {
     saveAccountSecurity,
     updateAccountPasswordStrength,
     loadWordbookEntries,
+    changeWordbookPage,
     changeArticleWordbook,
     loadSceneData,
     changeSceneWordbook,
@@ -48,6 +49,8 @@ export function bindAppEvents(ctx) {
     confirmAllWarnings,
     previousImportPage,
     nextImportPage,
+    previousImportHistoryPage,
+    nextImportHistoryPage,
     publishVocabularyImport,
     triggerVocabularyAnalysis,
     openScenePlanModal,
@@ -84,7 +87,8 @@ export function bindAppEvents(ctx) {
     renderSceneRelatedWords,
     loadArticleWords,
     loadArticleHistory,
-    renderArticleWords,
+    changeArticleHistoryPage,
+    changeArticleWordPage,
     clearArticleSelection,
     recommendArticleWords,
     openArticleStudyModal,
@@ -206,6 +210,8 @@ elements.reloadWordbookEntriesBtn.addEventListener('click', () => Promise.allSet
 elements.openVocabularyImportBtn?.addEventListener('click', openVocabularyImport)
 elements.openProfileScenePlanModalBtn?.addEventListener('click', openScenePlanModal)
 elements.reloadWordbookViewBtn.addEventListener('click', loadWordbookEntries)
+elements.wordbookPrevBtn?.addEventListener('click', () => changeWordbookPage(-1))
+elements.wordbookNextBtn?.addEventListener('click', () => changeWordbookPage(1))
 elements.openWordbookModalBtn.addEventListener('click', () => openWordbookModal())
 elements.closeWordbookModalBtn.addEventListener('click', closeWordbookModal)
 elements.wordbookModal.addEventListener('click', (event) => {
@@ -231,24 +237,37 @@ elements.saveSpeechBtn?.addEventListener('click', async () => {
   if (saved !== false) closeLearningConfigModal()
 })
 elements.wordbookSelect.addEventListener('change', () => changeWordbook(elements.wordbookSelect.value))
-elements.wordStatusFilter.addEventListener('change', loadWordbookEntries)
+elements.wordStatusFilter.addEventListener('change', () => {
+  state.wordbookPage = 1
+  loadWordbookEntries()
+})
 elements.toggleWordbookFocusModeBtn?.addEventListener('click', toggleWordbookFocusMode)
 elements.wordPrefixInput?.addEventListener('input', () => {
   state.wordPrefixFilter = elements.wordPrefixInput.value.trim()
+  state.wordbookPage = 1
+  if (!state.preview) loadWordbookEntries()
   renderWordbookEntries()
 })
 elements.articleWordbookSelect?.addEventListener('change', () => changeArticleWordbook(elements.articleWordbookSelect.value))
-elements.articleStatusFilter?.addEventListener('change', loadArticleWords)
+elements.articleStatusFilter?.addEventListener('change', () => {
+  state.articleWordPage = 1
+  loadArticleWords()
+})
 elements.toggleArticleFocusModeBtn?.addEventListener('click', toggleArticleFocusMode)
 elements.articlePrefixInput?.addEventListener('input', () => {
   state.articlePrefixFilter = elements.articlePrefixInput.value.trim()
-  renderArticleWords()
+  state.articleWordPage = 1
+  loadArticleWords()
 })
+elements.articleWordPrevBtn?.addEventListener('click', () => changeArticleWordPage(-1))
+elements.articleWordNextBtn?.addEventListener('click', () => changeArticleWordPage(1))
 elements.articleReloadWordsBtn?.addEventListener('click', () => {
   loadArticleWords()
   loadArticleHistory()
 })
 elements.articleReloadHistoryBtn?.addEventListener('click', loadArticleHistory)
+elements.articleHistoryPrevBtn?.addEventListener('click', () => changeArticleHistoryPage(-1))
+elements.articleHistoryNextBtn?.addEventListener('click', () => changeArticleHistoryPage(1))
 elements.sceneWordbookSelect?.addEventListener('change', () => changeSceneWordbook())
 elements.sceneReloadBtn?.addEventListener('click', loadSceneData)
 elements.openScenePlanModalBtn?.addEventListener('click', openScenePlanModal)
@@ -271,6 +290,8 @@ elements.vocabularyBatchConfirmBtn?.addEventListener('click', confirmAllWarnings
 elements.vocabularyReloadReviewBtn?.addEventListener('click', () => loadImportReview())
 elements.vocabularyPrevPageBtn?.addEventListener('click', previousImportPage)
 elements.vocabularyNextPageBtn?.addEventListener('click', nextImportPage)
+elements.vocabularyImportHistoryPrevBtn?.addEventListener('click', () => previousImportHistoryPage())
+elements.vocabularyImportHistoryNextBtn?.addEventListener('click', () => nextImportHistoryPage())
 elements.publishVocabularyImportBtn?.addEventListener('click', publishVocabularyImport)
 elements.triggerVocabularyAnalysisBtn?.addEventListener('click', triggerVocabularyAnalysis)
 elements.closeScenePlanModalBtn?.addEventListener('click', closeScenePlanModal)

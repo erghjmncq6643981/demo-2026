@@ -14,6 +14,7 @@ import com.chandler.learning.agent.task.domain.AiTaskStepStatus;
 import com.chandler.learning.agent.task.infrastructure.AiAsyncTaskAttemptMapper;
 import com.chandler.learning.agent.task.infrastructure.AiAsyncTaskStepMapper;
 import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -21,6 +22,9 @@ import java.time.LocalDateTime;
 import java.util.List;
 import java.util.Map;
 import java.util.UUID;
+import java.util.concurrent.ScheduledExecutorService;
+import java.util.concurrent.ScheduledFuture;
+import java.util.concurrent.TimeUnit;
 import java.util.function.Supplier;
 import java.util.stream.Collectors;
 
@@ -29,15 +33,21 @@ import java.util.stream.Collectors;
  */
 @Service
 @RequiredArgsConstructor
+@Slf4j
 public class AiTaskExecutionService {
 
     private final AiAsyncTaskStepMapper stepMapper;
     private final AiAsyncTaskAttemptMapper attemptMapper;
+    private final ScheduledExecutorService leaseScheduler;
 
     /** 创建父任务时一次性写入稳定步骤，重试不会重复创建。 */
     @Transactional(rollbackFor = Exception.class)
     public void initialize(Long taskId, Long operatorUserId, List<AiTaskStepDefinition> definitions) {
+        if (definitions == null || definitions.isEmpty()) {
+            return;
+        }
         LocalDateTime now = LocalDateTime.now();
+        List<AiAsyncTaskStep> steps = new java.util.ArrayList<>(definitions.size());
         for (AiTaskStepDefinition definition : definitions) {
             AiAsyncTaskStep step = new AiAsyncTaskStep();
             step.setId(IdWorker.getId());
@@ -56,8 +66,9 @@ public class AiTaskExecutionService {
             step.setUpdateTime(now);
             step.setDeleted(false);
             step.setVersion(LearningConstants.ZERO);
-            stepMapper.insert(step);
+            steps.add(step);
         }
+        stepMapper.insertBatch(steps);
     }
 
     /** 执行一个必要步骤；已完成步骤直接复用，实现断点续跑。 */
@@ -69,14 +80,16 @@ public class AiTaskExecutionService {
         }
         String leaseToken = UUID.randomUUID().toString();
         LocalDateTime now = LocalDateTime.now();
+        LocalDateTime leaseUntil = now.plusMinutes(LearningConstants.AiTask.STEP_LEASE_MINUTES);
         if (stepMapper.claim(step.getId(), leaseToken, now,
-                now.plusMinutes(LearningConstants.AiTask.STEP_LEASE_MINUTES)) == LearningConstants.ZERO) {
+                leaseUntil) == LearningConstants.ZERO) {
             throw LearningAssistantException.badRequest(
                     LearningConstants.ErrorCode.LEARNING_PLAN_GENERATION_IN_PROGRESS,
                     "任务步骤正在由其他执行器处理: " + step.getStepName());
         }
         int attemptNo = value(step.getAttemptCount()) + 1;
         AiAsyncTaskAttempt attempt = startAttempt(taskId, step.getId(), operatorUserId, modelConfigId, attemptNo, now);
+        ScheduledFuture<?> heartbeat = startHeartbeat(step.getId(), leaseToken);
         try {
             T result = action.get();
             finishStep(step.getId(), leaseToken, AiTaskStepStatus.COMPLETED.getCode(), null, true);
@@ -86,7 +99,26 @@ public class AiTaskExecutionService {
             finishStep(step.getId(), leaseToken, AiTaskStepStatus.FAILED.getCode(), ex.getMessage(), false);
             finishAttempt(attempt.getId(), AiTaskStepStatus.FAILED.getCode(), ex.getMessage());
             throw ex;
+        } finally {
+            heartbeat.cancel(false);
         }
+    }
+
+    private ScheduledFuture<?> startHeartbeat(Long stepId, String leaseToken) {
+        long interval = Math.max(10L, LearningConstants.AiTask.STEP_HEARTBEAT_INTERVAL_SECONDS);
+        return leaseScheduler.scheduleAtFixedRate(() -> {
+            LocalDateTime heartbeatTime = LocalDateTime.now();
+            try {
+                int renewed = stepMapper.renew(stepId, leaseToken, heartbeatTime,
+                        heartbeatTime.plusMinutes(LearningConstants.AiTask.STEP_LEASE_MINUTES));
+                if (renewed == LearningConstants.ZERO) {
+                    // 令牌失效时让当前动作尽快结束，调度器会负责恢复步骤。
+                    log.warn("AI 任务步骤续租失败 stepId={}，租约可能已被回收", stepId);
+                }
+            } catch (RuntimeException ex) {
+                log.debug("AI 任务步骤续租异常 stepId={}", stepId, ex);
+            }
+        }, interval, interval, TimeUnit.SECONDS);
     }
 
     /** 将失败或中断步骤重新置为待执行，已成功步骤保持完成。 */

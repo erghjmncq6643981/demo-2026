@@ -14,6 +14,7 @@ import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestHeader;
 import org.springframework.web.bind.annotation.RequestMapping;
+import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 
 /**
@@ -32,9 +33,11 @@ public class VocabularyCardGenerationController {
     @Operation(summary = "批量词卡任务详情")
     public VocabularyCardGenerationResponse detail(
             @RequestHeader(value = "Authorization", required = false) String authorization,
-            @PathVariable Long jobId) {
+            @PathVariable Long jobId,
+            @RequestParam(required = false) Integer page,
+            @RequestParam(required = false) Integer pageSize) {
         LearningUser user = authService.requireUser(authorization);
-        return cardBatchService.detail(user.getId(), jobId);
+        return cardBatchService.detail(user.getId(), jobId, page, pageSize);
     }
 
     @PostMapping("/{jobId}/retry")

@@ -34,4 +34,13 @@
         WHERE id IN
         <foreach collection="list" item="item" open="(" separator="," close=")">#{item.id}</foreach>
     </update>
+
+    <select id="selectProgress" resultType="com.chandler.learning.agent.vocabulary.domain.VocabularyCardGenerationProgress">
+        SELECT COUNT(*) AS totalCount,
+               SUM(CASE WHEN status IN ('completed', 'cache_hit') THEN 1 ELSE 0 END) AS successCount,
+               SUM(CASE WHEN status = 'failed' THEN 1 ELSE 0 END) AS failedCount
+        FROM vocabulary_card_generation_job_item
+        WHERE job_id = #{jobId}
+          AND deleted = 0
+    </select>
 </mapper>

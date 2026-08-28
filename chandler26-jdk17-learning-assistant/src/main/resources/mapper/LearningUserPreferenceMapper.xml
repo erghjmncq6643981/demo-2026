@@ -1,0 +1,20 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "https://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.chandler.learning.agent.identity.infrastructure.LearningUserPreferenceMapper">
+    <insert id="upsertBatch">
+        INSERT INTO learning_user_preference
+        (id, create_by, update_by, user_id, preference_key, preference_value,
+         create_time, update_time, deleted, version)
+        VALUES
+        <foreach collection="list" item="item" separator=",">
+            (#{item.id}, #{item.createBy}, #{item.updateBy}, #{item.userId}, #{item.preferenceKey},
+             #{item.preferenceValue}, #{item.createTime}, #{item.updateTime}, #{item.deleted}, #{item.version})
+        </foreach>
+        ON DUPLICATE KEY UPDATE
+            preference_value = VALUES(preference_value),
+            update_by = VALUES(update_by),
+            update_time = VALUES(update_time),
+            deleted = 0,
+            version = version + 1
+    </insert>
+</mapper>

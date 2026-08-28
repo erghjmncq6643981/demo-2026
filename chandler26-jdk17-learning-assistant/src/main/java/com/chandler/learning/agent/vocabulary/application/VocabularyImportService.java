@@ -8,6 +8,7 @@ import com.chandler.learning.agent.vocabulary.api.VocabularyImportEntryUpdateReq
 import com.chandler.learning.agent.vocabulary.api.VocabularyImportPublishRequest;
 import com.chandler.learning.agent.vocabulary.api.VocabularyImportMetadataUpdateRequest;
 import com.chandler.learning.agent.vocabulary.api.VocabularyImportResponse;
+import com.chandler.learning.agent.vocabulary.api.VocabularyImportPageResponse;
 import com.chandler.learning.agent.vocabulary.api.VocabularyCatalogResponse;
 import com.chandler.learning.agent.vocabulary.api.VocabularyMarkdownImportRequest;
 import com.chandler.learning.agent.vocabulary.domain.LearningWordProgress;
@@ -245,23 +246,37 @@ public class VocabularyImportService {
         return response;
     }
 
-    /** 查询全部管理员导入历史；调用入口必须先完成管理员鉴权。 */
-    public List<VocabularyImportResponse> list(Long userId) {
-        List<VocabularyImportJob> jobs = importJobMapper.selectList(new LambdaQueryWrapper<VocabularyImportJob>()
+    /** 分页查询管理员导入历史；调用入口必须先完成管理员鉴权。 */
+    public VocabularyImportPageResponse list(Long userId, Integer page, Integer pageSize) {
+        int resolvedPage = Math.max(LearningConstants.VocabularyImport.DEFAULT_PAGE,
+                page == null ? LearningConstants.VocabularyImport.DEFAULT_PAGE : page);
+        int resolvedPageSize = Math.max(LearningConstants.FIRST_SEQUENCE,
+                Math.min(pageSize == null ? LearningConstants.VocabularyImport.DEFAULT_PAGE_SIZE : pageSize,
+                        LearningConstants.VocabularyImport.MAX_PAGE_SIZE));
+        Page<VocabularyImportJob> pageResult = importJobMapper.selectPage(
+                new Page<>(resolvedPage, resolvedPageSize),
+                new LambdaQueryWrapper<VocabularyImportJob>()
                 .eq(VocabularyImportJob::getDeleted, false)
                 .orderByDesc(VocabularyImportJob::getUpdateTime));
+        List<VocabularyImportJob> jobs = pageResult.getRecords();
+        VocabularyImportPageResponse pageResponse = new VocabularyImportPageResponse();
+        pageResponse.setTotal(pageResult.getTotal());
+        pageResponse.setPage(resolvedPage);
+        pageResponse.setPageSize(resolvedPageSize);
         if (jobs.isEmpty()) {
-            return List.of();
+            pageResponse.setItems(List.of());
+            return pageResponse;
         }
         Set<Long> catalogIds = jobs.stream().map(VocabularyImportJob::getCatalogId).collect(Collectors.toSet());
         Map<Long, VocabularyCatalog> catalogMap = catalogMapper.selectBatchIds(catalogIds).stream()
                 .collect(Collectors.toMap(VocabularyCatalog::getId, c -> c, (a, b) -> a));
-        return jobs.stream().map(job -> {
+        pageResponse.setItems(jobs.stream().map(job -> {
             VocabularyCatalog catalog = catalogMap.get(job.getCatalogId());
-            VocabularyImportResponse response = baseResponse(job, catalog != null ? catalog : new VocabularyCatalog());
-            response.setItems(List.of());
-            return response;
-        }).toList();
+            VocabularyImportResponse itemResponse = baseResponse(job, catalog != null ? catalog : new VocabularyCatalog());
+            itemResponse.setItems(List.of());
+            return itemResponse;
+        }).toList());
+        return pageResponse;
     }
 
     /**

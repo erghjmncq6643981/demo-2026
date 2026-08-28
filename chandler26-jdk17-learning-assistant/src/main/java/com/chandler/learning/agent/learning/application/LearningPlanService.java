@@ -6,10 +6,8 @@ import com.chandler.learning.agent.task.application.AiAsyncTaskService;
 import com.chandler.learning.agent.vocabulary.application.LearningWordProgressService;
 import com.chandler.learning.agent.vocabulary.application.WordbookService;
 import com.chandler.learning.agent.vocabulary.application.VocabularyCatalogQueryService;
-import cn.hutool.core.util.StrUtil;
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import com.baomidou.mybatisplus.core.conditions.update.LambdaUpdateWrapper;
-import com.chandler.learning.agent.ai.chat.application.AgentChatRequest;
 import com.chandler.learning.agent.ai.chat.application.AgentChatResponse;
 import com.chandler.learning.agent.learning.api.LearningAssessmentSubmitRequest;
 import com.chandler.learning.agent.learning.api.LearningAssessmentSubmitResponse;
@@ -25,7 +23,6 @@ import com.chandler.learning.agent.learning.domain.LearningPlan;
 import com.chandler.learning.agent.learning.domain.LearningPlanUnit;
 import com.chandler.learning.agent.learning.domain.LearningPlanUnitEntry;
 import com.chandler.learning.agent.learning.domain.LearningReviewRecord;
-import com.chandler.learning.agent.learning.domain.LearningSceneMaterial;
 import com.chandler.learning.agent.vocabulary.domain.LearningWordProgress;
 import com.chandler.learning.agent.vocabulary.domain.LearningWordbook;
 import com.chandler.learning.agent.vocabulary.domain.LearningWordbookEntry;
@@ -33,7 +30,6 @@ import com.chandler.learning.agent.vocabulary.domain.VocabularyCatalog;
 import com.chandler.learning.agent.vocabulary.domain.VocabularyCatalogEntry;
 import com.chandler.learning.agent.vocabulary.domain.VocabularyCatalogVersion;
 import com.chandler.learning.agent.ai.chat.domain.AiInvocationScene;
-import com.chandler.learning.agent.learning.domain.LearningScene;
 import com.chandler.learning.agent.system.domain.SystemLogType;
 import com.chandler.learning.agent.exception.AiAsyncTaskCancelledException;
 import com.chandler.learning.agent.exception.LearningAssistantException;
@@ -41,10 +37,7 @@ import com.chandler.learning.agent.learning.infrastructure.LearningPlanMapper;
 import com.chandler.learning.agent.learning.infrastructure.LearningPlanUnitEntryMapper;
 import com.chandler.learning.agent.learning.infrastructure.LearningPlanUnitMapper;
 import com.chandler.learning.agent.learning.infrastructure.LearningReviewRecordMapper;
-import com.chandler.learning.agent.learning.infrastructure.LearningSceneMaterialMapper;
-import com.chandler.learning.agent.ai.chat.application.AiChatService;
 import com.chandler.learning.agent.support.LearningConstants;
-import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import lombok.RequiredArgsConstructor;
@@ -56,20 +49,15 @@ import org.springframework.util.StringUtils;
 
 import java.time.LocalDate;
 import java.time.LocalDateTime;
-import java.time.temporal.ChronoUnit;
 import java.util.ArrayList;
-import java.util.HashMap;
-import java.util.HashSet;
 import java.util.LinkedHashMap;
 import java.util.LinkedHashSet;
 import java.util.List;
-import java.util.Locale;
 import java.util.Map;
 import java.util.Objects;
 import java.util.Set;
 import java.util.UUID;
 import java.util.stream.Collectors;
-import java.util.stream.Stream;
 
 /**
  * 按需生成并推进场景学习单元，不设置每日场景或拼写词数量限制。
@@ -83,17 +71,20 @@ public class LearningPlanService {
     private final LearningPlanMapper planMapper;
     private final LearningPlanUnitMapper unitMapper;
     private final LearningPlanUnitEntryMapper unitEntryMapper;
-    private final LearningSceneMaterialMapper materialMapper;
     private final LearningReviewRecordMapper reviewRecordMapper;
     private final VocabularyCatalogQueryService catalogQueryService;
     private final LearningWordProgressService progressService;
     private final WordbookService wordbookService;
-    private final AiChatService aiChatService;
     private final AiAsyncTaskService aiAsyncTaskService;
     private final SystemLogService systemLogService;
     private final UserDisplayNameService userDisplayNameService;
     private final LearningPlanResponseAssembler responseAssembler;
     private final LearningPlanVocabularySelector vocabularySelector;
+    private final LearningPlanCalendarService calendarService;
+    private final LearningPlanLifecycleService lifecycleService;
+    private final LearningPlanSceneContentService sceneContentService;
+    private final LearningPlanAssessmentSupport assessmentSupport;
+    private final LearningPlanScenePersistenceService scenePersistenceService;
     private final ObjectMapper objectMapper;
     private final TransactionTemplate transactionTemplate;
 
@@ -156,9 +147,9 @@ public class LearningPlanService {
     }
 
     public LearningPlanResponse update(Long userId, Long planId, LearningPlanUpdateRequest request) {
-        PlanUpdateResult result = Objects.requireNonNull(transactionTemplate.execute(status ->
-                updatePlanState(userId, planId, request)));
-        if (result.generateFirstUnit()) {
+        boolean generateFirstUnit = Boolean.TRUE.equals(transactionTemplate.execute(status ->
+                lifecycleService.update(userId, requirePlan(userId, planId), request).generateFirstUnit()));
+        if (generateFirstUnit) {
             try {
                 generateNextUnit(userId, planId, request.getModelConfigId(), null);
             } catch (RuntimeException ex) {
@@ -166,77 +157,6 @@ public class LearningPlanService {
             }
         }
         return detail(userId, planId);
-    }
-
-    /** 在短事务中更新计划状态，AI 生成在提交后由调用方触发。 */
-    private PlanUpdateResult updatePlanState(Long userId, Long planId, LearningPlanUpdateRequest request) {
-        LearningPlan plan = requirePlan(userId, planId);
-        LocalDateTime now = LocalDateTime.now();
-        boolean generateFirstUnit = false;
-
-        plan.setName(request.getName().trim());
-        plan.setLearningPurpose(StringUtils.hasText(request.getLearningPurpose()) ? request.getLearningPurpose().trim() : null);
-        plan.setStartTime(request.getStartTime());
-        plan.setEndTime(request.getEndTime());
-        if (request.getWordbookId() != null && !request.getWordbookId().equals(plan.getWordbookId())) {
-            plan.setWordbookId(requireWordbook(userId, request.getWordbookId()).getId());
-        }
-
-        if (request.getStatus() != null) {
-            String newStatus = request.getStatus().trim();
-            if (!newStatus.equals(plan.getStatus())) {
-                if (LearningConstants.ScenePlan.STATUS_ACTIVE.equals(newStatus)) {
-                    if (!LearningConstants.ScenePlan.STATUS_PAUSED.equals(plan.getStatus())
-                            && !LearningConstants.ScenePlan.STATUS_NOT_STARTED.equals(plan.getStatus())) {
-                        throw LearningAssistantException.badRequest(
-                                LearningConstants.ErrorCode.LEARNING_PLAN_STATE_ERROR,
-                                "只有暂停或未开始的计划才可以恢复/启动");
-                    }
-                    plan.setStatus(LearningConstants.ScenePlan.STATUS_ACTIVE);
-                    if (plan.getCurrentUnitId() == null) {
-                        generateFirstUnit = true;
-                    }
-                } else if (LearningConstants.ScenePlan.STATUS_PAUSED.equals(newStatus)) {
-                    if (!LearningConstants.ScenePlan.STATUS_ACTIVE.equals(plan.getStatus())) {
-                        throw LearningAssistantException.badRequest(
-                                LearningConstants.ErrorCode.LEARNING_PLAN_STATE_ERROR,
-                                "只有进行中的计划才可以暂停");
-                    }
-                    plan.setStatus(LearningConstants.ScenePlan.STATUS_PAUSED);
-                } else if (LearningConstants.ScenePlan.STATUS_CANCELLED.equals(newStatus)) {
-                    if (LearningConstants.ScenePlan.STATUS_COMPLETED.equals(plan.getStatus())
-                            || LearningConstants.ScenePlan.STATUS_CANCELLED.equals(plan.getStatus())) {
-                        throw LearningAssistantException.badRequest(
-                                LearningConstants.ErrorCode.LEARNING_PLAN_STATE_ERROR,
-                                "已完成或已取消的计划无法取消");
-                    }
-                    plan.setStatus(LearningConstants.ScenePlan.STATUS_CANCELLED);
-                } else if (LearningConstants.ScenePlan.STATUS_NOT_STARTED.equals(newStatus)) {
-                    if (LearningConstants.ScenePlan.STATUS_COMPLETED.equals(plan.getStatus())
-                            || LearningConstants.ScenePlan.STATUS_CANCELLED.equals(plan.getStatus())) {
-                        throw LearningAssistantException.badRequest(
-                                LearningConstants.ErrorCode.LEARNING_PLAN_STATE_ERROR,
-                                "已完成或已取消的计划无法设为未开始");
-                    }
-                    plan.setStatus(LearningConstants.ScenePlan.STATUS_NOT_STARTED);
-                } else if (LearningConstants.ScenePlan.STATUS_COMPLETED.equals(newStatus)) {
-                    plan.setStatus(LearningConstants.ScenePlan.STATUS_COMPLETED);
-                } else {
-                    throw LearningAssistantException.badRequest(
-                            LearningConstants.ErrorCode.LEARNING_PLAN_STATE_ERROR,
-                            "无效的学习计划状态: " + newStatus);
-                }
-            }
-        }
-
-        plan.setUpdateTime(now);
-        planMapper.updateById(plan);
-
-        systemLogService.record(userId, SystemLogType.LEARNING_PLAN, "修改场景学习计划",
-                plan.getName() + "，状态: " + plan.getStatus());
-        log.info("用户「{}」修改了场景学习计划「{}」，状态 = {}",
-                userDisplayNameService.userName(userId), plan.getName(), plan.getStatus());
-        return new PlanUpdateResult(plan, generateFirstUnit);
     }
 
     public List<LearningPlanResponse> list(Long userId) {
@@ -266,60 +186,7 @@ public class LearningPlanService {
      */
     public List<LearningPlanCalendarDayResponse> calendar(Long userId, Long planId,
                                                           LocalDate from, LocalDate to) {
-        LearningPlan plan = requirePlan(userId, planId);
-        LocalDate today = LocalDate.now();
-        LocalDate resolvedFrom = from == null ? today.with(java.time.DayOfWeek.MONDAY) : from;
-        LocalDate resolvedTo = to == null ? resolvedFrom.plusDays(6) : to;
-        if (resolvedTo.isBefore(resolvedFrom)) {
-            throw LearningAssistantException.badRequest(
-                    LearningConstants.ErrorCode.LEARNING_PLAN_STATE_ERROR,
-                    "日历结束日期不能早于开始日期");
-        }
-        if (ChronoUnit.DAYS.between(resolvedFrom, resolvedTo) > 62) {
-            throw LearningAssistantException.badRequest(
-                    LearningConstants.ErrorCode.LEARNING_PLAN_STATE_ERROR,
-                    "单次日历查询不能超过 63 天");
-        }
-        List<LearningPlanUnit> units = unitMapper.selectList(new LambdaQueryWrapper<LearningPlanUnit>()
-                .eq(LearningPlanUnit::getPlanId, plan.getId())
-                .ge(LearningPlanUnit::getRecommendedDate, resolvedFrom)
-                .le(LearningPlanUnit::getRecommendedDate, resolvedTo)
-                .eq(LearningPlanUnit::getDeleted, false)
-                .orderByAsc(LearningPlanUnit::getRecommendedDate)
-                .orderByAsc(LearningPlanUnit::getUnitNo));
-        Map<LocalDate, List<LearningPlanUnit>> unitsByDate = units.stream()
-                .collect(Collectors.groupingBy(LearningPlanUnit::getRecommendedDate, LinkedHashMap::new,
-                        Collectors.toList()));
-        Map<Long, LearningPlanUnitResponse> summariesByUnit = responseAssembler
-                .toUnitSummaryResponses(units, plan.getId())
-                .stream()
-                .collect(Collectors.toMap(LearningPlanUnitResponse::getId, response -> response));
-        Set<LocalDate> generatingDates = aiAsyncTaskService.findActiveGeneratingDatesForPlan(userId, plan.getId());
-        List<LearningPlanCalendarDayResponse> result = new ArrayList<>();
-        for (LocalDate date = resolvedFrom; !date.isAfter(resolvedTo); date = date.plusDays(1)) {
-            List<LearningPlanUnit> dateUnits = unitsByDate.getOrDefault(date, List.of());
-            int planned = dateUnits.stream().mapToInt(unit -> value(unit.getCoreWordCount())).sum();
-            int pending = dateUnits.stream().mapToInt(unit -> Math.max(LearningConstants.ZERO,
-                    value(unit.getCoreWordCount()) - value(unit.getCompletedCoreCount()))).sum();
-            int completed = (int) dateUnits.stream()
-                    .filter(unit -> LearningConstants.ScenePlan.UNIT_COMPLETED.equals(unit.getStatus()))
-                    .count();
-            LearningPlanCalendarDayResponse day = new LearningPlanCalendarDayResponse();
-            day.setDate(date);
-            day.setPlannedWordCount(planned);
-            day.setPendingChallengeCount(pending);
-            day.setGeneratedUnitCount(dateUnits.size());
-            day.setCompletedUnitCount(completed);
-            day.setOverdueCount(date.isBefore(today) ? pending : LearningConstants.ZERO);
-            day.setGenerating(generatingDates.contains(date));
-            day.setUnits(dateUnits.stream()
-                    .map(LearningPlanUnit::getId)
-                    .map(summariesByUnit::get)
-                    .filter(Objects::nonNull)
-                    .toList());
-            result.add(day);
-        }
-        return result;
+        return calendarService.calendar(userId, planId, from, to);
     }
 
     /**
@@ -424,101 +291,31 @@ public class LearningPlanService {
                                 LearningConstants.ScenePlan.TIER_REVIEW))
                         .eq(LearningPlanUnitEntry::getDeleted, false)
                         .orderByAsc(LearningPlanUnitEntry::getSortOrder));
-        List<CandidateWord> coreWords = entries.stream()
+        List<LearningPlanSceneContentService.SceneCandidate> coreWords = entries.stream()
                 .filter(entry -> LearningConstants.ScenePlan.TIER_CORE.equals(entry.getTier()))
-                .map(entry -> new CandidateWord(entry.getTerm(), entry.getPhonetic(), entry.getMeaningText()))
+                .map(entry -> new LearningPlanSceneContentService.SceneCandidate(
+                        entry.getTerm(), entry.getPhonetic(), entry.getMeaningText()))
                 .toList();
-        List<CandidateWord> reviewWords = entries.stream()
+        List<LearningPlanSceneContentService.SceneCandidate> reviewWords = entries.stream()
                 .filter(entry -> LearningConstants.ScenePlan.TIER_REVIEW.equals(entry.getTier()))
-                .map(entry -> new CandidateWord(entry.getTerm(), entry.getPhonetic(), entry.getMeaningText()))
+                .map(entry -> new LearningPlanSceneContentService.SceneCandidate(
+                        entry.getTerm(), entry.getPhonetic(), entry.getMeaningText()))
                 .toList();
         if (coreWords.isEmpty()) {
             throw LearningAssistantException.badRequest(
                     LearningConstants.ErrorCode.LEARNING_PLAN_STATE_ERROR,
                     "场景核心词为空，无法保持原词组重新生成");
         }
-        AgentChatResponse aiResponse = generateSceneWithWords(plan, unit.getUnitNo(), coreWords, reviewWords,
+        AgentChatResponse aiResponse = sceneContentService.generateSceneWithWords(
+                plan, unit.getUnitNo(), coreWords, reviewWords,
                 coreWords.size(), modelConfigId);
         JsonNode scene = aiResponse.requireStructuredRoot(AiInvocationScene.VOCABULARY_SCENE_UNIT);
-        List<JsonNode> words = validateSceneWords(scene,
-                coreWords.stream().map(CandidateWord::term).collect(Collectors.toSet()),
-                reviewWords.stream().map(CandidateWord::term).collect(Collectors.toSet()), coreWords.size());
-        return Objects.requireNonNull(transactionTemplate.execute(status -> switchMaterialVersion(
+        List<JsonNode> words = sceneContentService.validateSceneWords(scene,
+                coreWords.stream().map(LearningPlanSceneContentService.SceneCandidate::term).collect(Collectors.toSet()),
+                reviewWords.stream().map(LearningPlanSceneContentService.SceneCandidate::term).collect(Collectors.toSet()),
+                coreWords.size());
+        return Objects.requireNonNull(transactionTemplate.execute(status -> scenePersistenceService.switchMaterialVersion(
                 userId, unit, entries, aiResponse, scene, words)));
-    }
-
-    private LearningPlanUnitResponse switchMaterialVersion(Long userId, LearningPlanUnit unit,
-                                                           List<LearningPlanUnitEntry> entries,
-                                                           AgentChatResponse aiResponse, JsonNode scene,
-                                                           List<JsonNode> words) {
-        LocalDateTime now = LocalDateTime.now();
-        LearningSceneMaterial previous = materialMapper.selectById(unit.getSceneMaterialId());
-        int revision = previous == null || previous.getRevisionNo() == null
-                ? LearningConstants.FIRST_SEQUENCE : previous.getRevisionNo() + 1;
-        if (previous != null) {
-            previous.setCurrentVersion(false);
-            previous.setMaterialStatus("archived");
-            previous.setUpdateTime(now);
-            materialMapper.updateById(previous);
-        }
-        LearningSceneMaterial material = new LearningSceneMaterial();
-        material.setUserId(userId);
-        material.setPlanId(unit.getPlanId());
-        material.setUnitId(unit.getId());
-        material.setRevisionNo(revision);
-        material.setMaterialStatus("published");
-        material.setCurrentVersion(true);
-        material.setSupersedesMaterialId(previous == null ? null : previous.getId());
-        material.setSessionId(aiResponse.getSessionId());
-        material.setTitle(requiredText(scene, "title"));
-        material.setScenarioType(text(scene, "scenario_type", "scenarioType"));
-        material.setLearningText(text(scene, "learning_text", "learningText", "article"));
-        material.setTranslation(text(scene, "translation"));
-        material.setRawContent(aiResponse.getContent());
-        material.setParsedJson(writeJson(scene));
-        material.setProvider(aiResponse.getModelProvider());
-        material.setModelName(aiResponse.getModelName());
-        material.setTokenUsage(aiResponse.getTokenUsage());
-        material.setCostTime(aiResponse.getCostTime());
-        material.setDeleted(false);
-        material.setCreateTime(now);
-        material.setUpdateTime(now);
-        materialMapper.insert(material);
-
-        Map<String, JsonNode> generatedByTerm = words.stream().collect(Collectors.toMap(
-                word -> normalize(requiredText(word, "term", "word")), word -> word,
-                (left, right) -> left, LinkedHashMap::new));
-        List<LearningPlanUnitEntry> updatedEntries = new ArrayList<>();
-        for (LearningPlanUnitEntry entry : entries) {
-            JsonNode generated = generatedByTerm.get(entry.getNormalizedTerm());
-            if (generated == null) continue;
-            entry.setPhonetic(firstText(text(generated, "phonetic"), entry.getPhonetic()));
-            entry.setMeaningText(firstText(text(generated, "meaning", "definition"), entry.getMeaningText()));
-            entry.setContextMeaning(firstText(text(generated, "context_meaning", "contextMeaning"),
-                    entry.getContextMeaning()));
-            JsonNode question = node(generated, "meaning_question", "meaningQuestion", "assessment");
-            if (LearningConstants.ScenePlan.TIER_CORE.equals(entry.getTier())
-                    || LearningConstants.ScenePlan.TIER_REVIEW.equals(entry.getTier())) {
-                question = ensureMeaningQuestion(generated, entry.getTerm(), question, entry.getMeaningText());
-            }
-            entry.setAssessmentJson(question == null ? entry.getAssessmentJson() : writeJson(question));
-            entry.setAcceptedSpellingsJson(writeJson(acceptedSpellings(generated, entry.getTerm())));
-            entry.setUpdateBy(userId);
-            entry.setUpdateTime(now);
-            updatedEntries.add(entry);
-        }
-        if (!updatedEntries.isEmpty()) {
-            unitEntryMapper.updateBatch(updatedEntries);
-        }
-        unit.setTitle(material.getTitle());
-        unit.setScenarioType(material.getScenarioType());
-        unit.setSummary(text(scene, "summary", "description"));
-        unit.setSceneMaterialId(material.getId());
-        unit.setGeneratedTime(now);
-        unit.setSupplementaryWordCount(LearningConstants.ZERO);
-        unit.setUpdateTime(now);
-        unitMapper.updateById(unit);
-        return responseAssembler.toUnitResponse(unit);
     }
 
     private List<LearningPlanUnitResponse> generateNextUnitWithLock(Long userId, Long planId, Long modelConfigId,
@@ -600,13 +397,13 @@ public class LearningPlanService {
                                                         Long asyncTaskId) {
         ensureAsyncTaskActive(asyncTaskId);
         int unitNo = nextUnitNo(plan.getId());
-        AgentChatResponse aiResponse = generateScene(plan, unitNo, candidates, reviewWords,
+        AgentChatResponse aiResponse = sceneContentService.generateScene(plan, unitNo, candidates, reviewWords,
                 targetWordCount, modelConfigId);
         ensureAsyncTaskActive(asyncTaskId);
         JsonNode scene = aiResponse.requireStructuredRoot(AiInvocationScene.VOCABULARY_SCENE_UNIT);
-        List<JsonNode> words = validateSceneWords(scene, candidates, reviewWords, targetWordCount);
+        List<JsonNode> words = sceneContentService.validateSceneWords(scene, candidates, reviewWords, targetWordCount);
         ensureAsyncTaskActive(asyncTaskId);
-        return Objects.requireNonNull(transactionTemplate.execute(status -> persistGeneratedUnit(
+        return Objects.requireNonNull(transactionTemplate.execute(status -> scenePersistenceService.persistGeneratedUnit(
                 userId, plan, resolvedRecommendedDate, today, candidates, reviewWords,
                 unitNo, aiResponse, scene, words)));
     }
@@ -624,176 +421,6 @@ public class LearningPlanService {
             throw LearningAssistantException.of(
                     LearningConstants.ErrorCode.LEARNING_PLAN_GENERATION_IN_PROGRESS);
         }
-    }
-
-    /** 在短事务中持久化已经完成校验的场景材料。 */
-    private LearningPlanUnitResponse persistGeneratedUnit(Long userId, LearningPlan plan,
-                                                          LocalDate resolvedRecommendedDate, LocalDate today,
-                                                          List<VocabularyCatalogEntry> candidates,
-                                                          List<VocabularyCatalogEntry> reviewWords, int unitNo,
-                                                          AgentChatResponse aiResponse, JsonNode scene,
-                                                          List<JsonNode> words) {
-        LocalDateTime now = LocalDateTime.now();
-
-        LearningPlanUnit unit = new LearningPlanUnit();
-        unit.setPlanId(plan.getId());
-        unit.setUnitNo(unitNo);
-        unit.setTitle(requiredText(scene, "title"));
-        unit.setScenarioType(text(scene, "scenario_type", "scenarioType"));
-        unit.setSummary(text(scene, "summary", "description"));
-        boolean startImmediately = plan.getCurrentUnitId() == null && !resolvedRecommendedDate.isAfter(today);
-        unit.setStatus(startImmediately
-                ? LearningConstants.ScenePlan.UNIT_IN_PROGRESS
-                : LearningConstants.ScenePlan.UNIT_READY);
-        unit.setCoreWordCount(LearningConstants.ZERO);
-        unit.setExtendedWordCount(LearningConstants.ZERO);
-        unit.setSupplementaryWordCount(LearningConstants.ZERO);
-        unit.setCompletedCoreCount(LearningConstants.ZERO);
-        unit.setGeneratedTime(now);
-        unit.setStartedTime(startImmediately ? now : null);
-        unit.setRecommendedDate(resolvedRecommendedDate);
-        unit.setDeleted(false);
-        unit.setCreateTime(now);
-        unit.setUpdateTime(now);
-        unitMapper.insert(unit);
-
-        LearningSceneMaterial material = new LearningSceneMaterial();
-        material.setUserId(userId);
-        material.setPlanId(plan.getId());
-        material.setUnitId(unit.getId());
-        material.setRevisionNo(LearningConstants.FIRST_SEQUENCE);
-        material.setMaterialStatus("published");
-        material.setCurrentVersion(true);
-        material.setSessionId(aiResponse.getSessionId());
-        material.setTitle(unit.getTitle());
-        material.setScenarioType(unit.getScenarioType());
-        material.setLearningText(text(scene, "learning_text", "learningText", "article"));
-        material.setTranslation(text(scene, "translation"));
-        material.setRawContent(aiResponse.getContent());
-        material.setParsedJson(writeJson(scene));
-        material.setProvider(aiResponse.getModelProvider());
-        material.setModelName(aiResponse.getModelName());
-        material.setTokenUsage(aiResponse.getTokenUsage());
-        material.setCostTime(aiResponse.getCostTime());
-        material.setDeleted(false);
-        material.setCreateTime(now);
-        material.setUpdateTime(now);
-        materialMapper.insert(material);
-
-        Map<String, VocabularyCatalogEntry> candidateMap = Stream.concat(candidates.stream(), reviewWords.stream())
-                .collect(Collectors.toMap(
-                entry -> normalize(entry.effectiveTerm()), entry -> entry, (left, right) -> left, LinkedHashMap::new));
-
-        Set<String> missingTerms = new LinkedHashSet<>();
-        for (JsonNode word : words) {
-            String nTerm = normalize(requiredText(word, "term", "word"));
-            if (!candidateMap.containsKey(nTerm)) {
-                missingTerms.add(nTerm);
-            }
-        }
-        if (!missingTerms.isEmpty()) {
-            List<VocabularyCatalogEntry> extraCatalogEntries = catalogQueryService.findByNormalizedTerms(
-                    plan.getCatalogVersionId(), missingTerms);
-            for (VocabularyCatalogEntry entry : extraCatalogEntries) {
-                candidateMap.put(entry.getNormalizedTerm(), entry);
-            }
-        }
-
-        int coreCount = LearningConstants.ZERO;
-        int extendedCount = LearningConstants.ZERO;
-        int supplementaryCount = LearningConstants.ZERO;
-        int sortOrder = LearningConstants.FIRST_SEQUENCE;
-        List<LearningPlanUnitEntry> unitEntriesToInsert = new ArrayList<>(words.size());
-        for (JsonNode word : words) {
-            String term = requiredText(word, "term", "word");
-            String normalizedTerm = normalize(term);
-            VocabularyCatalogEntry source = candidateMap.get(normalizedTerm);
-            String tier = normalizeTier(text(word, "tier"));
-            String requirement = normalizeRequirement(text(word, "mastery_requirement", "masteryRequirement"));
-            LearningWordProgress before = progressService.find(userId, normalizedTerm);
-            boolean firstLearning = LearningConstants.ScenePlan.TIER_CORE.equals(tier)
-                    && (before == null
-                    || LearningConstants.ScenePlan.PROGRESS_UNSEEN.equals(before.getLearningState())
-                    || LearningConstants.ScenePlan.PROGRESS_EXPOSED.equals(before.getLearningState()));
-            LearningWordProgress progress = startImmediately
-                    ? progressService.recordSceneExposure(
-                            userId, term, requirement, tier, plan.getId(), unit.getId())
-                    : progressService.getOrCreate(userId, term, requirement);
-            LearningWordbookEntry wordbookEntry = LearningConstants.ScenePlan.TIER_SUPPLEMENTARY.equals(tier)
-                    ? null
-                    : wordbookService.ensureLearningEntry(userId, plan.getWordbookId(), source, progress, term,
-                    normalizedTerm,
-                    LearningConstants.ScenePlan.TIER_CORE.equals(tier)
-                            || LearningConstants.ScenePlan.TIER_REVIEW.equals(tier), now);
-
-            String fallbackMeaning = firstText(text(word, "meaning", "definition"),
-                    source == null ? null : source.getDefinitionText());
-            JsonNode question = node(word, "meaning_question", "meaningQuestion", "assessment");
-            if (LearningConstants.ScenePlan.TIER_CORE.equals(tier)
-                    || LearningConstants.ScenePlan.TIER_REVIEW.equals(tier)) {
-                question = ensureMeaningQuestion(word, term, question, fallbackMeaning);
-            }
-            List<String> acceptedSpellings = acceptedSpellings(word, term);
-            LearningPlanUnitEntry unitEntry = new LearningPlanUnitEntry();
-            unitEntry.setId(com.baomidou.mybatisplus.core.toolkit.IdWorker.getId());
-            unitEntry.setCreateBy(userId);
-            unitEntry.setUpdateBy(userId);
-            unitEntry.setPlanId(plan.getId());
-            unitEntry.setUnitId(unit.getId());
-            unitEntry.setCatalogEntryId(source == null ? null : source.getId());
-            unitEntry.setWordbookEntryId(wordbookEntry == null ? null : wordbookEntry.getId());
-            unitEntry.setWordProgressId(progress.getId());
-            unitEntry.setSourceOrder(source == null ? null : source.getSourceOrder());
-            unitEntry.setTerm(source == null ? term : source.effectiveTerm());
-            unitEntry.setNormalizedTerm(source == null ? normalizedTerm : source.getNormalizedTerm());
-            unitEntry.setPhonetic(firstText(text(word, "phonetic"), source == null ? null : source.getPhonetic()));
-            unitEntry.setMeaningText(firstText(text(word, "meaning", "definition"),
-                    source == null ? null : source.getDefinitionText()));
-            unitEntry.setContextMeaning(text(word, "context_meaning", "contextMeaning"));
-            unitEntry.setTier(tier);
-            unitEntry.setMasteryRequirement(requirement);
-            unitEntry.setAcceptedSpellingsJson(writeJson(acceptedSpellings));
-            unitEntry.setAssessmentJson(question == null || question.isMissingNode() ? null : writeJson(question));
-            unitEntry.setFirstLearning(firstLearning);
-            unitEntry.setSortOrder(sortOrder++);
-            unitEntry.setDeleted(false);
-            unitEntry.setVersion(LearningConstants.ZERO);
-            unitEntry.setCreateTime(now);
-            unitEntry.setUpdateTime(now);
-            unitEntriesToInsert.add(unitEntry);
-
-            if (LearningConstants.ScenePlan.TIER_CORE.equals(tier)) {
-                coreCount++;
-            } else if (LearningConstants.ScenePlan.TIER_SUPPLEMENTARY.equals(tier)) {
-                supplementaryCount++;
-            } else {
-                extendedCount++;
-            }
-        }
-
-        if (!unitEntriesToInsert.isEmpty()) {
-            unitEntryMapper.insertBatch(unitEntriesToInsert);
-        }
-
-        unit.setCoreWordCount(coreCount);
-        unit.setExtendedWordCount(extendedCount);
-        unit.setSupplementaryWordCount(supplementaryCount);
-        unit.setSceneMaterialId(material.getId());
-        unit.setUpdateTime(now);
-        unitMapper.updateById(unit);
-        if (startImmediately) {
-            plan.setCurrentUnitId(unit.getId());
-        }
-        plan.setAiSessionId(aiResponse.getSessionId());
-        plan.setUpdateTime(now);
-        planMapper.updateById(plan);
-
-        systemLogService.record(userId, SystemLogType.LEARNING_PLAN, "生成场景学习单元",
-                plan.getName() + " / " + unit.getTitle() + "，核心词 " + coreCount + " 个");
-        log.info("用户「{}」为计划「{}」生成了第 {} 个场景「{}」，核心词 {} 个、扩展词 {} 个、补充词 {} 个",
-                userDisplayNameService.userName(userId), plan.getName(), unitNo, unit.getTitle(),
-                coreCount, extendedCount, supplementaryCount);
-        return responseAssembler.toUnitResponse(unit);
     }
 
     /**
@@ -862,28 +489,28 @@ public class LearningPlanService {
         if (entry == null || entry.getWordbookEntryId() == null) {
             throw assessmentInvalid("该词当前仅用于场景展示，提升为核心词后才能参加检查");
         }
-        String type = normalizeAssessmentType(request.getAssessmentType());
+        String type = assessmentSupport.normalizeAssessmentType(request.getAssessmentType());
         if (!LearningConstants.ScenePlan.MASTERY_SPELLING.equals(entry.getMasteryRequirement())
                 && !LearningConstants.ScenePlan.ASSESSMENT_MEANING_CHOICE.equals(type)) {
             throw assessmentInvalid("该词的掌握要求是认识，不需要拼写检查");
         }
 
-        JsonNode question = readTree(entry.getAssessmentJson());
+        JsonNode question = assessmentSupport.readTree(entry.getAssessmentJson());
         String correctAnswer;
         boolean correct;
         double typingAccuracy = 100D;
         if (LearningConstants.ScenePlan.ASSESSMENT_MEANING_CHOICE.equals(type)) {
             correctAnswer = requiredText(question, "correct_answer", "correctAnswer", "answer");
-            correct = normalizeAnswer(request.getAnswer()).equals(normalizeAnswer(correctAnswer));
+            correct = assessmentSupport.normalizeAnswer(request.getAnswer()).equals(assessmentSupport.normalizeAnswer(correctAnswer));
         } else {
-            List<String> accepted = readStringList(entry.getAcceptedSpellingsJson());
+            List<String> accepted = assessmentSupport.readStringList(entry.getAcceptedSpellingsJson());
             if (accepted.isEmpty()) {
                 accepted = List.of(entry.getTerm());
             }
             correctAnswer = accepted.get(0);
-            String answer = normalizeSpelling(request.getAnswer());
-            correct = accepted.stream().map(this::normalizeSpelling).anyMatch(answer::equals);
-            typingAccuracy = spellingAccuracy(answer, accepted);
+            String answer = assessmentSupport.normalizeSpelling(request.getAnswer());
+            correct = accepted.stream().map(assessmentSupport::normalizeSpelling).anyMatch(answer::equals);
+            typingAccuracy = assessmentSupport.spellingAccuracy(answer, accepted);
         }
 
         ReviewSubmitRequest reviewRequest = new ReviewSubmitRequest();
@@ -1039,7 +666,8 @@ public class LearningPlanService {
                 .stream()
                 .map(LearningPlanUnitEntry::getMeaningText)
                 .filter(StringUtils::hasText)
-                .filter(meaning -> !normalizeAnswer(meaning).equals(normalizeAnswer(entry.getMeaningText())))
+                .filter(meaning -> !assessmentSupport.normalizeAnswer(meaning)
+                        .equals(assessmentSupport.normalizeAnswer(entry.getMeaningText())))
                 .limit(3)
                 .collect(Collectors.toCollection(LinkedHashSet::new));
         if (!StringUtils.hasText(entry.getMeaningText()) || options.size() < 3) {
@@ -1051,48 +679,6 @@ public class LearningPlanService {
         question.put("options", List.copyOf(options));
         question.put("correct_answer", entry.getMeaningText());
         entry.setAssessmentJson(writeJson(question));
-    }
-
-    private AgentChatResponse generateScene(LearningPlan plan, int unitNo,
-                                            List<VocabularyCatalogEntry> candidates,
-                                            List<VocabularyCatalogEntry> reviewWords,
-                                            int targetWordCount, Long modelConfigId) {
-        List<CandidateWord> words = candidates.stream()
-                .map(entry -> new CandidateWord(entry.effectiveTerm(),
-                        entry.getPhonetic(), entry.getDefinitionText()))
-                .toList();
-        List<CandidateWord> review = reviewWords.stream()
-                .map(entry -> new CandidateWord(entry.effectiveTerm(),
-                        entry.getPhonetic(), entry.getDefinitionText()))
-                .toList();
-        return generateSceneWithWords(plan, unitNo, words, review, targetWordCount, modelConfigId);
-    }
-
-    private AgentChatResponse generateSceneWithWords(LearningPlan plan, int unitNo,
-                                            List<CandidateWord> words,
-                                            List<CandidateWord> review,
-                                            int targetWordCount, Long modelConfigId) {
-        Map<String, Object> variables = new HashMap<>();
-        variables.put("learning_purpose", StrUtil.blankToDefault(plan.getLearningPurpose(), "综合英语词汇学习"));
-        variables.put("unit_no", unitNo);
-        variables.put("candidate_words", words);
-        variables.put("review_words", review);
-        variables.put("target_word_count", targetWordCount);
-
-        AgentChatRequest request = new AgentChatRequest();
-        request.setUserId(plan.getUserId());
-        request.setInvocationScene(AiInvocationScene.VOCABULARY_SCENE_UNIT);
-        request.setAgentCode(LearningConstants.VOCABULARY_PLAN_AGENT_CODE);
-        request.setTemplateCode(LearningConstants.VOCABULARY_PLAN_TEMPLATE_CODE);
-        request.setSessionId(plan.getAiSessionId());
-        request.setTitle(LearningScene.ENGLISH_VOCABULARY_PLAN.getTitle());
-        request.setBusinessType(LearningConstants.ChatSession.BUSINESS_TYPE_LEARNING);
-        request.setBusinessId(LearningScene.ENGLISH_VOCABULARY_PLAN.getCode());
-        request.setSceneCode(LearningScene.ENGLISH_VOCABULARY_PLAN.getCode());
-        request.setModelConfigId(modelConfigId);
-        request.setMessage("请为学习计划“" + plan.getName() + "”生成第 " + unitNo + " 个场景单元。");
-        request.setVariables(variables);
-        return aiChatService.chat(request);
     }
 
     private int targetWordCount(LearningPlan plan) {
@@ -1124,210 +710,6 @@ public class LearningPlanService {
             }
         }
         return Math.max(LearningConstants.ScenePlan.MIN_CORE_WORDS, target);
-    }
-
-    private List<JsonNode> validateSceneWords(JsonNode scene, List<VocabularyCatalogEntry> candidates,
-                                              List<VocabularyCatalogEntry> reviewWords, int targetWordCount) {
-        return validateSceneWords(scene,
-                candidates.stream().map(VocabularyCatalogEntry::effectiveTerm).collect(Collectors.toSet()),
-                reviewWords.stream().map(VocabularyCatalogEntry::effectiveTerm).collect(Collectors.toSet()),
-                targetWordCount);
-    }
-
-    private List<JsonNode> validateSceneWords(JsonNode scene, Set<String> candidateInputTerms,
-                                              Set<String> reviewInputTerms, int targetWordCount) {
-        JsonNode vocabulary = node(scene, "vocabulary", "words");
-        if (vocabulary == null || !vocabulary.isArray() || vocabulary.isEmpty()) {
-            throw sceneInvalid("AI 场景结果缺少 vocabulary 数组");
-        }
-        int coreCount = LearningConstants.ZERO;
-        List<JsonNode> result = new ArrayList<>();
-        Set<String> seen = new HashSet<>();
-        Set<String> candidateTerms = candidateInputTerms.stream().map(this::normalize).collect(Collectors.toSet());
-        Set<String> reviewTerms = reviewInputTerms.stream().map(this::normalize).collect(Collectors.toSet());
-        for (JsonNode word : vocabulary) {
-            String term = requiredText(word, "term", "word");
-            String normalized = normalize(term);
-            String matchedCandidate = resolveCandidateLemma(normalized, candidateTerms);
-            String matchedReview = matchedCandidate == null ? resolveCandidateLemma(normalized, reviewTerms) : null;
-            String canonicalTerm = matchedCandidate != null ? matchedCandidate : (matchedReview != null ? matchedReview : normalized);
-            if (!seen.add(canonicalTerm)) {
-                continue;
-            }
-            if (matchedCandidate != null) {
-                if (word instanceof com.fasterxml.jackson.databind.node.ObjectNode obj) {
-                    obj.put("term", matchedCandidate);
-                    obj.put("tier", LearningConstants.ScenePlan.TIER_CORE);
-                }
-                coreCount++;
-                result.add(word);
-            } else if (matchedReview != null) {
-                if (word instanceof com.fasterxml.jackson.databind.node.ObjectNode obj) {
-                    obj.put("term", matchedReview);
-                    obj.put("tier", LearningConstants.ScenePlan.TIER_REVIEW);
-                }
-                result.add(word);
-            } else {
-                log.info("AI 场景生成返回了不在计划候选集或复习集的额外词条，已自动过滤: term={}", term);
-            }
-        }
-        int requiredMinimum = Math.min(targetWordCount, candidateTerms.size());
-        int acceptableMinimum = Math.min(requiredMinimum, Math.max(1, (int) Math.floor(requiredMinimum * 0.75)));
-        if (coreCount < acceptableMinimum) {
-            throw sceneInvalid("核心词数量不足，期望至少 " + acceptableMinimum + " 个，实际为 " + coreCount + " 个");
-        }
-        if (coreCount > LearningConstants.ScenePlan.MAX_CORE_WORDS_PER_UNIT) {
-            throw sceneInvalid("单篇场景材料最多包含 "
-                    + LearningConstants.ScenePlan.MAX_CORE_WORDS_PER_UNIT + " 个待挑战词，实际为 " + coreCount + " 个");
-        }
-        return result;
-    }
-
-    private String resolveCandidateLemma(String normalized, Set<String> candidates) {
-        if (candidates.contains(normalized)) {
-            return normalized;
-        }
-        // 尝试常见屈折变形还原：
-        // 1. -ies -> -y (activities -> activity)
-        if (normalized.endsWith("ies") && normalized.length() > 3) {
-            String candidate = normalized.substring(0, normalized.length() - 3) + "y";
-            if (candidates.contains(candidate)) {
-                return candidate;
-            }
-        }
-        // 2. -es -> -e / 原形 (utilizes -> utilize, actresses -> actress)
-        if (normalized.endsWith("es") && normalized.length() > 3) {
-            String candidateNoS = normalized.substring(0, normalized.length() - 1);
-            if (candidates.contains(candidateNoS)) {
-                return candidateNoS;
-            }
-            String candidateNoEs = normalized.substring(0, normalized.length() - 2);
-            if (candidates.contains(candidateNoEs)) {
-                return candidateNoEs;
-            }
-        }
-        // 3. -ed -> -e / 原形 (utilized -> utilize, annoyed -> annoy)
-        if (normalized.endsWith("ed") && normalized.length() > 3) {
-            String candidateE = normalized.substring(0, normalized.length() - 1);
-            if (candidates.contains(candidateE)) {
-                return candidateE;
-            }
-            String candidateNoEd = normalized.substring(0, normalized.length() - 2);
-            if (candidates.contains(candidateNoEd)) {
-                return candidateNoEd;
-            }
-        }
-        // 4. -ing -> -e / 原形 (utilizing -> utilize, annoying -> annoy)
-        if (normalized.endsWith("ing") && normalized.length() > 4) {
-            String candidateE = normalized.substring(0, normalized.length() - 3) + "e";
-            if (candidates.contains(candidateE)) {
-                return candidateE;
-            }
-            String candidateNoIng = normalized.substring(0, normalized.length() - 3);
-            if (candidates.contains(candidateNoIng)) {
-                return candidateNoIng;
-            }
-        }
-        // 5. -s -> 原形 (artists -> artist, winds -> wind)
-        if (normalized.endsWith("s") && normalized.length() > 2) {
-            String candidateNoS = normalized.substring(0, normalized.length() - 1);
-            if (candidates.contains(candidateNoS)) {
-                return candidateNoS;
-            }
-        }
-        return null;
-    }
-
-    private JsonNode ensureMeaningQuestion(JsonNode wordNode, String term, JsonNode question, String defaultMeaning) {
-        com.fasterxml.jackson.databind.node.ObjectNode questionObject;
-        if (question instanceof com.fasterxml.jackson.databind.node.ObjectNode obj) {
-            questionObject = obj;
-        } else {
-            questionObject = objectMapper.createObjectNode();
-            if (wordNode instanceof com.fasterxml.jackson.databind.node.ObjectNode wordObj) {
-                wordObj.set("meaning_question", questionObject);
-            }
-        }
-
-        if (!questionObject.hasNonNull("question") || !StringUtils.hasText(questionObject.get("question").asText())) {
-            questionObject.put("question", "「" + term + "」在语境中的主要含义是？");
-        }
-
-        JsonNode optionsNode = node(questionObject, "options", "choices", "selections", "items", "option_list");
-        com.fasterxml.jackson.databind.node.ArrayNode arrayNode;
-        if (optionsNode instanceof com.fasterxml.jackson.databind.node.ArrayNode arr && !arr.isEmpty()) {
-            arrayNode = arr;
-        } else if (optionsNode instanceof com.fasterxml.jackson.databind.node.ObjectNode obj && !obj.isEmpty()) {
-            arrayNode = objectMapper.createArrayNode();
-            obj.elements().forEachRemaining(arrayNode::add);
-        } else {
-            arrayNode = objectMapper.createArrayNode();
-            String correct = StringUtils.hasText(defaultMeaning) ? defaultMeaning.trim() : term + " 的含义";
-            arrayNode.add(correct);
-            arrayNode.add("状态或性质");
-            arrayNode.add("行动或过程");
-            arrayNode.add("关联与影响");
-        }
-
-        while (arrayNode.size() > 4) {
-            arrayNode.remove(arrayNode.size() - 1);
-        }
-        List<String> genericDistractors = List.of("状态或性质", "行动或过程", "关联与影响", "其他相关表达");
-        int distractorIndex = 0;
-        while (arrayNode.size() < 4) {
-            arrayNode.add(genericDistractors.get(distractorIndex % genericDistractors.size()));
-            distractorIndex++;
-        }
-        questionObject.set("options", arrayNode);
-
-        String correct = text(questionObject, "correct_answer", "correctAnswer", "answer");
-        if (!StringUtils.hasText(correct)) {
-            correct = StringUtils.hasText(defaultMeaning) ? defaultMeaning.trim() : arrayNode.get(0).asText();
-            questionObject.put("correct_answer", correct);
-        }
-
-        boolean contained = false;
-        for (JsonNode option : arrayNode) {
-            if (normalizeAnswer(option.asText()).equals(normalizeAnswer(correct))) {
-                contained = true;
-                break;
-            }
-        }
-        if (!contained && StringUtils.hasText(correct)) {
-            String trimmed = correct.trim();
-            if (trimmed.length() == 1) {
-                char ch = Character.toUpperCase(trimmed.charAt(0));
-                int index = -1;
-                if (ch >= 'A' && ch <= 'D') {
-                    index = ch - 'A';
-                } else if (ch >= '1' && ch <= '4') {
-                    index = ch - '1';
-                }
-                if (index >= 0 && index < arrayNode.size()) {
-                    questionObject.put("correct_answer", arrayNode.get(index).asText());
-                    contained = true;
-                }
-            }
-        }
-        if (!contained) {
-            int bestMatchIndex = -1;
-            for (int i = 0; i < arrayNode.size(); i++) {
-                String opt = normalizeAnswer(arrayNode.get(i).asText());
-                String normCorrect = normalizeAnswer(correct);
-                if (opt.contains(normCorrect) || normCorrect.contains(opt)) {
-                    bestMatchIndex = i;
-                    break;
-                }
-            }
-            if (bestMatchIndex >= 0) {
-                questionObject.put("correct_answer", arrayNode.get(bestMatchIndex).asText());
-            } else {
-                arrayNode.set(0, new com.fasterxml.jackson.databind.node.TextNode(correct));
-                questionObject.put("correct_answer", correct);
-            }
-        }
-
-        return questionObject;
     }
 
     private int refreshCompletedCoreCount(LearningPlanUnit unit) {
@@ -1459,80 +841,6 @@ public class LearningPlanService {
         return wordbookService.requireOwnedWordbook(userId, wordbookId);
     }
 
-    private List<String> acceptedSpellings(JsonNode word, String term) {
-        LinkedHashSet<String> result = new LinkedHashSet<>();
-        result.add(term);
-        JsonNode accepted = node(word, "accepted_spellings", "acceptedSpellings");
-        if (accepted != null && accepted.isArray()) {
-            accepted.forEach(item -> {
-                if (item.isTextual() && StringUtils.hasText(item.asText())) {
-                    result.add(item.asText().trim());
-                }
-            });
-        }
-        if (term.contains("-")) {
-            result.add(term.replace('-', ' '));
-        }
-        return List.copyOf(result);
-    }
-
-    private String normalizeTier(String tier) {
-        if (LearningConstants.ScenePlan.TIER_CORE.equals(tier)
-                || LearningConstants.ScenePlan.TIER_EXTENDED.equals(tier)
-                || LearningConstants.ScenePlan.TIER_SUPPLEMENTARY.equals(tier)
-                || LearningConstants.ScenePlan.TIER_REVIEW.equals(tier)) {
-            return tier;
-        }
-        return LearningConstants.ScenePlan.TIER_EXTENDED;
-    }
-
-    private String normalizeRequirement(String requirement) {
-        return LearningConstants.ScenePlan.MASTERY_SPELLING.equals(requirement)
-                ? LearningConstants.ScenePlan.MASTERY_SPELLING
-                : LearningConstants.ScenePlan.MASTERY_RECOGNITION;
-    }
-
-    private String normalizeAssessmentType(String type) {
-        String normalized = normalize(type);
-        if (LearningConstants.ScenePlan.ASSESSMENT_MEANING_CHOICE.equals(normalized)
-                || LearningConstants.ScenePlan.ASSESSMENT_COPY_TYPING.equals(normalized)
-                || LearningConstants.ScenePlan.ASSESSMENT_MEANING_SPELLING.equals(normalized)) {
-            return normalized;
-        }
-        throw assessmentInvalid("不支持的检查类型: " + type);
-    }
-
-    private double spellingAccuracy(String answer, List<String> accepted) {
-        int bestDistance = accepted.stream()
-                .map(this::normalizeSpelling)
-                .mapToInt(candidate -> levenshtein(answer, candidate))
-                .min()
-                .orElse(answer.length());
-        int maxLength = Math.max(1, Math.max(answer.length(), accepted.stream()
-                .map(this::normalizeSpelling).mapToInt(String::length).max().orElse(1)));
-        return Math.max(0D, Math.round((1D - (double) bestDistance / maxLength) * 10_000D) / 100D);
-    }
-
-    private int levenshtein(String left, String right) {
-        int[] previous = new int[right.length() + 1];
-        int[] current = new int[right.length() + 1];
-        for (int index = 0; index <= right.length(); index++) {
-            previous[index] = index;
-        }
-        for (int row = 1; row <= left.length(); row++) {
-            current[0] = row;
-            for (int column = 1; column <= right.length(); column++) {
-                int cost = left.charAt(row - 1) == right.charAt(column - 1) ? 0 : 1;
-                current[column] = Math.min(Math.min(current[column - 1] + 1, previous[column] + 1),
-                        previous[column - 1] + cost);
-            }
-            int[] swap = previous;
-            previous = current;
-            current = swap;
-        }
-        return previous[right.length()];
-    }
-
     private JsonNode node(JsonNode node, String... keys) {
         if (node == null) {
             return null;
@@ -1561,30 +869,6 @@ public class LearningPlanService {
                 : null;
     }
 
-    private JsonNode readTree(String json) {
-        if (!StringUtils.hasText(json)) {
-            return objectMapper.createObjectNode();
-        }
-        try {
-            return objectMapper.readTree(json);
-        } catch (Exception ex) {
-            throw assessmentInvalid("检查题数据已损坏，请重新生成当前场景");
-        }
-    }
-
-    private List<String> readStringList(String json) {
-        if (!StringUtils.hasText(json)) {
-            return List.of();
-        }
-        try {
-            return objectMapper.readValue(json, new TypeReference<List<String>>() {
-            });
-        } catch (Exception ex) {
-            log.debug("可接受拼写 JSON 读取失败 error={}", ex.getMessage());
-            return List.of();
-        }
-    }
-
     private String writeJson(Object value) {
         try {
             return objectMapper.writeValueAsString(value);
@@ -1594,22 +878,6 @@ public class LearningPlanService {
                     "场景学习数据序列化失败",
                     ex);
         }
-    }
-
-    private String normalize(String value) {
-        return value == null ? "" : value.trim().replaceAll("\\s+", " ").toLowerCase(Locale.ROOT);
-    }
-
-    private String normalizeAnswer(String value) {
-        return normalize(value).replaceAll("[，。；;,.!?！？]$", "");
-    }
-
-    private String normalizeSpelling(String value) {
-        return normalize(value).replace('’', '\'');
-    }
-
-    private String firstText(String first, String second) {
-        return StringUtils.hasText(first) ? first : second;
     }
 
     private int value(Integer value) {
@@ -1631,34 +899,14 @@ public class LearningPlanService {
     @Transactional(rollbackFor = Exception.class)
     public LearningPlanResponse pause(Long userId, Long planId) {
         LearningPlan plan = requirePlan(userId, planId);
-        if (!LearningConstants.ScenePlan.STATUS_ACTIVE.equals(plan.getStatus())) {
-            throw LearningAssistantException.badRequest(
-                    LearningConstants.ErrorCode.LEARNING_PLAN_STATE_ERROR,
-                    "只有进行中的计划才可以暂停");
-        }
-        plan.setStatus(LearningConstants.ScenePlan.STATUS_PAUSED);
-        plan.setUpdateTime(LocalDateTime.now());
-        planMapper.updateById(plan);
-
-        systemLogService.record(userId, SystemLogType.LEARNING_PLAN, "暂停场景学习计划", plan.getName());
-        log.info("用户「{}」暂停了场景学习计划「{}」", userDisplayNameService.userName(userId), plan.getName());
+        lifecycleService.pause(userId, plan);
         return detail(userId, planId);
     }
 
     public LearningPlanResponse resume(Long userId, Long planId) {
         LearningPlan plan = Objects.requireNonNull(transactionTemplate.execute(status -> {
             LearningPlan txPlan = requirePlan(userId, planId);
-            if (!LearningConstants.ScenePlan.STATUS_PAUSED.equals(txPlan.getStatus())
-                    && !LearningConstants.ScenePlan.STATUS_NOT_STARTED.equals(txPlan.getStatus())) {
-                throw LearningAssistantException.badRequest(
-                        LearningConstants.ErrorCode.LEARNING_PLAN_STATE_ERROR,
-                        "只有暂停或未开始的计划才可以恢复/启动");
-            }
-            txPlan.setStatus(LearningConstants.ScenePlan.STATUS_ACTIVE);
-            txPlan.setUpdateTime(LocalDateTime.now());
-            planMapper.updateById(txPlan);
-            systemLogService.record(userId, SystemLogType.LEARNING_PLAN, "恢复场景学习计划", txPlan.getName());
-            log.info("用户「{}」恢复了场景学习计划「{}」", userDisplayNameService.userName(userId), txPlan.getName());
+            lifecycleService.resume(userId, txPlan);
             return txPlan;
         }));
 
@@ -1676,24 +924,8 @@ public class LearningPlanService {
     @Transactional(rollbackFor = Exception.class)
     public LearningPlanResponse cancel(Long userId, Long planId) {
         LearningPlan plan = requirePlan(userId, planId);
-        if (LearningConstants.ScenePlan.STATUS_COMPLETED.equals(plan.getStatus())
-                || LearningConstants.ScenePlan.STATUS_CANCELLED.equals(plan.getStatus())) {
-            throw LearningAssistantException.badRequest(
-                    LearningConstants.ErrorCode.LEARNING_PLAN_STATE_ERROR,
-                    "已完成或已取消的计划无法取消");
-        }
-        plan.setStatus(LearningConstants.ScenePlan.STATUS_CANCELLED);
-        plan.setUpdateTime(LocalDateTime.now());
-        planMapper.updateById(plan);
-
-        systemLogService.record(userId, SystemLogType.LEARNING_PLAN, "取消场景学习计划", plan.getName());
-        log.info("用户「{}」取消了场景学习计划「{}」", userDisplayNameService.userName(userId), plan.getName());
+        lifecycleService.cancel(userId, plan);
         return detail(userId, planId);
     }
 
-    private record PlanUpdateResult(LearningPlan plan, boolean generateFirstUnit) {
-    }
-
-    private record CandidateWord(String term, String phonetic, String meaning) {
-    }
 }

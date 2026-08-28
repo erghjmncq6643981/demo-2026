@@ -1,6 +1,23 @@
 <?xml version="1.0" encoding="UTF-8" ?>
 <!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "https://mybatis.org/dtd/mybatis-3-mapper.dtd">
 <mapper namespace="com.chandler.learning.agent.task.infrastructure.AiAsyncTaskStepMapper">
+    <insert id="insertBatch">
+        INSERT INTO learning_ai_async_task_step
+        (id, task_id, step_code, step_name, step_order, status, completed_count, total_count,
+         checkpoint_json, lease_token, lease_until, heartbeat_time, attempt_count, max_attempt_count,
+         error_message, started_time, finished_time, create_by, create_time, update_by, update_time,
+         deleted, version)
+        VALUES
+        <foreach collection="list" item="item" separator=",">
+            (#{item.id}, #{item.taskId}, #{item.stepCode}, #{item.stepName}, #{item.stepOrder},
+             #{item.status}, #{item.completedCount}, #{item.totalCount}, #{item.checkpointJson},
+             #{item.leaseToken}, #{item.leaseUntil}, #{item.heartbeatTime}, #{item.attemptCount},
+             #{item.maxAttemptCount}, #{item.errorMessage}, #{item.startedTime}, #{item.finishedTime},
+             #{item.createBy}, #{item.createTime}, #{item.updateBy}, #{item.updateTime},
+             #{item.deleted}, #{item.version})
+        </foreach>
+    </insert>
+
     <update id="claim">
         UPDATE learning_ai_async_task_step
         SET status = 'running',
@@ -13,6 +30,17 @@
             update_time = #{now}
         WHERE id = #{stepId}
           AND status = 'pending'
+          AND deleted = 0
+    </update>
+
+    <update id="renew">
+        UPDATE learning_ai_async_task_step
+        SET lease_until = #{leaseUntil},
+            heartbeat_time = #{now},
+            update_time = #{now}
+        WHERE id = #{stepId}
+          AND lease_token = #{leaseToken}
+          AND status = 'running'
           AND deleted = 0
     </update>
 

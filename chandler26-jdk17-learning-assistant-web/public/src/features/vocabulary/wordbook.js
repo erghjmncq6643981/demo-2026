@@ -178,6 +178,7 @@ export function createWordbookProfileFeature(ctx) {
 
   async function changeWordbook(wordbookId) {
     syncCurrentWordbookId(state, elements, wordbookId)
+    state.wordbookPage = 1
     state.selectedArticleEntryIds = []
     state.currentArticleRecord = null
     state.articleRecords = []
@@ -320,16 +321,46 @@ export function createWordbookProfileFeature(ctx) {
     const params = new URLSearchParams()
     if (status) params.set('status', status)
     if (keyword) params.set('keyword', keyword)
-    const query = params.toString() ? `?${params.toString()}` : ''
-    return request(`/api/v1/learning/wordbooks/${encodeURIComponent(state.currentWordbookId)}/entries${query}`)
-      .then((entries) => {
+    params.set('page', String(state.wordbookPage || 1))
+    params.set('pageSize', String(state.wordbookPageSize || 30))
+    return request(`/api/v1/learning/wordbooks/${encodeURIComponent(state.currentWordbookId)}/entries?${params.toString()}`)
+      .then((result) => {
+        const entries = Array.isArray(result) ? result : result?.items
         state.wordbookEntries = Array.isArray(entries) ? entries : []
+        state.wordbookTotal = Number(result?.total || state.wordbookEntries.length)
+        state.wordbookPage = Number(result?.page || state.wordbookPage || 1)
         renderWordbookEntries()
         renderProfileMetrics()
       })
       .catch((error) => {
         logEvent('error', '单词本加载失败', error.message)
       })
+  }
+
+  function changeWordbookPage(delta) {
+    const maxPage = Math.max(1, Math.ceil((state.wordbookTotal || 0) / (state.wordbookPageSize || 30)))
+    const next = Math.max(1, Math.min(maxPage, (state.wordbookPage || 1) + delta))
+    if (next === (state.wordbookPage || 1)) return
+    state.wordbookPage = next
+    loadWordbookEntries()
+  }
+
+  async function loadWordbookEntryDetail(entry) {
+    if (!entry?.id || state.preview || !state.token) return entry
+    try {
+      const detail = await request(`/api/v1/learning/wordbook-entries/${encodeURIComponent(entry.id)}`)
+      if (!detail || !sameId(state.selectedEntry?.id, entry.id)) return entry
+      const index = state.wordbookEntries.findIndex((item) => sameId(item.id, entry.id))
+      if (index >= 0) state.wordbookEntries.splice(index, 1, detail)
+      state.selectedEntry = detail
+      renderWordbookFocus(detail)
+      ctx.renderNotes(detail)
+      return detail
+    } catch (error) {
+      logEvent('error', '词卡详情加载失败', error.message)
+      toast(`词卡详情加载失败：${error.message}`)
+      return entry
+    }
   }
 
   function openEntryStatusModal(entryId) {
@@ -391,7 +422,11 @@ export function createWordbookProfileFeature(ctx) {
     const entries = keyword ? statusFiltered.filter((entry) => entryMatchesKeyword(entry, keyword)) : statusFiltered
 
     if (elements.wordbookCountSummary) {
-      elements.wordbookCountSummary.textContent = `共 ${entries.length} 个单词`
+      elements.wordbookCountSummary.textContent = `共 ${state.wordbookTotal || entries.length} 个单词`
+      const maxPage = Math.max(1, Math.ceil((state.wordbookTotal || entries.length) / (state.wordbookPageSize || 30)))
+      elements.wordbookPageInfo.textContent = `第 ${state.wordbookPage || 1} / ${maxPage} 页`
+      elements.wordbookPrevBtn.disabled = (state.wordbookPage || 1) <= 1
+      elements.wordbookNextBtn.disabled = (state.wordbookPage || 1) >= maxPage
     }
 
     if (!entries.length) {
@@ -508,33 +543,8 @@ export function createWordbookProfileFeature(ctx) {
             showModal(modal)
           }
 
-          const term = entry.term || entry.normalizedTerm
-          const hasFullCard = entry.cardStatus === 'ready' || (Array.isArray(entry.parsed?.examples) && entry.parsed.examples.length > 0)
-          if (!state.preview && !hasFullCard && term) {
-            request(`/api/v1/english/vocabularies/${encodeURIComponent(term)}`)
-              .then((cached) => {
-                if (cached && sameId(state.selectedEntry?.id, entry.id)) {
-                  let parsedObj = cached.parsed
-                  if (typeof parsedObj === 'string') {
-                    try {
-                      parsedObj = JSON.parse(parsedObj)
-                    } catch {
-                      parsedObj = null
-                    }
-                  }
-                  if (parsedObj && typeof parsedObj === 'object') {
-                    entry.parsed = parsedObj
-                    if (Array.isArray(cached.tags) && cached.tags.length) entry.tags = cached.tags
-                    if (Array.isArray(cached.relations) && cached.relations.length) entry.relations = cached.relations
-                    entry.cardStatus = 'ready'
-                    renderWordbookFocus(entry)
-                  }
-                }
-              })
-              .catch(() => {
-                // 没有缓存时保持展示简要释义与 AI 生成词卡按钮
-              })
-          }
+          const hasDetail = entry.parsed && typeof entry.parsed === 'object'
+          if (!state.preview && !hasDetail) loadWordbookEntryDetail(entry)
         }
         return
       }
@@ -594,6 +604,8 @@ export function createWordbookProfileFeature(ctx) {
     resetWordbookForm,
     deleteWordbook,
     loadWordbookEntries,
+    changeWordbookPage,
+    loadWordbookEntryDetail,
     renderWordbookEntries,
     selectWordbookEntry,
     ...detailFeature,

@@ -22,6 +22,7 @@ import org.springframework.util.StringUtils;
 
 import java.time.LocalDateTime;
 import java.util.ArrayList;
+import java.util.Collection;
 import java.util.Iterator;
 import java.util.LinkedHashMap;
 import java.util.LinkedHashSet;
@@ -29,6 +30,7 @@ import java.util.List;
 import java.util.Locale;
 import java.util.Map;
 import java.util.Set;
+import java.util.function.Function;
 
 /**
  * VocabularyInsightService 类。
@@ -36,6 +38,8 @@ import java.util.Set;
 @Service
 @RequiredArgsConstructor
 public class VocabularyInsightService {
+
+    private static final int WRITE_BATCH_SIZE = 200;
 
     private final LearningVocabularyTagMapper tagMapper;
     private final LearningVocabularyRelationMapper relationMapper;
@@ -46,51 +50,79 @@ public class VocabularyInsightService {
      * 更新 {@code syncInsights} 相关业务。
      */
     public void syncInsights(EnglishVocabularyStudyRecord record) {
-        if (record == null || record.getId() == null || !StringUtils.hasText(record.getParsedJson())) {
+        syncInsightsBatch(record == null ? List.of() : List.of(record));
+    }
+
+    /**
+     * 批量同步词卡洞察。所有关联词缓存先一次性预取，避免在解析关联关系时逐词查询。
+     */
+    public void syncInsightsBatch(Collection<EnglishVocabularyStudyRecord> records) {
+        if (records == null || records.isEmpty()) {
             return;
         }
-
-        JsonNode root;
-        try {
-            root = objectMapper.readTree(record.getParsedJson());
-        } catch (Exception ex) {
+        List<InsightInput> inputs = new ArrayList<>();
+        Set<String> relatedTerms = new LinkedHashSet<>();
+        for (EnglishVocabularyStudyRecord record : records) {
+            if (record == null || record.getId() == null || !StringUtils.hasText(record.getParsedJson())) {
+                continue;
+            }
+            try {
+                JsonNode root = objectMapper.readTree(record.getParsedJson());
+                inputs.add(new InsightInput(record, root));
+                relatedTerms.addAll(extractRelatedTerms(root));
+            } catch (Exception ignored) {
+                // 单条词卡 JSON 损坏不应阻断同批其他词卡。
+            }
+        }
+        if (inputs.isEmpty()) {
             return;
         }
-
-        tagMapper.physicalDeleteByVocabularyId(record.getId());
-        relationMapper.physicalDeleteByVocabularyId(record.getId());
-
+        Map<String, EnglishVocabularyStudyRecord> relatedRecords = relatedTerms.isEmpty()
+                ? Map.of()
+                : recordMapper.selectList(new LambdaQueryWrapper<EnglishVocabularyStudyRecord>()
+                        .in(EnglishVocabularyStudyRecord::getNormalizedTerm, relatedTerms)
+                        .eq(EnglishVocabularyStudyRecord::getDeleted, false))
+                .stream().collect(java.util.stream.Collectors.toMap(
+                        EnglishVocabularyStudyRecord::getNormalizedTerm, value -> value, (left, right) -> left));
+        Set<Long> vocabularyIds = inputs.stream().map(input -> input.record().getId()).collect(java.util.stream.Collectors.toSet());
+        tagMapper.physicalDeleteByVocabularyIds(vocabularyIds);
+        relationMapper.physicalDeleteByVocabularyIds(vocabularyIds);
         LocalDateTime now = LocalDateTime.now();
-        Map<String, LearningVocabularyTag> tags = new LinkedHashMap<>();
-        collectPartOfSpeechTags(root, record, tags, now);
-        collectMeaningTopicTags(root, record, tags, now);
-        collectArrayTags(root, record, tags, now, "collocations", VocabularyTagType.COLLOCATION.getCode(), LearningConstants.VocabularyInsight.TAG_WEIGHT_COLLOCATION);
-        collectArrayTags(root, record, tags, now, "word_family", VocabularyTagType.WORD_FAMILY.getCode(), LearningConstants.VocabularyInsight.TAG_WEIGHT_WORD_FAMILY);
-        collectArrayTags(root, record, tags, now, "wordFamily", VocabularyTagType.WORD_FAMILY.getCode(), LearningConstants.VocabularyInsight.TAG_WEIGHT_WORD_FAMILY);
-        addTag(tags, record, VocabularyTagType.DIFFICULTY.getCode(), inferDifficulty(root, record), inferDifficulty(root, record),
-                LearningConstants.VocabularyInsight.TAG_WEIGHT_DIFFICULTY, now);
-
-        List<LearningVocabularyTag> tagList = new ArrayList<>(tags.values());
-        if (!tagList.isEmpty()) {
-            tagMapper.insertBatch(tagList);
+        List<LearningVocabularyTag> allTags = new ArrayList<>();
+        List<LearningVocabularyRelation> allRelations = new ArrayList<>();
+        for (InsightInput input : inputs) {
+            Map<String, LearningVocabularyTag> tags = new LinkedHashMap<>();
+            collectPartOfSpeechTags(input.root(), input.record(), tags, now);
+            collectMeaningTopicTags(input.root(), input.record(), tags, now);
+            collectArrayTags(input.root(), input.record(), tags, now, "collocations", VocabularyTagType.COLLOCATION.getCode(), LearningConstants.VocabularyInsight.TAG_WEIGHT_COLLOCATION);
+            collectArrayTags(input.root(), input.record(), tags, now, "word_family", VocabularyTagType.WORD_FAMILY.getCode(), LearningConstants.VocabularyInsight.TAG_WEIGHT_WORD_FAMILY);
+            collectArrayTags(input.root(), input.record(), tags, now, "wordFamily", VocabularyTagType.WORD_FAMILY.getCode(), LearningConstants.VocabularyInsight.TAG_WEIGHT_WORD_FAMILY);
+            addTag(tags, input.record(), VocabularyTagType.DIFFICULTY.getCode(), inferDifficulty(input.root(), input.record()), inferDifficulty(input.root(), input.record()),
+                    LearningConstants.VocabularyInsight.TAG_WEIGHT_DIFFICULTY, now);
+            allTags.addAll(tags.values());
+            allRelations.addAll(collectRelations(input.root(), input.record(), now, relatedRecords::get));
         }
-        List<LearningVocabularyRelation> relations = collectRelations(root, record, now);
-        if (!relations.isEmpty()) {
-            relationMapper.insertBatch(relations);
-        }
+        insertChunks(allTags, tagMapper::insertBatch);
+        insertChunks(allRelations, relationMapper::insertBatch);
     }
 
     /**
      * 查询 {@code listTags} 相关业务。
      */
     public List<VocabularyTagResponse> listTags(Long vocabularyId) {
-        return tagMapper.selectList(new LambdaQueryWrapper<LearningVocabularyTag>()
-                        .eq(LearningVocabularyTag::getVocabularyId, vocabularyId)
-                        .orderByDesc(LearningVocabularyTag::getWeight)
-                        .orderByAsc(LearningVocabularyTag::getTagType))
-                .stream()
-                .map(this::toTagResponse)
-                .toList();
+        return listTagsByVocabularyIds(List.of(vocabularyId)).getOrDefault(vocabularyId, List.of());
+    }
+
+    /** 批量查询标签并按词卡 ID 分组。 */
+    public Map<Long, List<VocabularyTagResponse>> listTagsByVocabularyIds(Collection<Long> vocabularyIds) {
+        Set<Long> ids = vocabularyIds == null ? Set.of() : vocabularyIds.stream()
+                .filter(java.util.Objects::nonNull).collect(java.util.stream.Collectors.toCollection(LinkedHashSet::new));
+        if (ids.isEmpty()) {
+            return Map.of();
+        }
+        return tagMapper.selectByVocabularyIds(ids).stream().collect(java.util.stream.Collectors.groupingBy(
+                LearningVocabularyTag::getVocabularyId, LinkedHashMap::new,
+                java.util.stream.Collectors.mapping(this::toTagResponse, java.util.stream.Collectors.toList())));
     }
 
     /**
@@ -100,16 +132,35 @@ public class VocabularyInsightService {
         if (!StringUtils.hasText(normalizedTerm)) {
             return List.of();
         }
-        List<LearningVocabularyRelation> relations = relationMapper.selectList(new LambdaQueryWrapper<LearningVocabularyRelation>()
-                        .eq(LearningVocabularyRelation::getNormalizedTerm, normalizedTerm)
-                        .orderByDesc(LearningVocabularyRelation::getScore)
-                        .last("LIMIT " + LearningConstants.VocabularyInsight.MAX_RELATIONS));
-        Map<Long, EnglishVocabularyStudyRecord> sourceRecords = new LinkedHashMap<>();
-        return relations.stream()
-                .filter(this::isVisibleRelation)
-                .map(relation -> toRelationResponse(relation, sourceRecord(relation, sourceRecords)))
-                .limit(LearningConstants.VocabularyInsight.VISIBLE_RELATION_LIMIT)
-                .toList();
+        return listRelationsByNormalizedTerms(List.of(normalizedTerm)).getOrDefault(normalizedTerm, List.of());
+    }
+
+    /** 批量查询关联词并一次性补齐来源词和关联词音标。 */
+    public Map<String, List<VocabularyRelationResponse>> listRelationsByNormalizedTerms(Collection<String> normalizedTerms) {
+        Set<String> terms = normalizedTerms == null ? Set.of() : normalizedTerms.stream()
+                .filter(StringUtils::hasText).map(this::normalizeTerm)
+                .collect(java.util.stream.Collectors.toCollection(LinkedHashSet::new));
+        if (terms.isEmpty()) {
+            return Map.of();
+        }
+        List<LearningVocabularyRelation> relations = relationMapper.selectByNormalizedTerms(terms);
+        RecordLookup lookup = loadRecords(
+                relations.stream().flatMap(relation -> java.util.stream.Stream.of(
+                                relation.getVocabularyId(), relation.getRelatedVocabularyId()))
+                        .filter(java.util.Objects::nonNull).toList(),
+                relations.stream().map(LearningVocabularyRelation::getRelatedTerm).toList());
+        Map<String, List<VocabularyRelationResponse>> grouped = new LinkedHashMap<>();
+        for (LearningVocabularyRelation relation : relations) {
+            if (!isVisibleRelation(relation)) {
+                continue;
+            }
+            List<VocabularyRelationResponse> values = grouped.computeIfAbsent(
+                    relation.getNormalizedTerm(), ignored -> new ArrayList<>());
+            if (values.size() < LearningConstants.VocabularyInsight.VISIBLE_RELATION_LIMIT) {
+                values.add(toRelationResponse(relation, lookup));
+            }
+        }
+        return grouped;
     }
 
     /**
@@ -129,14 +180,19 @@ public class VocabularyInsightService {
         relations = relations.stream()
                 .filter(this::isVisibleRelation)
                 .toList();
-        EnglishVocabularyStudyRecord sourceRecord = vocabularyId == null ? null : recordMapper.selectById(vocabularyId);
+        RecordLookup lookup = loadRecords(
+                java.util.stream.Stream.concat(java.util.stream.Stream.of(vocabularyId),
+                                relations.stream().map(VocabularyRelationResponse::getRelatedVocabularyId))
+                        .filter(java.util.Objects::nonNull).toList(),
+                relations.stream().map(VocabularyRelationResponse::getRelatedTerm).toList());
+        EnglishVocabularyStudyRecord sourceRecord = lookup.byId().get(vocabularyId);
         for (VocabularyRelationResponse relation : relations) {
             if (StringUtils.hasText(relation.getRelatedPhoneticUk()) || StringUtils.hasText(relation.getRelatedPhoneticUs())) {
                 continue;
             }
             Phonetic phonetic = firstPhonetic(
                     extractRelationPhonetic(sourceRecord, relation.getRelationType(), relation.getRelatedTerm()),
-                    findRelatedPhonetic(relation.getRelatedVocabularyId(), relation.getRelatedTerm()));
+                    extractPhonetic(lookup.related(relation.getRelatedVocabularyId(), relation.getRelatedTerm())));
             relation.setRelatedPhoneticUk(phonetic.uk());
             relation.setRelatedPhoneticUs(phonetic.us());
         }
@@ -205,12 +261,17 @@ public class VocabularyInsightService {
      * 处理 {@code collectRelations} 相关业务。
      */
     private List<LearningVocabularyRelation> collectRelations(JsonNode root, EnglishVocabularyStudyRecord record,
-                                                              LocalDateTime now) {
+                                                              LocalDateTime now,
+                                                              Function<String, EnglishVocabularyStudyRecord> relatedRecordResolver) {
         Map<String, LearningVocabularyRelation> relations = new LinkedHashMap<>();
-        collectArrayRelations(root, record, relations, now, "synonyms", VocabularyRelationType.SYNONYM, LearningConstants.VocabularyInsight.RELATION_SCORE_SYNONYM);
-        collectArrayRelations(root, record, relations, now, "antonyms", VocabularyRelationType.ANTONYM, LearningConstants.VocabularyInsight.RELATION_SCORE_ANTONYM);
-        collectArrayRelations(root, record, relations, now, "word_family", VocabularyRelationType.WORD_FAMILY, LearningConstants.VocabularyInsight.RELATION_SCORE_WORD_FAMILY);
-        collectArrayRelations(root, record, relations, now, "wordFamily", VocabularyRelationType.WORD_FAMILY, LearningConstants.VocabularyInsight.RELATION_SCORE_WORD_FAMILY);
+        collectArrayRelations(root, record, relations, now, "synonyms", VocabularyRelationType.SYNONYM,
+                LearningConstants.VocabularyInsight.RELATION_SCORE_SYNONYM, relatedRecordResolver);
+        collectArrayRelations(root, record, relations, now, "antonyms", VocabularyRelationType.ANTONYM,
+                LearningConstants.VocabularyInsight.RELATION_SCORE_ANTONYM, relatedRecordResolver);
+        collectArrayRelations(root, record, relations, now, "word_family", VocabularyRelationType.WORD_FAMILY,
+                LearningConstants.VocabularyInsight.RELATION_SCORE_WORD_FAMILY, relatedRecordResolver);
+        collectArrayRelations(root, record, relations, now, "wordFamily", VocabularyRelationType.WORD_FAMILY,
+                LearningConstants.VocabularyInsight.RELATION_SCORE_WORD_FAMILY, relatedRecordResolver);
 
         return relations.values().stream().limit(LearningConstants.VocabularyInsight.MAX_RELATIONS).toList();
     }
@@ -220,7 +281,8 @@ public class VocabularyInsightService {
      */
     private void collectArrayRelations(JsonNode root, EnglishVocabularyStudyRecord record,
                                        Map<String, LearningVocabularyRelation> relations,
-                                       LocalDateTime now, String field, VocabularyRelationType relationType, int score) {
+                                       LocalDateTime now, String field, VocabularyRelationType relationType, int score,
+                                       Function<String, EnglishVocabularyStudyRecord> relatedRecordResolver) {
         JsonNode node = root.get(field);
         if (node == null) {
             return;
@@ -233,7 +295,8 @@ public class VocabularyInsightService {
                         firstText(item, "meaning", "meaning_cn", "meaningCn", "translation", "translation_cn", "cn", "definition"),
                         StringUtils.hasText(firstText(item, "word", "term", "phrase", VocabularyRelationType.COLLOCATION.getCode(), "text", "value", "name"))
                                 ? VocabularyMatchType.PARSED_OBJECT.getCode() : VocabularyMatchType.PARSED_TEXT.getCode(),
-                        StringUtils.hasText(firstText(item, "meaning", "meaning_cn", "meaningCn", "translation", "translation_cn", "cn", "definition")) ? score : null);
+                        StringUtils.hasText(firstText(item, "meaning", "meaning_cn", "meaningCn", "translation", "translation_cn", "cn", "definition")) ? score : null,
+                        relatedRecordResolver);
             }
         }
     }
@@ -270,12 +333,13 @@ public class VocabularyInsightService {
      */
     private void addRelation(Map<String, LearningVocabularyRelation> relations, EnglishVocabularyStudyRecord record,
                              String relatedTerm, VocabularyRelationType relationType, String relationValue, int score, LocalDateTime now,
-                             String parsedPartOfSpeech, String parsedMeaning, String parsedMatchType, Integer parsedMatchScore) {
+                             String parsedPartOfSpeech, String parsedMeaning, String parsedMatchType, Integer parsedMatchScore,
+                             Function<String, EnglishVocabularyStudyRecord> relatedRecordResolver) {
         String normalizedRelated = normalizeTerm(cleanRelationText(relatedTerm));
         if (!StringUtils.hasText(normalizedRelated) || normalizedRelated.equals(record.getNormalizedTerm())) {
             return;
         }
-        EnglishVocabularyStudyRecord relatedRecord = findVocabulary(normalizedRelated);
+        EnglishVocabularyStudyRecord relatedRecord = relatedRecordResolver.apply(normalizedRelated);
         CoreMeaning coreMeaning = extractCoreMeaning(relatedRecord);
         String key = relationType.getCode() + ":" + normalizedRelated;
         LearningVocabularyRelation relation = new LearningVocabularyRelation();
@@ -302,13 +366,62 @@ public class VocabularyInsightService {
         relations.putIfAbsent(key, relation);
     }
 
-    /**
-     * 查询 {@code findVocabulary} 相关业务。
-     */
-    private EnglishVocabularyStudyRecord findVocabulary(String normalizedTerm) {
-        return recordMapper.selectOne(new LambdaQueryWrapper<EnglishVocabularyStudyRecord>()
-                .eq(EnglishVocabularyStudyRecord::getNormalizedTerm, normalizedTerm)
-                .last(LearningConstants.SQL_LIMIT_ONE));
+    private Set<String> extractRelatedTerms(JsonNode root) {
+        Set<String> terms = new LinkedHashSet<>();
+        for (VocabularyRelationType type : List.of(
+                VocabularyRelationType.SYNONYM,
+                VocabularyRelationType.ANTONYM,
+                VocabularyRelationType.WORD_FAMILY)) {
+            for (String field : type.getJsonFields()) {
+                JsonNode node = root.get(field);
+                if (node == null) {
+                    continue;
+                }
+                for (JsonNode item : iterable(node)) {
+                    String term = normalizeTerm(cleanRelationText(readableText(item)));
+                    if (StringUtils.hasText(term)) {
+                        terms.add(term);
+                    }
+                }
+            }
+        }
+        return terms;
+    }
+
+    private <T> void insertChunks(List<T> values, Function<List<T>, Integer> writer) {
+        for (int start = 0; start < values.size(); start += WRITE_BATCH_SIZE) {
+            writer.apply(values.subList(start, Math.min(start + WRITE_BATCH_SIZE, values.size())));
+        }
+    }
+
+    private RecordLookup loadRecords(Collection<Long> vocabularyIds, Collection<String> normalizedTerms) {
+        Set<Long> ids = vocabularyIds == null ? Set.of() : vocabularyIds.stream()
+                .filter(java.util.Objects::nonNull).collect(java.util.stream.Collectors.toCollection(LinkedHashSet::new));
+        Set<String> terms = normalizedTerms == null ? Set.of() : normalizedTerms.stream()
+                .filter(StringUtils::hasText).map(this::normalizeTerm)
+                .collect(java.util.stream.Collectors.toCollection(LinkedHashSet::new));
+        if (ids.isEmpty() && terms.isEmpty()) {
+            return RecordLookup.empty();
+        }
+        LambdaQueryWrapper<EnglishVocabularyStudyRecord> wrapper = new LambdaQueryWrapper<EnglishVocabularyStudyRecord>()
+                .eq(EnglishVocabularyStudyRecord::getDeleted, false)
+                .and(condition -> {
+                    if (!ids.isEmpty()) {
+                        condition.in(EnglishVocabularyStudyRecord::getId, ids);
+                    }
+                    if (!terms.isEmpty()) {
+                        if (!ids.isEmpty()) {
+                            condition.or();
+                        }
+                        condition.in(EnglishVocabularyStudyRecord::getNormalizedTerm, terms);
+                    }
+                });
+        List<EnglishVocabularyStudyRecord> records = recordMapper.selectList(wrapper);
+        return new RecordLookup(
+                records.stream().collect(java.util.stream.Collectors.toMap(
+                        EnglishVocabularyStudyRecord::getId, value -> value, (left, right) -> left)),
+                records.stream().collect(java.util.stream.Collectors.toMap(
+                        EnglishVocabularyStudyRecord::getNormalizedTerm, value -> value, (left, right) -> left)));
     }
 
     /**
@@ -600,7 +713,7 @@ public class VocabularyInsightService {
     /**
      * 转换 {@code toRelationResponse} 相关业务。
      */
-    private VocabularyRelationResponse toRelationResponse(LearningVocabularyRelation relation, EnglishVocabularyStudyRecord sourceRecord) {
+    private VocabularyRelationResponse toRelationResponse(LearningVocabularyRelation relation, RecordLookup lookup) {
         VocabularyRelationResponse response = new VocabularyRelationResponse();
         response.setId(relation.getId());
         response.setRelatedVocabularyId(relation.getRelatedVocabularyId());
@@ -610,36 +723,15 @@ public class VocabularyInsightService {
         response.setRelatedPartOfSpeech(relation.getRelatedPartOfSpeech());
         response.setRelatedMeaning(relation.getRelatedMeaning());
         Phonetic phonetic = firstPhonetic(
-                extractRelationPhonetic(sourceRecord, relation.getRelationType(), relation.getRelatedTerm()),
-                findRelatedPhonetic(relation.getRelatedVocabularyId(), relation.getRelatedTerm()));
+                extractRelationPhonetic(lookup.byId().get(relation.getVocabularyId()),
+                        relation.getRelationType(), relation.getRelatedTerm()),
+                extractPhonetic(lookup.related(relation.getRelatedVocabularyId(), relation.getRelatedTerm())));
         response.setRelatedPhoneticUk(phonetic.uk());
         response.setRelatedPhoneticUs(phonetic.us());
         response.setMatchType(relation.getMatchType());
         response.setMatchScore(relation.getMatchScore());
         response.setScore(relation.getScore());
         return response;
-    }
-
-    /**
-     * 处理 {@code sourceRecord} 相关业务。
-     */
-    private EnglishVocabularyStudyRecord sourceRecord(LearningVocabularyRelation relation,
-                                                       Map<Long, EnglishVocabularyStudyRecord> sourceRecords) {
-        Long vocabularyId = relation.getVocabularyId();
-        if (vocabularyId == null) {
-            return null;
-        }
-        return sourceRecords.computeIfAbsent(vocabularyId, recordMapper::selectById);
-    }
-
-    /**
-     * 查询 {@code findRelatedPhonetic} 相关业务。
-     */
-    private Phonetic findRelatedPhonetic(Long relatedVocabularyId, String relatedTerm) {
-        EnglishVocabularyStudyRecord relatedRecord = relatedVocabularyId == null
-                ? findVocabulary(relatedTerm)
-                : recordMapper.selectById(relatedVocabularyId);
-        return extractPhonetic(relatedRecord);
     }
 
     /**
@@ -747,6 +839,24 @@ public class VocabularyInsightService {
          */
         static Phonetic empty() {
             return new Phonetic("", "");
+        }
+    }
+
+    private record InsightInput(EnglishVocabularyStudyRecord record, JsonNode root) {
+    }
+
+    private record RecordLookup(Map<Long, EnglishVocabularyStudyRecord> byId,
+                                Map<String, EnglishVocabularyStudyRecord> byTerm) {
+        private static RecordLookup empty() {
+            return new RecordLookup(Map.of(), Map.of());
+        }
+
+        private EnglishVocabularyStudyRecord related(Long id, String term) {
+            EnglishVocabularyStudyRecord record = id == null ? null : byId.get(id);
+            if (record != null || term == null) {
+                return record;
+            }
+            return byTerm.get(term.trim().replaceAll("\\s+", " ").toLowerCase(Locale.ROOT));
         }
     }
 }

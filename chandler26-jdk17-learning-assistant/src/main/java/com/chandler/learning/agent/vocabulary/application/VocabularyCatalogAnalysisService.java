@@ -58,6 +58,7 @@ import org.springframework.dao.DuplicateKeyException;
 @RequiredArgsConstructor
 public class VocabularyCatalogAnalysisService {
 
+
     /** 单次 AI 返回可能只覆盖部分词条，未覆盖项留待下次分析。 */
     record AnalysisParseResult(List<VocabularyCatalogEntryAnalysis> analyses,
                                List<Long> unresolvedEntryIds) {

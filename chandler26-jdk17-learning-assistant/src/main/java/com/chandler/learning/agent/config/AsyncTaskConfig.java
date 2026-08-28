@@ -10,6 +10,8 @@ import org.slf4j.MDC;
 import java.util.Map;
 import java.util.concurrent.ThreadPoolExecutor;
 import java.util.concurrent.Executor;
+import java.util.concurrent.Executors;
+import java.util.concurrent.ScheduledExecutorService;
 
 import lombok.RequiredArgsConstructor;
 
@@ -55,5 +57,15 @@ public class AsyncTaskConfig {
         executor.setAwaitTerminationSeconds(properties.getAwaitTerminationSeconds());
         executor.initialize();
         return executor;
+    }
+
+    /** 独立于 AI 工作线程池的租约心跳线程，避免心跳被排队任务阻塞。 */
+    @Bean(name = "aiTaskLeaseScheduler", destroyMethod = "shutdown")
+    public ScheduledExecutorService aiTaskLeaseScheduler() {
+        return Executors.newScheduledThreadPool(1, runnable -> {
+            Thread thread = new Thread(runnable, "learning-ai-lease-heartbeat");
+            thread.setDaemon(true);
+            return thread;
+        });
     }
 }

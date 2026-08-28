@@ -24,7 +24,6 @@ import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
-import java.util.stream.Collectors;
 
 /**
  * 用户偏好配置服务。
@@ -181,29 +180,23 @@ public class UserPreferenceService {
         if (keyValues == null || keyValues.isEmpty()) {
             return;
         }
-        List<LearningUserPreference> existingList = preferenceMapper.selectList(
-                new LambdaQueryWrapper<LearningUserPreference>()
-                        .eq(LearningUserPreference::getUserId, userId)
-                        .in(LearningUserPreference::getPreferenceKey, keyValues.keySet()));
-        Map<String, LearningUserPreference> existingMap = existingList.stream()
-                .collect(Collectors.toMap(LearningUserPreference::getPreferenceKey, p -> p, (a, b) -> a));
         LocalDateTime now = LocalDateTime.now();
+        List<LearningUserPreference> preferences = new java.util.ArrayList<>(keyValues.size());
         for (Map.Entry<String, String> entry : keyValues.entrySet()) {
-            LearningUserPreference existing = existingMap.get(entry.getKey());
-            if (existing == null) {
-                LearningUserPreference pref = new LearningUserPreference();
-                pref.setUserId(userId);
-                pref.setPreferenceKey(entry.getKey());
-                pref.setPreferenceValue(entry.getValue());
-                pref.setCreateTime(now);
-                pref.setUpdateTime(now);
-                preferenceMapper.insert(pref);
-            } else {
-                existing.setPreferenceValue(entry.getValue());
-                existing.setUpdateTime(now);
-                preferenceMapper.updateById(existing);
-            }
+            LearningUserPreference preference = new LearningUserPreference();
+            preference.setId(com.baomidou.mybatisplus.core.toolkit.IdWorker.getId());
+            preference.setCreateBy(userId);
+            preference.setUpdateBy(userId);
+            preference.setUserId(userId);
+            preference.setPreferenceKey(entry.getKey());
+            preference.setPreferenceValue(entry.getValue());
+            preference.setCreateTime(now);
+            preference.setUpdateTime(now);
+            preference.setDeleted(false);
+            preference.setVersion(LearningConstants.ZERO);
+            preferences.add(preference);
         }
+        preferenceMapper.upsertBatch(preferences);
     }
 
     /**

@@ -9,6 +9,10 @@ import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.stereotype.Service;
 import org.springframework.util.StringUtils;
 
+import java.util.Collection;
+import java.util.LinkedHashMap;
+import java.util.Map;
+
 /**
  * 将用户 ID 转成业务日志里可读的操作者名称。
  */
@@ -39,6 +43,23 @@ public class UserDisplayNameService {
         }
         LearningUser user = userMapper.selectById(userId);
         return user == null ? "用户#" + userId : displayName(user);
+    }
+
+    /** 一次加载多个用户名称，供管理列表等批量响应避免逐行查询用户表。 */
+    public Map<Long, String> userNames(Collection<Long> userIds) {
+        if (userIds == null || userIds.isEmpty()) {
+            return Map.of();
+        }
+        Map<Long, String> result = new LinkedHashMap<>();
+        LearningUser currentUser = currentUser();
+        if (currentUser != null) {
+            result.put(currentUser.getId(), displayName(currentUser));
+        }
+        userMapper.selectBatchIds(userIds.stream().filter(java.util.Objects::nonNull).distinct().toList())
+                .forEach(user -> result.put(user.getId(), displayName(user)));
+        userIds.stream().filter(java.util.Objects::nonNull).distinct()
+                .forEach(id -> result.putIfAbsent(id, "用户#" + id));
+        return Map.copyOf(result);
     }
 
     /**

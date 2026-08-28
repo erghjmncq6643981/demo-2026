@@ -11,6 +11,9 @@ import com.chandler.learning.agent.reading.api.ArticleStudyCompleteRequest;
 import com.chandler.learning.agent.reading.api.ArticleStudyProgressRequest;
 import com.chandler.learning.agent.reading.api.ArticleStudyRequest;
 import com.chandler.learning.agent.reading.api.ArticleStudyResponse;
+import com.chandler.learning.agent.reading.api.ArticleStudyPageResponse;
+import com.chandler.learning.agent.reading.api.ArticleStudySummaryResponse;
+import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
 import com.chandler.learning.agent.reading.api.ArticleStudyWordResponse;
 import com.chandler.learning.agent.reading.domain.LearningArticleStudyRecord;
 import com.chandler.learning.agent.vocabulary.domain.LearningWordbook;
@@ -150,20 +153,34 @@ public class ArticleStudyService {
     /**
      * 查询 {@code listRecords} 相关业务。
      */
-    public List<ArticleStudyResponse> listRecords(Long userId, Long wordbookId, Integer limit) {
+    public ArticleStudyPageResponse listRecords(Long userId, Long wordbookId, Integer page, Integer pageSize) {
         Long resolvedWordbookId = wordbookId == null ? null : requireWordbook(userId, wordbookId).getId();
-        int resolvedLimit = Math.max(LearningConstants.Article.MIN_HISTORY_LIMIT,
-                Math.min(limit == null ? LearningConstants.Article.DEFAULT_HISTORY_LIMIT : limit,
-                        LearningConstants.Article.MAX_HISTORY_LIMIT));
-        return articleStudyRecordMapper.selectList(new LambdaQueryWrapper<LearningArticleStudyRecord>()
+        int current = page == null || page < 1 ? 1 : page;
+        int size = pageSize == null || pageSize < 1 ? 10 : Math.min(pageSize, 50);
+        Page<LearningArticleStudyRecord> result = new Page<>(current, size);
+        articleStudyRecordMapper.selectPage(result, new LambdaQueryWrapper<LearningArticleStudyRecord>()
+                        .select(LearningArticleStudyRecord::getId,
+                                LearningArticleStudyRecord::getWordbookId,
+                                LearningArticleStudyRecord::getSelectedTermsJson,
+                                LearningArticleStudyRecord::getWordCountRange,
+                                LearningArticleStudyRecord::getDifficulty,
+                                LearningArticleStudyRecord::getStudyStatus,
+                                LearningArticleStudyRecord::getCurrentStage,
+                                LearningArticleStudyRecord::getPracticeTotal,
+                                LearningArticleStudyRecord::getPracticeCorrect,
+                                LearningArticleStudyRecord::getPracticeScore,
+                                LearningArticleStudyRecord::getCreateTime,
+                                LearningArticleStudyRecord::getUpdateTime)
                         .eq(LearningArticleStudyRecord::getUserId, userId)
                         .eq(resolvedWordbookId != null, LearningArticleStudyRecord::getWordbookId, resolvedWordbookId)
                         .eq(LearningArticleStudyRecord::getDeleted, false)
-                        .orderByDesc(LearningArticleStudyRecord::getUpdateTime)
-                        .last("LIMIT " + resolvedLimit))
-                .stream()
-                .map(record -> toResponse(record, true))
-                .toList();
+                        .orderByDesc(LearningArticleStudyRecord::getUpdateTime));
+        ArticleStudyPageResponse response = new ArticleStudyPageResponse();
+        response.setItems(result.getRecords().stream().map(this::toSummaryResponse).toList());
+        response.setTotal(result.getTotal());
+        response.setPage(current);
+        response.setPageSize(size);
+        return response;
     }
 
     /**
@@ -216,10 +233,10 @@ public class ArticleStudyService {
         LocalDateTime now = LocalDateTime.now();
         record.completeStudy(result.total(), result.correct(), result.score(), now);
         articleStudyRecordMapper.updateById(record);
-        readSelectedWords(record).stream()
+        progressService.recordArticleExposures(userId, readSelectedWords(record).stream()
                 .map(ArticleStudyWordResponse::getTerm)
                 .filter(StringUtils::hasText)
-                .forEach(term -> progressService.recordArticleExposure(userId, term));
+                .toList());
         systemLogService.record(userId, SystemLogType.REVIEW, "完成语境精读",
                 articleTitle(record) + "，检测 " + result.correct() + "/" + result.total());
         log.info("用户「{}」完成语境精读「{}」，阅读检测得分 {}，目标词 {} 个",
@@ -435,6 +452,23 @@ public class ArticleStudyService {
         response.setPracticeScore(record.getPracticeScore());
         response.setStartedTime(record.getStartedTime());
         response.setCompletedTime(record.getCompletedTime());
+        response.setCreateTime(record.getCreateTime());
+        response.setUpdateTime(record.getUpdateTime());
+        return response;
+    }
+
+    private ArticleStudySummaryResponse toSummaryResponse(LearningArticleStudyRecord record) {
+        ArticleStudySummaryResponse response = new ArticleStudySummaryResponse();
+        response.setId(record.getId());
+        response.setWordbookId(record.getWordbookId());
+        response.setSelectedWords(readSelectedWords(record));
+        response.setWordCountRange(record.getWordCountRange());
+        response.setDifficulty(record.getDifficulty());
+        response.setStudyStatus(record.getStudyStatus());
+        response.setCurrentStage(record.getCurrentStage());
+        response.setPracticeTotal(record.getPracticeTotal());
+        response.setPracticeCorrect(record.getPracticeCorrect());
+        response.setPracticeScore(record.getPracticeScore());
         response.setCreateTime(record.getCreateTime());
         response.setUpdateTime(record.getUpdateTime());
         return response;
