@@ -56,6 +56,7 @@ export function createSceneActions({
     if (!confirmed) return
     setButtonLoading(elements.sceneCompleteUnitBtn, true, '提交中...')
     try {
+      const existingUnits = asArray(plan.units)
       const updated = state.preview
         ? (() => {
             unit.status = 'completed'
@@ -66,19 +67,31 @@ export function createSceneActions({
             return plan
           })()
         : await api.completeUnit(plan.id, unit.id)
-      state.currentLearningPlan = updated
-      state.learningPlans = state.learningPlans.map((item) => sameId(item.id, updated.id) ? { ...item, ...updated } : item)
-      const updatedUnits = asArray(updated.units)
-      const nextRemainingUnit = updatedUnits.find((item) => item.status !== 'completed')
+
+      const mergedUnits = existingUnits.map((u) => sameId(u.id, unit.id) ? { ...u, status: 'completed', completedTime: new Date().toISOString() } : u)
+      const mergedPlan = { ...plan, ...updated, units: mergedUnits }
+      state.currentLearningPlan = mergedPlan
+      state.learningPlans = state.learningPlans.map((item) => sameId(item.id, mergedPlan.id) ? mergedPlan : item)
+
+      const nextRemainingUnit = mergedUnits.find((item) => item.status !== 'completed')
       state.sceneChallengeStage = nextRemainingUnit ? 'learning' : 'overview'
       state.currentSceneWordId = null
-      renderSceneView()
+
+      if (state.preview) {
+        renderSceneView()
+      } else {
+        await loadSceneData({ planId: plan.id, keepStage: Boolean(nextRemainingUnit) })
+      }
+
       logEvent('learning', '完成场景学习', `${plan.name} / ${unit.title}`)
       if (nextRemainingUnit) {
         elements.sceneLearningStage?.scrollIntoView({ behavior: 'smooth', block: 'start' })
         toast(`当前场景已完成，已自动进入下一篇「${nextRemainingUnit.title || '下一场景'}」`)
-      } else if (updated.canGenerateNext) toast('场景已完成，可继续生成下一个场景')
-      else toast('恭喜！学习计划已全部完成')
+      } else if (mergedPlan.canGenerateNext) {
+        toast('场景已完成，可继续生成下一个场景')
+      } else {
+        toast('恭喜！学习计划已全部完成')
+      }
     } catch (error) {
       logEvent('error', '完成场景失败', error.message)
       toast(`完成场景失败：${error.message}`)

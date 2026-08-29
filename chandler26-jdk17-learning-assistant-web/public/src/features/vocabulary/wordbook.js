@@ -531,7 +531,9 @@ export function createWordbookProfileFeature(ctx) {
               }
             </td>
             <td class="cell-status">
-              <span class="status-pill status-${escapeHtml(stateCode)}">${escapeHtml(stateText)} · ${escapeHtml(stageText)}</span>
+              <button class="status-pill status-pill-btn status-${escapeHtml(stateCode)}" type="button" data-change-status="${escapeHtml(entry.id)}" title="点击修改掌握状态（如标记为熟悉以无需/减少复习）">
+                ${escapeHtml(stateText)} · ${escapeHtml(stageText)}<span class="status-edit-hint">✎</span>
+              </button>
             </td>
             <td class="cell-mastery">
               <span class="mastery-score">${mastery}</span>
@@ -540,7 +542,8 @@ export function createWordbookProfileFeature(ctx) {
               <span class="next-review-text">${escapeHtml(nextReview)}</span>
             </td>
             <td class="cell-actions" style="text-align: center;">
-              <div class="row-actions" style="justify-content: center; gap: 8px;">
+              <div class="row-actions" style="justify-content: center; gap: 6px;">
+                <button class="icon-action-button" type="button" data-entry-status="${escapeHtml(entry.id)}" title="修改掌握状态（可免复习）" aria-label="修改掌握状态">✎</button>
                 <button class="icon-action-button" type="button" data-entry-transfer="${escapeHtml(entry.id)}" title="复制或移动到其他单词本" aria-label="复制或移动到其他单词本">＋</button>
                 <button class="danger-icon-button" type="button" data-entry-delete="${escapeHtml(entry.id)}" title="从单词本删除" aria-label="删除">×</button>
               </div>
@@ -551,6 +554,14 @@ export function createWordbookProfileFeature(ctx) {
       .join('')
 
     elements.wordbookEntryList.onclick = (e) => {
+      const statusBtn = e.target.closest('[data-change-status], [data-entry-status]')
+      if (statusBtn) {
+        e.stopPropagation()
+        const entryId = statusBtn.getAttribute('data-change-status') || statusBtn.getAttribute('data-entry-status')
+        openEntryStatusModal(entryId)
+        return
+      }
+
       const generateCardBtn = e.target.closest('[data-generate-entry-card]')
       if (generateCardBtn) {
         e.stopPropagation()

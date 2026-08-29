@@ -30,6 +30,7 @@ import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Component;
 import org.springframework.util.StringUtils;
 
+import java.util.ArrayList;
 import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
@@ -127,17 +128,17 @@ public class LearningPlanResponseAssembler {
                         .filter(record -> record.getEntryId() != null && record.getAssessmentType() != null)
                         .collect(Collectors.groupingBy(LearningReviewRecord::getEntryId,
                                 Collectors.mapping(LearningReviewRecord::getAssessmentType, Collectors.toSet())));
-        Map<Long, List<LearningPlanUnitWordSummaryResponse>> pendingByUnit = entries.stream()
-                .filter(entry -> isPending(entry, passedByEntry))
+        Map<Long, List<LearningPlanUnitWordSummaryResponse>> wordsByUnit = entries.stream()
                 .collect(Collectors.groupingBy(LearningPlanUnitWordSummaryItem::getUnitId,
-                        Collectors.mapping(this::toWordSummaryResponse, Collectors.toList())));
+                        Collectors.mapping(entry -> toWordSummaryResponse(entry, passedByEntry.getOrDefault(entry.getWordbookEntryId(), Set.of())),
+                                Collectors.toList())));
         return units.stream()
-                .map(unit -> toUnitSummaryResponse(unit, pendingByUnit.getOrDefault(unit.getId(), List.of())))
+                .map(unit -> toUnitSummaryResponse(unit, wordsByUnit.getOrDefault(unit.getId(), List.of())))
                 .toList();
     }
 
     private LearningPlanUnitResponse toUnitSummaryResponse(
-            LearningPlanUnit unit, List<LearningPlanUnitWordSummaryResponse> pendingWords) {
+            LearningPlanUnit unit, List<LearningPlanUnitWordSummaryResponse> words) {
         LearningPlanUnitResponse response = new LearningPlanUnitResponse();
         response.setId(unit.getId());
         response.setPlanId(unit.getPlanId());
@@ -153,7 +154,7 @@ public class LearningPlanResponseAssembler {
         response.setRecommendedDate(unit.getRecommendedDate());
         response.setSceneMaterialId(unit.getSceneMaterialId());
         response.setMaterialAvailable(unit.getSceneMaterialId() != null);
-        response.setPendingChallengeWords(pendingWords);
+        response.setPendingChallengeWords(words);
         response.setRelatedWords(List.of());
         response.setWords(List.of());
         response.setGeneratedTime(unit.getGeneratedTime());
@@ -170,12 +171,19 @@ public class LearningPlanResponseAssembler {
         return !(meaningPassed && spellingPassed);
     }
 
-    private LearningPlanUnitWordSummaryResponse toWordSummaryResponse(LearningPlanUnitWordSummaryItem item) {
+    private LearningPlanUnitWordSummaryResponse toWordSummaryResponse(
+            LearningPlanUnitWordSummaryItem item, Set<String> passedAssessments) {
         LearningPlanUnitWordSummaryResponse response = new LearningPlanUnitWordSummaryResponse();
         response.setId(item.getId());
         response.setTerm(item.getTerm());
+        response.setPhonetic(item.getPhonetic());
+        response.setMeaning(item.getMeaning());
+        response.setContextMeaning(item.getContextMeaning());
         response.setTier(item.getTier());
         response.setMasteryRequirement(item.getMasteryRequirement());
+        response.setPassedAssessments(new ArrayList<>(passedAssessments));
+        Long entryId = item.getWordbookEntryId() == null ? -1L : item.getWordbookEntryId();
+        response.setCompleted(!isPending(item, Map.of(entryId, passedAssessments)));
         return response;
     }
 

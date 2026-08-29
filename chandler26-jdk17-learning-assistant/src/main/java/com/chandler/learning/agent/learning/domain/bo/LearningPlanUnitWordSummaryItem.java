@@ -20,6 +20,15 @@ public class LearningPlanUnitWordSummaryItem {
     /** 词面。 */
     private String term;
 
+    /** 音标。 */
+    private String phonetic;
+
+    /** 通用释义。 */
+    private String meaning;
+
+    /** 场景语境释义。 */
+    private String contextMeaning;
+
     /** 词汇层级。 */
     private String tier;
 

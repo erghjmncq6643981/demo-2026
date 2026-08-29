@@ -35,47 +35,73 @@ export function createSceneOverview({
     hideModal(elements.sceneVocabularyPreviewModal)
   }
 
-  function openVocabularyPreview({ date, unitId } = {}) {
+  async function openVocabularyPreview({ date, unitId } = {}) {
     const plan = state.currentLearningPlan
     if (!plan) return
     const selectedUnits = unitId
       ? asArray(plan.units).filter((unit) => sameId(unit.id, unitId))
       : unitsForDate(plan, date)
-    const displayDate = date || unitDateKey(selectedUnits[0])
-    let pendingTotal = 0
-    let completedTotal = 0
-    selectedUnits.forEach((unit) => {
-      const coreWords = asArray(unit.words).filter((word) => word.tier === 'core')
-      const summaryWords = coreWords.length
-        ? coreWords
-        : asArray(unit.pendingChallengeWords).map((word) => typeof word === 'string' ? { term: word, tier: 'core', pending: true } : word)
-      summaryWords.forEach((word) => isWordComplete(word) ? completedTotal++ : pendingTotal++)
-    })
-    elements.sceneVocabularyPreviewTitle.textContent = displayDate
-      ? `${formatCalendarDate(new Date(`${displayDate}T12:00:00`), true)} · 场景词汇`
-      : '场景词汇'
-    elements.sceneVocabularyPreviewSummary.textContent = selectedUnits.length
-      ? `${selectedUnits.length} 个场景，待挑战 ${pendingTotal} 词 · 已完成 ${completedTotal} 词`
-      : '该日期的场景尚未生成，生成后即可预览具体词汇。'
-    elements.sceneVocabularyPreviewList.className = selectedUnits.length
-      ? 'scene-vocabulary-preview-list'
-      : 'scene-vocabulary-preview-list empty'
-    elements.sceneVocabularyPreviewList.innerHTML = selectedUnits.length
-      ? selectedUnits.map((unit) => {
+
+    function renderModal() {
+      const displayDate = date || unitDateKey(selectedUnits[0])
+      let pendingTotal = 0
+      let completedTotal = 0
+      selectedUnits.forEach((unit) => {
         const coreWords = asArray(unit.words).filter((word) => word.tier === 'core')
-        const displayWords = coreWords.length
+        const summaryWords = coreWords.length
           ? coreWords
-          : asArray(unit.pendingChallengeWords).map((word) => typeof word === 'string' ? { term: word, tier: 'core', pending: true } : word)
-        return `<section class="scene-vocabulary-preview-group">
-          <div class="scene-vocabulary-preview-heading"><div><strong>${escapeHtml(unit.title || '场景单元')}</strong><small>Scene ${number(unit.unitNo)} · ${unitStatusLabel(unit)}</small></div><span class="mini-pill">${displayWords.length} 待挑战词</span></div>
-          ${displayWords.length ? `<div class="scene-vocabulary-preview-words">${displayWords.map((word, index) => {
-            const complete = isWordComplete(word)
-            return `<div class="scene-vocabulary-preview-word ${complete ? 'completed' : ''}"><span class="scene-vocabulary-preview-index">${index + 1}</span><div class="scene-vocabulary-preview-word-content"><div class="scene-vocabulary-preview-topline"><strong>${escapeHtml(word.term)}</strong><small>${escapeHtml(word.phonetic || '')}</small></div><p class="scene-vocabulary-preview-meaning">${escapeHtml(word.contextMeaning || word.meaning || '场景释义待补充')}</p></div><span class="scene-vocabulary-preview-status-pill ${complete ? 'completed' : 'pending'}">${complete ? '已完成' : (word.masteryRequirement === 'spelling' ? '待拼写' : '待认读')}</span></div>`
-          }).join('')}</div>` : '<div class="empty">本场景暂无核心词汇</div>'}
-        </section>`
-      }).join('')
-      : '暂无词汇'
+          : asArray(unit.pendingChallengeWords).map((word) => typeof word === 'string' ? { term: word, tier: 'core' } : word)
+        summaryWords.forEach((word) => isWordComplete(word) ? completedTotal++ : pendingTotal++)
+      })
+      elements.sceneVocabularyPreviewTitle.textContent = displayDate
+        ? `${formatCalendarDate(new Date(`${displayDate}T12:00:00`), true)} · 场景词汇`
+        : '场景词汇'
+      elements.sceneVocabularyPreviewSummary.textContent = selectedUnits.length
+        ? `${selectedUnits.length} 个场景，待挑战 ${pendingTotal} 词 · 已完成 ${completedTotal} 词`
+        : '该日期的场景尚未生成，生成后即可预览具体词汇。'
+      elements.sceneVocabularyPreviewList.className = selectedUnits.length
+        ? 'scene-vocabulary-preview-list'
+        : 'scene-vocabulary-preview-list empty'
+      elements.sceneVocabularyPreviewList.innerHTML = selectedUnits.length
+        ? selectedUnits.map((unit) => {
+          const coreWords = asArray(unit.words).filter((word) => word.tier === 'core')
+          const displayWords = coreWords.length
+            ? coreWords
+            : asArray(unit.pendingChallengeWords).map((word) => typeof word === 'string' ? { term: word, tier: 'core' } : word)
+          const unitPending = displayWords.filter((w) => !isWordComplete(w)).length
+          const pillText = unitPending > 0 ? `${unitPending} 待挑战词` : '已全部完成'
+          return `<section class="scene-vocabulary-preview-group">
+            <div class="scene-vocabulary-preview-heading"><div><strong>${escapeHtml(unit.title || '场景单元')}</strong><small>Scene ${number(unit.unitNo)} · ${unitStatusLabel(unit)}</small></div><span class="mini-pill ${unitPending === 0 ? 'ok' : ''}">${pillText}</span></div>
+            ${displayWords.length ? `<div class="scene-vocabulary-preview-words">${displayWords.map((word, index) => {
+              const complete = isWordComplete(word)
+              const phonetic = word.phonetic
+                ? (word.phonetic.startsWith('/') || word.phonetic.startsWith('[') ? word.phonetic : `/${word.phonetic}/`)
+                : ''
+              const meaning = word.contextMeaning || word.meaning || '暂无释义'
+              return `<div class="scene-vocabulary-preview-word ${complete ? 'completed' : ''}"><span class="scene-vocabulary-preview-index">${index + 1}</span><div class="scene-vocabulary-preview-word-content"><div class="scene-vocabulary-preview-topline"><strong>${escapeHtml(word.term)}</strong>${phonetic ? `<small>${escapeHtml(phonetic)}</small>` : ''}</div><p class="scene-vocabulary-preview-meaning">${escapeHtml(meaning)}</p></div><span class="scene-vocabulary-preview-status-pill ${complete ? 'completed' : 'pending'}">${complete ? '已完成' : (word.masteryRequirement === 'spelling' ? '待拼写' : '待认读')}</span></div>`
+            }).join('')}</div>` : '<div class="empty">加载中...</div>'}
+          </section>`
+        }).join('')
+        : '暂无词汇'
+    }
+
+    renderModal()
     showModal(elements.sceneVocabularyPreviewModal)
+
+    const unitsNeedDetail = selectedUnits.filter((u) => !asArray(u.words).length && !asArray(u.pendingChallengeWords).length)
+    if (unitsNeedDetail.length > 0 && !state.preview && api?.getUnit) {
+      try {
+        await Promise.all(unitsNeedDetail.map(async (u) => {
+          const detail = await api.getUnit(plan.id, u.id)
+          if (detail) {
+            Object.assign(u, detail)
+          }
+        }))
+        renderModal()
+      } catch (err) {
+        logEvent('error', '加载场景词汇详情失败', err?.message)
+      }
+    }
   }
 
   function isDayGenerating(key) {

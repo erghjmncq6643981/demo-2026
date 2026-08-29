@@ -420,14 +420,14 @@
                 <div class="wordbook-table-wrap">
                   <table class="wordbook-table">
                     <colgroup>
-                      <col class="col-term" style="width: 220px;" />
+                      <col class="col-term" style="width: 180px;" />
                       <col class="col-phonetic" style="width: 130px;" />
-                      <col class="col-meaning" style="width: auto;" />
-                      <col class="col-card-status" style="width: 100px;" />
-                      <col class="col-status" style="width: 120px;" />
+                      <col class="col-meaning" style="width: 320px;" />
+                      <col class="col-card-status" style="width: 110px;" />
+                      <col class="col-status" style="width: 140px;" />
                       <col class="col-mastery" style="width: 80px;" />
                       <col class="col-next-review" style="width: 160px;" />
-                      <col class="col-actions" style="width: 90px;" />
+                      <col class="col-actions" style="width: 140px;" />
                     </colgroup>
                     <thead>
                       <tr>
@@ -1498,16 +1498,25 @@
       <div class="review-modal status-modal">
         <div class="panel-heading">
           <div>
-            <p class="eyebrow">Mastery</p>
-            <h3>选择熟练程度</h3>
+            <p class="eyebrow">Mastery Status</p>
+            <h3>修改熟练程度与复习设置</h3>
           </div>
           <button class="icon-button" id="closeEntryStatusModalBtn" type="button" title="关闭">×</button>
         </div>
-        <p class="panel-description">为 <strong id="entryStatusTerm">当前单词</strong> 标记掌握状态。</p>
+        <p class="panel-description">为 <strong id="entryStatusTerm">当前单词</strong> 标记掌握状态。若标记为“熟悉”，系统将大幅提升掌握度并推迟/免除近期复习。</p>
         <div class="status-choice-list">
-          <button class="status-choice success-action" type="button" data-status-choice="familiar">熟悉</button>
-          <button class="status-choice warn-action" type="button" data-status-choice="vague">模糊</button>
-          <button class="status-choice danger-action" type="button" data-status-choice="forgotten">遗忘</button>
+          <button class="status-choice success-action" type="button" data-status-choice="familiar">
+            <strong>熟悉</strong>
+            <small>已牢固掌握 · 免近期复习</small>
+          </button>
+          <button class="status-choice warn-action" type="button" data-status-choice="vague">
+            <strong>模糊</strong>
+            <small>印象一般 · 标准周期复习</small>
+          </button>
+          <button class="status-choice danger-action" type="button" data-status-choice="forgotten">
+            <strong>遗忘</strong>
+            <small>已记不清 · 近期重点巩固</small>
+          </button>
         </div>
       </div>
     </section>

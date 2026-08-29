@@ -139,7 +139,7 @@ export function createAppShell(ctx) {
       loadArticleHistory?.()
     }
     if (viewId === 'scenePlanView') {
-      loadSceneData?.()
+      loadSceneData?.({ keepStage: Boolean(state.sceneChallengeStage && state.sceneChallengeStage !== 'overview') })
     }
     if (viewId === 'profileView') {
       const activeTab = state.activeProfileTab || 'accountPanel'

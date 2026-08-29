@@ -135,7 +135,8 @@ export function createScenePlanFeature(ctx) {
       planWorkflow?.renderPlanList()
       renderImportList()
       const planId = state.learningPlans.some((plan) => sameId(plan.id, selectedPlanId)) ? selectedPlanId : state.learningPlans[0]?.id
-      if (planId) await selectPlan(planId, { quiet: true })
+      const shouldKeepStage = options.keepStage ?? (sameId(planId, state.currentLearningPlan?.id) && Boolean(state.sceneChallengeStage && state.sceneChallengeStage !== 'overview'))
+      if (planId) await selectPlan(planId, { quiet: true, keepStage: shouldKeepStage })
       else { state.currentLearningPlan = null; renderCurrentScene() }
     } catch (error) {
       if (isRequestAbort(error)) return
@@ -183,17 +184,22 @@ export function createScenePlanFeature(ctx) {
   async function selectPlan(planId, options = {}) {
     if (!planId) return
     try {
+      const previousPlanId = state.currentLearningPlan?.id
+      const shouldKeepStage = options.keepStage ?? (sameId(planId, previousPlanId) && Boolean(state.sceneChallengeStage && state.sceneChallengeStage !== 'overview'))
       const plan = state.preview ? asArray(state.learningPlans).find((item) => sameId(item.id, planId)) : await api.getPlan(planId)
       if (!plan) return
       state.currentLearningPlan = plan
       const unit = activeUnit(plan)
       const coreWords = asArray(unit?.words).filter((word) => word.tier === 'core')
       state.currentSceneWordId = (coreWords.find((word) => !isWordComplete(word)) || coreWords[0])?.id || null
-      state.sceneChallengeStage = options.keepStage ? state.sceneChallengeStage : 'overview'
+      state.sceneChallengeStage = shouldKeepStage ? state.sceneChallengeStage : 'overview'
       sceneStudy?.resetAssessment()
       if (!state.sceneCalendarCursorDate) state.sceneCalendarCursorDate = localDateKey()
       planWorkflow?.renderPlanList()
       await loadCalendarData(plan)
+      if (shouldKeepStage) {
+        await ensureActiveUnitDetail()
+      }
       renderCurrentScene()
       if (!options.quiet) logEvent('learning', '切换场景学习计划', plan.name)
     } catch (error) {

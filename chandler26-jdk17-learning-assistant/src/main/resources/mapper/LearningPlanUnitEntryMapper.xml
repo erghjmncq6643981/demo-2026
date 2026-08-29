@@ -89,6 +89,9 @@
             e.unit_id AS unitId,
             e.wordbook_entry_id AS wordbookEntryId,
             e.term,
+            e.phonetic,
+            e.meaning_text AS meaning,
+            e.context_meaning AS contextMeaning,
             e.tier,
             e.mastery_requirement AS masteryRequirement
         FROM learning_plan_unit_entry e

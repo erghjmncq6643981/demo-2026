@@ -6,10 +6,13 @@ import com.chandler.learning.agent.learning.domain.constant.ScenePlanConstants;
 import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.fasterxml.jackson.databind.node.ArrayNode;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Component;
 import org.springframework.util.StringUtils;
 
+import java.util.ArrayList;
+import java.util.Collections;
 import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Locale;
@@ -130,6 +133,16 @@ public class LearningPlanAssessmentSupport {
                 questionObject.put("correct_answer", correct);
             }
         }
+        List<String> shuffledList = new ArrayList<>();
+        for (JsonNode opt : arrayNode) {
+            if (opt != null && StringUtils.hasText(opt.asText())) {
+                shuffledList.add(opt.asText().trim());
+            }
+        }
+        Collections.shuffle(shuffledList);
+        ArrayNode shuffledNode = objectMapper.createArrayNode();
+        shuffledList.forEach(shuffledNode::add);
+        questionObject.set("options", shuffledNode);
         return questionObject;
     }
 

@@ -341,7 +341,7 @@ export function createSceneStudy({
     // 4. Meaning choice mode
     if (type === 'meaning_choice' && !isTypingInInput) {
       const assessment = word.assessment || {}
-      const options = asArray(assessment.options)
+      const options = word._shuffledOptions || asArray(assessment.options)
       let chosenIndex = -1
       const key = event.key?.toLowerCase()
       const code = event.code
@@ -418,7 +418,17 @@ export function createSceneStudy({
     const feedback = assessmentFeedback ? `<div class="scene-assessment-feedback ${assessmentFeedback.correct ? 'ok' : 'bad'}">${escapeHtml(assessmentFeedback.message)}</div>` : ''
     if (type === 'meaning_choice') {
       const assessment = word.assessment || {}
-      const options = asArray(assessment.options)
+      if (!word._shuffledOptions || word._shuffledForWordId !== word.id) {
+        const rawOptions = asArray(assessment.options)
+        const shuffled = [...rawOptions]
+        for (let i = shuffled.length - 1; i > 0; i--) {
+          const j = Math.floor(Math.random() * (i + 1));
+          [shuffled[i], shuffled[j]] = [shuffled[j], shuffled[i]]
+        }
+        word._shuffledOptions = shuffled
+        word._shuffledForWordId = word.id
+      }
+      const options = word._shuffledOptions
       if (elements.sceneAssessment) {
         elements.sceneAssessment.innerHTML = `<div class="scene-assessment-prompt"><span class="mini-pill">${ASSESSMENT_LABELS[type]}</span><h4>${escapeHtml(assessment.prompt || `请选择 ${word.term} 在当前场景中的含义`)}</h4><p class="phonetic">${escapeHtml(word.phonetic ? `/${word.phonetic}/` : '暂无音标')}</p></div><div class="scene-choice-list">${options.map((option, index) => `<button type="button" data-scene-answer="${escapeHtml(option)}" data-choice-index="${index}"><span>${String.fromCharCode(65 + index)}</span>${escapeHtml(option)}</button>`).join('')}</div><p class="typing-hint">可按 1~4 或 A~D 键快捷选择 · 按 R 键发音</p>${feedback}`
         elements.sceneAssessment.querySelectorAll('[data-scene-answer]').forEach((button) => button.addEventListener('click', () => {

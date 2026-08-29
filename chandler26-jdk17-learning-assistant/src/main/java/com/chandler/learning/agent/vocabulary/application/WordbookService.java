@@ -597,7 +597,23 @@ public class WordbookService {
             entry.setNote(trimToNull(request.getNote()));
         }
         if (request.getStatus() != null) {
-            entry.setStatus(normalizeStatus(request.getStatus()));
+            String status = normalizeStatus(request.getStatus());
+            entry.setStatus(status);
+            if (ReviewConstants.STATUS_FAMILIAR.equals(status)) {
+                if (entry.getMasteryScore() == null || entry.getMasteryScore() < 80) {
+                    entry.setMasteryScore(80);
+                }
+                if (entry.getReviewStage() == null || entry.getReviewStage() < 3) {
+                    entry.setReviewStage(3);
+                }
+                LocalDateTime now = LocalDateTime.now();
+                if (entry.getNextReviewTime() == null || entry.getNextReviewTime().isBefore(now.plusDays(7))) {
+                    entry.setNextReviewTime(now.plusDays(14));
+                }
+            } else if (ReviewConstants.STATUS_FORGOTTEN.equals(status)) {
+                entry.setReviewStage(0);
+                entry.setNextReviewTime(LocalDateTime.now().plusMinutes(5));
+            }
         }
         entry.setUpdateTime(LocalDateTime.now());
         entryMapper.updateById(entry);
