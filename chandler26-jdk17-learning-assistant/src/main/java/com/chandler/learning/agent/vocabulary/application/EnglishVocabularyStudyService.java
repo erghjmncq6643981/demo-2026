@@ -4,6 +4,7 @@ import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import com.chandler.learning.agent.ai.chat.application.AgentChatRequest;
 import com.chandler.learning.agent.ai.chat.application.AgentChatResponse;
 import com.chandler.learning.agent.vocabulary.api.response.VocabularyBestMatchResponse;
+import com.chandler.learning.agent.vocabulary.api.response.VocabularySuggestionResponse;
 import com.chandler.learning.agent.vocabulary.api.request.VocabularyStudyRequest;
 import com.chandler.learning.agent.vocabulary.api.response.VocabularyStudyResponse;
 import com.chandler.learning.agent.vocabulary.domain.entity.EnglishVocabularyStudyRecord;
@@ -168,6 +169,30 @@ public class EnglishVocabularyStudyService {
                 response != null,
                 candidates.size());
         return response;
+    }
+
+    /**
+     * 根据输入关键词前缀查询联想补全建议列表。
+     */
+    public List<VocabularySuggestionResponse> suggestions(String keyword) {
+        String normalizedKeyword = normalize(keyword);
+        if (!StringUtils.hasText(normalizedKeyword)) {
+            return List.of();
+        }
+        List<EnglishVocabularyStudyRecord> records = recordMapper.selectList(
+                new LambdaQueryWrapper<EnglishVocabularyStudyRecord>()
+                        .likeRight(EnglishVocabularyStudyRecord::getNormalizedTerm, normalizedKeyword)
+                        .orderByDesc(EnglishVocabularyStudyRecord::getLookupCount)
+                        .last("LIMIT 8"));
+        return records.stream().map(record -> {
+            VocabularyInsightService.CoreMeaning coreMeaning = vocabularyInsightService.extractCoreMeaning(record);
+            return new VocabularySuggestionResponse(
+                    record.getTerm(),
+                    record.getNormalizedTerm(),
+                    coreMeaning.partOfSpeech(),
+                    coreMeaning.meaning(),
+                    record.getLookupCount());
+        }).toList();
     }
 
     /**

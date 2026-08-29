@@ -613,15 +613,23 @@
 
           <section class="view" id="studyView">
             <section class="study-layout">
-              <form class="search-card study-input-bar" id="studyForm">
-                <label>
-                  输入英语单词或短语
-                  <input id="termInput" class="term-input" autocomplete="off" placeholder="abandon" />
-                </label>
-                <button class="primary-button" id="studyBtn" type="submit">学习</button>
-                <button class="secondary-button regenerate-button" id="studyRegenerateBtn" type="button">重新生成</button>
-                <select id="studyModelSelect" class="hidden" aria-label="AI 模型"></select>
-              </form>
+              <div class="study-search-wrap">
+                <form class="search-card study-input-bar" id="studyForm">
+                  <div class="search-input-field">
+                    <label class="sr-only" for="termInput">输入英语单词或短语</label>
+                    <input id="termInput" class="term-input" autocomplete="off" placeholder="输入英语单词或短语（或按 ⌘K / Ctrl+K 全局查词）" />
+                    <div id="searchAutocompleteDropdown" class="autocomplete-dropdown hidden"></div>
+                  </div>
+                  <button class="primary-button" id="studyBtn" type="submit">查词精读</button>
+                  <button class="secondary-button regenerate-button" id="studyRegenerateBtn" type="button">重新生成</button>
+                  <select id="studyModelSelect" class="hidden" aria-label="AI 模型"></select>
+                </form>
+                <div id="recentSearchesBar" class="recent-searches-bar hidden">
+                  <span class="recent-title">最近查词:</span>
+                  <div id="recentSearchChips" class="recent-chips"></div>
+                  <button type="button" id="clearRecentSearchesBtn" class="clear-history-link" title="清空查词历史">清空</button>
+                </div>
+              </div>
 
               <div class="study-main">
                 <section class="word-hero panel">
@@ -630,6 +638,7 @@
                       <p class="eyebrow" id="cacheState">等待输入</p>
                       <h2 id="wordTitle">Ready</h2>
                       <div id="phoneticLine" class="phonetic phonetic-actions">输入单词后生成学习卡片</div>
+                      <div id="wordbookAssetBar" class="wordbook-asset-bar hidden"></div>
                     </div>
                     <div class="voice-actions">
                       <button class="icon-button large" id="addToWordbookBtn" type="button" title="选择词书加入">＋</button>
@@ -638,6 +647,16 @@
                     </div>
                   </div>
                   <div id="meaningList" class="meaning-list"></div>
+                </section>
+
+                <section class="panel morphology-panel" id="morphologyPanel">
+                  <div class="panel-heading">
+                    <div>
+                      <p class="eyebrow">Morphology &amp; Roots</p>
+                      <h3>构词剖析（词根词缀）</h3>
+                    </div>
+                  </div>
+                  <div id="morphologyBoard" class="morphology-board empty">暂无构词分析</div>
                 </section>
 
                 <section class="panel note-panel">
@@ -678,6 +697,41 @@
                   <div id="tagList" class="chips empty">暂无标签</div>
                 </section>
 
+                <section class="panel ai-prompt-panel" id="aiPromptChipsPanel">
+                  <div class="panel-heading">
+                    <div>
+                      <p class="eyebrow">AI Assistant Q&amp;A</p>
+                      <h3>AI 私教深度答疑</h3>
+                      <p class="panel-description">点击高频 Prompt 快捷芯片，向 AI 私教发起多维辨析、职场造句或语法批改</p>
+                    </div>
+                  </div>
+                  <div class="ai-prompt-chips" id="aiPromptChips">
+                    <button type="button" class="prompt-chip" data-prompt-type="synonym_diff">💡 易混近义词辨析</button>
+                    <button type="button" class="prompt-chip" data-prompt-type="workplace_sentences">✍️ 3个职场实战造句</button>
+                    <button type="button" class="prompt-chip" data-prompt-type="etymology_story">🔍 构词与文化故事</button>
+                    <button type="button" class="prompt-chip" data-prompt-type="sentence_eval">📝 语法润色与造句批改</button>
+                  </div>
+                  <div class="ai-mini-chat-box" id="aiMiniChatBox">
+                    <div id="aiMiniChatOutput" class="ai-mini-chat-output empty">点击上方快捷芯片或输入问题开始互动</div>
+                    <form id="aiMiniChatForm" class="ai-mini-chat-form">
+                      <input id="aiMiniChatInput" placeholder="向 AI 助教提问关于该单词的疑难用法..." autocomplete="off" />
+                      <button type="submit" class="primary-button compact-primary" id="aiMiniChatSendBtn">发送</button>
+                    </form>
+                  </div>
+                </section>
+
+                <section class="panel mini-quiz-panel" id="miniQuizPanel">
+                  <div class="panel-heading">
+                    <div>
+                      <p class="eyebrow">5-Second Recall</p>
+                      <h3>5秒跟敲巩固</h3>
+                      <p class="panel-description">双手直接键入当前单词，通过击键与音效内化拼写肌肉记忆</p>
+                    </div>
+                    <button type="button" class="secondary-button compact" id="restartMiniQuizBtn">重新敲击</button>
+                  </div>
+                  <div id="miniQuizBoard" class="mini-quiz-board empty">输入单词后开启跟敲微测</div>
+                </section>
+
               </div>
             </section>
           </section>
@@ -715,6 +769,24 @@
     </main>
 
     <div class="toast" id="toast"></div>
+    <section class="modal-backdrop hidden" id="quickLookupModal" aria-modal="true" role="dialog" aria-labelledby="quickLookupTitle">
+      <div class="config-modal quick-lookup-modal" data-modal-scroll>
+        <div class="panel-heading">
+          <div>
+            <p class="eyebrow">Quick Lookup</p>
+            <h3 id="quickLookupTitle">全局快速查词 (⌘K / Ctrl+K)</h3>
+          </div>
+          <button class="icon-button" id="quickLookupCloseBtn" type="button" title="关闭 (Esc)" aria-label="关闭">×</button>
+        </div>
+        <div class="quick-lookup-body">
+          <form class="search-card quick-lookup-input-bar" id="quickLookupForm">
+            <input id="quickLookupInput" class="term-input" autocomplete="off" placeholder="输入英语单词后回车（或按 Esc 退出）" />
+            <button class="primary-button compact-primary" type="submit">查词</button>
+          </form>
+          <div id="quickLookupContent" class="quick-lookup-content empty">输入任意英文单词快速查看 AI 词卡</div>
+        </div>
+      </div>
+    </section>
     <section class="modal-backdrop hidden" id="reviewNoteModal" aria-modal="true" role="dialog" aria-labelledby="reviewNoteModalTitle">
       <div class="config-modal review-note-modal" data-modal-scroll>
         <div class="panel-heading">

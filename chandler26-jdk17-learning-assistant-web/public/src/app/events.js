@@ -140,6 +140,8 @@ export function bindAppEvents(ctx) {
     systemManagement,
     handleReviewKeydown,
     handleSceneChallengeKeydown,
+    openQuickLookup,
+    closeQuickLookup,
   } = ctx
 
 elements.loginBtn.addEventListener('click', () => loginOrRegister('login'))
@@ -469,6 +471,16 @@ elements.aiSessionNextBtn?.addEventListener('click', () => systemManagement?.cha
 elements.closeAiSessionDetailBtn?.addEventListener('click', () => systemManagement?.closeDetail())
 elements.aiSessionDetailModal?.addEventListener('click', (event) => { if (event.target === elements.aiSessionDetailModal) systemManagement?.closeDetail() })
   document.addEventListener('keydown', (event) => {
+    if ((event.metaKey || event.ctrlKey) && (event.key === 'k' || event.key === 'K')) {
+      event.preventDefault()
+      openQuickLookup?.()
+      return
+    }
+    if (event.key === 'Escape' && elements.quickLookupModal && !elements.quickLookupModal.classList.contains('hidden')) {
+      event.preventDefault()
+      closeQuickLookup?.()
+      return
+    }
     handleReviewKeydown?.(event)
     handleSceneChallengeKeydown?.(event)
   })

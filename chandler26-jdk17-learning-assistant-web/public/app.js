@@ -470,6 +470,8 @@ bindAppEvents({
   systemManagement,
   handleReviewKeydown,
   handleSceneChallengeKeydown: (...args) => scenePlanFeature.handleSceneChallengeKeydown(...args),
+  openQuickLookup: studyFacade.openQuickLookup,
+  closeQuickLookup: studyFacade.closeQuickLookup,
 })
 exposeDebugGlobals({ state, renderRecord: studyFacade.renderRecord, renderReviewCompleteModal, speak, setView, setProfileTab })
 

@@ -190,7 +190,7 @@ public class LearningPlanController {
         if (resolved.getRecommendedDate() != null) payload.put("recommendedDate", resolved.getRecommendedDate().toString());
         var task = aiAsyncTaskService.create(user.getId(),
                 com.chandler.learning.agent.task.domain.constant.AiTaskConstants.TYPE_SCENE_MATERIAL,
-                 "批量生成场景材料", planId, null, null,
+                 "批量生成 " + taskDate + " 场景材料", planId, null, null,
                  resolved.getExecutionMode(), resolved.getScheduledTime(), resolved.getPriority(), 1,
                  idempotencyKey, payload);
         return aiAsyncTaskService.toResponse(task);
