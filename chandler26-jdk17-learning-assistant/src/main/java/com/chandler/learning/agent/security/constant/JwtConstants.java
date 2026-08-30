@@ -3,7 +3,7 @@ package com.chandler.learning.agent.security.constant;
 /** Jwt 业务常量。 */
 public final class JwtConstants {
 
-    public static final int DEFAULT_EXPIRE_DAYS = 30;
+    public static final int DEFAULT_EXPIRE_DAYS = 7;
 
 public static final int TOKEN_PART_COUNT = 3;
         public static final int SIGNATURE_PART_INDEX = 2;

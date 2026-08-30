@@ -90,7 +90,7 @@ learning:
   security:
     jwt-secret: ${LEARNING_JWT_SECRET:dev-learning-assistant-jwt-secret-change-me}
     jwt-issuer: ${LEARNING_JWT_ISSUER:learning-assistant}
-    jwt-expire-days: ${LEARNING_JWT_EXPIRE_DAYS:30}
+    jwt-expire-days: ${LEARNING_JWT_EXPIRE_DAYS:7}
     api-key-secret: ${LEARNING_API_KEY_SECRET:dev-learning-assistant-api-key-secret-change-me}
 
 management:
