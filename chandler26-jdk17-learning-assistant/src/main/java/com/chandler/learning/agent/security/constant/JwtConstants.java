@@ -4,11 +4,10 @@ package com.chandler.learning.agent.security.constant;
 public final class JwtConstants {
 
     public static final int DEFAULT_EXPIRE_DAYS = 7;
+    public static final int TOKEN_PART_COUNT = 3;
+    public static final int SIGNATURE_PART_INDEX = 2;
+    public static final long SECONDS_PER_DAY = 86_400L;
 
-public static final int TOKEN_PART_COUNT = 3;
-        public static final int SIGNATURE_PART_INDEX = 2;
-        public static final long SECONDS_PER_DAY = 86_400L;
-
-        private JwtConstants() {
-        }
+    private JwtConstants() {
+    }
 }
