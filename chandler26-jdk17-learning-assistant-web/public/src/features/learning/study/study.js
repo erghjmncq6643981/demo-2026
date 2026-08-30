@@ -115,7 +115,8 @@ export function createStudyFeature(ctx) {
   }
 
   function regenerateStudyCard() {
-    const term = state.currentRecord?.normalizedTerm || elements.termInput?.value
+    const inputVal = String(elements.termInput?.value || '').trim()
+    const term = inputVal || state.currentRecord?.lemma || state.currentRecord?.term || state.currentRecord?.normalizedTerm
     study(term, { forceRefresh: true })
   }
 

@@ -19,6 +19,9 @@ public interface LearningVocabularyRelationMapper extends BaseMapper<LearningVoc
     /** 批量删除词卡关联关系，避免批处理逐词删除。 */
     int physicalDeleteByVocabularyIds(@Param("vocabularyIds") Collection<Long> vocabularyIds);
 
+    /** 根据归一化主词条批量删除词卡关联关系，确保唯一索引不发生冲突。 */
+    int physicalDeleteByNormalizedTerms(@Param("normalizedTerms") Collection<String> normalizedTerms);
+
     /** 批量读取词卡关联关系。 */
     List<LearningVocabularyRelation> selectByNormalizedTerms(@Param("normalizedTerms") Collection<String> normalizedTerms);
 

@@ -66,8 +66,10 @@ export function createQuickLookupFeature({
     elements.quickLookupContent.className = 'quick-lookup-content'
     const parsed = record?.parsed || {}
     const term = record?.term || record?.normalizedTerm || parsed?.term || 'Word'
-    const cleanUk = parsed?.phonetic?.uk ? String(parsed.phonetic.uk).replace(/^\/+|\/+$/g, '') : ''
-    const cleanUs = parsed?.phonetic?.us ? String(parsed.phonetic.us).replace(/^\/+|\/+$/g, '') : ''
+    const ukRaw = parsed?.phonetic?.uk || parsed?.['phonetic.uk'] || parsed?.phonetic_uk || parsed?.uk_phonetic || (typeof parsed?.phonetic === 'string' ? parsed.phonetic : '') || ''
+    const usRaw = parsed?.phonetic?.us || parsed?.['phonetic.us'] || parsed?.phonetic_us || parsed?.us_phonetic || ''
+    const cleanUk = ukRaw ? String(ukRaw).replace(/^UK\s+/i, '').replace(/^\/+|\/+$/g, '') : ''
+    const cleanUs = usRaw ? String(usRaw).replace(/^US\s+/i, '').replace(/^\/+|\/+$/g, '') : ''
     const uk = cleanUk ? `UK /${cleanUk}/` : ''
     const us = cleanUs ? `US /${cleanUs}/` : ''
     const meanings = normalizeDefinitions(parsed)

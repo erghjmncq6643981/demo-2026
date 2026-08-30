@@ -35,15 +35,24 @@ export function createStudyCardFeature(ctx) {
     state.currentRecord = record
     state.currentSessionId = record?.sessionId || state.currentSessionId
     const parsed = record?.parsed || null
-    const term = parsed?.term || record?.term || record?.normalizedTerm || 'Ready'
+    const baseLemma = record?.lemma || parsed?.lemma
+    const term = baseLemma || parsed?.term || record?.term || record?.normalizedTerm || 'Ready'
     if (elements.cacheState) {
-      elements.cacheState.textContent = record ? (record.cacheHit ? 'CACHE HIT' : 'AI GENERATED') : '等待输入'
+      const isAlias = Boolean(record?.isAliasHit || (record?.queriedTerm && String(record.queriedTerm).toLowerCase() !== String(term).toLowerCase()))
+      const baseText = record ? (record.cacheHit ? 'CACHE HIT' : 'AI GENERATED') : '等待输入'
+      if (isAlias && record?.queriedTerm) {
+        elements.cacheState.innerHTML = `${escapeHtml(baseText)} · <span class="alias-notice-tag">关联原形 (检索: ${escapeHtml(record.queriedTerm)})</span>`
+      } else {
+        elements.cacheState.textContent = baseText
+      }
     }
     if (elements.wordTitle) {
       elements.wordTitle.textContent = term
     }
-    const uk = parsed?.phonetic?.uk ? `UK ${parsed.phonetic.uk}` : ''
-    const us = parsed?.phonetic?.us ? `US ${parsed.phonetic.us}` : ''
+    const ukRaw = parsed?.phonetic?.uk || parsed?.['phonetic.uk'] || parsed?.phonetic_uk || parsed?.uk_phonetic || (typeof parsed?.phonetic === 'string' ? parsed.phonetic : '') || ''
+    const usRaw = parsed?.phonetic?.us || parsed?.['phonetic.us'] || parsed?.phonetic_us || parsed?.us_phonetic || ''
+    const uk = ukRaw ? (String(ukRaw).startsWith('UK') ? ukRaw : `UK ${ukRaw}`) : ''
+    const us = usRaw ? (String(usRaw).startsWith('US') ? usRaw : `US ${usRaw}`) : ''
     renderPhonetics(term, uk, us)
     renderWordbookAssetBar(record)
     renderDefinitions(parsed)

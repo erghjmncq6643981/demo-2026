@@ -90,9 +90,16 @@ public class VocabularyInsightService {
                 .stream().collect(java.util.stream.Collectors.toMap(
                         EnglishVocabularyStudyRecord::getNormalizedTerm, value -> value, (left, right) -> left));
         Set<Long> vocabularyIds = inputs.stream().map(input -> input.record().getId()).collect(java.util.stream.Collectors.toSet());
+        Set<String> normalizedTerms = inputs.stream().map(input -> input.record().getNormalizedTerm()).collect(java.util.stream.Collectors.toSet());
         tagMapper.physicalDeleteByVocabularyIds(vocabularyIds);
         relationMapper.physicalDeleteByVocabularyIds(vocabularyIds);
-        aliasMapper.physicalDeleteByVocabularyIds(vocabularyIds);
+        if (!normalizedTerms.isEmpty()) {
+            relationMapper.physicalDeleteByNormalizedTerms(normalizedTerms);
+        }
+        try {
+            aliasMapper.physicalDeleteByVocabularyIds(vocabularyIds);
+        } catch (Exception ignored) {
+        }
         LocalDateTime now = LocalDateTime.now();
         List<LearningVocabularyTag> allTags = new ArrayList<>();
         List<LearningVocabularyRelation> allRelations = new ArrayList<>();
@@ -112,7 +119,10 @@ public class VocabularyInsightService {
         }
         insertChunks(allTags, tagMapper::insertBatch);
         insertChunks(allRelations, relationMapper::insertBatch);
-        insertChunks(allAliases, aliasMapper::insertBatch);
+        try {
+            insertChunks(allAliases, aliasMapper::insertBatch);
+        } catch (Exception ignored) {
+        }
     }
 
     /** 查询词汇标签列表。 */
@@ -699,10 +709,10 @@ public class VocabularyInsightService {
         String uk = firstText(phonetic, "uk", "uk_phonetic", "ukPhonetic", "british", "br");
         String us = firstText(phonetic, "us", "us_phonetic", "usPhonetic", "american", "am");
         if (!StringUtils.hasText(uk)) {
-            uk = firstText(root, "phonetic_uk", "phoneticUk", "uk_phonetic", "ukPhonetic", "uk");
+            uk = firstText(root, "phonetic.uk", "phonetic_uk", "phoneticUk", "uk_phonetic", "ukPhonetic", "uk");
         }
         if (!StringUtils.hasText(us)) {
-            us = firstText(root, "phonetic_us", "phoneticUs", "us_phonetic", "usPhonetic", "us");
+            us = firstText(root, "phonetic.us", "phonetic_us", "phoneticUs", "us_phonetic", "usPhonetic", "us");
         }
         return new Phonetic(uk, us);
     }

@@ -68,4 +68,24 @@ class EnglishVocabularyStudyServiceTest {
         assertThat(root.path("definitions")).hasSize(1);
         assertThat(root.path("definitions").get(0).path("meaning").asText()).isEqualTo("毯子");
     }
+
+    @Test
+    void normalizesDottedAndFlatPhoneticsIntoStructuredPhoneticObject() throws Exception {
+        String content = """
+                {
+                  "term": "slogan",
+                  "phonetic.uk": "/ˈsləʊɡən/",
+                  "phonetic.us": "/ˈsloʊɡən/",
+                  "definitions": [{"part_of_speech": "noun", "meaning": "口号"}]
+                }
+                """;
+
+        String normalized = ReflectionTestUtils.invokeMethod(
+                service, "normalizeCardPayload", objectMapper.readTree(content), "slogan");
+        JsonNode root = objectMapper.readTree(normalized);
+
+        assertThat(root.path("phonetic").isObject()).isTrue();
+        assertThat(root.path("phonetic").path("uk").asText()).isEqualTo("/ˈsləʊɡən/");
+        assertThat(root.path("phonetic").path("us").asText()).isEqualTo("/ˈsloʊɡən/");
+    }
 }

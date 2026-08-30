@@ -9,6 +9,11 @@
         WHERE vocabulary_id IN
         <foreach collection="vocabularyIds" item="id" open="(" separator="," close=")">#{id}</foreach>
     </delete>
+    <delete id="physicalDeleteByNormalizedTerms">
+        DELETE FROM learning_vocabulary_relation
+        WHERE normalized_term IN
+        <foreach collection="normalizedTerms" item="term" open="(" separator="," close=")">#{term}</foreach>
+    </delete>
     <select id="selectByNormalizedTerms"
             resultType="com.chandler.learning.agent.vocabulary.domain.entity.LearningVocabularyRelation">
         SELECT *

@@ -75,29 +75,39 @@ public class EnglishVocabularyStudyService {
         if (record != null) {
             return record;
         }
-        // 2. 形态别名表查找
-        LearningVocabularyAlias alias = aliasMapper.findByNormalizedAlias(normalizedTerm);
-        if (alias != null && alias.getVocabularyId() != null) {
-            EnglishVocabularyStudyRecord aliasRecord = recordMapper.selectById(alias.getVocabularyId());
-            if (aliasRecord != null && !Boolean.TRUE.equals(aliasRecord.getDeleted())) {
-                return aliasRecord;
+        // 2. 形态别名表查找（具备容错兜底）
+        try {
+            LearningVocabularyAlias alias = aliasMapper.findByNormalizedAlias(normalizedTerm);
+            if (alias != null && alias.getVocabularyId() != null) {
+                EnglishVocabularyStudyRecord aliasRecord = recordMapper.selectById(alias.getVocabularyId());
+                if (aliasRecord != null && !Boolean.TRUE.equals(aliasRecord.getDeleted())) {
+                    return aliasRecord;
+                }
             }
+        } catch (Exception ex) {
+            log.debug("别名索引查询跳过: {}", ex.getMessage());
         }
         // 3. 词形还原推导原型查找
         List<String> candidates = lemmatizer.candidateLemmas(normalizedTerm);
         for (String candidate : candidates) {
             EnglishVocabularyStudyRecord candidateRecord = findByNormalizedTerm(candidate);
             if (candidateRecord != null) {
-                vocabularyInsightService.syncInsights(candidateRecord);
+                try {
+                    vocabularyInsightService.syncInsights(candidateRecord);
+                } catch (Exception ignored) {
+                }
                 return candidateRecord;
             }
-            LearningVocabularyAlias candidateAlias = aliasMapper.findByNormalizedAlias(candidate);
-            if (candidateAlias != null && candidateAlias.getVocabularyId() != null) {
-                EnglishVocabularyStudyRecord matched = recordMapper.selectById(candidateAlias.getVocabularyId());
-                if (matched != null && !Boolean.TRUE.equals(matched.getDeleted())) {
-                    vocabularyInsightService.syncInsights(matched);
-                    return matched;
+            try {
+                LearningVocabularyAlias candidateAlias = aliasMapper.findByNormalizedAlias(candidate);
+                if (candidateAlias != null && candidateAlias.getVocabularyId() != null) {
+                    EnglishVocabularyStudyRecord matched = recordMapper.selectById(candidateAlias.getVocabularyId());
+                    if (matched != null && !Boolean.TRUE.equals(matched.getDeleted())) {
+                        vocabularyInsightService.syncInsights(matched);
+                        return matched;
+                    }
                 }
+            } catch (Exception ignored) {
             }
         }
         return null;
@@ -117,7 +127,10 @@ public class EnglishVocabularyStudyService {
         EnglishVocabularyStudyRecord existing = forceRefresh ? null : findRecord(normalizedTerm);
         if (existing != null) {
             touch(existing);
-            vocabularyInsightService.syncInsights(existing);
+            try {
+                vocabularyInsightService.syncInsights(existing);
+            } catch (Exception ignored) {
+            }
             systemLogService.record(null, SystemLogType.CACHE, "读取词汇缓存", normalizedTerm);
             log.debug("词汇缓存命中 term={} recordId={} lookupCount={} queriedTerm={}",
                     normalizedTerm,
@@ -127,26 +140,52 @@ public class EnglishVocabularyStudyService {
             return toResponse(existing, true, rawTerm);
         }
 
-        log.debug("开始生成词汇学习卡片 term={} forceRefresh={} modelConfigId={}",
+        // 若输入为复数/时态（如 slogans），确定目标原形词（如 slogan）
+        List<String> candidateLemmas = lemmatizer.candidateLemmas(normalizedTerm);
+        String targetGenerationTerm = candidateLemmas.isEmpty() ? normalizedTerm : candidateLemmas.get(0);
+
+        log.debug("开始生成词汇学习卡片 term={} targetLemma={} forceRefresh={} modelConfigId={}",
                 normalizedTerm,
+                targetGenerationTerm,
                 forceRefresh,
                 request.getModelConfigId());
-        AgentChatResponse chatResponse = aiChat(request, normalizedTerm);
-        EnglishVocabularyStudyRecord record = findByNormalizedTerm(normalizedTerm);
+        // 传递标准原形词给 AI 进行词卡生成，确保释义、音标与卡片主体均为标准原形
+        AgentChatResponse chatResponse = aiChat(request, targetGenerationTerm);
+        String parsedJson = normalizeCardPayload(
+                chatResponse.requireStructuredRoot(AiInvocationScene.VOCABULARY_CARD_SINGLE), targetGenerationTerm);
+        validateCardPayload(parsedJson);
+
+        // 统一提取标准原形（Lemma）作为主词卡的主键和标准展示词，严禁将复数/时态存为独立主词卡
+        String canonicalDisplayTerm = targetGenerationTerm;
+        String canonicalTerm = targetGenerationTerm;
+        try {
+            JsonNode root = objectMapper.readTree(parsedJson);
+            String parsedLemma = root.path("lemma").asText();
+            if (!StringUtils.hasText(parsedLemma)) {
+                parsedLemma = root.path("term").asText(targetGenerationTerm);
+            }
+            if (StringUtils.hasText(parsedLemma)) {
+                canonicalDisplayTerm = parsedLemma.trim();
+                canonicalTerm = normalize(canonicalDisplayTerm);
+            }
+        } catch (Exception ignored) {
+        }
+
+        EnglishVocabularyStudyRecord record = findByNormalizedTerm(canonicalTerm);
+        if (record == null && !canonicalTerm.equals(normalizedTerm)) {
+            record = findByNormalizedTerm(normalizedTerm);
+        }
         if (record == null) {
             record = new EnglishVocabularyStudyRecord();
         }
-        record.setTerm(rawTerm);
-        record.setNormalizedTerm(normalizedTerm);
+        record.setTerm(canonicalDisplayTerm);
+        record.setNormalizedTerm(canonicalTerm);
         record.setAgentCode(resolveAgentCode(request));
         record.setTemplateCode(resolveTemplateCode(request));
         record.setProvider(chatResponse.getModelProvider());
         record.setModelName(chatResponse.getModelName());
         record.setSessionId(chatResponse.getSessionId());
         record.setRawContent(chatResponse.getContent());
-        String parsedJson = normalizeCardPayload(
-                chatResponse.requireStructuredRoot(AiInvocationScene.VOCABULARY_CARD_SINGLE), normalizedTerm);
-        validateCardPayload(parsedJson);
         record.setParsedJson(parsedJson);
         record.setTokenUsage(chatResponse.getTokenUsage());
         record.setCostTime(chatResponse.getCostTime());
@@ -163,16 +202,28 @@ public class EnglishVocabularyStudyService {
             recordMapper.updateById(record);
         }
 
-        vocabularyInsightService.syncInsights(record);
-        systemLogService.record(null, SystemLogType.AI, "AI 生成词汇卡片", normalizedTerm);
+        // 若存在旧的历史复数脏记录（例如主键为 slogans），清理该脏记录以防污染模糊匹配
+        if (!canonicalTerm.equals(normalizedTerm)) {
+            EnglishVocabularyStudyRecord dirtyPluralRecord = findByNormalizedTerm(normalizedTerm);
+            if (dirtyPluralRecord != null && !dirtyPluralRecord.getId().equals(record.getId())) {
+                recordMapper.deleteById(dirtyPluralRecord.getId());
+            }
+        }
+
+        try {
+            vocabularyInsightService.syncInsights(record);
+        } catch (Exception ex) {
+            log.warn("同步词汇洞察及别名异常: {}", ex.getMessage());
+        }
+        systemLogService.record(null, SystemLogType.AI, "AI 生成词汇卡片", canonicalTerm);
         log.info("用户「{}」使用「{} / {}」生成了单词「{}」的学习卡片，是否刷新缓存：{}",
                 userDisplayNameService.currentUserName(),
                 record.getProvider(),
                 record.getModelName(),
-                normalizedTerm,
+                canonicalTerm,
                 forceRefresh);
-        log.debug("词汇学习卡片已保存 term={} recordId={} provider={} model={} cacheRefresh={}",
-                normalizedTerm, record.getId(), record.getProvider(), record.getModelName(), forceRefresh);
+        log.debug("词汇学习卡片已保存 term={} canonicalTerm={} recordId={} provider={} model={} cacheRefresh={}",
+                normalizedTerm, canonicalTerm, record.getId(), record.getProvider(), record.getModelName(), forceRefresh);
         return toResponse(record, false, rawTerm);
     }
 
@@ -259,7 +310,7 @@ public class EnglishVocabularyStudyService {
         chatRequest.setBusinessType(AiChatConstants.BUSINESS_TYPE_LEARNING);
         chatRequest.setBusinessId(LearningScene.ENGLISH_VOCABULARY.getCode());
         chatRequest.setSceneCode(LearningScene.ENGLISH_VOCABULARY.getCode());
-        chatRequest.setMessage("请生成英语词汇「" + normalizedTerm + "」的结构化学习卡片。");
+        chatRequest.setMessage("请生成英语词汇「" + normalizedTerm + "」的结构化学习卡片。注意：1. 面向中文母语学习者，definitions、collocations、synonyms、antonyms、word_family 中的 meaning 必须输出精准地道的中文释义，例句 translation 必须为中文翻译，memory_tips 必须使用中文讲解记忆技巧。2. 无论输入的是原形还是变体，必须基于单词标准原形生成。");
         chatRequest.setVariables(variables);
         return aiChatService.chat(chatRequest);
     }
@@ -379,20 +430,83 @@ public class EnglishVocabularyStudyService {
                     objectNode.put("term", fallbackTerm);
                 }
                 normalizeScalarField(objectNode, "lemma", List.of("base_form", "baseForm", "root_word", "rootWord", "prototype"));
+                normalizePhoneticField(objectNode);
                 normalizeArrayField(objectNode, "inflections", List.of("inflection", "word_forms", "wordForms", "forms", "conjugations"));
                 normalizeArrayField(objectNode, "definitions", List.of("meaning", "meanings", "definition"));
                 normalizeArrayField(objectNode, "examples", List.of("example_sentences", "example", "sentences", "exampleSentences"));
                 normalizeArrayField(objectNode, "collocations", List.of("phrases", "collocation", "common_phrases", "commonPhrases"));
                 normalizeScalarField(objectNode, "memory_tips", List.of("memoryTips", "tips", "memory_tip", "mnemonic", "memory"));
                 normalizeArrayField(objectNode, "related_words", List.of("relatedWords", "relations", "related"));
+                normalizeRelatedWordsPhonetics(objectNode);
             }
             return objectMapper.writeValueAsString(root);
         } catch (Exception ex) {
             throw LearningAssistantException.system(
-                    LearningErrorCode.JSON_SERIALIZE_FAILED,
+                LearningErrorCode.JSON_SERIALIZE_FAILED,
                     "词卡结构化响应标准化失败",
                     ex);
         }
+    }
+
+    private void normalizeRelatedWordsPhonetics(ObjectNode objectNode) {
+        for (String field : List.of("synonyms", "antonyms", "word_family", "wordFamily")) {
+            JsonNode array = objectNode.get(field);
+            if (array != null && array.isArray()) {
+                for (JsonNode item : array) {
+                    if (item instanceof ObjectNode itemObj) {
+                        normalizePhoneticField(itemObj);
+                    }
+                }
+            }
+        }
+    }
+
+    private void normalizePhoneticField(ObjectNode objectNode) {
+        JsonNode phoneticNode = objectNode.path("phonetic");
+        String uk = null;
+        String us = null;
+        if (phoneticNode.isObject()) {
+            uk = phoneticNode.path("uk").asText(null);
+            us = phoneticNode.path("us").asText(null);
+            if (uk == null) uk = phoneticNode.path("en").asText(null);
+            if (us == null) us = phoneticNode.path("am").asText(null);
+        } else if (phoneticNode.isTextual() && StringUtils.hasText(phoneticNode.asText())) {
+            uk = phoneticNode.asText();
+            us = phoneticNode.asText();
+        }
+        if (!StringUtils.hasText(uk)) {
+            uk = firstNonBlankText(objectNode, "phonetic.uk", "phonetic_uk", "uk_phonetic", "phoneticUk", "ukPhonetic", "uk");
+        }
+        if (!StringUtils.hasText(us)) {
+            us = firstNonBlankText(objectNode, "phonetic.us", "phonetic_us", "us_phonetic", "phoneticUs", "usPhonetic", "us", "am");
+        }
+        if (StringUtils.hasText(uk) || StringUtils.hasText(us)) {
+            ObjectNode pNode = objectNode.putObject("phonetic");
+            if (StringUtils.hasText(uk)) {
+                pNode.put("uk", formatPhonetic(uk));
+            }
+            if (StringUtils.hasText(us)) {
+                pNode.put("us", formatPhonetic(us));
+            }
+        }
+    }
+
+    private String firstNonBlankText(ObjectNode objectNode, String... fields) {
+        for (String field : fields) {
+            JsonNode node = objectNode.get(field);
+            if (node != null && node.isTextual() && StringUtils.hasText(node.asText())) {
+                return node.asText().trim();
+            }
+        }
+        return null;
+    }
+
+    private String formatPhonetic(String text) {
+        if (!StringUtils.hasText(text)) return "";
+        String clean = text.trim().replaceFirst("(?i)^UK\\s*", "").replaceFirst("(?i)^US\\s*", "");
+        if (!clean.startsWith("/")) clean = "/" + clean;
+        if (!clean.endsWith("/")) clean = clean + "/";
+        return clean;
     }
 
     private void normalizeArrayField(ObjectNode objectNode, String targetField, List<String> aliases) {
