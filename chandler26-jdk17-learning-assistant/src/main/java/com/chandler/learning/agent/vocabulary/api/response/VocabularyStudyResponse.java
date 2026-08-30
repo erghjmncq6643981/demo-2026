@@ -17,6 +17,12 @@ public class VocabularyStudyResponse {
     @Schema(description = "主键 ID")
     private Long id;
 
+    @Schema(description = "用户实际查询的词汇")
+    private String queriedTerm;
+
+    @Schema(description = "单词原形（Lemma）")
+    private String lemma;
+
     @Schema(description = "英文词汇")
     private String term;
 
@@ -25,6 +31,12 @@ public class VocabularyStudyResponse {
 
     @Schema(description = "是否命中缓存")
     private Boolean cacheHit;
+
+    @Schema(description = "是否通过形态变体或别名命中原型")
+    private Boolean isAliasHit;
+
+    @Schema(description = "常见时态或复数形态列表")
+    private List<String> inflections;
 
     @Schema(description = "Agent 编码")
     private String agentCode;

@@ -74,6 +74,12 @@ export function createQuickLookupFeature({
     const examples = normalizeExamples(parsed).slice(0, 2)
 
     elements.quickLookupContent.innerHTML = `
+      ${record?.isAliasHit || (record?.queriedTerm && record.queriedTerm.toLowerCase() !== (term || '').toLowerCase()) ? `
+        <div class="quick-lemma-notice">
+          <span class="quick-lemma-icon">🔀</span>
+          <span>检索词：<strong class="quick-lemma-highlight">${escapeHtml(record.queriedTerm)}</strong> · 已关联至原形单词 <strong class="quick-lemma-highlight">${escapeHtml(record.lemma || term)}</strong></span>
+        </div>
+      ` : ''}
       <div class="quick-card-hero">
         <div>
           <div class="quick-card-title-row">
@@ -89,6 +95,12 @@ export function createQuickLookupFeature({
           <button type="button" class="primary-button compact-primary" data-quick-goto="${escapeHtml(term)}">进入深度精读 →</button>
         </div>
       </div>
+      ${Array.isArray(record?.inflections) && record.inflections.length ? `
+        <div class="quick-inflections-row">
+          <span class="quick-inflections-label">形态变体：</span>
+          ${record.inflections.map((inf) => `<span class="quick-inflection-tag" data-quick-inflection="${escapeHtml(inf)}">${escapeHtml(inf)}</span>`).join('')}
+        </div>
+      ` : ''}
       <div class="quick-card-meanings">
         ${meanings.map((m) => `
           <div class="quick-meaning-item">
@@ -105,6 +117,16 @@ export function createQuickLookupFeature({
         </div>
       ` : ''}
     `
+
+    elements.quickLookupContent.querySelectorAll('[data-quick-inflection]')?.forEach((tag) => {
+      tag.addEventListener('click', (e) => {
+        const infTerm = e.currentTarget.getAttribute('data-quick-inflection')
+        if (infTerm) {
+          if (elements.quickLookupInput) elements.quickLookupInput.value = infTerm
+          lookup(infTerm)
+        }
+      })
+    })
 
     elements.quickLookupContent.querySelector('[data-quick-speak]')?.addEventListener('click', () => {
       speak?.(term)

@@ -18,6 +18,8 @@ class EnglishVocabularyStudyServiceTest {
     private final ObjectMapper objectMapper = new ObjectMapper();
     private final EnglishVocabularyStudyService service = new EnglishVocabularyStudyService(
             mock(EnglishVocabularyStudyRecordMapper.class),
+            mock(com.chandler.learning.agent.vocabulary.infrastructure.mapper.LearningVocabularyAliasMapper.class),
+            new EnglishLemmatizer(),
             mock(AiChatService.class),
             objectMapper,
             mock(VocabularyInsightService.class),

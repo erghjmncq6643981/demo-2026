@@ -1,0 +1,42 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "https://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.chandler.learning.agent.vocabulary.infrastructure.mapper.LearningVocabularyAliasMapper">
+
+    <select id="findByNormalizedAlias"
+            resultType="com.chandler.learning.agent.vocabulary.domain.entity.LearningVocabularyAlias">
+        SELECT *
+        FROM learning_vocabulary_alias
+        WHERE deleted = 0
+          AND normalized_alias = #{normalizedAlias}
+        ORDER BY create_time ASC
+        LIMIT 1
+    </select>
+
+    <select id="findByNormalizedAliases"
+            resultType="com.chandler.learning.agent.vocabulary.domain.entity.LearningVocabularyAlias">
+        SELECT *
+        FROM learning_vocabulary_alias
+        WHERE deleted = 0
+          AND normalized_alias IN
+        <foreach collection="normalizedAliases" item="alias" open="(" separator="," close=")">#{alias}</foreach>
+    </select>
+
+    <delete id="physicalDeleteByVocabularyIds">
+        DELETE FROM learning_vocabulary_alias
+        WHERE vocabulary_id IN
+        <foreach collection="vocabularyIds" item="id" open="(" separator="," close=")">#{id}</foreach>
+    </delete>
+
+    <insert id="insertBatch">
+        INSERT IGNORE INTO learning_vocabulary_alias
+        (id, create_by, update_by, vocabulary_id, alias_term, normalized_alias, lemma, normalized_lemma,
+         alias_type, source, create_time, update_time, deleted, version)
+        VALUES
+        <foreach collection="list" item="item" separator=",">
+            (#{item.id}, #{item.createBy}, #{item.updateBy}, #{item.vocabularyId}, #{item.aliasTerm},
+             #{item.normalizedAlias}, #{item.lemma}, #{item.normalizedLemma}, #{item.aliasType},
+             #{item.source}, #{item.createTime}, #{item.updateTime}, #{item.deleted}, #{item.version})
+        </foreach>
+    </insert>
+
+</mapper>

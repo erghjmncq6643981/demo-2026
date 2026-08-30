@@ -179,6 +179,27 @@ CREATE TABLE IF NOT EXISTS learning_vocabulary_relation (
     KEY idx_learning_vocabulary_relation_match (normalized_term, match_type, match_score)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci COMMENT='词汇语义关联关系';
 
+CREATE TABLE IF NOT EXISTS learning_vocabulary_alias (
+    id BIGINT NOT NULL COMMENT '主键',
+    create_by BIGINT NOT NULL DEFAULT 0 COMMENT '创建人用户 ID',
+    update_by BIGINT NOT NULL DEFAULT 0 COMMENT '更新人用户 ID',
+    vocabulary_id BIGINT NOT NULL COMMENT '公共词卡缓存 ID',
+    alias_term VARCHAR(128) NOT NULL COMMENT '变形或别名单词',
+    normalized_alias VARCHAR(128) NOT NULL COMMENT '归一化别名',
+    lemma VARCHAR(128) NOT NULL COMMENT '原形单词',
+    normalized_lemma VARCHAR(128) NOT NULL COMMENT '归一化原形',
+    alias_type VARCHAR(50) NOT NULL COMMENT '别名类型：exact, plural, past_tense, past_participle, present_participle, third_person_singular, comparative, superlative, irregular, ai_generated',
+    source VARCHAR(50) NOT NULL DEFAULT 'rule' COMMENT '来源：rule, ai, manual',
+    create_time DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP COMMENT '创建时间',
+    update_time DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP COMMENT '更新时间',
+    deleted TINYINT(1) NOT NULL DEFAULT 0 COMMENT '是否逻辑删除',
+    version INT NOT NULL DEFAULT 0 COMMENT '乐观锁版本号',
+    PRIMARY KEY (id),
+    UNIQUE KEY uk_learning_vocabulary_alias (normalized_alias, vocabulary_id),
+    KEY idx_learning_vocabulary_alias_lookup (normalized_alias, deleted),
+    KEY idx_learning_vocabulary_alias_vocab (vocabulary_id)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci COMMENT='英语词汇形态变形与别名索引';
+
 CREATE TABLE IF NOT EXISTS learning_review_record (
     id BIGINT NOT NULL COMMENT '主键',
     create_by BIGINT NOT NULL DEFAULT 0 COMMENT '创建人用户 ID',

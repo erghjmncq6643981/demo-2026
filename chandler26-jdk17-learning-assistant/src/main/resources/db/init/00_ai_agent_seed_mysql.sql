@@ -46,7 +46,7 @@ INSERT INTO ai_prompt_template (
 ) VALUES
 (
     1001, '英语词汇卡片 JSON', 'english_vocab_card_json', 'user', '英语,词汇,JSON',
-    '请为英语词汇「{{term}}」生成学习卡片。只输出合法 JSON，不要输出 Markdown。字段包括 term、is_valid、language、phonetic.uk、phonetic.us、definitions、examples、collocations、synonyms、antonyms、word_family、memory_tips。definitions 每项包含 part_of_speech、meaning、english；examples 每项包含 sentence、translation；collocations 每项包含 phrase、meaning；synonyms、antonyms、word_family 每项包含 word、part_of_speech、meaning、phonetic.uk、phonetic.us。相关词只能包含同义词、反义词和词族，搭配只放 collocations。',
+    '请为英语词汇「{{term}}」生成学习卡片。只输出合法 JSON，不要输出 Markdown。字段包括 term、lemma（单词原型）、inflections（常见单复数/时态/分词变形列表，如复数、过去式、进行时）、is_valid、language、phonetic.uk、phonetic.us、definitions、examples、collocations、synonyms、antonyms、word_family、memory_tips。definitions 每项包含 part_of_speech、meaning、english；examples 每项包含 sentence、translation；collocations 每项包含 phrase、meaning；synonyms、antonyms、word_family 每项包含 word、part_of_speech、meaning、phonetic.uk、phonetic.us。相关词只能包含同义词、反义词和词族，搭配只放 collocations。',
     JSON_ARRAY(JSON_OBJECT('name','term','label','英语单词或短语','required',true)),
     '生成可解析入库的英语词汇学习卡片', '{"term":"abandon"}', '{"term":"abandon","is_valid":true}', 1, 1, 1
 ),
@@ -70,7 +70,7 @@ INSERT INTO ai_prompt_template (
 ),
 (
     1202, '英语词汇卡片批量 JSON', 'english_vocab_cards_batch_json', 'user', '英语,词卡,批量生成,JSON',
-    '请为词汇数组 {{terms}} 批量生成学习卡片。只输出合法 JSON，不要输出 Markdown。根字段为 cards 数组，每个输入词必须且只能对应一项；字段包括 term、is_valid、language、phonetic、definitions、examples、collocations、synonyms、antonyms、word_family、memory_tips。相关词只能包含同义词、反义词和词族，搭配只放 collocations。',
+    '请为词汇数组 {{terms}} 批量生成学习卡片。只输出合法 JSON，不要输出 Markdown。根字段为 cards 数组，每个输入词必须且只能对应一项；字段包括 term、lemma、inflections、is_valid、language、phonetic、definitions、examples、collocations、synonyms、antonyms、word_family、memory_tips。相关词只能包含同义词、反义词和词族，搭配只放 collocations。',
     JSON_ARRAY(JSON_OBJECT('name','terms','label','词汇数组','required',true)),
     '一次模型调用生成一批独立词卡，减少请求和 Token 开销', '{"terms":["abandon","ability"]}', '{"cards":[]}', 1, 1, 5
 ),

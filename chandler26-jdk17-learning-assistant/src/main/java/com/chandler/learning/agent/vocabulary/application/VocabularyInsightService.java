@@ -3,6 +3,8 @@ package com.chandler.learning.agent.vocabulary.application;
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import com.chandler.learning.agent.vocabulary.api.response.VocabularyRelationResponse;
 import com.chandler.learning.agent.vocabulary.api.response.VocabularyTagResponse;
+import com.baomidou.mybatisplus.core.toolkit.IdWorker;
+import com.chandler.learning.agent.vocabulary.domain.entity.LearningVocabularyAlias;
 import com.chandler.learning.agent.vocabulary.domain.entity.LearningVocabularyRelation;
 import com.chandler.learning.agent.vocabulary.domain.entity.LearningVocabularyTag;
 import com.chandler.learning.agent.vocabulary.domain.entity.EnglishVocabularyStudyRecord;
@@ -10,6 +12,7 @@ import com.chandler.learning.agent.vocabulary.domain.enums.VocabularyDifficulty;
 import com.chandler.learning.agent.vocabulary.domain.enums.VocabularyMatchType;
 import com.chandler.learning.agent.vocabulary.domain.enums.VocabularyRelationType;
 import com.chandler.learning.agent.vocabulary.domain.enums.VocabularyTagType;
+import com.chandler.learning.agent.vocabulary.infrastructure.mapper.LearningVocabularyAliasMapper;
 import com.chandler.learning.agent.vocabulary.infrastructure.mapper.LearningVocabularyRelationMapper;
 import com.chandler.learning.agent.vocabulary.infrastructure.mapper.LearningVocabularyTagMapper;
 import com.chandler.learning.agent.vocabulary.infrastructure.mapper.EnglishVocabularyStudyRecordMapper;
@@ -45,7 +48,9 @@ public class VocabularyInsightService {
 
     private final LearningVocabularyTagMapper tagMapper;
     private final LearningVocabularyRelationMapper relationMapper;
+    private final LearningVocabularyAliasMapper aliasMapper;
     private final EnglishVocabularyStudyRecordMapper recordMapper;
+    private final EnglishLemmatizer lemmatizer;
     private final ObjectMapper objectMapper;
 
     /** 从结构化词卡同步标签和语义关系。 */
@@ -87,9 +92,11 @@ public class VocabularyInsightService {
         Set<Long> vocabularyIds = inputs.stream().map(input -> input.record().getId()).collect(java.util.stream.Collectors.toSet());
         tagMapper.physicalDeleteByVocabularyIds(vocabularyIds);
         relationMapper.physicalDeleteByVocabularyIds(vocabularyIds);
+        aliasMapper.physicalDeleteByVocabularyIds(vocabularyIds);
         LocalDateTime now = LocalDateTime.now();
         List<LearningVocabularyTag> allTags = new ArrayList<>();
         List<LearningVocabularyRelation> allRelations = new ArrayList<>();
+        List<LearningVocabularyAlias> allAliases = new ArrayList<>();
         for (InsightInput input : inputs) {
             Map<String, LearningVocabularyTag> tags = new LinkedHashMap<>();
             collectPartOfSpeechTags(input.root(), input.record(), tags, now);
@@ -101,9 +108,11 @@ public class VocabularyInsightService {
                     VocabularyInsightConstants.TAG_WEIGHT_DIFFICULTY, now);
             allTags.addAll(tags.values());
             allRelations.addAll(collectRelations(input.root(), input.record(), now, relatedRecords::get));
+            allAliases.addAll(collectAliases(input.root(), input.record(), now));
         }
         insertChunks(allTags, tagMapper::insertBatch);
         insertChunks(allRelations, relationMapper::insertBatch);
+        insertChunks(allAliases, aliasMapper::insertBatch);
     }
 
     /** 查询词汇标签列表。 */
@@ -708,6 +717,81 @@ public class VocabularyInsightService {
         } catch (Exception ignored) {
             return Phonetic.empty();
         }
+    }
+
+    private List<LearningVocabularyAlias> collectAliases(
+            JsonNode root, EnglishVocabularyStudyRecord record, LocalDateTime now) {
+        Map<String, LearningVocabularyAlias> aliases = new LinkedHashMap<>();
+        String rawTerm = record.getTerm();
+        String normalizedTerm = record.getNormalizedTerm();
+        String lemma = root.path("lemma").asText(rawTerm);
+        if (!StringUtils.hasText(lemma)) {
+            lemma = rawTerm;
+        }
+        String normalizedLemma = normalizeTerm(lemma);
+
+        // 1. 本身精确词
+        addAlias(aliases, record, rawTerm, normalizedTerm, lemma, normalizedLemma, "exact", "system", now);
+
+        // 2. 原型词（若不同）
+        if (StringUtils.hasText(lemma) && !normalizedLemma.equals(normalizedTerm)) {
+            addAlias(aliases, record, lemma, normalizedLemma, lemma, normalizedLemma, "lemma", "ai", now);
+        }
+
+        // 3. AI 输出的 inflections / word_forms 列表
+        JsonNode inflectionsNode = root.path("inflections");
+        if (inflectionsNode.isArray()) {
+            for (JsonNode item : inflectionsNode) {
+                String alias = item.asText();
+                if (StringUtils.hasText(alias)) {
+                    addAlias(aliases, record, alias, normalizeTerm(alias), lemma, normalizedLemma, "inflection", "ai", now);
+                }
+            }
+        }
+        JsonNode wordFormsNode = root.path("word_forms");
+        if (wordFormsNode.isArray()) {
+            for (JsonNode item : wordFormsNode) {
+                String alias = item.isObject() ? item.path("word").asText(item.path("term").asText()) : item.asText();
+                if (StringUtils.hasText(alias)) {
+                    addAlias(aliases, record, alias, normalizeTerm(alias), lemma, normalizedLemma, "word_form", "ai", now);
+                }
+            }
+        }
+
+        // 4. 词形还原器推荐的原型候选（建立双向索引）
+        List<String> candidateLemmas = lemmatizer.candidateLemmas(normalizedTerm);
+        for (String candidate : candidateLemmas) {
+            addAlias(aliases, record, candidate, candidate, lemma, normalizedLemma, "rule_lemma", "rule", now);
+        }
+
+        return new ArrayList<>(aliases.values());
+    }
+
+    private void addAlias(Map<String, LearningVocabularyAlias> aliases, EnglishVocabularyStudyRecord record,
+                          String aliasTerm, String normalizedAlias, String lemma, String normalizedLemma,
+                          String aliasType, String source, LocalDateTime now) {
+        if (!StringUtils.hasText(normalizedAlias)) {
+            return;
+        }
+        if (aliases.containsKey(normalizedAlias)) {
+            return;
+        }
+        LearningVocabularyAlias alias = new LearningVocabularyAlias();
+        alias.setId(IdWorker.getId());
+        alias.setCreateBy(0L);
+        alias.setUpdateBy(0L);
+        alias.setVocabularyId(record.getId());
+        alias.setAliasTerm(aliasTerm.trim());
+        alias.setNormalizedAlias(normalizedAlias);
+        alias.setLemma(lemma.trim());
+        alias.setNormalizedLemma(normalizedLemma);
+        alias.setAliasType(aliasType);
+        alias.setSource(source);
+        alias.setCreateTime(now);
+        alias.setUpdateTime(now);
+        alias.setDeleted(false);
+        alias.setVersion(CommonConstants.ZERO);
+        aliases.put(normalizedAlias, alias);
     }
 
     /**

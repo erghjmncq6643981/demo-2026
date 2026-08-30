@@ -12,6 +12,7 @@ import com.chandler.learning.agent.task.domain.entity.AiAsyncTask;
 import com.chandler.learning.agent.learning.domain.entity.LearningPlan;
 import com.chandler.learning.agent.learning.domain.entity.LearningPlanUnitEntry;
 import com.chandler.learning.agent.vocabulary.domain.entity.LearningWordProgress;
+import com.chandler.learning.agent.vocabulary.domain.entity.LearningVocabularyAlias;
 import com.chandler.learning.agent.vocabulary.domain.entity.EnglishVocabularyStudyRecord;
 import com.chandler.learning.agent.vocabulary.domain.entity.VocabularyCardGenerationJob;
 import com.chandler.learning.agent.vocabulary.domain.entity.VocabularyCardGenerationJobItem;
@@ -21,6 +22,7 @@ import com.chandler.learning.agent.learning.domain.enums.LearningScene;
 import com.chandler.learning.agent.system.domain.enums.SystemLogType;
 import com.chandler.learning.agent.exception.LearningAssistantException;
 import com.chandler.learning.agent.learning.application.LearningPlanAccessService;
+import com.chandler.learning.agent.vocabulary.infrastructure.mapper.LearningVocabularyAliasMapper;
 import com.chandler.learning.agent.vocabulary.infrastructure.mapper.LearningWordProgressMapper;
 import com.chandler.learning.agent.vocabulary.infrastructure.mapper.EnglishVocabularyStudyRecordMapper;
 import com.chandler.learning.agent.vocabulary.infrastructure.mapper.VocabularyCardGenerationJobItemMapper;
@@ -68,6 +70,7 @@ public class VocabularyCardBatchService {
     private final VocabularyCardGenerationJobMapper jobMapper;
     private final VocabularyCardGenerationJobItemMapper itemMapper;
     private final EnglishVocabularyStudyRecordMapper vocabularyMapper;
+    private final LearningVocabularyAliasMapper aliasMapper;
     private final LearningPlanAccessService learningPlanAccessService;
     private final LearningWordProgressMapper progressMapper;
     private final AiChatService aiChatService;
@@ -474,12 +477,32 @@ public class VocabularyCardBatchService {
         if (terms.isEmpty()) {
             return Map.of();
         }
-        return vocabularyMapper.selectList(new LambdaQueryWrapper<EnglishVocabularyStudyRecord>()
+        Map<String, EnglishVocabularyStudyRecord> result = new LinkedHashMap<>();
+        List<EnglishVocabularyStudyRecord> directMatches = vocabularyMapper.selectList(new LambdaQueryWrapper<EnglishVocabularyStudyRecord>()
                         .in(EnglishVocabularyStudyRecord::getNormalizedTerm, terms)
-                        .eq(EnglishVocabularyStudyRecord::getDeleted, false))
-                .stream()
-                .collect(Collectors.toMap(EnglishVocabularyStudyRecord::getNormalizedTerm, record -> record,
-                        (left, right) -> left));
+                        .eq(EnglishVocabularyStudyRecord::getDeleted, false));
+        for (EnglishVocabularyStudyRecord record : directMatches) {
+            result.put(record.getNormalizedTerm(), record);
+        }
+        Set<String> missingTerms = terms.stream().filter(t -> !result.containsKey(t)).collect(Collectors.toSet());
+        if (!missingTerms.isEmpty()) {
+            List<LearningVocabularyAlias> aliases = aliasMapper.findByNormalizedAliases(missingTerms);
+            if (aliases != null && !aliases.isEmpty()) {
+                Set<Long> vocabIds = aliases.stream().map(LearningVocabularyAlias::getVocabularyId).collect(Collectors.toSet());
+                if (!vocabIds.isEmpty()) {
+                    Map<Long, EnglishVocabularyStudyRecord> recordsById = vocabularyMapper.selectBatchIds(vocabIds).stream()
+                            .filter(r -> !Boolean.TRUE.equals(r.getDeleted()))
+                            .collect(Collectors.toMap(EnglishVocabularyStudyRecord::getId, r -> r));
+                    for (LearningVocabularyAlias a : aliases) {
+                        EnglishVocabularyStudyRecord rec = recordsById.get(a.getVocabularyId());
+                        if (rec != null) {
+                            result.put(a.getNormalizedAlias(), rec);
+                        }
+                    }
+                }
+            }
+        }
+        return result;
     }
 
     private Map<String, JsonNode> parseCards(AgentChatResponse response) {

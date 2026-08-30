@@ -75,6 +75,7 @@ class VocabularyCardBatchServiceTest {
                                                VocabularyInsightService insightService) {
         return new VocabularyCardBatchService(
                 mock(VocabularyCardGenerationJobMapper.class), itemMapper, vocabularyMapper,
+                mock(com.chandler.learning.agent.vocabulary.infrastructure.mapper.LearningVocabularyAliasMapper.class),
                 mock(LearningPlanAccessService.class), progressMapper, mock(AiChatService.class),
                 mock(WordbookService.class), insightService, mock(SystemLogService.class),
                 mock(UserDisplayNameService.class), new ObjectMapper(), mock(TransactionTemplate.class),
