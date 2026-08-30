@@ -17,9 +17,7 @@ public class LearningAuditor {
         this.currentUserContext = currentUserContext;
     }
 
-    /**
-     * 处理 {@code currentUserId} 相关业务。
-     */
+    /** 获取当前安全上下文中的用户 ID。 */
     public Long currentUserId() {
         return currentUserContext.findUser()
                 .map(user -> user.getId())

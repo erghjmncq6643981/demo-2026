@@ -34,11 +34,13 @@ public class SceneMaterialTaskHandler implements AiTaskHandler {
     private final AiTaskExecutionService executionService;
     private final AiAsyncTaskService taskService;
 
+    /** 返回处理器支持的任务类型。 */
     @Override
     public AiTaskType taskType() {
         return AiTaskType.SCENE_MATERIAL;
     }
 
+    /** 定义任务的执行步骤。 */
     @Override
     public List<AiTaskStepDefinition> steps() {
         return List.of(
@@ -48,6 +50,7 @@ public class SceneMaterialTaskHandler implements AiTaskHandler {
                 new AiTaskStepDefinition(PUBLISH, "发布学习材料", 40));
     }
 
+    /** 执行当前任务处理流程。 */
     @Override
     public void execute(AiAsyncTask task, Map<String, Object> payload) {
         Long modelConfigId = AiTaskPayload.longValue(payload, "modelConfigId");

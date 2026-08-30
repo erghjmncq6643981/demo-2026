@@ -75,6 +75,7 @@ public class LearningPlanLifecycleService {
         return new UpdateOutcome(generateFirstUnit);
     }
 
+    /** 暂停场景学习计划。 */
     public void pause(Long userId, LearningPlan plan) {
         if (!ScenePlanConstants.STATUS_ACTIVE.equals(plan.getStatus())) {
             throw stateError("只有进行中的计划才可以暂停");
@@ -83,6 +84,7 @@ public class LearningPlanLifecycleService {
         persistAndLog(userId, plan, "暂停场景学习计划");
     }
 
+    /** 恢复场景学习计划。 */
     public void resume(Long userId, LearningPlan plan) {
         if (!ScenePlanConstants.STATUS_PAUSED.equals(plan.getStatus())
                 && !ScenePlanConstants.STATUS_NOT_STARTED.equals(plan.getStatus())) {
@@ -92,6 +94,7 @@ public class LearningPlanLifecycleService {
         persistAndLog(userId, plan, "恢复场景学习计划");
     }
 
+    /** 取消场景学习计划。 */
     public void cancel(Long userId, LearningPlan plan) {
         ensureNotTerminal(plan, "已完成或已取消的计划无法取消");
         plan.setStatus(ScenePlanConstants.STATUS_CANCELLED);

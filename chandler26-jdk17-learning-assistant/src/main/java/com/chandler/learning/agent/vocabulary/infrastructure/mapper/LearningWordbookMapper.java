@@ -9,7 +9,7 @@ import org.apache.ibatis.annotations.Param;
 import java.util.List;
 
 /**
- * LearningWordbookMapper 类。
+ * 个人单词本数据访问接口。
  */
 @Mapper
 public interface LearningWordbookMapper extends BaseMapper<LearningWordbook> {

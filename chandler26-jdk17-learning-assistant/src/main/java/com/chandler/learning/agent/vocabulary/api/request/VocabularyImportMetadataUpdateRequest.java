@@ -12,7 +12,7 @@ import lombok.Data;
 public class VocabularyImportMetadataUpdateRequest {
 
     @NotBlank(message = "词表名称不能为空")
-    @Schema(description = "名称")
+    @Schema(description = "公共词本名称")
     private String catalogName;
 
     @Schema(description = "数据源类型")

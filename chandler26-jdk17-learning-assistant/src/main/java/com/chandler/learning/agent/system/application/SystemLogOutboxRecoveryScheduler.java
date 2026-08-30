@@ -15,6 +15,7 @@ public class SystemLogOutboxRecoveryScheduler {
 
     private final SystemLogOutboxPersistenceService outboxPersistenceService;
 
+    /** 恢复尚未消费的系统日志事件。 */
     @Scheduled(fixedDelayString = "${learning.audit-log.recovery-delay-ms:30000}")
     public void recoverPendingLogs() {
         try {

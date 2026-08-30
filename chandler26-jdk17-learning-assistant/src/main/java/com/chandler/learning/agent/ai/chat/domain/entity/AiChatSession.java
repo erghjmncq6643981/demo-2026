@@ -15,40 +15,26 @@ import lombok.Data;
 @Schema(name = "AI 对话会话")
 public class AiChatSession extends BaseEntity {
 
-    /**
-     * id 属性。
-     */
+    /** 主键 ID。 */
     @TableId(value = "id", type = IdType.ASSIGN_ID)
     private Long id;
 
-    /**
-     * userId 属性。
-     */
+    /** 用户 ID。 */
     private Long userId;
 
-    /**
-     * agentCode 属性。
-     */
+    /** Agent 编码。 */
     private String agentCode;
 
-    /**
-     * businessType 属性。
-     */
+    /** 关联业务类型。 */
     private String businessType;
 
-    /**
-     * businessId 属性。
-     */
+    /** 关联业务数据 ID。 */
     private String businessId;
 
-    /**
-     * sceneCode 属性。
-     */
+    /** 学习场景编码。 */
     private String sceneCode;
 
-    /**
-     * title 属性。
-     */
+    /** 标题。 */
     private String title;
 
     /**

@@ -10,7 +10,7 @@ import org.apache.ibatis.annotations.Param;
 import java.util.List;
 
 /**
- * AiChatSessionMapper 类。
+ * AI 会话数据访问接口。
  */
 @Mapper
 public interface AiChatSessionMapper extends BaseMapper<AiChatSession> {

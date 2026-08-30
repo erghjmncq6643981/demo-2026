@@ -57,6 +57,7 @@ public class AiAsyncTaskService {
                 priority, totalCount, null, payload);
     }
 
+    /** 创建AI 异步任务。 */
     @Transactional(rollbackFor = Exception.class)
     public AiAsyncTask create(Long userId, String taskType, String taskName, Long planId, Long unitId,
                               Long relatedJobId, String executionMode, LocalDateTime scheduledTime,
@@ -108,6 +109,7 @@ public class AiAsyncTaskService {
         return task;
     }
 
+    /** 分页查询AI 异步任务。 */
     public AiAsyncTaskPageResponse page(Long userId, String status, Integer page, Integer pageSize) {
         int current = page == null || page < 1 ? 1 : page;
         int size = pageSize == null || pageSize < 1 ? AiTaskConstants.DEFAULT_PAGE_SIZE
@@ -148,6 +150,7 @@ public class AiAsyncTaskService {
         return response;
     }
 
+    /** 查询列表AI 异步任务。 */
     public List<AiAsyncTaskResponse> list(Long userId, String status, Integer limit) {
         int resolvedLimit = limit == null ? AiTaskConstants.DEFAULT_PAGE_SIZE
                 : Math.max(1, Math.min(limit, AiTaskConstants.MAX_PAGE_SIZE));
@@ -176,6 +179,7 @@ public class AiAsyncTaskService {
         return toResponses(taskMapper.selectList(wrapper));
     }
 
+    /** 查询并校验AI 异步任务数据是否存在及可访问。 */
     public AiAsyncTask require(Long userId, Long taskId) {
         AiAsyncTask task = taskMapper.selectOne(new LambdaQueryWrapper<AiAsyncTask>()
                 .eq(AiAsyncTask::getId, taskId)
@@ -205,6 +209,7 @@ public class AiAsyncTaskService {
         return findActive(userId, AiTaskConstants.TYPE_SCENE_MATERIAL, planId, null);
     }
 
+    /** 按条件查询AI 异步任务数据。 */
     public AiAsyncTask findActiveSceneMaterialTask(Long userId, Long planId, String idempotencyKey) {
         return findActiveByKey(userId, AiTaskConstants.TYPE_SCENE_MATERIAL, planId, idempotencyKey);
     }
@@ -316,6 +321,7 @@ public class AiAsyncTaskService {
                 .set(AiAsyncTask::getUpdateTime, LocalDateTime.now()));
     }
 
+    /** 更新 AI 异步任务处理进度。 */
     public void updateProgress(Long taskId, int total, int success, int failed) {
         int resolvedTotal = Math.max(0, total);
         int finished = Math.max(0, success) + Math.max(0, failed);
@@ -341,6 +347,7 @@ public class AiAsyncTaskService {
                 .set(AiAsyncTask::getUpdateTime, LocalDateTime.now()));
     }
 
+    /** 完成AI 异步任务。 */
     public void complete(Long taskId, String status, String errorMessage) {
         AiAsyncTask task = taskMapper.selectById(taskId);
         LambdaUpdateWrapper<AiAsyncTask> wrapper = new LambdaUpdateWrapper<AiAsyncTask>()
@@ -363,6 +370,7 @@ public class AiAsyncTaskService {
         }
     }
 
+    /** 取消AI 异步任务。 */
     @Transactional(rollbackFor = Exception.class)
     public AiAsyncTask cancel(Long userId, Long taskId) {
         AiAsyncTask task = require(userId, taskId);
@@ -393,6 +401,7 @@ public class AiAsyncTaskService {
         return require(userId, taskId);
     }
 
+    /** 重试失败任务AI 异步任务。 */
     @Transactional(rollbackFor = Exception.class)
     public AiAsyncTask retry(Long userId, Long taskId) {
         return retry(userId, taskId, null);
@@ -558,6 +567,7 @@ public class AiAsyncTaskService {
                 task.getTaskName() + " (taskId=" + task.getId() + ")");
     }
 
+    /** 将AI 异步任务领域对象转换为接口响应。 */
     public AiAsyncTaskResponse toResponse(AiAsyncTask task) {
         return toResponse(task, userDisplayNameService.userNames(List.of(
                 task.getOwnerUserId(), task.getTriggerUserId(), task.getOperatorUserId())));

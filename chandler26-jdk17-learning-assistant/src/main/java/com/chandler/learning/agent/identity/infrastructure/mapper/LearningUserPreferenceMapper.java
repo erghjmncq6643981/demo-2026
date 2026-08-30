@@ -8,7 +8,7 @@ import org.apache.ibatis.annotations.Param;
 import java.util.List;
 
 /**
- * LearningUserPreferenceMapper 类。
+ * 用户账户数据访问接口。
  */
 @Mapper
 public interface LearningUserPreferenceMapper extends BaseMapper<LearningUserPreference> {

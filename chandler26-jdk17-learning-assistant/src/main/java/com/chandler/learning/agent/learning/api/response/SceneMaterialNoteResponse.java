@@ -12,7 +12,7 @@ import java.time.LocalDateTime;
 @Data
 public class SceneMaterialNoteResponse {
 
-    @Schema(description = "主键标识")
+    @Schema(description = "主键 ID")
     private Long id;
 
     @Schema(description = "学习计划标识")
@@ -24,10 +24,10 @@ public class SceneMaterialNoteResponse {
     @Schema(description = "场景材料标识")
     private Long sceneMaterialId;
 
-    @Schema(description = "内容")
+    @Schema(description = "正文内容")
     private String content;
 
-    @Schema(description = "业务属性")
+    @Schema(description = "内容格式")
     private String contentFormat;
 
     @Schema(description = "更新时间")

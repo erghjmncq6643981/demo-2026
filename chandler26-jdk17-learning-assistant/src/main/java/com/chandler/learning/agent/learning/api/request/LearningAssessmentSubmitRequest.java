@@ -13,7 +13,7 @@ import lombok.Data;
 public class LearningAssessmentSubmitRequest {
 
     @NotNull(message = "单元词汇不能为空")
-    @Schema(description = "关联业务标识")
+    @Schema(description = "场景单元词条 ID")
     private Long unitEntryId;
 
     @NotBlank(message = "检查类型不能为空")

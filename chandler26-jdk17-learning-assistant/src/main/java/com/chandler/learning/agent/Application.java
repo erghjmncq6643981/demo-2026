@@ -22,9 +22,7 @@ import org.springframework.boot.autoconfigure.SpringBootApplication;
 })
 @SpringBootApplication(scanBasePackages = "com.chandler")
 public class Application {
-	/**
-	 * 处理 {@code main} 相关业务。
-	 */
+	/** 启动英语学习助手后端应用。 */
 	public static void main(String[] args) {
 		SpringApplication.run(Application.class, args);
 	}

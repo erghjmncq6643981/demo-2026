@@ -7,15 +7,15 @@ import lombok.Data;
 import java.time.LocalDateTime;
 
 /**
- * WordbookResponse 类。
+ * 个人单词本响应数据。
  */
 @Data
 public class WordbookResponse {
 
-    @Schema(description = "主键标识")
+    @Schema(description = "主键 ID")
     private Long id;
 
-    @Schema(description = "名称")
+    @Schema(description = "业务对象名称")
     private String name;
 
     @Schema(description = "描述")
@@ -24,7 +24,7 @@ public class WordbookResponse {
     @Schema(description = "是否默认")
     private Boolean isDefault;
 
-    @Schema(description = "数量")
+    @Schema(description = "单词本词条数量")
     private Long entryCount;
 
     @Schema(description = "到期复习数量")

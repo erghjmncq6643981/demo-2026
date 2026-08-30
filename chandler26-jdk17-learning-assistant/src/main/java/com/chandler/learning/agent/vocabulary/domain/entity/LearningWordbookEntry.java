@@ -122,8 +122,10 @@ public class LearningWordbookEntry extends BaseEntity {
     /** 词卡状态：missing、queued、generating、ready、failed、not_required。 */
     private String cardStatus;
 
+    /** 词卡生成失败原因。 */
     private String cardErrorMessage;
 
+    /** 词卡生成完成时间。 */
     private LocalDateTime cardGeneratedTime;
 
     /**
@@ -186,9 +188,7 @@ public class LearningWordbookEntry extends BaseEntity {
     @Schema(description = "忘记次数")
     private Integer wrongCount;
 
-    /**
-     * 创建或保存 {@code createNew} 相关业务。
-     */
+    /** 创建新的个人单词本词条。 */
     public static LearningWordbookEntry createNew(Long userId, Long wordbookId, EnglishVocabularyStudyRecord vocabulary,
                                                   String note, LocalDateTime now) {
         LearningWordbookEntry entry = new LearningWordbookEntry();
@@ -249,9 +249,7 @@ public class LearningWordbookEntry extends BaseEntity {
         return entry;
     }
 
-    /**
-     * 更新 {@code copyTo} 相关业务。
-     */
+    /** 复制词条及个人学习状态到目标单词本。 */
     public LearningWordbookEntry copyTo(Long targetWordbookId, LocalDateTime now) {
         LearningWordbookEntry clone = new LearningWordbookEntry();
         clone.setUserId(userId);
@@ -289,34 +287,26 @@ public class LearningWordbookEntry extends BaseEntity {
         return clone;
     }
 
-    /**
-     * 更新 {@code restore} 相关业务。
-     */
+    /** 恢复已逻辑删除的个人词条。 */
     public void restore(String note, LocalDateTime now) {
         setDeleted(false);
         setNote(note);
         touch(now);
     }
 
-    /**
-     * 更新 {@code markDeleted} 相关业务。
-     */
+    /** 将个人词条标记为逻辑删除。 */
     public void markDeleted(LocalDateTime now) {
         setDeleted(true);
         touch(now);
     }
 
-    /**
-     * 更新 {@code moveTo} 相关业务。
-     */
+    /** 把个人词条移动到目标单词本。 */
     public void moveTo(Long targetWordbookId, LocalDateTime now) {
         setWordbookId(targetWordbookId);
         touch(now);
     }
 
-    /**
-     * 更新 {@code applyVocabularySnapshot} 相关业务。
-     */
+    /** 应用个人单词本状态变更。 */
     public void applyVocabularySnapshot(EnglishVocabularyStudyRecord vocabulary, LocalDateTime now,
                                         String tagsJson, String relationsJson) {
         setSnapshotRawContent(vocabulary.getRawContent());
@@ -332,49 +322,37 @@ public class LearningWordbookEntry extends BaseEntity {
         setCardGeneratedTime(now);
     }
 
-    /**
-     * 处理 {@code refreshVocabularyIdentity} 相关业务。
-     */
+    /** 刷新个人词条关联的公共词卡身份。 */
     public void refreshVocabularyIdentity(EnglishVocabularyStudyRecord vocabulary, LocalDateTime now) {
         setTerm(vocabulary.getTerm());
         setVocabularyId(vocabulary.getId());
         touch(now);
     }
 
-    /**
-     * 更新 {@code markDue} 相关业务。
-     */
+    /** 把词条标记为待复习状态。 */
     public void markDue(LocalDateTime now) {
         setDueCount(dueCount() + CommonConstants.SEQUENCE_STEP);
         touch(now);
     }
 
-    /**
-     * 更新 {@code recordCorrectReview} 相关业务。
-     */
+    /** 累计一次正确复习结果。 */
     public void recordCorrectReview(int stageAfter, int masteryAfter, String nextStatus) {
         setCorrectCount(correctCount() + CommonConstants.SEQUENCE_STEP);
         recordReviewProgress(stageAfter, masteryAfter, nextStatus);
     }
 
-    /**
-     * 更新 {@code recordNeutralReview} 相关业务。
-     */
+    /** 累计一次模糊复习结果。 */
     public void recordNeutralReview(int stageAfter, int masteryAfter, String nextStatus) {
         recordReviewProgress(stageAfter, masteryAfter, nextStatus);
     }
 
-    /**
-     * 更新 {@code recordWrongReview} 相关业务。
-     */
+    /** 累计一次错误复习结果。 */
     public void recordWrongReview(int stageAfter, int masteryAfter, String nextStatus) {
         setWrongCount(wrongCount() + CommonConstants.SEQUENCE_STEP);
         recordReviewProgress(stageAfter, masteryAfter, nextStatus);
     }
 
-    /**
-     * 更新 {@code completeReview} 相关业务。
-     */
+    /** 应用复习结果并更新下次复习时间。 */
     public void completeReview(LocalDateTime reviewTime, LocalDateTime nextTime,
                                int stageAfter, int masteryAfter, LocalDateTime now) {
         if (getFirstReviewTime() == null) {
@@ -388,60 +366,38 @@ public class LearningWordbookEntry extends BaseEntity {
         touch(now);
     }
 
-    /**
-     * 处理 {@code reviewStage} 相关业务。
-     */
+    /** 返回当前词条复习阶段。 */
     public int reviewStage() {
         return getReviewStage() == null ? CommonConstants.ZERO : getReviewStage();
     }
 
-    /**
-     * 处理 {@code masteryScore} 相关业务。
-     */
+    /** 返回当前词条掌握分。 */
     public int masteryScore() {
         return getMasteryScore() == null ? CommonConstants.ZERO : getMasteryScore();
     }
 
-    /**
-     * 更新 {@code recordReviewProgress} 相关业务。
-     */
     private void recordReviewProgress(int stageAfter, int masteryAfter, String nextStatus) {
         setReviewStage(stageAfter);
         setMasteryScore(masteryAfter);
         setStatus(nextStatus);
     }
 
-    /**
-     * 处理 {@code dueCount} 相关业务。
-     */
     private int dueCount() {
         return getDueCount() == null ? CommonConstants.ZERO : getDueCount();
     }
 
-    /**
-     * 处理 {@code reviewCount} 相关业务。
-     */
     private int reviewCount() {
         return getReviewCount() == null ? CommonConstants.ZERO : getReviewCount();
     }
 
-    /**
-     * 处理 {@code correctCount} 相关业务。
-     */
     private int correctCount() {
         return getCorrectCount() == null ? CommonConstants.ZERO : getCorrectCount();
     }
 
-    /**
-     * 处理 {@code wrongCount} 相关业务。
-     */
     private int wrongCount() {
         return getWrongCount() == null ? CommonConstants.ZERO : getWrongCount();
     }
 
-    /**
-     * 更新 {@code touch} 相关业务。
-     */
     private void touch(LocalDateTime now) {
         setUpdateTime(now);
     }

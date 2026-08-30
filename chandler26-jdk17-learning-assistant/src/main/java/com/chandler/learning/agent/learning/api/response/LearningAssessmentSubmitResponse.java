@@ -12,7 +12,7 @@ import java.time.LocalDateTime;
 @Data
 public class LearningAssessmentSubmitResponse {
 
-    @Schema(description = "关联业务标识")
+    @Schema(description = "场景单元词条 ID")
     private Long unitEntryId;
 
     @Schema(description = "检查类型")
@@ -36,13 +36,13 @@ public class LearningAssessmentSubmitResponse {
     @Schema(description = "拼写得分")
     private Integer spellingScore;
 
-    @Schema(description = "数量")
+    @Schema(description = "已完成挑战的核心词数量")
     private Integer completedCoreCount;
 
     @Schema(description = "核心词汇数量")
     private Integer coreWordCount;
 
-    @Schema(description = "业务属性")
+    @Schema(description = "场景单元是否满足完成条件")
     private Boolean unitReadyToComplete;
 
     @Schema(description = "下次复习时间")

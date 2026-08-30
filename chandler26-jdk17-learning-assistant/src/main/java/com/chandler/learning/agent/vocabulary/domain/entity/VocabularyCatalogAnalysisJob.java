@@ -17,8 +17,8 @@ import java.time.LocalDateTime;
 @TableName("vocabulary_catalog_analysis_job")
 public class VocabularyCatalogAnalysisJob extends BaseEntity {
 
-    @TableId(value = "id", type = IdType.ASSIGN_ID)
     /** 分析任务主键。 */
+    @TableId(value = "id", type = IdType.ASSIGN_ID)
     private Long id;
 
     /** 发起任务的用户 ID。 */

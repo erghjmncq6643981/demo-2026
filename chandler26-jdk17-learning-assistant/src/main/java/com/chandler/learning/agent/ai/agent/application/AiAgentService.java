@@ -38,9 +38,7 @@ public class AiAgentService {
     private final SystemLogService systemLogService;
     private final UserDisplayNameService userDisplayNameService;
 
-    /**
-     * 查询 {@code getByCode} 相关业务。
-     */
+    /** 按业务编码查询有效配置。 */
     public AiAgent getByCode(String code) {
         return agentMapper.selectOne(new LambdaQueryWrapper<AiAgent>()
                 .eq(AiAgent::getCode, code)
@@ -48,16 +46,12 @@ public class AiAgentService {
                 .last(CommonConstants.SQL_LIMIT_ONE));
     }
 
-    /**
-     * 查询 {@code getById} 相关业务。
-     */
+    /** 按主键查询配置详情。 */
     public AiAgent getById(Long id) {
         return enrich(agentMapper.selectById(id));
     }
 
-    /**
-     * 查询 {@code list} 相关业务。
-     */
+    /** 查询列表AI Agent。 */
     public List<AiAgent> list(String type, boolean enabledOnly) {
         String normalizedType = StringUtils.hasText(type) ? AiAgentType.of(type).getCode() : null;
         List<AiAgent> agents = agentMapper.selectList(new LambdaQueryWrapper<AiAgent>()
@@ -75,9 +69,7 @@ public class AiAgentService {
                 : agents;
     }
 
-    /**
-     * 创建或保存 {@code create} 相关业务。
-     */
+    /** 创建AI Agent。 */
     public Long create(AgentSaveRequest request) {
         AiAgent existing = getByCode(request.getCode());
         if (existing != null) {
@@ -98,9 +90,7 @@ public class AiAgentService {
         return agent.getId();
     }
 
-    /**
-     * 更新 {@code update} 相关业务。
-     */
+    /** 更新AI Agent。 */
     public void update(Long id, AgentSaveRequest request) {
         AiAgent agent = agentMapper.selectById(id);
         if (agent == null || Boolean.TRUE.equals(agent.getDeleted())) {
@@ -122,9 +112,7 @@ public class AiAgentService {
         log.info("用户「{}」更新了 Agent「{}」", userDisplayNameService.currentUserName(), agent.getName());
     }
 
-    /**
-     * 更新 {@code updateEnabled} 相关业务。
-     */
+    /** 更新模型或 Agent 的启用状态。 */
     public void updateEnabled(Long id, boolean enabled) {
         AiAgent agent = requireAgent(id);
         if (enabled) {
@@ -137,9 +125,7 @@ public class AiAgentService {
         log.info("用户「{}」{}了 Agent「{}」", userDisplayNameService.currentUserName(), enabled ? "启用" : "停用", agent.getName());
     }
 
-    /**
-     * 更新 {@code delete} 相关业务。
-     */
+    /** 删除AI Agent。 */
     @Transactional(rollbackFor = Exception.class)
     public void delete(Long id) {
         long aliveCount = agentMapper.selectCount(new LambdaQueryWrapper<AiAgent>()
@@ -157,9 +143,7 @@ public class AiAgentService {
         log.info("用户「{}」删除了 Agent「{}」", userDisplayNameService.currentUserName(), agent.getName());
     }
 
-    /**
-     * 更新 {@code clone} 相关业务。
-     */
+    /** 复制AI Agent。 */
     @Transactional(rollbackFor = Exception.class)
     public Long clone(Long id) {
         AiAgent source = agentMapper.selectById(id);
@@ -195,9 +179,6 @@ public class AiAgentService {
         return clone.getId();
     }
 
-    /**
-     * 更新 {@code copy} 相关业务。
-     */
     private void copy(AgentSaveRequest request, AiAgent agent) {
         AiModelConfig modelConfig = modelConfigService.requireEnabled(request.getModelConfigId());
         agent.setName(request.getName());
@@ -217,9 +198,6 @@ public class AiAgentService {
         agent.setSequence(request.getSequence() == null ? CommonConstants.DEFAULT_SEQUENCE : request.getSequence());
     }
 
-    /**
-     * 处理 {@code requireAgent} 相关业务。
-     */
     private AiAgent requireAgent(Long id) {
         AiAgent agent = agentMapper.selectById(id);
         if (agent == null || Boolean.TRUE.equals(agent.getDeleted())) {

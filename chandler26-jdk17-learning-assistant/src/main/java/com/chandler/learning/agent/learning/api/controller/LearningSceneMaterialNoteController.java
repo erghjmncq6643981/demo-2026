@@ -28,6 +28,7 @@ public class LearningSceneMaterialNoteController {
     private final CurrentUserContext currentUserContext;
     private final LearningSceneMaterialNoteService noteService;
 
+    /** 查询场景材料笔记。 */
     @GetMapping
     @Operation(summary = "查询场景材料笔记")
     public SceneMaterialNoteResponse get(
@@ -37,6 +38,7 @@ public class LearningSceneMaterialNoteController {
         return noteService.get(user.getId(), planId, unitId);
     }
 
+    /** 保存场景材料 Markdown 笔记。 */
     @PutMapping
     @Operation(summary = "保存场景材料 Markdown 笔记")
     public SceneMaterialNoteResponse save(

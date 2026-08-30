@@ -338,6 +338,7 @@ public class LearningWordProgressService {
         return progress;
     }
 
+    /** 按条件查询词汇数据。 */
     public LearningWordProgress find(Long userId, String normalizedTerm) {
         if (userId == null || !StringUtils.hasText(normalizedTerm)) {
             return null;

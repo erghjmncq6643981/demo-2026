@@ -51,6 +51,7 @@ public class AiChatSessionController {
             @PathVariable Long sessionId) {
         return chatSessionService.adminDetail(sessionId);
     }
+    /** 会话列表。 */
 
     @GetMapping
     @Operation(summary = "会话列表")
@@ -61,36 +62,28 @@ public class AiChatSessionController {
         return chatSessionService.listSessions(null, agentCode, businessType, businessId, sceneCode);
     }
 
-    /**
-     * 查询 {@code detail} 相关业务。
-     */
+    /** 会话详情。 */
     @GetMapping("/{sessionId}")
     @Operation(summary = "会话详情")
     public ChatSessionResponse detail(@PathVariable Long sessionId) {
         return chatSessionService.detail(sessionId);
     }
 
-    /**
-     * 处理 {@code messages} 相关业务。
-     */
+    /** 会话消息列表。 */
     @GetMapping("/{sessionId}/messages")
     @Operation(summary = "会话消息列表")
     public List<ChatMessageResponse> messages(@PathVariable Long sessionId) {
         return chatSessionService.listMessages(sessionId);
     }
 
-    /**
-     * 更新 {@code updateTitle} 相关业务。
-     */
+    /** 更新会话标题。 */
     @PostMapping("/{sessionId}/title")
     @Operation(summary = "更新会话标题")
     public void updateTitle(@PathVariable Long sessionId, @RequestParam String title) {
         chatSessionService.updateTitle(sessionId, title);
     }
 
-    /**
-     * 更新 {@code delete} 相关业务。
-     */
+    /** 删除会话。 */
     @DeleteMapping("/{sessionId}")
     @Operation(summary = "删除会话")
     public void delete(@PathVariable Long sessionId) {

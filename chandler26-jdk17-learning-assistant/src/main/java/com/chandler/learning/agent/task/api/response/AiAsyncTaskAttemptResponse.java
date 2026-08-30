@@ -10,7 +10,7 @@ import java.time.LocalDateTime;
 @Data
 public class AiAsyncTaskAttemptResponse {
 
-    @Schema(description = "主键标识")
+    @Schema(description = "主键 ID")
     private Long id;
     @Schema(description = "操作人用户标识")
     private Long operatorUserId;
@@ -18,7 +18,7 @@ public class AiAsyncTaskAttemptResponse {
     private String operatorUserName;
     @Schema(description = "尝试序号")
     private Integer attemptNo;
-    @Schema(description = "业务状态")
+    @Schema(description = "当前业务状态")
     private String status;
     @Schema(description = "模型配置标识")
     private Long modelConfigId;

@@ -12,7 +12,7 @@ import java.time.LocalDateTime;
 @Data
 public class VocabularyCatalogResponse {
 
-    @Schema(description = "关联业务标识")
+    @Schema(description = "公共词本 ID")
     private Long catalogId;
 
     @Schema(description = "词本版本标识")
@@ -30,12 +30,12 @@ public class VocabularyCatalogResponse {
     @Schema(description = "学习目标")
     private String learningPurpose;
 
-    @Schema(description = "业务状态")
+    @Schema(description = "当前业务状态")
     private String status;
 
-    @Schema(description = "总数量")
+    @Schema(description = "任务或分页数据总数")
     private Integer totalCount;
 
-    @Schema(description = "时间")
+    @Schema(description = "发布时间")
     private LocalDateTime publishedTime;
 }

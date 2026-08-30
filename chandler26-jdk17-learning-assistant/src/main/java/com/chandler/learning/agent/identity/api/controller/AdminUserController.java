@@ -38,6 +38,7 @@ public class AdminUserController {
     private final CurrentUserContext currentUserContext;
     private final AdminUserService adminUserService;
 
+    /** 分页查询用户。 */
     @GetMapping
     @Operation(summary = "分页查询用户")
     public AdminUserPageResponse page(
@@ -54,6 +55,7 @@ public class AdminUserController {
                 lastLoginFrom, lastLoginTo, page, pageSize);
     }
 
+    /** 查看用户。 */
     @GetMapping("/{userId}")
     @Operation(summary = "查看用户")
     public AdminUserResponse detail(
@@ -61,6 +63,7 @@ public class AdminUserController {
         return adminUserService.detail(userId);
     }
 
+    /** 新增用户。 */
     @PostMapping
     @Operation(summary = "新增用户")
     public AdminUserResponse create(
@@ -69,6 +72,7 @@ public class AdminUserController {
         return adminUserService.create(operator, request);
     }
 
+    /** 修改用户。 */
     @PutMapping("/{userId}")
     @Operation(summary = "修改用户")
     public AdminUserResponse update(
@@ -78,6 +82,7 @@ public class AdminUserController {
         return adminUserService.update(operator, userId, request);
     }
 
+    /** 重置用户密码。 */
     @PostMapping("/{userId}/reset-password")
     @Operation(summary = "重置用户密码")
     public void resetPassword(
@@ -87,6 +92,7 @@ public class AdminUserController {
         adminUserService.resetPassword(operator, userId, request);
     }
 
+    /** 注销用户。 */
     @DeleteMapping("/{userId}")
     @Operation(summary = "注销用户")
     public void delete(

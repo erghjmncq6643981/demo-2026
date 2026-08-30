@@ -30,9 +30,7 @@ public class JwtTokenService {
 
     private final LearningSecurityProperties properties;
 
-    /**
-     * 创建或保存 {@code createToken} 相关业务。
-     */
+    /** 为登录用户签发 JWT 访问令牌。 */
     public String createToken(Long userId, String username) {
         Instant now = Instant.now();
         Instant expiresAt = now.plusSeconds(Math.max(CommonConstants.FIRST_SEQUENCE, properties.getJwtExpireDays())
@@ -52,9 +50,7 @@ public class JwtTokenService {
         return unsigned + "." + sign(unsigned);
     }
 
-    /**
-     * 处理 {@code parse} 相关业务。
-     */
+    /** 解析模型结构化响应。 */
     public JwtClaims parse(String token) {
         if (!StringUtils.hasText(token)) {
             throw LearningAssistantException.unauthorized(LearningErrorCode.JWT_INVALID, "JWT 为空");
@@ -83,9 +79,6 @@ public class JwtTokenService {
         return new JwtClaims(userId, username, expiredTime);
     }
 
-    /**
-     * 处理 {@code sign} 相关业务。
-     */
     private String sign(String unsigned) {
         try {
             Mac mac = Mac.getInstance(HMAC_ALGORITHM);
@@ -99,16 +92,10 @@ public class JwtTokenService {
         }
     }
 
-    /**
-     * 处理 {@code base64Url} 相关业务。
-     */
     private String base64Url(String value) {
         return Base64.getUrlEncoder().withoutPadding().encodeToString(value.getBytes(StandardCharsets.UTF_8));
     }
 
-    /**
-     * 查询 {@code readLong} 相关业务。
-     */
     private Long readLong(Object value) {
         if (value instanceof Number number) {
             return number.longValue();
@@ -116,9 +103,6 @@ public class JwtTokenService {
         return Long.parseLong(String.valueOf(value));
     }
 
-    /**
-     * 处理 {@code constantTimeEquals} 相关业务。
-     */
     private boolean constantTimeEquals(String left, String right) {
         return java.security.MessageDigest.isEqual(
                 left.getBytes(StandardCharsets.UTF_8),

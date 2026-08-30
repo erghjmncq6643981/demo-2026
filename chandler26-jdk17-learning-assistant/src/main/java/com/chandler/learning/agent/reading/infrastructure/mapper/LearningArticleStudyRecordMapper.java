@@ -5,7 +5,7 @@ import com.chandler.learning.agent.reading.domain.entity.LearningArticleStudyRec
 import org.apache.ibatis.annotations.Mapper;
 
 /**
- * LearningArticleStudyRecordMapper 类。
+ * 语境精读数据访问接口。
  */
 @Mapper
 public interface LearningArticleStudyRecordMapper extends BaseMapper<LearningArticleStudyRecord> {

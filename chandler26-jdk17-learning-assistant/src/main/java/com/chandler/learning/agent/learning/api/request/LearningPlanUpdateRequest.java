@@ -13,7 +13,7 @@ import java.time.LocalDateTime;
 public class LearningPlanUpdateRequest {
 
     @NotBlank(message = "计划名称不能为空")
-    @Schema(description = "名称")
+    @Schema(description = "业务对象名称")
     private String name;
 
     @Schema(description = "学习目标")
@@ -25,12 +25,12 @@ public class LearningPlanUpdateRequest {
     @Schema(description = "结束时间")
     private LocalDateTime endTime;
 
-    @Schema(description = "关联业务标识")
+    @Schema(description = "模型配置 ID")
     private Long modelConfigId;
 
     @Schema(description = "单词本标识")
     private Long wordbookId;
 
-    @Schema(description = "业务状态")
+    @Schema(description = "当前业务状态")
     private String status;
 }

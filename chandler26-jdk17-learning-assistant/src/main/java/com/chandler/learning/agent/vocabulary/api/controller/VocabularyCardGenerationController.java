@@ -28,6 +28,7 @@ public class VocabularyCardGenerationController {
     private final CurrentUserContext currentUserContext;
     private final VocabularyCardBatchService cardBatchService;
 
+    /** 批量词卡任务详情。 */
     @GetMapping("/{jobId}")
     @Operation(summary = "批量词卡任务详情")
     public VocabularyCardGenerationResponse detail(
@@ -38,6 +39,7 @@ public class VocabularyCardGenerationController {
         return cardBatchService.detail(user.getId(), jobId, page, pageSize);
     }
 
+    /** 仅重试批量词卡任务中的失败词。 */
     @PostMapping("/{jobId}/retry")
     @Operation(summary = "仅重试批量词卡任务中的失败词")
     public VocabularyCardGenerationResponse retry(

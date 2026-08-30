@@ -10,7 +10,7 @@ import java.time.LocalDateTime;
 @Data
 public class AdminAiSessionResponse {
 
-    @Schema(description = "主键标识")
+    @Schema(description = "主键 ID")
     private Long id;
     @Schema(description = "用户标识")
     private Long userId;
@@ -26,7 +26,7 @@ public class AdminAiSessionResponse {
     private String businessId;
     @Schema(description = "场景编码")
     private String sceneCode;
-    @Schema(description = "数量")
+    @Schema(description = "会话消息数量")
     private Integer messageCount;
     @Schema(description = "调用次数")
     private Integer callCount;
@@ -40,9 +40,9 @@ public class AdminAiSessionResponse {
     private Long averageLatencyMs;
     @Schema(description = "最近供应商")
     private String lastProvider;
-    @Schema(description = "名称")
+    @Schema(description = "最近使用的模型名称")
     private String lastModelName;
-    @Schema(description = "时间")
+    @Schema(description = "创建时间")
     private LocalDateTime createTime;
     @Schema(description = "更新时间")
     private LocalDateTime updateTime;

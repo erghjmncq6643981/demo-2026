@@ -11,6 +11,7 @@ import java.time.temporal.ChronoUnit;
 @Component
 public class ReviewSchedulePolicy {
 
+    /** 根据复习结果和阶段计算下次复习时间。 */
     public LocalDateTime nextReviewTime(LocalDateTime now, int stage, boolean remembered, boolean vague) {
         LocalDateTime baseTime = avoidSleepWindow(now);
         if (vague) {

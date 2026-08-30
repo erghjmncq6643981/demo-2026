@@ -11,7 +11,7 @@ import java.time.LocalDateTime;
 public class WordbookEntrySummaryResponse {
 
     /** 词条主键。 */
-    @Schema(description = "主键标识")
+    @Schema(description = "主键 ID")
     private Long id;
     /** 所属单词本。 */
     @Schema(description = "单词本标识")
@@ -29,7 +29,7 @@ public class WordbookEntrySummaryResponse {
     @Schema(description = "释义摘要")
     private String meaningText;
     /** 学习状态。 */
-    @Schema(description = "状态")
+    @Schema(description = "当前业务状态")
     private String status;
     /** 复习阶段。 */
     @Schema(description = "复习阶段")
@@ -43,14 +43,14 @@ public class WordbookEntrySummaryResponse {
     @Schema(description = "下次复习时间")
     private LocalDateTime nextReviewTime;
     /** 复习统计。 */
-    @Schema(description = "数量")
+    @Schema(description = "累计复习次数")
     private Integer reviewCount;
     @Schema(description = "答对次数")
     private Integer correctCount;
     @Schema(description = "答错次数")
     private Integer wrongCount;
     /** 是否存在可用词卡。 */
-    @Schema(description = "状态")
+    @Schema(description = "词卡生成状态")
     private String cardStatus;
     /** 记录创建时间。 */
     @Schema(description = "创建时间")

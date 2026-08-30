@@ -5,7 +5,7 @@ import com.chandler.learning.agent.ai.prompt.domain.entity.AiPromptTemplate;
 import org.apache.ibatis.annotations.Mapper;
 
 /**
- * AiPromptTemplateMapper 类。
+ * 提示词模板数据访问接口。
  */
 @Mapper
 public interface AiPromptTemplateMapper extends BaseMapper<AiPromptTemplate> {

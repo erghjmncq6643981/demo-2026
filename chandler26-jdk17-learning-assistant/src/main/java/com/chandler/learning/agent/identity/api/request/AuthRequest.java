@@ -6,13 +6,13 @@ import jakarta.validation.constraints.NotBlank;
 import lombok.Data;
 
 /**
- * AuthRequest 类。
+ * 用户账户请求参数。
  */
 @Data
 public class AuthRequest {
 
     @NotBlank(message = "用户名不能为空")
-    @Schema(description = "名称")
+    @Schema(description = "登录用户名")
     private String username;
 
     @NotBlank(message = "密码不能为空")

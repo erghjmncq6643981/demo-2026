@@ -8,9 +8,6 @@ public final class AiGatewayConstants {
 public static final int EMPTY_SIZE = 0;
         public static final int FIRST_CHOICE_INDEX = 0;
 
-        /**
-         * 处理 {@code ModelClient} 相关业务。
-         */
         private AiGatewayConstants() {
         }
 }

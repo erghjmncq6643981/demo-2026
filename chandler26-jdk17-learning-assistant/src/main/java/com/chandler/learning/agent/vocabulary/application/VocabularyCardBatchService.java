@@ -266,6 +266,7 @@ public class VocabularyCardBatchService {
         }
     }
 
+    /** 查询详情词汇。 */
     public VocabularyCardGenerationResponse detail(Long userId, Long jobId) {
         return detail(userId, jobId, 1, VocabularyCardConstants.DEFAULT_ITEM_PAGE_SIZE);
     }

@@ -12,7 +12,7 @@ import java.time.LocalDate;
 @Data
 public class LearningPlanNextUnitRequest {
 
-    @Schema(description = "关联业务标识")
+    @Schema(description = "模型配置 ID")
     private Long modelConfigId;
 
     @Schema(description = "建议学习日期")

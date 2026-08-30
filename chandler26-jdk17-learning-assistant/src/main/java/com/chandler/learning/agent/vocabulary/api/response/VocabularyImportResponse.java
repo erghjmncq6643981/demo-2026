@@ -13,7 +13,7 @@ import java.util.List;
 @Data
 public class VocabularyImportResponse {
 
-    @Schema(description = "关联业务标识")
+    @Schema(description = "处理任务 ID")
     private Long jobId;
 
     @Schema(description = "公共词本标识")
@@ -27,7 +27,7 @@ public class VocabularyImportResponse {
     private Long importerUserId;
 
     /** 执行导入的管理员显示名称。 */
-    @Schema(description = "名称")
+    @Schema(description = "导入人名称")
     private String importerName;
 
     @Schema(description = "公共词本名称")
@@ -39,22 +39,22 @@ public class VocabularyImportResponse {
     @Schema(description = "数据源类型")
     private String sourceType;
 
-    @Schema(description = "名称")
+    @Schema(description = "文件名称")
     private String fileName;
 
-    @Schema(description = "业务状态")
+    @Schema(description = "当前业务状态")
     private String status;
 
-    @Schema(description = "总数量")
+    @Schema(description = "任务或分页数据总数")
     private Integer totalCount;
 
-    @Schema(description = "数量")
+    @Schema(description = "疑似问题数量")
     private Integer warningCount;
 
-    @Schema(description = "数量")
+    @Schema(description = "已确认问题数量")
     private Integer reviewedWarningCount;
 
-    @Schema(description = "数量")
+    @Schema(description = "待确认问题数量")
     private Integer pendingWarningCount;
 
     @Schema(description = "页码")
@@ -63,10 +63,10 @@ public class VocabularyImportResponse {
     @Schema(description = "每页数量")
     private Integer pageSize;
 
-    @Schema(description = "总数量")
+    @Schema(description = "筛选后的总数量")
     private Long filteredTotal;
 
-    @Schema(description = "列表数据")
+    @Schema(description = "分页数据列表")
     private List<VocabularyImportEntryResponse> items;
 
     @Schema(description = "创建时间")

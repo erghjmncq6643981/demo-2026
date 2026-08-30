@@ -10,7 +10,7 @@ import lombok.Data;
 @Data
 public class VocabularyCardGenerationItemResponse {
 
-    @Schema(description = "主键标识")
+    @Schema(description = "主键 ID")
     private Long id;
 
     @Schema(description = "英文词汇")
@@ -19,10 +19,10 @@ public class VocabularyCardGenerationItemResponse {
     @Schema(description = "标准化词汇")
     private String normalizedTerm;
 
-    @Schema(description = "业务状态")
+    @Schema(description = "当前业务状态")
     private String status;
 
-    @Schema(description = "关联业务标识")
+    @Schema(description = "公共词卡记录 ID")
     private Long vocabularyId;
 
     @Schema(description = "尝试次数")

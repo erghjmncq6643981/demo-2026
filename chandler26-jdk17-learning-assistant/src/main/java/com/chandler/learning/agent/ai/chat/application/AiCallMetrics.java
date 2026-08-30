@@ -16,6 +16,7 @@ public class AiCallMetrics {
 
     private final MeterRegistry meterRegistry;
 
+    /** 记录一次成功的 AI 调用指标。 */
     public void recordSuccess(AiInvocationScene scene, String provider, String model,
                               Integer promptTokens, Integer completionTokens, long latencyMs) {
         List<Tag> tags = tags(scene, provider, model, "success");
@@ -27,6 +28,7 @@ public class AiCallMetrics {
                 .increment(nonNegative(completionTokens));
     }
 
+    /** 记录一次失败的 AI 调用指标。 */
     public void recordFailure(AiInvocationScene scene, String provider, String model,
                               String errorCode, long latencyMs) {
         List<Tag> tags = append(tags(scene, provider, model, "failure"), "error_code", safe(errorCode));

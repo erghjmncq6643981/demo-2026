@@ -11,7 +11,7 @@ import java.util.List;
 @Data
 public class ArticleStudySummaryResponse {
 
-    @Schema(description = "主键标识")
+    @Schema(description = "主键 ID")
     private Long id;
     @Schema(description = "单词本标识")
     private Long wordbookId;
@@ -21,9 +21,9 @@ public class ArticleStudySummaryResponse {
     private String wordCountRange;
     @Schema(description = "难度")
     private String difficulty;
-    @Schema(description = "状态")
+    @Schema(description = "学习记录状态")
     private String studyStatus;
-    @Schema(description = "业务属性")
+    @Schema(description = "当前学习阶段")
     private String currentStage;
     @Schema(description = "练习题总数")
     private Integer practiceTotal;

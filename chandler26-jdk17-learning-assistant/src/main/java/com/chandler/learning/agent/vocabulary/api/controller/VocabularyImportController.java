@@ -42,6 +42,7 @@ public class VocabularyImportController {
     private final CurrentUserContext currentUserContext;
     private final VocabularyImportService importService;
 
+    /** 导入 Markdown 词表并生成审核预览。 */
     @PostMapping("/markdown")
     @RequirePermission(LearningPermission.SYSTEM_ADMIN)
     @Operation(summary = "导入 Markdown 词表并生成审核预览")
@@ -51,6 +52,7 @@ public class VocabularyImportController {
         return importService.importMarkdown(user.getId(), request);
     }
 
+    /** 词表导入历史。 */
     @GetMapping
     @RequirePermission(LearningPermission.SYSTEM_ADMIN)
     @Operation(summary = "词表导入历史")
@@ -61,6 +63,7 @@ public class VocabularyImportController {
         return importService.list(user.getId(), page, pageSize);
     }
 
+    /** 查询已发布公共词本。 */
     @GetMapping("/public")
     @Operation(summary = "查询已发布公共词本")
     public List<VocabularyCatalogResponse> publicCatalogs() {
@@ -68,6 +71,7 @@ public class VocabularyImportController {
         return importService.listPublicCatalogs();
     }
 
+    /** 导入任务和分页词条预览。 */
     @GetMapping("/{jobId}")
     @Operation(summary = "导入任务和分页词条预览")
     public VocabularyImportResponse detail(
@@ -80,6 +84,7 @@ public class VocabularyImportController {
         return importService.detail(user.getId(), jobId, Boolean.TRUE.equals(warningOnly), keyword, page, pageSize);
     }
 
+    /** 手工修改并确认疑似断词。 */
     @PutMapping("/{jobId}/entries/{entryId}")
     @RequirePermission(LearningPermission.SYSTEM_ADMIN)
     @Operation(summary = "手工修改并确认疑似断词")
@@ -91,6 +96,7 @@ public class VocabularyImportController {
         return importService.updateEntry(user.getId(), jobId, entryId, request);
     }
 
+    /** 批量确认疑似断词。 */
     @PostMapping("/{jobId}/warnings/confirm")
     @RequirePermission(LearningPermission.SYSTEM_ADMIN)
     @Operation(summary = "批量确认疑似断词")
@@ -101,6 +107,7 @@ public class VocabularyImportController {
         return importService.confirmWarnings(user.getId(), jobId, request);
     }
 
+    /** 发布词表并导入指定单词本，不生成 AI 词卡。 */
     @PostMapping("/{jobId}/publish")
     @RequirePermission(LearningPermission.SYSTEM_ADMIN)
     @Operation(summary = "发布词表并导入指定单词本，不生成 AI 词卡")
@@ -111,6 +118,7 @@ public class VocabularyImportController {
         return importService.publish(user.getId(), jobId, request);
     }
 
+    /** 更新词表导入元数据。 */
     @PutMapping("/{jobId}")
     @RequirePermission(LearningPermission.SYSTEM_ADMIN)
     @Operation(summary = "更新词表导入元数据")
@@ -121,6 +129,7 @@ public class VocabularyImportController {
         return importService.updateMetadata(user.getId(), jobId, request);
     }
 
+    /** 删除词表导入记录。 */
     @DeleteMapping("/{jobId}")
     @RequirePermission(LearningPermission.SYSTEM_ADMIN)
     @Operation(summary = "删除词表导入记录")

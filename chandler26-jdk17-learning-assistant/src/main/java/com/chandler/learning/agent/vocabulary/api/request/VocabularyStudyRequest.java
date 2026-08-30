@@ -12,6 +12,7 @@ import lombok.Data;
 public class VocabularyStudyRequest {
 
     @NotBlank(message = "单词不能为空")
+    @Schema(description = "需要查询或生成词卡的英文词汇")
     private String term;
 
     @Schema(description = "Agent 编码")

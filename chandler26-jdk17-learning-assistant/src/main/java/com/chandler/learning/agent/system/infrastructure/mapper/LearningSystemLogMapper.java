@@ -7,7 +7,7 @@ import org.apache.ibatis.annotations.Mapper;
 import java.util.List;
 
 /**
- * LearningSystemLogMapper 类。
+ * 系统日志数据访问接口。
  */
 @Mapper
 public interface LearningSystemLogMapper extends BaseMapper<LearningSystemLog> {

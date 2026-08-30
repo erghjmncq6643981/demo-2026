@@ -10,11 +10,11 @@ import java.time.LocalDateTime;
 @Data
 public class AiModelCallRecordResponse {
 
-    @Schema(description = "主键标识")
+    @Schema(description = "主键 ID")
     private Long id;
     @Schema(description = "Agent 编码")
     private String agentCode;
-    @Schema(description = "编码")
+    @Schema(description = "AI 调用场景编码")
     private String invocationSceneCode;
     @Schema(description = "AI 供应商")
     private String provider;

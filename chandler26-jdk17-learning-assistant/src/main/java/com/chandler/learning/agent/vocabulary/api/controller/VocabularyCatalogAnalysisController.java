@@ -27,6 +27,7 @@ public class VocabularyCatalogAnalysisController {
     private final CurrentUserContext currentUserContext;
     private final VocabularyCatalogAnalysisService analysisService;
 
+    /** 查询公共词本版本关联分析状态。 */
     @GetMapping("/{catalogVersionId}/analysis")
     @RequirePermission(LearningPermission.SYSTEM_ADMIN)
     @Operation(summary = "查询公共词本版本关联分析状态")
@@ -36,6 +37,7 @@ public class VocabularyCatalogAnalysisController {
         return analysisService.detail(user.getId(), catalogVersionId);
     }
 
+    /** 触发公共词本版本关联分析。 */
     @PostMapping("/{catalogVersionId}/analysis")
     @RequirePermission(LearningPermission.SYSTEM_ADMIN)
     @Operation(summary = "触发公共词本版本关联分析")

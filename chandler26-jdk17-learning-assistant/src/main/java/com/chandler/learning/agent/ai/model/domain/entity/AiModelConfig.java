@@ -15,54 +15,34 @@ import lombok.Data;
 @Schema(name = "AI 模型配置")
 public class AiModelConfig extends BaseEntity {
 
-    /**
-     * id 属性。
-     */
+    /** 主键 ID。 */
     @TableId(value = "id", type = IdType.ASSIGN_ID)
     private Long id;
 
-    /**
-     * name 属性。
-     */
+    /** 业务对象名称。 */
     private String name;
 
-    /**
-     * provider 属性。
-     */
+    /** 模型供应商。 */
     private String provider;
 
-    /**
-     * modelName 属性。
-     */
+    /** 模型名称。 */
     private String modelName;
 
-    /**
-     * baseUrl 属性。
-     */
+    /** 模型服务基础地址。 */
     private String baseUrl;
 
-    /**
-     * chatPath 属性。
-     */
+    /** 模型对话接口路径。 */
     private String chatPath;
 
-    /**
-     * apiKey 属性。
-     */
+    /** 模型 API 密钥。 */
     private String apiKey;
 
-    /**
-     * enabled 属性。
-     */
+    /** 是否启用。 */
     private Boolean enabled;
 
-    /**
-     * isDefault 属性。
-     */
+    /** 是否为默认配置。 */
     private Boolean isDefault;
 
-    /**
-     * sequence 属性。
-     */
+    /** 展示或执行顺序。 */
     private Integer sequence;
 }

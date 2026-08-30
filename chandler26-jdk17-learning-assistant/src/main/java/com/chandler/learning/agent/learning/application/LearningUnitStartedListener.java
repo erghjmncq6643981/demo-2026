@@ -29,6 +29,7 @@ public class LearningUnitStartedListener {
     private final SystemLogService systemLogService;
     private final UserDisplayNameService userDisplayNameService;
 
+    /** 异步处理场景开始学习事件。 */
     @Async("learningEventExecutor")
     @EventListener
     public void onUnitStarted(LearningUnitStartedEvent event) {

@@ -12,9 +12,9 @@ import java.util.List;
 @Data
 public class AiAsyncTaskPageResponse {
 
-    @Schema(description = "列表数据")
+    @Schema(description = "分页数据列表")
     private List<AiAsyncTaskResponse> items;
-    @Schema(description = "总数量")
+    @Schema(description = "分页数据总数")
     private long total;
     @Schema(description = "页码")
     private int page;

@@ -14,7 +14,7 @@ import lombok.Data;
 public class AiModelConfigSaveRequest {
 
     @NotBlank(message = "模型配置名称不能为空")
-    @Schema(description = "名称")
+    @Schema(description = "业务对象名称")
     private String name;
 
     @NotBlank(message = "供应商不能为空")

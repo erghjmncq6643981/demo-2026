@@ -13,7 +13,7 @@ import java.time.LocalDateTime;
 public class ChatSessionResponse {
 
     /** 会话主键。 */
-    @Schema(description = "主键标识")
+    @Schema(description = "主键 ID")
     private Long id;
 
     /** 会话所属用户 ID。 */
@@ -49,6 +49,6 @@ public class ChatSessionResponse {
     private LocalDateTime createTime;
 
     /** 最近更新时间。 */
-    @Schema(description = "时间")
+    @Schema(description = "最后更新时间")
     private LocalDateTime updateTime;
 }

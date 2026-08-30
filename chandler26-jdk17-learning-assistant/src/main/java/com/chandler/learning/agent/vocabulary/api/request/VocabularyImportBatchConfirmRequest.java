@@ -16,6 +16,6 @@ public class VocabularyImportBatchConfirmRequest {
     private List<Long> entryIds;
 
     /** 为空或 true 时使用建议词；false 时保留原词。 */
-    @Schema(description = "业务属性")
+    @Schema(description = "是否采用系统建议词")
     private Boolean applySuggested;
 }

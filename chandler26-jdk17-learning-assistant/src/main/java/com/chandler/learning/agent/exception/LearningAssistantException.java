@@ -14,9 +14,6 @@ public class LearningAssistantException extends RuntimeException {
     private final String debugMessage;
     private final HttpStatus status;
 
-    /**
-     * 处理 {@code LearningAssistantException} 相关业务。
-     */
     private LearningAssistantException(HttpStatus status, String errorCode, String message,
                                        String debugMessage, Throwable cause) {
         super(message, cause);
@@ -25,9 +22,7 @@ public class LearningAssistantException extends RuntimeException {
         this.debugMessage = debugMessage;
     }
 
-    /**
-     * 处理 {@code badRequest} 相关业务。
-     */
+    /** 创建请求参数错误异常。 */
     public static LearningAssistantException badRequest(String errorCode, String message) {
         return new LearningAssistantException(HttpStatus.BAD_REQUEST, errorCode, message, message, null);
     }
@@ -42,9 +37,7 @@ public class LearningAssistantException extends RuntimeException {
         return from(code, message, null);
     }
 
-    /**
-     * 处理 {@code unauthorized} 相关业务。
-     */
+    /** 创建未认证访问异常。 */
     public static LearningAssistantException unauthorized(String errorCode, String message) {
         return new LearningAssistantException(HttpStatus.UNAUTHORIZED, errorCode, message, message, null);
     }
@@ -59,9 +52,7 @@ public class LearningAssistantException extends RuntimeException {
         return from(code, message, null);
     }
 
-    /**
-     * 处理 {@code notFound} 相关业务。
-     */
+    /** 创建资源不存在异常。 */
     public static LearningAssistantException notFound(String errorCode, String message) {
         return new LearningAssistantException(HttpStatus.NOT_FOUND, errorCode, message, message, null);
     }
@@ -76,9 +67,7 @@ public class LearningAssistantException extends RuntimeException {
         return from(code, message, null);
     }
 
-    /**
-     * 处理 {@code externalService} 相关业务。
-     */
+    /** 创建外部服务调用异常。 */
     public static LearningAssistantException externalService(String errorCode, String message, Throwable cause) {
         String debugMessage = cause == null ? message : cause.getMessage();
         return new LearningAssistantException(HttpStatus.BAD_GATEWAY, errorCode, message, debugMessage, cause);
@@ -90,9 +79,7 @@ public class LearningAssistantException extends RuntimeException {
         return from(code, message, cause);
     }
 
-    /**
-     * 处理 {@code system} 相关业务。
-     */
+    /** 创建系统内部异常。 */
     public static LearningAssistantException system(String errorCode, String message, Throwable cause) {
         String debugMessage = cause == null ? message : cause.getMessage();
         return new LearningAssistantException(HttpStatus.INTERNAL_SERVER_ERROR, errorCode, message, debugMessage, cause);
@@ -123,23 +110,17 @@ public class LearningAssistantException extends RuntimeException {
         return new LearningAssistantException(code.getStatus(), code.getCode(), resolvedMessage, debugMessage, cause);
     }
 
-    /**
-     * 查询 {@code getErrorCode} 相关业务。
-     */
+    /** 返回稳定业务错误码。 */
     public String getErrorCode() {
         return errorCode;
     }
 
-    /**
-     * 查询 {@code getDebugMessage} 相关业务。
-     */
+    /** 返回仅用于服务端诊断的错误信息。 */
     public String getDebugMessage() {
         return debugMessage;
     }
 
-    /**
-     * 查询 {@code getStatus} 相关业务。
-     */
+    /** 返回异常对应的 HTTP 状态。 */
     public HttpStatus getStatus() {
         return status;
     }

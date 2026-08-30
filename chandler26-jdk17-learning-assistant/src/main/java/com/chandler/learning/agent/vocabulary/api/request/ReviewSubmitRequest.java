@@ -5,7 +5,7 @@ import io.swagger.v3.oas.annotations.media.Schema;
 import lombok.Data;
 
 /**
- * ReviewSubmitRequest 类。
+ * 复习请求参数。
  */
 @Data
 public class ReviewSubmitRequest {
@@ -19,10 +19,10 @@ public class ReviewSubmitRequest {
     @Schema(description = "耗时（秒）")
     private Integer durationSeconds;
 
-    @Schema(description = "关联业务标识")
+    @Schema(description = "词汇学习进度 ID")
     private Long wordProgressId;
 
-    @Schema(description = "关联业务标识")
+    @Schema(description = "学习计划 ID")
     private Long planId;
 
     @Schema(description = "场景单元标识")

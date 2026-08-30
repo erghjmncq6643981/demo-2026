@@ -10,9 +10,9 @@ import lombok.Data;
 @Data
 public class AiModelOptionResponse {
 
-    @Schema(description = "主键标识")
+    @Schema(description = "主键 ID")
     private Long id;
-    @Schema(description = "名称")
+    @Schema(description = "业务对象名称")
     private String name;
     @Schema(description = "AI 供应商")
     private String provider;

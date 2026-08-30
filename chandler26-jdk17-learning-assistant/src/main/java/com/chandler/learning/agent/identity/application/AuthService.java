@@ -51,9 +51,7 @@ public class AuthService {
     private final CurrentUserContext currentUserContext;
     private final SecureRandom secureRandom = new SecureRandom();
 
-    /**
-     * 创建或保存 {@code register} 相关业务。
-     */
+    /** 注册学习账户。 */
     public AuthResponse register(AuthRequest request) {
         String username = normalizeUsername(request.getUsername());
         LearningUser existing = findByUsername(username);
@@ -79,9 +77,7 @@ public class AuthService {
         return createLoginResponse(user);
     }
 
-    /**
-     * 处理 {@code login} 相关业务。
-     */
+    /** 校验账户凭据并登录。 */
     public AuthResponse login(AuthRequest request) {
         String username = normalizeUsername(request.getUsername());
         LearningUser user = findByUsername(username);
@@ -101,16 +97,12 @@ public class AuthService {
         return createLoginResponse(user);
     }
 
-    /**
-     * 处理 {@code me} 相关业务。
-     */
+    /** 查询当前登录用户资料。 */
     public UserProfileResponse me() {
         return toProfile(currentUserContext.requireUser());
     }
 
-    /**
-     * 更新 {@code updateProfile} 相关业务。
-     */
+    /** 更新当前用户昵称、联系方式或密码。 */
     public UserProfileResponse updateProfile(UserProfileUpdateRequest request) {
         LearningUser user = currentUserContext.requireUser();
         UserProfileUpdateRequest resolvedRequest = request == null ? new UserProfileUpdateRequest() : request;
@@ -158,9 +150,7 @@ public class AuthService {
         return toProfile(user);
     }
 
-    /**
-     * 更新 {@code logout} 相关业务。
-     */
+    /** 退出当前账户。 */
     public void logout() {
         LearningUser user = currentUserContext.requireUser();
         SecurityContextHolder.clearContext();
@@ -174,9 +164,6 @@ public class AuthService {
         return user != null && UserRole.of(user.getRoleCode()) == UserRole.ADMIN;
     }
 
-    /**
-     * 创建或保存 {@code createLoginResponse} 相关业务。
-     */
     private AuthResponse createLoginResponse(LearningUser user) {
         String rawToken = jwtTokenService.createToken(user.getId(), user.getUsername());
         JwtClaims claims = jwtTokenService.parse(rawToken);
@@ -199,18 +186,12 @@ public class AuthService {
         return response;
     }
 
-    /**
-     * 查询 {@code findByUsername} 相关业务。
-     */
     private LearningUser findByUsername(String username) {
         return userMapper.selectOne(new LambdaQueryWrapper<LearningUser>()
                 .eq(LearningUser::getUsername, username)
                 .last(CommonConstants.SQL_LIMIT_ONE));
     }
 
-    /**
-     * 转换 {@code toProfile} 相关业务。
-     */
     private UserProfileResponse toProfile(LearningUser user) {
         UserProfileResponse response = new UserProfileResponse();
         response.setId(user.getId());
@@ -224,9 +205,6 @@ public class AuthService {
         return response;
     }
 
-    /**
-     * 处理 {@code maskPhone} 相关业务。
-     */
     private String maskPhone(String phone) {
         if (!StringUtils.hasText(phone)) {
             return "";
@@ -240,9 +218,6 @@ public class AuthService {
                 + value.substring(value.length() - AuthConstants.PHONE_MASK_SUFFIX_LENGTH);
     }
 
-    /**
-     * 处理 {@code maskEmail} 相关业务。
-     */
     private String maskEmail(String email) {
         if (!StringUtils.hasText(email)) {
             return "";
@@ -262,9 +237,6 @@ public class AuthService {
                 + domain;
     }
 
-    /**
-     * 处理 {@code normalizePhone} 相关业务。
-     */
     private String normalizePhone(String phone) {
         String value = phone == null ? "" : phone.trim();
         if (!StringUtils.hasText(value)) {
@@ -278,9 +250,6 @@ public class AuthService {
         return value;
     }
 
-    /**
-     * 处理 {@code normalizeEmail} 相关业务。
-     */
     private String normalizeEmail(String email) {
         String value = email == null ? "" : email.trim();
         if (!StringUtils.hasText(value)) {
@@ -294,27 +263,18 @@ public class AuthService {
         return value;
     }
 
-    /**
-     * 判断 {@code hashPassword} 相关业务。
-     */
     /** 为账户创建与登录校验一致的密码哈希。 */
     public String hashPassword(String password) {
         String salt = randomHex(AuthConstants.PASSWORD_SALT_BYTES);
         return PASSWORD_PREFIX + salt + "$" + sha256(salt + AuthConstants.PASSWORD_HASH_SEPARATOR + password);
     }
 
-    /**
-     * 处理 {@code randomHex} 相关业务。
-     */
     private String randomHex(int byteLength) {
         byte[] bytes = new byte[byteLength];
         secureRandom.nextBytes(bytes);
         return HexFormat.of().formatHex(bytes);
     }
 
-    /**
-     * 处理 {@code verifyPassword} 相关业务。
-     */
     private boolean verifyPassword(String password, String passwordHash) {
         if (!StringUtils.hasText(passwordHash) || !passwordHash.startsWith(PASSWORD_PREFIX)) {
             return false;
@@ -328,9 +288,6 @@ public class AuthService {
                         .getBytes(StandardCharsets.UTF_8));
     }
 
-    /**
-     * 处理 {@code sha256} 相关业务。
-     */
     private String sha256(String value) {
         try {
             MessageDigest digest = MessageDigest.getInstance("SHA-256");
@@ -343,9 +300,6 @@ public class AuthService {
         }
     }
 
-    /**
-     * 处理 {@code normalizeUsername} 相关业务。
-     */
     private String normalizeUsername(String username) {
         return username == null ? "" : username.trim().toLowerCase();
     }

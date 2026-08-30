@@ -174,9 +174,7 @@ public class WordbookService {
         return Map.copyOf(result);
     }
 
-    /**
-     * 创建或保存 {@code ensureDefaultWordbook} 相关业务。
-     */
+    /** 确保用户至少拥有一个默认单词本。 */
     public LearningWordbook ensureDefaultWordbook(Long userId) {
         LearningWordbook existing = wordbookMapper.selectOne(new LambdaQueryWrapper<LearningWordbook>()
                 .eq(LearningWordbook::getUserId, userId)
@@ -195,17 +193,13 @@ public class WordbookService {
         return wordbook;
     }
 
-    /**
-     * 查询 {@code listWordbooks} 相关业务。
-     */
+    /** 查询当前用户的个人单词本列表。 */
     public List<WordbookResponse> listWordbooks(Long userId) {
         ensureDefaultWordbook(userId);
         return wordbookMapper.selectWordbookSummaries(userId);
     }
 
-    /**
-     * 创建或保存 {@code createWordbook} 相关业务。
-     */
+    /** 创建当前用户的个人单词本。 */
     public WordbookResponse createWordbook(Long userId, WordbookSaveRequest request) {
         LocalDateTime now = LocalDateTime.now();
         if (Boolean.TRUE.equals(request.getIsDefault())) {
@@ -223,9 +217,7 @@ public class WordbookService {
         return responseAssembler.toWordbookResponse(wordbook);
     }
 
-    /**
-     * 更新 {@code updateWordbook} 相关业务。
-     */
+    /** 更新个人单词本名称、说明或默认状态。 */
     public WordbookResponse updateWordbook(Long userId, Long wordbookId, WordbookSaveRequest request) {
         LearningWordbook wordbook = requireWordbook(userId, wordbookId);
         if (Boolean.TRUE.equals(request.getIsDefault())) {
@@ -242,9 +234,7 @@ public class WordbookService {
         return responseAssembler.toWordbookResponse(wordbook);
     }
 
-    /**
-     * 更新 {@code deleteWordbook} 相关业务。
-     */
+    /** 删除不含词条的个人单词本。 */
     public void deleteWordbook(Long userId, Long wordbookId) {
         LearningWordbook wordbook = requireWordbook(userId, wordbookId);
         long entryCount = entryMapper.selectCount(new LambdaQueryWrapper<LearningWordbookEntry>()
@@ -283,9 +273,7 @@ public class WordbookService {
                 userId, wordbookId, nextDefault == null ? null : nextDefault.getId());
     }
 
-    /**
-     * 处理 {@code transferEntry} 相关业务。
-     */
+    /** 移动或复制个人单词本词条。 */
     @Transactional(rollbackFor = Exception.class)
     public WordbookEntryResponse transferEntry(Long userId, Long entryId, WordbookEntryTransferRequest request) {
         LearningWordbookEntry source = requireEntry(userId, entryId);
@@ -317,9 +305,7 @@ public class WordbookService {
         return responseAssembler.toEntryResponse(source);
     }
 
-    /**
-     * 处理 {@code activity} 相关业务。
-     */
+    /** 查询学习活动统计。 */
     public LearningActivityResponse activity(Long userId, int days) {
         int resolvedDays = Math.max(LearningActivityConstants.MIN_DAYS, Math.min(days, LearningActivityConstants.MAX_DAYS));
         LocalDate endDate = LocalDate.now();
@@ -375,9 +361,7 @@ public class WordbookService {
         return response;
     }
 
-    /**
-     * 创建或保存 {@code addEntry} 相关业务。
-     */
+    /** 向个人单词本添加词条并保存词卡快照。 */
     public WordbookEntryResponse addEntry(Long userId, Long wordbookId, AddWordbookEntryRequest request) {
         LearningWordbook wordbook = requireWordbook(userId, wordbookId);
         String normalizedTerm = normalize(request.getTerm());
@@ -489,9 +473,7 @@ public class WordbookService {
         return responseAssembler.toEntryResponse(requireEntry(userId, entryId));
     }
 
-    /**
-     * 查询 {@code listDueEntries} 相关业务。
-     */
+    /** 查询当前已到期的复习词汇。 */
     public List<WordbookEntrySummaryResponse> listDueEntries(Long userId, Long wordbookId, Integer limit) {
         Long resolvedWordbookId = wordbookId == null ? ensureDefaultWordbook(userId).getId() : wordbookId;
         int resolvedLimit = Math.max(ReviewConstants.DUE_MIN_LIMIT,
@@ -588,9 +570,7 @@ public class WordbookService {
         return entries.stream().map(responseAssembler::toSummaryResponse).toList();
     }
 
-    /**
-     * 更新 {@code updateEntry} 相关业务。
-     */
+    /** 更新个人词条状态、笔记或词卡信息。 */
     public WordbookEntryResponse updateEntry(Long userId, Long entryId, WordbookEntryUpdateRequest request) {
         LearningWordbookEntry entry = requireEntry(userId, entryId);
         if (request.getNote() != null) {
@@ -626,9 +606,7 @@ public class WordbookService {
         return responseAssembler.toEntryResponse(entry);
     }
 
-    /**
-     * 更新 {@code deleteEntry} 相关业务。
-     */
+    /** 删除个人单词本词条。 */
     public void deleteEntry(Long userId, Long entryId) {
         LearningWordbookEntry entry = requireEntry(userId, entryId);
         entry.markDeleted(LocalDateTime.now());
@@ -786,9 +764,6 @@ public class WordbookService {
         return responseAssembler.toEntryResponse(requireEntry(userId, entryId));
     }
 
-    /**
-     * 处理 {@code requireWordbook} 相关业务。
-     */
     private LearningWordbook requireWordbook(Long userId, Long wordbookId) {
         LearningWordbook wordbook = wordbookMapper.selectById(wordbookId);
         if (wordbook == null || Boolean.TRUE.equals(wordbook.getDeleted()) || !wordbook.getUserId().equals(userId)) {
@@ -808,9 +783,6 @@ public class WordbookService {
         }
     }
 
-    /**
-     * 处理 {@code requireEntry} 相关业务。
-     */
     private LearningWordbookEntry requireEntry(Long userId, Long entryId) {
         LearningWordbookEntry entry = entryMapper.selectById(entryId);
         if (entry == null || Boolean.TRUE.equals(entry.getDeleted()) || !entry.getUserId().equals(userId)) {
@@ -821,18 +793,12 @@ public class WordbookService {
         return entry;
     }
 
-    /**
-     * 查询 {@code findVocabulary} 相关业务。
-     */
     private EnglishVocabularyStudyRecord findVocabulary(String normalizedTerm) {
         return vocabularyMapper.selectOne(new LambdaQueryWrapper<EnglishVocabularyStudyRecord>()
                 .eq(EnglishVocabularyStudyRecord::getNormalizedTerm, normalizedTerm)
                 .last(CommonConstants.SQL_LIMIT_ONE));
     }
 
-    /**
-     * 更新 {@code clearDefault} 相关业务。
-     */
     private void clearDefault(Long userId) {
         wordbookMapper.update(null, new LambdaUpdateWrapper<LearningWordbook>()
                 .eq(LearningWordbook::getUserId, userId)
@@ -842,44 +808,26 @@ public class WordbookService {
                 .set(LearningWordbook::getUpdateTime, LocalDateTime.now()));
     }
 
-    /**
-     * 处理 {@code normalizeStatus} 相关业务。
-     */
     private String normalizeStatus(String status) {
         return ReviewStatus.of(status).getCode();
     }
 
-    /**
-     * 处理 {@code inferStatus} 相关业务。
-     */
     private String inferStatus(LearningWordbookEntry entry) {
         return ReviewStatus.infer(entry.getMasteryScore(), entry.getWrongCount(), entry.getCorrectCount()).getCode();
     }
 
-    /**
-     * 处理 {@code normalize} 相关业务。
-     */
     private String normalize(String term) {
         return term == null ? "" : term.trim().replaceAll("\\s+", " ").toLowerCase(Locale.ROOT);
     }
 
-    /**
-     * 处理 {@code trimToNull} 相关业务。
-     */
     private String trimToNull(String value) {
         return StringUtils.hasText(value) ? value.trim() : null;
     }
 
-    /**
-     * 处理 {@code nullToZero} 相关业务。
-     */
     private int nullToZero(Integer value) {
         return value == null ? 0 : value;
     }
 
-    /**
-     * 处理 {@code statusLabel} 相关业务。
-     */
     private String statusLabel(String status) {
         return ReviewStatus.of(status).getLabel();
     }

@@ -29,9 +29,7 @@ public enum LearningScene {
         this.title = title;
     }
 
-    /**
-     * 处理 {@code of} 相关业务。
-     */
+    /** 按编码解析对应的业务枚举。 */
     public static LearningScene of(String code) {
         String normalized = StrUtil.blankToDefault(code, ENGLISH_VOCABULARY.code).trim();
         return Arrays.stream(values())
@@ -40,9 +38,7 @@ public enum LearningScene {
                 .orElse(ENGLISH_VOCABULARY);
     }
 
-    /**
-     * 处理 {@code titleOf} 相关业务。
-     */
+    /** 返回学习场景的中文标题。 */
     public static String titleOf(String code) {
         return of(code).title;
     }

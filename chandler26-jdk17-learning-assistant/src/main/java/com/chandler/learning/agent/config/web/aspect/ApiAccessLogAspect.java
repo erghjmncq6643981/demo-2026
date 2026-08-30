@@ -35,6 +35,7 @@ public class ApiAccessLogAspect {
 
     private final CurrentUserContext currentUserContext;
 
+    /** 记录 Controller 调用结果、耗时、追踪标识和有限分页元数据。 */
     @Around("@within(org.springframework.web.bind.annotation.RestController)")
     public Object logAccess(ProceedingJoinPoint joinPoint) throws Throwable {
         long startedAt = System.nanoTime();

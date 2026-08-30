@@ -12,7 +12,7 @@ import java.time.LocalDateTime;
 @Data
 public class ChatMessageResponse {
 
-    @Schema(description = "主键标识")
+    @Schema(description = "主键 ID")
     private Long id;
 
     @Schema(description = "AI 会话标识")
@@ -21,10 +21,10 @@ public class ChatMessageResponse {
     @Schema(description = "角色")
     private String role;
 
-    @Schema(description = "内容")
+    @Schema(description = "正文内容")
     private String content;
 
-    @Schema(description = "数量")
+    @Schema(description = "Token 数量")
     private Integer tokenCount;
 
     @Schema(description = "耗时（毫秒）")

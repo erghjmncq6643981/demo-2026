@@ -27,6 +27,7 @@ public class AiTaskHandlerRegistry {
         this.handlers = Map.copyOf(indexed);
     }
 
+    /** 查询并校验AI 异步任务数据是否存在及可访问。 */
     public AiTaskHandler require(String taskType) {
         AiTaskType type = AiTaskType.of(taskType);
         AiTaskHandler handler = handlers.get(type);

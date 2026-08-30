@@ -15,11 +15,13 @@ import java.util.Map;
 @Component
 public class KimiChatRequestAdapter extends AbstractOpenAiChatRequestAdapter {
 
+    /** 返回 Kimi 对话请求适配器类型。 */
     @Override
     public AiRequestAdapterType type() {
         return AiRequestAdapterType.KIMI_CHAT;
     }
 
+    /** 根据 Kimi 模型代际选择 Token 和推理参数并组装请求体。 */
     @Override
     public AiPreparedModelRequest prepare(ModelChatRequest request) {
         Map<String, Object> payload = textMessagePayload(request);

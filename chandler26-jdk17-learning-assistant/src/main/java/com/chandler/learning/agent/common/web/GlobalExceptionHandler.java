@@ -29,9 +29,7 @@ public class GlobalExceptionHandler {
 
     private final ObjectMapper objectMapper;
 
-    /**
-     * 处理 {@code handleLearningAssistant} 相关业务。
-     */
+    /** 转换业务异常为统一错误响应。 */
     @ExceptionHandler(LearningAssistantException.class)
     public ResponseEntity<Map<String, String>> handleLearningAssistant(LearningAssistantException ex) {
         if (ex.getStatus().is5xxServerError()) {
@@ -46,18 +44,14 @@ public class GlobalExceptionHandler {
                 "errorCode", ex.getErrorCode()));
     }
 
-    /**
-     * 处理 {@code handleIllegalArgument} 相关业务。
-     */
+    /** 转换非法参数异常为统一错误响应。 */
     @ExceptionHandler(IllegalArgumentException.class)
     public ResponseEntity<Map<String, String>> handleIllegalArgument(IllegalArgumentException ex) {
         log.warn("请求参数未通过校验: {}", ex.getMessage());
         return ResponseEntity.status(HttpStatus.BAD_REQUEST).body(Map.of("message", ex.getMessage()));
     }
 
-    /**
-     * 处理 {@code handleValidation} 相关业务。
-     */
+    /** 转换请求参数校验异常为统一错误响应。 */
     @ExceptionHandler(MethodArgumentNotValidException.class)
     public ResponseEntity<Map<String, String>> handleValidation(MethodArgumentNotValidException ex) {
         String message = ex.getBindingResult().getFieldErrors().stream()
@@ -68,18 +62,14 @@ public class GlobalExceptionHandler {
         return ResponseEntity.status(HttpStatus.BAD_REQUEST).body(Map.of("message", message));
     }
 
-    /**
-     * 处理 {@code handleConstraint} 相关业务。
-     */
+    /** 转换约束校验异常为统一错误响应。 */
     @ExceptionHandler(ConstraintViolationException.class)
     public ResponseEntity<Map<String, String>> handleConstraint(ConstraintViolationException ex) {
         log.warn("请求参数约束失败: {}", ex.getMessage());
         return ResponseEntity.status(HttpStatus.BAD_REQUEST).body(Map.of("message", ex.getMessage()));
     }
 
-    /**
-     * 处理 {@code handleExternalService} 相关业务。
-     */
+    /** 转换外部服务异常为统一错误响应。 */
     @ExceptionHandler(RestClientResponseException.class)
     public ResponseEntity<Map<String, String>> handleExternalService(RestClientResponseException ex) {
         String upstreamMessage = readUpstreamMessage(ex.getResponseBodyAsString());
@@ -106,9 +96,7 @@ public class GlobalExceptionHandler {
         log.debug("客户端已断开连接或取消请求: {}", ex.getMessage());
     }
 
-    /**
-     * 处理 {@code handleUnexpected} 相关业务。
-     */
+    /** 兜底处理未预期的服务端异常。 */
     @ExceptionHandler(Exception.class)
     public ResponseEntity<Map<String, String>> handleUnexpected(Exception ex) {
         if (isClientAbort(ex)) {
@@ -136,9 +124,6 @@ public class GlobalExceptionHandler {
         return false;
     }
 
-    /**
-     * 查询 {@code readUpstreamMessage} 相关业务。
-     */
     private String readUpstreamMessage(String responseBody) {
         if (!StringUtils.hasText(responseBody)) {
             return null;

@@ -76,9 +76,7 @@ public class AiChatService {
     @Value("${learning.ai.audit.max-content-length:120000}")
     private int maxAuditContentLength;
 
-    /**
-     * 处理 {@code chat} 相关业务。
-     */
+    /** 调用模型并记录会话及调用审计。 */
     public AgentChatResponse chat(AgentChatRequest request) {
         long startTime = System.currentTimeMillis();
         AiInvocationScene invocationScene = request.getInvocationScene() == null
@@ -208,9 +206,6 @@ public class AiChatService {
         }
     }
 
-    /**
-     * 查询 {@code getEnabledAgent} 相关业务。
-     */
     private AiAgent getEnabledAgent(String agentCode) {
         AiAgent agent = agentService.getByCode(agentCode);
         if (agent == null) {
@@ -226,9 +221,6 @@ public class AiChatService {
         return agent;
     }
 
-    /**
-     * 处理 {@code resolveSession} 相关业务。
-     */
     private AiChatSession resolveSession(AiAgent agent, AgentChatRequest request, Long userId, long startTime,
                                          AiInvocationScene invocationScene) {
         if (request.getSessionId() != null) {
@@ -248,9 +240,6 @@ public class AiChatService {
                 request.getBusinessId(), request.getSceneCode(), requestVariables(request, invocationScene));
     }
 
-    /**
-     * 处理 {@code buildMessages} 相关业务。
-     */
     private List<ChatMessageParam> buildMessages(AiAgent agent, AgentChatRequest request,
                                                  AiChatSession session, AiInvocationScene invocationScene) {
         List<ChatMessageParam> messages = new ArrayList<>();
@@ -415,9 +404,6 @@ public class AiChatService {
         return modelConfigService.requireEnabled(modelConfigId);
     }
 
-    /**
-     * 处理 {@code buildCallRecord} 相关业务。
-     */
     private AiModelCallRecord buildCallRecord(Long sessionId, AiAgent agent, ModelChatRequest request) {
         AiModelCallRecord record = new AiModelCallRecord();
         record.setSessionId(sessionId);
@@ -430,9 +416,6 @@ public class AiChatService {
         return record;
     }
 
-    /**
-     * 创建或保存 {@code saveSuccessRecord} 相关业务。
-     */
     private void trySaveSuccessRecord(AiModelCallRecord record, ModelChatResponse response, long costTime) {
         record.setResponseJson(responseAuditJson(response));
         record.setSuccess(true);
@@ -449,9 +432,6 @@ public class AiChatService {
         }
     }
 
-    /**
-     * 创建或保存 {@code saveFailedRecord} 相关业务。
-     */
     private void trySaveFailedRecord(AiModelCallRecord record, RuntimeException ex, long costTime) {
         record.setSuccess(false);
         record.setErrorMessage(limit(ex.getMessage(), AiAuditConstants.MAX_ERROR_MESSAGE_LENGTH));
@@ -482,9 +462,6 @@ public class AiChatService {
         record.setResponseJson(toJson(diagnostic));
     }
 
-    /**
-     * 转换 {@code toJson} 相关业务。
-     */
     private String toJson(Object value) {
         try {
             return objectMapper.writeValueAsString(value);
@@ -496,9 +473,6 @@ public class AiChatService {
         }
     }
 
-    /**
-     * 查询 {@code readSessionVariables} 相关业务。
-     */
     private Map<String, Object> readSessionVariables(AiChatSession session) {
         if (session == null || !StringUtils.hasText(session.getVariablesJson())) {
             return new HashMap<>();
@@ -593,9 +567,6 @@ public class AiChatService {
         return value.substring(CommonConstants.ZERO, maxLength);
     }
 
-    /**
-     * 处理 {@code sceneDisplayTitle} 相关业务。
-     */
     private String sceneDisplayTitle(String sceneCode, String businessType, String businessId, String agentName, long startTime) {
         if (StringUtils.hasText(sceneCode)) {
             LearningScene scene = LearningScene.of(sceneCode);

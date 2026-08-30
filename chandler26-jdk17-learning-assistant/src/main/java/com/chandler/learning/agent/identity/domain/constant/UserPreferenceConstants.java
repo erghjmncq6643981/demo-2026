@@ -18,9 +18,6 @@ public static final String KEY_LEARNING_AGENT_CODE = "learning.agent_code";
         public static final double SENTENCE_PITCH_MIN = 0.8D;
         public static final double SENTENCE_PITCH_MAX = 1.2D;
 
-        /**
-         * 处理 {@code UserPreference} 相关业务。
-         */
         private UserPreferenceConstants() {
         }
 }

@@ -151,6 +151,7 @@ public class LearningPlanService {
         return plan;
     }
 
+    /** 更新场景学习计划。 */
     public LearningPlanResponse update(Long userId, Long planId, LearningPlanUpdateRequest request) {
         boolean generateFirstUnit = Boolean.TRUE.equals(transactionTemplate.execute(status ->
                 lifecycleService.update(userId, requirePlan(userId, planId), request).generateFirstUnit()));
@@ -164,6 +165,7 @@ public class LearningPlanService {
         return detail(userId, planId);
     }
 
+    /** 查询列表场景学习计划。 */
     public List<LearningPlanResponse> list(Long userId) {
         return planMapper.selectList(new LambdaQueryWrapper<LearningPlan>()
                         .eq(LearningPlan::getUserId, userId)
@@ -174,6 +176,7 @@ public class LearningPlanService {
                 .toList();
     }
 
+    /** 查询详情场景学习计划。 */
     public LearningPlanResponse detail(Long userId, Long planId) {
         return responseAssembler.toPlanResponse(requirePlan(userId, planId), false);
     }
@@ -886,6 +889,7 @@ public class LearningPlanService {
                 message);
     }
 
+    /** 暂停场景学习计划。 */
     @Transactional(rollbackFor = Exception.class)
     public LearningPlanResponse pause(Long userId, Long planId) {
         LearningPlan plan = requirePlan(userId, planId);
@@ -893,6 +897,7 @@ public class LearningPlanService {
         return detail(userId, planId);
     }
 
+    /** 恢复场景学习计划。 */
     public LearningPlanResponse resume(Long userId, Long planId) {
         LearningPlan plan = Objects.requireNonNull(transactionTemplate.execute(status -> {
             LearningPlan txPlan = requirePlan(userId, planId);
@@ -911,6 +916,7 @@ public class LearningPlanService {
         return detail(userId, planId);
     }
 
+    /** 取消场景学习计划。 */
     @Transactional(rollbackFor = Exception.class)
     public LearningPlanResponse cancel(Long userId, Long planId) {
         LearningPlan plan = requirePlan(userId, planId);

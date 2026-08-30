@@ -18,9 +18,7 @@ import java.time.Duration;
 @Configuration
 public class RestClientConfig {
 
-    /**
-     * 处理 {@code restTemplate} 相关业务。
-     */
+    /** 创建带连接与读取超时的模型 HTTP 客户端。 */
     @Bean
     public RestTemplate restTemplate(RestTemplateBuilder builder,
                                      @Value("${learning.ai.http.connect-timeout:15s}") Duration connectTimeout,

@@ -23,7 +23,7 @@ import org.springframework.web.bind.annotation.RestController;
 import java.util.List;
 
 /**
- * SystemLogController 类。
+ * 系统日志接口控制器。
  */
 @RestController
 @RequiredArgsConstructor
@@ -34,9 +34,7 @@ public class SystemLogController {
     private final CurrentUserContext currentUserContext;
     private final SystemLogService systemLogService;
 
-    /**
-     * 查询 {@code list} 相关业务。
-     */
+    /** 系统日志列表。 */
     @GetMapping
     @Operation(summary = "系统日志列表")
     public List<SystemLogResponse> list(
@@ -56,6 +54,7 @@ public class SystemLogController {
                 request.getBusinessType(), request.getBusinessId());
     }
 
+    /** 清空系统日志。 */
     @DeleteMapping
     @Operation(summary = "清空系统日志")
     public void clear() {

@@ -25,12 +25,12 @@ public class VocabularyBestMatchResponse {
     @Schema(description = "释义")
     private String meaning;
 
-    @Schema(description = "业务属性")
+    @Schema(description = "匹配得分")
     private Integer matchScore;
 
-    @Schema(description = "业务属性")
+    @Schema(description = "匹配类型")
     private String matchType;
 
-    @Schema(description = "业务属性")
+    @Schema(description = "完整业务记录")
     private VocabularyStudyResponse record;
 }

@@ -21,14 +21,17 @@ public class AiStructuredResponseParseException extends RuntimeException {
         this.repairs = repairs == null ? List.of() : List.copyOf(repairs);
     }
 
+    /** 返回发生失败的响应解析器名称。 */
     public String getParserName() {
         return parserName;
     }
 
+    /** 返回响应解析失败的处理阶段。 */
     public String getParseStage() {
         return parseStage;
     }
 
+    /** 返回失败前已尝试的兼容修复动作。 */
     public List<String> getRepairs() {
         return repairs;
     }

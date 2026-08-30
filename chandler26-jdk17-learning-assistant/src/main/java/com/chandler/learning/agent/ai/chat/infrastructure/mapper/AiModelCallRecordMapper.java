@@ -8,7 +8,7 @@ import org.apache.ibatis.annotations.Mapper;
 import java.util.List;
 
 /**
- * AiModelCallRecordMapper 类。
+ * AI 模型数据访问接口。
  */
 @Mapper
 public interface AiModelCallRecordMapper extends BaseMapper<AiModelCallRecord> {

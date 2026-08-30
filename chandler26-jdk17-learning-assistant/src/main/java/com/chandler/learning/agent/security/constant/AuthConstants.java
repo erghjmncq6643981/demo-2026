@@ -19,9 +19,6 @@ public static final String BEARER_PREFIX = "Bearer ";
         public static final int EMAIL_MASK_VISIBLE_PREFIX_LENGTH = 2;
         public static final String CONTACT_MASK = "****";
 
-        /**
-         * 处理 {@code Auth} 相关业务。
-         */
         private AuthConstants() {
         }
 }

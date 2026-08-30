@@ -13,8 +13,8 @@ import lombok.Data;
 @TableName("vocabulary_card_generation_job_item")
 public class VocabularyCardGenerationJobItem extends BaseEntity {
 
-    @TableId(value = "id", type = IdType.ASSIGN_ID)
     /** 任务明细主键。 */
+    @TableId(value = "id", type = IdType.ASSIGN_ID)
     private Long id;
 
     /** 所属词卡任务 ID。 */

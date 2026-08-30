@@ -98,9 +98,6 @@ public class LearningWordbook extends BaseEntity {
         touch(now);
     }
 
-    /**
-     * 更新 {@code touch} 相关业务。
-     */
     private void touch(LocalDateTime now) {
         setUpdateTime(now);
     }

@@ -11,7 +11,7 @@ import lombok.Data;
 public class LearningPlanUnitWordSummaryResponse {
 
     /** 单元词条主键。 */
-    @Schema(description = "主键标识")
+    @Schema(description = "主键 ID")
     private Long id;
 
     /** 词面。 */
@@ -31,7 +31,7 @@ public class LearningPlanUnitWordSummaryResponse {
     private String contextMeaning;
 
     /** 词汇层级，日历摘要只返回核心词。 */
-    @Schema(description = "业务属性")
+    @Schema(description = "词汇在场景中的层级")
     private String tier;
 
     /** 认识或会拼写。 */

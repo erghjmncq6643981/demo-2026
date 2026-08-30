@@ -15,50 +15,32 @@ import lombok.Data;
 @Schema(name = "AI 对话消息")
 public class AiChatMessage extends BaseEntity {
 
-    /**
-     * id 属性。
-     */
+    /** 主键 ID。 */
     @TableId(value = "id", type = IdType.ASSIGN_ID)
     private Long id;
 
-    /**
-     * sessionId 属性。
-     */
+    /** AI 会话 ID。 */
     private Long sessionId;
 
-    /**
-     * system、user、assistant。
-     */
+    /** 消息角色：system-系统提示词，user-用户消息，assistant-模型回复。 */
     @Schema(description = "system、user、assistant")
     private String role;
 
-    /**
-     * content 属性。
-     */
+    /** 正文内容。 */
     private String content;
 
-    /**
-     * tokenCount 属性。
-     */
+    /** Token 数量。 */
     private Integer tokenCount;
 
-    /**
-     * costTime 属性。
-     */
+    /** 处理耗时，单位毫秒。 */
     private Long costTime;
 
-    /**
-     * modelProvider 属性。
-     */
+    /** 模型供应商编码。 */
     private String modelProvider;
 
-    /**
-     * modelName 属性。
-     */
+    /** 模型名称。 */
     private String modelName;
 
-    /**
-     * sequence 属性。
-     */
+    /** 展示或执行顺序。 */
     private Integer sequence;
 }

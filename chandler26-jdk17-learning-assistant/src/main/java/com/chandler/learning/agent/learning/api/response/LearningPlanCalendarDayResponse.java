@@ -19,13 +19,13 @@ public class LearningPlanCalendarDayResponse {
     @Schema(description = "计划词汇数量")
     private Integer plannedWordCount;
 
-    @Schema(description = "数量")
+    @Schema(description = "待挑战词数量")
     private Integer pendingChallengeCount;
 
     @Schema(description = "已生成场景单元数量")
     private Integer generatedUnitCount;
 
-    @Schema(description = "数量")
+    @Schema(description = "已完成场景单元数量")
     private Integer completedUnitCount;
 
     @Schema(description = "逾期复习数量")

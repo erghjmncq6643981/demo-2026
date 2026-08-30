@@ -5,12 +5,12 @@ import io.swagger.v3.oas.annotations.media.Schema;
 import lombok.Data;
 
 /**
- * UserProfileResponse 类。
+ * 用户账户响应数据。
  */
 @Data
 public class UserProfileResponse {
 
-    @Schema(description = "主键标识")
+    @Schema(description = "主键 ID")
     private Long id;
 
     @Schema(description = "用户名")

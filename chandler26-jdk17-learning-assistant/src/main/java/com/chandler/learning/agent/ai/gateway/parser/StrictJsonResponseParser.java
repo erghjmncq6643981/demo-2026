@@ -21,16 +21,19 @@ public class StrictJsonResponseParser implements AiStructuredResponseParser {
         this.objectMapper = objectMapper;
     }
 
+    /** 返回通用严格 JSON 解析器名称。 */
     @Override
     public String name() {
         return "strict-json";
     }
 
+    /** 作为所有供应商解析器的最终兜底实现。 */
     @Override
     public boolean supports(String provider, String modelName) {
         return true;
     }
 
+    /** 依次尝试原文、代码块和完整 JSON 块，不修改字符串内容。 */
     @Override
     public AiStructuredResponseParseResult parse(String content) {
         if (!StringUtils.hasText(content)) {

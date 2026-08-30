@@ -50,27 +50,37 @@ public class LearningReviewRecord extends BaseEntity {
     /** 用户跨词本逐词进度 ID。 */
     private Long wordProgressId;
 
+    /** 学习计划 ID。 */
     private Long planId;
 
+    /** 学习场景单元 ID。 */
     private Long unitId;
 
     /** meaning_choice、copy_typing 或 meaning_spelling。 */
     private String assessmentType;
 
+    /** 评测题目 JSON。 */
     private String questionJson;
 
+    /** 学习者提交的答案文本。 */
     private String answerText;
 
+    /** 正确答案。 */
     private String correctAnswer;
 
+    /** 评测检查结果。 */
     private String checkResult;
 
+    /** 跟敲准确率。 */
     private Double typingAccuracy;
 
+    /** 答题提示等级。 */
     private Integer hintLevel;
 
+    /** 已尝试次数。 */
     private Integer attemptCount;
 
+    /** 持续时间，单位毫秒。 */
     private Long durationMillis;
 
     /**

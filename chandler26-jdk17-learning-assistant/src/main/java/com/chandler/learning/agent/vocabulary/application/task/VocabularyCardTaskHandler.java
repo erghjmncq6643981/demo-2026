@@ -21,16 +21,19 @@ public class VocabularyCardTaskHandler implements AiTaskHandler {
     private final VocabularyCardBatchService batchService;
     private final AiTaskExecutionService executionService;
 
+    /** 返回处理器支持的任务类型。 */
     @Override
     public AiTaskType taskType() {
         return AiTaskType.VOCABULARY_CARD;
     }
 
+    /** 定义任务的执行步骤。 */
     @Override
     public List<AiTaskStepDefinition> steps() {
         return List.of(new AiTaskStepDefinition("generate_cards", "分批生成缺失词卡", 10));
     }
 
+    /** 执行当前任务处理流程。 */
     @Override
     public void execute(AiAsyncTask task, Map<String, Object> payload) {
         Long modelConfigId = AiTaskPayload.longValue(payload, "modelConfigId");

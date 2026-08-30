@@ -28,16 +28,19 @@ public class ArticleMaterialTaskHandler implements AiTaskHandler {
     private final AiAsyncTaskService taskService;
     private final ObjectMapper objectMapper;
 
+    /** 返回处理器支持的任务类型。 */
     @Override
     public AiTaskType taskType() {
         return AiTaskType.ARTICLE_MATERIAL;
     }
 
+    /** 定义任务的执行步骤。 */
     @Override
     public List<AiTaskStepDefinition> steps() {
         return List.of(new AiTaskStepDefinition("generate_article", "生成并保存语境精读材料", 10));
     }
 
+    /** 执行当前任务处理流程。 */
     @Override
     public void execute(AiAsyncTask task, Map<String, Object> payload) {
         executionService.execute(task.getId(), "generate_article", task.getOperatorUserId(),

@@ -53,6 +53,7 @@ public class LearningPlanController {
     private final VocabularyCardBatchService cardBatchService;
     private final AiAsyncTaskService aiAsyncTaskService;
 
+    /** 根据已发布词表创建场景学习计划。 */
     @PostMapping
     @Operation(summary = "根据已发布词表创建场景学习计划")
     public LearningPlanResponse create(
@@ -61,6 +62,7 @@ public class LearningPlanController {
         return learningPlanService.create(user.getId(), request);
     }
 
+    /** 更新场景学习计划。 */
     @PutMapping("/{planId}")
     @Operation(summary = "更新场景学习计划")
     public LearningPlanResponse update(
@@ -70,6 +72,7 @@ public class LearningPlanController {
         return learningPlanService.update(user.getId(), planId, request);
     }
 
+    /** 我的场景学习计划。 */
     @GetMapping
     @Operation(summary = "我的场景学习计划")
     public List<LearningPlanResponse> list() {
@@ -77,6 +80,7 @@ public class LearningPlanController {
         return learningPlanService.list(user.getId());
     }
 
+    /** 场景学习计划详情。 */
     @GetMapping("/{planId}")
     @Operation(summary = "场景学习计划详情")
     public LearningPlanResponse detail(
@@ -85,6 +89,7 @@ public class LearningPlanController {
         return learningPlanService.detail(user.getId(), planId);
     }
 
+    /** 查询学习计划日历汇总。 */
     @GetMapping("/{planId}/calendar")
     @Operation(summary = "查询学习计划日历汇总")
     public List<LearningPlanCalendarDayResponse> calendar(
@@ -95,6 +100,7 @@ public class LearningPlanController {
         return learningPlanService.calendar(user.getId(), planId, from, to);
     }
 
+    /** 按需加载单个场景的完整学习内容。 */
     @GetMapping("/{planId}/units/{unitId}")
     @Operation(summary = "按需加载单个场景的完整学习内容")
     public LearningPlanUnitResponse unitDetail(
@@ -104,6 +110,7 @@ public class LearningPlanController {
         return learningPlanService.unitDetail(user.getId(), planId, unitId);
     }
 
+    /** 暂停场景学习计划。 */
     @PostMapping("/{planId}/pause")
     @Operation(summary = "暂停场景学习计划")
     public LearningPlanResponse pause(
@@ -112,6 +119,7 @@ public class LearningPlanController {
         return learningPlanService.pause(user.getId(), planId);
     }
 
+    /** 恢复/启动场景学习计划。 */
     @PostMapping("/{planId}/resume")
     @Operation(summary = "恢复/启动场景学习计划")
     public LearningPlanResponse resume(
@@ -120,6 +128,7 @@ public class LearningPlanController {
         return learningPlanService.resume(user.getId(), planId);
     }
 
+    /** 取消场景学习计划。 */
     @PostMapping("/{planId}/cancel")
     @Operation(summary = "取消场景学习计划")
     public LearningPlanResponse cancel(
@@ -128,6 +137,7 @@ public class LearningPlanController {
         return learningPlanService.cancel(user.getId(), planId);
     }
 
+    /** 按学习计划生成指定日期的场景材料，超过 50 词自动均分多篇。 */
     @PostMapping("/{planId}/units/next")
     @Operation(summary = "按学习计划生成指定日期的场景材料，超过 50 词自动均分多篇")
     public List<LearningPlanUnitResponse> nextUnit(
@@ -139,6 +149,7 @@ public class LearningPlanController {
         return learningPlanService.generateNextUnit(user.getId(), planId, modelConfigId, recommendedDate);
     }
 
+    /** 重新生成指定日期的场景材料。 */
     @PostMapping("/{planId}/units/regenerate-day")
     @Operation(summary = "重新生成指定日期的场景材料")
     public List<LearningPlanUnitResponse> regenerateDayUnits(
@@ -148,6 +159,7 @@ public class LearningPlanController {
         return learningPlanService.regenerateDayUnits(user.getId(), planId, request.getModelConfigId(), request.getRecommendedDate());
     }
 
+    /** 异步生成当天场景材料新版本，并保留旧版本历史。 */
     @PostMapping("/{planId}/units/regenerate-day/async")
     @Operation(summary = "异步生成当天场景材料新版本，并保留旧版本历史")
     public AiAsyncTaskResponse regenerateDayUnitsAsync(
@@ -171,6 +183,7 @@ public class LearningPlanController {
         return aiAsyncTaskService.toResponse(task);
     }
 
+    /** 预约生成场景材料，任务由低价时段调度器执行。 */
     @PostMapping("/{planId}/units/next/async")
     @Operation(summary = "预约生成场景材料，任务由低价时段调度器执行")
     public AiAsyncTaskResponse scheduleNextUnit(
@@ -196,6 +209,7 @@ public class LearningPlanController {
         return aiAsyncTaskService.toResponse(task);
     }
 
+    /** 开始或切换到已生成的场景单元。 */
     @PostMapping("/{planId}/units/{unitId}/start")
     @Operation(summary = "开始或切换到已生成的场景单元")
     public LearningPlanResponse startUnit(
@@ -205,6 +219,7 @@ public class LearningPlanController {
         return learningPlanService.startUnit(user.getId(), planId, unitId);
     }
 
+    /** 提交含义选择、跟敲或按含义拼写检查。 */
     @PostMapping("/{planId}/units/{unitId}/assessments")
     @Operation(summary = "提交含义选择、跟敲或按含义拼写检查")
     public LearningAssessmentSubmitResponse submitAssessment(
@@ -215,6 +230,7 @@ public class LearningPlanController {
         return learningPlanService.submitAssessment(user.getId(), planId, unitId, request);
     }
 
+    /** 完成当前场景，后续单元仍由学习者手动触发。 */
     @PostMapping("/{planId}/units/{unitId}/complete")
     @Operation(summary = "完成当前场景，后续单元仍由学习者手动触发")
     public LearningPlanResponse completeUnit(
@@ -224,6 +240,7 @@ public class LearningPlanController {
         return learningPlanService.completeUnit(user.getId(), planId, unitId);
     }
 
+    /** 把扩展或 AI 补充词提升为核心学习词。 */
     @PostMapping("/{planId}/units/{unitId}/entries/{entryId}/promote")
     @Operation(summary = "把扩展或 AI 补充词提升为核心学习词")
     public LearningPlanUnitEntryResponse promoteWord(
@@ -234,6 +251,7 @@ public class LearningPlanController {
         return learningPlanService.promoteWord(user.getId(), planId, unitId, entryId);
     }
 
+    /** 为已有场景材料独立补生成场景相关词汇。 */
     @PostMapping("/{planId}/units/{unitId}/related-words/async")
     @Operation(summary = "为已有场景材料独立补生成场景相关词汇")
     public AiAsyncTaskResponse generateRelatedWords(
@@ -257,6 +275,7 @@ public class LearningPlanController {
         return aiAsyncTaskService.toResponse(task);
     }
 
+    /** 对当前场景缓存缺失词按 10-20 个一批生成 AI 词卡。 */
     @PostMapping("/{planId}/units/{unitId}/cards/generate")
     @Operation(summary = "对当前场景缓存缺失词按 10-20 个一批生成 AI 词卡")
     public VocabularyCardGenerationResponse generateCards(

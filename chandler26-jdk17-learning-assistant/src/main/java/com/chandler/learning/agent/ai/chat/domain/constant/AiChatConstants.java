@@ -18,9 +18,6 @@ public static final int MAX_HISTORY_SIZE = 20;
         public static final String SCENE_WRITING = "writing";
         public static final String SCENE_TITLE_ENGLISH_VOCABULARY = "英语词汇学习";
 
-        /**
-         * 处理 {@code ChatSession} 相关业务。
-         */
         private AiChatConstants() {
         }
 }

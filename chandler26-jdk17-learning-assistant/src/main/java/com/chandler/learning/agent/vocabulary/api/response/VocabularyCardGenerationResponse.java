@@ -13,7 +13,7 @@ import java.util.List;
 @Data
 public class VocabularyCardGenerationResponse {
 
-    @Schema(description = "关联业务标识")
+    @Schema(description = "处理任务 ID")
     private Long jobId;
 
     @Schema(description = "学习计划标识")
@@ -25,19 +25,19 @@ public class VocabularyCardGenerationResponse {
     @Schema(description = "异步任务标识")
     private Long asyncTaskId;
 
-    @Schema(description = "状态")
+    @Schema(description = "当前业务状态")
     private String status;
 
     @Schema(description = "批处理数量")
     private Integer batchSize;
 
-    @Schema(description = "总数量")
+    @Schema(description = "任务或分页数据总数")
     private Integer totalCount;
 
     @Schema(description = "成功数量")
     private Integer successCount;
 
-    @Schema(description = "数量")
+    @Schema(description = "处理失败数量")
     private Integer failedCount;
 
     /** 任务级失败原因；单词级失败原因位于 items。 */
@@ -60,7 +60,7 @@ public class VocabularyCardGenerationResponse {
     @Schema(description = "是否还有更多词条")
     private Boolean itemHasMore;
 
-    @Schema(description = "列表数据")
+    @Schema(description = "分页数据列表")
     private List<VocabularyCardGenerationItemResponse> items;
 
     @Schema(description = "开始时间")

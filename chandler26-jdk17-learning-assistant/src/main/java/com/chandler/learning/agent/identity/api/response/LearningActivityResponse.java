@@ -7,7 +7,7 @@ import lombok.Data;
 import java.util.List;
 
 /**
- * LearningActivityResponse 类。
+ * 当前业务响应数据。
  */
 @Data
 public class LearningActivityResponse {
@@ -15,12 +15,12 @@ public class LearningActivityResponse {
     @Schema(description = "统计天数")
     private Integer days;
 
-    @Schema(description = "总数量")
+    @Schema(description = "累计学习词汇数量")
     private Integer learnedTotal;
 
-    @Schema(description = "总数量")
+    @Schema(description = "累计复习词汇数量")
     private Integer reviewTotal;
 
-    @Schema(description = "列表数据")
+    @Schema(description = "分页数据列表")
     private List<LearningActivityDayResponse> items;
 }

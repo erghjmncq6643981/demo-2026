@@ -32,9 +32,6 @@ public static final String STATUS_FAMILIAR = "familiar";
         public static final int RESTART_MAX_LIMIT = 100;
         public static final int[] INTERVAL_DAYS = {0, 1, 2, 4, 7, 15, 30, 60};
 
-        /**
-         * 处理 {@code Review} 相关业务。
-         */
         private ReviewConstants() {
         }
 }

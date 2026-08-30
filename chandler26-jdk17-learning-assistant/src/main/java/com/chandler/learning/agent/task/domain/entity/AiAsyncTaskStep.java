@@ -15,6 +15,7 @@ import java.time.LocalDateTime;
 @TableName("learning_ai_async_task_step")
 public class AiAsyncTaskStep extends BaseEntity {
 
+    /** 主键 ID。 */
     @TableId(value = "id", type = IdType.ASSIGN_ID)
     private Long id;
 
@@ -60,7 +61,9 @@ public class AiAsyncTaskStep extends BaseEntity {
     /** 最近一次失败的可读摘要。 */
     private String errorMessage;
 
+    /** 执行开始时间。 */
     private LocalDateTime startedTime;
 
+    /** 执行结束时间。 */
     private LocalDateTime finishedTime;
 }

@@ -12,6 +12,6 @@ import lombok.Data;
 public class SceneMaterialNoteRequest {
 
     @Size(max = 20000, message = "场景笔记不能超过 20000 个字符")
-    @Schema(description = "内容")
+    @Schema(description = "正文内容")
     private String content;
 }

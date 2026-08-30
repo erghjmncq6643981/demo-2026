@@ -8,7 +8,7 @@ import org.apache.ibatis.annotations.Param;
 import java.util.List;
 
 /**
- * EnglishVocabularyStudyRecordMapper 类。
+ * 词汇数据访问接口。
  */
 @Mapper
 public interface EnglishVocabularyStudyRecordMapper extends BaseMapper<EnglishVocabularyStudyRecord> {

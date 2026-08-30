@@ -13,10 +13,10 @@ import java.util.List;
 @Data
 public class AiModelConfigResponse {
 
-    @Schema(description = "主键标识")
+    @Schema(description = "主键 ID")
     private Long id;
 
-    @Schema(description = "名称")
+    @Schema(description = "业务对象名称")
     private String name;
 
     @Schema(description = "AI 供应商")
@@ -76,11 +76,11 @@ public class AiModelConfigResponse {
     private Integer sequence;
 
     /** 当前绑定该配置的未删除 Agent 数量。 */
-    @Schema(description = "数量")
+    @Schema(description = "已绑定 Agent 数量")
     private Long boundAgentCount;
 
     /** 当前绑定该配置的 Agent 名称，供管理端识别影响范围。 */
-    @Schema(description = "业务属性")
+    @Schema(description = "已绑定 Agent 名称列表")
     private List<String> boundAgentNames;
 
     /** 累计模型调用次数。 */
@@ -88,7 +88,7 @@ public class AiModelConfigResponse {
     private Long callCount;
 
     /** 成功调用次数。 */
-    @Schema(description = "数量")
+    @Schema(description = "处理成功数量")
     private Long successCount;
 
     /** 失败调用次数。 */

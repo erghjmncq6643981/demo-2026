@@ -24,16 +24,19 @@ public class SceneRelatedVocabularyTaskHandler implements AiTaskHandler {
     private final AiTaskExecutionService executionService;
     private final AiAsyncTaskService taskService;
 
+    /** 返回处理器支持的任务类型。 */
     @Override
     public AiTaskType taskType() {
         return AiTaskType.SCENE_RELATED_VOCABULARY;
     }
 
+    /** 定义任务的执行步骤。 */
     @Override
     public List<AiTaskStepDefinition> steps() {
         return List.of(new AiTaskStepDefinition("generate_related_words", "补充场景相关词汇", 10));
     }
 
+    /** 执行当前任务处理流程。 */
     @Override
     public void execute(AiAsyncTask task, Map<String, Object> payload) {
         Long modelConfigId = AiTaskPayload.longValue(payload, "modelConfigId");

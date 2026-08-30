@@ -6,9 +6,6 @@ public final class LearningActivityConstants {
 public static final int MIN_DAYS = 7;
         public static final int MAX_DAYS = 366;
 
-        /**
-         * 处理 {@code Activity} 相关业务。
-         */
         private LearningActivityConstants() {
         }
 }

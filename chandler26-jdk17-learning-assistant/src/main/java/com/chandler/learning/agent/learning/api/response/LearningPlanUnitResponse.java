@@ -14,7 +14,7 @@ import java.util.List;
 @Data
 public class LearningPlanUnitResponse {
 
-    @Schema(description = "主键标识")
+    @Schema(description = "主键 ID")
     private Long id;
 
     @Schema(description = "学习计划标识")
@@ -32,13 +32,13 @@ public class LearningPlanUnitResponse {
     @Schema(description = "摘要")
     private String summary;
 
-    @Schema(description = "业务状态")
+    @Schema(description = "当前业务状态")
     private String status;
 
     @Schema(description = "核心词汇数量")
     private Integer coreWordCount;
 
-    @Schema(description = "数量")
+    @Schema(description = "扩展词数量")
     private Integer extendedWordCount;
 
     @Schema(description = "补充词汇数量")
@@ -51,7 +51,7 @@ public class LearningPlanUnitResponse {
     private LocalDate recommendedDate;
 
     /** 场景材料主键，用于加载与材料绑定的学习笔记。 */
-    @Schema(description = "关联业务标识")
+    @Schema(description = "场景材料 ID")
     private Long sceneMaterialId;
 
     /** 是否已经生成可学习的场景材料。 */
@@ -86,6 +86,6 @@ public class LearningPlanUnitResponse {
     @Schema(description = "生成时间")
     private LocalDateTime generatedTime;
 
-    @Schema(description = "时间")
+    @Schema(description = "完成时间")
     private LocalDateTime completedTime;
 }

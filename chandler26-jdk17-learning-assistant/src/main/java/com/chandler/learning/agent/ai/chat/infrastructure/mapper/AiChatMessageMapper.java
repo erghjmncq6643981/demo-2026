@@ -6,7 +6,7 @@ import org.apache.ibatis.annotations.Mapper;
 import org.apache.ibatis.annotations.Param;
 
 /**
- * AiChatMessageMapper 类。
+ * AI 会话数据访问接口。
  */
 @Mapper
 public interface AiChatMessageMapper extends BaseMapper<AiChatMessage> {

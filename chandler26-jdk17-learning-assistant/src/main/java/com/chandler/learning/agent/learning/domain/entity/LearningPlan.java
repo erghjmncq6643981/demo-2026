@@ -13,8 +13,8 @@ import lombok.Data;
 @TableName("learning_plan")
 public class LearningPlan extends BaseEntity {
 
-    @TableId(value = "id", type = IdType.ASSIGN_ID)
     /** 学习计划主键。 */
+    @TableId(value = "id", type = IdType.ASSIGN_ID)
     private Long id;
 
     /** 计划所属用户 ID。 */

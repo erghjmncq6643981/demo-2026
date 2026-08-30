@@ -10,6 +10,6 @@ import lombok.Data;
 @Data
 public class VocabularyImportPublishRequest {
 
-    @Schema(description = "关联业务标识")
+    @Schema(description = "个人单词本 ID")
     private Long wordbookId;
 }

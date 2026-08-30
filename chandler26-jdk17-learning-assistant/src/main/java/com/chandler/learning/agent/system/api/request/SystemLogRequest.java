@@ -7,7 +7,7 @@ import jakarta.validation.constraints.Size;
 import lombok.Data;
 
 /**
- * SystemLogRequest 类。
+ * 系统日志请求参数。
  */
 @Data
 public class SystemLogRequest {

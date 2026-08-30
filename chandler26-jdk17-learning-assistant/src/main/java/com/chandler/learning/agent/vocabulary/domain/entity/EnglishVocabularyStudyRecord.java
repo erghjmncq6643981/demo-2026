@@ -17,74 +17,46 @@ import java.time.LocalDateTime;
 @Schema(name = "英语词汇学习记录")
 public class EnglishVocabularyStudyRecord extends BaseEntity {
 
-    /**
-     * id 属性。
-     */
+    /** 主键 ID。 */
     @TableId(value = "id", type = IdType.ASSIGN_ID)
     private Long id;
 
-    /**
-     * term 属性。
-     */
+    /** 英文词汇或短语。 */
     private String term;
 
-    /**
-     * normalizedTerm 属性。
-     */
+    /** 归一化词汇。 */
     private String normalizedTerm;
 
-    /**
-     * agentCode 属性。
-     */
+    /** Agent 编码。 */
     private String agentCode;
 
-    /**
-     * templateCode 属性。
-     */
+    /** 提示词模板编码。 */
     private String templateCode;
 
-    /**
-     * provider 属性。
-     */
+    /** 模型供应商。 */
     private String provider;
 
-    /**
-     * modelName 属性。
-     */
+    /** 模型名称。 */
     private String modelName;
 
-    /**
-     * sessionId 属性。
-     */
+    /** AI 会话 ID。 */
     private Long sessionId;
 
-    /**
-     * rawContent 属性。
-     */
+    /** AI 原始响应内容。 */
     private String rawContent;
 
-    /**
-     * parsedJson 属性。
-     */
+    /** 解析后的结构化 JSON。 */
     private String parsedJson;
 
-    /**
-     * tokenUsage 属性。
-     */
+    /** 模型调用 Token 总数。 */
     private Integer tokenUsage;
 
-    /**
-     * costTime 属性。
-     */
+    /** 处理耗时，单位毫秒。 */
     private Long costTime;
 
-    /**
-     * lookupCount 属性。
-     */
+    /** 累计查询次数。 */
     private Integer lookupCount;
 
-    /**
-     * lastLookupTime 属性。
-     */
+    /** 最近查词时间。 */
     private LocalDateTime lastLookupTime;
 }

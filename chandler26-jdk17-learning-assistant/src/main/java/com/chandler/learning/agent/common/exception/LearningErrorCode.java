@@ -97,18 +97,22 @@ AUTH_REQUIRED(HttpStatus.UNAUTHORIZED, "请先登录"),
             this.defaultMessage = defaultMessage;
         }
 
+        /** 返回错误码对应的 HTTP 状态。 */
         public HttpStatus getStatus() {
             return status;
         }
 
+        /** 返回面向用户的默认中文错误提示。 */
         public String getDefaultMessage() {
             return defaultMessage;
         }
 
+        /** 返回稳定错误码字符串。 */
         public String getCode() {
             return name();
         }
 
+        /** 使用稳定错误码作为枚举的文本表示。 */
         @Override
         public String toString() {
             return name();

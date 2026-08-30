@@ -9,6 +9,7 @@ public final class AiTaskPayload {
     private AiTaskPayload() {
     }
 
+    /** 从任务载荷读取长整型 ID 参数。 */
     public static Long longValue(Map<String, Object> payload, String key) {
         Object value = payload == null ? null : payload.get(key);
         if (value == null) return null;
@@ -19,6 +20,7 @@ public final class AiTaskPayload {
         }
     }
 
+    /** 从任务载荷读取整数参数。 */
     public static Integer intValue(Map<String, Object> payload, String key, Integer defaultValue) {
         Object value = payload == null ? null : payload.get(key);
         if (value == null) return defaultValue;
@@ -29,6 +31,7 @@ public final class AiTaskPayload {
         }
     }
 
+    /** 从任务载荷读取日期参数。 */
     public static LocalDate dateValue(Map<String, Object> payload, String key, LocalDate defaultValue) {
         Object value = payload == null ? null : payload.get(key);
         if (value == null) return defaultValue;

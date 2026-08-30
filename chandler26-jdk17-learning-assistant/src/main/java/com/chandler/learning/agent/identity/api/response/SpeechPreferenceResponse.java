@@ -5,7 +5,7 @@ import io.swagger.v3.oas.annotations.media.Schema;
 import lombok.Data;
 
 /**
- * SpeechPreferenceResponse 类。
+ * 当前业务响应数据。
  */
 @Data
 public class SpeechPreferenceResponse {

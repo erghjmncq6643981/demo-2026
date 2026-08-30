@@ -5,7 +5,7 @@ import com.chandler.learning.agent.ai.agent.domain.entity.AiAgent;
 import org.apache.ibatis.annotations.Mapper;
 
 /**
- * AiAgentMapper 类。
+ * AI Agent数据访问接口。
  */
 @Mapper
 public interface AiAgentMapper extends BaseMapper<AiAgent> {

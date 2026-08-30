@@ -163,9 +163,7 @@ public class LearningArticleStudyRecord extends BaseEntity {
     @Schema(description = "完成学习时间")
     private LocalDateTime completedTime;
 
-    /**
-     * 创建或保存 {@code create} 相关业务。
-     */
+    /** 创建语境精读。 */
     public static LearningArticleStudyRecord create(Long userId, Long wordbookId, String selectedTermsJson,
                                                     String selectedTermHash, String wordCountRange, String difficulty,
                                                     String remark, String agentCode, String templateCode,
@@ -193,9 +191,7 @@ public class LearningArticleStudyRecord extends BaseEntity {
         return record;
     }
 
-    /**
-     * 更新 {@code applyAiResult} 相关业务。
-     */
+    /** 应用语境精读状态变更。 */
     public void applyAiResult(String provider, String modelName, Long sessionId, String rawContent,
                               String parsedJson, Integer tokenUsage, Long costTime, LocalDateTime now) {
         setProvider(provider);
@@ -209,9 +205,7 @@ public class LearningArticleStudyRecord extends BaseEntity {
         setUpdateTime(now);
     }
 
-    /**
-     * 更新 {@code touch} 相关业务。
-     */
+    /** 更新语境精读记录的最近访问时间和次数。 */
     public void touch(LocalDateTime now) {
         setLookupCount(getLookupCount() == null
                 ? ArticleConstants.DEFAULT_LOOKUP_COUNT

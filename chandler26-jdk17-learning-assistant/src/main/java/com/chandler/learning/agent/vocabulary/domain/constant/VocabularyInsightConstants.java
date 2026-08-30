@@ -42,9 +42,6 @@ public static final int MAX_RELATIONS = 80;
         public static final String DIFFICULTY_HARD = "hard";
         public static final String SOURCE_PARSED_JSON = "parsed_json";
 
-        /**
-         * 处理 {@code VocabularyInsight} 相关业务。
-         */
         private VocabularyInsightConstants() {
         }
 }

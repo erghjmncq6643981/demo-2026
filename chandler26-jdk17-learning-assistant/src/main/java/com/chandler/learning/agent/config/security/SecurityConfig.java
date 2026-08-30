@@ -24,9 +24,7 @@ public class SecurityConfig {
 
     private final JwtAuthenticationFilter jwtAuthenticationFilter;
 
-    /**
-     * 处理 {@code securityFilterChain} 相关业务。
-     */
+    /** 配置无状态 JWT 安全过滤链。 */
     @Bean
     public SecurityFilterChain securityFilterChain(HttpSecurity http) throws Exception {
         return http

@@ -17,7 +17,7 @@ import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
 
 /**
- * AuthController 类。
+ * 用户账户接口控制器。
  */
 @RestController
 @RequiredArgsConstructor
@@ -27,39 +27,35 @@ public class AuthController {
 
     private final AuthService authService;
 
-    /**
-     * 创建或保存 {@code register} 相关业务。
-     */
+    /** 注册学习用户。 */
     @PostMapping("/register")
     @Operation(summary = "注册学习用户")
     public AuthResponse register(@Valid @RequestBody AuthRequest request) {
         return authService.register(request);
     }
 
-    /**
-     * 处理 {@code login} 相关业务。
-     */
+    /** 登录学习用户。 */
     @PostMapping("/login")
     @Operation(summary = "登录学习用户")
     public AuthResponse login(@Valid @RequestBody AuthRequest request) {
         return authService.login(request);
     }
 
+    /** 当前登录用户。 */
     @GetMapping("/me")
     @Operation(summary = "当前登录用户")
     public UserProfileResponse me() {
         return authService.me();
     }
 
-    /**
-     * 更新 {@code updateProfile} 相关业务。
-     */
+    /** 更新当前登录用户。 */
     @PutMapping("/me")
     @Operation(summary = "更新当前登录用户")
     public UserProfileResponse updateProfile(@RequestBody UserProfileUpdateRequest request) {
         return authService.updateProfile(request);
     }
 
+    /** 退出登录。 */
     @PostMapping("/logout")
     @Operation(summary = "退出登录")
     public void logout() {

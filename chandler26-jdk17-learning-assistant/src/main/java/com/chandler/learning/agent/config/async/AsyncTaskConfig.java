@@ -29,6 +29,7 @@ public class AsyncTaskConfig {
     private final LearningAiTaskProperties properties;
     private final LearningAuditLogProperties auditLogProperties;
 
+    /** 创建有界的 AI 任务线程池并传播请求 MDC。 */
     @Bean("aiTaskExecutor")
     public Executor aiTaskExecutor() {
         return createExecutor(

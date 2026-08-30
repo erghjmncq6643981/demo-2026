@@ -6,7 +6,7 @@ import jakarta.validation.constraints.NotBlank;
 import lombok.Data;
 
 /**
- * AddWordbookEntryRequest 类。
+ * 个人单词本请求参数。
  */
 @Data
 public class AddWordbookEntryRequest {

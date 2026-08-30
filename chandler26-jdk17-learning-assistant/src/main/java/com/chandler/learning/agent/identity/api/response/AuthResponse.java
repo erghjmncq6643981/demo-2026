@@ -7,7 +7,7 @@ import lombok.Data;
 import java.time.LocalDateTime;
 
 /**
- * AuthResponse 类。
+ * 用户账户响应数据。
  */
 @Data
 public class AuthResponse {
@@ -18,6 +18,6 @@ public class AuthResponse {
     @Schema(description = "过期时间")
     private LocalDateTime expiredTime;
 
-    @Schema(description = "业务属性")
+    @Schema(description = "当前用户资料")
     private UserProfileResponse user;
 }

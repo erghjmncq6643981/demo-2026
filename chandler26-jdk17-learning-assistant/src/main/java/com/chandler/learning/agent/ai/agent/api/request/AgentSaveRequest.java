@@ -15,6 +15,7 @@ import lombok.Data;
 public class AgentSaveRequest {
 
     @NotBlank(message = "Agent 名称不能为空")
+    @Schema(description = "Agent 名称")
     private String name;
 
     @NotBlank(message = "Agent 编码不能为空")

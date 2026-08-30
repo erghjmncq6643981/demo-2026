@@ -15,6 +15,7 @@ public class VocabularyCardGenerationWorker {
 
     private final VocabularyCardBatchService cardBatchService;
 
+    /** 消费词卡生成事件并执行批量生成。 */
     @Async("aiTaskExecutor")
     @TransactionalEventListener(phase = TransactionPhase.AFTER_COMMIT)
     public void handle(VocabularyCardGenerationRequestedEvent event) {

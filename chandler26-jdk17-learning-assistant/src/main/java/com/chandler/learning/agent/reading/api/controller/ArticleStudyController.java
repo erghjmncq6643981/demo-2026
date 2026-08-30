@@ -29,7 +29,7 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.core.type.TypeReference;
 
 /**
- * ArticleStudyController 类。
+ * 语境精读接口控制器。
  */
 @RestController
 @RequiredArgsConstructor
@@ -42,9 +42,7 @@ public class ArticleStudyController {
     private final AiAsyncTaskService aiAsyncTaskService;
     private final ObjectMapper objectMapper;
 
-    /**
-     * 处理 {@code study} 相关业务。
-     */
+    /** 基于单词本目标词生成语境精读材料。 */
     @PostMapping("/study")
     @Operation(summary = "基于单词本目标词生成语境精读材料")
     public ArticleStudyResponse study(
@@ -53,6 +51,7 @@ public class ArticleStudyController {
         return articleStudyService.study(user.getId(), request);
     }
 
+    /** 提交异步语境精读材料生成任务。 */
     @PostMapping("/study/async")
     @Operation(summary = "提交异步语境精读材料生成任务")
     public AiAsyncTaskResponse studyAsync(
@@ -72,9 +71,7 @@ public class ArticleStudyController {
         return aiAsyncTaskService.toResponse(task);
     }
 
-    /**
-     * 查询 {@code listRecords} 相关业务。
-     */
+    /** 语境精读历史记录。 */
     @GetMapping
     @Operation(summary = "语境精读历史记录")
     public ArticleStudyPageResponse listRecords(
@@ -85,9 +82,7 @@ public class ArticleStudyController {
         return articleStudyService.listRecords(user.getId(), wordbookId, page, pageSize);
     }
 
-    /**
-     * 查询 {@code detail} 相关业务。
-     */
+    /** 语境精读记录详情。 */
     @GetMapping("/{recordId}")
     @Operation(summary = "语境精读记录详情")
     public ArticleStudyResponse detail(
@@ -96,6 +91,7 @@ public class ArticleStudyController {
         return articleStudyService.detail(user.getId(), recordId);
     }
 
+    /** 开始语境精读或切换学习阶段。 */
     @PostMapping("/{recordId}/progress")
     @Operation(summary = "开始语境精读或切换学习阶段")
     public ArticleStudyResponse updateProgress(
@@ -105,6 +101,7 @@ public class ArticleStudyController {
         return articleStudyService.updateProgress(user.getId(), recordId, request);
     }
 
+    /** 提交阅读检测并完成语境精读。 */
     @PostMapping("/{recordId}/complete")
     @Operation(summary = "提交阅读检测并完成语境精读")
     public ArticleStudyResponse complete(

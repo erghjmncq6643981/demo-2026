@@ -10,12 +10,12 @@ import java.util.List;
 @Data
 public class AdminAiSessionPageResponse {
 
-    @Schema(description = "总数量")
+    @Schema(description = "分页数据总数")
     private Long total;
     @Schema(description = "页码")
     private Integer page;
     @Schema(description = "每页数量")
     private Integer pageSize;
-    @Schema(description = "列表数据")
+    @Schema(description = "分页数据列表")
     private List<AdminAiSessionResponse> items;
 }

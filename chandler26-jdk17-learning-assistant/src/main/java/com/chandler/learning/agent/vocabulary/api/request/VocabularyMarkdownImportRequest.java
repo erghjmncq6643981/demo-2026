@@ -11,7 +11,7 @@ import lombok.Data;
 public class VocabularyMarkdownImportRequest {
 
     @NotBlank(message = "词表名称不能为空")
-    @Schema(description = "名称")
+    @Schema(description = "公共词本名称")
     private String catalogName;
 
     @NotBlank(message = "数据源类型不能为空")
@@ -23,13 +23,13 @@ public class VocabularyMarkdownImportRequest {
     private String learningPurpose;
 
     /** 兼容旧客户端，服务端会优先使用 sourceType。 */
-    @Schema(description = "业务属性")
+    @Schema(description = "考试或词表来源类型")
     private String examType;
 
-    @Schema(description = "名称")
+    @Schema(description = "文件名称")
     private String fileName;
 
     @NotBlank(message = "Markdown 内容不能为空")
-    @Schema(description = "内容")
+    @Schema(description = "正文内容")
     private String content;
 }

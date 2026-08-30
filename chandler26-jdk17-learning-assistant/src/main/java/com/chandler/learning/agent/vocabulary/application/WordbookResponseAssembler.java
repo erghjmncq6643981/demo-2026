@@ -43,6 +43,7 @@ public class WordbookResponseAssembler {
     private final VocabularyInsightService vocabularyInsightService;
     private final ObjectMapper objectMapper;
 
+    /** 将个人单词本领域对象转换为接口响应。 */
     public WordbookResponse toWordbookResponse(LearningWordbook wordbook) {
         WordbookResponse response = new WordbookResponse();
         response.setId(wordbook.getId());
@@ -60,6 +61,7 @@ public class WordbookResponseAssembler {
         return response;
     }
 
+    /** 将个人单词本领域对象转换为接口响应。 */
     public WordbookEntryResponse toEntryResponse(LearningWordbookEntry entry) {
         WordbookEntryResponse response = new WordbookEntryResponse();
         response.setId(entry.getId());
@@ -92,6 +94,7 @@ public class WordbookResponseAssembler {
         return response;
     }
 
+    /** 将个人单词本领域对象转换为接口响应。 */
     public WordbookEntrySummaryResponse toSummaryResponse(LearningWordbookEntry entry) {
         WordbookEntrySummaryResponse response = new WordbookEntrySummaryResponse();
         response.setId(entry.getId());
@@ -182,6 +185,7 @@ public class WordbookResponseAssembler {
         return null;
     }
 
+    /** 应用个人单词本状态变更。 */
     public void applyVocabularySnapshot(LearningWordbookEntry entry, EnglishVocabularyStudyRecord vocabulary,
                                         LocalDateTime now) {
         String tagsJson = writeJson(vocabularyInsightService.listTags(vocabulary.getId()),
@@ -191,11 +195,13 @@ public class WordbookResponseAssembler {
         applyVocabularySnapshot(entry, vocabulary, now, tagsJson, relationsJson);
     }
 
+    /** 应用个人单词本状态变更。 */
     public void applyVocabularySnapshot(LearningWordbookEntry entry, EnglishVocabularyStudyRecord vocabulary,
                                         LocalDateTime now, String tagsJson, String relationsJson) {
         entry.applyVocabularySnapshot(vocabulary, now, tagsJson, relationsJson);
     }
 
+    /** 公共词卡更新时刷新个人快照并保留学习状态。 */
     public boolean refreshSnapshotIfVocabularyChanged(LearningWordbookEntry entry,
                                                       EnglishVocabularyStudyRecord vocabulary,
                                                       LocalDateTime now) {
@@ -215,6 +221,7 @@ public class WordbookResponseAssembler {
         return true;
     }
 
+    /** 根据公共词表词条构建基础词卡快照。 */
     public String basicSnapshot(VocabularyCatalogEntry source, String term) {
         Map<String, Object> definition = new LinkedHashMap<>();
         definition.put("meaning", source == null ? null : source.getDefinitionText());

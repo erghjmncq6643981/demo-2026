@@ -10,7 +10,7 @@ import lombok.Data;
 public class AdminUserUpdateRequest {
 
     @Size(max = 64, message = "昵称不能超过 64 个字符")
-    @Schema(description = "名称")
+    @Schema(description = "用户昵称")
     private String nickname;
 
     /** USER 或 ADMIN。 */

@@ -23,6 +23,7 @@ import java.util.List;
 public class AiAgentController {
 
     private final AiAgentService agentService;
+    /** Agent 列表。 */
 
     @GetMapping
     @Operation(summary = "Agent 列表")
@@ -31,27 +32,21 @@ public class AiAgentController {
         return agentService.list(type, Boolean.TRUE.equals(enabledOnly));
     }
 
-    /**
-     * 查询 {@code detail} 相关业务。
-     */
+    /** Agent 详情。 */
     @GetMapping("/{id}")
     @Operation(summary = "Agent 详情")
     public AiAgent detail(@PathVariable Long id) {
         return agentService.getById(id);
     }
 
-    /**
-     * 查询 {@code detailByCode} 相关业务。
-     */
+    /** 根据编码查询 Agent。 */
     @GetMapping("/code/{code}")
     @Operation(summary = "根据编码查询 Agent")
     public AiAgent detailByCode(@PathVariable String code) {
         return agentService.getByCode(code);
     }
 
-    /**
-     * 创建或保存 {@code create} 相关业务。
-     */
+    /** 创建 Agent。 */
     @PostMapping
     @RequirePermission(LearningPermission.SYSTEM_ADMIN)
     @Operation(summary = "创建 Agent")
@@ -60,9 +55,7 @@ public class AiAgentController {
         return agentService.create(request);
     }
 
-    /**
-     * 更新 {@code update} 相关业务。
-     */
+    /** 更新 Agent。 */
     @PutMapping("/{id}")
     @RequirePermission(LearningPermission.SYSTEM_ADMIN)
     @Operation(summary = "更新 Agent")
@@ -71,9 +64,7 @@ public class AiAgentController {
         agentService.update(id, request);
     }
 
-    /**
-     * 更新 {@code enable} 相关业务。
-     */
+    /** 启用 Agent。 */
     @PostMapping("/{id}/enable")
     @RequirePermission(LearningPermission.SYSTEM_ADMIN)
     @Operation(summary = "启用 Agent")
@@ -82,9 +73,7 @@ public class AiAgentController {
         agentService.updateEnabled(id, true);
     }
 
-    /**
-     * 更新 {@code disable} 相关业务。
-     */
+    /** 停用 Agent。 */
     @PostMapping("/{id}/disable")
     @RequirePermission(LearningPermission.SYSTEM_ADMIN)
     @Operation(summary = "停用 Agent")
@@ -93,9 +82,7 @@ public class AiAgentController {
         agentService.updateEnabled(id, false);
     }
 
-    /**
-     * 更新 {@code delete} 相关业务。
-     */
+    /** 删除 Agent。 */
     @DeleteMapping("/{id}")
     @RequirePermission(LearningPermission.SYSTEM_ADMIN)
     @Operation(summary = "删除 Agent")
@@ -104,9 +91,7 @@ public class AiAgentController {
         agentService.delete(id);
     }
 
-    /**
-     * 更新 {@code clone} 相关业务。
-     */
+    /** 复制 Agent。 */
     @PostMapping("/{id}/clone")
     @RequirePermission(LearningPermission.SYSTEM_ADMIN)
     @Operation(summary = "复制 Agent")

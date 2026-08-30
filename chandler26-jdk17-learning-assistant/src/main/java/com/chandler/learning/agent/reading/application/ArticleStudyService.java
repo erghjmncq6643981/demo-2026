@@ -74,9 +74,7 @@ public class ArticleStudyService {
     private final UserDisplayNameService userDisplayNameService;
     private final ObjectMapper objectMapper;
 
-    /**
-     * 处理 {@code study} 相关业务。
-     */
+    /** 生成或读取学习材料。 */
     public ArticleStudyResponse study(Long userId, ArticleStudyRequest request) {
         LearningWordbook wordbook = requireWordbook(userId, request.getWordbookId());
         ArticleWordCountRange wordCountRange = ArticleWordCountRange.of(request.getWordCountRange());
@@ -154,9 +152,7 @@ public class ArticleStudyService {
         return toResponse(record, false);
     }
 
-    /**
-     * 查询 {@code listRecords} 相关业务。
-     */
+    /** 分页查询语境精读历史记录。 */
     public ArticleStudyPageResponse listRecords(Long userId, Long wordbookId, Integer page, Integer pageSize) {
         Long resolvedWordbookId = wordbookId == null ? null : requireWordbook(userId, wordbookId).getId();
         int current = page == null || page < 1 ? 1 : page;
@@ -187,9 +183,7 @@ public class ArticleStudyService {
         return response;
     }
 
-    /**
-     * 查询 {@code detail} 相关业务。
-     */
+    /** 查询详情语境精读。 */
     public ArticleStudyResponse detail(Long userId, Long recordId) {
         LearningArticleStudyRecord record = requireRecord(userId, recordId);
         record.touch(LocalDateTime.now());
@@ -248,9 +242,6 @@ public class ArticleStudyService {
         return toResponse(record, false);
     }
 
-    /**
-     * 处理 {@code aiChat} 相关业务。
-     */
     private AgentChatResponse aiChat(Long userId, ArticleStudyRequest request, List<ArticleStudyWordResponse> selectedWords,
                                      ArticleWordCountRange wordCountRange, ArticleDifficulty difficulty, String remark) {
         Map<String, Object> variables = new HashMap<>();
@@ -282,9 +273,6 @@ public class ArticleStudyService {
         return aiChatService.chat(chatRequest);
     }
 
-    /**
-     * 查询 {@code findCached} 相关业务。
-     */
     private LearningArticleStudyRecord findCached(Long userId, Long wordbookId, String selectedTermHash) {
         return articleStudyRecordMapper.selectOne(new LambdaQueryWrapper<LearningArticleStudyRecord>()
                 .eq(LearningArticleStudyRecord::getUserId, userId)
@@ -295,9 +283,6 @@ public class ArticleStudyService {
                 .last(CommonConstants.SQL_LIMIT_ONE));
     }
 
-    /**
-     * 处理 {@code normalizeEntryIds} 相关业务。
-     */
     private List<Long> normalizeEntryIds(List<Long> entryIds) {
         if (CollUtil.isEmpty(entryIds)) {
             throw LearningAssistantException.badRequest(
@@ -321,9 +306,6 @@ public class ArticleStudyService {
         return normalized;
     }
 
-    /**
-     * 处理 {@code requireEntries} 相关业务。
-     */
     private List<LearningWordbookEntry> requireEntries(Long userId, Long wordbookId, List<Long> entryIds) {
         List<LearningWordbookEntry> entries = wordbookService.findOwnedEntries(userId, wordbookId, entryIds);
         Map<Long, LearningWordbookEntry> entryMap = entries.stream()
@@ -340,9 +322,6 @@ public class ArticleStudyService {
         return ordered;
     }
 
-    /**
-     * 转换 {@code toSelectedWord} 相关业务。
-     */
     private ArticleStudyWordResponse toSelectedWord(LearningWordbookEntry entry) {
         CoreMeaning coreMeaning = extractCoreMeaning(entry);
         ArticleStudyWordResponse response = new ArticleStudyWordResponse();
@@ -355,9 +334,6 @@ public class ArticleStudyService {
         return response;
     }
 
-    /**
-     * 处理 {@code extractCoreMeaning} 相关业务。
-     */
     private CoreMeaning extractCoreMeaning(LearningWordbookEntry entry) {
         if (!StringUtils.hasText(entry.getSnapshotParsedJson())) {
             return new CoreMeaning(null, null);
@@ -380,9 +356,6 @@ public class ArticleStudyService {
         }
     }
 
-    /**
-     * 处理 {@code firstDefinition} 相关业务。
-     */
     private JsonNode firstDefinition(JsonNode parsed) {
         JsonNode definitions = parsed == null ? null : parsed.path("definitions");
         if (definitions != null && definitions.isArray() && definitions.size() > 0) {
@@ -395,9 +368,6 @@ public class ArticleStudyService {
         return parsed;
     }
 
-    /**
-     * 处理 {@code text} 相关业务。
-     */
     private String text(JsonNode node, String... keys) {
         if (node == null || node.isMissingNode() || node.isNull()) {
             return null;
@@ -411,9 +381,6 @@ public class ArticleStudyService {
         return null;
     }
 
-    /**
-     * 判断 {@code hash} 相关业务。
-     */
     private String hash(Long userId, Long wordbookId, List<ArticleStudyWordResponse> selectedWords,
                         ArticleWordCountRange wordCountRange, ArticleDifficulty difficulty, String remark) {
         String terms = selectedWords.stream()
@@ -425,9 +392,6 @@ public class ArticleStudyService {
                 + wordCountRange.getCode() + "|" + difficulty.getCode() + "|" + StrUtil.blankToDefault(remark, ""));
     }
 
-    /**
-     * 转换 {@code toResponse} 相关业务。
-     */
     private ArticleStudyResponse toResponse(LearningArticleStudyRecord record, boolean cacheHit) {
         ArticleStudyResponse response = new ArticleStudyResponse();
         response.setId(record.getId());
@@ -478,9 +442,6 @@ public class ArticleStudyService {
         return response;
     }
 
-    /**
-     * 查询 {@code readSelectedWords} 相关业务。
-     */
     private List<ArticleStudyWordResponse> readSelectedWords(LearningArticleStudyRecord record) {
         if (!StringUtils.hasText(record.getSelectedTermsJson())) {
             return List.of();
@@ -494,9 +455,6 @@ public class ArticleStudyService {
         }
     }
 
-    /**
-     * 查询 {@code readParsed} 相关业务。
-     */
     private Object readParsed(LearningArticleStudyRecord record) {
         if (!StringUtils.hasText(record.getParsedJson())) {
             return null;
@@ -509,9 +467,6 @@ public class ArticleStudyService {
         }
     }
 
-    /**
-     * 处理 {@code extractJson} 相关业务。
-     */
     private String normalizeArticlePayload(JsonNode parsed, List<ArticleStudyWordResponse> selectedWords) {
         if (parsed == null || !parsed.isObject()) {
             throw articleInvalid("AI 返回的语境精读材料不是有效 JSON，请重新生成");
@@ -688,9 +643,6 @@ public class ArticleStudyService {
                 null);
     }
 
-    /**
-     * 处理 {@code writeJson} 相关业务。
-     */
     private String writeJson(Object value, String errorMessage) {
         try {
             return objectMapper.writeValueAsString(value);
@@ -702,40 +654,25 @@ public class ArticleStudyService {
         }
     }
 
-    /**
-     * 处理 {@code requireWordbook} 相关业务。
-     */
     private LearningWordbook requireWordbook(Long userId, Long wordbookId) {
         return wordbookService.requireOwnedWordbook(userId, wordbookId);
     }
 
-    /**
-     * 处理 {@code resolveAgentCode} 相关业务。
-     */
     private String resolveAgentCode(ArticleStudyRequest request) {
         return StringUtils.hasText(request.getAgentCode()) ? request.getAgentCode() : AiScenarioConstants.ARTICLE_AGENT_CODE;
     }
 
-    /**
-     * 处理 {@code resolveTemplateCode} 相关业务。
-     */
     private String resolveTemplateCode(ArticleStudyRequest request) {
         return StringUtils.hasText(request.getTemplateCode()) ? request.getTemplateCode() : AiScenarioConstants.ARTICLE_TEMPLATE_CODE;
     }
 
-    /**
-     * 处理 {@code trimToNull} 相关业务。
-     */
     private String trimToNull(String value) {
         return StringUtils.hasText(value) ? value.trim() : null;
     }
 
     /**
-     * CoreMeaning 类。
-     */
-    /**
-     * 处理 {@code CoreMeaning} 相关业务。
-     */
+ * 当前业务领域组件。
+ */
     private record CoreMeaning(String partOfSpeech, String meaning) {
     }
 

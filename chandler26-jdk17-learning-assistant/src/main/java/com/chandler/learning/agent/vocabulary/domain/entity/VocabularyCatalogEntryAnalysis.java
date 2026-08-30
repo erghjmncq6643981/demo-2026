@@ -11,8 +11,8 @@ import lombok.Data;
 @TableName("vocabulary_catalog_entry_analysis")
 public class VocabularyCatalogEntryAnalysis extends BaseEntity {
 
-    @TableId(value = "id", type = IdType.ASSIGN_ID)
     /** 分析结果主键。 */
+    @TableId(value = "id", type = IdType.ASSIGN_ID)
     private Long id;
 
     /** 产生结果的分析任务 ID。 */

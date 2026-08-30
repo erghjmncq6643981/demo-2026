@@ -27,9 +27,7 @@ public enum ReviewStatus {
         this.label = label;
     }
 
-    /**
-     * 处理 {@code of} 相关业务。
-     */
+    /** 按编码解析对应的业务枚举。 */
     public static ReviewStatus of(String code) {
         String normalized = StrUtil.blankToDefault(code, VAGUE.code).trim().toLowerCase();
         return Arrays.stream(values())
@@ -38,9 +36,7 @@ public enum ReviewStatus {
                 .orElse(VAGUE);
     }
 
-    /**
-     * 处理 {@code infer} 相关业务。
-     */
+    /** 根据历史数据推断对应业务枚举。 */
     public static ReviewStatus infer(Integer masteryScore, Integer wrongCount, Integer correctCount) {
         int mastery = masteryScore == null ? CommonConstants.ZERO : masteryScore;
         int wrong = wrongCount == null ? CommonConstants.ZERO : wrongCount;

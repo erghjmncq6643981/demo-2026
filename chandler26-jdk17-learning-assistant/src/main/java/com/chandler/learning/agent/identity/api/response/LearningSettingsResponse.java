@@ -13,7 +13,7 @@ public class LearningSettingsResponse {
     /**
      * 学习时默认使用的 Agent 编码。
      */
-    @Schema(description = "编码")
+    @Schema(description = "Agent 编码")
     private String agentCode;
 
     /**

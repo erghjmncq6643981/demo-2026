@@ -18,9 +18,6 @@ public static final int DEFAULT_LOOKUP_COUNT = 1;
         public static final int EDIT_DISTANCE_SAME_COST = 0;
         public static final int EDIT_DISTANCE_REPLACE_COST = 1;
 
-        /**
-         * 处理 {@code Vocabulary} 相关业务。
-         */
         private VocabularyConstants() {
         }
 }

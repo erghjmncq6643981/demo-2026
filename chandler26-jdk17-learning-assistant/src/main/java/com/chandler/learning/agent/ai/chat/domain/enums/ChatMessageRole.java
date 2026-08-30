@@ -27,17 +27,13 @@ public enum ChatMessageRole {
         this.label = label;
     }
 
-    /**
-     * 处理 {@code of} 相关业务。
-     */
+    /** 按编码解析对应的业务枚举。 */
     public static ChatMessageRole of(String code) {
         String normalized = StrUtil.blankToDefault(code, USER.code).trim().toLowerCase();
         return from(normalized).orElse(USER);
     }
 
-    /**
-     * 处理 {@code from} 相关业务。
-     */
+    /** 把外部角色值转换为内部消息角色。 */
     public static Optional<ChatMessageRole> from(String code) {
         String normalized = StrUtil.blankToDefault(code, "").trim().toLowerCase();
         return Arrays.stream(values())
@@ -45,9 +41,7 @@ public enum ChatMessageRole {
                 .findFirst();
     }
 
-    /**
-     * 判断 {@code conversational} 相关业务。
-     */
+    /** 判断消息角色是否属于对话消息。 */
     public static boolean conversational(String code) {
         return from(code)
                 .filter(role -> role == USER || role == ASSISTANT)

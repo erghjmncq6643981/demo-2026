@@ -87,10 +87,12 @@ public class VocabularyCatalogQueryService {
                 .eq(VocabularyCatalogEntry::getDeleted, false));
     }
 
+    /** 按条件查询公共词本数据。 */
     public VocabularyCatalogEntry findEntry(Long entryId) {
         return entryId == null ? null : entryMapper.selectById(entryId);
     }
 
+    /** 按条件查询公共词本数据。 */
     public List<VocabularyCatalogEntry> findEntries(Collection<Long> entryIds) {
         return entryIds == null || entryIds.isEmpty() ? List.of() : entryMapper.selectBatchIds(entryIds);
     }

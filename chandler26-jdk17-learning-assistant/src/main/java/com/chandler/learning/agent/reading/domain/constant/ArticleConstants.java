@@ -19,9 +19,6 @@ public static final int MIN_SELECTED_WORDS = 1;
         public static final String STAGE_CHECK = "check";
         public static final String STAGE_COMPLETED = "completed";
 
-        /**
-         * 处理 {@code Article} 相关业务。
-         */
         private ArticleConstants() {
         }
 }

@@ -18,7 +18,7 @@ import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
 
 /**
- * UserPreferenceController 类。
+ * 用户账户接口控制器。
  */
 @RestController
 @RequiredArgsConstructor
@@ -50,9 +50,7 @@ public class UserPreferenceController {
         return userPreferenceService.saveLearningSettings(user.getId(), request);
     }
 
-    /**
-     * 查询 {@code getSpeechPreferences} 相关业务。
-     */
+    /** 获取发音偏好。 */
     @GetMapping("/speech")
     @Operation(summary = "获取发音偏好")
     public SpeechPreferenceResponse getSpeechPreferences() {
@@ -60,9 +58,7 @@ public class UserPreferenceController {
         return userPreferenceService.getSpeechPreferences(user.getId());
     }
 
-    /**
-     * 创建或保存 {@code saveSpeechPreferences} 相关业务。
-     */
+    /** 保存发音偏好。 */
     @PutMapping("/speech")
     @Operation(summary = "保存发音偏好")
     public SpeechPreferenceResponse saveSpeechPreferences(

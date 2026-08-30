@@ -13,7 +13,7 @@ import lombok.Data;
 public class PromptTemplateSaveRequest {
 
     @NotBlank(message = "模板名称不能为空")
-    @Schema(description = "名称")
+    @Schema(description = "业务对象名称")
     private String name;
 
     @NotBlank(message = "模板编码不能为空")
@@ -27,7 +27,7 @@ public class PromptTemplateSaveRequest {
     private String tags;
 
     @NotBlank(message = "模板内容不能为空")
-    @Schema(description = "内容")
+    @Schema(description = "正文内容")
     private String content;
 
     @Schema(description = "提示词变量列表")
@@ -36,13 +36,13 @@ public class PromptTemplateSaveRequest {
     @Schema(description = "描述")
     private String description;
 
-    @Schema(description = "业务属性")
+    @Schema(description = "提示词示例输入")
     private String exampleInput;
 
-    @Schema(description = "业务属性")
+    @Schema(description = "提示词示例输出")
     private String exampleOutput;
 
-    @Schema(description = "业务属性")
+    @Schema(description = "是否为公共提示词模板")
     private Boolean publicTemplate = false;
 
     @Schema(description = "排序序号")

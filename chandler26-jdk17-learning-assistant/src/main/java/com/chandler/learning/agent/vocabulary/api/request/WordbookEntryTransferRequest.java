@@ -6,15 +6,15 @@ import jakarta.validation.constraints.NotNull;
 import lombok.Data;
 
 /**
- * WordbookEntryTransferRequest 类。
+ * 个人单词本请求参数。
  */
 @Data
 public class WordbookEntryTransferRequest {
 
     @NotNull(message = "目标单词本不能为空")
-    @Schema(description = "关联业务标识")
+    @Schema(description = "目标单词本 ID")
     private Long targetWordbookId;
 
-    @Schema(description = "业务属性")
+    @Schema(description = "是否复制而非移动")
     private Boolean copy;
 }

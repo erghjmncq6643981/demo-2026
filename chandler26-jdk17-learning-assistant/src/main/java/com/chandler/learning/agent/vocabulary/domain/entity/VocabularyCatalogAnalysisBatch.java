@@ -13,8 +13,8 @@ import java.time.LocalDateTime;
 @TableName("vocabulary_catalog_analysis_batch")
 public class VocabularyCatalogAnalysisBatch extends BaseEntity {
 
-    @TableId(value = "id", type = IdType.ASSIGN_ID)
     /** 批次主键。 */
+    @TableId(value = "id", type = IdType.ASSIGN_ID)
     private Long id;
 
     /** 所属分析任务 ID。 */

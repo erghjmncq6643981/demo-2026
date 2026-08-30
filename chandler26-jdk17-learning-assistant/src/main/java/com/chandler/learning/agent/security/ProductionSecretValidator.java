@@ -21,6 +21,7 @@ public class ProductionSecretValidator {
     private final Environment environment;
     private final LearningSecurityProperties properties;
 
+    /** 在生产和预发布环境启动时拒绝默认值或过短密钥。 */
     @PostConstruct
     public void validate() {
         boolean guarded = Arrays.stream(environment.getActiveProfiles()).anyMatch(GUARDED_PROFILES::contains);

@@ -28,9 +28,7 @@ public class RequestTraceFilter extends OncePerRequestFilter {
     private static final String TRACE_HEADER = "X-Trace-Id";
     private static final String REQUEST_ID_HEADER = "X-Request-Id";
 
-    /**
-     * 处理 {@code doFilterInternal} 相关业务。
-     */
+    /** 处理当前请求并维护认证或追踪上下文。 */
     @Override
     protected void doFilterInternal(HttpServletRequest request, HttpServletResponse response, FilterChain filterChain)
             throws ServletException, IOException {
@@ -56,9 +54,6 @@ public class RequestTraceFilter extends OncePerRequestFilter {
         }
     }
 
-    /**
-     * 处理 {@code resolveTraceId} 相关业务。
-     */
     private String resolveTraceId(HttpServletRequest request) {
         String headerTraceId = request.getHeader(TRACE_HEADER);
         if (StringUtils.hasText(headerTraceId)) {
@@ -67,17 +62,11 @@ public class RequestTraceFilter extends OncePerRequestFilter {
         return UUID.randomUUID().toString().replace("-", "");
     }
 
-    /**
-     * 处理 {@code resolveRequestId} 相关业务。
-     */
     private String resolveRequestId(HttpServletRequest request, String traceId) {
         String requestId = request.getHeader(REQUEST_ID_HEADER);
         return StringUtils.hasText(requestId) ? requestId.trim() : traceId;
     }
 
-    /**
-     * 处理 {@code clientIp} 相关业务。
-     */
     private String clientIp(HttpServletRequest request) {
         String forwardedFor = request.getHeader("X-Forwarded-For");
         if (StringUtils.hasText(forwardedFor)) {

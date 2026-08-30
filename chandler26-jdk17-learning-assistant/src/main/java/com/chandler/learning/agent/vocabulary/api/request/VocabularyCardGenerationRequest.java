@@ -23,7 +23,7 @@ public class VocabularyCardGenerationRequest {
     private String executionMode;
 
     /** 指定执行时间，按后端时区解析。 */
-    @Schema(description = "时间")
+    @Schema(description = "计划执行时间")
     private LocalDateTime scheduledTime;
 
     @Schema(description = "优先级")

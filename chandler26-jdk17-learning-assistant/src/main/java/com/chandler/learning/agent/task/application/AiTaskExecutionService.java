@@ -140,6 +140,7 @@ public class AiTaskExecutionService {
                 .set(AiAsyncTaskStep::getUpdateTime, now));
     }
 
+    /** 取消任务中尚未开始的步骤。 */
     public void cancelPendingSteps(Long taskId, Long operatorUserId) {
         LocalDateTime now = LocalDateTime.now();
         stepMapper.update(null, new LambdaUpdateWrapper<AiAsyncTaskStep>()
@@ -155,6 +156,7 @@ public class AiTaskExecutionService {
                 .set(AiAsyncTaskStep::getUpdateTime, now));
     }
 
+    /** 删除任务步骤及其尝试记录。 */
     public void deleteStepsAndAttempts(Long taskId, Long operatorUserId) {
         LocalDateTime now = LocalDateTime.now();
         stepMapper.update(null, new LambdaUpdateWrapper<AiAsyncTaskStep>()
@@ -172,10 +174,12 @@ public class AiTaskExecutionService {
                 .set(AiAsyncTaskAttempt::getUpdateTime, now));
     }
 
+    /** 恢复执行租约已过期的 AI 任务。 */
     public int recoverExpired(LocalDateTime now) {
         return stepMapper.recoverExpired(now);
     }
 
+    /** 批量转换 AI 任务响应。 */
     public List<AiAsyncTaskStepResponse> responses(Long taskId) {
         List<AiAsyncTaskStep> steps = stepMapper.selectList(new LambdaQueryWrapper<AiAsyncTaskStep>()
                 .eq(AiAsyncTaskStep::getTaskId, taskId)

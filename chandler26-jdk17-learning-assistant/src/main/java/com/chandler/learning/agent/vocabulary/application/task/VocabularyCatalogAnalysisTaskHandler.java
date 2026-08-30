@@ -21,16 +21,19 @@ public class VocabularyCatalogAnalysisTaskHandler implements AiTaskHandler {
     private final VocabularyCatalogAnalysisService analysisService;
     private final AiTaskExecutionService executionService;
 
+    /** 返回处理器支持的任务类型。 */
     @Override
     public AiTaskType taskType() {
         return AiTaskType.VOCABULARY_CATALOG_ANALYSIS;
     }
 
+    /** 定义任务的执行步骤。 */
     @Override
     public List<AiTaskStepDefinition> steps() {
         return List.of(new AiTaskStepDefinition("analyze_catalog", "分批分析公共词本", 10));
     }
 
+    /** 执行当前任务处理流程。 */
     @Override
     public void execute(AiAsyncTask task, Map<String, Object> payload) {
         Long modelConfigId = AiTaskPayload.longValue(payload, "modelConfigId");

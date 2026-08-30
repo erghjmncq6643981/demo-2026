@@ -24,6 +24,7 @@ public class AiAsyncTaskDispatcher {
     private final AiTaskExecutionService executionService;
     private final ObjectMapper objectMapper;
 
+    /** 分派异步任务到受控线程池。 */
     @Async("aiTaskExecutor")
     public void dispatch(AiAsyncTask task) {
         try {

@@ -5,7 +5,7 @@ import com.chandler.learning.agent.learning.domain.entity.LearningReviewRecord;
 import org.apache.ibatis.annotations.Mapper;
 
 /**
- * LearningReviewRecordMapper 类。
+ * 复习数据访问接口。
  */
 @Mapper
 public interface LearningReviewRecordMapper extends BaseMapper<LearningReviewRecord> {

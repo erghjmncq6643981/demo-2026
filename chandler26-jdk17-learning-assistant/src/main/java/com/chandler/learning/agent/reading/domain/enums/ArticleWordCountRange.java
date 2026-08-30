@@ -32,9 +32,7 @@ public enum ArticleWordCountRange {
         this.label = label;
     }
 
-    /**
-     * 处理 {@code of} 相关业务。
-     */
+    /** 按编码解析对应的业务枚举。 */
     public static ArticleWordCountRange of(String code) {
         String normalized = StrUtil.blankToDefault(code, MEDIUM.code).trim();
         return Arrays.stream(values())

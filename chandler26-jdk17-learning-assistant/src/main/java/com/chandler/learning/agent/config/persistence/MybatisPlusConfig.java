@@ -36,9 +36,7 @@ public class MybatisPlusConfig implements MetaObjectHandler {
         return interceptor;
     }
 
-    /**
-     * 处理 {@code insertFill} 相关业务。
-     */
+    /** 新增数据时自动填充审计字段。 */
     @Override
     public void insertFill(MetaObject metaObject) {
         LocalDateTime now = LocalDateTime.now();
@@ -51,9 +49,7 @@ public class MybatisPlusConfig implements MetaObjectHandler {
         strictInsertFill(metaObject, "version", Integer.class, PersistenceConstants.INITIAL_VERSION);
     }
 
-    /**
-     * 更新 {@code updateFill} 相关业务。
-     */
+    /** 更新数据时自动填充审计字段。 */
     @Override
     public void updateFill(MetaObject metaObject) {
         strictUpdateFill(metaObject, "updateBy", Long.class, learningAuditor.currentUserId());

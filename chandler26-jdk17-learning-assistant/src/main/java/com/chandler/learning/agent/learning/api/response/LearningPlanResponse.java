@@ -13,7 +13,7 @@ import java.util.List;
 @Data
 public class LearningPlanResponse {
 
-    @Schema(description = "主键标识")
+    @Schema(description = "主键 ID")
     private Long id;
 
     @Schema(description = "公共词本标识")
@@ -25,7 +25,7 @@ public class LearningPlanResponse {
     @Schema(description = "单词本标识")
     private Long wordbookId;
 
-    @Schema(description = "名称")
+    @Schema(description = "业务对象名称")
     private String name;
 
     @Schema(description = "学习目标")
@@ -37,19 +37,19 @@ public class LearningPlanResponse {
     @Schema(description = "结束时间")
     private java.time.LocalDateTime endTime;
 
-    @Schema(description = "状态")
+    @Schema(description = "当前业务状态")
     private String status;
 
-    @Schema(description = "业务属性")
+    @Schema(description = "公共词本词汇总数")
     private Integer totalCatalogWords;
 
-    @Schema(description = "业务属性")
+    @Schema(description = "已完成首次学习的核心词数量")
     private Integer learnedCoreWords;
 
     @Schema(description = "已完成场景单元数量")
     private Integer completedUnitCount;
 
-    @Schema(description = "关联业务标识")
+    @Schema(description = "当前学习场景单元 ID")
     private Long currentUnitId;
 
     @Schema(description = "AI 会话标识")
@@ -61,7 +61,7 @@ public class LearningPlanResponse {
     @Schema(description = "场景单元列表")
     private List<LearningPlanUnitResponse> units;
 
-    @Schema(description = "时间")
+    @Schema(description = "创建时间")
     private LocalDateTime createTime;
 
     @Schema(description = "更新时间")

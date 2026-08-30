@@ -28,6 +28,7 @@ public class AiAsyncTaskScheduler {
     private final AiAsyncTaskDispatcher dispatcher;
     private final AiTaskExecutionService executionService;
 
+    /** 领取并分派到期异步任务。 */
     @Scheduled(fixedDelayString = "${learning.ai-task.poll-interval-ms:10000}")
     public void dispatchDueTasks() {
         LocalDateTime now = LocalDateTime.now();

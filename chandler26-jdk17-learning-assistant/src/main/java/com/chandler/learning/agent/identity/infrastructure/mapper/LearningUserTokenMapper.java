@@ -5,7 +5,7 @@ import com.chandler.learning.agent.identity.domain.entity.LearningUserToken;
 import org.apache.ibatis.annotations.Mapper;
 
 /**
- * LearningUserTokenMapper 类。
+ * 用户账户数据访问接口。
  */
 @Mapper
 public interface LearningUserTokenMapper extends BaseMapper<LearningUserToken> {

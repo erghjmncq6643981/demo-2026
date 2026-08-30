@@ -5,18 +5,18 @@ import io.swagger.v3.oas.annotations.media.Schema;
 import lombok.Data;
 
 /**
- * VocabularyTagResponse 类。
+ * 词汇响应数据。
  */
 @Data
 public class VocabularyTagResponse {
 
-    @Schema(description = "主键标识")
+    @Schema(description = "主键 ID")
     private Long id;
 
-    @Schema(description = "业务属性")
+    @Schema(description = "标签类型")
     private String tagType;
 
-    @Schema(description = "业务属性")
+    @Schema(description = "标签值")
     private String tagValue;
 
     @Schema(description = "展示名称")

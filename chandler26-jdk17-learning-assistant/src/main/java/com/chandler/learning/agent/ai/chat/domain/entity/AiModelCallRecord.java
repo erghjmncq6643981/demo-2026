@@ -15,20 +15,14 @@ import lombok.Data;
 @Schema(name = "AI 模型调用记录")
 public class AiModelCallRecord extends BaseEntity {
 
-    /**
-     * id 属性。
-     */
+    /** 主键 ID。 */
     @TableId(value = "id", type = IdType.ASSIGN_ID)
     private Long id;
 
-    /**
-     * sessionId 属性。
-     */
+    /** AI 会话 ID。 */
     private Long sessionId;
 
-    /**
-     * agentCode 属性。
-     */
+    /** Agent 编码。 */
     private String agentCode;
 
     /**
@@ -36,53 +30,33 @@ public class AiModelCallRecord extends BaseEntity {
      */
     private String invocationSceneCode;
 
-    /**
-     * provider 属性。
-     */
+    /** 模型供应商。 */
     private String provider;
 
-    /**
-     * modelName 属性。
-     */
+    /** 模型名称。 */
     private String modelName;
 
-    /**
-     * requestJson 属性。
-     */
+    /** 模型请求摘要 JSON。 */
     private String requestJson;
 
-    /**
-     * responseJson 属性。
-     */
+    /** 模型响应审计 JSON。 */
     private String responseJson;
 
-    /**
-     * success 属性。
-     */
+    /** 操作是否成功。 */
     private Boolean success;
 
-    /**
-     * errorMessage 属性。
-     */
+    /** 错误原因。 */
     private String errorMessage;
 
-    /**
-     * promptTokens 属性。
-     */
+    /** 模型输入 Token 数。 */
     private Integer promptTokens;
 
-    /**
-     * completionTokens 属性。
-     */
+    /** 模型输出 Token 数。 */
     private Integer completionTokens;
 
-    /**
-     * totalTokens 属性。
-     */
+    /** 模型调用 Token 总数。 */
     private Integer totalTokens;
 
-    /**
-     * latencyMs 属性。
-     */
+    /** 调用延迟，单位毫秒。 */
     private Long latencyMs;
 }

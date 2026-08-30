@@ -24,6 +24,7 @@ import java.util.Map;
 public class AiPromptTemplateController {
 
     private final AiPromptTemplateService templateService;
+    /** 模板列表。 */
 
     @GetMapping
     @Operation(summary = "模板列表")
@@ -32,18 +33,14 @@ public class AiPromptTemplateController {
         return templateService.list(type, Boolean.TRUE.equals(enabledOnly));
     }
 
-    /**
-     * 查询 {@code detailByCode} 相关业务。
-     */
+    /** 根据编码查询模板。 */
     @GetMapping("/code/{code}")
     @Operation(summary = "根据编码查询模板")
     public AiPromptTemplate detailByCode(@PathVariable String code) {
         return templateService.getByCode(code);
     }
 
-    /**
-     * 创建或保存 {@code create} 相关业务。
-     */
+    /** 创建模板。 */
     @PostMapping
     @RequirePermission(LearningPermission.SYSTEM_ADMIN)
     @Operation(summary = "创建模板")
@@ -52,9 +49,7 @@ public class AiPromptTemplateController {
         return templateService.create(request);
     }
 
-    /**
-     * 更新 {@code update} 相关业务。
-     */
+    /** 更新模板。 */
     @PutMapping("/{id}")
     @RequirePermission(LearningPermission.SYSTEM_ADMIN)
     @Operation(summary = "更新模板")
@@ -63,9 +58,7 @@ public class AiPromptTemplateController {
         templateService.update(id, request);
     }
 
-    /**
-     * 更新 {@code delete} 相关业务。
-     */
+    /** 删除模板。 */
     @DeleteMapping("/{id}")
     @RequirePermission(LearningPermission.SYSTEM_ADMIN)
     @Operation(summary = "删除模板")
@@ -74,9 +67,7 @@ public class AiPromptTemplateController {
         templateService.delete(id);
     }
 
-    /**
-     * 更新 {@code clone} 相关业务。
-     */
+    /** 复制模板。 */
     @PostMapping("/{id}/clone")
     @RequirePermission(LearningPermission.SYSTEM_ADMIN)
     @Operation(summary = "复制模板")
@@ -84,6 +75,7 @@ public class AiPromptTemplateController {
             @PathVariable Long id) {
         return templateService.clone(id);
     }
+    /** 渲染模板。 */
 
     @PostMapping("/{code}/render")
     @Operation(summary = "渲染模板")

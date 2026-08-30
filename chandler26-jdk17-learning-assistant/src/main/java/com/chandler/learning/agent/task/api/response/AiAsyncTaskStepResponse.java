@@ -11,7 +11,7 @@ import java.util.List;
 @Data
 public class AiAsyncTaskStepResponse {
 
-    @Schema(description = "主键标识")
+    @Schema(description = "主键 ID")
     private Long id;
     @Schema(description = "步骤编码")
     private String stepCode;
@@ -19,15 +19,15 @@ public class AiAsyncTaskStepResponse {
     private String stepName;
     @Schema(description = "步骤序号")
     private Integer stepOrder;
-    @Schema(description = "业务状态")
+    @Schema(description = "当前业务状态")
     private String status;
     @Schema(description = "已完成数量")
     private Integer completedCount;
-    @Schema(description = "总数量")
+    @Schema(description = "任务或分页数据总数")
     private Integer totalCount;
     @Schema(description = "尝试次数")
     private Integer attemptCount;
-    @Schema(description = "数量")
+    @Schema(description = "最大尝试次数")
     private Integer maxAttemptCount;
     @Schema(description = "错误信息")
     private String errorMessage;

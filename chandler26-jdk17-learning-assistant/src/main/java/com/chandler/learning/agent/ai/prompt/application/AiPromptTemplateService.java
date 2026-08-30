@@ -34,9 +34,7 @@ public class AiPromptTemplateService {
     private final SystemLogService systemLogService;
     private final UserDisplayNameService userDisplayNameService;
 
-    /**
-     * 查询 {@code getByCode} 相关业务。
-     */
+    /** 按业务编码查询有效配置。 */
     public AiPromptTemplate getByCode(String code) {
         return templateMapper.selectOne(new LambdaQueryWrapper<AiPromptTemplate>()
                 .eq(AiPromptTemplate::getCode, code)
@@ -53,16 +51,12 @@ public class AiPromptTemplateService {
         return template;
     }
 
-    /**
-     * 查询 {@code list} 相关业务。
-     */
+    /** 查询列表提示词模板。 */
     public List<AiPromptTemplate> list(String type) {
         return list(type, true);
     }
 
-    /**
-     * 查询 {@code list} 相关业务。
-     */
+    /** 查询列表提示词模板。 */
     public List<AiPromptTemplate> list(String type, boolean enabledOnly) {
         String normalizedType = StringUtils.hasText(type) ? PromptTemplateType.of(type).getCode() : null;
         return templateMapper.selectList(new LambdaQueryWrapper<AiPromptTemplate>()
@@ -72,9 +66,7 @@ public class AiPromptTemplateService {
                 .orderByAsc(AiPromptTemplate::getSequence));
     }
 
-    /**
-     * 创建或保存 {@code create} 相关业务。
-     */
+    /** 创建提示词模板。 */
     public Long create(PromptTemplateSaveRequest request) {
         AiPromptTemplate existing = getByCode(request.getCode());
         if (existing != null) {
@@ -94,9 +86,7 @@ public class AiPromptTemplateService {
         return template.getId();
     }
 
-    /**
-     * 更新 {@code update} 相关业务。
-     */
+    /** 更新提示词模板。 */
     public void update(Long id, PromptTemplateSaveRequest request) {
         AiPromptTemplate template = templateMapper.selectById(id);
         if (template == null || Boolean.TRUE.equals(template.getDeleted())) {
@@ -117,9 +107,7 @@ public class AiPromptTemplateService {
         log.info("用户「{}」更新了提示词模板「{}」", userDisplayNameService.currentUserName(), template.getName());
     }
 
-    /**
-     * 更新 {@code delete} 相关业务。
-     */
+    /** 删除提示词模板。 */
     @Transactional(rollbackFor = Exception.class)
     public void delete(Long id) {
         long aliveCount = templateMapper.selectCount(new LambdaQueryWrapper<AiPromptTemplate>()
@@ -142,9 +130,7 @@ public class AiPromptTemplateService {
         log.info("用户「{}」删除了提示词模板「{}」", userDisplayNameService.currentUserName(), template.getName());
     }
 
-    /**
-     * 更新 {@code clone} 相关业务。
-     */
+    /** 复制提示词模板。 */
     @Transactional(rollbackFor = Exception.class)
     public Long clone(Long id) {
         AiPromptTemplate source = templateMapper.selectById(id);
@@ -179,9 +165,7 @@ public class AiPromptTemplateService {
         return clone.getId();
     }
 
-    /**
-     * 处理 {@code render} 相关业务。
-     */
+    /** 渲染提示词模板。 */
     public String render(String code, Map<String, Object> variables) {
         AiPromptTemplate template = getByCode(code);
         if (template == null) {
@@ -197,9 +181,6 @@ public class AiPromptTemplateService {
         return promptRenderer.render(template.getContent(), variables);
     }
 
-    /**
-     * 更新 {@code copy} 相关业务。
-     */
     private void copy(PromptTemplateSaveRequest request, AiPromptTemplate template) {
         template.setName(request.getName());
         template.setCode(request.getCode());

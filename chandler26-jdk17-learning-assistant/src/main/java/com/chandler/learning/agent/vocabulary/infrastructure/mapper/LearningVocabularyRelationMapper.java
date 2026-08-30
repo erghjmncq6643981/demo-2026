@@ -9,7 +9,7 @@ import java.util.List;
 import java.util.Collection;
 
 /**
- * LearningVocabularyRelationMapper 类。
+ * 词汇数据访问接口。
  */
 @Mapper
 public interface LearningVocabularyRelationMapper extends BaseMapper<LearningVocabularyRelation> {

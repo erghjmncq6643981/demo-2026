@@ -18,16 +18,19 @@ public class DeepSeekJsonResponseParser extends StrictJsonResponseParser {
         super(objectMapper);
     }
 
+    /** 返回 DeepSeek JSON 解析器名称。 */
     @Override
     public String name() {
         return "deepseek-json";
     }
 
+    /** 判断供应商或模型名称是否属于 DeepSeek。 */
     @Override
     public boolean supports(String provider, String modelName) {
         return normalized(provider).equals("deepseek") || normalized(modelName).startsWith("deepseek-");
     }
 
+    /** 优先严格解析，失败时仅移除 DeepSeek 思考包裹后重试。 */
     @Override
     public AiStructuredResponseParseResult parse(String content) {
         try {

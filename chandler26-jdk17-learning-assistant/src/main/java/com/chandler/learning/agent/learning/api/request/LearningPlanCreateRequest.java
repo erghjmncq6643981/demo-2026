@@ -12,7 +12,7 @@ import lombok.Data;
 public class LearningPlanCreateRequest {
 
     @jakarta.validation.constraints.NotNull(message = "公共词本不能为空")
-    @Schema(description = "关联业务标识")
+    @Schema(description = "公共词本版本 ID")
     private Long catalogVersionId;
 
     /** 可选个人词本；未传时使用默认个人词本承载学习快照。 */
@@ -20,7 +20,7 @@ public class LearningPlanCreateRequest {
     private Long wordbookId;
 
     @NotBlank(message = "计划名称不能为空")
-    @Schema(description = "名称")
+    @Schema(description = "业务对象名称")
     private String name;
 
     @Schema(description = "学习目标")

@@ -13,9 +13,6 @@ public static final String API_KEY_PREFIX = "enc:v1:";
         public static final int API_KEY_MASK_SUFFIX_LENGTH = 4;
         public static final int API_KEY_FINGERPRINT_LENGTH = 16;
 
-        /**
-         * 处理 {@code Crypto} 相关业务。
-         */
         private ApiKeyCryptoConstants() {
         }
 }

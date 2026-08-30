@@ -15,36 +15,24 @@ import lombok.Data;
 @Schema(name = "AI 提示词模板")
 public class AiPromptTemplate extends BaseEntity {
 
-    /**
-     * id 属性。
-     */
+    /** 主键 ID。 */
     @TableId(value = "id", type = IdType.ASSIGN_ID)
     private Long id;
 
-    /**
-     * name 属性。
-     */
+    /** 业务对象名称。 */
     private String name;
 
-    /**
-     * code 属性。
-     */
+    /** 业务编码。 */
     private String code;
 
-    /**
-     * system、user、analysis。
-     */
+    /** 模板类型：system-系统模板，user-用户模板，analysis-分析模板。 */
     @Schema(description = "system、user、analysis")
     private String type;
 
-    /**
-     * tags 属性。
-     */
+    /** 词汇标签列表。 */
     private String tags;
 
-    /**
-     * content 属性。
-     */
+    /** 正文内容。 */
     private String content;
 
     /**
@@ -53,33 +41,21 @@ public class AiPromptTemplate extends BaseEntity {
     @Schema(description = "变量定义 JSON")
     private String variables;
 
-    /**
-     * description 属性。
-     */
+    /** 业务说明。 */
     private String description;
 
-    /**
-     * exampleInput 属性。
-     */
+    /** 提示词示例输入。 */
     private String exampleInput;
 
-    /**
-     * exampleOutput 属性。
-     */
+    /** 提示词示例输出。 */
     private String exampleOutput;
 
-    /**
-     * publicTemplate 属性。
-     */
+    /** 是否为公共提示词模板。 */
     private Boolean publicTemplate;
 
-    /**
-     * enabled 属性。
-     */
+    /** 是否启用。 */
     private Boolean enabled;
 
-    /**
-     * sequence 属性。
-     */
+    /** 展示或执行顺序。 */
     private Integer sequence;
 }

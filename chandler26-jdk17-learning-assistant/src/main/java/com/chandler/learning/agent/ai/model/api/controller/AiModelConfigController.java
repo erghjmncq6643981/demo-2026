@@ -31,6 +31,7 @@ public class AiModelConfigController {
     private final AiModelConfigService modelConfigService;
     private final AiModelConnectionTestService connectionTestService;
     private final CurrentUserContext currentUserContext;
+    /** 模型配置列表。 */
 
     @GetMapping
     @RequirePermission(LearningPermission.SYSTEM_ADMIN)
@@ -50,9 +51,7 @@ public class AiModelConfigController {
         return modelConfigService.listAvailableOptions();
     }
 
-    /**
-     * 创建或保存 {@code create} 相关业务。
-     */
+    /** 创建模型配置。 */
     @PostMapping
     @RequirePermission(LearningPermission.SYSTEM_ADMIN)
     @Operation(summary = "创建模型配置")
@@ -61,9 +60,7 @@ public class AiModelConfigController {
         return modelConfigService.create(request);
     }
 
-    /**
-     * 更新 {@code update} 相关业务。
-     */
+    /** 更新模型配置。 */
     @PutMapping("/{id}")
     @RequirePermission(LearningPermission.SYSTEM_ADMIN)
     @Operation(summary = "更新模型配置")
@@ -72,9 +69,7 @@ public class AiModelConfigController {
         return modelConfigService.update(id, request);
     }
 
-    /**
-     * 更新 {@code enable} 相关业务。
-     */
+    /** 启用模型配置。 */
     @PostMapping("/{id}/enable")
     @RequirePermission(LearningPermission.SYSTEM_ADMIN)
     @Operation(summary = "启用模型配置")
@@ -83,9 +78,7 @@ public class AiModelConfigController {
         modelConfigService.updateEnabled(id, true);
     }
 
-    /**
-     * 更新 {@code disable} 相关业务。
-     */
+    /** 停用模型配置。 */
     @PostMapping("/{id}/disable")
     @RequirePermission(LearningPermission.SYSTEM_ADMIN)
     @Operation(summary = "停用模型配置")
@@ -94,9 +87,7 @@ public class AiModelConfigController {
         modelConfigService.updateEnabled(id, false);
     }
 
-    /**
-     * 处理 {@code priority} 相关业务。
-     */
+    /** 更新模型配置优先级。 */
     @PostMapping("/{id}/priority")
     @RequirePermission(LearningPermission.SYSTEM_ADMIN)
     @Operation(summary = "更新模型配置优先级")
@@ -107,9 +98,7 @@ public class AiModelConfigController {
         modelConfigService.updatePriority(id, sequence, isDefault);
     }
 
-    /**
-     * 更新 {@code delete} 相关业务。
-     */
+    /** 删除模型配置。 */
     @DeleteMapping("/{id}")
     @RequirePermission(LearningPermission.SYSTEM_ADMIN)
     @Operation(summary = "删除模型配置")

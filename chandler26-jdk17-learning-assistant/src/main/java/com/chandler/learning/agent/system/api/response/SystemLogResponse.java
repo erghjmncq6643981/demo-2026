@@ -7,12 +7,12 @@ import lombok.Data;
 import java.time.LocalDateTime;
 
 /**
- * SystemLogResponse 类。
+ * 系统日志响应数据。
  */
 @Data
 public class SystemLogResponse {
 
-    @Schema(description = "主键标识")
+    @Schema(description = "主键 ID")
     private Long id;
 
     @Schema(description = "业务类型")
@@ -33,6 +33,6 @@ public class SystemLogResponse {
     @Schema(description = "业务标识")
     private String businessId;
 
-    @Schema(description = "时间")
+    @Schema(description = "业务发生时间")
     private LocalDateTime time;
 }

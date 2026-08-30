@@ -16,8 +16,8 @@ import java.time.LocalDateTime;
 @TableName("learning_plan_unit")
 public class LearningPlanUnit extends BaseEntity {
 
-    @TableId(value = "id", type = IdType.ASSIGN_ID)
     /** 场景单元主键。 */
+    @TableId(value = "id", type = IdType.ASSIGN_ID)
     private Long id;
 
     /** 所属学习计划 ID。 */

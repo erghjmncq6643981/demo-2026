@@ -12,7 +12,7 @@ import java.util.List;
 @Data
 public class VocabularyImportEntryResponse {
 
-    @Schema(description = "主键标识")
+    @Schema(description = "主键 ID")
     private Long id;
 
     @Schema(description = "来源序号")
@@ -39,7 +39,7 @@ public class VocabularyImportEntryResponse {
     @Schema(description = "是否疑似断词")
     private Boolean suspicious;
 
-    @Schema(description = "状态")
+    @Schema(description = "词条审核状态")
     private String reviewStatus;
 
     @Schema(description = "疑似问题列表")

@@ -20,11 +20,13 @@ public class KimiJsonResponseParser extends StrictJsonResponseParser {
         super(objectMapper);
     }
 
+    /** 返回 Kimi JSON 解析器名称。 */
     @Override
     public String name() {
         return "kimi-json";
     }
 
+    /** 判断供应商或模型名称是否属于 Kimi/Moonshot。 */
     @Override
     public boolean supports(String provider, String modelName) {
         String providerKey = normalized(provider);
@@ -33,6 +35,7 @@ public class KimiJsonResponseParser extends StrictJsonResponseParser {
                 || modelKey.contains("moonshot") || modelKey.contains("kimi");
     }
 
+    /** 优先严格解析，失败后执行受限的 Kimi JSON 兼容修复。 */
     @Override
     public AiStructuredResponseParseResult parse(String content) {
         try {

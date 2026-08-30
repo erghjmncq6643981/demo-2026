@@ -35,7 +35,7 @@ import java.util.Set;
 import java.util.function.Function;
 
 /**
- * VocabularyInsightService 类。
+ * 词汇应用服务。
  */
 @Service
 @RequiredArgsConstructor
@@ -48,9 +48,7 @@ public class VocabularyInsightService {
     private final EnglishVocabularyStudyRecordMapper recordMapper;
     private final ObjectMapper objectMapper;
 
-    /**
-     * 更新 {@code syncInsights} 相关业务。
-     */
+    /** 从结构化词卡同步标签和语义关系。 */
     public void syncInsights(EnglishVocabularyStudyRecord record) {
         syncInsightsBatch(record == null ? List.of() : List.of(record));
     }
@@ -108,9 +106,7 @@ public class VocabularyInsightService {
         insertChunks(allRelations, relationMapper::insertBatch);
     }
 
-    /**
-     * 查询 {@code listTags} 相关业务。
-     */
+    /** 查询词汇标签列表。 */
     public List<VocabularyTagResponse> listTags(Long vocabularyId) {
         return listTagsByVocabularyIds(List.of(vocabularyId)).getOrDefault(vocabularyId, List.of());
     }
@@ -127,9 +123,7 @@ public class VocabularyInsightService {
                 java.util.stream.Collectors.mapping(this::toTagResponse, java.util.stream.Collectors.toList())));
     }
 
-    /**
-     * 查询 {@code listRelations} 相关业务。
-     */
+    /** 查询词汇的语义关系列表。 */
     public List<VocabularyRelationResponse> listRelations(String normalizedTerm) {
         if (!StringUtils.hasText(normalizedTerm)) {
             return List.of();
@@ -165,16 +159,12 @@ public class VocabularyInsightService {
         return grouped;
     }
 
-    /**
-     * 处理 {@code enrichRelationPhonetics} 相关业务。
-     */
+    /** 批量补充关联词的英美音标。 */
     public List<VocabularyRelationResponse> enrichRelationPhonetics(List<VocabularyRelationResponse> relations) {
         return enrichRelationPhonetics(null, relations);
     }
 
-    /**
-     * 处理 {@code enrichRelationPhonetics} 相关业务。
-     */
+    /** 批量补充关联词的英美音标。 */
     public List<VocabularyRelationResponse> enrichRelationPhonetics(Long vocabularyId, List<VocabularyRelationResponse> relations) {
         if (relations == null || relations.isEmpty()) {
             return relations;
@@ -201,9 +191,6 @@ public class VocabularyInsightService {
         return relations;
     }
 
-    /**
-     * 处理 {@code collectPartOfSpeechTags} 相关业务。
-     */
     private void collectPartOfSpeechTags(JsonNode root, EnglishVocabularyStudyRecord record,
                                          Map<String, LearningVocabularyTag> tags, LocalDateTime now) {
         JsonNode definitions = firstExisting(root, "definitions", "meanings", "translations", "definition");
@@ -219,9 +206,6 @@ public class VocabularyInsightService {
         }
     }
 
-    /**
-     * 处理 {@code collectMeaningTopicTags} 相关业务。
-     */
     private void collectMeaningTopicTags(JsonNode root, EnglishVocabularyStudyRecord record,
                                          Map<String, LearningVocabularyTag> tags, LocalDateTime now) {
         JsonNode definitions = firstExisting(root, "definitions", "meanings", "translations", "definition");
@@ -242,9 +226,6 @@ public class VocabularyInsightService {
         }
     }
 
-    /**
-     * 处理 {@code collectArrayTags} 相关业务。
-     */
     private void collectArrayTags(JsonNode root, EnglishVocabularyStudyRecord record, Map<String, LearningVocabularyTag> tags,
                                   LocalDateTime now, String field, String tagType, int weight) {
         JsonNode node = root.get(field);
@@ -259,9 +240,6 @@ public class VocabularyInsightService {
         }
     }
 
-    /**
-     * 处理 {@code collectRelations} 相关业务。
-     */
     private List<LearningVocabularyRelation> collectRelations(JsonNode root, EnglishVocabularyStudyRecord record,
                                                               LocalDateTime now,
                                                               Function<String, EnglishVocabularyStudyRecord> relatedRecordResolver) {
@@ -278,9 +256,6 @@ public class VocabularyInsightService {
         return relations.values().stream().limit(VocabularyInsightConstants.MAX_RELATIONS).toList();
     }
 
-    /**
-     * 处理 {@code collectArrayRelations} 相关业务。
-     */
     private void collectArrayRelations(JsonNode root, EnglishVocabularyStudyRecord record,
                                        Map<String, LearningVocabularyRelation> relations,
                                        LocalDateTime now, String field, VocabularyRelationType relationType, int score,
@@ -303,9 +278,6 @@ public class VocabularyInsightService {
         }
     }
 
-    /**
-     * 创建或保存 {@code addTag} 相关业务。
-     */
     private void addTag(Map<String, LearningVocabularyTag> tags, EnglishVocabularyStudyRecord record, String tagType,
                         String tagValue, String displayName, int weight, LocalDateTime now) {
         String cleanValue = normalizeValue(tagValue);
@@ -330,9 +302,6 @@ public class VocabularyInsightService {
         tags.putIfAbsent(key, tag);
     }
 
-    /**
-     * 创建或保存 {@code addRelation} 相关业务。
-     */
     private void addRelation(Map<String, LearningVocabularyRelation> relations, EnglishVocabularyStudyRecord record,
                              String relatedTerm, VocabularyRelationType relationType, String relationValue, int score, LocalDateTime now,
                              String parsedPartOfSpeech, String parsedMeaning, String parsedMatchType, Integer parsedMatchScore,
@@ -426,9 +395,6 @@ public class VocabularyInsightService {
                         EnglishVocabularyStudyRecord::getNormalizedTerm, value -> value, (left, right) -> left)));
     }
 
-    /**
-     * 处理 {@code inferTopics} 相关业务。
-     */
     private Set<String> inferTopics(String text) {
         if (!StringUtils.hasText(text)) {
             return Set.of();
@@ -447,9 +413,6 @@ public class VocabularyInsightService {
         return topics;
     }
 
-    /**
-     * 创建或保存 {@code addIfContains} 相关业务。
-     */
     private void addIfContains(Set<String> topics, String lower, String topic, String... keywords) {
         for (String keyword : keywords) {
             if (lower.contains(keyword)) {
@@ -459,9 +422,6 @@ public class VocabularyInsightService {
         }
     }
 
-    /**
-     * 处理 {@code inferDifficulty} 相关业务。
-     */
     private String inferDifficulty(JsonNode root, EnglishVocabularyStudyRecord record) {
         int definitionCount = 0;
         JsonNode definitions = firstExisting(root, "definitions", "meanings", "translations", "definition");
@@ -480,9 +440,6 @@ public class VocabularyInsightService {
         return VocabularyDifficulty.EASY.getCode();
     }
 
-    /**
-     * 处理 {@code firstExisting} 相关业务。
-     */
     private JsonNode firstExisting(JsonNode node, String... keys) {
         if (node == null) {
             return null;
@@ -496,9 +453,6 @@ public class VocabularyInsightService {
         return null;
     }
 
-    /**
-     * 处理 {@code firstText} 相关业务。
-     */
     private String firstText(JsonNode node, String... keys) {
         if (node == null) {
             return "";
@@ -513,9 +467,6 @@ public class VocabularyInsightService {
         return "";
     }
 
-    /**
-     * 处理 {@code relationValue} 相关业务。
-     */
     private String relationValue(JsonNode item, VocabularyRelationType relationType) {
         String value = firstText(item, "relation", "relation_value", "relationValue", "note", "reason");
         if (StringUtils.hasText(value)) {
@@ -527,30 +478,18 @@ public class VocabularyInsightService {
         return "";
     }
 
-    /**
-     * 判断 {@code isVisibleRelation} 相关业务。
-     */
     private boolean isVisibleRelation(VocabularyRelationResponse relation) {
         return relation != null && isVisibleRelationType(relation.getRelationType());
     }
 
-    /**
-     * 判断 {@code isVisibleRelation} 相关业务。
-     */
     private boolean isVisibleRelation(LearningVocabularyRelation relation) {
         return relation != null && isVisibleRelationType(relation.getRelationType());
     }
 
-    /**
-     * 判断 {@code isVisibleRelationType} 相关业务。
-     */
     private boolean isVisibleRelationType(String relationType) {
         return VocabularyRelationType.of(relationType).isVisibleInRelatedWords();
     }
 
-    /**
-     * 处理 {@code iterable} 相关业务。
-     */
     private Iterable<JsonNode> iterable(JsonNode node) {
         List<JsonNode> list = new ArrayList<>();
         if (node == null) {
@@ -569,9 +508,6 @@ public class VocabularyInsightService {
         return list;
     }
 
-    /**
-     * 查询 {@code readableText} 相关业务。
-     */
     private String readableText(JsonNode node) {
         if (node == null || node.isNull()) {
             return "";
@@ -600,9 +536,6 @@ public class VocabularyInsightService {
         return "";
     }
 
-    /**
-     * 处理 {@code cleanRelationText} 相关业务。
-     */
     private String cleanRelationText(String value) {
         if (value == null) {
             return "";
@@ -614,9 +547,7 @@ public class VocabularyInsightService {
                 .trim();
     }
 
-    /**
-     * 处理 {@code extractCoreMeaning} 相关业务。
-     */
+    /** 从结构化词卡提取核心词性和含义。 */
     public CoreMeaning extractCoreMeaning(EnglishVocabularyStudyRecord record) {
         if (record == null || !StringUtils.hasText(record.getParsedJson())) {
             return CoreMeaning.empty();
@@ -643,9 +574,6 @@ public class VocabularyInsightService {
         return CoreMeaning.empty();
     }
 
-    /**
-     * 处理 {@code firstNonBlank} 相关业务。
-     */
     private String firstNonBlank(String... values) {
         for (String value : values) {
             if (StringUtils.hasText(value)) {
@@ -655,9 +583,6 @@ public class VocabularyInsightService {
         return "";
     }
 
-    /**
-     * 处理 {@code resolveMatchType} 相关业务。
-     */
     private String resolveMatchType(String parsedMatchType, EnglishVocabularyStudyRecord relatedRecord, String parsedMeaning) {
         VocabularyMatchType parsedType = VocabularyMatchType.of(parsedMatchType);
         if (StringUtils.hasText(parsedMatchType) && parsedType != VocabularyMatchType.PARSED_TEXT) {
@@ -672,16 +597,10 @@ public class VocabularyInsightService {
         return StringUtils.hasText(parsedMatchType) ? parsedType.getCode() : VocabularyMatchType.PARSED_TEXT.getCode();
     }
 
-    /**
-     * 处理 {@code normalizeTerm} 相关业务。
-     */
     private String normalizeTerm(String value) {
         return value == null ? "" : value.trim().replaceAll("\\s+", " ").toLowerCase(Locale.ROOT);
     }
 
-    /**
-     * 处理 {@code normalizeValue} 相关业务。
-     */
     private String normalizeValue(String value) {
         return normalizeTerm(value)
                 .replaceAll("[：:]+", " ")
@@ -689,9 +608,6 @@ public class VocabularyInsightService {
                 .trim();
     }
 
-    /**
-     * 处理 {@code limit} 相关业务。
-     */
     private String limit(String value, int length) {
         if (value == null) {
             return null;
@@ -699,9 +615,6 @@ public class VocabularyInsightService {
         return value.length() <= length ? value : value.substring(0, length);
     }
 
-    /**
-     * 转换 {@code toTagResponse} 相关业务。
-     */
     private VocabularyTagResponse toTagResponse(LearningVocabularyTag tag) {
         VocabularyTagResponse response = new VocabularyTagResponse();
         response.setId(tag.getId());
@@ -712,9 +625,6 @@ public class VocabularyInsightService {
         return response;
     }
 
-    /**
-     * 转换 {@code toRelationResponse} 相关业务。
-     */
     private VocabularyRelationResponse toRelationResponse(LearningVocabularyRelation relation, RecordLookup lookup) {
         VocabularyRelationResponse response = new VocabularyRelationResponse();
         response.setId(relation.getId());
@@ -736,9 +646,6 @@ public class VocabularyInsightService {
         return response;
     }
 
-    /**
-     * 处理 {@code extractRelationPhonetic} 相关业务。
-     */
     private Phonetic extractRelationPhonetic(EnglishVocabularyStudyRecord sourceRecord, String relationType, String relatedTerm) {
         if (sourceRecord == null || !StringUtils.hasText(sourceRecord.getParsedJson()) || !StringUtils.hasText(relatedTerm)) {
             return Phonetic.empty();
@@ -764,16 +671,10 @@ public class VocabularyInsightService {
         return Phonetic.empty();
     }
 
-    /**
-     * 处理 {@code relationFields} 相关业务。
-     */
     private List<String> relationFields(String relationType) {
         return VocabularyRelationType.of(relationType).getJsonFields();
     }
 
-    /**
-     * 处理 {@code firstPhonetic} 相关业务。
-     */
     private Phonetic firstPhonetic(Phonetic preferred, Phonetic fallback) {
         if (preferred != null && (StringUtils.hasText(preferred.uk()) || StringUtils.hasText(preferred.us()))) {
             return preferred;
@@ -781,9 +682,6 @@ public class VocabularyInsightService {
         return fallback == null ? Phonetic.empty() : fallback;
     }
 
-    /**
-     * 处理 {@code extractPhonetic} 相关业务。
-     */
     private Phonetic extractPhonetic(JsonNode root) {
         if (root == null || root.isNull()) {
             return Phonetic.empty();
@@ -800,9 +698,7 @@ public class VocabularyInsightService {
         return new Phonetic(uk, us);
     }
 
-    /**
-     * 处理 {@code extractPhonetic} 相关业务。
-     */
+    /** 从词卡结构中提取英美音标。 */
     public Phonetic extractPhonetic(EnglishVocabularyStudyRecord record) {
         if (record == null || !StringUtils.hasText(record.getParsedJson())) {
             return Phonetic.empty();
@@ -815,30 +711,20 @@ public class VocabularyInsightService {
     }
 
     /**
-     * CoreMeaning 类。
-     */
-    /**
-     * 处理 {@code CoreMeaning} 相关业务。
-     */
+ * 当前业务领域组件。
+ */
+    /** 表示词汇的核心词性和含义。 */
     public record CoreMeaning(String partOfSpeech, String meaning) {
-        /**
-         * 处理 {@code empty} 相关业务。
-         */
         static CoreMeaning empty() {
             return new CoreMeaning("", "");
         }
     }
 
     /**
-     * Phonetic 类。
-     */
-    /**
-     * 处理 {@code Phonetic} 相关业务。
-     */
+ * 当前业务领域组件。
+ */
+    /** 表示词汇的英美音标。 */
     public record Phonetic(String uk, String us) {
-        /**
-         * 处理 {@code empty} 相关业务。
-         */
         static Phonetic empty() {
             return new Phonetic("", "");
         }

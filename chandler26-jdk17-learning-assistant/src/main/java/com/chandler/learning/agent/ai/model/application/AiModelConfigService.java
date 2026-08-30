@@ -51,9 +51,7 @@ public class AiModelConfigService {
     private final SystemLogService systemLogService;
     private final UserDisplayNameService userDisplayNameService;
 
-    /**
-     * 查询 {@code list} 相关业务。
-     */
+    /** 查询列表AI 模型。 */
     public List<AiModelConfigResponse> list(boolean enabledOnly) {
         Map<String, AiModelUsageSummary> usageByModel = modelUsageQueryService.listUsageSummaries().stream()
                 .collect(Collectors.toMap(this::usageKey, Function.identity(), (left, right) -> left));
@@ -86,9 +84,7 @@ public class AiModelConfigService {
                 .toList();
     }
 
-    /**
-     * 查询 {@code getById} 相关业务。
-     */
+    /** 按主键查询配置详情。 */
     public AiModelConfig getById(Long id) {
         if (id == null) {
             return null;
@@ -127,9 +123,7 @@ public class AiModelConfigService {
         return config;
     }
 
-    /**
-     * 查询 {@code getDefaultEnabled} 相关业务。
-     */
+    /** 查询当前默认且启用的模型配置。 */
     public AiModelConfig getDefaultEnabled() {
         return modelConfigMapper.selectList(new LambdaQueryWrapper<AiModelConfig>()
                 .eq(AiModelConfig::getDeleted, false)
@@ -143,9 +137,7 @@ public class AiModelConfigService {
                 .orElse(null);
     }
 
-    /**
-     * 创建或保存 {@code create} 相关业务。
-     */
+    /** 创建AI 模型。 */
     @Transactional(rollbackFor = Exception.class)
     public AiModelConfigResponse create(AiModelConfigSaveRequest request) {
         if (!StringUtils.hasText(request.getApiKey())) {
@@ -176,9 +168,7 @@ public class AiModelConfigService {
         return toResponse(config);
     }
 
-    /**
-     * 更新 {@code update} 相关业务。
-     */
+    /** 更新AI 模型。 */
     @Transactional(rollbackFor = Exception.class)
     public AiModelConfigResponse update(Long id, AiModelConfigSaveRequest request) {
         AiModelConfig config = getById(id);
@@ -211,9 +201,7 @@ public class AiModelConfigService {
         return toResponse(config);
     }
 
-    /**
-     * 更新 {@code updateEnabled} 相关业务。
-     */
+    /** 更新模型或 Agent 的启用状态。 */
     @Transactional(rollbackFor = Exception.class)
     public void updateEnabled(Long id, boolean enabled) {
         AiModelConfig config = getById(id);
@@ -240,9 +228,7 @@ public class AiModelConfigService {
                 config.getName());
     }
 
-    /**
-     * 更新 {@code updatePriority} 相关业务。
-     */
+    /** 更新模型配置优先级。 */
     public void updatePriority(Long id, Integer sequence, Boolean isDefault) {
         AiModelConfig config = getById(id);
         if (config == null) {
@@ -268,9 +254,7 @@ public class AiModelConfigService {
                 config.getIsDefault());
     }
 
-    /**
-     * 更新 {@code delete} 相关业务。
-     */
+    /** 删除AI 模型。 */
     @Transactional(rollbackFor = Exception.class)
     public void delete(Long id) {
         AiModelConfig config = getById(id);
@@ -289,9 +273,7 @@ public class AiModelConfigService {
                 config.getModelName());
     }
 
-    /**
-     * 处理 {@code resolveProviderConfig} 相关业务。
-     */
+    /** 解析AI 模型所需的有效配置。 */
     public AiModelConnectionConfig resolveProviderConfig(String provider) {
         AiModelConfig config = findEnabledByProvider(provider);
         if (config != null) {
@@ -300,9 +282,7 @@ public class AiModelConfigService {
         return null;
     }
 
-    /**
-     * 处理 {@code resolveProviderConfig} 相关业务。
-     */
+    /** 解析AI 模型所需的有效配置。 */
     public AiModelConnectionConfig resolveProviderConfig(Long modelConfigId) {
         AiModelConfig config = getById(modelConfigId);
         if (config == null) {
@@ -346,25 +326,18 @@ public class AiModelConfigService {
                 .orElse(null);
     }
 
-    /**
-     * 处理 {@code resolveDefaultProvider} 相关业务。
-     */
+    /** 解析AI 模型所需的有效配置。 */
     public String resolveDefaultProvider() {
         AiModelConfig config = getDefaultEnabled();
         return config == null ? null : config.getProvider();
     }
 
-    /**
-     * 处理 {@code resolveDefaultModel} 相关业务。
-     */
+    /** 解析AI 模型所需的有效配置。 */
     public String resolveDefaultModel(String provider) {
         AiModelConfig config = findEnabledByProvider(provider);
         return config == null ? null : config.getModelName();
     }
 
-    /**
-     * 查询 {@code findEnabledByProvider} 相关业务。
-     */
     private AiModelConfig findEnabledByProvider(String provider) {
         if (!StringUtils.hasText(provider)) {
             return getDefaultEnabled();
@@ -381,9 +354,6 @@ public class AiModelConfigService {
                 .orElse(null);
     }
 
-    /**
-     * 转换 {@code toConnectionConfig} 相关业务。
-     */
     private AiModelConnectionConfig toConnectionConfig(AiModelConfig config) {
         encryptLegacyApiKey(config);
         AiModelConnectionConfig connectionConfig = new AiModelConnectionConfig();
@@ -395,9 +365,6 @@ public class AiModelConfigService {
         return connectionConfig;
     }
 
-    /**
-     * 更新 {@code copy} 相关业务。
-     */
     private void copy(AiModelConfigSaveRequest request, AiModelConfig config, boolean create) {
         AiModelDefinition modelDefinition = AiModelDefinition.resolve(request.getProvider(), request.getModelName());
         config.setName(request.getName().trim());
@@ -413,9 +380,6 @@ public class AiModelConfigService {
         config.setSequence(request.getSequence() == null ? CommonConstants.DEFAULT_SEQUENCE : request.getSequence());
     }
 
-    /**
-     * 更新 {@code clearDefault} 相关业务。
-     */
     private void clearDefault(Long keepId) {
         LambdaUpdateWrapper<AiModelConfig> wrapper = new LambdaUpdateWrapper<AiModelConfig>()
                 .eq(AiModelConfig::getDeleted, false)
@@ -428,9 +392,6 @@ public class AiModelConfigService {
         modelConfigMapper.update(null, wrapper);
     }
 
-    /**
-     * 转换 {@code toResponse} 相关业务。
-     */
     private AiModelConfigResponse toResponse(AiModelConfig config) {
         return toResponse(config, null, boundAgents(config.getId()));
     }
@@ -531,9 +492,6 @@ public class AiModelConfigService {
                 config.getId(), config.getProvider(), config.getModelName());
     }
 
-    /**
-     * 处理 {@code encryptLegacyApiKey} 相关业务。
-     */
     private void encryptLegacyApiKey(AiModelConfig config) {
         if (config == null || !StringUtils.hasText(config.getApiKey()) || apiKeyCryptoService.isEncrypted(config.getApiKey())) {
             return;
@@ -549,9 +507,6 @@ public class AiModelConfigService {
                 apiKeyCryptoService.fingerprint(config.getApiKey()));
     }
 
-    /**
-     * 更新 {@code enabledLabel} 相关业务。
-     */
     private String enabledLabel(Boolean enabled) {
         return Boolean.TRUE.equals(enabled) ? "启用" : "停用";
     }

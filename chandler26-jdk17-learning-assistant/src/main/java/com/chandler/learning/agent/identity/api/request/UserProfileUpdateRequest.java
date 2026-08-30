@@ -5,12 +5,12 @@ import io.swagger.v3.oas.annotations.media.Schema;
 import lombok.Data;
 
 /**
- * UserProfileUpdateRequest 类。
+ * 用户账户请求参数。
  */
 @Data
 public class UserProfileUpdateRequest {
 
-    @Schema(description = "名称")
+    @Schema(description = "用户昵称")
     private String nickname;
 
     @Schema(description = "手机号")

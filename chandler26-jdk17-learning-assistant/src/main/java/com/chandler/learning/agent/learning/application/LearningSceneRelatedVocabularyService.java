@@ -79,6 +79,7 @@ public class LearningSceneRelatedVocabularyService {
         return current;
     }
 
+    /** 统计当前场景材料的相关词数量。 */
     public int count(Long materialId) {
         return Math.toIntExact(relatedWordMapper.selectCount(new LambdaQueryWrapper<LearningSceneRelatedWord>()
                 .eq(LearningSceneRelatedWord::getSceneMaterialId, materialId)

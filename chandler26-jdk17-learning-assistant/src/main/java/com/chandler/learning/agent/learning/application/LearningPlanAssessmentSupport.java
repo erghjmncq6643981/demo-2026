@@ -146,6 +146,7 @@ public class LearningPlanAssessmentSupport {
         return questionObject;
     }
 
+    /** 读取并解析场景学习计划数据。 */
     public JsonNode readTree(String json) {
         if (!StringUtils.hasText(json)) {
             return objectMapper.createObjectNode();
@@ -157,6 +158,7 @@ public class LearningPlanAssessmentSupport {
         }
     }
 
+    /** 读取并解析场景学习计划数据。 */
     public List<String> readStringList(String json) {
         if (!StringUtils.hasText(json)) {
             return List.of();
@@ -169,6 +171,7 @@ public class LearningPlanAssessmentSupport {
         }
     }
 
+    /** 计算输入答案与标准拼写的相似准确率。 */
     public double spellingAccuracy(String answer, List<String> accepted) {
         int bestDistance = accepted.stream()
                 .map(this::normalizeSpelling)
@@ -179,10 +182,12 @@ public class LearningPlanAssessmentSupport {
         return Math.max(0D, Math.round((1D - (double) bestDistance / maxLength) * 10_000D) / 100D);
     }
 
+    /** 归一化含义选择答案。 */
     public String normalizeAnswer(String value) {
         return normalize(value).replaceAll("[，。；;,.!?！？]$", "");
     }
 
+    /** 归一化拼写答案。 */
     public String normalizeSpelling(String value) {
         return normalize(value).replace('’', '\'');
     }

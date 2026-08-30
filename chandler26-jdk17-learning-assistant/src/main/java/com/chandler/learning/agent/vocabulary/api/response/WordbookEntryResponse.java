@@ -8,12 +8,12 @@ import java.time.LocalDateTime;
 import java.util.List;
 
 /**
- * WordbookEntryResponse 类。
+ * 个人单词本响应数据。
  */
 @Data
 public class WordbookEntryResponse {
 
-    @Schema(description = "主键标识")
+    @Schema(description = "主键 ID")
     private Long id;
 
     @Schema(description = "单词本标识")
@@ -22,10 +22,10 @@ public class WordbookEntryResponse {
     @Schema(description = "词汇标识")
     private Long vocabularyId;
 
-    @Schema(description = "关联业务标识")
+    @Schema(description = "词汇学习进度 ID")
     private Long progressId;
 
-    @Schema(description = "关联业务标识")
+    @Schema(description = "公共词本词条 ID")
     private Long catalogEntryId;
 
     @Schema(description = "英文词汇")
@@ -37,7 +37,7 @@ public class WordbookEntryResponse {
     @Schema(description = "学习笔记")
     private String note;
 
-    @Schema(description = "状态")
+    @Schema(description = "当前业务状态")
     private String status;
 
     @Schema(description = "复习阶段")
@@ -49,7 +49,7 @@ public class WordbookEntryResponse {
     @Schema(description = "最近复习时间")
     private LocalDateTime lastReviewTime;
 
-    @Schema(description = "时间")
+    @Schema(description = "下次复习时间")
     private LocalDateTime nextReviewTime;
 
     @Schema(description = "复习次数")
@@ -61,32 +61,32 @@ public class WordbookEntryResponse {
     @Schema(description = "答错次数")
     private Integer wrongCount;
 
-    @Schema(description = "时间")
+    @Schema(description = "创建时间")
     private LocalDateTime createTime;
 
     @com.fasterxml.jackson.annotation.JsonRawValue
-    @Schema(description = "是否已解析")
+    @Schema(description = "解析后的结构化内容")
     private String parsed;
 
-    @Schema(description = "业务属性")
+    @Schema(description = "词卡快照模型供应商")
     private String snapshotProvider;
 
-    @Schema(description = "名称")
+    @Schema(description = "词卡快照模型名称")
     private String snapshotModelName;
 
-    @Schema(description = "关联业务标识")
+    @Schema(description = "词卡快照会话 ID")
     private Long snapshotSessionId;
 
     @Schema(description = "快照时间")
     private LocalDateTime snapshotTime;
 
-    @Schema(description = "状态")
+    @Schema(description = "词卡生成状态")
     private String cardStatus;
 
-    @Schema(description = "业务属性")
+    @Schema(description = "词卡生成失败原因")
     private String cardErrorMessage;
 
-    @Schema(description = "时间")
+    @Schema(description = "词卡生成完成时间")
     private LocalDateTime cardGeneratedTime;
 
     @Schema(description = "标签列表")

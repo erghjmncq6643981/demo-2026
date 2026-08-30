@@ -12,7 +12,7 @@ import java.util.List;
 @Data
 public class LearningPlanUnitEntryResponse {
 
-    @Schema(description = "主键标识")
+    @Schema(description = "主键 ID")
     private Long id;
 
     @Schema(description = "公共词本词条标识")
@@ -21,7 +21,7 @@ public class LearningPlanUnitEntryResponse {
     @Schema(description = "单词本词条标识")
     private Long wordbookEntryId;
 
-    @Schema(description = "关联业务标识")
+    @Schema(description = "词汇学习进度 ID")
     private Long wordProgressId;
 
     @Schema(description = "来源序号")
@@ -42,7 +42,7 @@ public class LearningPlanUnitEntryResponse {
     @Schema(description = "语境释义")
     private String contextMeaning;
 
-    @Schema(description = "业务属性")
+    @Schema(description = "词汇在场景中的层级")
     private String tier;
 
     @Schema(description = "掌握要求")
@@ -56,10 +56,10 @@ public class LearningPlanUnitEntryResponse {
     @Schema(description = "词汇检查内容")
     private String assessment;
 
-    @Schema(description = "业务属性")
+    @Schema(description = "已通过的评测类型列表")
     private List<String> passedAssessments;
 
-    @Schema(description = "业务属性")
+    @Schema(description = "是否首次学习")
     private Boolean firstLearning;
 
     @Schema(description = "学习状态")
@@ -71,6 +71,6 @@ public class LearningPlanUnitEntryResponse {
     @Schema(description = "拼写得分")
     private Integer spellingScore;
 
-    @Schema(description = "状态")
+    @Schema(description = "词卡生成状态")
     private String cardStatus;
 }

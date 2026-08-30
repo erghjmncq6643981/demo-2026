@@ -13,6 +13,6 @@ public class WordbookEntryUpdateRequest {
     @Schema(description = "学习笔记")
     private String note;
 
-    @Schema(description = "业务状态")
+    @Schema(description = "当前业务状态")
     private String status;
 }

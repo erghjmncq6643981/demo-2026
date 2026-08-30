@@ -14,7 +14,7 @@ import java.util.List;
 @Data
 public class VocabularyStudyResponse {
 
-    @Schema(description = "主键标识")
+    @Schema(description = "主键 ID")
     private Long id;
 
     @Schema(description = "英文词汇")
@@ -26,7 +26,7 @@ public class VocabularyStudyResponse {
     @Schema(description = "是否命中缓存")
     private Boolean cacheHit;
 
-    @Schema(description = "编码")
+    @Schema(description = "Agent 编码")
     private String agentCode;
 
     @Schema(description = "提示词模板编码")
@@ -38,22 +38,22 @@ public class VocabularyStudyResponse {
     @Schema(description = "模型名称")
     private String modelName;
 
-    @Schema(description = "关联业务标识")
+    @Schema(description = "AI 会话 ID")
     private Long sessionId;
 
     @Schema(description = "原始内容")
     private String rawContent;
 
-    @Schema(description = "是否已解析")
+    @Schema(description = "解析后的结构化内容")
     private Object parsed;
 
     @Schema(description = "Token 使用明细")
     private Integer tokenUsage;
 
-    @Schema(description = "时间")
+    @Schema(description = "处理耗时，单位毫秒")
     private Long costTime;
 
-    @Schema(description = "数量")
+    @Schema(description = "累计查询次数")
     private Integer lookupCount;
 
     @Schema(description = "标签列表")

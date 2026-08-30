@@ -32,9 +32,6 @@ public static final int DEFAULT_LIMIT = 80;
         public static final int MAX_TRACE_ID_LENGTH = 64;
         public static final int OUTBOX_BATCH_SIZE = 100;
 
-        /**
-         * 处理 {@code SystemLog} 相关业务。
-         */
         private SystemLogConstants() {
         }
 }

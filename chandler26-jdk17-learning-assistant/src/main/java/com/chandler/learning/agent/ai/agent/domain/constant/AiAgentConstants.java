@@ -8,9 +8,6 @@ public final class AiAgentConstants {
     public static final String TYPE_ASSISTANT = "assistant";
     public static final String DEFAULT_TYPE = TYPE_CHAT;
 
-        /**
-         * 处理 {@code Agent} 相关业务。
-         */
         private AiAgentConstants() {
         }
 }

@@ -5,7 +5,7 @@ import io.swagger.v3.oas.annotations.media.Schema;
 import lombok.Data;
 
 /**
- * LearningActivityDayResponse 类。
+ * 当前业务响应数据。
  */
 @Data
 public class LearningActivityDayResponse {
@@ -19,6 +19,6 @@ public class LearningActivityDayResponse {
     @Schema(description = "复习次数")
     private Integer reviewCount;
 
-    @Schema(description = "总数量")
+    @Schema(description = "任务或分页数据总数")
     private Integer totalCount;
 }

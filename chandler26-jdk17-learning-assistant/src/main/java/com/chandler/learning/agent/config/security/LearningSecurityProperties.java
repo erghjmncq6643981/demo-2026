@@ -6,7 +6,7 @@ import org.springframework.boot.context.properties.ConfigurationProperties;
 import org.springframework.stereotype.Component;
 
 /**
- * LearningSecurityProperties 类。
+ * 安全认证配置属性。
  */
 @Data
 @Component

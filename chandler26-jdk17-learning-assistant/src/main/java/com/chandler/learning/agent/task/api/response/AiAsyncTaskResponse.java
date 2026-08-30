@@ -13,7 +13,7 @@ import java.util.List;
 @Data
 public class AiAsyncTaskResponse {
 
-    @Schema(description = "主键标识")
+    @Schema(description = "主键 ID")
     private Long id;
 
     @Schema(description = "用户标识")
@@ -24,7 +24,7 @@ public class AiAsyncTaskResponse {
     private Long ownerUserId;
 
     /** 发起任务的用户 ID。 */
-    @Schema(description = "关联业务标识")
+    @Schema(description = "任务触发人用户 ID")
     private Long triggerUserId;
 
     @Schema(description = "触发人名称")
@@ -49,7 +49,7 @@ public class AiAsyncTaskResponse {
     @Schema(description = "任务类型")
     private String taskType;
 
-    @Schema(description = "名称")
+    @Schema(description = "AI 异步任务名称")
     private String taskName;
 
     @Schema(description = "学习计划标识")
@@ -67,25 +67,25 @@ public class AiAsyncTaskResponse {
     @Schema(description = "业务标识")
     private String businessId;
 
-    @Schema(description = "业务状态")
+    @Schema(description = "当前业务状态")
     private String status;
 
     @Schema(description = "执行方式")
     private String executionMode;
 
-    @Schema(description = "时间")
+    @Schema(description = "计划执行时间")
     private LocalDateTime scheduledTime;
 
     @Schema(description = "优先级")
     private Integer priority;
 
-    @Schema(description = "总数量")
+    @Schema(description = "任务或分页数据总数")
     private Integer totalCount;
 
     @Schema(description = "成功数量")
     private Integer successCount;
 
-    @Schema(description = "数量")
+    @Schema(description = "处理失败数量")
     private Integer failedCount;
 
     @Schema(description = "进度百分比")
@@ -109,7 +109,7 @@ public class AiAsyncTaskResponse {
     @Schema(description = "取消时间")
     private LocalDateTime cancelledTime;
 
-    @Schema(description = "时间")
+    @Schema(description = "创建时间")
     private LocalDateTime createTime;
 
     @Schema(description = "更新时间")
