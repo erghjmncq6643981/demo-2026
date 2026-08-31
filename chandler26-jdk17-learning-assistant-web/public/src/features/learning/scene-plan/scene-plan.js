@@ -295,12 +295,13 @@ export function createScenePlanFeature(ctx) {
     sceneStudy?.renderRelatedWords(unit)
     sceneStudy?.renderChallengeWords(coreWords)
     sceneStudy?.renderAssessment(unit)
+    sceneNote?.updateButtonText(unit)
   }
 
   function formatPlanDate(value) {
     if (!value) return '-'
     const date = new Date(value)
-    return Number.isNaN(date.getTime()) ? '-' : date.toLocaleString('zh-CN', { hour12: false })
+    return Number.isNaN(date.getTime()) ? '未设置' : date.toLocaleDateString('zh-CN')
   }
 
   const planManager = createPlanManager({ state, api, sameId, loadSceneData, toast, logEvent, confirmAction })
@@ -318,13 +319,13 @@ export function createScenePlanFeature(ctx) {
 
   return {
     loadSceneData, clearSceneData, renderSceneView, renderRelatedWords: () => sceneStudy.renderRelatedWords(activeUnit()),
-    openVocabularyImport, closeVocabularyImport, startVocabularyImport, deleteImportJob, saveVocabularyImportMetadata, loadImportReview, loadReview: loadImportReview, openImportReview, confirmAllWarnings, publishVocabularyImport, triggerVocabularyAnalysis,
+    openVocabularyImport, closeVocabularyImport, startVocabularyImport, deleteImportJob, saveVocabularyImportMetadata, loadReview: loadImportReview, loadReview: loadImportReview, openImportReview, confirmAllWarnings, publishVocabularyImport, triggerVocabularyAnalysis,
     openScenePlanModal: planWorkflow.openModal, closeScenePlanModal: planWorkflow.closeModal, createScenePlan: planWorkflow.savePlan, changePlanCatalog: planWorkflow.changeCatalog, changeSceneWordbook: planWorkflow.changeWordbook,
     changeImportSearch, previousImportPage, nextImportPage, previousHistoryPage, nextHistoryPage,
     completeCurrentUnit: sceneActions.completeCurrentUnit, generateNextUnit: sceneActions.generateNextUnit, scheduleNextUnit: sceneActions.scheduleNextUnit, generateCards: sceneActions.generateCards, scheduleCards: sceneActions.scheduleCards,
     startLearning: studyEngine.startLearning, showChallengeWords: studyEngine.showChallengeWords, startChallenge: studyEngine.startChallenge, backToReading: studyEngine.backToReading, backToPlanOverview: () => sceneStudy.applyStage('overview'),
     changeCalendarRange, changeCalendarOffset: calendarView.changeOffset, resetCalendar: calendarView.reset, changeSelectedPlan, pausePlan: planWorkflow.pausePlan, resumePlan: planWorkflow.resumePlan, cancelPlan: planWorkflow.cancelPlan,
-    speakCurrentScene: () => speakSentence(activeUnit()?.learningText || ''), loadSceneNote: sceneNote.load, renderSceneNote: sceneNote.render, saveSceneNote: sceneNote.save, toggleSceneNotePreview: sceneNote.togglePreview, openSceneNoteModal: sceneNote.openModal, closeSceneNoteModal: sceneNote.closeModal,
+    speakCurrentScene: () => speakSentence(activeUnit()?.learningText || ''), loadSceneNote: sceneNote.load, renderSceneNote: sceneNote.render, saveSceneNote: sceneNote.save, toggleSceneNotePreview: sceneNote.togglePreview, handleSceneNoteInput: sceneNote.handleInput, setSceneNoteMode: sceneNote.setMode, toggleSceneNotePanel: sceneNote.togglePanel, openSceneNotePanel: sceneNote.openPanel, closeSceneNotePanel: sceneNote.closePanel, openSceneNoteModal: sceneNote.openPanel, closeSceneNoteModal: sceneNote.closePanel,
     closeSceneVocabularyPreview: sceneOverview.closeVocabularyPreview, openCoreWordsModal: sceneStudy.openCoreWordsModal, closeCoreWordsModal: sceneStudy.closeCoreWordsModal, openRelatedWordsModal: sceneStudy.openRelatedWordsModal, closeRelatedWordsModal: sceneStudy.closeRelatedWordsModal, generateRelatedWords: () => sceneActions.generateRelatedWords?.(),
     handleSceneChallengeKeydown: (event) => sceneStudy?.handleChallengeKeydown?.(event),
   }

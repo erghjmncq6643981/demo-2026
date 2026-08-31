@@ -68,9 +68,16 @@ public class SceneMaterialTaskHandler implements AiTaskHandler {
             List<LearningPlanUnitResponse> dateUnits = plan.getUnits().stream()
                     .filter(unit -> recommendedDate.equals(unit.getRecommendedDate()))
                     .toList();
-            for (LearningPlanUnitResponse unit : dateUnits) {
-                relatedVocabularyService.generate(task.getOwnerUserId(), task.getPlanId(), unit.getId(),
+            if (dateUnits.isEmpty()) {
+                return 0;
+            }
+            if (dateUnits.size() == 1) {
+                relatedVocabularyService.generate(task.getOwnerUserId(), task.getPlanId(), dateUnits.get(0).getId(),
                         modelConfigId, LearningSceneRelatedVocabularyService.DEFAULT_TARGET_COUNT);
+            } else {
+                dateUnits.parallelStream().forEach(unit ->
+                        relatedVocabularyService.generate(task.getOwnerUserId(), task.getPlanId(), unit.getId(),
+                                modelConfigId, LearningSceneRelatedVocabularyService.DEFAULT_TARGET_COUNT));
             }
             return dateUnits.size();
         });

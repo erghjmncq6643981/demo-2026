@@ -13,7 +13,11 @@ import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Component;
 
 import java.time.LocalDateTime;
+import java.util.HashSet;
 import java.util.List;
+import java.util.Objects;
+import java.util.Set;
+import java.util.stream.Collectors;
 
 /**
  * 低价时段和预约任务调度器。任务先入库，再由本组件定时原子领取。
@@ -29,11 +33,28 @@ public class AiAsyncTaskScheduler {
     private final AiTaskExecutionService executionService;
 
     /** 领取并分派到期异步任务。 */
-    @Scheduled(fixedDelayString = "${learning.ai-task.poll-interval-ms:10000}")
+    @Scheduled(fixedDelayString = "${learning.ai-task.poll-interval-ms:5000}")
     public void dispatchDueTasks() {
         LocalDateTime now = LocalDateTime.now();
         recoverStaleTasks(now);
         promoteDueRetries(now);
+
+        // 收集当前正在占用词表分配锁的学习计划 ID：
+        // 仅当一个活动任务（RUNNING / RETRY_WAIT）的材料与核心词生成步骤尚未完成时，才视为独占 planId 词表锁。
+        // 一旦材料生成步骤完成，词表分配锁已释放，后续日期的任务可以立即启动，与前序任务的相关词生成步骤流水线重叠执行！
+        List<AiAsyncTask> activePlanTasks = taskMapper.selectList(new LambdaQueryWrapper<AiAsyncTask>()
+                .in(AiAsyncTask::getStatus, List.of(
+                        AiTaskConstants.STATUS_RUNNING,
+                        AiTaskConstants.STATUS_RETRY_WAIT))
+                .isNotNull(AiAsyncTask::getPlanId)
+                .eq(AiAsyncTask::getDeleted, false));
+
+        Set<Long> occupiedPlanIds = activePlanTasks.stream()
+                .filter(task -> !executionService.isMaterialStepCompleted(task.getId(), task.getTaskType()))
+                .map(AiAsyncTask::getPlanId)
+                .filter(Objects::nonNull)
+                .collect(Collectors.toCollection(HashSet::new));
+
         List<AiAsyncTask> tasks = taskMapper.selectList(new LambdaQueryWrapper<AiAsyncTask>()
                 .eq(AiAsyncTask::getStatus, AiTaskConstants.STATUS_PENDING)
                 .eq(AiAsyncTask::getDeleted, false)
@@ -41,11 +62,26 @@ public class AiAsyncTaskScheduler {
                 .orderByDesc(AiAsyncTask::getPriority)
                 .orderByAsc(AiAsyncTask::getCreateTime)
                 .last("LIMIT 20"));
+
         for (AiAsyncTask task : tasks) {
+            Long planId = task.getPlanId();
+            if (planId != null && occupiedPlanIds.contains(planId)) {
+                // 同一学习计划已有前序任务在执行或等待重试，后序任务在队列中保持 PENDING 排队
+                log.debug("学习计划已有正在执行的任务，跳过当前任务派发保持排队 taskId={} planId={}",
+                        task.getId(), planId);
+                continue;
+            }
+
             if (taskService.claim(task.getId())) {
+                if (planId != null) {
+                    occupiedPlanIds.add(planId);
+                }
                 try {
                     dispatcher.dispatch(task);
                 } catch (TaskRejectedException ex) {
+                    if (planId != null) {
+                        occupiedPlanIds.remove(planId);
+                    }
                     taskService.releaseClaim(task.getId(), now.plusSeconds(
                             AiTaskConstants.QUEUE_RETRY_DELAY_SECONDS));
                     log.info("AI 任务队列已满，任务稍后重试 taskId={} type={}",

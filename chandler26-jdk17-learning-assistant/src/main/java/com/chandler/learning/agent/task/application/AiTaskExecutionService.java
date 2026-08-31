@@ -13,6 +13,7 @@ import com.chandler.learning.agent.task.application.contract.AiTaskStepDefinitio
 import com.chandler.learning.agent.task.domain.entity.AiAsyncTaskAttempt;
 import com.chandler.learning.agent.task.domain.entity.AiAsyncTaskStep;
 import com.chandler.learning.agent.task.domain.enums.AiTaskStepStatus;
+import com.chandler.learning.agent.task.domain.enums.AiTaskType;
 import com.chandler.learning.agent.task.infrastructure.mapper.AiAsyncTaskAttemptMapper;
 import com.chandler.learning.agent.task.infrastructure.mapper.AiAsyncTaskStepMapper;
 import lombok.RequiredArgsConstructor;
@@ -177,6 +178,21 @@ public class AiTaskExecutionService {
     /** 恢复执行租约已过期的 AI 任务。 */
     public int recoverExpired(LocalDateTime now) {
         return stepMapper.recoverExpired(now);
+    }
+
+    /**
+     * 判断指定任务的材料与核心词生成步骤是否已经完成。
+     * 若已完成，说明该计划的词表分配锁已经释放，后续日期的任务可以开始生成并流水线重叠。
+     */
+    public boolean isMaterialStepCompleted(Long taskId, String taskType) {
+        String materialStepCode = AiTaskType.SCENE_MATERIAL_REGENERATION.getCode().equals(taskType)
+                ? "generate_revision" : "generate_material";
+        AiAsyncTaskStep step = stepMapper.selectOne(new LambdaQueryWrapper<AiAsyncTaskStep>()
+                .eq(AiAsyncTaskStep::getTaskId, taskId)
+                .eq(AiAsyncTaskStep::getStepCode, materialStepCode)
+                .eq(AiAsyncTaskStep::getDeleted, false)
+                .last(CommonConstants.SQL_LIMIT_ONE));
+        return step != null && AiTaskStepStatus.COMPLETED.getCode().equals(step.getStatus());
     }
 
     /** 批量转换 AI 任务响应。 */

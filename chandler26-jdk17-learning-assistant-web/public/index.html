@@ -508,26 +508,50 @@
                     </div>
                     <div class="scene-unit-actions">
                       <span class="mini-pill" id="sceneUnitProgress">0 / 0</span>
-                      <button class="secondary-button compact" id="sceneOpenNoteModalBtn" type="button">添加笔记</button>
+                      <button class="secondary-button compact scene-note-toggle-btn" id="sceneOpenNoteModalBtn" type="button"><span class="scene-note-btn-icon">📝</span> <span id="sceneOpenNoteBtnText">添加笔记</span></button>
                       <button class="secondary-button compact" id="sceneBackToPlanBtn" type="button">返回计划</button>
                       <button class="primary-button compact-primary hidden" id="sceneCompleteUnitBtn" type="button">完成场景</button>
                     </div>
                   </section>
 
-                  <section class="panel scene-reading-panel">
-                    <div class="panel-heading compact-heading">
-                      <div>
-                        <p class="eyebrow">Context</p>
-                        <h3>场景文章</h3>
+                  <div class="scene-study-split-layout" id="sceneStudySplitLayout">
+                    <section class="panel scene-reading-panel" id="sceneReadingPanel">
+                      <div class="panel-heading compact-heading">
+                        <div>
+                          <p class="eyebrow">Context</p>
+                          <h3>场景文章</h3>
+                        </div>
+                        <button class="icon-button" id="sceneSpeakBtn" type="button" title="朗读场景文章" aria-label="朗读场景文章">▶</button>
                       </div>
-                      <button class="icon-button" id="sceneSpeakBtn" type="button" title="朗读场景文章" aria-label="朗读场景文章">▶</button>
-                    </div>
-                    <div id="sceneLearningText" class="scene-learning-text empty">暂无场景材料</div>
-                    <details class="scene-translation">
-                      <summary>查看中文译文</summary>
-                      <div id="sceneTranslation">暂无译文</div>
-                    </details>
-                  </section>
+                      <div id="sceneLearningText" class="scene-learning-text empty">暂无场景材料</div>
+                      <details class="scene-translation">
+                        <summary>查看中文译文</summary>
+                        <div id="sceneTranslation">暂无译文</div>
+                      </details>
+                    </section>
+
+                    <section class="panel scene-note-panel hidden" id="sceneNotePanel">
+                      <div class="panel-heading compact-heading scene-note-panel-header">
+                        <div>
+                          <p class="eyebrow">Study Notes</p>
+                          <h3>场景笔记</h3>
+                        </div>
+                        <div class="inline-actions">
+                          <button class="secondary-button compact" id="sceneNoteEditBtn" type="button" title="编辑笔记">✏️ 编辑</button>
+                          <button class="secondary-button compact hidden" id="sceneNotePreviewBtn" type="button" title="预览笔记">👁️ 预览</button>
+                          <button class="icon-button" id="sceneNoteCloseBtn" type="button" title="收起笔记" aria-label="收起笔记">×</button>
+                        </div>
+                      </div>
+                      <div class="scene-note-panel-body">
+                        <div class="scene-note-status-bar">
+                          <span id="sceneNoteStatus" class="scene-note-status">未保存</span>
+                          <span class="scene-note-auto-badge">自动保存已开启</span>
+                        </div>
+                        <textarea id="sceneNoteInput" class="scene-note-input hidden" rows="12" placeholder="记录本篇材料的重点、疑问、难句或个人例句（支持 Markdown）。&#10;输入内容后将自动为您保存。"></textarea>
+                        <div id="sceneNotePreview" class="scene-note-preview"></div>
+                      </div>
+                    </section>
+                  </div>
 
                   <section class="panel scene-learning-footer" id="sceneLearningFooter">
                     <div class="scene-learning-footer-left">
@@ -813,32 +837,7 @@
         </div>
       </div>
     </section>
-    <section class="modal-backdrop hidden" id="sceneNoteModal" aria-modal="true" role="dialog" aria-labelledby="sceneNoteModalTitle">
-      <div class="config-modal scene-note-modal" data-modal-scroll>
-        <div class="panel-heading">
-          <div>
-            <p class="eyebrow">Notes</p>
-            <h3 id="sceneNoteModalTitle">场景材料笔记</h3>
-          </div>
-          <button class="icon-button" id="sceneNoteModalCloseBtn" type="button" title="关闭" aria-label="关闭">×</button>
-        </div>
-        <div class="scene-note-modal-body">
-          <div class="inline-actions" style="margin-bottom: 8px;">
-            <span class="mini-pill">支持 Markdown</span>
-            <button class="secondary-button compact" id="sceneNotePreviewBtn" type="button">预览 Markdown</button>
-          </div>
-          <textarea id="sceneNoteInput" class="scene-note-input" rows="8" placeholder="记录本篇材料的重点、疑问、易错词或自己的例句。支持 Markdown，例如：&#10;## 本篇重点&#10;- airport 与 boarding 的区别"></textarea>
-          <div id="sceneNotePreview" class="scene-note-preview hidden"></div>
-        </div>
-        <div class="scene-note-modal-footer">
-          <span id="sceneNoteStatus" class="scene-note-status">未保存</span>
-          <div class="inline-actions">
-            <button class="secondary-button compact" id="sceneNoteModalCancelBtn" type="button">关闭</button>
-            <button class="primary-button compact-primary" id="sceneNoteSaveBtn" type="button">保存笔记</button>
-          </div>
-        </div>
-      </div>
-    </section>
+
 
     <section class="modal-backdrop hidden" id="sceneCoreWordsModal" aria-modal="true" role="dialog" aria-labelledby="sceneCoreWordsModalTitle">
       <div class="config-modal scene-core-words-modal" data-modal-scroll>

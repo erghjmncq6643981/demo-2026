@@ -78,6 +78,11 @@ export function bindAppEvents(ctx) {
     resumeScenePlan,
     cancelScenePlan,
     saveSceneNote,
+    handleSceneNoteInput,
+    setSceneNoteMode,
+    toggleSceneNotePanel,
+    openSceneNotePanel,
+    closeSceneNotePanel,
     toggleSceneNotePreview,
     openSceneNoteModal,
     closeSceneNoteModal,
@@ -326,14 +331,17 @@ elements.sceneScheduleNextUnitBtn?.addEventListener('click', scheduleNextUnit)
 elements.sceneGenerateCardsBtn?.addEventListener('click', generateSceneCards)
 elements.sceneScheduleCardsBtn?.addEventListener('click', scheduleSceneCards)
 elements.sceneSpeakBtn?.addEventListener('click', speakCurrentScene)
-elements.sceneOpenNoteModalBtn?.addEventListener('click', openSceneNoteModal)
+elements.sceneOpenNoteModalBtn?.addEventListener('click', toggleSceneNotePanel)
+elements.sceneNoteCloseBtn?.addEventListener('click', closeSceneNotePanel)
+elements.sceneNoteEditBtn?.addEventListener('click', () => setSceneNoteMode('edit'))
+elements.sceneNotePreviewBtn?.addEventListener('click', () => setSceneNoteMode('preview'))
+elements.sceneNoteInput?.addEventListener('input', handleSceneNoteInput)
+elements.sceneNoteSaveBtn?.addEventListener('click', saveSceneNote)
 elements.sceneNoteModalCloseBtn?.addEventListener('click', closeSceneNoteModal)
 elements.sceneNoteModalCancelBtn?.addEventListener('click', closeSceneNoteModal)
 elements.sceneNoteModal?.addEventListener('click', (event) => {
   if (event.target === elements.sceneNoteModal) closeSceneNoteModal()
 })
-elements.sceneNoteSaveBtn?.addEventListener('click', saveSceneNote)
-elements.sceneNotePreviewBtn?.addEventListener('click', toggleSceneNotePreview)
 
 elements.sceneOpenCoreWordsBtn?.addEventListener('click', openCoreWordsModal)
 elements.sceneCoreWordsModalCloseBtn?.addEventListener('click', closeCoreWordsModal)
