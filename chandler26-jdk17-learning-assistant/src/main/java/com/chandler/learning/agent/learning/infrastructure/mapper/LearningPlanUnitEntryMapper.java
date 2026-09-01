@@ -27,4 +27,13 @@ public interface LearningPlanUnitEntryMapper extends BaseMapper<LearningPlanUnit
     List<LearningPlanUnitWordSummaryItem> selectWordSummaries(
             @Param("planId") Long planId,
             @Param("unitIds") Collection<Long> unitIds);
+
+    /**
+     * 单条联表查询词汇检查上下文，包含计划、单元、词条、生词本与逐词进度。
+     */
+    com.chandler.learning.agent.learning.domain.bo.LearningAssessmentContextBO selectAssessmentContext(
+            @Param("userId") Long userId,
+            @Param("planId") Long planId,
+            @Param("unitId") Long unitId,
+            @Param("unitEntryId") Long unitEntryId);
 }

@@ -20,9 +20,18 @@ export function createUnitList({ state, api, sameId }) {
       asArray(day.units).forEach((u) => {
         const idStr = String(u.id)
         if (unitMap.has(idStr)) {
-          Object.assign(unitMap.get(idStr), u)
+          const existing = unitMap.get(idStr)
+          // 仅合并非空字段，绝不能用日历概要的 null/undefined 覆盖已加载的详情字段（words, relatedWords, learningText 等）
+          Object.keys(u).forEach((key) => {
+            if (u[key] !== null && u[key] !== undefined) {
+              if (Array.isArray(existing[key]) && existing[key].length > 0 && Array.isArray(u[key]) && u[key].length === 0) {
+                return
+              }
+              existing[key] = u[key]
+            }
+          })
         } else {
-          unitMap.set(idStr, u)
+          unitMap.set(idStr, { ...u })
         }
       })
     })

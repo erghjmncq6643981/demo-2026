@@ -23,6 +23,7 @@ export function createSceneStudy({
   generateRelatedWords,
   promoteWord,
   speak,
+  preloadAudio,
   startChallenge,
 }) {
   let assessmentFeedback = null
@@ -397,6 +398,7 @@ export function createSceneStudy({
       if (elements.sceneAssessmentStage) elements.sceneAssessmentStage.textContent = '未开始'
       return
     }
+    preloadAudio?.(word.term)
     const type = nextAssessment(word)
     const passedCount = asArray(word.passedAssessments).filter((item) => requiredAssessments(word).includes(item)).length
     const wordIndex = coreWords.findIndex((item) => sameId(item.id, word.id)) + 1

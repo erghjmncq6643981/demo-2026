@@ -94,6 +94,7 @@ const speechFeature = createSpeechFeature({
 
 const {
   speak,
+  preloadAudio,
   speakSentence,
   currentVoiceType,
   loadSpeechPreferences,
@@ -124,6 +125,7 @@ scenePlanFeature = createScenePlanFeature({
   escapeHtml,
   sameId,
   speak,
+  preloadAudio,
   speakSentence,
   loadWordbooks: profile.loadWordbooks,
 })
@@ -475,6 +477,10 @@ bindAppEvents({
   systemManagement,
   handleReviewKeydown,
   handleSceneChallengeKeydown: (...args) => scenePlanFeature.handleSceneChallengeKeydown(...args),
+  handleSceneNoteKeydown: (...args) => scenePlanFeature.handleSceneNoteKeydown(...args),
+  handleSceneNoteCompositionStart: (...args) => scenePlanFeature.handleSceneNoteCompositionStart(...args),
+  handleSceneNoteCompositionEnd: (...args) => scenePlanFeature.handleSceneNoteCompositionEnd(...args),
+  flushSceneNoteSave: (...args) => scenePlanFeature.flushSceneNoteSave(...args),
   openQuickLookup: studyFacade.openQuickLookup,
   closeQuickLookup: studyFacade.closeQuickLookup,
 })

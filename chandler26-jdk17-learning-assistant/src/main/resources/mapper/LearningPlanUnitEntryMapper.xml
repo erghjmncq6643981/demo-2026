@@ -106,4 +106,58 @@
           </if>
         ORDER BY e.unit_id ASC, e.sort_order ASC
     </select>
+
+    <select id="selectAssessmentContext" resultType="com.chandler.learning.agent.learning.domain.bo.LearningAssessmentContextBO">
+        SELECT
+            p.id AS planId,
+            p.user_id AS userId,
+            p.name AS planName,
+            p.wordbook_id AS wordbookId,
+
+            u.id AS unitId,
+            u.title AS unitTitle,
+            u.core_word_count AS coreWordCount,
+            u.completed_core_count AS completedCoreCount,
+            u.status AS unitStatus,
+
+            e.id AS unitEntryId,
+            e.tier,
+            e.mastery_requirement AS masteryRequirement,
+            e.term,
+            e.normalized_term AS normalizedTerm,
+            e.assessment_json AS assessmentJson,
+            e.accepted_spellings_json AS acceptedSpellingsJson,
+            e.first_learning AS firstLearning,
+            e.wordbook_entry_id AS wordbookEntryId,
+            e.word_progress_id AS wordProgressId,
+
+            w.review_stage AS wordbookStage,
+            w.mastery_score AS wordbookMastery,
+            w.next_review_time AS wordbookNextReviewTime,
+
+            pr.learning_state AS progressLearningState,
+            pr.recognition_score AS progressRecognitionScore,
+            pr.spelling_score AS progressSpellingScore,
+            pr.recognition_stage AS progressRecognitionStage,
+            pr.spelling_stage AS progressSpellingStage,
+            pr.recognition_correct_count AS progressRecognitionCorrectCount,
+            pr.spelling_correct_count AS progressSpellingCorrectCount,
+            pr.recognition_wrong_count AS progressRecognitionWrongCount,
+            pr.spelling_wrong_count AS progressSpellingWrongCount
+        FROM learning_plan_unit_entry e
+        JOIN learning_plan_unit u
+            ON e.unit_id = u.id AND u.deleted = 0
+        JOIN learning_plan p
+            ON u.plan_id = p.id AND p.deleted = 0
+        LEFT JOIN learning_wordbook_entry w
+            ON e.wordbook_entry_id = w.id AND w.deleted = 0
+        LEFT JOIN learning_word_progress pr
+            ON e.word_progress_id = pr.id AND pr.deleted = 0
+        WHERE e.id = #{unitEntryId}
+          AND u.id = #{unitId}
+          AND p.id = #{planId}
+          AND p.user_id = #{userId}
+          AND e.deleted = 0
+        LIMIT 1
+    </select>
 </mapper>

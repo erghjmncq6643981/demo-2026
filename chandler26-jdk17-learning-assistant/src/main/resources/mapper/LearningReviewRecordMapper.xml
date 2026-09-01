@@ -1,0 +1,13 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "https://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.chandler.learning.agent.learning.infrastructure.mapper.LearningReviewRecordMapper">
+
+    <select id="selectPassedAssessmentTypes" resultType="java.lang.String">
+        SELECT DISTINCT assessment_type
+        FROM learning_review_record
+        WHERE unit_id = #{unitId}
+          AND entry_id = #{entryId}
+          AND check_result = 'correct'
+          AND deleted = 0
+    </select>
+</mapper>

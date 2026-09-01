@@ -618,6 +618,23 @@ public class WordbookService {
     }
 
     /**
+     * 快速更新单词本词条的复习状态（由场景检查等主事务调用，流水与日志由调用方异步发布）。
+     */
+    public ReviewResult.ReviewOutcome completeReviewState(Long entryId, ReviewResult result, LocalDateTime now,
+                                                          LocalDateTime nextReviewTime) {
+        LearningWordbookEntry entry = entryMapper.selectById(entryId);
+        if (entry == null || Boolean.TRUE.equals(entry.getDeleted())) {
+            throw LearningAssistantException.notFound(
+                    LearningErrorCode.ENTRY_NOT_FOUND,
+                    "单词本词条不存在: " + entryId);
+        }
+        ReviewResult.ReviewOutcome outcome = result.apply(entry);
+        entry.completeReview(now, nextReviewTime, outcome.stageAfter(), outcome.masteryAfter(), now);
+        entryMapper.updateById(entry);
+        return outcome;
+    }
+
+    /**
      * 保存一次复习结果，并根据记忆状态计算下一次复习时间。
      */
     public ReviewSubmitResponse submitReview(Long userId, Long entryId, ReviewSubmitRequest request) {

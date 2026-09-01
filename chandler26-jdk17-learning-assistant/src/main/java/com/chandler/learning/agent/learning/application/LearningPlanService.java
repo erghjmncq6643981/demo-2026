@@ -8,6 +8,9 @@ import com.chandler.learning.agent.vocabulary.application.WordbookService;
 import com.chandler.learning.agent.vocabulary.application.VocabularyCatalogQueryService;
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import com.baomidou.mybatisplus.core.conditions.update.LambdaUpdateWrapper;
+import com.baomidou.mybatisplus.core.toolkit.IdWorker;
+import com.chandler.learning.agent.learning.domain.bo.LearningAssessmentContextBO;
+import com.chandler.learning.agent.learning.domain.enums.ReviewResult;
 import com.chandler.learning.agent.ai.chat.application.AgentChatResponse;
 import com.chandler.learning.agent.learning.api.request.LearningAssessmentSubmitRequest;
 import com.chandler.learning.agent.learning.api.response.LearningAssessmentSubmitResponse;
@@ -54,6 +57,10 @@ import org.springframework.util.StringUtils;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.util.ArrayList;
+import java.util.Collection;
+import java.util.Collections;
+import java.util.Comparator;
+import java.util.HashSet;
 import java.util.LinkedHashMap;
 import java.util.LinkedHashSet;
 import java.util.List;
@@ -79,6 +86,7 @@ public class LearningPlanService {
     private final VocabularyCatalogQueryService catalogQueryService;
     private final LearningWordProgressService progressService;
     private final WordbookService wordbookService;
+    private final ReviewSchedulePolicy reviewSchedulePolicy;
     private final AiAsyncTaskService aiAsyncTaskService;
     private final SystemLogService systemLogService;
     private final UserDisplayNameService userDisplayNameService;
@@ -468,27 +476,26 @@ public class LearningPlanService {
 
     /**
      * 提交四选一、跟敲或按含义拼写结果。
+     * 采用 5 合 1 高性能联表查询 + 增量完成数判断 + 答题流水/日志异步化。
      */
     @Transactional(rollbackFor = Exception.class)
     public LearningAssessmentSubmitResponse submitAssessment(Long userId, Long planId, Long unitId,
                                                              LearningAssessmentSubmitRequest request) {
-        LearningPlan plan = requirePlan(userId, planId);
-        LearningPlanUnit unit = requireUnit(plan, unitId);
-        LearningPlanUnitEntry entry = unitEntryMapper.selectOne(new LambdaQueryWrapper<LearningPlanUnitEntry>()
-                .eq(LearningPlanUnitEntry::getId, request.getUnitEntryId())
-                .eq(LearningPlanUnitEntry::getUnitId, unit.getId())
-                .eq(LearningPlanUnitEntry::getDeleted, false)
-                .last(CommonConstants.SQL_LIMIT_ONE));
-        if (entry == null || entry.getWordbookEntryId() == null) {
+        LearningAssessmentContextBO ctx = unitEntryMapper.selectAssessmentContext(
+                userId, planId, unitId, request.getUnitEntryId());
+        if (ctx == null) {
+            throw assessmentInvalid("学习计划或词条不存在");
+        }
+        if (ctx.getWordbookEntryId() == null) {
             throw assessmentInvalid("该词当前仅用于场景展示，提升为核心词后才能参加检查");
         }
         String type = assessmentSupport.normalizeAssessmentType(request.getAssessmentType());
-        if (!ScenePlanConstants.MASTERY_SPELLING.equals(entry.getMasteryRequirement())
+        if (!ScenePlanConstants.MASTERY_SPELLING.equals(ctx.getMasteryRequirement())
                 && !ScenePlanConstants.ASSESSMENT_MEANING_CHOICE.equals(type)) {
             throw assessmentInvalid("该词的掌握要求是认识，不需要拼写检查");
         }
 
-        JsonNode question = assessmentSupport.readTree(entry.getAssessmentJson());
+        JsonNode question = assessmentSupport.readTree(ctx.getAssessmentJson());
         String correctAnswer;
         boolean correct;
         double typingAccuracy = 100D;
@@ -496,9 +503,9 @@ public class LearningPlanService {
             correctAnswer = requiredText(question, "correct_answer", "correctAnswer", "answer");
             correct = assessmentSupport.normalizeAnswer(request.getAnswer()).equals(assessmentSupport.normalizeAnswer(correctAnswer));
         } else {
-            List<String> accepted = assessmentSupport.readStringList(entry.getAcceptedSpellingsJson());
+            List<String> accepted = assessmentSupport.readStringList(ctx.getAcceptedSpellingsJson());
             if (accepted.isEmpty()) {
-                accepted = List.of(entry.getTerm());
+                accepted = List.of(ctx.getTerm());
             }
             correctAnswer = accepted.get(0);
             String answer = assessmentSupport.normalizeSpelling(request.getAnswer());
@@ -506,35 +513,78 @@ public class LearningPlanService {
             typingAccuracy = assessmentSupport.spellingAccuracy(answer, accepted);
         }
 
-        ReviewSubmitRequest reviewRequest = new ReviewSubmitRequest();
-        reviewRequest.setResult(correct
-                ? ReviewConstants.RESULT_REMEMBERED
-                : ReviewConstants.RESULT_FORGOTTEN);
-        reviewRequest.setScore(correct ? ReviewConstants.MAX_MASTERY : ReviewConstants.MIN_MASTERY);
-        reviewRequest.setDurationSeconds(request.getDurationMillis() == null
-                ? null
-                : Math.toIntExact(Math.min(Integer.MAX_VALUE, request.getDurationMillis() / 1000L)));
-        reviewRequest.setWordProgressId(entry.getWordProgressId());
-        reviewRequest.setPlanId(plan.getId());
-        reviewRequest.setUnitId(unit.getId());
-        reviewRequest.setAssessmentType(type);
-        reviewRequest.setQuestionJson(entry.getAssessmentJson());
-        reviewRequest.setAnswerText(request.getAnswer());
-        reviewRequest.setCorrectAnswer(correctAnswer);
-        reviewRequest.setCheckResult(correct
-                ? ScenePlanConstants.CHECK_CORRECT
-                : ScenePlanConstants.CHECK_INCORRECT);
-        reviewRequest.setTypingAccuracy(typingAccuracy);
-        reviewRequest.setHintLevel(request.getHintLevel());
-        reviewRequest.setAttemptCount(request.getAttemptCount());
-        reviewRequest.setDurationMillis(request.getDurationMillis());
-        ReviewSubmitResponse review = wordbookService.submitReview(userId, entry.getWordbookEntryId(), reviewRequest);
+        LocalDateTime now = LocalDateTime.now();
+        ReviewResult result = ReviewResult.of(correct ? ReviewConstants.RESULT_REMEMBERED : ReviewConstants.RESULT_FORGOTTEN);
+
+        int stageBefore = ctx.getWordbookStage() == null ? ReviewConstants.INITIAL_STAGE : ctx.getWordbookStage();
+        int masteryBefore = ctx.getWordbookMastery() == null ? ReviewConstants.INITIAL_MASTERY : ctx.getWordbookMastery();
+        int stageAfter = result.remembered() ? stageBefore + CommonConstants.SEQUENCE_STEP : ReviewConstants.INITIAL_STAGE;
+        int masteryAfter = Math.max(ReviewConstants.MIN_MASTERY, Math.min(ReviewConstants.MAX_MASTERY,
+                masteryBefore + (result.remembered() ? ReviewConstants.REMEMBERED_MASTERY_DELTA : -ReviewConstants.FORGOTTEN_MASTERY_DELTA)));
+
+        LocalDateTime nextReviewTime = reviewSchedulePolicy.nextReviewTime(
+                now, stageAfter, result.remembered(), result.vague());
+        wordbookService.completeReviewState(ctx.getWordbookEntryId(), result, now, nextReviewTime);
+
         LearningWordProgress progress = progressService.recordAssessment(
-                entry.getWordProgressId(), type, correct, review.getNextReviewTime());
-        int completedCoreCount = refreshCompletedCoreCount(unit);
+                ctx.getWordProgressId(), type, correct, nextReviewTime);
+
+        int completedCoreCount = value(ctx.getCompletedCoreCount());
+        if (correct) {
+            List<String> passedList = reviewRecordMapper.selectPassedAssessmentTypes(unitId, ctx.getWordbookEntryId());
+            Set<String> passedSet = new HashSet<>(passedList);
+            boolean wasCompleted = isEntryComplete(ctx.getMasteryRequirement(), passedSet);
+            passedSet.add(type);
+            boolean nowCompleted = isEntryComplete(ctx.getMasteryRequirement(), passedSet);
+            if (!wasCompleted && nowCompleted) {
+                completedCoreCount = completedCoreCount + CommonConstants.SEQUENCE_STEP;
+                LearningPlanUnit unitUpdate = new LearningPlanUnit();
+                unitUpdate.setId(unitId);
+                unitUpdate.setCompletedCoreCount(completedCoreCount);
+                unitUpdate.setUpdateTime(now);
+                unitMapper.updateById(unitUpdate);
+            }
+        }
+
+        LearningReviewRecord record = new LearningReviewRecord();
+        record.setId(IdWorker.getId());
+        record.setCreateBy(userId);
+        record.setUpdateBy(userId);
+        record.setUserId(userId);
+        record.setWordbookId(ctx.getWordbookId());
+        record.setEntryId(ctx.getWordbookEntryId());
+        record.setVocabularyId(null);
+        record.setWordProgressId(ctx.getWordProgressId());
+        record.setPlanId(planId);
+        record.setUnitId(unitId);
+        record.setAssessmentType(type);
+        record.setQuestionJson(ctx.getAssessmentJson());
+        record.setAnswerText(request.getAnswer());
+        record.setCorrectAnswer(correctAnswer);
+        record.setCheckResult(correct ? ScenePlanConstants.CHECK_CORRECT : ScenePlanConstants.CHECK_INCORRECT);
+        record.setTypingAccuracy(typingAccuracy);
+        record.setHintLevel(request.getHintLevel());
+        record.setAttemptCount(request.getAttemptCount());
+        record.setDurationMillis(request.getDurationMillis());
+        record.setNormalizedTerm(ctx.getNormalizedTerm());
+        record.setResult(result.getCode());
+        record.setScore(correct ? ReviewConstants.MAX_MASTERY : ReviewConstants.MIN_MASTERY);
+        record.setReviewStageBefore(stageBefore);
+        record.setReviewStageAfter(stageAfter);
+        record.setMasteryBefore(masteryBefore);
+        record.setMasteryAfter(masteryAfter);
+        record.setNextReviewTime(nextReviewTime);
+        record.setDurationSeconds(request.getDurationMillis() == null ? null : Math.toIntExact(Math.min(Integer.MAX_VALUE, request.getDurationMillis() / 1000L)));
+        record.setCreateTime(now);
+        record.setUpdateTime(now);
+
+        String userName = userDisplayNameService.userName(userId);
+        eventPublisher.publishEvent(new LearningAssessmentSubmittedEvent(
+                userId, record, ctx.getPlanName(), ctx.getUnitTitle(),
+                ctx.getTerm(), result.getLabel(), masteryBefore, masteryAfter, userName));
 
         LearningAssessmentSubmitResponse response = new LearningAssessmentSubmitResponse();
-        response.setUnitEntryId(entry.getId());
+        response.setUnitEntryId(ctx.getUnitEntryId());
         response.setAssessmentType(type);
         response.setCorrect(correct);
         response.setCorrectAnswer(correctAnswer);
@@ -543,9 +593,9 @@ public class LearningPlanService {
         response.setRecognitionScore(progress.getRecognitionScore());
         response.setSpellingScore(progress.getSpellingScore());
         response.setCompletedCoreCount(completedCoreCount);
-        response.setCoreWordCount(unit.getCoreWordCount());
-        response.setUnitReadyToComplete(completedCoreCount >= value(unit.getCoreWordCount()));
-        response.setNextReviewTime(review.getNextReviewTime());
+        response.setCoreWordCount(ctx.getCoreWordCount());
+        response.setUnitReadyToComplete(completedCoreCount >= value(ctx.getCoreWordCount()));
+        response.setNextReviewTime(nextReviewTime);
         return response;
     }
 
@@ -705,27 +755,31 @@ public class LearningPlanService {
         return Math.max(ScenePlanConstants.MIN_CORE_WORDS, target);
     }
 
+    private boolean isEntryComplete(String masteryRequirement, Set<String> passed) {
+        boolean meaningPassed = passed.contains(ScenePlanConstants.ASSESSMENT_MEANING_CHOICE);
+        boolean spellingPassed = !ScenePlanConstants.MASTERY_SPELLING.equals(masteryRequirement)
+                || (passed.contains(ScenePlanConstants.ASSESSMENT_COPY_TYPING)
+                && passed.contains(ScenePlanConstants.ASSESSMENT_MEANING_SPELLING));
+        return meaningPassed && spellingPassed;
+    }
+
     private int refreshCompletedCoreCount(LearningPlanUnit unit) {
         List<LearningPlanUnitEntry> coreEntries = unitEntryMapper.selectList(
                 new LambdaQueryWrapper<LearningPlanUnitEntry>()
                         .eq(LearningPlanUnitEntry::getUnitId, unit.getId())
                         .eq(LearningPlanUnitEntry::getTier, ScenePlanConstants.TIER_CORE)
                         .eq(LearningPlanUnitEntry::getDeleted, false));
-        List<LearningReviewRecord> records = reviewRecordMapper.selectList(new LambdaQueryWrapper<LearningReviewRecord>()
-                .eq(LearningReviewRecord::getUnitId, unit.getId())
-                .eq(LearningReviewRecord::getCheckResult, ScenePlanConstants.CHECK_CORRECT)
-                .eq(LearningReviewRecord::getDeleted, false));
-        Map<Long, Set<String>> passedTypes = records.stream()
-                .collect(Collectors.groupingBy(LearningReviewRecord::getEntryId,
-                        Collectors.mapping(LearningReviewRecord::getAssessmentType, Collectors.toSet())));
+        if (coreEntries.isEmpty()) {
+            unit.setCompletedCoreCount(0);
+            return 0;
+        }
         int completed = CommonConstants.ZERO;
         for (LearningPlanUnitEntry entry : coreEntries) {
-            Set<String> passed = passedTypes.getOrDefault(entry.getWordbookEntryId(), Set.of());
-            boolean meaningPassed = passed.contains(ScenePlanConstants.ASSESSMENT_MEANING_CHOICE);
-            boolean spellingPassed = !ScenePlanConstants.MASTERY_SPELLING.equals(entry.getMasteryRequirement())
-                    || (passed.contains(ScenePlanConstants.ASSESSMENT_COPY_TYPING)
-                    && passed.contains(ScenePlanConstants.ASSESSMENT_MEANING_SPELLING));
-            if (meaningPassed && spellingPassed) {
+            if (entry.getWordbookEntryId() == null) {
+                continue;
+            }
+            List<String> passed = reviewRecordMapper.selectPassedAssessmentTypes(unit.getId(), entry.getWordbookEntryId());
+            if (isEntryComplete(entry.getMasteryRequirement(), new HashSet<>(passed))) {
                 completed++;
             }
         }

@@ -1,9 +1,35 @@
 export function createSpeechFeature(ctx) {
   const { state, elements, request, toast, logEvent, clampNumber, renderLearningConfigSummary } = ctx
 
+  const audioCache = new Map()
+  const MAX_AUDIO_CACHE_SIZE = 120
+
   function pronunciationUrl(text, type = 'us') {
     const encoded = encodeURIComponent(text)
     return `https://dict.youdao.com/dictvoice?audio=${encoded}&type=${type === 'uk' ? 1 : 2}`
+  }
+
+  function getCachedAudio(content, voiceType = 'us') {
+    const key = `${voiceType}:${content.toLowerCase()}`
+    let audio = audioCache.get(key)
+    if (!audio && typeof Audio !== 'undefined') {
+      try {
+        audio = new Audio(pronunciationUrl(content, voiceType))
+        audio.preload = 'auto'
+        if (audioCache.size >= MAX_AUDIO_CACHE_SIZE) {
+          const oldestKey = audioCache.keys().next().value
+          audioCache.delete(oldestKey)
+        }
+        audioCache.set(key, audio)
+      } catch (_) {}
+    }
+    return audio
+  }
+
+  function preloadAudio(text, voiceType = currentVoiceType()) {
+    const content = String(text || '').trim()
+    if (!content) return
+    getCachedAudio(content, voiceType)
   }
 
   function playRemoteAudio(content, fallback) {
@@ -11,17 +37,65 @@ export function createSpeechFeature(ctx) {
   }
 
   function playRemoteAudioByType(content, voiceType = 'us', fallback) {
-    const audio = new Audio(pronunciationUrl(content, voiceType))
-    audio.preload = 'auto'
-    audio.play()
-      .then(() => toast('正在播放发音'))
-      .catch(() => {
-        if (fallback) {
-          fallback()
-          return
-        }
+    const audio = getCachedAudio(content, voiceType)
+    if (!audio) {
+      if (fallback) fallback()
+      else toast('暂无可播放音频')
+      return
+    }
+
+    let fallbackTriggered = false
+    const triggerFallback = () => {
+      if (fallbackTriggered) return
+      fallbackTriggered = true
+      try {
+        audio.pause()
+      } catch (_) {}
+      if (fallback) {
+        fallback()
+      } else {
         toast('浏览器阻止了音频播放，请检查站点声音权限')
-      })
+      }
+    }
+
+    // 智能毫秒级超时降级守护（180ms 内未出声立即切本地原生 TTS）
+    let timeoutId = null
+    if (fallback) {
+      timeoutId = window.setTimeout(() => {
+        if (audio.paused || audio.currentTime === 0) {
+          triggerFallback()
+        }
+      }, 180)
+    }
+
+    const onPlaying = () => {
+      if (timeoutId) {
+        window.clearTimeout(timeoutId)
+        timeoutId = null
+      }
+      toast('正在播放发音')
+      audio.removeEventListener('playing', onPlaying)
+    }
+
+    audio.addEventListener('playing', onPlaying, { once: true })
+
+    try {
+      audio.currentTime = 0
+      audio.play()
+        .catch(() => {
+          if (timeoutId) {
+            window.clearTimeout(timeoutId)
+            timeoutId = null
+          }
+          triggerFallback()
+        })
+    } catch (_) {
+      if (timeoutId) {
+        window.clearTimeout(timeoutId)
+        timeoutId = null
+      }
+      triggerFallback()
+    }
   }
 
   function speak(text, voiceType = currentVoiceType()) {
@@ -256,6 +330,7 @@ export function createSpeechFeature(ctx) {
 
   return {
     pronunciationUrl,
+    preloadAudio,
     playRemoteAudio,
     playRemoteAudioByType,
     speak,

@@ -237,7 +237,8 @@ CREATE TABLE IF NOT EXISTS learning_review_record (
     KEY idx_learning_review_record_user_deleted_time (user_id, deleted, create_time),
     KEY idx_learning_review_record_entry (entry_id, create_time),
     KEY idx_learning_review_record_term (normalized_term),
-    KEY idx_learning_review_record_progress_type (word_progress_id, assessment_type, create_time)
+    KEY idx_learning_review_record_progress_type (word_progress_id, assessment_type, create_time),
+    KEY idx_learning_review_record_unit_entry (unit_id, entry_id, check_result, deleted)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci COMMENT='逐词学习与复习检查记录';
 
 CREATE TABLE IF NOT EXISTS learning_user_preference (

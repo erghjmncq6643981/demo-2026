@@ -78,7 +78,11 @@ export function bindAppEvents(ctx) {
     resumeScenePlan,
     cancelScenePlan,
     saveSceneNote,
+    flushSceneNoteSave,
     handleSceneNoteInput,
+    handleSceneNoteKeydown,
+    handleSceneNoteCompositionStart,
+    handleSceneNoteCompositionEnd,
     setSceneNoteMode,
     toggleSceneNotePanel,
     openSceneNotePanel,
@@ -336,6 +340,10 @@ elements.sceneNoteCloseBtn?.addEventListener('click', closeSceneNotePanel)
 elements.sceneNoteEditBtn?.addEventListener('click', () => setSceneNoteMode('edit'))
 elements.sceneNotePreviewBtn?.addEventListener('click', () => setSceneNoteMode('preview'))
 elements.sceneNoteInput?.addEventListener('input', handleSceneNoteInput)
+elements.sceneNoteInput?.addEventListener('compositionstart', handleSceneNoteCompositionStart)
+elements.sceneNoteInput?.addEventListener('compositionend', handleSceneNoteCompositionEnd)
+elements.sceneNoteInput?.addEventListener('blur', flushSceneNoteSave)
+elements.sceneNoteInput?.addEventListener('keydown', handleSceneNoteKeydown)
 elements.sceneNoteSaveBtn?.addEventListener('click', saveSceneNote)
 elements.sceneNoteModalCloseBtn?.addEventListener('click', closeSceneNoteModal)
 elements.sceneNoteModalCancelBtn?.addEventListener('click', closeSceneNoteModal)

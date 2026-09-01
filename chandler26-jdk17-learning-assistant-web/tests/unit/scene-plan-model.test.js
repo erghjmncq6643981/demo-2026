@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import { localDateKey, number } from '../../public/src/features/learning/scene-plan/model.js'
+import { createUnitList } from '../../public/src/features/learning/scene-plan/unit-list.js'
 import { parsePreviewMarkdown, suggestedSplitCorrection } from '../../public/src/features/learning/scene-plan/markdown-parser.js'
 import { calendarDates, startOfWeek } from '../../public/src/features/learning/scene-plan/calendar-model.js'
 import { isWordComplete, nextAssessment, pendingChallengeWords } from '../../public/src/features/learning/scene-plan/challenge-model.js'
@@ -71,5 +72,54 @@ describe('学习日历规则', () => {
 
   it('月视角给出稳定的六周网格', () => {
     expect(calendarDates('month', '2026-08-17')).toHaveLength(42)
+  })
+
+  it('合并日历数据时保留已加载的词汇详情，不被概要中的 null 覆盖', () => {
+    const unitList = createUnitList({
+      state: {},
+      api: {},
+      sameId: (a, b) => String(a) === String(b),
+    })
+
+    const plan = {
+      id: '100',
+      units: [
+        {
+          id: '200',
+          unitNo: 1,
+          status: 'ready',
+          words: [{ id: '1', term: 'apple', tier: 'core' }],
+          relatedWords: [{ id: '10', term: 'fruit' }],
+          learningText: 'This is an apple.',
+        },
+      ],
+    }
+
+    const calendarData = [
+      {
+        date: '2026-08-31',
+        units: [
+          {
+            id: '200',
+            unitNo: 1,
+            status: 'ready',
+            coreWordCount: 1,
+            completedCoreCount: 0,
+            words: null,
+            relatedWords: null,
+            learningText: null,
+          },
+        ],
+      },
+    ]
+
+    unitList.mergeCalendarUnits(plan, calendarData)
+
+    expect(plan.units[0].words).toHaveLength(1)
+    expect(plan.units[0].words[0].term).toBe('apple')
+    expect(plan.units[0].relatedWords).toHaveLength(1)
+    expect(plan.units[0].relatedWords[0].term).toBe('fruit')
+    expect(plan.units[0].learningText).toBe('This is an apple.')
+    expect(plan.units[0].coreWordCount).toBe(1)
   })
 })
