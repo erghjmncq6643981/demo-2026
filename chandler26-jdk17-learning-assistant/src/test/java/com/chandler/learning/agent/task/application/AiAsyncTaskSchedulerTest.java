@@ -140,6 +140,21 @@ class AiAsyncTaskSchedulerTest {
         verify(dispatcher).dispatch(argThatTask(103L));
     }
 
+    @Test
+    @DisplayName("应用启动时自动重置 running 任务与步骤并立即触发调度")
+    void recoversRunningTasksAndStepsOnApplicationReady() {
+        when(executionService.recoverAllRunning(any())).thenReturn(2);
+        when(taskMapper.update(any(), any())).thenReturn(1);
+        when(taskMapper.selectList(any(Wrapper.class)))
+                .thenReturn(List.of())
+                .thenReturn(List.of());
+
+        scheduler.onApplicationReady();
+
+        verify(executionService).recoverAllRunning(any());
+        verify(taskMapper, org.mockito.Mockito.atLeastOnce()).update(any(), any());
+    }
+
     private AiAsyncTask createTask(Long id, Long planId, String date) {
         AiAsyncTask task = new AiAsyncTask();
         task.setId(id);

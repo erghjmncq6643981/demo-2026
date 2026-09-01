@@ -3,7 +3,9 @@ package com.chandler.learning.agent.task.application;
 import com.chandler.learning.agent.task.application.contract.AiTaskStepDefinition;
 import com.chandler.learning.agent.task.domain.entity.AiAsyncTaskStep;
 import com.chandler.learning.agent.task.infrastructure.mapper.AiAsyncTaskAttemptMapper;
+import com.chandler.learning.agent.task.infrastructure.mapper.AiAsyncTaskMapper;
 import com.chandler.learning.agent.task.infrastructure.mapper.AiAsyncTaskStepMapper;
+import com.fasterxml.jackson.databind.ObjectMapper;
 import org.junit.jupiter.api.Test;
 import org.mockito.ArgumentCaptor;
 
@@ -20,8 +22,9 @@ class AiTaskExecutionServiceTest {
     @Test
     void initializesStableStepsWithOneBatchInsert() {
         AiAsyncTaskStepMapper stepMapper = mock(AiAsyncTaskStepMapper.class);
-        AiTaskExecutionService service = new AiTaskExecutionService(stepMapper, mock(AiAsyncTaskAttemptMapper.class),
-                Executors.newSingleThreadScheduledExecutor());
+        AiTaskExecutionService service = new AiTaskExecutionService(
+                stepMapper, mock(AiAsyncTaskAttemptMapper.class), mock(AiAsyncTaskMapper.class),
+                new ObjectMapper(), Executors.newSingleThreadScheduledExecutor());
 
         service.initialize(100L, 200L, List.of(
                 new AiTaskStepDefinition("generate", "生成材料", 1, 3),

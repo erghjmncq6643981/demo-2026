@@ -7,6 +7,7 @@ import com.chandler.learning.agent.vocabulary.domain.entity.LearningWordProgress
 import com.chandler.learning.agent.vocabulary.domain.entity.VocabularyCatalogEntry;
 import com.chandler.learning.agent.vocabulary.domain.entity.VocabularyCatalogEntryAnalysis;
 import com.chandler.learning.agent.learning.infrastructure.mapper.LearningPlanUnitEntryMapper;
+import com.chandler.learning.agent.task.application.AiTaskExecutionService;
 import com.chandler.learning.agent.vocabulary.application.LearningWordProgressService;
 import com.chandler.learning.agent.vocabulary.application.VocabularyCatalogAnalysisService;
 import com.chandler.learning.agent.vocabulary.application.VocabularyCatalogQueryService;
@@ -27,7 +28,7 @@ import java.util.stream.Collectors;
 /**
  * 学习计划选词策略。
  * <p>
- * 优先使用公共词本预分析得到的语义分组，把相关词放进同一批候选；同时排除已编排词和已掌握词。
+ * 优先使用公共词本预分析得到的语义分组，把相关词放进同一批候选；同时排除已编排词、已被其他活动任务锁定的词和已掌握词。
  */
 @Component
 @RequiredArgsConstructor
@@ -37,22 +38,34 @@ public class LearningPlanVocabularySelector {
     private final VocabularyCatalogQueryService catalogQueryService;
     private final LearningWordProgressService progressService;
     private final VocabularyCatalogAnalysisService catalogAnalysisService;
+    private final AiTaskExecutionService executionService;
 
     /** 选择尚未被任何场景编排的新核心词候选。 */
     public List<VocabularyCatalogEntry> nextCandidates(LearningPlan plan, int requestedLimit) {
-        return nextCandidates(plan, requestedLimit, List.of());
+        return nextCandidates(plan, requestedLimit, List.of(), null);
     }
 
     /** 根据待复习词的语义分组优先选择相关的新词。 */
     public List<VocabularyCatalogEntry> nextCandidates(LearningPlan plan, int requestedLimit,
                                                        List<VocabularyCatalogEntry> reviewWords) {
-        Set<Long> arranged = unitEntryMapper.selectList(new LambdaQueryWrapper<LearningPlanUnitEntry>()
+        return nextCandidates(plan, requestedLimit, reviewWords, null);
+    }
+
+    /** 根据待复习词的语义分组优先选择相关的新词，并排除当前其他活动任务锁定的词。 */
+    public List<VocabularyCatalogEntry> nextCandidates(LearningPlan plan, int requestedLimit,
+                                                       List<VocabularyCatalogEntry> reviewWords,
+                                                       Long currentTaskId) {
+        Set<Long> arranged = new HashSet<>(unitEntryMapper.selectList(new LambdaQueryWrapper<LearningPlanUnitEntry>()
                         .eq(LearningPlanUnitEntry::getPlanId, plan.getId())
                         .isNotNull(LearningPlanUnitEntry::getCatalogEntryId)
                         .eq(LearningPlanUnitEntry::getDeleted, false))
                 .stream()
                 .map(LearningPlanUnitEntry::getCatalogEntryId)
-                .collect(Collectors.toSet());
+                .collect(Collectors.toSet()));
+        if (executionService != null) {
+            Set<Long> lockedByOtherTasks = executionService.findLockedCatalogEntryIds(plan.getId(), currentTaskId);
+            arranged.addAll(lockedByOtherTasks);
+        }
         List<VocabularyCatalogEntry> all = catalogQueryService.listPublishedEntries(plan.getCatalogVersionId());
         int candidateLimit = Math.max(CommonConstants.SEQUENCE_STEP, requestedLimit);
         List<VocabularyCatalogEntryAnalysis> analyses = catalogAnalysisService.readyEntries(plan.getCatalogVersionId());

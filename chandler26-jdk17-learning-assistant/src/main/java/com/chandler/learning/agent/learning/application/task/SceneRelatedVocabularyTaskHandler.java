@@ -40,11 +40,16 @@ public class SceneRelatedVocabularyTaskHandler implements AiTaskHandler {
     @Override
     public void execute(AiAsyncTask task, Map<String, Object> payload) {
         Long modelConfigId = AiTaskPayload.longValue(payload, "modelConfigId");
+        Long unitId = task.getUnitId() != null ? task.getUnitId() : AiTaskPayload.longValue(payload, "unitId");
+        Long planId = task.getPlanId() != null ? task.getPlanId() : AiTaskPayload.longValue(payload, "planId");
         int targetCount = AiTaskPayload.intValue(payload, "targetCount",
                 LearningSceneRelatedVocabularyService.DEFAULT_TARGET_COUNT);
         executionService.execute(task.getId(), "generate_related_words", task.getOperatorUserId(), modelConfigId,
-                () -> relatedVocabularyService.generate(task.getOwnerUserId(), task.getPlanId(), task.getUnitId(),
+                () -> relatedVocabularyService.generate(task.getOwnerUserId(), planId, unitId,
                         modelConfigId, targetCount));
+        if (unitId != null) {
+            taskService.bindBusiness(task.getId(), "scene_unit", String.valueOf(unitId));
+        }
         taskService.updateProgress(task.getId(), targetCount, targetCount, 0);
         taskService.complete(task.getId(), AiTaskConstants.STATUS_COMPLETED, null);
     }

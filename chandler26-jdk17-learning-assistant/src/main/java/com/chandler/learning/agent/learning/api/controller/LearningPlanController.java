@@ -14,6 +14,7 @@ import com.chandler.learning.agent.task.api.request.AiAsyncTaskScheduleRequest;
 import com.chandler.learning.agent.identity.domain.entity.LearningUser;
 import com.chandler.learning.agent.vocabulary.api.request.VocabularyCardGenerationRequest;
 import com.chandler.learning.agent.vocabulary.api.response.VocabularyCardGenerationResponse;
+import com.chandler.learning.agent.learning.domain.entity.LearningPlanUnit;
 import com.chandler.learning.agent.security.CurrentUserContext;
 import com.chandler.learning.agent.learning.application.LearningPlanService;
 import com.chandler.learning.agent.task.application.AiAsyncTaskService;
@@ -24,6 +25,7 @@ import com.chandler.learning.agent.config.web.annotation.ApiAccessLog;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import org.springframework.format.annotation.DateTimeFormat;
+import org.springframework.util.StringUtils;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
@@ -259,7 +261,12 @@ public class LearningPlanController {
             @PathVariable Long unitId,
             @RequestBody(required = false) Map<String, Object> request) {
         LearningUser user = currentUserContext.requireUser();
-        learningPlanService.detail(user.getId(), planId);
+        LearningPlanResponse plan = learningPlanService.detail(user.getId(), planId);
+        List<LearningPlanUnit> units = learningPlanService.findUnitsByIds(planId, List.of(unitId));
+        String unitTitle = (units != null && !units.isEmpty() && StringUtils.hasText(units.get(0).getTitle()))
+                ? units.get(0).getTitle() : ("场景单元#" + unitId);
+        String taskName = "《" + plan.getName() + "》" + unitTitle + " · 补充相关词汇";
+
         String idempotencyKey = "scene_related_vocabulary:" + planId + ":" + unitId;
         var active = aiAsyncTaskService.findActiveByKey(user.getId(),
                 com.chandler.learning.agent.task.domain.constant.AiTaskConstants.TYPE_SCENE_RELATED_VOCABULARY,
@@ -267,9 +274,15 @@ public class LearningPlanController {
         if (active != null) return aiAsyncTaskService.toResponse(active);
         Map<String, Object> payload = request == null ? new HashMap<>() : new HashMap<>(request);
         payload.putIfAbsent("targetCount", 50);
+        payload.put("planName", plan.getName());
+        payload.put("unitTitle", unitTitle);
+        payload.put("unitId", unitId);
+        if (units != null && !units.isEmpty() && units.get(0).getRecommendedDate() != null) {
+            payload.put("recommendedDate", units.get(0).getRecommendedDate().toString());
+        }
         var task = aiAsyncTaskService.create(user.getId(),
                 com.chandler.learning.agent.task.domain.constant.AiTaskConstants.TYPE_SCENE_RELATED_VOCABULARY,
-                 "补充场景相关词汇", planId, unitId, null,
+                 taskName, planId, unitId, null,
                  com.chandler.learning.agent.task.domain.constant.AiTaskConstants.EXECUTION_IMMEDIATE,
                  null, null, 50, idempotencyKey, payload);
         return aiAsyncTaskService.toResponse(task);

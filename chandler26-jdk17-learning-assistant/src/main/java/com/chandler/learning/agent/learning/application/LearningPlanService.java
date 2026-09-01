@@ -44,6 +44,9 @@ import com.chandler.learning.agent.common.constant.CommonConstants;
 import com.chandler.learning.agent.common.exception.LearningErrorCode;
 import com.chandler.learning.agent.learning.domain.constant.ScenePlanConstants;
 import com.chandler.learning.agent.vocabulary.domain.constant.ReviewConstants;
+import com.chandler.learning.agent.learning.domain.bo.PreparedUnitGroup;
+import com.chandler.learning.agent.learning.domain.bo.PreparedVocabularyBatch;
+import com.chandler.learning.agent.task.application.AiTaskExecutionService;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import lombok.RequiredArgsConstructor;
@@ -88,6 +91,7 @@ public class LearningPlanService {
     private final WordbookService wordbookService;
     private final ReviewSchedulePolicy reviewSchedulePolicy;
     private final AiAsyncTaskService aiAsyncTaskService;
+    private final AiTaskExecutionService executionService;
     private final SystemLogService systemLogService;
     private final UserDisplayNameService userDisplayNameService;
     private final LearningPlanResponseAssembler responseAssembler;
@@ -197,6 +201,30 @@ public class LearningPlanService {
         return responseAssembler.toUnitResponse(requireUnit(plan, unitId));
     }
 
+    /** 查询指定计划在某一建议学习日期的所有场景单元实体。 */
+    public List<LearningPlanUnit> findUnitsByDate(Long planId, LocalDate recommendedDate) {
+        if (planId == null || recommendedDate == null) {
+            return List.of();
+        }
+        return unitMapper.selectList(new LambdaQueryWrapper<LearningPlanUnit>()
+                .eq(LearningPlanUnit::getPlanId, planId)
+                .eq(LearningPlanUnit::getRecommendedDate, recommendedDate)
+                .eq(LearningPlanUnit::getDeleted, false)
+                .orderByAsc(LearningPlanUnit::getUnitNo));
+    }
+
+    /** 按单元 ID 列表查询场景单元实体。 */
+    public List<LearningPlanUnit> findUnitsByIds(Long planId, List<Long> unitIds) {
+        if (planId == null || unitIds == null || unitIds.isEmpty()) {
+            return List.of();
+        }
+        return unitMapper.selectList(new LambdaQueryWrapper<LearningPlanUnit>()
+                .eq(LearningPlanUnit::getPlanId, planId)
+                .in(LearningPlanUnit::getId, unitIds)
+                .eq(LearningPlanUnit::getDeleted, false)
+                .orderByAsc(LearningPlanUnit::getUnitNo));
+    }
+
     /**
      * 查询计划在指定日期范围内的日历汇总，过去日期也会返回，便于查看遗漏任务。
      */
@@ -213,25 +241,10 @@ public class LearningPlanService {
         return generateNextUnit(userId, planId, modelConfigId, recommendedDate, null);
     }
 
-    /** 异步生成入口在每篇材料边界检查取消状态，并复用计划级生成租约。 */
+    /** 异步生成入口在每篇材料边界检查取消状态，并委托 3 步流水线逻辑。 */
     public List<LearningPlanUnitResponse> generateNextUnit(Long userId, Long planId, Long modelConfigId,
                                                           LocalDate recommendedDate, Long asyncTaskId) {
-        requirePlan(userId, planId);
-        ensureAsyncTaskActive(asyncTaskId);
-        String lockToken = UUID.randomUUID().toString();
-        LocalDateTime now = LocalDateTime.now();
-        int claimed = planMapper.claimGenerationLock(planId, lockToken, now,
-                now.plusMinutes(ScenePlanConstants.GENERATION_LOCK_MINUTES));
-        if (claimed == CommonConstants.ZERO) {
-            throw LearningAssistantException.of(
-                    LearningErrorCode.LEARNING_PLAN_GENERATION_IN_PROGRESS);
-        }
-        try {
-            return generateNextUnitWithLock(userId, planId, modelConfigId, recommendedDate,
-                    asyncTaskId, lockToken);
-        } finally {
-            planMapper.releaseGenerationLock(planId, lockToken);
-        }
+        return generateMaterialForTask(userId, planId, modelConfigId, recommendedDate, asyncTaskId);
     }
 
     /**
@@ -334,16 +347,15 @@ public class LearningPlanService {
                 userId, unit, entries, aiResponse, scene, words)));
     }
 
-    private List<LearningPlanUnitResponse> generateNextUnitWithLock(Long userId, Long planId, Long modelConfigId,
-                                                                   LocalDate recommendedDate, Long asyncTaskId,
-                                                                   String lockToken) {
+    /** 步骤 1：加极短事务锁选出词组，写入步骤 Checkpoint 锁定并立即释放锁（< 5ms）。 */
+    public PreparedVocabularyBatch prepareVocabularyForTask(Long userId, Long planId,
+                                                           LocalDate recommendedDate, Long taskId) {
         LearningPlan plan = requirePlan(userId, planId);
         if (ScenePlanConstants.STATUS_COMPLETED.equals(plan.getStatus())) {
             throw LearningAssistantException.badRequest(
                     LearningErrorCode.LEARNING_PLAN_COMPLETED,
                     "学习计划已经完成");
         }
-
         LocalDate today = LocalDate.now();
         if (plan.getStartTime() != null && today.isBefore(plan.getStartTime().toLocalDate())) {
             throw LearningAssistantException.badRequest(
@@ -357,36 +369,104 @@ public class LearningPlanService {
         }
 
         LocalDate resolvedRecommendedDate = resolveRecommendedDate(plan, recommendedDate, today);
-        int dailyTarget = targetWordCount(plan);
-        List<VocabularyCatalogEntry> reviewWords = vocabularySelector.pendingReviewWords(plan, dailyTarget);
-        List<VocabularyCatalogEntry> candidates = vocabularySelector.nextCandidates(plan, dailyTarget, reviewWords);
-        if (candidates.isEmpty()) {
-            if (hasIncompleteUnit(plan.getId())) {
-                throw LearningAssistantException.badRequest(
-                        LearningErrorCode.LEARNING_PLAN_STATE_ERROR,
-                        "词表中的词已经全部安排到场景中，请完成已生成的待学习场景");
-            }
-            markPlanCompleted(plan);
-            throw LearningAssistantException.badRequest(
-                    LearningErrorCode.LEARNING_PLAN_COMPLETED,
-                    "词表中的词已经全部安排到场景中");
+        String lockToken = UUID.randomUUID().toString();
+        LocalDateTime now = LocalDateTime.now();
+        int claimed = planMapper.claimGenerationLock(planId, lockToken, now,
+                now.plusMinutes(ScenePlanConstants.GENERATION_LOCK_MINUTES));
+        if (claimed == CommonConstants.ZERO) {
+            throw LearningAssistantException.of(
+                    LearningErrorCode.LEARNING_PLAN_GENERATION_IN_PROGRESS);
         }
-        int totalToGenerate = Math.min(dailyTarget, candidates.size());
+        try {
+            int dailyTarget = targetWordCount(plan);
+            List<VocabularyCatalogEntry> reviewWords = vocabularySelector.pendingReviewWords(plan, dailyTarget);
+            List<VocabularyCatalogEntry> candidates = vocabularySelector.nextCandidates(plan, dailyTarget, reviewWords, taskId);
+            if (candidates.isEmpty()) {
+                if (hasIncompleteUnit(plan.getId())) {
+                    throw LearningAssistantException.badRequest(
+                            LearningErrorCode.LEARNING_PLAN_STATE_ERROR,
+                            "词表中的词已经全部安排到场景中，请完成已生成的待学习场景");
+                }
+                markPlanCompleted(plan);
+                throw LearningAssistantException.badRequest(
+                        LearningErrorCode.LEARNING_PLAN_COMPLETED,
+                        "词表中的词已经全部安排到场景中");
+            }
+            int totalToGenerate = Math.min(dailyTarget, candidates.size());
+            List<Integer> materialWordCounts = splitMaterialWordCounts(totalToGenerate);
+            List<PreparedUnitGroup> groups = new ArrayList<>();
+            int candidateOffset = 0;
+            for (int i = 0; i < materialWordCounts.size(); i++) {
+                int batchSize = materialWordCounts.get(i);
+                List<Long> candidateIds = candidates.subList(candidateOffset, candidateOffset + batchSize)
+                        .stream().map(VocabularyCatalogEntry::getId).toList();
+                int reviewStart = reviewWords.size() * i / materialWordCounts.size();
+                int reviewEnd = reviewWords.size() * (i + 1) / materialWordCounts.size();
+                List<Long> reviewIds = reviewWords.subList(reviewStart, reviewEnd)
+                        .stream().map(VocabularyCatalogEntry::getId).toList();
+                groups.add(new PreparedUnitGroup(i, candidateIds, reviewIds, batchSize));
+                candidateOffset += batchSize;
+            }
+            PreparedVocabularyBatch batch = new PreparedVocabularyBatch(planId, resolvedRecommendedDate,
+                    totalToGenerate, groups);
+            if (taskId != null) {
+                executionService.saveStepCheckpoint(taskId, "prepare_vocabulary", batch);
+            }
+            return batch;
+        } finally {
+            planMapper.releaseGenerationLock(planId, lockToken);
+        }
+    }
+
+    /** 步骤 2：读取 Checkpoint 词组（若有冲突自动重选），无锁调用 AI 撰写故事并正式落库场景材料。 */
+    public List<LearningPlanUnitResponse> generateMaterialForTask(Long userId, Long planId,
+                                                                 Long modelConfigId,
+                                                                 LocalDate recommendedDate,
+                                                                 Long taskId) {
+        LearningPlan plan = requirePlan(userId, planId);
+        PreparedVocabularyBatch batch = null;
+        if (taskId != null) {
+            batch = executionService.getStepCheckpoint(taskId, "prepare_vocabulary", PreparedVocabularyBatch.class);
+        }
+        if (batch == null) {
+            batch = prepareVocabularyForTask(userId, planId, recommendedDate, taskId);
+        } else {
+            // 校验 Checkpoint 中的词条是否已被其他已落库场景占用
+            Set<Long> arrangedInDb = unitEntryMapper.selectList(new LambdaQueryWrapper<LearningPlanUnitEntry>()
+                            .eq(LearningPlanUnitEntry::getPlanId, planId)
+                            .isNotNull(LearningPlanUnitEntry::getCatalogEntryId)
+                            .eq(LearningPlanUnitEntry::getDeleted, false))
+                    .stream().map(LearningPlanUnitEntry::getCatalogEntryId).collect(Collectors.toSet());
+            boolean conflict = batch.allCandidateEntryIds().stream().anyMatch(arrangedInDb::contains);
+            if (conflict) {
+                log.info("检测到任务检查点中的词条已被其他场景占用，自动重新分配词组 taskId={} planId={}", taskId, planId);
+                batch = prepareVocabularyForTask(userId, planId, recommendedDate, taskId);
+            }
+        }
+
+        LocalDate today = LocalDate.now();
+        LocalDate resolvedRecommendedDate = batch.getRecommendedDate() != null
+                ? batch.getRecommendedDate()
+                : resolveRecommendedDate(plan, recommendedDate, today);
+
+        List<Long> allEntryIds = new ArrayList<>(batch.allCandidateEntryIds());
+        for (PreparedUnitGroup group : batch.getUnitGroups()) {
+            if (group.getReviewEntryIds() != null) {
+                allEntryIds.addAll(group.getReviewEntryIds());
+            }
+        }
+        Map<Long, VocabularyCatalogEntry> entryMap = catalogQueryService.findEntries(allEntryIds)
+                .stream().collect(Collectors.toMap(VocabularyCatalogEntry::getId, e -> e, (a, b) -> a));
+
         List<LearningPlanUnitResponse> generatedUnits = new ArrayList<>();
-        int candidateOffset = 0;
-        List<Integer> materialWordCounts = splitMaterialWordCounts(totalToGenerate);
-        for (int materialIndex = 0; materialIndex < materialWordCounts.size(); materialIndex++) {
-            ensureAsyncTaskActive(asyncTaskId);
-            renewGenerationLock(planId, lockToken);
-            Integer batchSize = materialWordCounts.get(materialIndex);
-            List<VocabularyCatalogEntry> batch = new ArrayList<>(
-                    candidates.subList(candidateOffset, candidateOffset + batchSize));
-            int reviewStart = reviewWords.size() * materialIndex / materialWordCounts.size();
-            int reviewEnd = reviewWords.size() * (materialIndex + 1) / materialWordCounts.size();
-            List<VocabularyCatalogEntry> reviewBatch = reviewWords.subList(reviewStart, reviewEnd);
+        for (PreparedUnitGroup group : batch.getUnitGroups()) {
+            ensureAsyncTaskActive(taskId);
+            List<VocabularyCatalogEntry> candidates = group.getCandidateEntryIds().stream()
+                    .map(entryMap::get).filter(Objects::nonNull).toList();
+            List<VocabularyCatalogEntry> reviewWords = group.getReviewEntryIds() == null ? List.of()
+                    : group.getReviewEntryIds().stream().map(entryMap::get).filter(Objects::nonNull).toList();
             generatedUnits.add(generateSingleUnit(userId, plan, modelConfigId, resolvedRecommendedDate,
-                    today, batch, batchSize, reviewBatch, asyncTaskId));
-            candidateOffset += batchSize;
+                    today, candidates, group.getTargetCount(), reviewWords, taskId));
         }
         return List.copyOf(generatedUnits);
     }

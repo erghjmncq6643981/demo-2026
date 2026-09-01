@@ -4,6 +4,7 @@ import com.chandler.learning.agent.learning.api.response.LearningPlanResponse;
 import com.chandler.learning.agent.learning.api.response.LearningPlanUnitResponse;
 import com.chandler.learning.agent.learning.application.LearningPlanService;
 import com.chandler.learning.agent.learning.application.LearningSceneRelatedVocabularyService;
+import com.chandler.learning.agent.learning.domain.entity.LearningPlanUnit;
 import com.chandler.learning.agent.task.domain.constant.AiTaskConstants;
 import com.chandler.learning.agent.task.application.AiAsyncTaskService;
 import com.chandler.learning.agent.task.application.AiTaskExecutionService;
@@ -27,7 +28,6 @@ public class SceneMaterialTaskHandler implements AiTaskHandler {
     private static final String PREPARE = "prepare_vocabulary";
     private static final String MATERIAL = "generate_material";
     private static final String RELATED = "generate_related_words";
-    private static final String PUBLISH = "publish_material";
 
     private final LearningPlanService planService;
     private final LearningSceneRelatedVocabularyService relatedVocabularyService;
@@ -40,14 +40,13 @@ public class SceneMaterialTaskHandler implements AiTaskHandler {
         return AiTaskType.SCENE_MATERIAL;
     }
 
-    /** 定义任务的执行步骤。 */
+    /** 定义任务的执行步骤（3 步极速流水线）。 */
     @Override
     public List<AiTaskStepDefinition> steps() {
         return List.of(
                 new AiTaskStepDefinition(PREPARE, "确定学习词组", 10),
                 new AiTaskStepDefinition(MATERIAL, "生成场景文章与核心词数据", 20),
-                new AiTaskStepDefinition(RELATED, "补充场景相关词汇", 30),
-                new AiTaskStepDefinition(PUBLISH, "发布学习材料", 40));
+                new AiTaskStepDefinition(RELATED, "补充场景相关词汇", 30));
     }
 
     /** 执行当前任务处理流程。 */
@@ -56,18 +55,28 @@ public class SceneMaterialTaskHandler implements AiTaskHandler {
         Long modelConfigId = AiTaskPayload.longValue(payload, "modelConfigId");
         LocalDate recommendedDate = AiTaskPayload.dateValue(payload, "recommendedDate", LocalDate.now());
         Long operator = task.getOperatorUserId();
+
+        // 步骤 1：确定学习词组（极短事务锁选词并写入 Checkpoint，立即释放锁）
         executionService.execute(task.getId(), PREPARE, operator, null,
-                () -> planService.detail(task.getOwnerUserId(), task.getPlanId()));
-        taskService.updateProgress(task.getId(), 4, 1, 0);
-        executionService.execute(task.getId(), MATERIAL, operator, modelConfigId,
-                () -> planService.generateNextUnit(task.getOwnerUserId(), task.getPlanId(), modelConfigId,
+                () -> planService.prepareVocabularyForTask(task.getOwnerUserId(), task.getPlanId(),
                         recommendedDate, task.getId()));
-        taskService.updateProgress(task.getId(), 4, 2, 0);
+        taskService.updateProgress(task.getId(), 3, 1, 0);
+
+        // 步骤 2：生成场景文章与核心词数据（读取词组，无锁并发调用 AI 撰写故事并落库）
+        List<LearningPlanUnitResponse> generatedUnits = executionService.execute(task.getId(), MATERIAL, operator, modelConfigId,
+                () -> planService.generateMaterialForTask(task.getOwnerUserId(), task.getPlanId(), modelConfigId,
+                        recommendedDate, task.getId()));
+        taskService.updateProgress(task.getId(), 3, 2, 0);
+
+        // 步骤 3：补充场景相关词汇（为生成好的单元扩充 50 个相关词）
         executionService.execute(task.getId(), RELATED, operator, modelConfigId, () -> {
-            LearningPlanResponse plan = planService.detail(task.getOwnerUserId(), task.getPlanId());
-            List<LearningPlanUnitResponse> dateUnits = plan.getUnits().stream()
-                    .filter(unit -> recommendedDate.equals(unit.getRecommendedDate()))
-                    .toList();
+            List<LearningPlanUnit> dateUnits;
+            if (generatedUnits != null && !generatedUnits.isEmpty()) {
+                dateUnits = planService.findUnitsByIds(task.getPlanId(),
+                        generatedUnits.stream().map(LearningPlanUnitResponse::getId).toList());
+            } else {
+                dateUnits = planService.findUnitsByDate(task.getPlanId(), recommendedDate);
+            }
             if (dateUnits.isEmpty()) {
                 return 0;
             }
@@ -81,10 +90,7 @@ public class SceneMaterialTaskHandler implements AiTaskHandler {
             }
             return dateUnits.size();
         });
-        taskService.updateProgress(task.getId(), 4, 3, 0);
-        executionService.execute(task.getId(), PUBLISH, operator, null,
-                () -> planService.detail(task.getOwnerUserId(), task.getPlanId()));
-        taskService.updateProgress(task.getId(), 4, 4, 0);
+        taskService.updateProgress(task.getId(), 3, 3, 0);
         taskService.complete(task.getId(), AiTaskConstants.STATUS_COMPLETED, null);
     }
 }

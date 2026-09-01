@@ -6,8 +6,11 @@ import com.chandler.learning.agent.task.domain.entity.AiAsyncTask;
 import com.chandler.learning.agent.task.infrastructure.mapper.AiAsyncTaskMapper;
 import com.chandler.learning.agent.common.constant.CommonConstants;
 import com.chandler.learning.agent.task.domain.constant.AiTaskConstants;
+import com.chandler.learning.agent.task.domain.enums.AiTaskType;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.boot.context.event.ApplicationReadyEvent;
+import org.springframework.context.event.EventListener;
 import org.springframework.core.task.TaskRejectedException;
 import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Component;
@@ -31,6 +34,26 @@ public class AiAsyncTaskScheduler {
     private final AiAsyncTaskService taskService;
     private final AiAsyncTaskDispatcher dispatcher;
     private final AiTaskExecutionService executionService;
+
+    /** 应用启动就绪后，立即恢复所有在上次停机时中断的运行中任务与步骤，无需等待心跳超时。 */
+    @EventListener(ApplicationReadyEvent.class)
+    public void onApplicationReady() {
+        LocalDateTime now = LocalDateTime.now();
+        int recoveredSteps = executionService.recoverAllRunning(now);
+        int recoveredTasks = taskMapper.update(null, new LambdaUpdateWrapper<AiAsyncTask>()
+                .eq(AiAsyncTask::getStatus, AiTaskConstants.STATUS_RUNNING)
+                .eq(AiAsyncTask::getDeleted, false)
+                .set(AiAsyncTask::getStatus, AiTaskConstants.STATUS_PENDING)
+                .set(AiAsyncTask::getErrorMessage, "系统启动自动恢复：从上次中断步骤断点续跑")
+                .set(AiAsyncTask::getScheduledTime, now)
+                .set(AiAsyncTask::getStartedTime, null)
+                .set(AiAsyncTask::getFinishedTime, null)
+                .set(AiAsyncTask::getUpdateTime, now));
+        if (recoveredTasks > CommonConstants.ZERO || recoveredSteps > CommonConstants.ZERO) {
+            log.info("系统启动完成，已自动恢复中断任务 taskCount={} stepCount={}", recoveredTasks, recoveredSteps);
+        }
+        dispatchDueTasks();
+    }
 
     /** 领取并分派到期异步任务。 */
     @Scheduled(fixedDelayString = "${learning.ai-task.poll-interval-ms:5000}")
@@ -65,21 +88,23 @@ public class AiAsyncTaskScheduler {
 
         for (AiAsyncTask task : tasks) {
             Long planId = task.getPlanId();
-            if (planId != null && occupiedPlanIds.contains(planId)) {
-                // 同一学习计划已有前序任务在执行或等待重试，后序任务在队列中保持 PENDING 排队
-                log.debug("学习计划已有正在执行的任务，跳过当前任务派发保持排队 taskId={} planId={}",
+            boolean requiresMaterialLock = AiTaskType.SCENE_MATERIAL.getCode().equals(task.getTaskType())
+                    || AiTaskType.SCENE_MATERIAL_REGENERATION.getCode().equals(task.getTaskType());
+            if (requiresMaterialLock && planId != null && occupiedPlanIds.contains(planId)) {
+                // 同一学习计划已有前序场景材料任务正在分配词表，后序场景材料生成任务在队列中保持 PENDING 排队
+                log.debug("学习计划已有正在生成材料的任务，跳过当前任务派发保持排队 taskId={} planId={}",
                         task.getId(), planId);
                 continue;
             }
 
             if (taskService.claim(task.getId())) {
-                if (planId != null) {
+                if (requiresMaterialLock && planId != null) {
                     occupiedPlanIds.add(planId);
                 }
                 try {
                     dispatcher.dispatch(task);
                 } catch (TaskRejectedException ex) {
-                    if (planId != null) {
+                    if (requiresMaterialLock && planId != null) {
                         occupiedPlanIds.remove(planId);
                     }
                     taskService.releaseClaim(task.getId(), now.plusSeconds(

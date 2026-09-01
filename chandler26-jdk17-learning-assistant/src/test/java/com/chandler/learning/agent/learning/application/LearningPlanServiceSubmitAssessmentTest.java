@@ -12,6 +12,7 @@ import com.chandler.learning.agent.learning.infrastructure.mapper.LearningPlanUn
 import com.chandler.learning.agent.learning.infrastructure.mapper.LearningReviewRecordMapper;
 import com.chandler.learning.agent.system.application.SystemLogService;
 import com.chandler.learning.agent.task.application.AiAsyncTaskService;
+import com.chandler.learning.agent.task.application.AiTaskExecutionService;
 import com.chandler.learning.agent.vocabulary.application.LearningWordProgressService;
 import com.chandler.learning.agent.vocabulary.application.VocabularyCatalogQueryService;
 import com.chandler.learning.agent.vocabulary.application.WordbookService;
@@ -56,6 +57,8 @@ class LearningPlanServiceSubmitAssessmentTest {
     @Mock
     private AiAsyncTaskService aiAsyncTaskService;
     @Mock
+    private AiTaskExecutionService executionService;
+    @Mock
     private SystemLogService systemLogService;
     @Mock
     private UserDisplayNameService userDisplayNameService;
@@ -94,6 +97,7 @@ class LearningPlanServiceSubmitAssessmentTest {
                 wordbookService,
                 reviewSchedulePolicy,
                 aiAsyncTaskService,
+                executionService,
                 systemLogService,
                 userDisplayNameService,
                 responseAssembler,

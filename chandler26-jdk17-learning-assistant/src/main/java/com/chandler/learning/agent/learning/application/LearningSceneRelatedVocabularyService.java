@@ -66,15 +66,26 @@ public class LearningSceneRelatedVocabularyService {
         int target = Math.max(1, Math.min(targetCount == null ? DEFAULT_TARGET_COUNT : targetCount,
                 MAX_TARGET_COUNT));
         int current = count(material.getId());
+        int consecutiveZeroBatches = 0;
         while (current < target) {
             int batchTarget = Math.min(BATCH_SIZE, target - current);
             int inserted = generateBatch(plan, unit, material, modelConfigId, batchTarget);
             if (inserted == CommonConstants.ZERO) {
-                throw LearningAssistantException.badRequest(
-                        LearningErrorCode.LEARNING_SCENE_PARSE_FAILED,
-                        "AI 未返回可保存的场景相关词汇，可继续任务重试当前批次");
+                consecutiveZeroBatches++;
+                if (consecutiveZeroBatches >= 2) {
+                    if (current > 0) {
+                        log.warn("相关词汇生成部分完成: unitId={} materialId={} current={} target={}",
+                                unit.getId(), material.getId(), current, target);
+                        break;
+                    }
+                    throw LearningAssistantException.badRequest(
+                            LearningErrorCode.LEARNING_SCENE_PARSE_FAILED,
+                            "AI 未返回可保存的场景相关词汇，可继续任务重试当前批次");
+                }
+            } else {
+                consecutiveZeroBatches = 0;
+                current += inserted;
             }
-            current += inserted;
         }
         return current;
     }
@@ -123,7 +134,7 @@ public class LearningSceneRelatedVocabularyService {
         request.setVariables(variables);
         AgentChatResponse response = aiChatService.chat(request);
         JsonNode root = response.requireStructuredRoot(AiInvocationScene.VOCABULARY_SCENE_RELATED_WORDS);
-        JsonNode words = root.get("related_words");
+        JsonNode words = extractWordsNode(root);
         if (words == null || !words.isArray()) return CommonConstants.ZERO;
 
         Set<String> excluded = new HashSet<>();
@@ -136,9 +147,11 @@ public class LearningSceneRelatedVocabularyService {
         LocalDateTime now = LocalDateTime.now();
         for (JsonNode word : words) {
             if (batch.size() >= targetCount) break;
-            String term = text(word, "term", "word");
+            String term = text(word, "term", "word", "vocabulary", "english", "name");
             String normalized = normalize(term);
             if (!StringUtils.hasText(normalized) || !excluded.add(normalized)) continue;
+            String categoryCode = text(word, "category_code", "categoryCode", "category", "type");
+            String categoryName = text(word, "category_name", "categoryName", "categoryLabel", "group");
             LearningSceneRelatedWord entity = new LearningSceneRelatedWord();
             entity.setId(IdWorker.getId());
             entity.setUserId(plan.getUserId());
@@ -147,11 +160,11 @@ public class LearningSceneRelatedVocabularyService {
             entity.setSceneMaterialId(material.getId());
             entity.setTerm(term.trim());
             entity.setNormalizedTerm(normalized);
-            entity.setPhonetic(text(word, "phonetic"));
-            entity.setMeaningText(text(word, "meaning", "definition"));
-            entity.setContextMeaning(text(word, "context_meaning", "contextMeaning"));
-            entity.setCategoryCode(text(word, "category_code", "categoryCode"));
-            entity.setCategoryName(text(word, "category_name", "categoryName"));
+            entity.setPhonetic(text(word, "phonetic", "ipa"));
+            entity.setMeaningText(text(word, "meaning", "definition", "chinese", "translation"));
+            entity.setContextMeaning(text(word, "context_meaning", "contextMeaning", "usage", "context"));
+            entity.setCategoryCode(StringUtils.hasText(categoryCode) ? categoryCode : "context");
+            entity.setCategoryName(StringUtils.hasText(categoryName) ? categoryName : "情景拓展");
             entity.setSourceType("ai");
             entity.setSortOrder(sortOrder++);
             entity.setPromoted(false);
@@ -168,6 +181,29 @@ public class LearningSceneRelatedVocabularyService {
         log.info("用户场景相关词汇批次已保存 userId={} planId={} unitId={} materialId={} count={}",
                 plan.getUserId(), plan.getId(), unit.getId(), material.getId(), batch.size());
         return batch.size();
+    }
+
+    private JsonNode extractWordsNode(JsonNode root) {
+        if (root == null) return null;
+        if (root.has("related_words") && root.get("related_words").isArray()) {
+            return root.get("related_words");
+        }
+        if (root.has("relatedWords") && root.get("relatedWords").isArray()) {
+            return root.get("relatedWords");
+        }
+        if (root.has("words") && root.get("words").isArray()) {
+            return root.get("words");
+        }
+        if (root.has("vocabulary") && root.get("vocabulary").isArray()) {
+            return root.get("vocabulary");
+        }
+        if (root.has("items") && root.get("items").isArray()) {
+            return root.get("items");
+        }
+        if (root.isArray()) {
+            return root;
+        }
+        return null;
     }
 
     private LearningSceneMaterial requireCurrentMaterial(Long userId, Long planId, LearningPlanUnit unit) {

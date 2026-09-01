@@ -4,6 +4,7 @@ import com.chandler.learning.agent.learning.api.response.LearningPlanResponse;
 import com.chandler.learning.agent.learning.api.response.LearningPlanUnitResponse;
 import com.chandler.learning.agent.learning.application.LearningPlanService;
 import com.chandler.learning.agent.learning.application.LearningSceneRelatedVocabularyService;
+import com.chandler.learning.agent.learning.domain.entity.LearningPlanUnit;
 import com.chandler.learning.agent.task.domain.constant.AiTaskConstants;
 import com.chandler.learning.agent.task.application.AiAsyncTaskService;
 import com.chandler.learning.agent.task.application.AiTaskExecutionService;
@@ -49,14 +50,17 @@ public class SceneMaterialRegenerationTaskHandler implements AiTaskHandler {
     public void execute(AiAsyncTask task, Map<String, Object> payload) {
         Long modelConfigId = AiTaskPayload.longValue(payload, "modelConfigId");
         LocalDate date = AiTaskPayload.dateValue(payload, "recommendedDate", LocalDate.now());
-        executionService.execute(task.getId(), "generate_revision", task.getOperatorUserId(), modelConfigId,
+        List<LearningPlanUnitResponse> regeneratedUnits = executionService.execute(task.getId(), "generate_revision", task.getOperatorUserId(), modelConfigId,
                 () -> planService.regenerateDayUnits(task.getOwnerUserId(), task.getPlanId(), modelConfigId, date));
         taskService.updateProgress(task.getId(), 3, 1, 0);
         executionService.execute(task.getId(), "generate_related_words", task.getOperatorUserId(), modelConfigId, () -> {
-            LearningPlanResponse plan = planService.detail(task.getOwnerUserId(), task.getPlanId());
-            List<LearningPlanUnitResponse> units = plan.getUnits().stream()
-                    .filter(unit -> date.equals(unit.getRecommendedDate()))
-                    .toList();
+            List<LearningPlanUnit> units;
+            if (regeneratedUnits != null && !regeneratedUnits.isEmpty()) {
+                units = planService.findUnitsByIds(task.getPlanId(),
+                        regeneratedUnits.stream().map(LearningPlanUnitResponse::getId).toList());
+            } else {
+                units = planService.findUnitsByDate(task.getPlanId(), date);
+            }
             if (units.isEmpty()) {
                 return 0;
             }

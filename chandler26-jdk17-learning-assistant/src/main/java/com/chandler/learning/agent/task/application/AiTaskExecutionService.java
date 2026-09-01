@@ -14,16 +14,23 @@ import com.chandler.learning.agent.task.domain.entity.AiAsyncTaskAttempt;
 import com.chandler.learning.agent.task.domain.entity.AiAsyncTaskStep;
 import com.chandler.learning.agent.task.domain.enums.AiTaskStepStatus;
 import com.chandler.learning.agent.task.domain.enums.AiTaskType;
+import com.chandler.learning.agent.task.domain.entity.AiAsyncTask;
 import com.chandler.learning.agent.task.infrastructure.mapper.AiAsyncTaskAttemptMapper;
+import com.chandler.learning.agent.task.infrastructure.mapper.AiAsyncTaskMapper;
 import com.chandler.learning.agent.task.infrastructure.mapper.AiAsyncTaskStepMapper;
+import com.fasterxml.jackson.databind.JsonNode;
+import com.fasterxml.jackson.databind.ObjectMapper;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import org.springframework.util.StringUtils;
 
 import java.time.LocalDateTime;
+import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 import java.util.UUID;
 import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.ScheduledFuture;
@@ -41,6 +48,8 @@ public class AiTaskExecutionService {
 
     private final AiAsyncTaskStepMapper stepMapper;
     private final AiAsyncTaskAttemptMapper attemptMapper;
+    private final AiAsyncTaskMapper taskMapper;
+    private final ObjectMapper objectMapper;
     private final ScheduledExecutorService leaseScheduler;
 
     /** 创建父任务时一次性写入稳定步骤，重试不会重复创建。 */
@@ -180,11 +189,27 @@ public class AiTaskExecutionService {
         return stepMapper.recoverExpired(now);
     }
 
+    /** 系统启动或恢复时，强制重置所有处于 running 状态的步骤为 pending。 */
+    public int recoverAllRunning(LocalDateTime now) {
+        return stepMapper.update(null, new LambdaUpdateWrapper<AiAsyncTaskStep>()
+                .eq(AiAsyncTaskStep::getStatus, AiTaskStepStatus.RUNNING.getCode())
+                .eq(AiAsyncTaskStep::getDeleted, false)
+                .set(AiAsyncTaskStep::getStatus, AiTaskStepStatus.PENDING.getCode())
+                .set(AiAsyncTaskStep::getLeaseToken, null)
+                .set(AiAsyncTaskStep::getLeaseUntil, null)
+                .set(AiAsyncTaskStep::getErrorMessage, "系统启动：步骤已自动恢复为待执行")
+                .set(AiAsyncTaskStep::getUpdateTime, now));
+    }
+
     /**
      * 判断指定任务的材料与核心词生成步骤是否已经完成。
      * 若已完成，说明该计划的词表分配锁已经释放，后续日期的任务可以开始生成并流水线重叠。
      */
     public boolean isMaterialStepCompleted(Long taskId, String taskType) {
+        if (!AiTaskType.SCENE_MATERIAL.getCode().equals(taskType)
+                && !AiTaskType.SCENE_MATERIAL_REGENERATION.getCode().equals(taskType)) {
+            return true;
+        }
         String materialStepCode = AiTaskType.SCENE_MATERIAL_REGENERATION.getCode().equals(taskType)
                 ? "generate_revision" : "generate_material";
         AiAsyncTaskStep step = stepMapper.selectOne(new LambdaQueryWrapper<AiAsyncTaskStep>()
@@ -193,6 +218,89 @@ public class AiTaskExecutionService {
                 .eq(AiAsyncTaskStep::getDeleted, false)
                 .last(CommonConstants.SQL_LIMIT_ONE));
         return step != null && AiTaskStepStatus.COMPLETED.getCode().equals(step.getStatus());
+    }
+
+    /** 查询指定学习计划下所有处于活动状态的任务在 prepare_vocabulary 步骤中锁定的词表 Entry ID 集合。 */
+    public Set<Long> findLockedCatalogEntryIds(Long planId, Long excludedTaskId) {
+        if (planId == null) {
+            return Set.of();
+        }
+        List<AiAsyncTask> activeTasks = taskMapper.selectList(new LambdaQueryWrapper<AiAsyncTask>()
+                .eq(AiAsyncTask::getPlanId, planId)
+                .eq(AiAsyncTask::getTaskType, AiTaskType.SCENE_MATERIAL.getCode())
+                .in(AiAsyncTask::getStatus, List.of(
+                        AiTaskConstants.STATUS_PENDING,
+                        AiTaskConstants.STATUS_RUNNING,
+                        AiTaskConstants.STATUS_RETRY_WAIT))
+                .ne(excludedTaskId != null, AiAsyncTask::getId, excludedTaskId)
+                .eq(AiAsyncTask::getDeleted, false));
+        if (activeTasks.isEmpty()) {
+            return Set.of();
+        }
+        List<Long> taskIds = activeTasks.stream().map(AiAsyncTask::getId).toList();
+        List<AiAsyncTaskStep> steps = stepMapper.selectList(new LambdaQueryWrapper<AiAsyncTaskStep>()
+                .in(AiAsyncTaskStep::getTaskId, taskIds)
+                .eq(AiAsyncTaskStep::getStepCode, "prepare_vocabulary")
+                .isNotNull(AiAsyncTaskStep::getCheckpointJson)
+                .eq(AiAsyncTaskStep::getDeleted, false));
+        Set<Long> lockedEntryIds = new HashSet<>();
+        for (AiAsyncTaskStep step : steps) {
+            if (!StringUtils.hasText(step.getCheckpointJson())) {
+                continue;
+            }
+            try {
+                JsonNode root = objectMapper.readTree(step.getCheckpointJson());
+                JsonNode unitGroups = root.path("unitGroups");
+                if (unitGroups.isArray()) {
+                    for (JsonNode group : unitGroups) {
+                        JsonNode candidateEntryIds = group.path("candidateEntryIds");
+                        if (candidateEntryIds.isArray()) {
+                            for (JsonNode idNode : candidateEntryIds) {
+                                if (idNode.isNumber()) {
+                                    lockedEntryIds.add(idNode.asLong());
+                                }
+                            }
+                        }
+                    }
+                }
+            } catch (Exception ex) {
+                log.debug("解析步骤 checkpoint_json 锁定词条异常 stepId={}", step.getId(), ex);
+            }
+        }
+        return Set.copyOf(lockedEntryIds);
+    }
+
+    /** 保存指定任务步骤的断点检查点 JSON 数据。 */
+    public void saveStepCheckpoint(Long taskId, String stepCode, Object checkpointData) {
+        try {
+            String json = checkpointData instanceof String str ? str : objectMapper.writeValueAsString(checkpointData);
+            stepMapper.update(null, new LambdaUpdateWrapper<AiAsyncTaskStep>()
+                    .eq(AiAsyncTaskStep::getTaskId, taskId)
+                    .eq(AiAsyncTaskStep::getStepCode, stepCode)
+                    .eq(AiAsyncTaskStep::getDeleted, false)
+                    .set(AiAsyncTaskStep::getCheckpointJson, json)
+                    .set(AiAsyncTaskStep::getUpdateTime, LocalDateTime.now()));
+        } catch (Exception ex) {
+            log.warn("保存任务步骤检查点失败 taskId={} stepCode={}", taskId, stepCode, ex);
+        }
+    }
+
+    /** 读取指定任务步骤的断点检查点反序列化对象。 */
+    public <T> T getStepCheckpoint(Long taskId, String stepCode, Class<T> clazz) {
+        AiAsyncTaskStep step = stepMapper.selectOne(new LambdaQueryWrapper<AiAsyncTaskStep>()
+                .eq(AiAsyncTaskStep::getTaskId, taskId)
+                .eq(AiAsyncTaskStep::getStepCode, stepCode)
+                .eq(AiAsyncTaskStep::getDeleted, false)
+                .last(CommonConstants.SQL_LIMIT_ONE));
+        if (step == null || !StringUtils.hasText(step.getCheckpointJson())) {
+            return null;
+        }
+        try {
+            return objectMapper.readValue(step.getCheckpointJson(), clazz);
+        } catch (Exception ex) {
+            log.debug("反序列化步骤检查点失败 taskId={} stepCode={}", taskId, stepCode, ex);
+            return null;
+        }
     }
 
     /** 批量转换 AI 任务响应。 */
