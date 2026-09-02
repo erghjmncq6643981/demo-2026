@@ -319,7 +319,7 @@ export function createScenePlanFeature(ctx) {
 
   return {
     loadSceneData, clearSceneData, renderSceneView, renderRelatedWords: () => sceneStudy.renderRelatedWords(activeUnit()),
-    openVocabularyImport, closeVocabularyImport, startVocabularyImport, deleteImportJob, saveVocabularyImportMetadata, loadReview: loadImportReview, loadReview: loadImportReview, openImportReview, confirmAllWarnings, publishVocabularyImport, triggerVocabularyAnalysis,
+    openVocabularyImport, closeVocabularyImport, startVocabularyImport, deleteImportJob, saveVocabularyImportMetadata, loadReview: loadImportReview, openImportReview, confirmAllWarnings, publishVocabularyImport, triggerVocabularyAnalysis,
     openScenePlanModal: planWorkflow.openModal, closeScenePlanModal: planWorkflow.closeModal, createScenePlan: planWorkflow.savePlan, changePlanCatalog: planWorkflow.changeCatalog, changeSceneWordbook: planWorkflow.changeWordbook,
     changeImportSearch, previousImportPage, nextImportPage, previousHistoryPage, nextHistoryPage,
     completeCurrentUnit: sceneActions.completeCurrentUnit, generateNextUnit: sceneActions.generateNextUnit, scheduleNextUnit: sceneActions.scheduleNextUnit, generateCards: sceneActions.generateCards, scheduleCards: sceneActions.scheduleCards,
