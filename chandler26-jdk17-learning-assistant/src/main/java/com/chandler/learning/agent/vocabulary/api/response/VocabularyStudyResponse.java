@@ -35,6 +35,9 @@ public class VocabularyStudyResponse {
     @Schema(description = "是否通过形态变体或别名命中原型")
     private Boolean isAliasHit;
 
+    @Schema(description = "是否正在后台生成中")
+    private Boolean generating;
+
     @Schema(description = "常见时态或复数形态列表")
     private List<String> inflections;
 

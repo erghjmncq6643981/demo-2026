@@ -73,7 +73,10 @@ export function createSceneActions({
       state.currentLearningPlan = mergedPlan
       state.learningPlans = state.learningPlans.map((item) => sameId(item.id, mergedPlan.id) ? mergedPlan : item)
 
-      const nextRemainingUnit = mergedUnits.find((item) => item.status !== 'completed')
+      const currentIndex = mergedUnits.findIndex((u) => sameId(u.id, unit.id))
+      const nextRemainingUnit = (currentIndex >= 0 ? mergedUnits.slice(currentIndex + 1).find((item) => item.status !== 'completed') : null)
+        || mergedUnits.find((item) => item.status !== 'completed')
+        || null
       state.sceneChallengeStage = nextRemainingUnit ? 'learning' : 'overview'
       state.currentSceneWordId = null
 

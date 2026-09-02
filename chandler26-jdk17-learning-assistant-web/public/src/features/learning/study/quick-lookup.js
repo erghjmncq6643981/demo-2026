@@ -12,51 +12,103 @@ export function createQuickLookupFeature({
   setView,
 }) {
   let activeRecord = null
+  let currentLookupTerm = ''
+  let isLookingUp = false
+
+  function reset() {
+    activeRecord = null
+    currentLookupTerm = ''
+    isLookingUp = false
+    if (!elements.quickLookupContent) return
+    elements.quickLookupContent.className = 'quick-lookup-content empty'
+    elements.quickLookupContent.innerHTML = '输入任意英文单词快速查看 AI 词卡'
+  }
+
+  function showLoading(term) {
+    if (!elements.quickLookupContent) return
+    elements.quickLookupContent.className = 'quick-lookup-content loading'
+    elements.quickLookupContent.innerHTML = `
+      <div class="quick-lookup-loading">
+        <span class="quick-lookup-loading-icon">⏳</span>
+        <span>正在查询「<strong>${escapeHtml(term)}</strong>」AI 词卡...</span>
+      </div>
+    `
+  }
 
   function open(initialTerm = '') {
     if (!elements.quickLookupModal) return
     elements.quickLookupModal.classList.remove('hidden')
-    if (elements.quickLookupInput) {
-      elements.quickLookupInput.value = initialTerm || ''
-      elements.quickLookupInput.focus()
-      elements.quickLookupInput.select()
-    }
-    if (initialTerm) {
-      lookup(initialTerm)
+    const term = String(initialTerm || '').trim()
+    if (term) {
+      if (elements.quickLookupInput) {
+        elements.quickLookupInput.value = term
+        elements.quickLookupInput.focus()
+        elements.quickLookupInput.select()
+      }
+      lookup(term)
+    } else {
+      if (isLookingUp && currentLookupTerm) {
+        if (elements.quickLookupInput) {
+          elements.quickLookupInput.value = currentLookupTerm
+          elements.quickLookupInput.focus()
+          elements.quickLookupInput.select()
+        }
+        showLoading(currentLookupTerm)
+      } else {
+        if (elements.quickLookupInput) {
+          elements.quickLookupInput.value = ''
+          elements.quickLookupInput.focus()
+        }
+        reset()
+      }
     }
   }
 
   function close() {
     if (!elements.quickLookupModal) return
     elements.quickLookupModal.classList.add('hidden')
-    activeRecord = null
   }
 
   async function lookup(term) {
     const clean = String(term || '').trim()
     if (!clean) return
-    if (!elements.quickLookupContent) return
-    elements.quickLookupContent.className = 'quick-lookup-content loading'
-    elements.quickLookupContent.innerHTML = '<div class="quick-lookup-loading">正在查询 AI 词卡...</div>'
+    currentLookupTerm = clean
+    isLookingUp = true
+    showLoading(clean)
+
     try {
-      const record = await request(`/api/v1/english/vocabularies/${encodeURIComponent(clean)}`)
-      if (record) {
-        renderQuickRecord(record)
-      } else {
-        // If not cached, fetch or generate via study
-        const studyRecord = await request('/api/v1/english/vocabularies/study', {
-          method: 'POST',
-          body: JSON.stringify({
-            term: clean,
-            agentCode: elements.agentSelect?.value || 'english_vocabulary_plan',
-            templateCode: elements.templateSelect?.value || 'vocabulary_card_single',
-          }),
-        })
+      // 1. 优先查询本地/服务端缓存
+      const cached = await request(`/api/v1/english/vocabularies/${encodeURIComponent(clean)}`)
+      if (cached && !cached.generating) {
+        if (currentLookupTerm === clean) {
+          isLookingUp = false
+          renderQuickRecord(cached)
+        }
+        return
+      }
+
+      // 2. 若未缓存或后台生成中，调用 study 接口（后端自动合并并发，避免重复请求模型）
+      const studyRecord = await request('/api/v1/english/vocabularies/study', {
+        method: 'POST',
+        body: JSON.stringify({
+          term: clean,
+          agentCode: elements.agentSelect?.value || 'english_vocabulary_plan',
+          templateCode: elements.templateSelect?.value || 'vocabulary_card_single',
+        }),
+      })
+
+      if (currentLookupTerm === clean) {
+        isLookingUp = false
         renderQuickRecord(studyRecord)
       }
     } catch (error) {
-      elements.quickLookupContent.className = 'quick-lookup-content error'
-      elements.quickLookupContent.innerHTML = `<div class="quick-lookup-error">查询失败：${escapeHtml(error.message)}</div>`
+      if (currentLookupTerm === clean) {
+        isLookingUp = false
+        if (elements.quickLookupContent) {
+          elements.quickLookupContent.className = 'quick-lookup-content error'
+          elements.quickLookupContent.innerHTML = `<div class="quick-lookup-error">查询失败：${escapeHtml(error.message)}</div>`
+        }
+      }
     }
   }
 

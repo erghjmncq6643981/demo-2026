@@ -40,6 +40,8 @@ import java.util.Comparator;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.ConcurrentHashMap;
 
 /**
  * 英语词汇学习服务。
@@ -113,6 +115,8 @@ public class EnglishVocabularyStudyService {
         return null;
     }
 
+    private final Map<String, CompletableFuture<VocabularyStudyResponse>> inFlightLookups = new ConcurrentHashMap<>();
+
     /** 生成或读取学习材料。 */
     public VocabularyStudyResponse study(VocabularyStudyRequest request) {
         String rawTerm = request.getTerm() == null ? "" : request.getTerm().trim();
@@ -140,6 +144,41 @@ public class EnglishVocabularyStudyService {
             return toResponse(existing, true, rawTerm);
         }
 
+        if (!forceRefresh) {
+            CompletableFuture<VocabularyStudyResponse> runningFuture = inFlightLookups.get(normalizedTerm);
+            if (runningFuture != null) {
+                log.info("检测到词汇「{}」正在进行 AI 查词，合并复用当前任务", normalizedTerm);
+                try {
+                    return runningFuture.join();
+                } catch (Exception ex) {
+                    log.warn("等待并发查词任务失败，尝试重新发起生成: {}", ex.getMessage());
+                }
+            }
+        }
+
+        CompletableFuture<VocabularyStudyResponse> future = new CompletableFuture<>();
+        CompletableFuture<VocabularyStudyResponse> existingFuture = inFlightLookups.putIfAbsent(normalizedTerm, future);
+        if (existingFuture != null && !forceRefresh) {
+            log.info("检测到词汇「{}」已被并发发起 AI 查词，合并复用结果", normalizedTerm);
+            return existingFuture.join();
+        }
+
+        try {
+            VocabularyStudyResponse response = doGenerate(request, normalizedTerm, rawTerm, forceRefresh);
+            future.complete(response);
+            return response;
+        } catch (Throwable throwable) {
+            future.completeExceptionally(throwable);
+            if (throwable instanceof RuntimeException re) {
+                throw re;
+            }
+            throw new RuntimeException(throwable);
+        } finally {
+            inFlightLookups.remove(normalizedTerm, future);
+        }
+    }
+
+    private VocabularyStudyResponse doGenerate(VocabularyStudyRequest request, String normalizedTerm, String rawTerm, boolean forceRefresh) {
         // 若输入为复数/时态（如 slogans），确定目标原形词（如 slogan）
         List<String> candidateLemmas = lemmatizer.candidateLemmas(normalizedTerm);
         String targetGenerationTerm = candidateLemmas.isEmpty() ? normalizedTerm : candidateLemmas.get(0);
@@ -233,7 +272,18 @@ public class EnglishVocabularyStudyService {
         String normalizedTerm = normalize(rawTerm);
         EnglishVocabularyStudyRecord record = findRecord(normalizedTerm);
         log.debug("查询词汇学习缓存 term={} found={}", normalizedTerm, record != null);
-        return record == null ? null : toResponse(record, true, rawTerm);
+        if (record != null) {
+            return toResponse(record, true, rawTerm);
+        }
+        if (inFlightLookups.containsKey(normalizedTerm)) {
+            VocabularyStudyResponse generatingResponse = new VocabularyStudyResponse();
+            generatingResponse.setTerm(rawTerm);
+            generatingResponse.setNormalizedTerm(normalizedTerm);
+            generatingResponse.setCacheHit(false);
+            generatingResponse.setGenerating(true);
+            return generatingResponse;
+        }
+        return null;
     }
 
     /** 查询拼写最相近的词汇。 */

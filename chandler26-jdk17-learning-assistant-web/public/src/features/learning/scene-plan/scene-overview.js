@@ -78,7 +78,7 @@ export function createSceneOverview({
                 ? (word.phonetic.startsWith('/') || word.phonetic.startsWith('[') ? word.phonetic : `/${word.phonetic}/`)
                 : ''
               const meaning = word.contextMeaning || word.meaning || '暂无释义'
-              return `<div class="scene-vocabulary-preview-word ${complete ? 'completed' : ''}"><span class="scene-vocabulary-preview-index">${index + 1}</span><div class="scene-vocabulary-preview-word-content"><div class="scene-vocabulary-preview-topline"><strong>${escapeHtml(word.term)}</strong>${phonetic ? `<small>${escapeHtml(phonetic)}</small>` : ''}</div><p class="scene-vocabulary-preview-meaning">${escapeHtml(meaning)}</p></div><span class="scene-vocabulary-preview-status-pill ${complete ? 'completed' : 'pending'}">${complete ? '已完成' : (word.masteryRequirement === 'spelling' ? '待拼写' : '待认读')}</span></div>`
+              return `<div class="scene-vocabulary-preview-word ${complete ? 'completed' : ''}"><span class="scene-vocabulary-preview-index">${index + 1}</span><div class="scene-vocabulary-preview-word-content"><div class="scene-vocabulary-preview-topline"><strong title="${escapeHtml(word.term)}">${escapeHtml(word.term)}</strong>${phonetic ? `<small title="${escapeHtml(phonetic)}">${escapeHtml(phonetic)}</small>` : ''}</div><p class="scene-vocabulary-preview-meaning" title="${escapeHtml(meaning)}">${escapeHtml(meaning)}</p></div></div>`
             }).join('')}</div>` : '<div class="empty">加载中...</div>'}
           </section>`
         }).join('')
