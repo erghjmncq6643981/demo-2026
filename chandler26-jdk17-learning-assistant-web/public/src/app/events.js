@@ -489,11 +489,17 @@ elements.aiSessionDetailModal?.addEventListener('click', (event) => { if (event.
   document.addEventListener('keydown', (event) => {
     if ((event.metaKey || event.ctrlKey) && (event.key === 'k' || event.key === 'K')) {
       event.preventDefault()
-      openQuickLookup?.()
+      event.stopPropagation()
+      if (elements.quickLookupModal && !elements.quickLookupModal.classList.contains('hidden')) {
+        closeQuickLookup?.()
+      } else {
+        openQuickLookup?.()
+      }
       return
     }
     if (event.key === 'Escape' && elements.quickLookupModal && !elements.quickLookupModal.classList.contains('hidden')) {
       event.preventDefault()
+      event.stopPropagation()
       closeQuickLookup?.()
       return
     }

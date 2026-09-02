@@ -85,36 +85,55 @@ public class AiSceneResponseCodecRegistry {
         return !value.isMissingNode() && !value.isNull();
     }
 
+    private static final List<String> COMMON_NORMALIZED_FIELDS = List.of(
+            "term", "lemma", "inflections", "phonetic", "definitions", "examples",
+            "collocations", "memory_tips", "synonyms", "antonyms", "word_family",
+            "title", "learning_text", "translation", "vocabulary", "related_words",
+            "entries", "cards", "article", "vocabulary_focus", "grammar_points", "practice");
+
     private void normalizeAliases(JsonNode root, List<String> requiredFields) {
         if (!(root instanceof ObjectNode objectNode)) {
             return;
         }
         for (String field : requiredFields) {
-            if (hasValue(root, field)) {
-                continue;
-            }
-            for (String alias : fieldAliases(field)) {
-                JsonNode value = root.get(alias);
-                if (value != null && !value.isNull()) {
-                    objectNode.set(field, value);
-                    break;
-                }
+            applyAlias(objectNode, field);
+        }
+        for (String field : COMMON_NORMALIZED_FIELDS) {
+            applyAlias(objectNode, field);
+        }
+        // 若 definitions 为单一对象，自动包裹为数组
+        JsonNode definitions = objectNode.get("definitions");
+        if (definitions != null && definitions.isObject()) {
+            objectNode.putArray("definitions").add(definitions);
+        }
+    }
+
+    private void applyAlias(ObjectNode objectNode, String field) {
+        if (hasValue(objectNode, field)) {
+            return;
+        }
+        for (String alias : fieldAliases(field)) {
+            JsonNode value = objectNode.get(alias);
+            if (value != null && !value.isNull() && !value.isMissingNode()) {
+                objectNode.set(field, value);
+                break;
             }
         }
     }
 
     private List<String> fieldAliases(String field) {
         return switch (field) {
+            case "term" -> List.of("word", "lemma", "headword", "target_word", "targetWord", "name");
             case "vocabulary" -> List.of("words", "vocabulary_list", "vocabularies", "word_list");
             case "learning_text" -> List.of("learningText", "text", "article", "content", "passage", "scene_text");
             case "translation" -> List.of("chinese_translation", "chinese", "text_translation", "translation_text");
             case "title" -> List.of("scene_title", "unit_title", "topic");
             case "entries" -> List.of("words", "items", "catalog_entries");
             case "cards" -> List.of("vocabulary", "words", "list");
-            case "definitions" -> List.of("meaning", "meanings", "definition");
-            case "examples" -> List.of("example_sentences", "example", "sentences", "exampleSentences");
-            case "collocations" -> List.of("phrases", "collocation", "common_phrases", "commonPhrases");
-            case "memory_tips" -> List.of("memoryTips", "tips", "memory_tip", "mnemonic", "memory");
+            case "definitions" -> List.of("meaning", "meanings", "definition", "translations", "explanation", "explanations", "senses");
+            case "examples" -> List.of("example_sentences", "example", "sentences", "exampleSentences", "sample_sentences", "samples");
+            case "collocations" -> List.of("phrases", "collocation", "common_phrases", "commonPhrases", "collocates", "combinations", "expressions");
+            case "memory_tips" -> List.of("memoryTips", "tips", "memory_tip", "memoryTip", "mnemonic", "mnemonics", "memory", "memory_method", "memory_aid", "memory_advice", "study_tips", "study_tip", "note", "notes", "remember_tip", "rememberTips");
             case "article" -> List.of("content", "text", "learning_text");
             case "vocabulary_focus" -> List.of("vocabularyFocus", "vocabulary", "words", "core_words");
             case "grammar_points" -> List.of("grammarPoints", "grammar", "points");

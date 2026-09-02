@@ -23,7 +23,7 @@ public enum AiInvocationScene {
     GENERAL_CHAT("general_chat", "通用 Agent 对话", false, List.of(), List.of()),
     MODEL_CONNECTION_TEST("model_connection_test", "模型连接验证", false, List.of(), List.of()),
     VOCABULARY_CARD_SINGLE("vocabulary_card_single", "单词词卡生成", true,
-            List.of("term", "definitions", "examples", "collocations", "memory_tips"),
+            List.of("term", "definitions"),
             List.of("term")),
     VOCABULARY_CARD_BATCH("vocabulary_card_batch", "批量词卡生成", true, List.of("cards"),
             List.of("terms")),

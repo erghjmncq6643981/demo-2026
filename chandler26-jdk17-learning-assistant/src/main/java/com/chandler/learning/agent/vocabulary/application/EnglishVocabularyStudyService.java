@@ -309,8 +309,7 @@ public class EnglishVocabularyStudyService {
         chatRequest.setTitle("Vocabulary - " + normalizedTerm);
         chatRequest.setBusinessType(AiChatConstants.BUSINESS_TYPE_LEARNING);
         chatRequest.setBusinessId(LearningScene.ENGLISH_VOCABULARY.getCode());
-        chatRequest.setSceneCode(LearningScene.ENGLISH_VOCABULARY.getCode());
-        chatRequest.setMessage("请生成英语词汇「" + normalizedTerm + "」的结构化学习卡片。注意：1. 面向中文母语学习者，definitions、collocations、synonyms、antonyms、word_family 中的 meaning 必须输出精准地道的中文释义，例句 translation 必须为中文翻译，memory_tips 必须使用中文讲解记忆技巧。2. 无论输入的是原形还是变体，必须基于单词标准原形生成。");
+        chatRequest.setMessage("请生成英语词汇「" + normalizedTerm + "」的结构化学习卡片。");
         chatRequest.setVariables(variables);
         return aiChatService.chat(chatRequest);
     }

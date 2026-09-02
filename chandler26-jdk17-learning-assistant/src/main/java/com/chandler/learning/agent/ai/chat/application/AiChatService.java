@@ -111,9 +111,9 @@ public class AiChatService {
                 modelCapabilityResolver.effectiveContextWindowTokens(modelDefinition));
         modelRequest.setModelConfigId(selectedModelConfig.getId());
         modelRequest.setTemperature(agent.getTemperature());
-        int configuredMaxTokens = agent.getMaxTokens() == null
-                ? defaultOutputTokens(invocationScene)
-                : agent.getMaxTokens();
+        int configuredMaxTokens = Math.max(
+                agent.getMaxTokens() == null ? CommonConstants.ZERO : agent.getMaxTokens(),
+                defaultOutputTokens(invocationScene));
         int availableOutputTokens = safeContextWindow - estimatedInputTokens;
         if (availableOutputTokens < AiContextBudgetConstants.MIN_OUTPUT_TOKENS) {
             throw LearningAssistantException.badRequest(
@@ -340,8 +340,8 @@ public class AiChatService {
     private int defaultOutputTokens(AiInvocationScene invocationScene) {
         return switch (invocationScene) {
             case VOCABULARY_CATALOG_ANALYSIS, VOCABULARY_SCENE_UNIT -> 16_000;
-            case VOCABULARY_SCENE_RELATED_WORDS -> 8_000;
-            case VOCABULARY_CARD_BATCH -> 8_000;
+            case VOCABULARY_SCENE_RELATED_WORDS, VOCABULARY_CARD_BATCH,
+                 VOCABULARY_CARD_SINGLE, ARTICLE_STUDY_MATERIAL -> 8_000;
             default -> 4_096;
         };
     }

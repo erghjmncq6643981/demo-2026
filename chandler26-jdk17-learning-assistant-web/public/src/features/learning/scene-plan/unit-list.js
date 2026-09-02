@@ -6,10 +6,21 @@ export function createUnitList({ state, api, sameId }) {
     const units = asArray(plan.units)
     if (plan.currentUnitId != null) {
       return units.find((unit) => sameId(unit.id, plan.currentUnitId))
-        || [...units].reverse().find((unit) => unit.status !== 'completed')
+        || units.find((unit) => unit.status !== 'completed')
         || null
     }
-    return [...units].reverse().find((unit) => unit.status !== 'completed') || null
+    return units.find((unit) => unit.status !== 'completed') || null
+  }
+
+  function compareUnits(a, b) {
+    const dateA = a.recommendedDate || a.recommended_date || ''
+    const dateB = b.recommendedDate || b.recommended_date || ''
+    if (dateA && dateB && dateA !== dateB) {
+      return dateA.localeCompare(dateB)
+    }
+    if (dateA && !dateB) return 1
+    if (!dateA && dateB) return -1
+    return (Number(a.unitNo || a.unit_no) || 0) - (Number(b.unitNo || b.unit_no) || 0) || String(a.id).localeCompare(String(b.id))
   }
 
   function mergeCalendarUnits(plan, calendarData) {
@@ -35,7 +46,7 @@ export function createUnitList({ state, api, sameId }) {
         }
       })
     })
-    plan.units = Array.from(unitMap.values()).sort((a, b) => (Number(a.unitNo) || 0) - (Number(b.unitNo) || 0))
+    plan.units = Array.from(unitMap.values()).sort(compareUnits)
   }
 
   async function loadDetail(plan, unitId) {
@@ -50,7 +61,7 @@ export function createUnitList({ state, api, sameId }) {
       units[idx] = { ...units[idx], ...detail }
     } else {
       units.push(detail)
-      units.sort((a, b) => (Number(a.unitNo) || 0) - (Number(b.unitNo) || 0))
+      units.sort(compareUnits)
     }
     plan.units = units
     return detail

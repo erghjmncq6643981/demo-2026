@@ -71,13 +71,25 @@ export function createSceneStudy({
     elements.sceneAssessmentPanel?.classList.toggle('hidden', stage !== 'assessment')
   }
 
+  function renderTranslation(translation) {
+    if (!translation) return '<p>暂无译文</p>'
+    const paragraphs = String(translation)
+      .split(/\r?\n+/)
+      .map((line) => line.trim())
+      .filter(Boolean)
+    if (!paragraphs.length) return '<p>暂无译文</p>'
+    return paragraphs.map((line) => `<p>${escapeHtml(line)}</p>`).join('')
+  }
+
   function renderLearningText(unit, coreWords) {
     const learningText = unit.learningText || unit.material?.learning_text || unit.material?.learningText || ''
     elements.sceneLearningText.className = learningText ? 'scene-learning-text' : 'scene-learning-text empty'
     elements.sceneLearningText.innerHTML = learningText
       ? annotateUnknownWords(learningText, coreWords.filter((word) => word.firstLearning))
       : '暂无场景材料'
-    elements.sceneTranslation.textContent = unit.translation || unit.material?.translation || '暂无译文'
+    if (elements.sceneTranslation) {
+      elements.sceneTranslation.innerHTML = renderTranslation(unit.translation || unit.material?.translation)
+    }
   }
 
   function generateWordVariants(rawTerm, acceptedSpellings = []) {

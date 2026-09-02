@@ -270,7 +270,7 @@ export function createScenePlanFeature(ctx) {
       if (elements.sceneUnitTitle) elements.sceneUnitTitle.textContent = plan ? '可以生成下一个场景' : '选择一个学习计划'
       if (elements.sceneUnitSummary) elements.sceneUnitSummary.textContent = plan?.learningPurpose || '当前场景会显示在这里'
       if (elements.sceneLearningText) { elements.sceneLearningText.className = 'scene-learning-text empty'; elements.sceneLearningText.textContent = plan ? '当前没有进行中的场景' : '暂无场景材料' }
-      if (elements.sceneTranslation) elements.sceneTranslation.textContent = '暂无译文'
+      if (elements.sceneTranslation) elements.sceneTranslation.innerHTML = '<p>暂无译文</p>'
       sceneStudy?.renderCoreWords([])
       sceneStudy?.renderRelatedWords(null)
       sceneStudy?.renderChallengeWords([])

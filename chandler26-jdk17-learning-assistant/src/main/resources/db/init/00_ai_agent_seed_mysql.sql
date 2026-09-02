@@ -10,7 +10,7 @@ INSERT INTO ai_agent (
     '生成释义、例句、搭配、语义关系和记忆提示',
     '你是一个严谨的英语词汇学习助手。请围绕用户输入的英语单词或短语提供准确、结构化的学习内容。需要 JSON 时只输出合法 JSON，不要输出 Markdown 代码块。',
     '你是一个英语词汇学习助手。回答准确、简洁，并延续当前词汇学习上下文。',
-    '你好，我可以帮你拆解单词释义、生成例句、整理搭配和记忆提示。', 'deepseek', 'deepseek-v4-flash', 0.70, 4096,
+    '你好，我可以帮你拆解单词释义、生成例句、整理搭配和记忆提示。', 'deepseek', 'deepseek-v4-flash', 0.70, 8000,
     JSON_ARRAY(JSON_OBJECT('code','vocab_card','name','词汇卡片','prompt','生成词汇学习卡片'), JSON_OBJECT('code','quiz','name','练习题','prompt','生成词汇练习题')),
     1, 1
 ),
@@ -64,7 +64,7 @@ INSERT INTO ai_prompt_template (
 ),
 (
     1201, '英语场景词汇单元 JSON', 'english_vocab_scene_unit_json', 'user', '英语,词表,场景学习,词汇检查,JSON',
-    '学习目的：{{learning_purpose}}。这是第 {{unit_no}} 个场景单元。新词候选 JSON：{{candidate_words}}。待挑战复习词 JSON：{{review_words}}。目标词数：{{target_word_count}}。本批新词候选必须作为 core；待挑战复习词只能作为 review 或语境辅助，不能冒充新的 core。候选词已由系统排除其他场景的核心词，不需要根据历史对话自行判断。单篇材料 core 最多 50 个。词汇数组只返回 core 和 review，场景扩展名词由独立动作生成，不要返回 supplementary 或其他额外词条。短文写作中允许且鼓励根据英文语法自然使用单词的时态、单复数等屈折变形，但在 vocabulary 数组的 term 字段必须严格统一返回候选词库中的原形单词。请只输出合法的单个 JSON 对象，不要输出 Markdown 代码块或额外说明文字，必须符合如下 JSON 结构：{"title":"场景标题","scenario_type":"场景类型","summary":"场景说明","learning_text":"英文短文（由2-4个自然段组成连贯短文，总词数250-450词，核心词自然融入语境）","translation":"中文对照翻译","vocabulary":[{"term":"单词原形","tier":"core","mastery_requirement":"recognition","phonetic":"音标","meaning":"词义","context_meaning":"语境释义","accepted_spellings":["单词"],"meaning_question":{"prompt":"题目说明","options":["选项A","选项B","选项C","选项D"],"correct_answer":"正确选项"}}]}。',
+    '学习目的：{{learning_purpose}}。这是第 {{unit_no}} 个场景单元。新词候选 JSON：{{candidate_words}}。待挑战复习词 JSON：{{review_words}}。目标词数：{{target_word_count}}。本批新词候选必须作为 core；待挑战复习词只能作为 review 或语境辅助，不能冒充新的 core。候选词已由系统排除其他场景的核心词，不需要根据历史对话自行判断。单篇材料 core 最多 50 个。词汇数组只返回 core 和 review，场景扩展名词由独立动作生成，不要返回 supplementary 或其他额外词条。短文写作中允许且鼓励根据英文语法自然使用单词的时态、单复数等屈折变形，但在 vocabulary 数组的 term 字段必须严格统一返回候选词库中的原形单词。请只输出合法的单个 JSON 对象，不要输出 Markdown 代码块或额外说明文字，必须符合如下 JSON 结构：{"title":"场景标题","scenario_type":"场景类型","summary":"场景说明","learning_text":"英文短文（由2-4个自然段组成连贯短文，总词数250-650词，核心词自然融入语境）","translation":"中文对照翻译（与英文短文自然段逐段对应的中文翻译，保持相同的段落数，段落间用换行隔开）","vocabulary":[{"term":"单词原形","tier":"core","mastery_requirement":"recognition","phonetic":"音标","meaning":"词义","context_meaning":"语境释义","accepted_spellings":["单词"],"meaning_question":{"prompt":"题目说明","options":["选项A","选项B","选项C","选项D"],"correct_answer":"正确选项"}}]}。',
     JSON_ARRAY(JSON_OBJECT('name','learning_purpose','label','学习目的','required',true), JSON_OBJECT('name','unit_no','label','单元序号','required',true), JSON_OBJECT('name','candidate_words','label','新词候选 JSON','required',true), JSON_OBJECT('name','review_words','label','待挑战复习词 JSON','required',true), JSON_OBJECT('name','target_word_count','label','目标词数','required',true)),
     '根据词表按需生成一个可学习、可检查的场景单元', '{"candidate_words":[{"term":"clean"}]}', '{"title":"周末大扫除","vocabulary":[]}', 1, 1, 4
 ),

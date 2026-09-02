@@ -705,17 +705,28 @@ public class LearningPlanService {
                     .eq(LearningPlanUnitEntry::getDeleted, false)).intValue();
             plan.setLearnedCoreWords(value(plan.getLearnedCoreWords()) + newlyLearned);
             plan.setCompletedUnitCount(value(plan.getCompletedUnitCount()) + CommonConstants.SEQUENCE_STEP);
-            if (Objects.equals(plan.getCurrentUnitId(), unit.getId()) || plan.getCurrentUnitId() == null) {
-                LearningPlanUnit nextUnit = findNextIncompleteUnit(plan.getId(), unit.getId());
-                plan.setCurrentUnitId(nextUnit == null ? null : nextUnit.getId());
-                if (nextUnit != null && !ScenePlanConstants.UNIT_IN_PROGRESS.equals(nextUnit.getStatus())) {
-                    nextUnit.setStatus(ScenePlanConstants.UNIT_IN_PROGRESS);
-                    if (nextUnit.getStartedTime() == null) {
-                        nextUnit.setStartedTime(now);
-                    }
-                    nextUnit.setUpdateTime(now);
-                    unitMapper.updateById(nextUnit);
+            Long previousCurrentUnitId = plan.getCurrentUnitId();
+            LearningPlanUnit nextUnit = findNextIncompleteUnit(plan.getId(), unit);
+            plan.setCurrentUnitId(nextUnit == null ? null : nextUnit.getId());
+
+            if (previousCurrentUnitId != null
+                    && !Objects.equals(previousCurrentUnitId, unit.getId())
+                    && (nextUnit == null || !Objects.equals(previousCurrentUnitId, nextUnit.getId()))) {
+                LearningPlanUnit oldInProgress = unitMapper.selectById(previousCurrentUnitId);
+                if (oldInProgress != null && ScenePlanConstants.UNIT_IN_PROGRESS.equals(oldInProgress.getStatus())) {
+                    oldInProgress.setStatus(ScenePlanConstants.UNIT_READY);
+                    oldInProgress.setUpdateTime(now);
+                    unitMapper.updateById(oldInProgress);
                 }
+            }
+
+            if (nextUnit != null && !ScenePlanConstants.UNIT_IN_PROGRESS.equals(nextUnit.getStatus())) {
+                nextUnit.setStatus(ScenePlanConstants.UNIT_IN_PROGRESS);
+                if (nextUnit.getStartedTime() == null) {
+                    nextUnit.setStartedTime(now);
+                }
+                nextUnit.setUpdateTime(now);
+                unitMapper.updateById(nextUnit);
             }
             if (vocabularySelector.nextCandidates(plan, targetWordCount(plan)).isEmpty()
                     && !hasIncompleteUnit(plan.getId())) {
@@ -927,12 +938,47 @@ public class LearningPlanService {
                 .count();
     }
 
-    private LearningPlanUnit findNextIncompleteUnit(Long planId, Long excludedUnitId) {
+    private LearningPlanUnit findNextIncompleteUnit(Long planId, LearningPlanUnit currentUnit) {
+        LocalDate currentDate = currentUnit == null ? null : currentUnit.getRecommendedDate();
+        Integer currentUnitNo = currentUnit == null ? null : currentUnit.getUnitNo();
+        if (currentDate != null) {
+            LearningPlanUnit subsequent = unitMapper.selectOne(new LambdaQueryWrapper<LearningPlanUnit>()
+                    .eq(LearningPlanUnit::getPlanId, planId)
+                    .ne(LearningPlanUnit::getStatus, ScenePlanConstants.UNIT_COMPLETED)
+                    .eq(LearningPlanUnit::getDeleted, false)
+                    .and(wrapper -> wrapper
+                            .gt(LearningPlanUnit::getRecommendedDate, currentDate)
+                            .or(orWrapper -> orWrapper
+                                    .eq(LearningPlanUnit::getRecommendedDate, currentDate)
+                                    .gt(currentUnitNo != null, LearningPlanUnit::getUnitNo, currentUnitNo)
+                            )
+                    )
+                    .orderByAsc(LearningPlanUnit::getRecommendedDate)
+                    .orderByAsc(LearningPlanUnit::getUnitNo)
+                    .last(CommonConstants.SQL_LIMIT_ONE));
+            if (subsequent != null) {
+                return subsequent;
+            }
+        } else if (currentUnitNo != null) {
+            LearningPlanUnit subsequent = unitMapper.selectOne(new LambdaQueryWrapper<LearningPlanUnit>()
+                    .eq(LearningPlanUnit::getPlanId, planId)
+                    .gt(LearningPlanUnit::getUnitNo, currentUnitNo)
+                    .ne(LearningPlanUnit::getStatus, ScenePlanConstants.UNIT_COMPLETED)
+                    .eq(LearningPlanUnit::getDeleted, false)
+                    .orderByAsc(LearningPlanUnit::getRecommendedDate)
+                    .orderByAsc(LearningPlanUnit::getUnitNo)
+                    .last(CommonConstants.SQL_LIMIT_ONE));
+            if (subsequent != null) {
+                return subsequent;
+            }
+        }
+        Long excludedId = currentUnit == null ? null : currentUnit.getId();
         return unitMapper.selectOne(new LambdaQueryWrapper<LearningPlanUnit>()
                 .eq(LearningPlanUnit::getPlanId, planId)
-                .ne(excludedUnitId != null, LearningPlanUnit::getId, excludedUnitId)
+                .ne(excludedId != null, LearningPlanUnit::getId, excludedId)
                 .ne(LearningPlanUnit::getStatus, ScenePlanConstants.UNIT_COMPLETED)
                 .eq(LearningPlanUnit::getDeleted, false)
+                .orderByAsc(LearningPlanUnit::getRecommendedDate)
                 .orderByAsc(LearningPlanUnit::getUnitNo)
                 .last(CommonConstants.SQL_LIMIT_ONE));
     }

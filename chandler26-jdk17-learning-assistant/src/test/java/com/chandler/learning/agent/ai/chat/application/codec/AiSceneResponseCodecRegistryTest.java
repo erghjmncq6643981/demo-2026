@@ -39,4 +39,29 @@ class AiSceneResponseCodecRegistryTest {
                 .isInstanceOf(LearningAssistantException.class)
                 .hasMessageContaining("learning_text");
     }
+
+    @Test
+    void decodesVocabularyCardSingleEvenWithoutMemoryTips() throws Exception {
+        var parsed = new AiStructuredResponseParseResult(objectMapper.readTree("""
+                {"word":"abandon","meaning":[{"part_of_speech":"v.","meaning":"放弃"}]}
+                """), "", "kimi-json", "raw", List.of());
+
+        AiSceneResponse response = registry.decode(AiInvocationScene.VOCABULARY_CARD_SINGLE, parsed);
+
+        assertThat(response.root().path("term").asText()).isEqualTo("abandon");
+        assertThat(response.root().path("definitions").isArray()).isTrue();
+        assertThat(response.root().path("definitions").get(0).path("meaning").asText()).isEqualTo("放弃");
+    }
+
+    @Test
+    void normalizesMemoryTipsAliasForVocabularyCard() throws Exception {
+        var parsed = new AiStructuredResponseParseResult(objectMapper.readTree("""
+                {"term":"abandon","definitions":[{"meaning":"放弃"}],"memoryTips":"把 abandon 想成放开控制"}
+                """), "", "kimi-json", "raw", List.of());
+
+        AiSceneResponse response = registry.decode(AiInvocationScene.VOCABULARY_CARD_SINGLE, parsed);
+
+        assertThat(response.root().path("term").asText()).isEqualTo("abandon");
+        assertThat(response.root().path("memory_tips").asText()).isEqualTo("把 abandon 想成放开控制");
+    }
 }
