@@ -28,7 +28,6 @@ export function createStudyCardFeature(ctx) {
     speak,
     speakSentence,
     request,
-    toast,
   } = ctx
 
   function renderRecord(record) {
@@ -239,7 +238,7 @@ export function createStudyCardFeature(ctx) {
     `
   }
 
-  function renderAiPromptChips(term, parsed) {
+  function renderAiPromptChips(term, _parsed) {
     if (!elements.aiPromptChips) return
     const chips = elements.aiPromptChips.querySelectorAll('.prompt-chip')
     chips.forEach((chip) => {

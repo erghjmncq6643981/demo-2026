@@ -45,6 +45,7 @@ describe('scene study keydown', () => {
     const state = {
       activeView: 'scenePlanView',
       sceneChallengeStage: 'assessment',
+      currentLearningPlan: { id: 100 },
     }
     const unit = {
       id: 1,
@@ -65,6 +66,8 @@ describe('scene study keydown', () => {
     const sceneStudy = createSceneStudy({
       state,
       elements: {},
+      logEvent: vi.fn(),
+      toast: vi.fn(),
       activeUnit: () => unit,
       renderCurrentScene: () => {},
       sameId: (a, b) => String(a) === String(b),
@@ -87,5 +90,6 @@ describe('scene study keydown', () => {
     // Answer '城市' is at index 1
     // The state was updated with submitAssessment
     expect(event2.preventDefault).toHaveBeenCalled()
+    expect(submittedAnswer).toBe('城市')
   })
 })

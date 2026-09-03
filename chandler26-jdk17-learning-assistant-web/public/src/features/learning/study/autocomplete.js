@@ -32,14 +32,18 @@ export function createStudyAutocomplete({
     list.unshift(clean)
     try {
       localStorage.setItem(RECENT_SEARCHES_KEY, JSON.stringify(list.slice(0, MAX_RECENT)))
-    } catch {}
+    } catch {
+      /* ignore */
+    }
     renderRecentSearches()
   }
 
   function clearRecentSearches() {
     try {
       localStorage.removeItem(RECENT_SEARCHES_KEY)
-    } catch {}
+    } catch {
+      /* ignore */
+    }
     renderRecentSearches()
   }
 

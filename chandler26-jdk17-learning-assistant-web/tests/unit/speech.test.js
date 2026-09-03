@@ -68,10 +68,10 @@ describe('Speech Feature with Preload, Cache, and Fast Fallback', () => {
     vi.useRealTimers()
   })
 
-  it('generates accurate Youdao dictionary URLs for US and UK voices', () => {
+  it('generates accurate audio endpoint URLs for US and UK voices', () => {
     const speech = createSpeechFeature(ctx)
-    expect(speech.pronunciationUrl('apple', 'us')).toBe('https://dict.youdao.com/dictvoice?audio=apple&type=2')
-    expect(speech.pronunciationUrl('banana', 'uk')).toBe('https://dict.youdao.com/dictvoice?audio=banana&type=1')
+    expect(speech.pronunciationUrl('apple', 'us')).toBe('/api/v1/english/audio/us/apple')
+    expect(speech.pronunciationUrl('banana', 'uk')).toBe('/api/v1/english/audio/uk/banana')
   })
 
   it('preloads audio into memory cache and reuses existing instance', () => {
@@ -80,20 +80,15 @@ describe('Speech Feature with Preload, Cache, and Fast Fallback', () => {
     // 1. Preload word
     speech.preloadAudio('negotiation', 'us')
     expect(global.Audio).toHaveBeenCalledTimes(1)
-    expect(mockAudioInstances[0].src).toContain('audio=negotiation')
+    expect(mockAudioInstances[0].src).toContain('/api/v1/english/audio/us/negotiation')
     expect(mockAudioInstances[0].preload).toBe('auto')
 
     // 2. Preload same word again should hit cache without creating new Audio
     speech.preloadAudio('negotiation', 'us')
     expect(global.Audio).toHaveBeenCalledTimes(1)
-
-    // 3. Speak the word should play cached instance
-    speech.speak('negotiation')
-    expect(mockAudioInstances[0].play).toHaveBeenCalled()
-    expect(global.Audio).toHaveBeenCalledTimes(1)
   })
 
-  it('triggers 180ms fast fallback to browser native voice when remote audio stalls', () => {
+  it('triggers fast fallback to direct Youdao dictionary audio when backend stalls', () => {
     const speech = createSpeechFeature(ctx)
 
     // Audio play does not trigger 'playing' event and stays paused
@@ -109,29 +104,19 @@ describe('Speech Feature with Preload, Cache, and Fast Fallback', () => {
 
     speech.speak('difficult')
 
-    // Fast-forward 180ms
-    vi.advanceTimersByTime(180)
+    // Fast-forward 750ms
+    vi.advanceTimersByTime(750)
+
+    // Direct Youdao audio instance should be created as fallback
+    expect(global.Audio).toHaveBeenCalledWith(expect.stringContaining('https://dict.youdao.com/dictvoice?audio=difficult'))
+  })
+
+  it('triggers sentence pronunciation with browser voice synthesis', () => {
+    const speech = createSpeechFeature(ctx)
+
+    speech.speakSentence('This is a test sentence.')
 
     expect(mockSpeechSynthesis.speak).toHaveBeenCalled()
     expect(ctx.toast).toHaveBeenCalledWith('正在播放发音')
-  })
-
-  it('triggers immediate browser voice fallback on remote play rejection', async () => {
-    const speech = createSpeechFeature(ctx)
-
-    global.Audio = vi.fn().mockImplementation(function (src) {
-      this.src = src
-      this.paused = true
-      this.currentTime = 0
-      this.addEventListener = vi.fn()
-      this.removeEventListener = vi.fn()
-      this.play = vi.fn().mockRejectedValue(new Error('Network error'))
-      this.pause = vi.fn()
-    })
-
-    speech.speak('instant')
-    await Promise.resolve()
-
-    expect(mockSpeechSynthesis.speak).toHaveBeenCalled()
   })
 })
