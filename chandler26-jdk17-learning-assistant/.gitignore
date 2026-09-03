@@ -1,6 +1,7 @@
 config/application-local.yaml
 .run/
-logs/dev/
+logs/
+data/
 
 # Local presentation generation artifacts
 /.codex-pptx-build/
