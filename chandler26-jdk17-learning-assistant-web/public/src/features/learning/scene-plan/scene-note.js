@@ -323,12 +323,12 @@ export function createSceneNote({ state, elements, api, activeUnit, sameId, toas
     isComposing = true
   }
 
-  function handleCompositionEnd(event) {
+  function handleCompositionEnd() {
     isComposing = false
-    handleInput(event)
+    handleInput()
   }
 
-  function handleInput(event) {
+  function handleInput() {
     if (isComposing) return
     const unit = activeUnit()
     if (!unit || !elements.sceneNoteInput) return

@@ -27,7 +27,7 @@ import { isRequestAbort } from '/src/shared/latest-request.js'
 import { createVocabularyCatalogApi } from '/src/features/vocabulary/catalog/api.js'
 
 export function createScenePlanFeature(ctx) {
-  const { state, elements, request, toast, logEvent, confirmAction, escapeHtml, sameId, speak, speakSentence, loadWordbooks } = ctx
+  const { state, elements, request, toast, logEvent, confirmAction, escapeHtml, sameId, speakSentence, loadWordbooks } = ctx
   const api = createScenePlanApi(request)
   const catalogApi = createVocabularyCatalogApi(request)
   let sceneStudy

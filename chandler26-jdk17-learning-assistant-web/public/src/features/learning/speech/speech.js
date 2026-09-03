@@ -29,7 +29,9 @@ export function createSpeechFeature(ctx) {
           audioCache.delete(oldestKey)
         }
         audioCache.set(key, audio)
-      } catch (_) {}
+      } catch {
+        /* ignore */
+      }
     }
     return audio
   }
@@ -41,7 +43,9 @@ export function createSpeechFeature(ctx) {
     // 触发后端异步预拉取
     try {
       fetch(pronunciationUrl(content, voiceType), { method: 'GET' }).catch(() => {})
-    } catch (_) {}
+    } catch {
+      /* ignore */
+    }
   }
 
   function speak(text, voiceType = currentVoiceType()) {
@@ -68,7 +72,7 @@ export function createSpeechFeature(ctx) {
         })
         // 触发后端缺省补充持久化保存
         fetch(backendUrl, { method: 'GET' }).catch(() => {})
-      } catch (_) {
+      } catch {
         toast('发音播放异常')
       }
     }
@@ -77,7 +81,11 @@ export function createSpeechFeature(ctx) {
       const backendAudio = new Audio(backendUrl)
       let timeoutId = window.setTimeout(() => {
         if (backendAudio.paused || backendAudio.currentTime === 0) {
-          try { backendAudio.pause() } catch (_) {}
+          try {
+            backendAudio.pause()
+          } catch {
+            /* ignore */
+          }
           playDirectYoudao()
         }
       }, 700)
@@ -105,7 +113,7 @@ export function createSpeechFeature(ctx) {
         }
         playDirectYoudao()
       })
-    } catch (_) {
+    } catch {
       playDirectYoudao()
     }
   }

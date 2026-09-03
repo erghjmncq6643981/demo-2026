@@ -2,22 +2,17 @@ import { escapeHtml } from '/src/shared/text.js'
 import { normalizeDefinitions, normalizeExamples } from '/src/shared/vocabulary.js'
 
 export function createQuickLookupFeature({
-  state,
   elements,
   request,
   speak,
-  speakSentence,
   preloadAudio,
   study,
-  confirmAction,
   setView,
 }) {
-  let activeRecord = null
   let currentLookupTerm = ''
   let isLookingUp = false
 
   function reset() {
-    activeRecord = null
     currentLookupTerm = ''
     isLookingUp = false
     if (!elements.quickLookupContent) return
@@ -114,7 +109,6 @@ export function createQuickLookupFeature({
   }
 
   function renderQuickRecord(record) {
-    activeRecord = record
     if (!elements.quickLookupContent) return
     elements.quickLookupContent.className = 'quick-lookup-content'
     const parsed = record?.parsed || {}
@@ -123,8 +117,6 @@ export function createQuickLookupFeature({
     const usRaw = parsed?.phonetic?.us || parsed?.['phonetic.us'] || parsed?.phonetic_us || parsed?.us_phonetic || ''
     const cleanUk = ukRaw ? String(ukRaw).replace(/^UK\s+/i, '').replace(/^\/+|\/+$/g, '') : ''
     const cleanUs = usRaw ? String(usRaw).replace(/^US\s+/i, '').replace(/^\/+|\/+$/g, '') : ''
-    const uk = cleanUk ? `UK /${cleanUk}/` : ''
-    const us = cleanUs ? `US /${cleanUs}/` : ''
     const meanings = normalizeDefinitions(parsed)
     const examples = normalizeExamples(parsed).slice(0, 2)
     preloadAudio?.(term, 'us')
