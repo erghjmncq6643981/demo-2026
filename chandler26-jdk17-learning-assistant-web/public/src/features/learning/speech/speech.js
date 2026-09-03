@@ -6,7 +6,15 @@ export function createSpeechFeature(ctx) {
 
   function pronunciationUrl(text, type = 'us') {
     const encoded = encodeURIComponent(text)
-    return `https://dict.youdao.com/dictvoice?audio=${encoded}&type=${type === 'uk' ? 1 : 2}`
+    const voice = type === 'uk' ? 'uk' : 'us'
+    const base = state?.apiBase ? state.apiBase.replace(/\/$/, '') : ''
+    return `${base}/api/v1/english/audio/${voice}/${encoded}`
+  }
+
+  function directYoudaoUrl(text, type = 'us') {
+    const encoded = encodeURIComponent(text)
+    const youdaoType = type === 'uk' ? 1 : 2
+    return `https://dict.youdao.com/dictvoice?audio=${encoded}&type=${youdaoType}`
   }
 
   function getCachedAudio(content, voiceType = 'us') {
@@ -30,72 +38,10 @@ export function createSpeechFeature(ctx) {
     const content = String(text || '').trim()
     if (!content) return
     getCachedAudio(content, voiceType)
-  }
-
-  function playRemoteAudio(content, fallback) {
-    playRemoteAudioByType(content, currentVoiceType(), fallback)
-  }
-
-  function playRemoteAudioByType(content, voiceType = 'us', fallback) {
-    const audio = getCachedAudio(content, voiceType)
-    if (!audio) {
-      if (fallback) fallback()
-      else toast('暂无可播放音频')
-      return
-    }
-
-    let fallbackTriggered = false
-    const triggerFallback = () => {
-      if (fallbackTriggered) return
-      fallbackTriggered = true
-      try {
-        audio.pause()
-      } catch (_) {}
-      if (fallback) {
-        fallback()
-      } else {
-        toast('浏览器阻止了音频播放，请检查站点声音权限')
-      }
-    }
-
-    // 智能毫秒级超时降级守护（180ms 内未出声立即切本地原生 TTS）
-    let timeoutId = null
-    if (fallback) {
-      timeoutId = window.setTimeout(() => {
-        if (audio.paused || audio.currentTime === 0) {
-          triggerFallback()
-        }
-      }, 180)
-    }
-
-    const onPlaying = () => {
-      if (timeoutId) {
-        window.clearTimeout(timeoutId)
-        timeoutId = null
-      }
-      toast('正在播放发音')
-      audio.removeEventListener('playing', onPlaying)
-    }
-
-    audio.addEventListener('playing', onPlaying, { once: true })
-
+    // 触发后端异步预拉取
     try {
-      audio.currentTime = 0
-      audio.play()
-        .catch(() => {
-          if (timeoutId) {
-            window.clearTimeout(timeoutId)
-            timeoutId = null
-          }
-          triggerFallback()
-        })
-    } catch (_) {
-      if (timeoutId) {
-        window.clearTimeout(timeoutId)
-        timeoutId = null
-      }
-      triggerFallback()
-    }
+      fetch(pronunciationUrl(content, voiceType), { method: 'GET' }).catch(() => {})
+    } catch (_) {}
   }
 
   function speak(text, voiceType = currentVoiceType()) {
@@ -104,11 +50,72 @@ export function createSpeechFeature(ctx) {
       toast('暂无可播放内容')
       return
     }
-    if ('speechSynthesis' in window && 'SpeechSynthesisUtterance' in window) {
-      playRemoteAudioByType(content, voiceType, () => speakWithBrowserVoice(content, voiceType))
-      return
+
+    const voice = voiceType === 'uk' ? 'uk' : 'us'
+    const backendUrl = pronunciationUrl(content, voice)
+    const directUrl = directYoudaoUrl(content, voice)
+
+    let fallbackDone = false
+    const playDirectYoudao = () => {
+      if (fallbackDone) return
+      fallbackDone = true
+      try {
+        const directAudio = new Audio(directUrl)
+        directAudio.play().then(() => {
+          toast(`正在播放有道${voice === 'uk' ? '英音' : '美音'}发音`)
+        }).catch(() => {
+          toast('音频播放受阻，请检查网络或浏览器声音权限')
+        })
+        // 触发后端缺省补充持久化保存
+        fetch(backendUrl, { method: 'GET' }).catch(() => {})
+      } catch (_) {
+        toast('发音播放异常')
+      }
     }
-    playRemoteAudioByType(content, voiceType)
+
+    try {
+      const backendAudio = new Audio(backendUrl)
+      let timeoutId = window.setTimeout(() => {
+        if (backendAudio.paused || backendAudio.currentTime === 0) {
+          try { backendAudio.pause() } catch (_) {}
+          playDirectYoudao()
+        }
+      }, 700)
+
+      backendAudio.addEventListener('playing', () => {
+        if (timeoutId) {
+          window.clearTimeout(timeoutId)
+          timeoutId = null
+        }
+        toast(`正在播放${voice === 'uk' ? '英音' : '美音'}发音`)
+      }, { once: true })
+
+      backendAudio.addEventListener('error', () => {
+        if (timeoutId) {
+          window.clearTimeout(timeoutId)
+          timeoutId = null
+        }
+        playDirectYoudao()
+      }, { once: true })
+
+      backendAudio.play().catch(() => {
+        if (timeoutId) {
+          window.clearTimeout(timeoutId)
+          timeoutId = null
+        }
+        playDirectYoudao()
+      })
+    } catch (_) {
+      playDirectYoudao()
+    }
+  }
+
+  function playRemoteAudioByType(content, voiceType = currentVoiceType()) {
+    return speak(content, voiceType)
+  }
+
+  function playRemoteAudio(content) {
+    return speak(content, currentVoiceType())
   }
 
   function speakSentence(text) {
@@ -121,7 +128,7 @@ export function createSpeechFeature(ctx) {
       speakWithBrowserVoice(content, currentVoiceType(), { sentence: true })
       return
     }
-    playRemoteAudioByType(content, currentVoiceType())
+    speak(content, currentVoiceType())
   }
 
   function speakWithBrowserVoice(content, voiceType = currentVoiceType(), options = {}) {

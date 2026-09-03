@@ -178,6 +178,7 @@ export function createElements() {
   sceneScheduleCardsBtn: $('sceneScheduleCardsBtn'),
   sceneNextUnitBtn: $('sceneNextUnitBtn'),
   sceneCompleteUnitBtn: $('sceneCompleteUnitBtn'),
+  sceneTtsAudioBtn: $('sceneTtsAudioBtn'),
   sceneSpeakBtn: $('sceneSpeakBtn'),
   sceneLearningText: $('sceneLearningText'),
   sceneTranslation: $('sceneTranslation'),

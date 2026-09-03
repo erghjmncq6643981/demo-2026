@@ -23,6 +23,7 @@ class EnglishVocabularyStudyServiceTest {
             mock(AiChatService.class),
             objectMapper,
             mock(VocabularyInsightService.class),
+            mock(VocabularyAudioService.class),
             mock(SystemLogService.class),
             mock(UserDisplayNameService.class));
 

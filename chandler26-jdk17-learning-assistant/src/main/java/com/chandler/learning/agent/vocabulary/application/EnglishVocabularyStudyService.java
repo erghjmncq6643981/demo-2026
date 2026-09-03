@@ -59,6 +59,7 @@ public class EnglishVocabularyStudyService {
     private final AiChatService aiChatService;
     private final ObjectMapper objectMapper;
     private final VocabularyInsightService vocabularyInsightService;
+    private final VocabularyAudioService vocabularyAudioService;
     private final SystemLogService systemLogService;
     private final UserDisplayNameService userDisplayNameService;
 
@@ -141,6 +142,7 @@ public class EnglishVocabularyStudyService {
                     existing.getId(),
                     existing.getLookupCount(),
                     rawTerm);
+            vocabularyAudioService.prefetchAudio(existing.getTerm());
             return toResponse(existing, true, rawTerm);
         }
 
@@ -261,8 +263,11 @@ public class EnglishVocabularyStudyService {
                 record.getModelName(),
                 canonicalTerm,
                 forceRefresh);
-        log.debug("词汇学习卡片已保存 term={} canonicalTerm={} recordId={} provider={} model={} cacheRefresh={}",
-                normalizedTerm, canonicalTerm, record.getId(), record.getProvider(), record.getModelName(), forceRefresh);
+        try {
+            vocabularyAudioService.prefetchAudio(canonicalTerm);
+        } catch (Exception ex) {
+            log.debug("异步预热音频异常 term={}: {}", canonicalTerm, ex.getMessage());
+        }
         return toResponse(record, false, rawTerm);
     }
 

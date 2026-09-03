@@ -43,7 +43,7 @@ public class ApiAccessLogAspect {
         String operation = operationName(joinPoint);
         try {
             Object result = joinPoint.proceed();
-            log.info("event=api_access operation={} method={} path={} userId={} traceId={} costMs={} success=true errorCode=- pagination={}",
+            log.debug("event=api_access operation={} method={} path={} userId={} traceId={} costMs={} success=true errorCode=- pagination={}",
                     operation, request == null ? "-" : request.getMethod(),
                     request == null ? "-" : request.getRequestURI(), userId(), traceId(), elapsedMs(startedAt),
                     pagination(result));
@@ -51,7 +51,7 @@ public class ApiAccessLogAspect {
         } catch (Throwable error) {
             String errorCode = error instanceof LearningAssistantException business
                     ? business.getErrorCode() : error.getClass().getSimpleName();
-            log.info("event=api_access operation={} method={} path={} userId={} traceId={} costMs={} success=false errorCode={} pagination={}",
+            log.debug("event=api_access operation={} method={} path={} userId={} traceId={} costMs={} success=false errorCode={} pagination={}",
                     operation, request == null ? "-" : request.getMethod(),
                     request == null ? "-" : request.getRequestURI(), userId(), traceId(), elapsedMs(startedAt),
                     errorCode, Map.of());

@@ -409,6 +409,7 @@ bindAppEvents({
   generateSceneCards: scenePlan.generateCards,
   scheduleSceneCards: scenePlan.scheduleCards,
   speakCurrentScene: scenePlan.speakCurrentScene,
+  toggleSceneTtsAudio: scenePlan.toggleSceneTtsAudio,
   saveSceneNote: scenePlan.saveSceneNote,
   handleSceneNoteInput: scenePlan.handleSceneNoteInput,
   setSceneNoteMode: scenePlan.setSceneNoteMode,
@@ -493,9 +494,9 @@ profile.renderSystemLogs()
 profile.renderProviderOptions()
 profile.syncModelProviderDefaults()
 profile.renderLearningConfigSummary()
-profile.loadAgents()
-profile.loadModelConfigs()
-profile.loadPromptTemplates()
 if (state.token || state.preview) {
+  profile.loadAgents?.()
+  profile.loadModelConfigs?.()
+  profile.loadPromptTemplates?.()
   loadInitialData()
 }

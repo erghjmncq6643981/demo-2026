@@ -43,6 +43,7 @@ class EnglishVocabularyStudyServiceAliasTest {
         lemmatizer = new EnglishLemmatizer();
         aiChatService = Mockito.mock(AiChatService.class);
         insightService = Mockito.mock(VocabularyInsightService.class);
+        VocabularyAudioService audioService = Mockito.mock(VocabularyAudioService.class);
         systemLogService = Mockito.mock(SystemLogService.class);
         userDisplayNameService = Mockito.mock(UserDisplayNameService.class);
         objectMapper = new ObjectMapper();
@@ -54,6 +55,7 @@ class EnglishVocabularyStudyServiceAliasTest {
                 aiChatService,
                 objectMapper,
                 insightService,
+                audioService,
                 systemLogService,
                 userDisplayNameService);
     }

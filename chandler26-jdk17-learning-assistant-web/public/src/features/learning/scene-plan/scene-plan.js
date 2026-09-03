@@ -298,6 +298,117 @@ export function createScenePlanFeature(ctx) {
     sceneNote?.updateButtonText(unit)
   }
 
+  let activeSceneAudio = null
+  let activeSceneAudioUnitId = null
+
+  function stopSceneTtsAudio() {
+    if (activeSceneAudio) {
+      activeSceneAudio.pause()
+      activeSceneAudio = null
+      activeSceneAudioUnitId = null
+      if (elements.sceneTtsAudioBtn) {
+        elements.sceneTtsAudioBtn.disabled = false
+        elements.sceneTtsAudioBtn.innerHTML = '🎙️ AI 真人朗读'
+        elements.sceneTtsAudioBtn.classList.remove('playing')
+      }
+    }
+  }
+
+  async function toggleSceneTtsAudio() {
+    const unit = activeUnit()
+    if (!unit || !unit.id) {
+      toast('暂无可朗读的场景文章')
+      return
+    }
+
+    const btn = elements.sceneTtsAudioBtn
+    if (activeSceneAudio && activeSceneAudioUnitId === unit.id) {
+      if (!activeSceneAudio.paused) {
+        activeSceneAudio.pause()
+        if (btn) btn.innerHTML = '🎙️ AI 真人朗读'
+        return
+      } else {
+        activeSceneAudio.play().catch(() => {})
+        if (btn) btn.innerHTML = '⏸ 暂停朗读'
+        return
+      }
+    }
+
+    stopSceneTtsAudio()
+
+    if (btn) {
+      btn.disabled = true
+      btn.innerHTML = '⏳ 正在加载/合成...'
+    }
+
+    try {
+      const base = state?.apiBase ? state.apiBase.replace(/\/$/, '') : ''
+      const audioUrl = `${base}/api/v1/english/learning/scene-units/${unit.id}/audio`
+      const generateUrl = `${base}/api/v1/english/learning/scene-units/${unit.id}/audio/generate`
+
+      const authHeaders = state?.token ? { Authorization: `Bearer ${state.token}` } : {}
+      const checkRes = await fetch(audioUrl, { method: 'HEAD', headers: authHeaders }).catch(() => null)
+      let targetPlayUrl = audioUrl
+      if (!checkRes || !checkRes.ok) {
+        if (btn) btn.innerHTML = '🎙️ 正在生成真人语音...'
+        const genRes = await fetch(generateUrl, { method: 'POST', headers: authHeaders })
+        if (!genRes.ok) {
+          const errData = await genRes.json().catch(() => ({}))
+          throw new Error(errData.message || '语音合成失败，请检查阿里云 TTS 配置')
+        }
+        targetPlayUrl = `${audioUrl}?t=${Date.now()}`
+      }
+
+      const audio = new Audio(targetPlayUrl)
+      activeSceneAudio = audio
+      activeSceneAudioUnitId = unit.id
+
+      audio.addEventListener('play', () => {
+        if (btn) {
+          btn.disabled = false
+          btn.innerHTML = '⏸ 暂停朗读'
+          btn.classList.add('playing')
+        }
+      })
+      audio.addEventListener('pause', () => {
+        if (btn) {
+          btn.disabled = false
+          btn.innerHTML = '🎙️ AI 真人朗读'
+          btn.classList.remove('playing')
+        }
+      })
+      audio.addEventListener('ended', () => {
+        if (btn) {
+          btn.disabled = false
+          btn.innerHTML = '🎙️ AI 真人朗读'
+          btn.classList.remove('playing')
+        }
+        activeSceneAudio = null
+        activeSceneAudioUnitId = null
+      })
+      audio.addEventListener('error', () => {
+        if (btn) {
+          btn.disabled = false
+          btn.innerHTML = '🎙️ AI 真人朗读'
+          btn.classList.remove('playing')
+        }
+        activeSceneAudio = null
+        activeSceneAudioUnitId = null
+        toast('音频加载失败，请重试')
+      })
+
+      await audio.play()
+    } catch (err) {
+      logEvent('error', 'AI真人朗读异常', err.message)
+      toast(err.message || 'AI 真人朗读启动失败')
+      if (btn) {
+        btn.disabled = false
+        btn.innerHTML = '🎙️ AI 真人朗读'
+        btn.classList.remove('playing')
+      }
+    }
+  }
+
   function formatPlanDate(value) {
     if (!value) return '-'
     const date = new Date(value)
@@ -306,7 +417,7 @@ export function createScenePlanFeature(ctx) {
 
   const planManager = createPlanManager({ state, api, sameId, loadSceneData, toast, logEvent, confirmAction })
   const calendarView = createCalendarView({ state, render: () => sceneOverview?.renderCalendar(state.currentLearningPlan), refresh: () => refreshCalendarData(state.currentLearningPlan) })
-  const studyEngine = createStudyEngine({ state, elements, applyStage: (stage) => sceneStudy?.applyStage(stage), renderChallengeWords: (words) => sceneStudy?.renderChallengeWords(words), renderAssessment: (unit) => sceneStudy?.renderAssessment(unit), prepareUnit: ensureActiveUnitDetail, coreWords: (unit) => asArray(unit?.words).filter((word) => word.tier === 'core'), isWordComplete, onChallengeStart: (word) => { state.currentSceneWordId = word?.id || null; state.sceneAssessmentStartedAt = Date.now(); sceneStudy?.resetAssessment() } })
+  const studyEngine = createStudyEngine({ state, elements, applyStage: (stage) => { stopSceneTtsAudio(); sceneStudy?.applyStage(stage) }, renderChallengeWords: (words) => sceneStudy?.renderChallengeWords(words), renderAssessment: (unit) => sceneStudy?.renderAssessment(unit), prepareUnit: ensureActiveUnitDetail, coreWords: (unit) => asArray(unit?.words).filter((word) => word.tier === 'core'), isWordComplete, onChallengeStart: (word) => { state.currentSceneWordId = word?.id || null; state.sceneAssessmentStartedAt = Date.now(); sceneStudy?.resetAssessment() } })
   const importWorkflow = createVocabularyImportWorkflow({ state, elements, catalogApi, renderSourceOptions, setButtonLoading, toast, logEvent, confirmAction, escapeHtml, sameId, loadWordbooks })
   const { open: openVocabularyImport, close: closeVocabularyImport, start: startVocabularyImport, remove: deleteImportJob, saveMetadata: saveVocabularyImportMetadata, loadReview: loadImportReview, openReview: openImportReview, confirmAll: confirmAllWarnings, publish: publishVocabularyImport, triggerAnalysis: triggerVocabularyAnalysis, applyHistoryPage: applyImportHistoryPage, renderImportList, changeSearch: changeImportSearch, previousPage: previousImportPage, nextPage: nextImportPage, previousHistoryPage: previousHistoryPage, nextHistoryPage: nextHistoryPage } = importWorkflow
 
@@ -325,7 +436,7 @@ export function createScenePlanFeature(ctx) {
     completeCurrentUnit: sceneActions.completeCurrentUnit, generateNextUnit: sceneActions.generateNextUnit, scheduleNextUnit: sceneActions.scheduleNextUnit, generateCards: sceneActions.generateCards, scheduleCards: sceneActions.scheduleCards,
     startLearning: studyEngine.startLearning, showChallengeWords: studyEngine.showChallengeWords, startChallenge: studyEngine.startChallenge, backToReading: studyEngine.backToReading, backToPlanOverview: () => sceneStudy.applyStage('overview'),
     changeCalendarRange, changeCalendarOffset: calendarView.changeOffset, resetCalendar: calendarView.reset, changeSelectedPlan, pausePlan: planWorkflow.pausePlan, resumePlan: planWorkflow.resumePlan, cancelPlan: planWorkflow.cancelPlan,
-    speakCurrentScene: () => speakSentence(activeUnit()?.learningText || ''), loadSceneNote: sceneNote.load, renderSceneNote: sceneNote.render, saveSceneNote: sceneNote.save, flushSceneNoteSave: () => sceneNote.flushSave?.(), toggleSceneNotePreview: sceneNote.togglePreview, handleSceneNoteInput: sceneNote.handleInput, handleSceneNoteKeydown: (event) => sceneNote.handleKeydown?.(event), handleSceneNoteCompositionStart: () => sceneNote.handleCompositionStart?.(), handleSceneNoteCompositionEnd: (event) => sceneNote.handleCompositionEnd?.(event), setSceneNoteMode: sceneNote.setMode, toggleSceneNotePanel: sceneNote.togglePanel, openSceneNotePanel: sceneNote.openPanel, closeSceneNotePanel: sceneNote.closePanel, openSceneNoteModal: sceneNote.openPanel, closeSceneNoteModal: sceneNote.closePanel,
+    speakCurrentScene: () => speakSentence(activeUnit()?.learningText || ''), toggleSceneTtsAudio, stopSceneTtsAudio, loadSceneNote: sceneNote.load, renderSceneNote: sceneNote.render, saveSceneNote: sceneNote.save, flushSceneNoteSave: () => sceneNote.flushSave?.(), toggleSceneNotePreview: sceneNote.togglePreview, handleSceneNoteInput: sceneNote.handleInput, handleSceneNoteKeydown: (event) => sceneNote.handleKeydown?.(event), handleSceneNoteCompositionStart: () => sceneNote.handleCompositionStart?.(), handleSceneNoteCompositionEnd: (event) => sceneNote.handleCompositionEnd?.(event), setSceneNoteMode: sceneNote.setMode, toggleSceneNotePanel: sceneNote.togglePanel, openSceneNotePanel: sceneNote.openPanel, closeSceneNotePanel: sceneNote.closePanel, openSceneNoteModal: sceneNote.openPanel, closeSceneNoteModal: sceneNote.closePanel,
     closeSceneVocabularyPreview: sceneOverview.closeVocabularyPreview, openCoreWordsModal: sceneStudy.openCoreWordsModal, closeCoreWordsModal: sceneStudy.closeCoreWordsModal, openRelatedWordsModal: sceneStudy.openRelatedWordsModal, closeRelatedWordsModal: sceneStudy.closeRelatedWordsModal, generateRelatedWords: () => sceneActions.generateRelatedWords?.(),
     handleSceneChallengeKeydown: (event) => sceneStudy?.handleChallengeKeydown?.(event),
   }

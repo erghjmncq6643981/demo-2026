@@ -28,6 +28,7 @@ export function createStudyFeature(ctx) {
     currentWordbookName,
     speak,
     speakSentence,
+    preloadAudio,
   } = ctx
 
   const feature = {}
@@ -59,6 +60,7 @@ export function createStudyFeature(ctx) {
     request,
     speak,
     speakSentence,
+    preloadAudio,
     study: (term) => study(term),
     confirmAction,
     setView,

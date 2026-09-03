@@ -92,6 +92,17 @@ learning:
     jwt-issuer: ${LEARNING_JWT_ISSUER:learning-assistant}
     jwt-expire-days: ${LEARNING_JWT_EXPIRE_DAYS:7}
     api-key-secret: ${LEARNING_API_KEY_SECRET:dev-learning-assistant-api-key-secret-change-me}
+  audio:
+    storage-path: ${LEARNING_AUDIO_STORAGE_PATH:./data/audio/}
+    sync-enabled: ${LEARNING_AUDIO_SYNC_ENABLED:true}
+    sync-cron: ${LEARNING_AUDIO_SYNC_CRON:0 0 1 * * ?}
+    sync-throttle-ms: ${LEARNING_AUDIO_SYNC_THROTTLE_MS:50}
+  aliyun:
+    nls:
+      gateway-url: ${NLS_GATEWAY_URL:wss://nls-gateway-cn-shanghai.aliyuncs.com/ws/v1}
+      voice: ${NLS_VOICE:siqi}
+      sample-rate: 16000
+      max-chunk-length: 200
 
 management:
   endpoints:

@@ -65,6 +65,7 @@ export function bindAppEvents(ctx) {
     generateSceneCards,
     scheduleSceneCards,
     speakCurrentScene,
+    toggleSceneTtsAudio,
     startSceneLearning,
     showSceneChallengeWords,
     startSceneChallenge,
@@ -153,38 +154,38 @@ export function bindAppEvents(ctx) {
     closeQuickLookup,
   } = ctx
 
-elements.loginBtn.addEventListener('click', () => loginOrRegister('login'))
-elements.registerBtn.addEventListener('click', () => loginOrRegister('register'))
+elements.loginBtn?.addEventListener('click', () => loginOrRegister('login'))
+elements.registerBtn?.addEventListener('click', () => loginOrRegister('register'))
 elements.usernameInput?.addEventListener('keydown', (e) => {
   if (e.key === 'Enter') loginOrRegister('login')
 })
 elements.passwordInput?.addEventListener('keydown', (e) => {
   if (e.key === 'Enter') loginOrRegister('login')
 })
-elements.logoutBtn.addEventListener('click', logout)
+elements.logoutBtn?.addEventListener('click', logout)
 if (elements.apiBaseInput) {
   elements.apiBaseInput.addEventListener('change', () => {
     state.apiBase = elements.apiBaseInput.value.trim() || 'http://localhost:16681'
     localStorage.setItem('learning.apiBase', state.apiBase)
-    loadAgents()
-    loadModelConfigs()
-    loadPromptTemplates()
+    loadAgents?.()
+    loadModelConfigs?.()
+    loadPromptTemplates?.()
   })
 }
-elements.toggleSidebarBtn.addEventListener('click', toggleSidebar)
-elements.sidebarBackdrop.addEventListener('click', () => setSidebarCollapsed(true))
-window.matchMedia('(max-width: 1100px)').addEventListener('change', handleViewportChange)
+elements.toggleSidebarBtn?.addEventListener('click', toggleSidebar)
+elements.sidebarBackdrop?.addEventListener('click', () => setSidebarCollapsed(true))
+window.matchMedia?.('(max-width: 1100px)')?.addEventListener?.('change', handleViewportChange)
 elements.reloadAgentsBtn?.addEventListener('click', reloadCurrentView)
 elements.reloadAppBtn?.addEventListener('click', reloadCurrentView)
 elements.reloadAgentConfigsBtn?.addEventListener('click', loadAgents)
-elements.reloadModelsBtn.addEventListener('click', loadModelConfigs)
-elements.openModelModalBtn.addEventListener('click', () => openModelModal())
-elements.closeModelModalBtn.addEventListener('click', closeModelModal)
-elements.modelConfigModal.addEventListener('click', (event) => {
+elements.reloadModelsBtn?.addEventListener('click', loadModelConfigs)
+elements.openModelModalBtn?.addEventListener('click', () => openModelModal())
+elements.closeModelModalBtn?.addEventListener('click', closeModelModal)
+elements.modelConfigModal?.addEventListener('click', (event) => {
   if (event.target === elements.modelConfigModal) closeModelModal()
 })
-elements.modelProviderInput.addEventListener('change', () => syncModelProviderDefaults())
-elements.modelProviderInput.addEventListener('input', () => syncModelProviderDefaults())
+elements.modelProviderInput?.addEventListener('change', () => syncModelProviderDefaults())
+elements.modelProviderInput?.addEventListener('input', () => syncModelProviderDefaults())
 elements.modelDefaultToggleBtn?.addEventListener('click', () => toggleModelFlag(elements.modelDefaultInput))
 elements.modelEnabledToggleBtn?.addEventListener('click', () => toggleModelFlag(elements.modelEnabledInput))
 elements.saveAndTestModelBtn?.addEventListener('click', () => saveModelConfig({ testAfterSave: true }))
@@ -205,12 +206,12 @@ elements.templateModal?.addEventListener('click', (event) => {
   if (event.target === elements.templateModal) closeTemplateModal()
 })
 elements.reloadTemplatesBtn?.addEventListener('click', loadPromptTemplates)
-elements.openAccountModalBtn.addEventListener('click', openAccountModal)
-elements.closeAccountModalBtn.addEventListener('click', closeAccountModal)
-elements.accountModal.addEventListener('click', (event) => {
+elements.openAccountModalBtn?.addEventListener('click', openAccountModal)
+elements.closeAccountModalBtn?.addEventListener('click', closeAccountModal)
+elements.accountModal?.addEventListener('click', (event) => {
   if (event.target === elements.accountModal) closeAccountModal()
 })
-elements.accountModal.querySelectorAll('[data-account-tab]').forEach((button) => {
+elements.accountModal?.querySelectorAll('[data-account-tab]')?.forEach((button) => {
   button.addEventListener('click', () => setAccountModalTab(button.dataset.accountTab))
 })
 elements.editAccountPasswordBtn?.addEventListener('click', () => openAccountSecurityEditor('password'))
@@ -218,12 +219,12 @@ elements.editAccountPhoneBtn?.addEventListener('click', () => openAccountSecurit
 elements.editAccountEmailBtn?.addEventListener('click', () => openAccountSecurityEditor('email'))
 elements.cancelAccountSecurityBtn?.addEventListener('click', cancelAccountSecurityEditor)
 elements.accountNewPasswordInput?.addEventListener('input', updateAccountPasswordStrength)
-elements.saveAccountProfileBtn.addEventListener('click', saveAccountProfile)
-elements.saveAccountSecurityBtn.addEventListener('click', saveAccountSecurity)
-elements.reloadWordbookEntriesBtn.addEventListener('click', () => Promise.allSettled([loadWordbooks?.(), loadWordbookEntries?.()]))
+elements.saveAccountProfileBtn?.addEventListener('click', saveAccountProfile)
+elements.saveAccountSecurityBtn?.addEventListener('click', saveAccountSecurity)
+elements.reloadWordbookEntriesBtn?.addEventListener('click', () => Promise.allSettled([loadWordbooks?.(), loadWordbookEntries?.()]))
 elements.openVocabularyImportBtn?.addEventListener('click', openVocabularyImport)
 elements.openProfileScenePlanModalBtn?.addEventListener('click', openScenePlanModal)
-elements.reloadWordbookViewBtn.addEventListener('click', () => {
+elements.reloadWordbookViewBtn?.addEventListener('click', () => {
   if (typeof searchWordbookEntries === 'function') searchWordbookEntries()
   else loadWordbookEntries()
 })
@@ -236,31 +237,31 @@ elements.wordPrefixInput?.addEventListener('keydown', (event) => {
 })
 elements.wordbookPrevBtn?.addEventListener('click', () => changeWordbookPage(-1))
 elements.wordbookNextBtn?.addEventListener('click', () => changeWordbookPage(1))
-elements.openWordbookModalBtn.addEventListener('click', () => openWordbookModal())
-elements.closeWordbookModalBtn.addEventListener('click', closeWordbookModal)
-elements.wordbookModal.addEventListener('click', (event) => {
+elements.openWordbookModalBtn?.addEventListener('click', () => openWordbookModal())
+elements.closeWordbookModalBtn?.addEventListener('click', closeWordbookModal)
+elements.wordbookModal?.addEventListener('click', (event) => {
   if (event.target === elements.wordbookModal) closeWordbookModal()
 })
 elements.closeWordbookCardModalBtn?.addEventListener('click', () => hideModal(elements.wordbookCardModal))
 elements.wordbookCardModal?.addEventListener('click', (event) => {
   if (event.target === elements.wordbookCardModal) hideModal(elements.wordbookCardModal)
 })
-elements.createWordbookBtn.addEventListener('click', createWordbook)
-elements.saveModelBtn.addEventListener('click', saveModelConfig)
+elements.createWordbookBtn?.addEventListener('click', createWordbook)
+elements.saveModelBtn?.addEventListener('click', saveModelConfig)
 if (elements.resetModelFormBtn) {
   elements.resetModelFormBtn.addEventListener('click', () => resetModelForm({ keepModalOpen: true }))
 }
-elements.agentSelect.addEventListener('change', changeLearningAgent)
-elements.templateSelect.addEventListener('change', renderSelectedTemplate)
-elements.templateContentInput.addEventListener('input', () => validateTemplatePlaceholders({ quiet: true }))
-elements.saveTemplateBtn.addEventListener('click', savePromptTemplate)
+elements.agentSelect?.addEventListener('change', changeLearningAgent)
+elements.templateSelect?.addEventListener('change', renderSelectedTemplate)
+elements.templateContentInput?.addEventListener('input', () => validateTemplatePlaceholders({ quiet: true }))
+elements.saveTemplateBtn?.addEventListener('click', savePromptTemplate)
 elements.saveSpeechBtn?.addEventListener('click', async () => {
   const speechSaved = await saveSpeechPreferences()
   const learningSaved = await saveLearningSettings?.()
   const saved = speechSaved !== false && learningSaved !== false
   if (saved !== false) closeLearningConfigModal()
 })
-elements.wordbookSelect.addEventListener('change', () => {
+elements.wordbookSelect?.addEventListener('change', () => {
   if (elements.wordStatusFilter) elements.wordStatusFilter.value = ''
   if (elements.wordPrefixInput) elements.wordPrefixInput.value = ''
   state.wordPrefixFilter = ''
@@ -334,6 +335,7 @@ elements.sceneOverviewNextUnitBtn?.addEventListener('click', generateNextUnit)
 elements.sceneScheduleNextUnitBtn?.addEventListener('click', scheduleNextUnit)
 elements.sceneGenerateCardsBtn?.addEventListener('click', generateSceneCards)
 elements.sceneScheduleCardsBtn?.addEventListener('click', scheduleSceneCards)
+elements.sceneTtsAudioBtn?.addEventListener('click', toggleSceneTtsAudio)
 elements.sceneSpeakBtn?.addEventListener('click', speakCurrentScene)
 elements.sceneOpenNoteModalBtn?.addEventListener('click', toggleSceneNotePanel)
 elements.sceneNoteCloseBtn?.addEventListener('click', closeSceneNotePanel)
@@ -392,34 +394,34 @@ elements.articleStudyModal?.addEventListener('click', (event) => {
 })
 elements.articlePreviewGenerateBtn?.addEventListener('click', () => generateArticlePreview({ forceRefresh: Boolean(state.articleDraftRecord) }))
 elements.saveArticleStudyBtn?.addEventListener('click', saveArticleStudy)
-elements.reloadSystemLogsBtn.addEventListener('click', loadSystemLogs)
+elements.reloadSystemLogsBtn?.addEventListener('click', loadSystemLogs)
 elements.reloadAiTasksBtn?.addEventListener('click', loadAiTasks)
 elements.aiTaskStatusFilter?.addEventListener('change', renderAiTasks)
-elements.clearLogBtn.addEventListener('click', clearLogs)
-elements.studyForm.addEventListener('submit', (event) => {
+elements.clearLogBtn?.addEventListener('click', clearLogs)
+elements.studyForm?.addEventListener('submit', (event) => {
   event.preventDefault()
-  study(elements.termInput.value)
+  study(elements.termInput?.value)
 })
 elements.studyRegenerateBtn?.addEventListener('click', regenerateStudyCard)
-elements.addToWordbookBtn.addEventListener('click', addCurrentWordToWordbook)
-elements.closeAddWordbookModalBtn.addEventListener('click', closeAddWordbookModal)
-elements.addWordbookModal.addEventListener('click', (event) => {
+elements.addToWordbookBtn?.addEventListener('click', addCurrentWordToWordbook)
+elements.closeAddWordbookModalBtn?.addEventListener('click', closeAddWordbookModal)
+elements.addWordbookModal?.addEventListener('click', (event) => {
   if (event.target === elements.addWordbookModal) closeAddWordbookModal()
 })
 elements.closeEntryTransferModalBtn?.addEventListener('click', closeEntryTransferModal)
 elements.entryTransferModal?.addEventListener('click', (event) => {
   if (event.target === elements.entryTransferModal) closeEntryTransferModal()
 })
-elements.closeEntryStatusModalBtn.addEventListener('click', closeEntryStatusModal)
-elements.entryStatusModal.addEventListener('click', (event) => {
+elements.closeEntryStatusModalBtn?.addEventListener('click', closeEntryStatusModal)
+elements.entryStatusModal?.addEventListener('click', (event) => {
   if (event.target === elements.entryStatusModal) closeEntryStatusModal()
 })
-elements.entryStatusModal.querySelectorAll('[data-status-choice]').forEach((button) => {
+elements.entryStatusModal?.querySelectorAll('[data-status-choice]')?.forEach((button) => {
   button.addEventListener('click', () => chooseEntryStatus(button.getAttribute('data-status-choice')))
 })
-elements.speakWordBtn.addEventListener('click', () => speak(state.currentRecord?.normalizedTerm || elements.termInput.value))
-elements.speakSentenceBtn.addEventListener('click', () => speakSentence(firstExample(state.currentRecord?.parsed)))
-elements.editStudyNoteBtn.addEventListener('click', editCurrentNote)
+elements.speakWordBtn?.addEventListener('click', () => speak(state.currentRecord?.normalizedTerm || elements.termInput?.value))
+elements.speakSentenceBtn?.addEventListener('click', () => speakSentence(firstExample(state.currentRecord?.parsed)))
+elements.editStudyNoteBtn?.addEventListener('click', editCurrentNote)
 elements.editReviewNoteBtn?.addEventListener('click', editCurrentNote)
 elements.reviewNoteModalCloseBtn?.addEventListener('click', closeReviewNoteModal)
 elements.reviewNoteModalCancelBtn?.addEventListener('click', closeReviewNoteModal)
@@ -428,24 +430,24 @@ elements.reviewNoteModal?.addEventListener('click', (event) => {
 })
 elements.reviewNotePreviewBtn?.addEventListener('click', toggleReviewNotePreview)
 elements.reviewNoteSaveBtn?.addEventListener('click', saveReviewNote)
-elements.reloadReviewBtn.addEventListener('click', startReview)
-elements.reviewWordbookSelect.addEventListener('change', () => {
-  syncCurrentWordbookId(state, elements, elements.reviewWordbookSelect.value)
+elements.reloadReviewBtn?.addEventListener('click', startReview)
+elements.reviewWordbookSelect?.addEventListener('change', () => {
+  syncCurrentWordbookId(state, elements, elements.reviewWordbookSelect?.value)
 })
-elements.closeReviewModalBtn.addEventListener('click', closeReviewModal)
-elements.reviewCompleteModal.addEventListener('click', (event) => {
+elements.closeReviewModalBtn?.addEventListener('click', closeReviewModal)
+elements.reviewCompleteModal?.addEventListener('click', (event) => {
   if (event.target === elements.reviewCompleteModal) closeReviewModal()
 })
-  elements.reviewCompleteModal.querySelectorAll('[data-modal-result]').forEach((button) => {
+  elements.reviewCompleteModal?.querySelectorAll('[data-modal-result]')?.forEach((button) => {
     button.addEventListener('click', () => {
       const entryId = state.pendingReviewEntryId || state.currentReviewEntry?.id
       if (!entryId) return
       submitReview(entryId, button.getAttribute('data-modal-result'))
     })
   })
-elements.closeForgottenDetailModalBtn.addEventListener('click', closeForgottenDetailModal)
-elements.forgottenBackToReviewBtn.addEventListener('click', closeForgottenDetailModal)
-elements.forgottenDetailModal.addEventListener('click', (event) => {
+elements.closeForgottenDetailModalBtn?.addEventListener('click', closeForgottenDetailModal)
+elements.forgottenBackToReviewBtn?.addEventListener('click', closeForgottenDetailModal)
+elements.forgottenDetailModal?.addEventListener('click', (event) => {
   if (event.target === elements.forgottenDetailModal) closeForgottenDetailModal()
 })
 elements.deleteConfirmCloseBtn?.addEventListener('click', () => closeDeleteConfirm(false))

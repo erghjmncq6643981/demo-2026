@@ -5051,6 +5051,13 @@ input[type="range"] {
   font-weight: 600;
 }
 
+.scene-tts-audio-btn.playing {
+  background: rgba(16, 185, 129, 0.15);
+  border-color: rgba(52, 211, 153, 0.5);
+  color: #34d399;
+  font-weight: 600;
+}
+
 .scene-note-panel {
   display: flex;
   flex-direction: column;
@@ -7852,10 +7859,17 @@ input.sr-only:disabled + .file-upload-trigger {
 .quick-phonetic-row {
   display: flex;
   align-items: center;
-  gap: 10px;
+  flex-wrap: wrap;
+  gap: 12px;
   margin-top: 6px;
   font-size: 14px;
   color: var(--muted, #94a3b8);
+}
+
+.quick-phonetic-row .phonetic-item {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
 }
 
 .quick-card-meanings {

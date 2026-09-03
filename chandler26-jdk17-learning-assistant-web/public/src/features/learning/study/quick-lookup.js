@@ -7,6 +7,7 @@ export function createQuickLookupFeature({
   request,
   speak,
   speakSentence,
+  preloadAudio,
   study,
   confirmAction,
   setView,
@@ -126,6 +127,8 @@ export function createQuickLookupFeature({
     const us = cleanUs ? `US /${cleanUs}/` : ''
     const meanings = normalizeDefinitions(parsed)
     const examples = normalizeExamples(parsed).slice(0, 2)
+    preloadAudio?.(term, 'us')
+    preloadAudio?.(term, 'uk')
 
     elements.quickLookupContent.innerHTML = `
       ${record?.isAliasHit || (record?.queriedTerm && record.queriedTerm.toLowerCase() !== (term || '').toLowerCase()) ? `
@@ -141,8 +144,9 @@ export function createQuickLookupFeature({
             <span class="mini-pill">${record?.cacheHit ? '缓存命中' : 'AI 生成'}</span>
           </div>
           <div class="quick-phonetic-row">
-            <span>${escapeHtml([uk, us].filter(Boolean).join(' · ') || '暂无音标')}</span>
-            <button type="button" class="mini-audio-button" data-quick-speak="${escapeHtml(term)}">🔊 发音</button>
+            ${cleanUk ? `<span class="phonetic-item"><span>UK /${escapeHtml(cleanUk)}/</span> <button type="button" class="mini-audio-button" data-voice-type="uk" title="播放英音">UK ▶</button></span>` : ''}
+            ${cleanUs ? `<span class="phonetic-item"><span>US /${escapeHtml(cleanUs)}/</span> <button type="button" class="mini-audio-button" data-voice-type="us" title="播放美音">US ▶</button></span>` : ''}
+            ${!cleanUk && !cleanUs ? `<span>暂无音标</span> <button type="button" class="mini-audio-button" data-quick-speak="${escapeHtml(term)}">🔊 发音</button>` : ''}
           </div>
         </div>
         <div class="quick-card-actions">
@@ -179,6 +183,13 @@ export function createQuickLookupFeature({
           if (elements.quickLookupInput) elements.quickLookupInput.value = infTerm
           lookup(infTerm)
         }
+      })
+    })
+
+    elements.quickLookupContent.querySelectorAll('[data-voice-type]')?.forEach((btn) => {
+      btn.addEventListener('click', () => {
+        const voiceType = btn.getAttribute('data-voice-type') || 'us'
+        speak?.(term, voiceType)
       })
     })
 
