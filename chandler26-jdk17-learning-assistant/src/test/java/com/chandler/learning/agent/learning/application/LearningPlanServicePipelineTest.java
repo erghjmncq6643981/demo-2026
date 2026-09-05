@@ -68,6 +68,8 @@ class LearningPlanServicePipelineTest {
     @Mock
     private LearningPlanScenePersistenceService scenePersistenceService;
     @Mock
+    private LearningPlanProgressQueryService progressQueryService;
+    @Mock
     private ApplicationEventPublisher eventPublisher;
     @Mock
     private ObjectMapper objectMapper;
@@ -91,6 +93,7 @@ class LearningPlanServicePipelineTest {
 
         when(planMapper.selectOne(any(Wrapper.class))).thenReturn(plan);
         when(planMapper.claimGenerationLock(eq(1001L), any(), any(), any())).thenReturn(1);
+        when(progressQueryService.targetWordCount(any())).thenReturn(500);
 
         VocabularyCatalogEntry entry1 = new VocabularyCatalogEntry();
         entry1.setId(101L);
@@ -141,6 +144,7 @@ class LearningPlanServicePipelineTest {
 
         // 重新分配选词
         when(planMapper.claimGenerationLock(eq(1001L), any(), any(), any())).thenReturn(1);
+        when(progressQueryService.targetWordCount(any())).thenReturn(500);
         VocabularyCatalogEntry freshEntry = new VocabularyCatalogEntry();
         freshEntry.setId(103L);
         when(vocabularySelector.pendingReviewWords(eq(plan), anyInt())).thenReturn(List.of());

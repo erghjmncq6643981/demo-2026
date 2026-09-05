@@ -75,6 +75,8 @@ class LearningPlanServiceSubmitAssessmentTest {
     @Mock
     private LearningPlanScenePersistenceService scenePersistenceService;
     @Mock
+    private LearningPlanProgressQueryService progressQueryService;
+    @Mock
     private ApplicationEventPublisher eventPublisher;
     @Mock
     private TransactionTemplate transactionTemplate;
@@ -107,6 +109,7 @@ class LearningPlanServiceSubmitAssessmentTest {
                 sceneContentService,
                 assessmentSupport,
                 scenePersistenceService,
+                progressQueryService,
                 eventPublisher,
                 objectMapper,
                 transactionTemplate

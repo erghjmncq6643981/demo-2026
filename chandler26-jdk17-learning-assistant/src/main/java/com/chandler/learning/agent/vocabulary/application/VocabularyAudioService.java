@@ -54,13 +54,28 @@ public class VocabularyAudioService {
     private final EnglishVocabularyStudyRecordMapper studyRecordMapper;
     private final LearningWordbookEntryMapper wordbookEntryMapper;
 
-    private final HttpClient httpClient = HttpClient.newBuilder()
-            .proxy(ProxySelector.getDefault())
-            .followRedirects(HttpClient.Redirect.ALWAYS)
-            .connectTimeout(Duration.ofSeconds(VocabularyAudioConstants.DOWNLOAD_TIMEOUT_SECONDS))
-            .build();
+    /** 延迟创建网络客户端，避免服务初始化阶段因本机网络环境影响非联网用例。 */
+    private volatile HttpClient httpClient;
 
     private final ConcurrentHashMap<String, Object> downloadLocks = new ConcurrentHashMap<>();
+
+    private HttpClient httpClient() {
+        HttpClient client = httpClient;
+        if (client == null) {
+            synchronized (this) {
+                client = httpClient;
+                if (client == null) {
+                    client = HttpClient.newBuilder()
+                            .proxy(ProxySelector.getDefault())
+                            .followRedirects(HttpClient.Redirect.ALWAYS)
+                            .connectTimeout(Duration.ofSeconds(VocabularyAudioConstants.DOWNLOAD_TIMEOUT_SECONDS))
+                            .build();
+                    httpClient = client;
+                }
+            }
+        }
+        return client;
+    }
 
     private static final Set<String> CLAUSE_ENDINGS = Set.of(
             "that", "which", "who", "whom", "whose", "where", "when", "why", "how",
@@ -339,7 +354,7 @@ public class VocabularyAudioService {
                         .GET()
                         .build();
 
-                HttpResponse<byte[]> response = httpClient.send(request, HttpResponse.BodyHandlers.ofByteArray());
+                HttpResponse<byte[]> response = httpClient().send(request, HttpResponse.BodyHandlers.ofByteArray());
                 if (response.statusCode() == 200 && response.body() != null && response.body().length >= VocabularyAudioConstants.MIN_VALID_AUDIO_BYTES) {
                     Path tmpFile = targetFile.resolveSibling(targetFile.getFileName().toString() + ".tmp." + System.currentTimeMillis());
                     Files.write(tmpFile, response.body());

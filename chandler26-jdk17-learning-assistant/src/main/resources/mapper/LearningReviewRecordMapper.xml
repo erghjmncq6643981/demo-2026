@@ -10,4 +10,18 @@
           AND check_result = 'correct'
           AND deleted = 0
     </select>
+
+    <select id="selectPassedAssessmentTypesBatch"
+            resultType="com.chandler.learning.agent.learning.domain.bo.LearningAssessmentPassBO">
+        SELECT entry_id, assessment_type
+        FROM learning_review_record
+        WHERE unit_id = #{unitId}
+          AND entry_id IN
+          <foreach collection="entryIds" item="entryId" open="(" separator="," close=")">
+              #{entryId}
+          </foreach>
+          AND check_result = 'correct'
+          AND deleted = 0
+        GROUP BY entry_id, assessment_type
+    </select>
 </mapper>

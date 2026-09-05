@@ -101,6 +101,7 @@ public class LearningPlanService {
     private final LearningPlanSceneContentService sceneContentService;
     private final LearningPlanAssessmentSupport assessmentSupport;
     private final LearningPlanScenePersistenceService scenePersistenceService;
+    private final LearningPlanProgressQueryService progressQueryService;
     private final ApplicationEventPublisher eventPublisher;
     private final ObjectMapper objectMapper;
     private final TransactionTemplate transactionTemplate;
@@ -378,11 +379,11 @@ public class LearningPlanService {
                     LearningErrorCode.LEARNING_PLAN_GENERATION_IN_PROGRESS);
         }
         try {
-            int dailyTarget = targetWordCount(plan);
+            int dailyTarget = progressQueryService.targetWordCount(plan);
             List<VocabularyCatalogEntry> reviewWords = vocabularySelector.pendingReviewWords(plan, dailyTarget);
             List<VocabularyCatalogEntry> candidates = vocabularySelector.nextCandidates(plan, dailyTarget, reviewWords, taskId);
             if (candidates.isEmpty()) {
-                if (hasIncompleteUnit(plan.getId())) {
+                if (progressQueryService.hasIncompleteUnit(plan.getId())) {
                     throw LearningAssistantException.badRequest(
                             LearningErrorCode.LEARNING_PLAN_STATE_ERROR,
                             "词表中的词已经全部安排到场景中，请完成已生成的待学习场景");
@@ -686,7 +687,7 @@ public class LearningPlanService {
     public LearningPlanResponse completeUnit(Long userId, Long planId, Long unitId) {
         LearningPlan plan = requirePlan(userId, planId);
         LearningPlanUnit unit = requireUnit(plan, unitId);
-        int completedCore = refreshCompletedCoreCount(unit);
+        int completedCore = progressQueryService.refreshCompletedCoreCount(unit);
         if (completedCore < value(unit.getCoreWordCount())) {
             throw LearningAssistantException.badRequest(
                     LearningErrorCode.LEARNING_PLAN_UNIT_INCOMPLETE,
@@ -706,7 +707,7 @@ public class LearningPlanService {
             plan.setLearnedCoreWords(value(plan.getLearnedCoreWords()) + newlyLearned);
             plan.setCompletedUnitCount(value(plan.getCompletedUnitCount()) + CommonConstants.SEQUENCE_STEP);
             Long previousCurrentUnitId = plan.getCurrentUnitId();
-            LearningPlanUnit nextUnit = findNextIncompleteUnit(plan.getId(), unit);
+            LearningPlanUnit nextUnit = progressQueryService.findNextIncompleteUnit(plan.getId(), unit);
             plan.setCurrentUnitId(nextUnit == null ? null : nextUnit.getId());
 
             if (previousCurrentUnitId != null
@@ -728,8 +729,8 @@ public class LearningPlanService {
                 nextUnit.setUpdateTime(now);
                 unitMapper.updateById(nextUnit);
             }
-            if (vocabularySelector.nextCandidates(plan, targetWordCount(plan)).isEmpty()
-                    && !hasIncompleteUnit(plan.getId())) {
+            if (vocabularySelector.nextCandidates(plan, progressQueryService.targetWordCount(plan)).isEmpty()
+                    && !progressQueryService.hasIncompleteUnit(plan.getId())) {
                 plan.setStatus(ScenePlanConstants.STATUS_COMPLETED);
             }
             plan.setUpdateTime(now);
@@ -815,69 +816,13 @@ public class LearningPlanService {
         entry.setAssessmentJson(writeJson(question));
     }
 
-    private int targetWordCount(LearningPlan plan) {
-        int target = ScenePlanConstants.MIN_CORE_WORDS;
-        if (plan.getEndTime() != null) {
-            LocalDate today = LocalDate.now();
-            LocalDate planStart = plan.getStartTime() != null ? plan.getStartTime().toLocalDate() : today;
-            LocalDate planEnd = plan.getEndTime().toLocalDate();
-            LocalDate startForRemaining = today.isAfter(planStart) ? today : planStart;
-            long remainingDays = java.time.temporal.ChronoUnit.DAYS.between(startForRemaining, planEnd) + 1;
-            if (remainingDays > 0) {
-                int generatedCoreCount = unitMapper.selectList(new LambdaQueryWrapper<LearningPlanUnit>()
-                                .eq(LearningPlanUnit::getPlanId, plan.getId())
-                                .eq(LearningPlanUnit::getDeleted, false))
-                        .stream()
-                        .mapToInt(unit -> value(unit.getCoreWordCount()))
-                        .sum();
-                int remainingToGenerate = Math.max(0, value(plan.getTotalCatalogWords()) - generatedCoreCount);
-                target = (int) Math.ceil((double) remainingToGenerate / remainingDays);
-            }
-        } else {
-            LearningPlanUnit latestUnit = unitMapper.selectOne(new LambdaQueryWrapper<LearningPlanUnit>()
-                    .eq(LearningPlanUnit::getPlanId, plan.getId())
-                    .eq(LearningPlanUnit::getDeleted, false)
-                    .orderByDesc(LearningPlanUnit::getUnitNo)
-                    .last(CommonConstants.SQL_LIMIT_ONE));
-            if (latestUnit != null) {
-                target = value(latestUnit.getCoreWordCount());
-            }
-        }
-        return Math.max(ScenePlanConstants.MIN_CORE_WORDS, target);
-    }
-
+    /** 判断单次答题后是否已经满足当前计划要求的评测阶段。 */
     private boolean isEntryComplete(String masteryRequirement, Set<String> passed) {
         boolean meaningPassed = passed.contains(ScenePlanConstants.ASSESSMENT_MEANING_CHOICE);
         boolean spellingPassed = !ScenePlanConstants.MASTERY_SPELLING.equals(masteryRequirement)
                 || (passed.contains(ScenePlanConstants.ASSESSMENT_COPY_TYPING)
                 && passed.contains(ScenePlanConstants.ASSESSMENT_MEANING_SPELLING));
         return meaningPassed && spellingPassed;
-    }
-
-    private int refreshCompletedCoreCount(LearningPlanUnit unit) {
-        List<LearningPlanUnitEntry> coreEntries = unitEntryMapper.selectList(
-                new LambdaQueryWrapper<LearningPlanUnitEntry>()
-                        .eq(LearningPlanUnitEntry::getUnitId, unit.getId())
-                        .eq(LearningPlanUnitEntry::getTier, ScenePlanConstants.TIER_CORE)
-                        .eq(LearningPlanUnitEntry::getDeleted, false));
-        if (coreEntries.isEmpty()) {
-            unit.setCompletedCoreCount(0);
-            return 0;
-        }
-        int completed = CommonConstants.ZERO;
-        for (LearningPlanUnitEntry entry : coreEntries) {
-            if (entry.getWordbookEntryId() == null) {
-                continue;
-            }
-            List<String> passed = reviewRecordMapper.selectPassedAssessmentTypes(unit.getId(), entry.getWordbookEntryId());
-            if (isEntryComplete(entry.getMasteryRequirement(), new HashSet<>(passed))) {
-                completed++;
-            }
-        }
-        unit.setCompletedCoreCount(completed);
-        unit.setUpdateTime(LocalDateTime.now());
-        unitMapper.updateById(unit);
-        return completed;
     }
 
     private LearningPlan requirePlan(Long userId, Long planId) {
@@ -921,73 +866,6 @@ public class LearningPlanService {
                     "场景日期不能晚于学习计划结束日期");
         }
         return resolved;
-    }
-
-    private int pendingCoreCount(LearningPlanUnitResponse unit) {
-        if (unit.getWords() == null || unit.getWords().isEmpty()) {
-            return Math.max(CommonConstants.ZERO,
-                    value(unit.getCoreWordCount()) - value(unit.getCompletedCoreCount()));
-        }
-        return (int) unit.getWords().stream()
-                .filter(word -> ScenePlanConstants.TIER_CORE.equals(word.getTier()))
-                .filter(word -> {
-                    int required = ScenePlanConstants.MASTERY_SPELLING.equals(word.getMasteryRequirement())
-                            ? 3 : 1;
-                    return word.getPassedAssessments() == null || word.getPassedAssessments().size() < required;
-                })
-                .count();
-    }
-
-    private LearningPlanUnit findNextIncompleteUnit(Long planId, LearningPlanUnit currentUnit) {
-        LocalDate currentDate = currentUnit == null ? null : currentUnit.getRecommendedDate();
-        Integer currentUnitNo = currentUnit == null ? null : currentUnit.getUnitNo();
-        if (currentDate != null) {
-            LearningPlanUnit subsequent = unitMapper.selectOne(new LambdaQueryWrapper<LearningPlanUnit>()
-                    .eq(LearningPlanUnit::getPlanId, planId)
-                    .ne(LearningPlanUnit::getStatus, ScenePlanConstants.UNIT_COMPLETED)
-                    .eq(LearningPlanUnit::getDeleted, false)
-                    .and(wrapper -> wrapper
-                            .gt(LearningPlanUnit::getRecommendedDate, currentDate)
-                            .or(orWrapper -> orWrapper
-                                    .eq(LearningPlanUnit::getRecommendedDate, currentDate)
-                                    .gt(currentUnitNo != null, LearningPlanUnit::getUnitNo, currentUnitNo)
-                            )
-                    )
-                    .orderByAsc(LearningPlanUnit::getRecommendedDate)
-                    .orderByAsc(LearningPlanUnit::getUnitNo)
-                    .last(CommonConstants.SQL_LIMIT_ONE));
-            if (subsequent != null) {
-                return subsequent;
-            }
-        } else if (currentUnitNo != null) {
-            LearningPlanUnit subsequent = unitMapper.selectOne(new LambdaQueryWrapper<LearningPlanUnit>()
-                    .eq(LearningPlanUnit::getPlanId, planId)
-                    .gt(LearningPlanUnit::getUnitNo, currentUnitNo)
-                    .ne(LearningPlanUnit::getStatus, ScenePlanConstants.UNIT_COMPLETED)
-                    .eq(LearningPlanUnit::getDeleted, false)
-                    .orderByAsc(LearningPlanUnit::getRecommendedDate)
-                    .orderByAsc(LearningPlanUnit::getUnitNo)
-                    .last(CommonConstants.SQL_LIMIT_ONE));
-            if (subsequent != null) {
-                return subsequent;
-            }
-        }
-        Long excludedId = currentUnit == null ? null : currentUnit.getId();
-        return unitMapper.selectOne(new LambdaQueryWrapper<LearningPlanUnit>()
-                .eq(LearningPlanUnit::getPlanId, planId)
-                .ne(excludedId != null, LearningPlanUnit::getId, excludedId)
-                .ne(LearningPlanUnit::getStatus, ScenePlanConstants.UNIT_COMPLETED)
-                .eq(LearningPlanUnit::getDeleted, false)
-                .orderByAsc(LearningPlanUnit::getRecommendedDate)
-                .orderByAsc(LearningPlanUnit::getUnitNo)
-                .last(CommonConstants.SQL_LIMIT_ONE));
-    }
-
-    private boolean hasIncompleteUnit(Long planId) {
-        return unitMapper.selectCount(new LambdaQueryWrapper<LearningPlanUnit>()
-                .eq(LearningPlanUnit::getPlanId, planId)
-                .ne(LearningPlanUnit::getStatus, ScenePlanConstants.UNIT_COMPLETED)
-                .eq(LearningPlanUnit::getDeleted, false)) > CommonConstants.ZERO;
     }
 
     private void markPlanCompleted(LearningPlan plan) {

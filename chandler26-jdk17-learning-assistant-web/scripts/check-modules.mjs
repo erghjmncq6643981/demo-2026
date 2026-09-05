@@ -7,6 +7,7 @@ const publicRoot = join(projectRoot, 'public')
 const sourceRoot = join(publicRoot, 'src')
 const featureRoot = join(sourceRoot, 'features')
 const businessDomains = new Set(['ai', 'identity', 'learning', 'reading', 'system', 'task', 'vocabulary'])
+const MAX_MODULE_LINES = 1000
 
 async function javascriptFiles(directory) {
   const entries = await readdir(directory, { withFileTypes: true })
@@ -43,8 +44,13 @@ function resolveImport(importer, specifier) {
 await validateBusinessDomainLayout()
 const files = [...await javascriptFiles(sourceRoot), join(publicRoot, 'app.js')]
 const missing = []
+const oversized = []
 for (const file of files) {
   const source = await readFile(file, 'utf8')
+  const lineCount = source.split(/\r?\n/).length
+  if (lineCount > MAX_MODULE_LINES) {
+    oversized.push(`${relative(projectRoot, file)} (${lineCount} lines)`)
+  }
   const imports = source.matchAll(/(?:import|export)\s+(?:[^'";]+?\s+from\s+)?['"]([^'"]+)['"]/g)
   for (const match of imports) {
     const target = resolveImport(file, match[1])
@@ -57,9 +63,10 @@ for (const file of files) {
   }
 }
 
-if (missing.length) {
-  console.error(`Unresolved frontend modules:\n${missing.join('\n')}`)
+if (missing.length || oversized.length) {
+  if (missing.length) console.error(`Unresolved frontend modules:\n${missing.join('\n')}`)
+  if (oversized.length) console.error(`Frontend modules exceed ${MAX_MODULE_LINES} lines; split by responsibility:\n${oversized.join('\n')}`)
   process.exitCode = 1
 } else {
-  console.log(`Validated ${files.length} JavaScript modules.`)
+  console.log(`Validated ${files.length} JavaScript modules (size limit ${MAX_MODULE_LINES} lines).`)
 }

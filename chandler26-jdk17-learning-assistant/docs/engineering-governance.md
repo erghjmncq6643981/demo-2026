@@ -14,7 +14,9 @@
 - Flyway 管理版本：空库执行 `V1__BaselineSchema`，存量非空库以 107 建立基线，后续迁移从 V108 开始。
 - 当前完整 schema、种子数据、历史升级脚本相互分离，执行顺序见 `src/main/resources/db/README.md`。
 - 学习计划详情一次批量加载单元、材料、词条、进度和检测记录，避免逐单元 N+1。
+- 场景完成度计算通过 `LearningReviewRecordMapper.selectPassedAssessmentTypesBatch` 一次读取当前单元的通过记录，再按词条在内存分组；禁止在核心词循环中查询数据库。
 - 同类更新使用批量 SQL；大批次在服务层分块。
+- `LearningPlanProgressQueryService` 独立承载计划进度查询、场景完成度和选词数量策略，避免学习计划编排服务继续膨胀。
 - AI 网络调用不持有数据库事务。场景材料、词卡和词本分析通过显式任务状态异步执行，支持部分成功、取消和失败项重试。
 
 ## AI 交互
@@ -38,4 +40,5 @@ GitHub Actions 对每个 push 和 PR 执行：
 
 - 后端：测试、编译、依赖分析、ArchUnit 和可用时的 Testcontainers MySQL 冒烟测试。
 - 前端：模块导入检查、ESLint、Vitest、静态构建、桌面与移动端 Playwright 冒烟测试。
+- 前后端源码均执行 1000 行单文件门禁；超过阈值必须按渲染、状态、策略或持久化职责拆分后再合并。
 - 本地最低命令与提交前检查以根目录 `AGENTS.md` 为准。
