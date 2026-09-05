@@ -76,5 +76,12 @@ export function createScenePlanApi(request) {
       `/api/v1/learning/plans/${id(planId)}/${action}`,
       { method: 'POST' },
     ),
+    getSceneAudioStatus: (unitId) => request(
+      `/api/v1/english/learning/scene-units/${id(unitId)}/audio/status`,
+    ),
+    generateSceneAudioAsync: (unitId, forceRefresh = false) => request(
+      `/api/v1/english/learning/scene-units/${id(unitId)}/audio/async?forceRefresh=${forceRefresh}`,
+      { method: 'POST' },
+    ),
   }
 }

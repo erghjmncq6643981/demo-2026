@@ -146,6 +146,7 @@ export function createScenePlanFeature(ctx) {
   }
 
   function clearSceneData() {
+    clearAllSceneAudio?.()
     api.cancelAll()
     catalogApi.cancelAll()
     state.vocabularyImports = []
@@ -278,6 +279,7 @@ export function createScenePlanFeature(ctx) {
       elements.sceneGenerateCardsBtn?.classList.add('hidden')
       elements.sceneScheduleCardsBtn?.classList.add('hidden')
       elements.sceneCompleteUnitBtn?.classList.add('hidden')
+      stopSceneTtsAudio()
       return
     }
     const coreWords = asArray(unit.words).filter((word) => word.tier === 'core')
@@ -296,22 +298,311 @@ export function createScenePlanFeature(ctx) {
     sceneStudy?.renderChallengeWords(coreWords)
     sceneStudy?.renderAssessment(unit)
     sceneNote?.updateButtonText(unit)
+    if (activeSceneAudio && !sameId(activeSceneAudioUnitId, unit.id)) {
+      stopSceneTtsAudio()
+    }
+    updateSceneTtsAudioButton(unit.id)
+    syncUnitAudioStatus(unit.id)
   }
 
   let activeSceneAudio = null
   let activeSceneAudioUnitId = null
+  const sceneAudioStates = new Map()
+
+  function getUnitAudioState(unitId) {
+    if (!unitId) return null
+    const key = String(unitId)
+    if (!sceneAudioStates.has(key)) {
+      sceneAudioStates.set(key, {
+        status: 'idle',
+        taskId: null,
+        hasAudio: false,
+        errorMessage: null,
+        pollTimer: null,
+      })
+    }
+    return sceneAudioStates.get(key)
+  }
+
+  function clearAllSceneAudio() {
+    stopSceneTtsAudio()
+    for (const item of sceneAudioStates.values()) {
+      if (item.pollTimer) {
+        clearInterval(item.pollTimer)
+        item.pollTimer = null
+      }
+    }
+    sceneAudioStates.clear()
+  }
+
+  function isUserOnSceneArticle(unitId) {
+    if (!unitId) return false
+    if (state.activeView && state.activeView !== 'scenePlanView') {
+      return false
+    }
+    if (state.sceneChallengeStage && state.sceneChallengeStage !== 'learning') {
+      return false
+    }
+    const current = activeUnit()
+    if (!current || !sameId(current.id, unitId)) {
+      return false
+    }
+    if (elements.sceneLearningStage && elements.sceneLearningStage.classList.contains('hidden')) {
+      return false
+    }
+    return true
+  }
+
+  function updateSceneTtsAudioButton(unitId) {
+    const btn = elements.sceneTtsAudioBtn
+    if (!btn) return
+    const current = activeUnit()
+    if (!current || !sameId(current.id, unitId)) return
+
+    const itemState = getUnitAudioState(unitId)
+    if (!itemState) {
+      btn.disabled = false
+      btn.innerHTML = '🎙️ AI 真人朗读'
+      btn.classList.remove('playing')
+      return
+    }
+
+    if (itemState.status === 'playing') {
+      btn.disabled = false
+      btn.innerHTML = '⏸ 暂停朗读'
+      btn.classList.add('playing')
+    } else if (itemState.status === 'paused') {
+      btn.disabled = false
+      btn.innerHTML = '▶ 继续朗读'
+      btn.classList.remove('playing')
+    } else if (itemState.status === 'checking') {
+      btn.disabled = true
+      btn.innerHTML = '⏳ 正在检查语音...'
+      btn.classList.remove('playing')
+    } else if (itemState.status === 'pending' || itemState.status === 'running') {
+      btn.disabled = true
+      btn.innerHTML = '🎙️ 正在生成真人语音...'
+      btn.classList.remove('playing')
+    } else {
+      btn.disabled = false
+      btn.innerHTML = '🎙️ AI 真人朗读'
+      btn.classList.remove('playing')
+    }
+  }
 
   function stopSceneTtsAudio() {
     if (activeSceneAudio) {
       activeSceneAudio.pause()
       activeSceneAudio = null
+      const prevUnitId = activeSceneAudioUnitId
       activeSceneAudioUnitId = null
-      if (elements.sceneTtsAudioBtn) {
-        elements.sceneTtsAudioBtn.disabled = false
-        elements.sceneTtsAudioBtn.innerHTML = '🎙️ AI 真人朗读'
-        elements.sceneTtsAudioBtn.classList.remove('playing')
+      if (prevUnitId) {
+        const prevState = getUnitAudioState(prevUnitId)
+        if (prevState && ['playing', 'paused'].includes(prevState.status)) {
+          prevState.status = 'completed'
+        }
+        updateSceneTtsAudioButton(prevUnitId)
       }
     }
+    const current = activeUnit()
+    if (current) {
+      updateSceneTtsAudioButton(current.id)
+    } else if (elements.sceneTtsAudioBtn) {
+      elements.sceneTtsAudioBtn.disabled = false
+      elements.sceneTtsAudioBtn.innerHTML = '🎙️ AI 真人朗读'
+      elements.sceneTtsAudioBtn.classList.remove('playing')
+    }
+  }
+
+  async function syncUnitAudioStatus(unitId) {
+    if (!unitId || state.preview) return
+    const itemState = getUnitAudioState(unitId)
+    if (['playing', 'paused'].includes(itemState.status)) return
+    if (itemState.pollTimer) return
+
+    try {
+      const res = await api.getSceneAudioStatus(unitId)
+      if (!res) return
+      itemState.hasAudio = Boolean(res.hasAudio)
+      if (res.taskStatus === 'pending' || res.taskStatus === 'running') {
+        itemState.status = res.taskStatus
+        itemState.taskId = res.taskId
+        startPollingAudioStatus(unitId)
+      } else if (res.hasAudio || res.taskStatus === 'completed') {
+        itemState.status = 'completed'
+      } else if (res.taskStatus === 'failed') {
+        itemState.status = 'failed'
+        itemState.errorMessage = res.errorMessage
+      } else {
+        itemState.status = 'idle'
+      }
+      updateSceneTtsAudioButton(unitId)
+    } catch {
+      // 状态静默同步，异常不打扰界面
+    }
+  }
+
+  function startPollingAudioStatus(unitId) {
+    const itemState = getUnitAudioState(unitId)
+    if (itemState.pollTimer) {
+      clearInterval(itemState.pollTimer)
+      itemState.pollTimer = null
+    }
+
+    let pollCount = 0
+    const maxPolls = 60
+
+    itemState.pollTimer = setInterval(async () => {
+      pollCount++
+      try {
+        const res = await api.getSceneAudioStatus(unitId)
+        if (!res) return
+
+        if (res.hasAudio || res.taskStatus === 'completed') {
+          clearInterval(itemState.pollTimer)
+          itemState.pollTimer = null
+          itemState.hasAudio = true
+          itemState.status = 'completed'
+
+          if (isUserOnSceneArticle(unitId)) {
+            toast('AI 真人朗读语音已就绪，开始播放')
+            playSceneAudio(unitId)
+          } else {
+            // 防串音：若用户已离开该场景文章页面（如切换视图、退回日历概览、进入考核或切换到其他单元），绝不跨页面放音
+            updateSceneTtsAudioButton(unitId)
+          }
+          return
+        }
+
+        if (res.taskStatus === 'failed') {
+          clearInterval(itemState.pollTimer)
+          itemState.pollTimer = null
+          itemState.status = 'failed'
+          itemState.errorMessage = res.errorMessage
+          if (sameId(activeUnit()?.id, unitId)) {
+            updateSceneTtsAudioButton(unitId)
+            toast(`语音生成失败: ${res.errorMessage || '请检查配置后重试'}`)
+          }
+          return
+        }
+
+        itemState.status = res.taskStatus || 'running'
+        itemState.taskId = res.taskId
+        if (sameId(activeUnit()?.id, unitId)) {
+          updateSceneTtsAudioButton(unitId)
+        }
+
+        if (pollCount >= maxPolls) {
+          clearInterval(itemState.pollTimer)
+          itemState.pollTimer = null
+          itemState.status = 'idle'
+          if (sameId(activeUnit()?.id, unitId)) {
+            updateSceneTtsAudioButton(unitId)
+            toast('语音生成超时，请稍后重试')
+          }
+        }
+      } catch (err) {
+        logEvent('warn', '轮询场景文章语音状态异常', err.message)
+      }
+    }, 2500)
+  }
+
+  async function playSceneAudio(unitId) {
+    if (!isUserOnSceneArticle(unitId)) {
+      return
+    }
+
+    const itemState = getUnitAudioState(unitId)
+    const base = state?.apiBase ? state.apiBase.replace(/\/$/, '') : ''
+    const audioUrl = `${base}/api/v1/english/learning/scene-units/${encodeURIComponent(unitId)}/audio?t=${Date.now()}`
+
+    stopSceneTtsAudio()
+
+    const audio = new Audio(audioUrl)
+    audio.playbackRate = getSceneTtsPlaybackRate()
+    activeSceneAudio = audio
+    activeSceneAudioUnitId = unitId
+    itemState.status = 'playing'
+    updateSceneTtsAudioButton(unitId)
+
+    const btn = elements.sceneTtsAudioBtn
+    audio.addEventListener('play', () => {
+      itemState.status = 'playing'
+      if (sameId(activeUnit()?.id, unitId) && btn) {
+        btn.disabled = false
+        btn.innerHTML = '⏸ 暂停朗读'
+        btn.classList.add('playing')
+      }
+    })
+    audio.addEventListener('pause', () => {
+      if (itemState.status === 'playing') {
+        itemState.status = 'paused'
+      }
+      if (sameId(activeUnit()?.id, unitId) && btn) {
+        btn.disabled = false
+        btn.innerHTML = '▶ 继续朗读'
+        btn.classList.remove('playing')
+      }
+    })
+    audio.addEventListener('ended', () => {
+      itemState.status = 'completed'
+      if (sameId(activeUnit()?.id, unitId) && btn) {
+        btn.disabled = false
+        btn.innerHTML = '🎙️ AI 真人朗读'
+        btn.classList.remove('playing')
+      }
+      activeSceneAudio = null
+      activeSceneAudioUnitId = null
+    })
+    audio.addEventListener('error', (err) => {
+      logEvent('error', '音频播放错误', err)
+      itemState.status = 'idle'
+      if (sameId(activeUnit()?.id, unitId) && btn) {
+        btn.disabled = false
+        btn.innerHTML = '🎙️ AI 真人朗读'
+        btn.classList.remove('playing')
+      }
+      activeSceneAudio = null
+      activeSceneAudioUnitId = null
+      if (sameId(activeUnit()?.id, unitId)) {
+        toast('音频加载失败，请重试')
+      }
+    })
+
+    try {
+      await audio.play()
+    } catch (playErr) {
+      logEvent('warn', '自动播放受阻或失败', playErr.message)
+      itemState.status = 'paused'
+      updateSceneTtsAudioButton(unitId)
+    }
+  }
+
+  const PLAYBACK_RATES = [1.0, 0.75, 1.25]
+
+  function getSceneTtsPlaybackRate() {
+    const saved = parseFloat(localStorage.getItem('learning.sceneTtsRate'))
+    return PLAYBACK_RATES.includes(saved) ? saved : 1.0
+  }
+
+  function renderSceneTtsRateBtn() {
+    if (elements.sceneTtsRateBtn) {
+      const rate = getSceneTtsPlaybackRate()
+      elements.sceneTtsRateBtn.textContent = `${rate}x`
+      elements.sceneTtsRateBtn.title = `当前倍速 ${rate}x，点击切换 (0.75x / 1.0x / 1.25x)`
+    }
+  }
+
+  function cycleSceneTtsPlaybackRate() {
+    const current = getSceneTtsPlaybackRate()
+    const idx = PLAYBACK_RATES.indexOf(current)
+    const nextRate = PLAYBACK_RATES[(idx + 1) % PLAYBACK_RATES.length]
+    localStorage.setItem('learning.sceneTtsRate', String(nextRate))
+    renderSceneTtsRateBtn()
+    if (activeSceneAudio) {
+      activeSceneAudio.playbackRate = nextRate
+    }
+    toast(`朗读倍速已设为 ${nextRate}x`)
   }
 
   async function toggleSceneTtsAudio() {
@@ -321,91 +612,76 @@ export function createScenePlanFeature(ctx) {
       return
     }
 
-    const btn = elements.sceneTtsAudioBtn
-    if (activeSceneAudio && activeSceneAudioUnitId === unit.id) {
+    if (state.preview) {
+      toast('预览模式暂不支持 AI 真人朗读')
+      return
+    }
+
+    const itemState = getUnitAudioState(unit.id)
+
+    // 1. 若当前就是正在播放/暂停的本单元音频：切换播放与暂停
+    if (activeSceneAudio && sameId(activeSceneAudioUnitId, unit.id)) {
       if (!activeSceneAudio.paused) {
         activeSceneAudio.pause()
-        if (btn) btn.innerHTML = '🎙️ AI 真人朗读'
+        itemState.status = 'paused'
+        updateSceneTtsAudioButton(unit.id)
         return
       } else {
+        itemState.status = 'playing'
+        updateSceneTtsAudioButton(unit.id)
         activeSceneAudio.play().catch(() => {})
-        if (btn) btn.innerHTML = '⏸ 暂停朗读'
         return
       }
     }
 
-    stopSceneTtsAudio()
-
-    if (btn) {
-      btn.disabled = true
-      btn.innerHTML = '⏳ 正在加载/合成...'
+    // 2. 若当前单元的语音任务正在后台生成中，提示用户
+    if (itemState.status === 'pending' || itemState.status === 'running') {
+      toast('当前场景文章语音正在后台生成中，请稍候...')
+      return
     }
 
+    // 3. 若有其他单元的放音，先停止
+    stopSceneTtsAudio()
+
+    // 4. 查询当前单元的真实就绪状态
+    itemState.status = 'checking'
+    updateSceneTtsAudioButton(unit.id)
+
     try {
-      const base = state?.apiBase ? state.apiBase.replace(/\/$/, '') : ''
-      const audioUrl = `${base}/api/v1/english/learning/scene-units/${unit.id}/audio`
-      const generateUrl = `${base}/api/v1/english/learning/scene-units/${unit.id}/audio/generate`
-
-      const authHeaders = state?.token ? { Authorization: `Bearer ${state.token}` } : {}
-      const checkRes = await fetch(audioUrl, { method: 'HEAD', headers: authHeaders }).catch(() => null)
-      let targetPlayUrl = audioUrl
-      if (!checkRes || !checkRes.ok) {
-        if (btn) btn.innerHTML = '🎙️ 正在生成真人语音...'
-        const genRes = await fetch(generateUrl, { method: 'POST', headers: authHeaders })
-        if (!genRes.ok) {
-          const errData = await genRes.json().catch(() => ({}))
-          throw new Error(errData.message || '语音合成失败，请检查阿里云 TTS 配置')
+      const statusRes = await api.getSceneAudioStatus(unit.id)
+      if (statusRes?.hasAudio) {
+        itemState.hasAudio = true
+        itemState.status = 'completed'
+        if (isUserOnSceneArticle(unit.id)) {
+          await playSceneAudio(unit.id)
         }
-        targetPlayUrl = `${audioUrl}?t=${Date.now()}`
+        return
       }
 
-      const audio = new Audio(targetPlayUrl)
-      activeSceneAudio = audio
-      activeSceneAudioUnitId = unit.id
+      // 后端已有排队或执行中的任务
+      if (statusRes?.taskStatus === 'pending' || statusRes?.taskStatus === 'running') {
+        itemState.status = statusRes.taskStatus
+        itemState.taskId = statusRes.taskId
+        updateSceneTtsAudioButton(unit.id)
+        toast('当前场景文章语音正在后台生成中，请稍候...')
+        startPollingAudioStatus(unit.id)
+        return
+      }
 
-      audio.addEventListener('play', () => {
-        if (btn) {
-          btn.disabled = false
-          btn.innerHTML = '⏸ 暂停朗读'
-          btn.classList.add('playing')
-        }
-      })
-      audio.addEventListener('pause', () => {
-        if (btn) {
-          btn.disabled = false
-          btn.innerHTML = '🎙️ AI 真人朗读'
-          btn.classList.remove('playing')
-        }
-      })
-      audio.addEventListener('ended', () => {
-        if (btn) {
-          btn.disabled = false
-          btn.innerHTML = '🎙️ AI 真人朗读'
-          btn.classList.remove('playing')
-        }
-        activeSceneAudio = null
-        activeSceneAudioUnitId = null
-      })
-      audio.addEventListener('error', () => {
-        if (btn) {
-          btn.disabled = false
-          btn.innerHTML = '🎙️ AI 真人朗读'
-          btn.classList.remove('playing')
-        }
-        activeSceneAudio = null
-        activeSceneAudioUnitId = null
-        toast('音频加载失败，请重试')
-      })
-
-      await audio.play()
+      // 5. 异步提交生成任务
+      itemState.status = 'running'
+      updateSceneTtsAudioButton(unit.id)
+      const submitRes = await api.generateSceneAudioAsync(unit.id, false)
+      itemState.taskId = submitRes?.taskId
+      itemState.status = submitRes?.taskStatus || 'pending'
+      updateSceneTtsAudioButton(unit.id)
+      toast('已提交场景文章语音生成任务，将在后台自动合成')
+      startPollingAudioStatus(unit.id)
     } catch (err) {
-      logEvent('error', 'AI真人朗读异常', err.message)
+      logEvent('error', 'AI真人朗读提交失败', err.message)
+      itemState.status = 'idle'
+      updateSceneTtsAudioButton(unit.id)
       toast(err.message || 'AI 真人朗读启动失败')
-      if (btn) {
-        btn.disabled = false
-        btn.innerHTML = '🎙️ AI 真人朗读'
-        btn.classList.remove('playing')
-      }
     }
   }
 
@@ -430,13 +706,13 @@ export function createScenePlanFeature(ctx) {
 
   return {
     loadSceneData, clearSceneData, renderSceneView, renderRelatedWords: () => sceneStudy.renderRelatedWords(activeUnit()),
-    openVocabularyImport, closeVocabularyImport, startVocabularyImport, deleteImportJob, saveVocabularyImportMetadata, loadReview: loadImportReview, openImportReview, confirmAllWarnings, publishVocabularyImport, triggerVocabularyAnalysis,
+    openVocabularyImport, closeVocabularyImport, startVocabularyImport, deleteImportJob, saveVocabularyImportMetadata, loadReview: loadImportReview, openReview: openImportReview, confirmAllWarnings, publishVocabularyImport, triggerVocabularyAnalysis,
     openScenePlanModal: planWorkflow.openModal, closeScenePlanModal: planWorkflow.closeModal, createScenePlan: planWorkflow.savePlan, changePlanCatalog: planWorkflow.changeCatalog, changeSceneWordbook: planWorkflow.changeWordbook,
     changeImportSearch, previousImportPage, nextImportPage, previousHistoryPage, nextHistoryPage,
     completeCurrentUnit: sceneActions.completeCurrentUnit, generateNextUnit: sceneActions.generateNextUnit, scheduleNextUnit: sceneActions.scheduleNextUnit, generateCards: sceneActions.generateCards, scheduleCards: sceneActions.scheduleCards,
     startLearning: studyEngine.startLearning, showChallengeWords: studyEngine.showChallengeWords, startChallenge: studyEngine.startChallenge, backToReading: studyEngine.backToReading, backToPlanOverview: () => sceneStudy.applyStage('overview'),
     changeCalendarRange, changeCalendarOffset: calendarView.changeOffset, resetCalendar: calendarView.reset, changeSelectedPlan, pausePlan: planWorkflow.pausePlan, resumePlan: planWorkflow.resumePlan, cancelPlan: planWorkflow.cancelPlan,
-    speakCurrentScene: () => speakSentence(activeUnit()?.learningText || ''), toggleSceneTtsAudio, stopSceneTtsAudio, loadSceneNote: sceneNote.load, renderSceneNote: sceneNote.render, saveSceneNote: sceneNote.save, flushSceneNoteSave: () => sceneNote.flushSave?.(), toggleSceneNotePreview: sceneNote.togglePreview, handleSceneNoteInput: sceneNote.handleInput, handleSceneNoteKeydown: (event) => sceneNote.handleKeydown?.(event), handleSceneNoteCompositionStart: () => sceneNote.handleCompositionStart?.(), handleSceneNoteCompositionEnd: (event) => sceneNote.handleCompositionEnd?.(event), setSceneNoteMode: sceneNote.setMode, toggleSceneNotePanel: sceneNote.togglePanel, openSceneNotePanel: sceneNote.openPanel, closeSceneNotePanel: sceneNote.closePanel, openSceneNoteModal: sceneNote.openPanel, closeSceneNoteModal: sceneNote.closePanel,
+    speakCurrentScene: () => speakSentence(activeUnit()?.learningText || ''), toggleSceneTtsAudio, stopSceneTtsAudio, cycleSceneTtsPlaybackRate, renderSceneTtsRateBtn, loadSceneNote: sceneNote.load, renderSceneNote: sceneNote.render, saveSceneNote: sceneNote.save, flushSceneNoteSave: () => sceneNote.flushSave?.(), toggleSceneNotePreview: sceneNote.togglePreview, handleSceneNoteInput: sceneNote.handleInput, handleSceneNoteKeydown: (event) => sceneNote.handleKeydown?.(event), handleSceneNoteCompositionStart: () => sceneNote.handleCompositionStart?.(), handleSceneNoteCompositionEnd: (event) => sceneNote.handleCompositionEnd?.(event), setSceneNoteMode: sceneNote.setMode, toggleSceneNotePanel: sceneNote.togglePanel, openSceneNotePanel: sceneNote.openPanel, closeSceneNotePanel: sceneNote.closePanel, openSceneNoteModal: sceneNote.openPanel, closeSceneNoteModal: sceneNote.closePanel,
     closeSceneVocabularyPreview: sceneOverview.closeVocabularyPreview, openCoreWordsModal: sceneStudy.openCoreWordsModal, closeCoreWordsModal: sceneStudy.closeCoreWordsModal, openRelatedWordsModal: sceneStudy.openRelatedWordsModal, closeRelatedWordsModal: sceneStudy.closeRelatedWordsModal, generateRelatedWords: () => sceneActions.generateRelatedWords?.(),
     handleSceneChallengeKeydown: (event) => sceneStudy?.handleChallengeKeydown?.(event),
   }

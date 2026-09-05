@@ -94,7 +94,7 @@ describe('Scene Note Smart Auto-Save with MD5, UpdateTime and 15s Idle Refresh',
     await fixture.sceneNote.flushSave(true)
 
     expect(fixture.api.saveNote).not.toHaveBeenCalled()
-    expect(fixture.toast).toHaveBeenCalledWith('笔记已是最新状态')
+    expect(fixture.toast).toHaveBeenCalledWith('保存成功')
   })
 
   it('resets dirty state when user edits and reverts back to original MD5', async () => {
@@ -174,13 +174,59 @@ describe('Scene Note Smart Auto-Save with MD5, UpdateTime and 15s Idle Refresh',
       ctrlKey: false,
       key: 's',
       preventDefault: vi.fn(),
+      stopPropagation: vi.fn(),
     }
 
     fixture.sceneNote.handleKeydown(event)
     await Promise.resolve()
 
     expect(event.preventDefault).toHaveBeenCalled()
+    expect(event.stopPropagation).toHaveBeenCalled()
     expect(fixture.api.saveNote).toHaveBeenCalledWith('plan-1', 'unit-1', 'New Note Content via Shortcut')
-    expect(fixture.toast).toHaveBeenCalledWith('✓ 笔记已保存')
+    expect(fixture.toast).toHaveBeenCalledWith('保存成功')
+  })
+
+  it('supports Cmd+E / Ctrl+E shortcut to toggle between edit and preview mode', async () => {
+    fixture = createTestFixture('Note text')
+    await fixture.sceneNote.load()
+
+    expect(fixture.state.sceneNoteMode).toBe('edit')
+
+    const eventE = {
+      metaKey: true,
+      ctrlKey: false,
+      key: 'e',
+      preventDefault: vi.fn(),
+      stopPropagation: vi.fn(),
+    }
+    fixture.sceneNote.handleKeydown(eventE)
+
+    expect(eventE.preventDefault).toHaveBeenCalled()
+    expect(eventE.stopPropagation).toHaveBeenCalled()
+    expect(fixture.state.sceneNoteMode).toBe('preview')
+
+    // Press again to switch back to edit
+    fixture.sceneNote.handleKeydown(eventE)
+    expect(fixture.state.sceneNoteMode).toBe('edit')
+  })
+
+  it('supports Escape key to switch from edit mode to preview mode', async () => {
+    fixture = createTestFixture('Note text')
+    await fixture.sceneNote.load()
+
+    fixture.state.sceneNoteMode = 'edit'
+
+    const eventEsc = {
+      metaKey: false,
+      ctrlKey: false,
+      key: 'Escape',
+      preventDefault: vi.fn(),
+      stopPropagation: vi.fn(),
+    }
+    fixture.sceneNote.handleKeydown(eventEsc)
+
+    expect(eventEsc.preventDefault).toHaveBeenCalled()
+    expect(eventEsc.stopPropagation).toHaveBeenCalled()
+    expect(fixture.state.sceneNoteMode).toBe('preview')
   })
 })

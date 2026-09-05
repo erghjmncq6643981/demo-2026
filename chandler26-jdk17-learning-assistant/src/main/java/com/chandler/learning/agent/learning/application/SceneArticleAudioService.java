@@ -7,6 +7,7 @@ import com.alibaba.nls.client.protocol.SampleRateEnum;
 import com.alibaba.nls.client.protocol.tts.SpeechSynthesizer;
 import com.alibaba.nls.client.protocol.tts.SpeechSynthesizerListener;
 import com.alibaba.nls.client.protocol.tts.SpeechSynthesizerResponse;
+import com.baomidou.mybatisplus.core.conditions.query.QueryWrapper;
 import com.chandler.learning.agent.config.speech.AliyunNlsProperties;
 import com.chandler.learning.agent.exception.LearningAssistantException;
 import com.chandler.learning.agent.common.exception.LearningErrorCode;
@@ -14,6 +15,10 @@ import com.chandler.learning.agent.learning.domain.entity.LearningPlanUnit;
 import com.chandler.learning.agent.learning.domain.entity.LearningSceneMaterial;
 import com.chandler.learning.agent.learning.infrastructure.mapper.LearningPlanUnitMapper;
 import com.chandler.learning.agent.learning.infrastructure.mapper.LearningSceneMaterialMapper;
+import com.chandler.learning.agent.learning.api.response.SceneUnitAudioStatusResponse;
+import com.chandler.learning.agent.task.application.AiAsyncTaskService;
+import com.chandler.learning.agent.task.domain.constant.AiTaskConstants;
+import com.chandler.learning.agent.task.domain.entity.AiAsyncTask;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Value;
@@ -32,6 +37,7 @@ import java.nio.file.Paths;
 import java.nio.file.StandardCopyOption;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
 
 /**
@@ -45,6 +51,7 @@ public class SceneArticleAudioService {
     private final LearningPlanUnitMapper unitMapper;
     private final LearningSceneMaterialMapper materialMapper;
     private final AliyunNlsProperties nlsProperties;
+    private final AiAsyncTaskService aiAsyncTaskService;
 
     @Value("${learning.audio.storage-path:./data/audio/}")
     private String storagePath;
@@ -82,7 +89,8 @@ public class SceneArticleAudioService {
     }
 
     /**
-     * 智能分句与分块切片算法：在句末标点处断句，确保每个切片不超过 maxChunkLength 字符。
+     * 智能分句切片算法：在句末标点处断句，每一句作为一个独立切片。
+     * 当按句独立合成时，各句的停顿和语调更自然，拼接后产生清晰、自然的句间停顿，更利于学习者精读跟读。
      */
     public List<String> splitIntoChunks(String text, int maxChunkLength) {
         List<String> chunks = new ArrayList<>();
@@ -91,9 +99,8 @@ public class SceneArticleAudioService {
         }
         int limit = maxChunkLength > 0 ? maxChunkLength : 200;
 
-        // 按段落与句子边界预分割
+        // 按段落与句子边界精确分句
         String[] sentences = text.split("(?<=[.!?])\\s+|\\n+");
-        StringBuilder currentChunk = new StringBuilder();
 
         for (String sentence : sentences) {
             String trimmedSentence = sentence.trim();
@@ -101,13 +108,13 @@ public class SceneArticleAudioService {
                 continue;
             }
 
-            // 若单句长度超过上限，进一步按逗号或分号子从句切分
-            if (trimmedSentence.length() > limit) {
-                if (currentChunk.length() > 0) {
-                    chunks.add(currentChunk.toString().trim());
-                    currentChunk.setLength(0);
-                }
+            // 若单句长度在限制以内，单独作为切片，保持完整的句子韵律和句尾停顿
+            if (trimmedSentence.length() <= limit) {
+                chunks.add(trimmedSentence);
+            } else {
+                // 超长句按从句逗号/分号进一步切分
                 String[] subClauses = trimmedSentence.split("(?<=[,;:])\\s+");
+                StringBuilder currentChunk = new StringBuilder();
                 for (String clause : subClauses) {
                     String sub = clause.trim();
                     if (sub.isEmpty()) continue;
@@ -119,7 +126,6 @@ public class SceneArticleAudioService {
                             chunks.add(currentChunk.toString().trim());
                             currentChunk.setLength(0);
                         }
-                        // 若子从句仍超限，强制按字符切分
                         while (sub.length() > limit) {
                             chunks.add(sub.substring(0, limit).trim());
                             sub = sub.substring(limit).trim();
@@ -129,25 +135,10 @@ public class SceneArticleAudioService {
                         }
                     }
                 }
-                continue;
-            }
-
-            if (currentChunk.length() + trimmedSentence.length() + 1 <= limit) {
-                if (currentChunk.length() > 0) {
-                    currentChunk.append(" ");
-                }
-                currentChunk.append(trimmedSentence);
-            } else {
                 if (currentChunk.length() > 0) {
                     chunks.add(currentChunk.toString().trim());
-                    currentChunk.setLength(0);
                 }
-                currentChunk.append(trimmedSentence);
             }
-        }
-
-        if (currentChunk.length() > 0) {
-            chunks.add(currentChunk.toString().trim());
         }
 
         return chunks;
@@ -170,6 +161,141 @@ public class SceneArticleAudioService {
             }
         }
         return null;
+    }
+
+    /**
+     * 判断指定场景单元的音频文件是否已生成就绪。
+     */
+    public boolean hasAudio(Long unitId) {
+        return getExistingSceneAudio(unitId) != null;
+    }
+
+    /**
+     * 获取指定场景单元的音频就绪状态与异步生成任务状态。
+     */
+    public SceneUnitAudioStatusResponse getAudioStatus(Long userId, Long unitId) {
+        boolean hasAudio = hasAudio(unitId);
+
+        SceneUnitAudioStatusResponse response = new SceneUnitAudioStatusResponse();
+        response.setUnitId(unitId);
+        response.setHasAudio(hasAudio);
+
+        String idempotencyKey = "scene_audio:" + unitId;
+        AiAsyncTask activeTask = aiAsyncTaskService.findActiveByKey(userId,
+                AiTaskConstants.TYPE_SCENE_ARTICLE_AUDIO, null, idempotencyKey);
+        if (activeTask == null) {
+            LearningPlanUnit unit = unitMapper.selectById(unitId);
+            if (unit != null && unit.getPlanId() != null) {
+                activeTask = aiAsyncTaskService.findActiveByKey(userId,
+                        AiTaskConstants.TYPE_SCENE_ARTICLE_AUDIO, unit.getPlanId(), idempotencyKey);
+            }
+        }
+
+        if (activeTask != null) {
+            response.setTaskStatus(activeTask.getStatus());
+            response.setTaskId(activeTask.getId());
+            response.setErrorMessage(activeTask.getErrorMessage());
+        } else if (hasAudio) {
+            response.setTaskStatus(AiTaskConstants.STATUS_COMPLETED);
+        } else {
+            response.setTaskStatus("none");
+        }
+        return response;
+    }
+
+    /**
+     * 异步提交场景文章语音生成任务。
+     */
+    public SceneUnitAudioStatusResponse submitAudioGenerationTask(Long userId, Long unitId, boolean forceRefresh) {
+        LearningPlanUnit unit = unitMapper.selectById(unitId);
+        if (unit == null) {
+            throw LearningAssistantException.notFound(LearningErrorCode.LEARNING_PLAN_UNIT_NOT_FOUND, "场景学习单元不存在");
+        }
+
+        boolean hasAudio = hasAudio(unitId);
+        if (!forceRefresh && hasAudio) {
+            SceneUnitAudioStatusResponse response = new SceneUnitAudioStatusResponse();
+            response.setUnitId(unitId);
+            response.setHasAudio(true);
+            response.setTaskStatus(AiTaskConstants.STATUS_COMPLETED);
+            return response;
+        }
+
+        String idempotencyKey = "scene_audio:" + unitId;
+        AiAsyncTask active = aiAsyncTaskService.findActiveByKey(userId,
+                AiTaskConstants.TYPE_SCENE_ARTICLE_AUDIO, unit.getPlanId(), idempotencyKey);
+        if (active != null) {
+            SceneUnitAudioStatusResponse response = new SceneUnitAudioStatusResponse();
+            response.setUnitId(unitId);
+            response.setHasAudio(hasAudio);
+            response.setTaskStatus(active.getStatus());
+            response.setTaskId(active.getId());
+            response.setErrorMessage(active.getErrorMessage());
+            return response;
+        }
+
+        Map<String, Object> payload = Map.of("forceRefresh", forceRefresh);
+        AiAsyncTask task = aiAsyncTaskService.create(
+                userId,
+                AiTaskConstants.TYPE_SCENE_ARTICLE_AUDIO,
+                "场景文章语音生成 · " + (unit.getTitle() != null ? unit.getTitle() : ("单元#" + unitId)),
+                unit.getPlanId(),
+                unitId,
+                null,
+                AiTaskConstants.EXECUTION_IMMEDIATE,
+                null,
+                null,
+                1,
+                idempotencyKey,
+                payload);
+
+        SceneUnitAudioStatusResponse response = new SceneUnitAudioStatusResponse();
+        response.setUnitId(unitId);
+        response.setHasAudio(hasAudio);
+        response.setTaskStatus(task.getStatus());
+        response.setTaskId(task.getId());
+        return response;
+    }
+
+    /**
+     * 查询所有已生成有效场景学习材料的单元 ID 列表（用于定时缺省巡检）。
+     */
+    public List<Long> collectAllSceneUnitIds() {
+        QueryWrapper<LearningPlanUnit> qw = new QueryWrapper<>();
+        qw.select("id");
+        qw.isNotNull("scene_material_id");
+        qw.eq("deleted", false);
+        List<LearningPlanUnit> units = unitMapper.selectList(qw);
+        if (units == null || units.isEmpty()) {
+            return List.of();
+        }
+        return units.stream()
+                .map(LearningPlanUnit::getId)
+                .filter(id -> id != null)
+                .distinct()
+                .toList();
+    }
+
+    /**
+     * 检查并确保指定场景单元的文章音频已落盘，若缺省则自动调用阿里云 TTS 生成。
+     *
+     * @param unitId 场景单元 ID
+     * @return 本次新合成成功的音频文件数（0 或 1）
+     */
+    public int syncEnsureSceneAudio(Long unitId) {
+        if (unitId == null) {
+            return 0;
+        }
+        if (hasAudio(unitId)) {
+            return 0;
+        }
+        try {
+            Resource resource = generateOrGetSceneAudio(unitId, false);
+            return resource != null && resource.exists() ? 1 : 0;
+        } catch (Exception ex) {
+            log.warn("缺省检查中合成场景文章语音异常 unitId={}: {}", unitId, ex.getMessage());
+            return 0;
+        }
     }
 
     private volatile String cachedToken;
@@ -277,7 +403,7 @@ public class SceneArticleAudioService {
                     for (int i = 0; i < chunks.size(); i++) {
                         String chunk = chunks.get(i);
                         log.debug("正在合成第 {}/{} 段音频 ({} chars): {}", (i + 1), chunks.size(), chunk.length(), chunk);
-                        byte[] audioBytes = synthesizeChunk(nlsClient, chunk, nlsProperties.getAppKey(), nlsProperties.getVoice());
+                        byte[] audioBytes = synthesizeChunk(nlsClient, chunk, nlsProperties.getAppKey(), nlsProperties.getVoice(), nlsProperties.getSpeechRate());
                         if (audioBytes != null && audioBytes.length > 0) {
                             fos.write(audioBytes);
                         }
@@ -309,7 +435,7 @@ public class SceneArticleAudioService {
         }
     }
 
-    private byte[] synthesizeChunk(NlsClient client, String text, String appKey, String voice) throws Exception {
+    private byte[] synthesizeChunk(NlsClient client, String text, String appKey, String voice, Integer speechRate) throws Exception {
         ByteArrayOutputStream baos = new ByteArrayOutputStream();
         SpeechSynthesizer synthesizer = null;
         try {
@@ -341,7 +467,7 @@ public class SceneArticleAudioService {
             synthesizer.setSampleRate(SampleRateEnum.SAMPLE_RATE_16K);
             synthesizer.setVoice(StringUtils.hasText(voice) ? voice : "siyue");
             synthesizer.setPitchRate(0);
-            synthesizer.setSpeechRate(0);
+            synthesizer.setSpeechRate(speechRate != null ? speechRate : -120);
             synthesizer.setText(text);
 
             synthesizer.start();

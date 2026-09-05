@@ -100,7 +100,8 @@ learning:
   aliyun:
     nls:
       gateway-url: ${NLS_GATEWAY_URL:wss://nls-gateway-cn-shanghai.aliyuncs.com/ws/v1}
-      voice: ${NLS_VOICE:siqi}
+      voice: ${NLS_VOICE:Emily}
+      speech-rate: ${NLS_SPEECH_RATE:-120}
       sample-rate: 16000
       max-chunk-length: 200
 

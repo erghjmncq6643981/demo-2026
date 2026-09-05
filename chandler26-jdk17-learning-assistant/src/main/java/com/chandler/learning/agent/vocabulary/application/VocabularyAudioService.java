@@ -62,8 +62,14 @@ public class VocabularyAudioService {
 
     private final ConcurrentHashMap<String, Object> downloadLocks = new ConcurrentHashMap<>();
 
+    private static final Set<String> CLAUSE_ENDINGS = Set.of(
+            "that", "which", "who", "whom", "whose", "where", "when", "why", "how",
+            "if", "whether", "because", "although", "though", "since", "until", "unless",
+            "as", "than"
+    );
+
     /**
-     * 规范化音频文件名（转小写、去除特殊字符）。
+     * 规范化音频文件名（转小写、去除特殊字符、折叠多余空格）。
      */
     public String normalizeAudioTerm(String term) {
         if (!StringUtils.hasText(term)) {
@@ -71,8 +77,53 @@ public class VocabularyAudioService {
         }
         return term.trim()
                 .toLowerCase(Locale.ROOT)
+                .replaceAll("\\s+", " ")
                 .replaceAll("[^a-zA-Z0-9_\\-\\s']", "")
                 .trim();
+    }
+
+    /**
+     * 判断词汇是否适合请求词典真人发音库（单字或二元基础词组，过滤 3 词及以上长短语、从句结构与词缀片段）。
+     */
+    public boolean isDownloadableDictTerm(String term) {
+        if (!StringUtils.hasText(term)) {
+            return false;
+        }
+        String clean = normalizeAudioTerm(term);
+        if (clean.isEmpty()) {
+            return false;
+        }
+        // 必须包含英文字母
+        if (!clean.matches(".*[a-zA-Z].*")) {
+            return false;
+        }
+        // 过滤前后缀片段（以连字符或单引号开头/结尾，如 -able, post-, 's）
+        if (clean.startsWith("-") || clean.endsWith("-") || clean.startsWith("'") || clean.endsWith("'")) {
+            return false;
+        }
+        String[] tokens = clean.split(" ");
+        // 词典真人发音库仅收录单字或至多 2 个词的基础词组（如 look after, ice cream），3 词及以上长短语/句式直接过滤
+        if (tokens.length > 2) {
+            return false;
+        }
+        // 过滤以从句连接词/关系代词结尾的短语（如 forbid that, given that）
+        if (tokens.length == 2 && CLAUSE_ENDINGS.contains(tokens[1])) {
+            return false;
+        }
+        for (String token : tokens) {
+            if (token.isEmpty() || token.length() > 45) {
+                return false;
+            }
+            // 单字母单词仅允许 a, i, o
+            if (token.length() == 1 && !Set.of("a", "i", "o").contains(token)) {
+                return false;
+            }
+            // 必须包含至少一个元音字母或数字
+            if (!token.matches(".*[aeiouyAEIOUY0-9].*")) {
+                return false;
+            }
+        }
+        return true;
     }
 
     /**
@@ -113,6 +164,11 @@ public class VocabularyAudioService {
             }
         }
 
+        // 仅对合法的词典单字或二元词组发起远程下载，非词典条目（如 3+ 词长短语、从句等）直接过滤跳过
+        if (!isDownloadableDictTerm(cleanTerm)) {
+            return null;
+        }
+
         // 同步下载并使用细粒度锁防重入
         String lockKey = type + ":" + cleanTerm;
         Object lock = downloadLocks.computeIfAbsent(lockKey, k -> new Object());
@@ -126,7 +182,7 @@ public class VocabularyAudioService {
                     return new FileSystemResource(targetFile);
                 }
             } catch (Exception ex) {
-                log.warn("获取/下载发音音频异常 term={} type={}: {}", cleanTerm, type, ex.getMessage());
+                log.debug("获取/下载发音音频异常 term={} type={}: {}", cleanTerm, type, ex.getMessage());
             } finally {
                 downloadLocks.remove(lockKey);
             }
@@ -139,7 +195,7 @@ public class VocabularyAudioService {
      */
     public void prefetchAudio(String rawTerm) {
         String cleanTerm = normalizeAudioTerm(rawTerm);
-        if (!StringUtils.hasText(cleanTerm)) {
+        if (!StringUtils.hasText(cleanTerm) || !isDownloadableDictTerm(cleanTerm)) {
             return;
         }
         aiTaskExecutor.execute(() -> {
@@ -179,7 +235,7 @@ public class VocabularyAudioService {
      */
     public int syncEnsureAudio(String rawTerm) {
         String cleanTerm = normalizeAudioTerm(rawTerm);
-        if (!StringUtils.hasText(cleanTerm)) {
+        if (!StringUtils.hasText(cleanTerm) || !isDownloadableDictTerm(cleanTerm)) {
             return 0;
         }
         int downloaded = 0;
@@ -218,7 +274,7 @@ public class VocabularyAudioService {
             for (LearningWordbookEntry entry : result.getRecords()) {
                 if (StringUtils.hasText(entry.getNormalizedTerm())) {
                     String clean = normalizeAudioTerm(entry.getNormalizedTerm());
-                    if (StringUtils.hasText(clean)) {
+                    if (StringUtils.hasText(clean) && isDownloadableDictTerm(clean)) {
                         allTerms.add(clean);
                     }
                 }
@@ -244,7 +300,7 @@ public class VocabularyAudioService {
             for (EnglishVocabularyStudyRecord record : result.getRecords()) {
                 if (StringUtils.hasText(record.getNormalizedTerm())) {
                     String clean = normalizeAudioTerm(record.getNormalizedTerm());
-                    if (StringUtils.hasText(clean)) {
+                    if (StringUtils.hasText(clean) && isDownloadableDictTerm(clean)) {
                         allTerms.add(clean);
                     }
                 }
@@ -260,6 +316,9 @@ public class VocabularyAudioService {
     }
 
     private boolean downloadAudio(String term, String voiceType, Path targetFile) {
+        if (!isDownloadableDictTerm(term)) {
+            return false;
+        }
         int youdaoType = VocabularyAudioConstants.VOICE_TYPE_UK.equals(voiceType)
                 ? VocabularyAudioConstants.YOUDAO_TYPE_UK
                 : VocabularyAudioConstants.YOUDAO_TYPE_US;
@@ -292,7 +351,7 @@ public class VocabularyAudioService {
                 log.debug("从音源下载音频重试 url={} error={}", url, ex.getMessage());
             }
         }
-        log.warn("下载远程音频失败 term={} type={}", term, voiceType);
+        log.debug("远程词典音库未收录或下载失败 term={} type={}", term, voiceType);
         return false;
     }
 }

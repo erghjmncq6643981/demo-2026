@@ -15,7 +15,8 @@ public enum AiTaskType {
     SCENE_RELATED_VOCABULARY("scene_related_vocabulary", "场景相关词汇生成"),
     VOCABULARY_CARD("vocabulary_card", "批量词卡生成"),
     VOCABULARY_CATALOG_ANALYSIS("vocabulary_catalog_analysis", "词本关联分析"),
-    ARTICLE_MATERIAL("article_material", "语境精读材料生成");
+    ARTICLE_MATERIAL("article_material", "语境精读材料生成"),
+    SCENE_ARTICLE_AUDIO("scene_article_audio", "场景文章语音生成");
 
     private final String code;
     private final String title;

@@ -16,6 +16,7 @@ const TYPE_LABELS = {
   scene_material: '场景材料',
   scene_material_regeneration: '材料重新生成',
   scene_related_vocabulary: '场景相关词汇',
+  scene_article_audio: '场景文章语音',
   vocabulary_card: '批量词卡',
   vocabulary_catalog_analysis: '词本关联分析',
   article_material: '语境精读材料',
@@ -68,7 +69,8 @@ export function createTaskCenterProfileFeature(ctx) {
     if (options.page) {
       state.aiTaskPage = options.page
     }
-    const shouldLoadAll = (state.user?.roleCode === 'ADMIN') && (options.all || state.activeView === 'systemAdminView' || state.activeSystemTab === 'aiTaskPanel')
+    const isExplicitAll = typeof options.all === 'boolean' ? options.all : (state.activeView === 'systemAdminView')
+    const shouldLoadAll = (state.user?.roleCode === 'ADMIN') && isExplicitAll
     const filter = elements.aiTaskStatusFilter?.value || ''
     const params = new URLSearchParams({
       page: String(state.aiTaskPage || 1),

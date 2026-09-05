@@ -1,12 +1,14 @@
 import { hideModal, showModal } from '/src/shared/modal.js'
 import { escapeHtml, formatDateTime } from '/src/shared/text.js'
 import { createAiSessionAdminFeature } from '/src/features/ai/chat/session-admin.js'
+import { createJobManagementFeature } from '/src/features/system/job-management.js'
 
 const ROLE_LABELS = { USER: '普通用户', ADMIN: '系统管理员' }
 
 export function createSystemManagementFeature(ctx) {
   const { state, elements, request, setLoading, toast, logEvent, confirmDelete } = ctx
   const aiSessions = createAiSessionAdminFeature(ctx)
+  const jobManagement = createJobManagementFeature(ctx)
 
   function isAdmin() {
     return state.preview || state.user?.roleCode === 'ADMIN'
@@ -14,14 +16,13 @@ export function createSystemManagementFeature(ctx) {
 
   function mountPanels() {
     if (!elements.systemManagedPanels) return
-    for (const id of ['aiTaskPanel', 'modelManagePanel', 'agentManagePanel', 'systemLogPanel']) {
+    for (const id of ['aiTaskPanel', 'modelManagePanel', 'agentManagePanel', 'systemJobPanel', 'systemLogPanel']) {
       const panel = document.getElementById(id)
       if (panel && panel.parentElement !== elements.systemManagedPanels) {
         panel.classList.add('system-section')
         elements.systemManagedPanels.appendChild(panel)
       }
     }
-    renderSystemTab(state.activeSystemTab)
   }
 
   function renderAdminEntry() {
@@ -32,6 +33,7 @@ export function createSystemManagementFeature(ctx) {
   }
 
   function renderSystemTab(tabId = state.activeSystemTab) {
+    mountPanels()
     const fallback = document.getElementById(tabId) ? tabId : 'adminUserPanel'
     state.activeSystemTab = fallback
     localStorage.setItem('learning.systemTab', fallback)
@@ -44,6 +46,7 @@ export function createSystemManagementFeature(ctx) {
     if (fallback === 'adminUserPanel') loadUsers()
     if (fallback === 'modelManagePanel') aiSessions.loadAiSessions()
     if (fallback === 'aiTaskPanel') ctx.loadAiTasks?.({ all: true })
+    if (fallback === 'systemJobPanel') jobManagement.loadJobs()
   }
 
   async function loadUsers() {
@@ -190,5 +193,5 @@ export function createSystemManagementFeature(ctx) {
     ]
   }
 
-  return { isAdmin, mountPanels, renderAdminEntry, renderSystemTab, loadUsers, renderUsers, openUserModal, closeUserModal, saveUser, changePage, ...aiSessions }
+  return { isAdmin, mountPanels, renderAdminEntry, renderSystemTab, loadUsers, renderUsers, openUserModal, closeUserModal, saveUser, changePage, ...aiSessions, ...jobManagement }
 }

@@ -9,6 +9,7 @@ public static final String TYPE_SCENE_MATERIAL = "scene_material";
         public static final String TYPE_VOCABULARY_CARD = "vocabulary_card";
         public static final String TYPE_VOCABULARY_CATALOG_ANALYSIS = "vocabulary_catalog_analysis";
         public static final String TYPE_ARTICLE_MATERIAL = "article_material";
+        public static final String TYPE_SCENE_ARTICLE_AUDIO = "scene_article_audio";
         public static final String STATUS_PENDING = "pending";
         public static final String STATUS_RUNNING = "running";
         public static final String STATUS_RETRY_WAIT = "retry_wait";

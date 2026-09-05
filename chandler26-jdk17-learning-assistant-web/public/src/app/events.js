@@ -66,6 +66,8 @@ export function bindAppEvents(ctx) {
     scheduleSceneCards,
     speakCurrentScene,
     toggleSceneTtsAudio,
+    cycleSceneTtsPlaybackRate,
+    renderSceneTtsRateBtn,
     startSceneLearning,
     showSceneChallengeWords,
     startSceneChallenge,
@@ -86,6 +88,7 @@ export function bindAppEvents(ctx) {
     handleSceneNoteCompositionEnd,
     setSceneNoteMode,
     toggleSceneNotePanel,
+    toggleSceneNotePreview,
     closeSceneNotePanel,
     closeSceneNoteModal,
     openCoreWordsModal,
@@ -332,11 +335,14 @@ elements.sceneScheduleNextUnitBtn?.addEventListener('click', scheduleNextUnit)
 elements.sceneGenerateCardsBtn?.addEventListener('click', generateSceneCards)
 elements.sceneScheduleCardsBtn?.addEventListener('click', scheduleSceneCards)
 elements.sceneTtsAudioBtn?.addEventListener('click', toggleSceneTtsAudio)
+elements.sceneTtsRateBtn?.addEventListener('click', cycleSceneTtsPlaybackRate)
 elements.sceneSpeakBtn?.addEventListener('click', speakCurrentScene)
+renderSceneTtsRateBtn?.()
 elements.sceneOpenNoteModalBtn?.addEventListener('click', toggleSceneNotePanel)
 elements.sceneNoteCloseBtn?.addEventListener('click', closeSceneNotePanel)
 elements.sceneNoteEditBtn?.addEventListener('click', () => setSceneNoteMode('edit'))
 elements.sceneNotePreviewBtn?.addEventListener('click', () => setSceneNoteMode('preview'))
+elements.sceneNotePreview?.addEventListener('dblclick', () => setSceneNoteMode('edit'))
 elements.sceneNoteInput?.addEventListener('input', handleSceneNoteInput)
 elements.sceneNoteInput?.addEventListener('compositionstart', handleSceneNoteCompositionStart)
 elements.sceneNoteInput?.addEventListener('compositionend', handleSceneNoteCompositionEnd)
@@ -482,6 +488,7 @@ elements.searchAiSessionsBtn?.addEventListener('click', () => { state.aiSessionP
 elements.resetAiSessionsBtn?.addEventListener('click', () => systemManagement?.resetAiSessionFilters())
 elements.aiSessionPrevBtn?.addEventListener('click', () => systemManagement?.changeAiSessionPage(-1))
 elements.aiSessionNextBtn?.addEventListener('click', () => systemManagement?.changeAiSessionPage(1))
+elements.reloadSystemJobsBtn?.addEventListener('click', () => systemManagement?.loadJobs())
 elements.closeAiSessionDetailBtn?.addEventListener('click', () => systemManagement?.closeDetail())
 elements.aiSessionDetailModal?.addEventListener('click', (event) => { if (event.target === elements.aiSessionDetailModal) systemManagement?.closeDetail() })
   document.addEventListener('keydown', (event) => {
@@ -501,6 +508,36 @@ elements.aiSessionDetailModal?.addEventListener('click', (event) => { if (event.
       closeQuickLookup?.()
       return
     }
+
+    // 场景笔记全局快捷键：Cmd+E / Ctrl+E 切换编辑/预览或打开笔记，Esc 在编辑时退出到预览
+    const isSceneView = state.activeView === 'scenePlanView' || elements.scenePlanView?.classList.contains('active')
+    if (isSceneView) {
+      const isModifier = Boolean(event.metaKey || event.ctrlKey)
+      const key = String(event.key || '').toLowerCase()
+      const code = String(event.code || '')
+      if (isModifier && (key === 'e' || code === 'KeyE')) {
+        event.preventDefault()
+        event.stopPropagation()
+        if (!state.sceneNotePanelOpen) {
+          toggleSceneNotePanel?.(true)
+          setSceneNoteMode?.('edit')
+        } else {
+          toggleSceneNotePreview?.()
+        }
+        return
+      }
+      if ((key === 'escape' || code === 'Escape') && state.sceneNotePanelOpen) {
+        event.preventDefault()
+        event.stopPropagation()
+        if (state.sceneNoteMode === 'edit') {
+          setSceneNoteMode?.('preview')
+        } else {
+          closeSceneNotePanel?.()
+        }
+        return
+      }
+    }
+
     handleReviewKeydown?.(event)
     handleSceneChallengeKeydown?.(event)
   })

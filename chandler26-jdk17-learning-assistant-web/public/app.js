@@ -61,6 +61,7 @@ const systemManagement = createSystemManagementFeature({
   toast,
   logEvent,
   confirmDelete,
+  loadAiTasks: (...args) => profile.loadAiTasks(...args),
 })
 
 function setGlobalFocusMode(viewId, active) {
@@ -410,6 +411,8 @@ bindAppEvents({
   scheduleSceneCards: scenePlan.scheduleCards,
   speakCurrentScene: scenePlan.speakCurrentScene,
   toggleSceneTtsAudio: scenePlan.toggleSceneTtsAudio,
+  cycleSceneTtsPlaybackRate: scenePlan.cycleSceneTtsPlaybackRate,
+  renderSceneTtsRateBtn: scenePlan.renderSceneTtsRateBtn,
   saveSceneNote: scenePlan.saveSceneNote,
   handleSceneNoteInput: scenePlan.handleSceneNoteInput,
   setSceneNoteMode: scenePlan.setSceneNoteMode,

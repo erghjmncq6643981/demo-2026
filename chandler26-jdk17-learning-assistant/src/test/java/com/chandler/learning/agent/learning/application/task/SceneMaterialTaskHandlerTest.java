@@ -3,6 +3,7 @@ package com.chandler.learning.agent.learning.application.task;
 import com.chandler.learning.agent.learning.api.response.LearningPlanUnitResponse;
 import com.chandler.learning.agent.learning.application.LearningPlanService;
 import com.chandler.learning.agent.learning.application.LearningSceneRelatedVocabularyService;
+import com.chandler.learning.agent.learning.application.SceneArticleAudioService;
 import com.chandler.learning.agent.learning.domain.bo.PreparedUnitGroup;
 import com.chandler.learning.agent.learning.domain.bo.PreparedVocabularyBatch;
 import com.chandler.learning.agent.learning.domain.entity.LearningPlanUnit;
@@ -30,20 +31,22 @@ import static org.mockito.Mockito.when;
 class SceneMaterialTaskHandlerTest {
 
     @Test
-    @DisplayName("批量生成场景材料任务正常按 3 步流水线执行")
-    void executesThreeStepPipelineSuccessfully() {
+    @DisplayName("批量生成场景材料任务正常按 4 步流水线执行（选词、生成材料、补充相关词、合成文章语音）")
+    void executesFourStepPipelineSuccessfully() {
         LearningPlanService planService = mock(LearningPlanService.class);
         LearningSceneRelatedVocabularyService relatedVocabularyService = mock(LearningSceneRelatedVocabularyService.class);
+        SceneArticleAudioService audioService = mock(SceneArticleAudioService.class);
         AiTaskExecutionService executionService = mock(AiTaskExecutionService.class);
         AiAsyncTaskService taskService = mock(AiAsyncTaskService.class);
 
         SceneMaterialTaskHandler handler = new SceneMaterialTaskHandler(
-                planService, relatedVocabularyService, executionService, taskService);
+                planService, relatedVocabularyService, audioService, executionService, taskService);
 
-        assertThat(handler.steps()).hasSize(3);
+        assertThat(handler.steps()).hasSize(4);
         assertThat(handler.steps().get(0).code()).isEqualTo("prepare_vocabulary");
         assertThat(handler.steps().get(1).code()).isEqualTo("generate_material");
         assertThat(handler.steps().get(2).code()).isEqualTo("generate_related_words");
+        assertThat(handler.steps().get(3).code()).isEqualTo("synthesize_audio");
 
         AiAsyncTask task = new AiAsyncTask();
         task.setId(1001L);
@@ -93,6 +96,7 @@ class SceneMaterialTaskHandlerTest {
                 eq(88L),
                 eq(LearningSceneRelatedVocabularyService.DEFAULT_TARGET_COUNT)
         );
+        verify(audioService).generateOrGetSceneAudio(eq(5001L), eq(true));
 
         verify(taskService).complete(eq(1001L), eq(AiTaskConstants.STATUS_COMPLETED), any());
     }

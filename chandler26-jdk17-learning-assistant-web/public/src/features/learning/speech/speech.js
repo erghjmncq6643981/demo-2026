@@ -141,18 +141,52 @@ export function createSpeechFeature(ctx) {
 
   function speakWithBrowserVoice(content, voiceType = currentVoiceType(), options = {}) {
     if (!('speechSynthesis' in window && 'SpeechSynthesisUtterance' in window)) return
-    window.speechSynthesis.cancel()
-    const utterance = new SpeechSynthesisUtterance(content)
-    utterance.lang = voiceType === 'uk' ? 'en-GB' : 'en-US'
-    const voice = chooseSpeechVoice(voiceType, options.sentence ? state.speechSettings.sentenceVoiceName : '')
-    if (voice) {
-      utterance.voice = voice
-      utterance.lang = voice.lang || utterance.lang
+
+    // 若当前正在发音且再次触发，则停止播放
+    if (window.speechSynthesis.speaking) {
+      window.speechSynthesis.cancel()
+      toast('已停止朗读')
+      return
     }
-    utterance.rate = options.sentence ? state.speechSettings.sentenceRate : 0.86
-    utterance.pitch = options.sentence ? state.speechSettings.sentencePitch : 1
-    utterance.onerror = () => toast('浏览器阻止了音频播放，请检查站点声音权限')
-    window.speechSynthesis.speak(utterance)
+
+    window.speechSynthesis.cancel()
+
+    // 清洗 Markdown/注解符号，按句切分以防长文本导致浏览器 TTS 引擎溢出报错
+    const cleanedText = content
+      .replace(/\{[^}]+\}/g, '')
+      .replace(/`([^`]+)`/g, '$1')
+      .replace(/\*{1,2}(.*?)\*{1,2}/g, '$1')
+      .trim()
+    const rawSentences = cleanedText.split(/(?<=[.!?])\s+|\n+/).map((s) => s.trim()).filter(Boolean)
+    const sentences = rawSentences.length > 0 ? rawSentences : [cleanedText]
+
+    const voice = chooseSpeechVoice(voiceType, options.sentence ? state.speechSettings.sentenceVoiceName : '')
+
+    sentences.forEach((sentence) => {
+      const utterance = new SpeechSynthesisUtterance(sentence)
+      utterance.lang = voiceType === 'uk' ? 'en-GB' : 'en-US'
+      if (voice) {
+        utterance.voice = voice
+        utterance.lang = voice.lang || utterance.lang
+      }
+      utterance.rate = options.sentence ? state.speechSettings.sentenceRate : 0.86
+      utterance.pitch = options.sentence ? state.speechSettings.sentencePitch : 1
+
+      utterance.onerror = (event) => {
+        // 忽略主动停止/取消引起的正常中断事件
+        if (event.error === 'canceled' || event.error === 'interrupted') {
+          return
+        }
+        if (event.error === 'not-allowed') {
+          toast('浏览器阻止了音频播放，请在浏览器地址栏允许站点声音权限')
+        } else {
+          console.warn('SpeechSynthesis error:', event.error)
+        }
+      }
+
+      window.speechSynthesis.speak(utterance)
+    })
+
     toast('正在播放发音')
   }
 

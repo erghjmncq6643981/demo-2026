@@ -138,6 +138,48 @@ public class EnglishLemmatizer {
             Map.entry("elder", "old"), Map.entry("eldest", "old")
     );
 
+    private static final Set<String> NON_INFLECTIONAL_ING_WORDS = Set.of(
+            "sibling", "darling", "duckling", "seedling", "underling", "sapling", "yearling",
+            "sterling", "halfling", "hireling", "fledgling", "changeling", "inkling", "gosling",
+            "nestling", "stripling", "suckling", "foundling", "youngling", "spiderling",
+            "king", "ring", "sing", "wing", "spring", "string", "bring", "thing",
+            "sling", "fling", "cling", "sting", "swing", "wring", "morning", "evening",
+            "ceiling", "lightning", "building", "meeting", "wedding", "clothing", "warning",
+            "hearing", "meaning", "feeling", "painting", "spelling", "pudding", "stocking",
+            "shipping", "shopping"
+    );
+
+    private static final Set<String> NON_INFLECTIONAL_EST_WORDS = Set.of(
+            "modest", "forest", "honest", "earnest", "interest", "harvest", "guest", "chest",
+            "nest", "pest", "rest", "test", "vest", "west", "best", "east", "feast", "beast",
+            "yeast", "contest", "protest", "suggest", "digest", "request", "invest", "conquest",
+            "tempest", "manifest", "arrest", "infest", "molest", "ingest", "crest", "quest", "priest"
+    );
+
+    /**
+     * 判断单词是否为不规则形态词，若是则返回其精确原型（如 went -> go）。
+     */
+    public String getIrregularLemma(String rawTerm) {
+        if (!StringUtils.hasText(rawTerm)) {
+            return null;
+        }
+        return IRREGULAR_MAP.get(rawTerm.trim().toLowerCase(Locale.ROOT));
+    }
+
+    /**
+     * 判断单词是否为非屈折变化的独立名词/形容词/词根（如 sibling, modest, forest 等），
+     * 这类词汇严禁被误当做分词或比较级/最高级屈折进行推导还原。
+     */
+    public boolean isNonInflectional(String rawTerm) {
+        if (!StringUtils.hasText(rawTerm)) {
+            return false;
+        }
+        String term = rawTerm.trim().toLowerCase(Locale.ROOT);
+        return NON_INFLECTIONAL_ING_WORDS.contains(term)
+                || NON_INFLECTIONAL_EST_WORDS.contains(term)
+                || (term.endsWith("ling") && term.length() > 4);
+    }
+
     /**
      * 推导单词的原形候选列表（按置信度排序）。
      * 若包含不规则映射，优先返回精确映射的原形；若有多种规则还原可能，依次返回所有有效候选。
@@ -154,8 +196,8 @@ public class EnglishLemmatizer {
             candidates.add(IRREGULAR_MAP.get(term));
         }
 
-        // 2. 动词 -ing 还原
-        if (term.endsWith("ing") && term.length() > 4) {
+        // 2. 动词 -ing 还原（排除非屈折变化独立名词及 -ling 名词后缀）
+        if (term.endsWith("ing") && term.length() > 4 && !NON_INFLECTIONAL_ING_WORDS.contains(term) && !term.endsWith("ling")) {
             String stem = term.substring(0, term.length() - 3);
             if (term.endsWith("ying") && stem.length() >= 1) {
                 candidates.add(stem.substring(0, stem.length() - 1) + "ie"); // e.g., tying -> tie, dying -> die
@@ -208,7 +250,7 @@ public class EnglishLemmatizer {
             candidates.add(stem + "e"); // e.g., nicer -> nice, larger -> large
             candidates.add(stem);       // e.g., faster -> fast, cleaner -> clean
         }
-        if (term.endsWith("est") && term.length() > 5 && !term.endsWith("iest")) {
+        if (term.endsWith("est") && term.length() > 5 && !term.endsWith("iest") && !NON_INFLECTIONAL_EST_WORDS.contains(term)) {
             String stem = term.substring(0, term.length() - 3);
             if (hasDoubleConsonant(stem)) {
                 candidates.add(stem.substring(0, stem.length() - 1)); // e.g., biggest -> big

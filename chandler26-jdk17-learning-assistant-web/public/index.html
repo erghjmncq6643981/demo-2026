@@ -339,6 +339,37 @@
                 </div>
               </section>
 
+              <section class="panel model-panel profile-section" id="systemJobPanel">
+                <div class="panel-heading">
+                  <div>
+                    <p class="eyebrow">Scheduled Jobs</p>
+                    <h3>定时任务管理</h3>
+                    <p class="panel-description">查看后台定时调度任务状态与运行指标，支持系统管理员手动触发音频同步与补偿任务。</p>
+                  </div>
+                  <div class="inline-actions">
+                    <span class="mini-pill" id="systemJobSummary">0 个任务</span>
+                    <button class="secondary-button compact" id="reloadSystemJobsBtn" type="button">刷新</button>
+                  </div>
+                </div>
+                <div class="ai-session-table-wrap">
+                  <table class="admin-user-table system-job-table">
+                    <thead>
+                      <tr>
+                        <th>任务名称</th>
+                        <th>任务标识</th>
+                        <th>调度规则</th>
+                        <th>运行状态</th>
+                        <th>最近执行时间</th>
+                        <th>耗时</th>
+                        <th>最近执行结果</th>
+                        <th>操作</th>
+                      </tr>
+                    </thead>
+                    <tbody id="systemJobRows"></tbody>
+                  </table>
+                </div>
+              </section>
+
               <section class="panel log-panel profile-section" id="systemLogPanel">
               <div class="panel-heading">
                 <div>
@@ -363,6 +394,7 @@
               <button class="system-tab" type="button" data-system-tab="aiTaskPanel">AI 任务</button>
               <button class="system-tab" type="button" data-system-tab="modelManagePanel">模型管理</button>
               <button class="system-tab" type="button" data-system-tab="agentManagePanel">Agent 与模板</button>
+              <button class="system-tab" type="button" data-system-tab="systemJobPanel">定时任务</button>
               <button class="system-tab" type="button" data-system-tab="systemLogPanel">系统日志</button>
             </nav>
             <div class="system-sections">
@@ -508,7 +540,7 @@
                     </div>
                     <div class="scene-unit-actions">
                       <span class="mini-pill" id="sceneUnitProgress">0 / 0</span>
-                      <button class="secondary-button compact scene-note-toggle-btn" id="sceneOpenNoteModalBtn" type="button"><span class="scene-note-btn-icon">📝</span> <span id="sceneOpenNoteBtnText">添加笔记</span></button>
+                      <button class="secondary-button compact scene-note-toggle-btn" id="sceneOpenNoteModalBtn" type="button" title="打开/切换场景笔记 (⌘E / Ctrl+E)"><span class="scene-note-btn-icon">📝</span> <span id="sceneOpenNoteBtnText">添加笔记</span></button>
                       <button class="secondary-button compact" id="sceneBackToPlanBtn" type="button">返回计划</button>
                       <button class="primary-button compact-primary hidden" id="sceneCompleteUnitBtn" type="button">完成场景</button>
                     </div>
@@ -523,6 +555,7 @@
                         </div>
                         <div class="inline-actions">
                           <button class="secondary-button compact scene-tts-audio-btn" id="sceneTtsAudioBtn" type="button" title="使用阿里云 TTS 生成/播放真人原声">🎙️ AI 真人朗读</button>
+                          <button class="secondary-button compact scene-tts-rate-btn" id="sceneTtsRateBtn" type="button" title="切换朗读倍速 (0.75x / 1.0x / 1.25x)">1.0x</button>
                           <button class="icon-button" id="sceneSpeakBtn" type="button" title="本地快速朗读" aria-label="本地快速朗读">▶</button>
                         </div>
                       </div>
@@ -540,9 +573,9 @@
                           <h3>场景笔记</h3>
                         </div>
                         <div class="inline-actions">
-                          <button class="secondary-button compact" id="sceneNoteEditBtn" type="button" title="编辑笔记">✏️ 编辑</button>
-                          <button class="secondary-button compact hidden" id="sceneNotePreviewBtn" type="button" title="预览笔记">👁️ 预览</button>
-                          <button class="icon-button" id="sceneNoteCloseBtn" type="button" title="收起笔记" aria-label="收起笔记">×</button>
+                          <button class="secondary-button compact" id="sceneNoteEditBtn" type="button" title="切换编辑模式 (⌘E / Ctrl+E)">✏️ 编辑</button>
+                          <button class="secondary-button compact hidden" id="sceneNotePreviewBtn" type="button" title="切换预览模式 (⌘E / Ctrl+E)">👁️ 预览</button>
+                          <button class="icon-button" id="sceneNoteCloseBtn" type="button" title="收起笔记 (Esc)" aria-label="收起笔记">×</button>
                         </div>
                       </div>
                       <div class="scene-note-panel-body">

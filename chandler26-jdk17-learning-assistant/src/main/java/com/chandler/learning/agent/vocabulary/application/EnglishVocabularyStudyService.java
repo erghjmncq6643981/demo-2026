@@ -83,7 +83,7 @@ public class EnglishVocabularyStudyService {
             LearningVocabularyAlias alias = aliasMapper.findByNormalizedAlias(normalizedTerm);
             if (alias != null && alias.getVocabularyId() != null) {
                 EnglishVocabularyStudyRecord aliasRecord = recordMapper.selectById(alias.getVocabularyId());
-                if (aliasRecord != null && !Boolean.TRUE.equals(aliasRecord.getDeleted())) {
+                if (isValidAliasMatch(normalizedTerm, aliasRecord, alias)) {
                     return aliasRecord;
                 }
             }
@@ -94,7 +94,7 @@ public class EnglishVocabularyStudyService {
         List<String> candidates = lemmatizer.candidateLemmas(normalizedTerm);
         for (String candidate : candidates) {
             EnglishVocabularyStudyRecord candidateRecord = findByNormalizedTerm(candidate);
-            if (candidateRecord != null) {
+            if (candidateRecord != null && isConfirmedInflection(candidateRecord, normalizedTerm)) {
                 try {
                     vocabularyInsightService.syncInsights(candidateRecord);
                 } catch (Exception ignored) {
@@ -105,7 +105,7 @@ public class EnglishVocabularyStudyService {
                 LearningVocabularyAlias candidateAlias = aliasMapper.findByNormalizedAlias(candidate);
                 if (candidateAlias != null && candidateAlias.getVocabularyId() != null) {
                     EnglishVocabularyStudyRecord matched = recordMapper.selectById(candidateAlias.getVocabularyId());
-                    if (matched != null && !Boolean.TRUE.equals(matched.getDeleted())) {
+                    if (isValidAliasMatch(candidate, matched, candidateAlias) && isConfirmedInflection(matched, normalizedTerm)) {
                         vocabularyInsightService.syncInsights(matched);
                         return matched;
                     }
@@ -114,6 +114,74 @@ public class EnglishVocabularyStudyService {
             }
         }
         return null;
+    }
+
+    private boolean isValidAliasMatch(String queryTerm, EnglishVocabularyStudyRecord aliasRecord, LearningVocabularyAlias alias) {
+        if (aliasRecord == null || Boolean.TRUE.equals(aliasRecord.getDeleted())) {
+            return false;
+        }
+        if (queryTerm.equals(aliasRecord.getNormalizedTerm())) {
+            return true;
+        }
+        // 若查询词本身是非屈折独立词（如 sibling, modest），严禁被误关联至不同词根的非标准拟合词
+        if (lemmatizer.isNonInflectional(queryTerm) && !queryTerm.equals(aliasRecord.getNormalizedTerm())) {
+            return false;
+        }
+        // 如果别名来源于规则推导，但当前词形还原规则不认可该候选，判定为失效别名
+        if ("rule_lemma".equals(alias.getAliasType()) || "rule".equals(alias.getSource())) {
+            List<String> validCandidates = lemmatizer.candidateLemmas(queryTerm);
+            return validCandidates.contains(aliasRecord.getNormalizedTerm()) && isConfirmedInflection(aliasRecord, queryTerm);
+        }
+        return true;
+    }
+
+    private boolean isConfirmedInflection(EnglishVocabularyStudyRecord record, String queryTerm) {
+        if (record == null || !StringUtils.hasText(queryTerm)) {
+            return false;
+        }
+        if (queryTerm.equalsIgnoreCase(record.getNormalizedTerm())) {
+            return true;
+        }
+        // 1. 若是不规则词映射（如 went -> go, children -> child），100% 确定为真
+        String irregularLemma = lemmatizer.getIrregularLemma(queryTerm);
+        if (irregularLemma != null && irregularLemma.equalsIgnoreCase(record.getNormalizedTerm())) {
+            return true;
+        }
+        // 2. 若查询词本身是非屈折独立词（如 modest, sibling, forest 等），严禁被拟合为屈折形态
+        if (lemmatizer.isNonInflectional(queryTerm)) {
+            return false;
+        }
+        // 3. 检查原形词卡内的 parsedJson 中的 inflections、word_forms 或 lemma 字段是否确认包含 queryTerm
+        String parsedJson = record.getParsedJson();
+        if (!StringUtils.hasText(parsedJson)) {
+            return false;
+        }
+        try {
+            JsonNode root = objectMapper.readTree(parsedJson);
+            String lemma = root.path("lemma").asText();
+            if (StringUtils.hasText(lemma) && queryTerm.equalsIgnoreCase(normalize(lemma))) {
+                return true;
+            }
+            JsonNode inflectionsNode = root.path("inflections");
+            if (inflectionsNode.isArray()) {
+                for (JsonNode node : inflectionsNode) {
+                    if (queryTerm.equalsIgnoreCase(normalize(node.asText()))) {
+                        return true;
+                    }
+                }
+            }
+            JsonNode wordFormsNode = root.path("word_forms");
+            if (wordFormsNode.isArray()) {
+                for (JsonNode node : wordFormsNode) {
+                    String form = node.isObject() ? node.path("word").asText(node.path("term").asText()) : node.asText();
+                    if (StringUtils.hasText(form) && queryTerm.equalsIgnoreCase(normalize(form))) {
+                        return true;
+                    }
+                }
+            }
+        } catch (Exception ignored) {
+        }
+        return false;
     }
 
     private final Map<String, CompletableFuture<VocabularyStudyResponse>> inFlightLookups = new ConcurrentHashMap<>();
@@ -181,29 +249,24 @@ public class EnglishVocabularyStudyService {
     }
 
     private VocabularyStudyResponse doGenerate(VocabularyStudyRequest request, String normalizedTerm, String rawTerm, boolean forceRefresh) {
-        // 若输入为复数/时态（如 slogans），确定目标原形词（如 slogan）
-        List<String> candidateLemmas = lemmatizer.candidateLemmas(normalizedTerm);
-        String targetGenerationTerm = candidateLemmas.isEmpty() ? normalizedTerm : candidateLemmas.get(0);
-
-        log.debug("开始生成词汇学习卡片 term={} targetLemma={} forceRefresh={} modelConfigId={}",
+        log.debug("开始生成词汇学习卡片 term={} forceRefresh={} modelConfigId={}",
                 normalizedTerm,
-                targetGenerationTerm,
                 forceRefresh,
                 request.getModelConfigId());
-        // 传递标准原形词给 AI 进行词卡生成，确保释义、音标与卡片主体均为标准原形
-        AgentChatResponse chatResponse = aiChat(request, targetGenerationTerm);
+        // 传递用户输入的词给 AI 生成词卡，由结构化卡片与 Prompt 准确解析原形 lemma
+        AgentChatResponse chatResponse = aiChat(request, normalizedTerm);
         String parsedJson = normalizeCardPayload(
-                chatResponse.requireStructuredRoot(AiInvocationScene.VOCABULARY_CARD_SINGLE), targetGenerationTerm);
+                chatResponse.requireStructuredRoot(AiInvocationScene.VOCABULARY_CARD_SINGLE), normalizedTerm);
         validateCardPayload(parsedJson);
 
-        // 统一提取标准原形（Lemma）作为主词卡的主键和标准展示词，严禁将复数/时态存为独立主词卡
-        String canonicalDisplayTerm = targetGenerationTerm;
-        String canonicalTerm = targetGenerationTerm;
+        // 统一从 AI 结构化输出中提取标准原形（Lemma）作为主词卡的主键和标准展示词
+        String canonicalDisplayTerm = rawTerm;
+        String canonicalTerm = normalizedTerm;
         try {
             JsonNode root = objectMapper.readTree(parsedJson);
             String parsedLemma = root.path("lemma").asText();
             if (!StringUtils.hasText(parsedLemma)) {
-                parsedLemma = root.path("term").asText(targetGenerationTerm);
+                parsedLemma = root.path("term").asText(normalizedTerm);
             }
             if (StringUtils.hasText(parsedLemma)) {
                 canonicalDisplayTerm = parsedLemma.trim();

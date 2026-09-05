@@ -76,4 +76,47 @@ class VocabularyAudioServiceTest {
         assertThat(audioService.hasValidAudio("technique", VocabularyAudioConstants.VOICE_TYPE_US)).isTrue();
         assertThat(audioService.hasValidAudio("technique", VocabularyAudioConstants.VOICE_TYPE_UK)).isFalse();
     }
+
+    @Test
+    @DisplayName("词典发音过滤应正确识别单字与二元短语，过滤 3 词及以上长短语、从句与前后缀片段")
+    void shouldFilterIneligibleDictTerms() {
+        // 合法单字与二元短语
+        assertThat(audioService.isDownloadableDictTerm("technique")).isTrue();
+        assertThat(audioService.isDownloadableDictTerm("apple")).isTrue();
+        assertThat(audioService.isDownloadableDictTerm("ice cream")).isTrue();
+        assertThat(audioService.isDownloadableDictTerm("look after")).isTrue();
+        assertThat(audioService.isDownloadableDictTerm("state-of-the-art")).isTrue();
+        assertThat(audioService.isDownloadableDictTerm("a")).isTrue();
+        assertThat(audioService.isDownloadableDictTerm("I")).isTrue();
+
+        // 3 词及以上长短语 / 句式（应过滤）
+        assertThat(audioService.isDownloadableDictTerm("god forbid that")).isFalse();
+        assertThat(audioService.isDownloadableDictTerm("heaven forbid that")).isFalse();
+        assertThat(audioService.isDownloadableDictTerm("lord forbid that")).isFalse();
+        assertThat(audioService.isDownloadableDictTerm("accept  at face value")).isFalse();
+        assertThat(audioService.isDownloadableDictTerm("as well as")).isFalse();
+
+        // 从句短语（以 that 等结尾）
+        assertThat(audioService.isDownloadableDictTerm("forbid that")).isFalse();
+        assertThat(audioService.isDownloadableDictTerm("given that")).isFalse();
+
+        // 词缀与特殊符号片段（应过滤）
+        assertThat(audioService.isDownloadableDictTerm("-able")).isFalse();
+        assertThat(audioService.isDownloadableDictTerm("-sible")).isFalse();
+        assertThat(audioService.isDownloadableDictTerm("post-")).isFalse();
+        assertThat(audioService.isDownloadableDictTerm("'s")).isFalse();
+        assertThat(audioService.isDownloadableDictTerm("123")).isFalse();
+        assertThat(audioService.isDownloadableDictTerm("")).isFalse();
+        assertThat(audioService.isDownloadableDictTerm(null)).isFalse();
+    }
+
+    @Test
+    @DisplayName("非词典词汇在本地无缓存时不应发起远程下载，直接返回 null")
+    void shouldNotDownloadIneligibleTerms() {
+        Resource res = audioService.resolveAudioResource("god forbid that", VocabularyAudioConstants.VOICE_TYPE_US);
+        assertThat(res).isNull();
+
+        int synced = audioService.syncEnsureAudio("accept  at face value");
+        assertThat(synced).isEqualTo(0);
+    }
 }

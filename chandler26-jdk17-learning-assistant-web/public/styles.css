@@ -5058,6 +5058,22 @@ input[type="range"] {
   font-weight: 600;
 }
 
+.scene-tts-rate-btn {
+  min-width: 48px;
+  font-variant-numeric: tabular-nums;
+  font-weight: 600;
+  font-size: 0.82rem;
+  color: var(--text-secondary);
+  border-color: var(--line);
+  padding: 4px 8px;
+  transition: all 0.15s ease;
+}
+
+.scene-tts-rate-btn:hover {
+  border-color: var(--primary);
+  color: var(--text);
+}
+
 .scene-note-panel {
   display: flex;
   flex-direction: column;

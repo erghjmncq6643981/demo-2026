@@ -138,4 +138,29 @@ class EnglishVocabularyStudyServiceAliasTest {
         assertThat(response.getInflections()).containsExactly("apples");
         verify(insightService, Mockito.atLeastOnce()).syncInsights(appleRecord);
     }
+
+    @Test
+    @DisplayName("独立单词（如 modest）绝不能误命中不相关的原形词（如 mode）")
+    void shouldNotMistakeModestForMode() {
+        EnglishVocabularyStudyRecord modeRecord = new EnglishVocabularyStudyRecord();
+        modeRecord.setId(4001L);
+        modeRecord.setTerm("mode");
+        modeRecord.setNormalizedTerm("mode");
+        modeRecord.setParsedJson("""
+                {
+                  "term": "mode",
+                  "lemma": "mode",
+                  "inflections": ["modes"],
+                  "definitions": [{"part_of_speech": "noun", "meaning": "模式"}]
+                }
+                """);
+        modeRecord.setLookupCount(2);
+
+        // findByNormalizedTerm("modest") 返回 null, findByNormalizedTerm("mode") 返回 modeRecord
+        when(recordMapper.selectOne(any())).thenReturn(null, modeRecord);
+        when(aliasMapper.findByNormalizedAlias(any())).thenReturn(null);
+
+        EnglishVocabularyStudyRecord result = service.findRecord("modest");
+        assertThat(result).isNull();
+    }
 }

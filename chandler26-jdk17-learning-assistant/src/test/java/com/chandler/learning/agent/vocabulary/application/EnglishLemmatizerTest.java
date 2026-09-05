@@ -56,6 +56,25 @@ class EnglishLemmatizerTest {
     }
 
     @Test
+    @DisplayName("非屈折变化的独立词汇（如 sibling, modest, forest, darling）不应被误推导变形")
+    void shouldNotFalselyStemIndependentNouns() {
+        assertThat(lemmatizer.candidateLemmas("sibling")).isEmpty();
+        assertThat(lemmatizer.candidateLemmas("darling")).isEmpty();
+        assertThat(lemmatizer.candidateLemmas("duckling")).isEmpty();
+        assertThat(lemmatizer.candidateLemmas("morning")).isEmpty();
+        assertThat(lemmatizer.candidateLemmas("evening")).isEmpty();
+        assertThat(lemmatizer.candidateLemmas("ceiling")).isEmpty();
+        assertThat(lemmatizer.candidateLemmas("modest")).isEmpty();
+        assertThat(lemmatizer.candidateLemmas("forest")).isEmpty();
+        assertThat(lemmatizer.candidateLemmas("honest")).isEmpty();
+        assertThat(lemmatizer.candidateLemmas("interest")).isEmpty();
+        assertThat(lemmatizer.candidateLemmas("guest")).isEmpty();
+        assertThat(lemmatizer.isNonInflectional("modest")).isTrue();
+        assertThat(lemmatizer.isNonInflectional("sibling")).isTrue();
+        assertThat(lemmatizer.isNonInflectional("nicest")).isFalse();
+    }
+
+    @Test
     @DisplayName("空值或单字符应安全处理")
     void shouldHandleEmptyOrSingleCharSafely() {
         assertThat(lemmatizer.candidateLemmas(null)).isEmpty();

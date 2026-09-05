@@ -3,6 +3,11 @@ package com.chandler.learning.agent.learning.application;
 import com.chandler.learning.agent.config.speech.AliyunNlsProperties;
 import com.chandler.learning.agent.learning.infrastructure.mapper.LearningPlanUnitMapper;
 import com.chandler.learning.agent.learning.infrastructure.mapper.LearningSceneMaterialMapper;
+import com.chandler.learning.agent.task.application.AiAsyncTaskService;
+import com.chandler.learning.agent.task.domain.constant.AiTaskConstants;
+import com.chandler.learning.agent.task.domain.entity.AiAsyncTask;
+import com.chandler.learning.agent.learning.api.response.SceneUnitAudioStatusResponse;
+import com.chandler.learning.agent.learning.domain.entity.LearningPlanUnit;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
@@ -17,6 +22,12 @@ import java.nio.file.Path;
 import java.util.List;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.anyInt;
+import static org.mockito.ArgumentMatchers.anyString;
+import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.when;
 
 @DisplayName("场景文章音频与分块切片服务测试")
 class SceneArticleAudioServiceTest {
@@ -25,6 +36,7 @@ class SceneArticleAudioServiceTest {
     private LearningPlanUnitMapper unitMapper;
     private LearningSceneMaterialMapper materialMapper;
     private AliyunNlsProperties nlsProperties;
+    private AiAsyncTaskService aiAsyncTaskService;
 
     @TempDir
     Path tempDir;
@@ -35,8 +47,10 @@ class SceneArticleAudioServiceTest {
         materialMapper = Mockito.mock(LearningSceneMaterialMapper.class);
         nlsProperties = new AliyunNlsProperties();
         nlsProperties.setMaxChunkLength(200);
+        aiAsyncTaskService = Mockito.mock(AiAsyncTaskService.class);
 
-        audioService = new SceneArticleAudioService(unitMapper, materialMapper, nlsProperties);
+        audioService = new SceneArticleAudioService(
+                unitMapper, materialMapper, nlsProperties, aiAsyncTaskService);
         ReflectionTestUtils.setField(audioService, "storagePath", tempDir.toString());
     }
 
@@ -84,5 +98,55 @@ class SceneArticleAudioServiceTest {
         assertThat(resource).isNotNull();
         assertThat(resource.exists()).isTrue();
         assertThat(resource.contentLength()).isEqualTo(512);
+    }
+
+    @Test
+    @DisplayName("查询音频状态：存在运行中任务时应返回任务状态与任务ID")
+    void shouldReturnActiveTaskStatusWhenQuerying() {
+        Long userId = 100L;
+        Long unitId = 200L;
+
+        AiAsyncTask active = new AiAsyncTask();
+        active.setId(888L);
+        active.setStatus(AiTaskConstants.STATUS_RUNNING);
+
+        when(aiAsyncTaskService.findActiveByKey(eq(userId), eq(AiTaskConstants.TYPE_SCENE_ARTICLE_AUDIO), any(), eq("scene_audio:" + unitId)))
+                .thenReturn(active);
+
+        SceneUnitAudioStatusResponse resp = audioService.getAudioStatus(userId, unitId);
+        assertThat(resp).isNotNull();
+        assertThat(resp.getUnitId()).isEqualTo(unitId);
+        assertThat(resp.getTaskId()).isEqualTo(888L);
+        assertThat(resp.getTaskStatus()).isEqualTo(AiTaskConstants.STATUS_RUNNING);
+        assertThat(resp.getHasAudio()).isFalse();
+    }
+
+    @Test
+    @DisplayName("异步提交音频生成任务：不存在任务时应创建新任务并触发调度")
+    void shouldSubmitAudioGenerationTask() {
+        Long userId = 100L;
+        Long unitId = 200L;
+
+        LearningPlanUnit unit = new LearningPlanUnit();
+        unit.setId(unitId);
+        unit.setPlanId(300L);
+        unit.setTitle("Dining Scene");
+        when(unitMapper.selectById(unitId)).thenReturn(unit);
+
+        when(aiAsyncTaskService.findActiveByKey(eq(userId), eq(AiTaskConstants.TYPE_SCENE_ARTICLE_AUDIO), eq(300L), eq("scene_audio:" + unitId)))
+                .thenReturn(null);
+
+        AiAsyncTask created = new AiAsyncTask();
+        created.setId(999L);
+        created.setStatus(AiTaskConstants.STATUS_PENDING);
+
+        when(aiAsyncTaskService.create(eq(userId), eq(AiTaskConstants.TYPE_SCENE_ARTICLE_AUDIO), anyString(), eq(300L), eq(unitId), any(), anyString(), any(), any(), anyInt(), eq("scene_audio:" + unitId), any()))
+                .thenReturn(created);
+
+        SceneUnitAudioStatusResponse resp = audioService.submitAudioGenerationTask(userId, unitId, false);
+        assertThat(resp).isNotNull();
+        assertThat(resp.getUnitId()).isEqualTo(unitId);
+        assertThat(resp.getTaskId()).isEqualTo(999L);
+        assertThat(resp.getTaskStatus()).isEqualTo(AiTaskConstants.STATUS_PENDING);
     }
 }

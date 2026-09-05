@@ -142,10 +142,8 @@ export function createAppShell(ctx) {
       loadSceneData?.({ keepStage: Boolean(state.sceneChallengeStage && state.sceneChallengeStage !== 'overview') })
     }
     if (viewId === 'profileView') {
+      mountProfilePanels()
       const activeTab = state.activeProfileTab || 'accountPanel'
-      if (activeTab === 'aiTaskPanel' && elements.aiTaskPanel && elements.profileSections && elements.aiTaskPanel.parentElement !== elements.profileSections) {
-        elements.profileSections.appendChild(elements.aiTaskPanel)
-      }
       setProfileTab(activeTab)
     }
     if (viewId === 'systemAdminView') {
@@ -157,14 +155,22 @@ export function createAppShell(ctx) {
     }
   }
 
+  function mountProfilePanels() {
+    if (!elements.profileSections) return
+    for (const id of ['aiTaskPanel', 'modelManagePanel', 'agentManagePanel', 'systemLogPanel']) {
+      const panel = document.getElementById(id)
+      if (panel && panel.parentElement !== elements.profileSections) {
+        panel.classList.add('profile-section')
+        elements.profileSections.appendChild(panel)
+      }
+    }
+  }
+
   function setProfileTab(tabId) {
+    mountProfilePanels()
     const fallback = document.querySelector(`[data-profile-tab="${tabId}"]`) ? tabId : 'accountPanel'
     state.activeProfileTab = fallback
     localStorage.setItem('learning.profileTab', fallback)
-    if (fallback === 'aiTaskPanel' && elements.aiTaskPanel && elements.profileSections && elements.aiTaskPanel.parentElement !== elements.profileSections) {
-      elements.aiTaskPanel.classList.add('profile-section')
-      elements.profileSections.appendChild(elements.aiTaskPanel)
-    }
     document.querySelectorAll('[data-profile-tab]').forEach((button) => {
       const active = button.dataset.profileTab === fallback
       button.classList.toggle('active', active)

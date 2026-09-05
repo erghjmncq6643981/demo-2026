@@ -87,7 +87,9 @@ AUTH_REQUIRED(HttpStatus.UNAUTHORIZED, "请先登录"),
         LEARNING_PLAN_NO_WORDS(HttpStatus.BAD_REQUEST, "词表中没有可学习词汇"),
         LEARNING_SCENE_PARSE_FAILED(HttpStatus.BAD_REQUEST, "场景材料解析失败"),
         LEARNING_ASSESSMENT_INVALID(HttpStatus.BAD_REQUEST, "词汇检查内容无效"),
-        LEARNING_PLAN_STATE_ERROR(HttpStatus.BAD_REQUEST, "学习计划状态不允许当前操作");
+        LEARNING_PLAN_STATE_ERROR(HttpStatus.BAD_REQUEST, "学习计划状态不允许当前操作"),
+        JOB_NOT_FOUND(HttpStatus.NOT_FOUND, "定时任务不存在"),
+        JOB_ALREADY_RUNNING(HttpStatus.CONFLICT, "定时任务正在执行中，请勿重复触发");
 
         private final HttpStatus status;
         private final String defaultMessage;

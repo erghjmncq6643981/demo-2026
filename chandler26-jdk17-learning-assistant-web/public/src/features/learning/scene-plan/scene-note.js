@@ -199,7 +199,7 @@ export function createSceneNote({ state, elements, api, activeUnit, sameId, toas
     }
     if (elements.sceneOpenNoteModalBtn) {
       elements.sceneOpenNoteModalBtn.classList.toggle('has-note', hasNote)
-      elements.sceneOpenNoteModalBtn.title = hasNote ? '查看并编辑场景笔记' : '记录本篇场景笔记'
+      elements.sceneOpenNoteModalBtn.title = hasNote ? '查看并编辑场景笔记 (快捷键: ⌘E / Ctrl+E)' : '记录本篇场景笔记 (快捷键: ⌘E / Ctrl+E)'
     }
   }
 
@@ -230,7 +230,7 @@ export function createSceneNote({ state, elements, api, activeUnit, sameId, toas
     if (!elements.sceneNotePreview) return
     elements.sceneNotePreview.innerHTML = content
       ? renderMarkdown(content)
-      : '<div class="scene-note-empty-preview"><p>📝 还没有笔记</p><p class="sub">点击右上角「✏️ 编辑」记录本篇材料的重点、难句或个人思考。</p></div>'
+      : '<div class="scene-note-empty-preview"><p>📝 还没有笔记</p><p class="sub">按 <code>⌘E</code> / <code>Ctrl+E</code> 或双击此处立即开始记录重点与思考。</p></div>'
   }
 
   function render(unit = activeUnit(), errorMessage = '') {
@@ -250,9 +250,11 @@ export function createSceneNote({ state, elements, api, activeUnit, sameId, toas
 
     if (elements.sceneNoteEditBtn) {
       elements.sceneNoteEditBtn.classList.toggle('hidden', !isPreview)
+      elements.sceneNoteEditBtn.title = '切换编辑模式 (快捷键: ⌘E / Ctrl+E)'
     }
     if (elements.sceneNotePreviewBtn) {
       elements.sceneNotePreviewBtn.classList.toggle('hidden', isPreview)
+      elements.sceneNotePreviewBtn.title = '切换预览模式 (快捷键: ⌘E / Ctrl+E)'
     }
 
     updateStatusBar(errorMessage)
@@ -369,10 +371,31 @@ export function createSceneNote({ state, elements, api, activeUnit, sameId, toas
 
   function handleKeydown(event) {
     if (!event) return
-    // 快捷键 Cmd+S / Ctrl+S 立即手动保存
-    if ((event.metaKey || event.ctrlKey) && event.key.toLowerCase() === 's') {
+    const isModifier = Boolean(event.metaKey || event.ctrlKey)
+    const key = String(event.key || '').toLowerCase()
+    const code = String(event.code || '')
+
+    // 1. 快捷键 Cmd+S / Ctrl+S 立即手动保存
+    if (isModifier && (key === 's' || code === 'KeyS')) {
       event.preventDefault()
+      event.stopPropagation()
       void flushSave(true)
+      return
+    }
+
+    // 2. 快捷键 Cmd+E / Ctrl+E 快速切换编辑与预览
+    if (isModifier && (key === 'e' || code === 'KeyE')) {
+      event.preventDefault()
+      event.stopPropagation()
+      togglePreview()
+      return
+    }
+
+    // 3. 在编辑状态下按 Escape 自动退出到预览模式并保存
+    if ((key === 'escape' || code === 'Escape') && state.sceneNoteMode === 'edit') {
+      event.preventDefault()
+      event.stopPropagation()
+      setMode('preview')
     }
   }
 
@@ -391,7 +414,7 @@ export function createSceneNote({ state, elements, api, activeUnit, sameId, toas
     if (currentMd5 === lastSavedMd5) {
       isDirty = false
       updateStatusBar()
-      if (showFeedback) toast('笔记已是最新状态')
+      if (showFeedback) toast('保存成功')
       return
     }
 
@@ -419,7 +442,7 @@ export function createSceneNote({ state, elements, api, activeUnit, sameId, toas
       syncPreviewContent(content)
       updateStatusBar()
       updateButtonText(unit)
-      if (showFeedback) toast('✓ 笔记已保存')
+      if (showFeedback) toast('保存成功')
     } catch (error) {
       isDirty = true
       updateStatusBar('保存失败，请检查网络')

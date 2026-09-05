@@ -27,6 +27,9 @@ public class AliyunNlsProperties {
     /** 默认发音人音色（如 siyue、zhimiao_emo 等）。 */
     private String voice = "siyue";
 
+    /** 默认语速（-500 到 500，默认 -120 约 0.88x 适合精读与跟读）。 */
+    private Integer speechRate = -120;
+
     /** 音频采样率。 */
     private Integer sampleRate = 16000;
 

@@ -4,6 +4,7 @@ import com.chandler.learning.agent.learning.api.response.LearningPlanResponse;
 import com.chandler.learning.agent.learning.api.response.LearningPlanUnitResponse;
 import com.chandler.learning.agent.learning.application.LearningPlanService;
 import com.chandler.learning.agent.learning.application.LearningSceneRelatedVocabularyService;
+import com.chandler.learning.agent.learning.application.SceneArticleAudioService;
 import com.chandler.learning.agent.learning.domain.entity.LearningPlanUnit;
 import com.chandler.learning.agent.task.domain.constant.AiTaskConstants;
 import com.chandler.learning.agent.task.application.AiAsyncTaskService;
@@ -14,6 +15,7 @@ import com.chandler.learning.agent.task.application.contract.AiTaskStepDefinitio
 import com.chandler.learning.agent.task.domain.entity.AiAsyncTask;
 import com.chandler.learning.agent.task.domain.enums.AiTaskType;
 import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Component;
 
 import java.time.LocalDate;
@@ -21,6 +23,7 @@ import java.util.List;
 import java.util.Map;
 
 /** 学习域拥有的场景材料分步生成工作流。 */
+@Slf4j
 @Component
 @RequiredArgsConstructor
 public class SceneMaterialTaskHandler implements AiTaskHandler {
@@ -28,9 +31,11 @@ public class SceneMaterialTaskHandler implements AiTaskHandler {
     private static final String PREPARE = "prepare_vocabulary";
     private static final String MATERIAL = "generate_material";
     private static final String RELATED = "generate_related_words";
+    private static final String AUDIO = "synthesize_audio";
 
     private final LearningPlanService planService;
     private final LearningSceneRelatedVocabularyService relatedVocabularyService;
+    private final SceneArticleAudioService sceneArticleAudioService;
     private final AiTaskExecutionService executionService;
     private final AiAsyncTaskService taskService;
 
@@ -40,13 +45,14 @@ public class SceneMaterialTaskHandler implements AiTaskHandler {
         return AiTaskType.SCENE_MATERIAL;
     }
 
-    /** 定义任务的执行步骤（3 步极速流水线）。 */
+    /** 定义任务的执行步骤（4 步流水线：选词 -> 生成材料与核心词 -> 扩充相关词 -> 合成文章语音）。 */
     @Override
     public List<AiTaskStepDefinition> steps() {
         return List.of(
                 new AiTaskStepDefinition(PREPARE, "确定学习词组", 10),
                 new AiTaskStepDefinition(MATERIAL, "生成场景文章与核心词数据", 20),
-                new AiTaskStepDefinition(RELATED, "补充场景相关词汇", 30));
+                new AiTaskStepDefinition(RELATED, "补充场景相关词汇", 30),
+                new AiTaskStepDefinition(AUDIO, "合成场景文章语音", 40));
     }
 
     /** 执行当前任务处理流程。 */
@@ -60,23 +66,17 @@ public class SceneMaterialTaskHandler implements AiTaskHandler {
         executionService.execute(task.getId(), PREPARE, operator, null,
                 () -> planService.prepareVocabularyForTask(task.getOwnerUserId(), task.getPlanId(),
                         recommendedDate, task.getId()));
-        taskService.updateProgress(task.getId(), 3, 1, 0);
+        taskService.updateProgress(task.getId(), 4, 1, 0);
 
         // 步骤 2：生成场景文章与核心词数据（读取词组，无锁并发调用 AI 撰写故事并落库）
         List<LearningPlanUnitResponse> generatedUnits = executionService.execute(task.getId(), MATERIAL, operator, modelConfigId,
                 () -> planService.generateMaterialForTask(task.getOwnerUserId(), task.getPlanId(), modelConfigId,
                         recommendedDate, task.getId()));
-        taskService.updateProgress(task.getId(), 3, 2, 0);
+        taskService.updateProgress(task.getId(), 4, 2, 0);
 
         // 步骤 3：补充场景相关词汇（为生成好的单元扩充 50 个相关词）
         executionService.execute(task.getId(), RELATED, operator, modelConfigId, () -> {
-            List<LearningPlanUnit> dateUnits;
-            if (generatedUnits != null && !generatedUnits.isEmpty()) {
-                dateUnits = planService.findUnitsByIds(task.getPlanId(),
-                        generatedUnits.stream().map(LearningPlanUnitResponse::getId).toList());
-            } else {
-                dateUnits = planService.findUnitsByDate(task.getPlanId(), recommendedDate);
-            }
+            List<LearningPlanUnit> dateUnits = resolveUnits(task.getPlanId(), generatedUnits, recommendedDate);
             if (dateUnits.isEmpty()) {
                 return 0;
             }
@@ -90,7 +90,32 @@ public class SceneMaterialTaskHandler implements AiTaskHandler {
             }
             return dateUnits.size();
         });
-        taskService.updateProgress(task.getId(), 3, 3, 0);
+        taskService.updateProgress(task.getId(), 4, 3, 0);
+
+        // 步骤 4：合成场景文章语音（阿里云 TTS 预合成并落盘）
+        executionService.execute(task.getId(), AUDIO, operator, null, () -> {
+            List<LearningPlanUnit> dateUnits = resolveUnits(task.getPlanId(), generatedUnits, recommendedDate);
+            if (dateUnits.isEmpty()) {
+                return 0;
+            }
+            for (LearningPlanUnit unit : dateUnits) {
+                try {
+                    sceneArticleAudioService.generateOrGetSceneAudio(unit.getId(), true);
+                } catch (Exception ex) {
+                    log.warn("场景材料任务合成文章语音异常 unitId={}: {}", unit.getId(), ex.getMessage());
+                }
+            }
+            return dateUnits.size();
+        });
+        taskService.updateProgress(task.getId(), 4, 4, 0);
         taskService.complete(task.getId(), AiTaskConstants.STATUS_COMPLETED, null);
+    }
+
+    private List<LearningPlanUnit> resolveUnits(Long planId, List<LearningPlanUnitResponse> generatedUnits, LocalDate date) {
+        if (generatedUnits != null && !generatedUnits.isEmpty()) {
+            return planService.findUnitsByIds(planId,
+                    generatedUnits.stream().map(LearningPlanUnitResponse::getId).toList());
+        }
+        return planService.findUnitsByDate(planId, date);
     }
 }
