@@ -29,39 +29,117 @@ export function createStudyNotesFeature(ctx) {
     }
   }
 
+  function isStudyNoteDrawerOpen() {
+    return Boolean(elements.studyNoteDrawer && !elements.studyNoteDrawer.classList.contains('hidden'))
+  }
+
+  function openStudyNoteDrawer(shouldEdit = false) {
+    if (!elements.studyNoteDrawer) return
+    elements.studyNoteDrawer.classList.remove('hidden')
+    elements.studyNoteDrawerBackdrop?.classList.remove('hidden')
+    elements.studySplitLayout?.classList.add('with-note-open')
+    const entry = state.currentNoteEntry || findEntryForRecord?.(state.currentRecord)
+    if (entry && elements.studyNoteDrawerTitle) {
+      elements.studyNoteDrawerTitle.textContent = `学习笔记 · ${entry.term || entry.normalizedTerm || ''}`
+    }
+    if (shouldEdit) {
+      editCurrentNote()
+    }
+  }
+
+  function closeStudyNoteDrawer() {
+    if (!elements.studyNoteDrawer) return
+    elements.studyNoteDrawer.classList.add('hidden')
+    elements.studyNoteDrawerBackdrop?.classList.add('hidden')
+    elements.studySplitLayout?.classList.remove('with-note-open')
+  }
+
+  function toggleStudyNoteDrawer(forceState) {
+    const currentlyOpen = isStudyNoteDrawerOpen()
+    const nextState = typeof forceState === 'boolean' ? forceState : !currentlyOpen
+    if (nextState) {
+      openStudyNoteDrawer()
+    } else {
+      closeStudyNoteDrawer()
+    }
+  }
+
   function editCurrentNote() {
-    const entry = state.currentNoteEntry || findEntryForRecord(state.currentRecord)
+    const isWordCardModalOpen = Boolean(elements.wordbookCardModal && !elements.wordbookCardModal.classList.contains('hidden'))
+    const entry = (isWordCardModalOpen && state.selectedEntry)
+      ? state.selectedEntry
+      : (state.currentNoteEntry || findEntryForRecord?.(state.currentRecord) || state.selectedEntry)
     if (!entry) {
       toast('请先把单词加入当前词表')
       return
     }
     state.currentNoteEntry = entry
     const focusTarget = state.selectedEntry && sameId(state.selectedEntry.id, entry.id) ? elements.wordbookFocus?.querySelector('.note-view') : null
-    const textarea = `
+    const textareaHtml = `
       <div class="note-editor">
+        <div class="scene-note-status-bar" style="margin-bottom: 6px;">
+          <span class="scene-note-auto-badge">快捷键：⌘S / ⌘Enter 保存，⌘E 保存并退出，Esc 取消</span>
+        </div>
         <textarea rows="8" placeholder="支持 Markdown，例如：## 记忆点">${escapeHtml(entry.note || '')}</textarea>
         <div class="inline-actions">
-          <button class="secondary-button compact" type="button" data-save-note>保存笔记</button>
-          <button class="ghost-button compact" type="button" data-cancel-note>取消</button>
+          <button class="secondary-button compact" type="button" data-save-note title="快捷键: ⌘S / ⌘Enter / ⌘E">保存笔记 (⌘S)</button>
+          <button class="ghost-button compact" type="button" data-cancel-note title="快捷键: Esc">取消</button>
         </div>
       </div>
     `
-    if (elements.studyNote) elements.studyNote.innerHTML = textarea
-    if (elements.reviewNote) elements.reviewNote.innerHTML = textarea
-    if (focusTarget) focusTarget.innerHTML = textarea
-    document.querySelectorAll('[data-save-note]').forEach((button) => button.addEventListener('click', () => saveCurrentNote(button)))
-    document.querySelectorAll('[data-cancel-note]').forEach((button) =>
-      button.addEventListener('click', () => {
-        renderNotes(entry)
-        if (state.selectedEntry && sameId(state.selectedEntry.id, entry.id)) renderWordbookFocus(entry)
-      }),
-    )
+    let targetContainers = []
+    if (isWordCardModalOpen && focusTarget) {
+      focusTarget.innerHTML = textareaHtml
+      targetContainers = [focusTarget]
+    } else {
+      if (elements.studyNote) elements.studyNote.innerHTML = textareaHtml
+      if (elements.reviewNote) elements.reviewNote.innerHTML = textareaHtml
+      if (focusTarget) focusTarget.innerHTML = textareaHtml
+      targetContainers = [elements.studyNote, elements.reviewNote, focusTarget].filter(Boolean)
+    }
+
+    const cancelAction = () => {
+      renderNotes(entry)
+      if (state.selectedEntry && sameId(state.selectedEntry.id, entry.id)) renderWordbookFocus(entry)
+    }
+
+    targetContainers.forEach((container) => {
+      container.querySelectorAll('[data-save-note]').forEach((button) => button.addEventListener('click', () => saveCurrentNote(button)))
+      container.querySelectorAll('[data-cancel-note]').forEach((button) => button.addEventListener('click', cancelAction))
+
+      const ta = container.querySelector('textarea')
+      if (ta) {
+        ta.addEventListener('keydown', (e) => {
+          const isSaveKey = (e.metaKey || e.ctrlKey) && (e.key === 's' || e.key === 'S' || e.key === 'Enter')
+          const isToggleEdit = (e.metaKey || e.ctrlKey) && (e.key === 'e' || e.key === 'E')
+          if (isSaveKey || isToggleEdit) {
+            e.preventDefault()
+            e.stopPropagation()
+            saveCurrentNote(ta)
+            return
+          }
+          if (e.key === 'Escape') {
+            e.preventDefault()
+            e.stopPropagation()
+            cancelAction()
+          }
+        })
+      }
+    })
+
+    // 自动聚焦到目标容器的 textarea
+    const activeTextarea = targetContainers[0]?.querySelector('textarea')
+    if (activeTextarea) {
+      activeTextarea.focus()
+      activeTextarea.setSelectionRange(activeTextarea.value.length, activeTextarea.value.length)
+    }
   }
 
-  async function saveCurrentNote(button) {
+  async function saveCurrentNote(target) {
     const entry = state.currentNoteEntry
     if (!entry) return
-    const input = button.closest('.note-editor')?.querySelector('textarea')
+    const editor = target?.closest?.('.note-editor') || document.querySelector('.note-editor')
+    const input = editor?.querySelector('textarea')
     const note = input?.value || ''
     await saveEntry(entry.id, { note })
   }
@@ -115,5 +193,9 @@ export function createStudyNotesFeature(ctx) {
     editCurrentNote,
     saveCurrentNote,
     saveEntry,
+    openStudyNoteDrawer,
+    closeStudyNoteDrawer,
+    toggleStudyNoteDrawer,
+    isStudyNoteDrawerOpen,
   }
 }

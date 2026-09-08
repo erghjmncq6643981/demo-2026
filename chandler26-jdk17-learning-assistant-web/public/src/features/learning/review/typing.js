@@ -36,13 +36,14 @@ export function createReviewTypingFeature(ctx) {
   }
 
   function handleReviewKeydown(event) {
+    if (!event || typeof event.key !== 'string') return
     if (state.activeView !== 'reviewView' || !state.currentReviewEntry || !state.token) return
     const activeTag = document.activeElement?.tagName?.toLowerCase()
-    if (['input', 'textarea', 'select'].includes(activeTag) || elements.reviewCompleteModal?.classList.contains('hidden') === false) return
+    if (['input', 'textarea', 'select'].includes(activeTag) || elements.reviewCompleteModal?.classList.contains('hidden') === false || elements.reviewNoteModal?.classList.contains('hidden') === false) return
     if (event.altKey || event.ctrlKey || event.metaKey) return
     if (event.key === 'Backspace') {
       event.preventDefault()
-      state.reviewTyped = state.reviewTyped.slice(0, -1)
+      state.reviewTyped = (state.reviewTyped || '').slice(0, -1)
       renderReviewFocus(state.currentReviewEntry)
       return
     }
@@ -54,11 +55,12 @@ export function createReviewTypingFeature(ctx) {
     }
     if (event.key.length !== 1) return
     const term = reviewTargetTerm(state.currentReviewEntry)
-    const expected = term[state.reviewTyped.length]
+    const typed = state.reviewTyped || ''
+    const expected = term[typed.length]
     if (!expected) return
     event.preventDefault()
     if (event.key.toLowerCase() === expected.toLowerCase()) {
-      state.reviewTyped += expected
+      state.reviewTyped = typed + expected
       playUiTone('correct')
       renderReviewFocus(state.currentReviewEntry)
       if (state.reviewTyped.length === term.length) {
@@ -76,7 +78,7 @@ export function createReviewTypingFeature(ctx) {
   }
 
   function shakeTypingBoard() {
-    const board = elements.reviewFocus.querySelector('.typing-board')
+    const board = elements.reviewFocus?.querySelector('.typing-board')
     if (!board) return
     board.classList.remove('shake')
     void board.offsetWidth

@@ -69,6 +69,7 @@ export function createSceneStudy({
     elements.sceneLearningFooter?.classList.toggle('hidden', !showReading)
     elements.sceneChallengeStage?.classList.toggle('hidden', stage !== 'challenge')
     elements.sceneAssessmentPanel?.classList.toggle('hidden', stage !== 'assessment')
+    elements.sceneLearningStage?.classList.toggle('in-challenge-stage', stage === 'challenge' || stage === 'assessment')
   }
 
   function renderTranslation(translation) {
@@ -243,6 +244,7 @@ export function createSceneStudy({
   }
 
   function handleSceneTypingKeydown(event, word) {
+    if (!event || typeof event.key !== 'string') return
     const term = String(word?.term || '').trim()
     if (!term) return
     if (event.key === 'Backspace') {
@@ -281,6 +283,7 @@ export function createSceneStudy({
   }
 
   function handleChallengeKeydown(event) {
+    if (!event || typeof event.key !== 'string') return
     const isSceneView = state.activeView === 'scenePlanView' || elements.scenePlanView?.classList.contains('active')
     if (!isSceneView) return
     if (elements.sceneCoreWordsModal && !elements.sceneCoreWordsModal.classList.contains('hidden')) return

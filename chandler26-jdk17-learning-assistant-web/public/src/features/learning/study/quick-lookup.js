@@ -4,7 +4,9 @@ import { normalizeDefinitions, normalizeExamples } from '/src/shared/vocabulary.
 export function createQuickLookupFeature({
   elements,
   request,
+  toast,
   speak,
+  speakSentence,
   preloadAudio,
   study,
   setView,
@@ -111,7 +113,14 @@ export function createQuickLookupFeature({
   function renderQuickRecord(record) {
     if (!elements.quickLookupContent) return
     elements.quickLookupContent.className = 'quick-lookup-content'
-    const parsed = record?.parsed || {}
+    let parsed = record?.parsed || {}
+    if (typeof parsed === 'string') {
+      try {
+        parsed = JSON.parse(parsed)
+      } catch {
+        parsed = {}
+      }
+    }
     const term = record?.term || record?.normalizedTerm || parsed?.term || 'Word'
     const ukRaw = parsed?.phonetic?.uk || parsed?.['phonetic.uk'] || parsed?.phonetic_uk || parsed?.uk_phonetic || (typeof parsed?.phonetic === 'string' ? parsed.phonetic : '') || ''
     const usRaw = parsed?.phonetic?.us || parsed?.['phonetic.us'] || parsed?.phonetic_us || parsed?.us_phonetic || ''
@@ -163,13 +172,42 @@ export function createQuickLookupFeature({
       ${examples.length ? `
         <div class="quick-card-examples">
           <p class="section-subtitle">经典例句</p>
-          ${examples.map((ex) => `<div class="quick-example-item"><p class="sentence">${escapeHtml(ex.sentence || '')}</p><p class="translation">${escapeHtml(ex.translation || '')}</p></div>`).join('')}
+          ${examples.map((ex, index) => `
+            <div class="quick-example-item">
+              <div class="quick-example-header">
+                <p class="sentence">${escapeHtml(ex.sentence || '')}</p>
+                ${ex.sentence ? `<button type="button" class="mini-audio-button" data-quick-sentence="${index}" title="播放例句">▶</button>` : ''}
+              </div>
+              <p class="translation">${escapeHtml(ex.translation || '')}</p>
+            </div>
+          `).join('')}
         </div>
       ` : ''}
     `
 
+    elements.quickLookupContent.querySelectorAll('[data-quick-sentence]')?.forEach((btn) => {
+      btn.addEventListener('click', (event) => {
+        event.preventDefault()
+        event.stopPropagation()
+        try {
+          const idx = Number(btn.getAttribute('data-quick-sentence'))
+          const sentence = examples[idx]?.sentence
+          if (sentence) {
+            speakSentence?.(sentence)
+          } else {
+            toast?.('暂无可播放例句')
+          }
+        } catch (error) {
+          console.error('播放例句异常:', error)
+          toast?.('播放例句失败')
+        }
+      })
+    })
+
     elements.quickLookupContent.querySelectorAll('[data-quick-inflection]')?.forEach((tag) => {
       tag.addEventListener('click', (e) => {
+        e.preventDefault()
+        e.stopPropagation()
         const infTerm = e.currentTarget.getAttribute('data-quick-inflection')
         if (infTerm) {
           if (elements.quickLookupInput) elements.quickLookupInput.value = infTerm
@@ -179,14 +217,28 @@ export function createQuickLookupFeature({
     })
 
     elements.quickLookupContent.querySelectorAll('[data-voice-type]')?.forEach((btn) => {
-      btn.addEventListener('click', () => {
-        const voiceType = btn.getAttribute('data-voice-type') || 'us'
-        speak?.(term, voiceType)
+      btn.addEventListener('click', (event) => {
+        event.preventDefault()
+        event.stopPropagation()
+        try {
+          const voiceType = btn.getAttribute('data-voice-type') || 'us'
+          speak?.(term, voiceType)
+        } catch (error) {
+          console.error('发音播放异常:', error)
+          toast?.('发音播放异常')
+        }
       })
     })
 
-    elements.quickLookupContent.querySelector('[data-quick-speak]')?.addEventListener('click', () => {
-      speak?.(term)
+    elements.quickLookupContent.querySelector('[data-quick-speak]')?.addEventListener('click', (event) => {
+      event.preventDefault()
+      event.stopPropagation()
+      try {
+        speak?.(term)
+      } catch (error) {
+        console.error('发音播放异常:', error)
+        toast?.('发音播放异常')
+      }
     })
 
     elements.quickLookupContent.querySelector('[data-quick-goto]')?.addEventListener('click', () => {

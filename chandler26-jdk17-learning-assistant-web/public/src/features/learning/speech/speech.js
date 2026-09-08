@@ -126,71 +126,115 @@ export function createSpeechFeature(ctx) {
     return speak(content, currentVoiceType())
   }
 
+  function playSentenceAudio(text, voiceType = currentVoiceType()) {
+    const content = String(text || '').trim()
+    if (!content) {
+      toast('暂无可播放内容')
+      return
+    }
+    const voice = voiceType === 'uk' ? 'uk' : 'us'
+    const directUrl = directYoudaoUrl(content, voice)
+    try {
+      const audio = new Audio(directUrl)
+      audio.play().then(() => {
+        toast(`正在播放${voice === 'uk' ? '英音' : '美音'}例句发音`)
+      }).catch((err) => {
+        console.warn('例句音频播放受阻:', err)
+        toast('音频播放受阻，请检查网络或浏览器声音权限')
+      })
+    } catch (err) {
+      console.warn('创建例句音频异常:', err)
+      toast('发音播放异常')
+    }
+  }
+
   function speakSentence(text) {
     const content = String(text || '').trim()
     if (!content) {
       toast('暂无可播放内容')
       return
     }
-    if ('speechSynthesis' in window && 'SpeechSynthesisUtterance' in window) {
-      speakWithBrowserVoice(content, currentVoiceType(), { sentence: true })
-      return
+    try {
+      if ('speechSynthesis' in window && 'SpeechSynthesisUtterance' in window) {
+        speakWithBrowserVoice(content, currentVoiceType(), { sentence: true })
+        return
+      }
+    } catch (err) {
+      console.warn('语音合成初始化异常，降级为在线发音:', err)
     }
-    speak(content, currentVoiceType())
+    playSentenceAudio(content, currentVoiceType())
   }
 
   function speakWithBrowserVoice(content, voiceType = currentVoiceType(), options = {}) {
-    if (!('speechSynthesis' in window && 'SpeechSynthesisUtterance' in window)) return
-
-    // 若当前正在发音且再次触发，则停止播放
-    if (window.speechSynthesis.speaking) {
-      window.speechSynthesis.cancel()
-      toast('已停止朗读')
+    if (!('speechSynthesis' in window && 'SpeechSynthesisUtterance' in window)) {
+      playSentenceAudio(content, voiceType)
       return
     }
 
-    window.speechSynthesis.cancel()
-
-    // 清洗 Markdown/注解符号，按句切分以防长文本导致浏览器 TTS 引擎溢出报错
-    const cleanedText = content
-      .replace(/\{[^}]+\}/g, '')
-      .replace(/`([^`]+)`/g, '$1')
-      .replace(/\*{1,2}(.*?)\*{1,2}/g, '$1')
-      .trim()
-    const rawSentences = cleanedText.split(/(?<=[.!?])\s+|\n+/).map((s) => s.trim()).filter(Boolean)
-    const sentences = rawSentences.length > 0 ? rawSentences : [cleanedText]
-
-    const voice = chooseSpeechVoice(voiceType, options.sentence ? state.speechSettings.sentenceVoiceName : '')
-
-    sentences.forEach((sentence) => {
-      const utterance = new SpeechSynthesisUtterance(sentence)
-      utterance.lang = voiceType === 'uk' ? 'en-GB' : 'en-US'
-      if (voice) {
-        utterance.voice = voice
-        utterance.lang = voice.lang || utterance.lang
-      }
-      utterance.rate = options.sentence ? state.speechSettings.sentenceRate : 0.86
-      utterance.pitch = options.sentence ? state.speechSettings.sentencePitch : 1
-
-      utterance.onerror = (event) => {
-        // 忽略主动停止/取消引起的正常中断事件
-        if (event.error === 'canceled' || event.error === 'interrupted') {
-          return
+    try {
+      // 若当前正在发音且再次触发，则停止播放
+      if (window.speechSynthesis.speaking) {
+        try {
+          window.speechSynthesis.cancel()
+        } catch {
+          /* ignore */
         }
-        if (event.error === 'not-allowed') {
-          toast('浏览器阻止了音频播放，请在浏览器地址栏允许站点声音权限')
-        } else {
-          console.warn('SpeechSynthesis error:', event.error)
-        }
+        toast('已停止朗读')
+        return
       }
 
-      window.speechSynthesis.speak(utterance)
-    })
+      try {
+        window.speechSynthesis.cancel()
+      } catch {
+        /* ignore */
+      }
 
-    toast('正在播放发音')
+      // 清洗 Markdown/注解符号，按句切分以防长文本导致浏览器 TTS 引擎溢出报错
+      const cleanedText = content
+        .replace(/\{[^}]+\}/g, '')
+        .replace(/`([^`]+)`/g, '$1')
+        .replace(/\*{1,2}(.*?)\*{1,2}/g, '$1')
+        .trim()
+      const rawSentences = cleanedText.split(/(?<=[.!?])\s+|\n+/).map((s) => s.trim()).filter(Boolean)
+      const sentences = rawSentences.length > 0 ? rawSentences : [cleanedText]
+
+      const settings = state?.speechSettings || {}
+      const voice = chooseSpeechVoice(voiceType, options.sentence ? (settings.sentenceVoiceName || '') : '')
+
+      sentences.forEach((sentence) => {
+        const utterance = new SpeechSynthesisUtterance(sentence)
+        utterance.lang = voiceType === 'uk' ? 'en-GB' : 'en-US'
+        if (voice) {
+          utterance.voice = voice
+          utterance.lang = voice.lang || utterance.lang
+        }
+        utterance.rate = options.sentence ? (settings.sentenceRate ?? 0.86) : 0.86
+        utterance.pitch = options.sentence ? (settings.sentencePitch ?? 1) : 1
+
+        utterance.onerror = (event) => {
+          // 忽略主动停止/取消引起的正常中断事件
+          if (event.error === 'canceled' || event.error === 'interrupted') {
+            return
+          }
+          if (event.error === 'not-allowed') {
+            toast('浏览器阻止了音频播放，请在浏览器地址栏允许站点声音权限')
+          } else {
+            console.warn('SpeechSynthesis error:', event.error)
+            playSentenceAudio(sentence, voiceType)
+          }
+        }
+
+        window.speechSynthesis.speak(utterance)
+      })
+
+      toast('正在播放发音')
+    } catch (err) {
+      console.warn('SpeechSynthesis 播放失败，自动降级至网络发音:', err)
+      playSentenceAudio(content, voiceType)
+    }
   }
 
-  function currentVoiceType(voiceType = state.speechSettings.voiceType) {
+  function currentVoiceType(voiceType = state?.speechSettings?.voiceType) {
     return voiceType === 'uk' ? 'uk' : 'us'
   }
 
@@ -382,6 +426,7 @@ export function createSpeechFeature(ctx) {
     preloadAudio,
     playRemoteAudio,
     playRemoteAudioByType,
+    playSentenceAudio,
     speak,
     speakSentence,
     speakWithBrowserVoice,

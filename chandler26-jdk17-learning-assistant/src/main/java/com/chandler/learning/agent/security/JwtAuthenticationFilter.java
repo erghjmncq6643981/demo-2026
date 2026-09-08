@@ -28,6 +28,7 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
 
     private final JwtTokenService jwtTokenService;
     private final LearningUserMapper userMapper;
+    private final UserContextCache userContextCache;
 
     /** 处理当前请求并维护认证或追踪上下文。 */
     @Override
@@ -37,7 +38,7 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
         if (StringUtils.hasText(token) && SecurityContextHolder.getContext().getAuthentication() == null) {
             try {
                 JwtClaims claims = jwtTokenService.parse(token);
-                LearningUser user = userMapper.selectById(claims.userId());
+                LearningUser user = userContextCache.get(claims.userId(), userMapper::selectById);
                 if (user != null && Boolean.TRUE.equals(user.getEnabled())) {
                     LearningUserPrincipal principal = new LearningUserPrincipal(user);
                     UsernamePasswordAuthenticationToken authentication = new UsernamePasswordAuthenticationToken(

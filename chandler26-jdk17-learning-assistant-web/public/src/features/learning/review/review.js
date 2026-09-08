@@ -276,7 +276,7 @@ export function createReviewFeature(ctx) {
           <button class="secondary-button compact" type="button" data-review-next ${canNext ? '' : 'disabled'}>下一个</button>
         </div>
         <div style="display: flex; gap: 8px; align-items: center;">
-          <button class="secondary-button compact" type="button" data-review-note>查看笔记</button>
+          <button class="secondary-button compact" type="button" data-review-note title="复习笔记 (快捷键: ⌘E / Ctrl+E)">复习笔记 (⌘E)</button>
           <button class="icon-action-button" type="button" data-review-transfer="${escapeHtml(entryOrRecord.id)}" title="复制或移动" aria-label="复制或移动">＋</button>
         </div>
       </div>

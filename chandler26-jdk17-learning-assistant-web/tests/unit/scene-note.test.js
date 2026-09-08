@@ -229,4 +229,34 @@ describe('Scene Note Smart Auto-Save with MD5, UpdateTime and 15s Idle Refresh',
     expect(eventEsc.stopPropagation).toHaveBeenCalled()
     expect(fixture.state.sceneNoteMode).toBe('preview')
   })
+
+  it('defers note loading via scheduleLoad without blocking initial render', async () => {
+    fixture = createTestFixture('Initial Note')
+    const unit2 = { id: 'unit-2', planId: 'plan-1' }
+    fixture.activeUnit.mockReturnValue(unit2)
+    fixture.api.getNote.mockResolvedValueOnce({ content: 'Deferred Content', updateTime: '2026-08-31T11:00:00.000Z' })
+
+    // 调用 scheduleLoad，不应立即触发网络请求
+    fixture.sceneNote.scheduleLoad(unit2, 800)
+    expect(fixture.api.getNote).not.toHaveBeenCalled()
+
+    // 推进 800ms 后才触发网络加载
+    await vi.advanceTimersByTimeAsync(800)
+    expect(fixture.api.getNote).toHaveBeenCalledWith('plan-1', 'unit-2')
+  })
+
+  it('immediately triggers load when openPanel is invoked before scheduleLoad timer fires', async () => {
+    fixture = createTestFixture('Initial Note')
+    const unit3 = { id: 'unit-3', planId: 'plan-1' }
+    fixture.activeUnit.mockReturnValue(unit3)
+    fixture.api.getNote.mockResolvedValueOnce({ content: 'Fast Content', updateTime: '2026-08-31T12:00:00.000Z' })
+
+    // 调度延迟加载
+    fixture.sceneNote.scheduleLoad(unit3, 1000)
+    expect(fixture.api.getNote).not.toHaveBeenCalled()
+
+    // 用户主动点击打开笔记面板，立即取消计时器并即时请求
+    fixture.sceneNote.openPanel()
+    expect(fixture.api.getNote).toHaveBeenCalledWith('plan-1', 'unit-3')
+  })
 })

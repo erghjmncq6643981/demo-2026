@@ -119,4 +119,25 @@ describe('Speech Feature with Preload, Cache, and Fast Fallback', () => {
     expect(mockSpeechSynthesis.speak).toHaveBeenCalled()
     expect(ctx.toast).toHaveBeenCalledWith('正在播放发音')
   })
+
+  it('falls back gracefully to direct sentence audio when browser speech synthesis throws', () => {
+    mockSpeechSynthesis.speak.mockImplementation(() => {
+      throw new Error('Speech synthesis error: DOMException')
+    })
+    const speech = createSpeechFeature(ctx)
+
+    speech.speakSentence('Another test sentence.')
+
+    expect(global.Audio).toHaveBeenCalledWith(expect.stringContaining('https://dict.youdao.com/dictvoice?audio=Another%20test%20sentence.'))
+  })
+
+  it('handles missing speechSettings safely without throwing exceptions', () => {
+    const speech = createSpeechFeature({
+      ...ctx,
+      state: {},
+    })
+
+    expect(() => speech.speakSentence('Sentence without settings.')).not.toThrow()
+    expect(mockSpeechSynthesis.speak).toHaveBeenCalled()
+  })
 })

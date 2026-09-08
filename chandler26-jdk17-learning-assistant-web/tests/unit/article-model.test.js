@@ -29,4 +29,11 @@ describe('语境精读规则', () => {
   it('模型余额错误给出可执行建议', () => {
     expect(articleErrorSuggestion('AI_MODEL_BALANCE_INSUFFICIENT', 400)).toContain('余额')
   })
+
+  it('预览材料应包含顶层文章标题以支持历史摘要渲染', async () => {
+    const { buildPreviewArticleRecord } = await import('../../public/src/features/reading/article-render.js')
+    const preview = buildPreviewArticleRecord({ articleEntries: [], selectedArticleEntryIds: [], wordbookEntries: [] })
+    expect(preview.title).toBe('A Choice That Changed the Plan')
+    expect(preview.parsed.title).toBe('A Choice That Changed the Plan')
+  })
 })

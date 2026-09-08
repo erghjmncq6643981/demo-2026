@@ -15,6 +15,8 @@ public class ArticleStudySummaryResponse {
     private Long id;
     @Schema(description = "单词本标识")
     private Long wordbookId;
+    @Schema(description = "文章标题")
+    private String title;
     @Schema(description = "选中词汇列表")
     private List<ArticleStudyWordResponse> selectedWords;
     @Schema(description = "词数范围")

@@ -454,6 +454,7 @@ export function createWordbookArticleFeature(ctx) {
     try {
       if (!state.preview && !record?.parsed) {
         record = await api.getRecord(recordId)
+        replaceArticleRecord(record)
       }
       if (!record) return
       const stage = record.studyStatus === 'completed' ? 'check' : normalizeArticleStage(record.currentStage)
@@ -490,7 +491,7 @@ export function createWordbookArticleFeature(ctx) {
     elements.articleHistoryNextBtn.disabled = (state.articleHistoryPage || 1) >= maxPage
     elements.articleHistoryList.innerHTML = records
       .map((record) => {
-        const title = readText(record.parsed, ['title']) || selectedWordsText(record) || '语境精读'
+        const title = record.title || readText(record.parsed, ['title']) || selectedWordsText(record) || '语境精读'
         const time = formatDateTime(record.createTime || record.createdAt || record.updateTime)
         return `
           <button class="article-history-item ${state.currentArticleRecord && sameId(state.currentArticleRecord.id, record.id) ? 'active' : ''}" type="button" data-article-record="${escapeHtml(record.id)}">
@@ -870,7 +871,12 @@ export function createWordbookArticleFeature(ctx) {
 
   function replaceArticleRecord(record) {
     if (!record) return
-    state.articleRecords = [record, ...state.articleRecords.filter((item) => !sameId(item.id, record.id))]
+    const exists = state.articleRecords.some((item) => sameId(item.id, record.id))
+    if (exists) {
+      state.articleRecords = state.articleRecords.map((item) => sameId(item.id, record.id) ? { ...item, ...record } : item)
+    } else {
+      state.articleRecords = [record, ...state.articleRecords]
+    }
     if (state.articleDraftRecord && sameId(state.articleDraftRecord.id, record.id)) state.articleDraftRecord = record
     if (state.currentArticleRecord && sameId(state.currentArticleRecord.id, record.id)) state.currentArticleRecord = record
   }

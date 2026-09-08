@@ -85,6 +85,7 @@ public class LearningSceneMaterialNoteService {
 
     private LearningSceneMaterial requireMaterial(Long userId, Long planId, Long unitId) {
         LearningPlan plan = planMapper.selectOne(new LambdaQueryWrapper<LearningPlan>()
+                .select(LearningPlan::getId)
                 .eq(LearningPlan::getId, planId)
                 .eq(LearningPlan::getUserId, userId)
                 .eq(LearningPlan::getDeleted, false)
@@ -93,6 +94,7 @@ public class LearningSceneMaterialNoteService {
             throw LearningAssistantException.notFound(LearningErrorCode.LEARNING_PLAN_NOT_FOUND);
         }
         LearningPlanUnit unit = unitMapper.selectOne(new LambdaQueryWrapper<LearningPlanUnit>()
+                .select(LearningPlanUnit::getId, LearningPlanUnit::getSceneMaterialId)
                 .eq(LearningPlanUnit::getId, unitId)
                 .eq(LearningPlanUnit::getPlanId, planId)
                 .eq(LearningPlanUnit::getDeleted, false)
@@ -101,6 +103,7 @@ public class LearningSceneMaterialNoteService {
             throw LearningAssistantException.notFound(LearningErrorCode.LEARNING_PLAN_UNIT_NOT_FOUND);
         }
         LearningSceneMaterial material = materialMapper.selectOne(new LambdaQueryWrapper<LearningSceneMaterial>()
+                .select(LearningSceneMaterial::getId, LearningSceneMaterial::getTitle)
                 .eq(LearningSceneMaterial::getId, unit.getSceneMaterialId())
                 .eq(LearningSceneMaterial::getUnitId, unitId)
                 .eq(LearningSceneMaterial::getPlanId, planId)

@@ -151,6 +151,7 @@ export function buildPreviewArticleRecord(state, payload = {}) {
   return {
     id: payload.forceRefresh ? String(Date.now()) : 'preview-article',
     wordbookId: state.currentWordbookId || '1',
+    title: 'A Choice That Changed the Plan',
     selectedWords,
     wordCountRange: payload.wordCountRange || '300-500',
     difficulty: payload.difficulty || 'medium',

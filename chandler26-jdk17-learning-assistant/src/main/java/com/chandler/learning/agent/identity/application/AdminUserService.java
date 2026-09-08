@@ -17,6 +17,7 @@ import com.chandler.learning.agent.vocabulary.application.WordbookService;
 import com.chandler.learning.agent.common.constant.CommonConstants;
 import com.chandler.learning.agent.common.constant.PersistenceConstants;
 import com.chandler.learning.agent.common.exception.LearningErrorCode;
+import com.chandler.learning.agent.security.UserContextCache;
 import com.chandler.learning.agent.system.application.SystemLogService;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -49,6 +50,7 @@ public class AdminUserService {
     private final AuthService authService;
     private final SystemLogService systemLogService;
     private final UserDisplayNameService userDisplayNameService;
+    private final UserContextCache userContextCache;
 
     /** 查询用户中心分页列表。 */
     public AdminUserPageResponse page(String keyword, String roleCode, Boolean enabled,
@@ -123,6 +125,7 @@ public class AdminUserService {
         user.setUpdateBy(operator.getId());
         user.setUpdateTime(LocalDateTime.now());
         userMapper.updateById(user);
+        userContextCache.evict(userId);
         writeAudit(operator, "修改用户", user);
         log.info("系统管理员「{}」修改用户「{}」，角色「{}」，状态「{}」",
                 userDisplayNameService.displayName(operator), user.getUsername(), targetRole.getLabel(), targetEnabled ? "启用" : "停用");
@@ -137,6 +140,7 @@ public class AdminUserService {
         user.setUpdateBy(operator.getId());
         user.setUpdateTime(LocalDateTime.now());
         userMapper.updateById(user);
+        userContextCache.evict(userId);
         writeAudit(operator, "重置用户密码", user);
         log.info("系统管理员「{}」重置了用户「{}」的密码", userDisplayNameService.displayName(operator), user.getUsername());
     }
@@ -154,6 +158,7 @@ public class AdminUserService {
         user.setUpdateTime(LocalDateTime.now());
         userMapper.updateById(user);
         userMapper.deleteById(userId);
+        userContextCache.evict(userId);
         writeAudit(operator, "注销用户", user);
         log.info("系统管理员「{}」注销了用户「{}」", userDisplayNameService.displayName(operator), user.getUsername());
     }

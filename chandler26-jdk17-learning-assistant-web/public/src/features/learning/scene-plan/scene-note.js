@@ -175,12 +175,16 @@ export function md5(string) {
 export function createSceneNote({ state, elements, api, activeUnit, sameId, toast, logEvent }) {
   let saveTimer = null
   let idleRefreshTimer = null
+  let scheduledLoadTimer = null
+  let inFlightLoadPromise = null
+  let inFlightUnitId = null
   let isDirty = false
   let isComposing = false
   let lastSavedMd5 = null
   let lastSavedUpdateTime = null
   const DEBOUNCE_DELAY_MS = 2500
   const IDLE_REFRESH_DELAY_MS = 15000
+  const SCHEDULED_LOAD_DELAY_MS = 800
 
   function formatNoteTime(value) {
     const date = new Date(value)
@@ -271,7 +275,36 @@ export function createSceneNote({ state, elements, api, activeUnit, sameId, toas
     updateStatusBar()
   }
 
+  function cancelScheduledLoad() {
+    if (scheduledLoadTimer) {
+      clearTimeout(scheduledLoadTimer)
+      scheduledLoadTimer = null
+    }
+  }
+
+  function scheduleLoad(unit = activeUnit(), delayMs = SCHEDULED_LOAD_DELAY_MS) {
+    cancelScheduledLoad()
+    if (!unit) return
+    if (sameId(state.sceneNote?.unitId, unit.id)) {
+      render(unit)
+      return
+    }
+    updateButtonText(unit)
+    const executeLoad = () => {
+      scheduledLoadTimer = null
+      void load(unit)
+    }
+    if (typeof window !== 'undefined' && 'requestIdleCallback' in window) {
+      scheduledLoadTimer = setTimeout(() => {
+        window.requestIdleCallback(executeLoad, { timeout: 1500 })
+      }, delayMs)
+    } else {
+      scheduledLoadTimer = setTimeout(executeLoad, delayMs)
+    }
+  }
+
   async function load(unit = activeUnit()) {
+    cancelScheduledLoad()
     if (!unit) {
       state.sceneNote = { content: '', updateTime: null, unitId: null }
       state.sceneNoteMode = 'edit'
@@ -289,6 +322,9 @@ export function createSceneNote({ state, elements, api, activeUnit, sameId, toas
       render(unit)
       return
     }
+    if (inFlightLoadPromise && sameId(inFlightUnitId, unit.id)) {
+      return inFlightLoadPromise
+    }
     if (state.preview) {
       const content = unit.note?.content || ''
       const updateTime = unit.note?.updateTime || null
@@ -300,25 +336,41 @@ export function createSceneNote({ state, elements, api, activeUnit, sameId, toas
       render(unit)
       return
     }
-    try {
-      const note = await api.getNote(unit.planId, unit.id)
-      const content = note?.content || ''
-      const updateTime = note?.updateTime || null
-      state.sceneNote = { content, updateTime, unitId: unit.id }
-      state.sceneNoteMode = content.trim() ? 'preview' : 'edit'
-      lastSavedMd5 = md5(content)
-      lastSavedUpdateTime = updateTime
-      isDirty = false
-      render(unit)
-    } catch (error) {
-      state.sceneNote = { content: '', updateTime: null, unitId: unit.id }
-      state.sceneNoteMode = 'edit'
-      lastSavedMd5 = md5('')
-      lastSavedUpdateTime = null
-      isDirty = false
-      render(unit, '笔记加载失败，可重试')
-      logEvent('error', '场景笔记加载失败', error.message)
-    }
+
+    inFlightUnitId = unit.id
+    inFlightLoadPromise = (async () => {
+      try {
+        const note = await api.getNote(unit.planId, unit.id)
+        const current = activeUnit()
+        if (!current || !sameId(current.id, unit.id)) {
+          return
+        }
+        const content = note?.content || ''
+        const updateTime = note?.updateTime || null
+        state.sceneNote = { content, updateTime, unitId: unit.id }
+        state.sceneNoteMode = content.trim() ? 'preview' : 'edit'
+        lastSavedMd5 = md5(content)
+        lastSavedUpdateTime = updateTime
+        isDirty = false
+        render(unit)
+      } catch (error) {
+        const current = activeUnit()
+        if (current && sameId(current.id, unit.id)) {
+          state.sceneNote = { content: '', updateTime: null, unitId: unit.id }
+          state.sceneNoteMode = 'edit'
+          lastSavedMd5 = md5('')
+          lastSavedUpdateTime = null
+          isDirty = false
+          render(unit, '笔记加载失败，可重试')
+          logEvent('error', '场景笔记加载失败', error.message)
+        }
+      } finally {
+        inFlightLoadPromise = null
+        inFlightUnitId = null
+      }
+    })()
+
+    return inFlightLoadPromise
   }
 
   function handleCompositionStart() {
@@ -480,6 +532,10 @@ export function createSceneNote({ state, elements, api, activeUnit, sameId, toas
     }
 
     if (nextOpen) {
+      cancelScheduledLoad()
+      if (!sameId(state.sceneNote?.unitId, unit.id)) {
+        void load(unit)
+      }
       const content = state.sceneNote?.content || ''
       state.sceneNoteMode = content.trim() ? 'preview' : 'edit'
       render(unit)
@@ -501,6 +557,8 @@ export function createSceneNote({ state, elements, api, activeUnit, sameId, toas
 
   return {
     load,
+    scheduleLoad,
+    cancelScheduledLoad,
     render,
     save: flushSave,
     flushSave,

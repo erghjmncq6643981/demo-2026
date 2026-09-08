@@ -256,8 +256,8 @@ export function createSceneOverview({
         const active = detail || activeUnit(state.currentLearningPlan)
         state.currentSceneWordId = asArray(active?.words).find((word) => word.tier === 'core' && !isWordComplete(word))?.id || asArray(active?.words).find((word) => word.tier === 'core')?.id || null
         renderCurrentScene()
-        await loadSceneNote(active)
         await startLearning()
+        loadSceneNote?.(active)
       } catch (error) {
         logEvent('error', '开始场景失败', error.message)
         toast(`开始场景失败：${error.message}`)

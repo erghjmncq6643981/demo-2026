@@ -141,7 +141,7 @@ export function createWordbookDetailFeature(ctx) {
       <div class="focus-section">
         <div class="panel-heading compact-heading">
           <h3>笔记</h3>
-          <button class="secondary-button compact" type="button" data-edit-focus-note>编辑笔记</button>
+          <button class="secondary-button compact" type="button" data-edit-focus-note title="编辑笔记 (快捷键: ⌘E / Ctrl+E)">编辑笔记 (⌘E)</button>
         </div>
         <div class="note-view">${renderMarkdown(entry.note || '') || '<span class="empty">暂无笔记</span>'}</div>
       </div>

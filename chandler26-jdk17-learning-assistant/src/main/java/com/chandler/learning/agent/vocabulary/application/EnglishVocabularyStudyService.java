@@ -29,11 +29,14 @@ import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.node.ArrayNode;
 import com.fasterxml.jackson.databind.node.ObjectNode;
+import com.github.benmanes.caffeine.cache.Cache;
+import com.github.benmanes.caffeine.cache.Caffeine;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
 import org.springframework.util.StringUtils;
 
+import java.time.Duration;
 import java.time.LocalDateTime;
 import java.util.ArrayList;
 import java.util.Comparator;
@@ -62,6 +65,14 @@ public class EnglishVocabularyStudyService {
     private final VocabularyAudioService vocabularyAudioService;
     private final SystemLogService systemLogService;
     private final UserDisplayNameService userDisplayNameService;
+
+    private static final int CARD_CACHE_MAX_SIZE = 3000;
+    private static final Duration CARD_CACHE_EXPIRE_DURATION = Duration.ofMinutes(60);
+
+    private final Cache<String, VocabularyStudyResponse> cardCache = Caffeine.newBuilder()
+            .maximumSize(CARD_CACHE_MAX_SIZE)
+            .expireAfterWrite(CARD_CACHE_EXPIRE_DURATION)
+            .build();
 
     /**
      * 多级查找词汇缓存：
@@ -197,6 +208,13 @@ public class EnglishVocabularyStudyService {
         }
 
         boolean forceRefresh = Boolean.TRUE.equals(request.getForceRefresh());
+        if (forceRefresh) {
+            invalidateCard(normalizedTerm);
+            EnglishVocabularyStudyRecord existingRecord = findRecord(normalizedTerm);
+            if (existingRecord != null && StringUtils.hasText(existingRecord.getNormalizedTerm())) {
+                invalidateCard(existingRecord.getNormalizedTerm());
+            }
+        }
         EnglishVocabularyStudyRecord existing = forceRefresh ? null : findRecord(normalizedTerm);
         if (existing != null) {
             touch(existing);
@@ -211,7 +229,12 @@ public class EnglishVocabularyStudyService {
                     existing.getLookupCount(),
                     rawTerm);
             vocabularyAudioService.prefetchAudio(existing.getTerm());
-            return toResponse(existing, true, rawTerm);
+            VocabularyStudyResponse response = toResponse(existing, true, rawTerm);
+            cardCache.put(normalizedTerm, response);
+            if (StringUtils.hasText(existing.getNormalizedTerm()) && !existing.getNormalizedTerm().equals(normalizedTerm)) {
+                cardCache.put(existing.getNormalizedTerm(), response);
+            }
+            return response;
         }
 
         if (!forceRefresh) {
@@ -331,17 +354,35 @@ public class EnglishVocabularyStudyService {
         } catch (Exception ex) {
             log.debug("异步预热音频异常 term={}: {}", canonicalTerm, ex.getMessage());
         }
-        return toResponse(record, false, rawTerm);
+        VocabularyStudyResponse response = toResponse(record, false, rawTerm);
+        cardCache.put(canonicalTerm, response);
+        if (!canonicalTerm.equals(normalizedTerm)) {
+            cardCache.put(normalizedTerm, response);
+        }
+        return response;
     }
 
-    /** 查询详情词汇。 */
+    /** 查询详情词汇。优先命中内存卡片缓存，消除高频词卡重复查询数据库与大 JSON 解析的耗时。 */
     public VocabularyStudyResponse detail(String term) {
         String rawTerm = term == null ? "" : term.trim();
         String normalizedTerm = normalize(rawTerm);
+        if (!StringUtils.hasText(normalizedTerm)) {
+            return null;
+        }
+        VocabularyStudyResponse cached = cardCache.getIfPresent(normalizedTerm);
+        if (cached != null) {
+            log.debug("词汇卡片内存缓存命中 term={}", normalizedTerm);
+            return cached;
+        }
         EnglishVocabularyStudyRecord record = findRecord(normalizedTerm);
         log.debug("查询词汇学习缓存 term={} found={}", normalizedTerm, record != null);
         if (record != null) {
-            return toResponse(record, true, rawTerm);
+            VocabularyStudyResponse response = toResponse(record, true, rawTerm);
+            cardCache.put(normalizedTerm, response);
+            if (StringUtils.hasText(record.getNormalizedTerm()) && !record.getNormalizedTerm().equals(normalizedTerm)) {
+                cardCache.put(record.getNormalizedTerm(), response);
+            }
+            return response;
         }
         if (inFlightLookups.containsKey(normalizedTerm)) {
             VocabularyStudyResponse generatingResponse = new VocabularyStudyResponse();
@@ -352,6 +393,31 @@ public class EnglishVocabularyStudyService {
             return generatingResponse;
         }
         return null;
+    }
+
+    /**
+     * 淘汰指定词汇的卡片缓存。
+     */
+    public void invalidateCard(String term) {
+        if (StringUtils.hasText(term)) {
+            cardCache.invalidate(normalize(term));
+            log.debug("词汇卡片内存缓存已淘汰 term={}", term);
+        }
+    }
+
+    /**
+     * 清空全部词汇卡片缓存。
+     */
+    public void clearCardCache() {
+        cardCache.invalidateAll();
+        log.debug("词汇卡片内存缓存已全量清空");
+    }
+
+    /**
+     * 获取词汇卡片缓存大小。
+     */
+    public long cardCacheSize() {
+        return cardCache.estimatedSize();
     }
 
     /** 查询拼写最相近的词汇。 */

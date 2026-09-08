@@ -58,6 +58,7 @@ export function createStudyFeature(ctx) {
     state,
     elements,
     request,
+    toast,
     speak,
     speakSentence,
     preloadAudio,

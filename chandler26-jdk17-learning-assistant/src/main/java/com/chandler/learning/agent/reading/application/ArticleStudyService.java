@@ -162,6 +162,7 @@ public class ArticleStudyService {
                         .select(LearningArticleStudyRecord::getId,
                                 LearningArticleStudyRecord::getWordbookId,
                                 LearningArticleStudyRecord::getSelectedTermsJson,
+                                LearningArticleStudyRecord::getParsedJson,
                                 LearningArticleStudyRecord::getWordCountRange,
                                 LearningArticleStudyRecord::getDifficulty,
                                 LearningArticleStudyRecord::getStudyStatus,
@@ -174,7 +175,7 @@ public class ArticleStudyService {
                         .eq(LearningArticleStudyRecord::getUserId, userId)
                         .eq(resolvedWordbookId != null, LearningArticleStudyRecord::getWordbookId, resolvedWordbookId)
                         .eq(LearningArticleStudyRecord::getDeleted, false)
-                        .orderByDesc(LearningArticleStudyRecord::getUpdateTime));
+                        .orderByDesc(LearningArticleStudyRecord::getCreateTime));
         ArticleStudyPageResponse response = new ArticleStudyPageResponse();
         response.setItems(result.getRecords().stream().map(this::toSummaryResponse).toList());
         response.setTotal(result.getTotal());
@@ -429,6 +430,7 @@ public class ArticleStudyService {
         ArticleStudySummaryResponse response = new ArticleStudySummaryResponse();
         response.setId(record.getId());
         response.setWordbookId(record.getWordbookId());
+        response.setTitle(articleSummaryTitle(record));
         response.setSelectedWords(readSelectedWords(record));
         response.setWordCountRange(record.getWordCountRange());
         response.setDifficulty(record.getDifficulty());
@@ -440,6 +442,17 @@ public class ArticleStudyService {
         response.setCreateTime(record.getCreateTime());
         response.setUpdateTime(record.getUpdateTime());
         return response;
+    }
+
+    private String articleSummaryTitle(LearningArticleStudyRecord record) {
+        if (record == null || !StringUtils.hasText(record.getParsedJson())) {
+            return null;
+        }
+        try {
+            return StrUtil.blankToDefault(text(objectMapper.readTree(record.getParsedJson()), "title"), null);
+        } catch (Exception ignored) {
+            return null;
+        }
     }
 
     private List<ArticleStudyWordResponse> readSelectedWords(LearningArticleStudyRecord record) {

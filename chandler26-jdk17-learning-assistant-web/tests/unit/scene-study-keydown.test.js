@@ -92,4 +92,82 @@ describe('scene study keydown', () => {
     expect(event2.preventDefault).toHaveBeenCalled()
     expect(submittedAnswer).toBe('城市')
   })
+
+  it('types letter n in copy_typing mode for aunt without interference', () => {
+    const state = {
+      activeView: 'scenePlanView',
+      sceneChallengeStage: 'assessment',
+      sceneTypingTyped: 'au',
+    }
+    const unit = {
+      id: 1,
+      words: [
+        {
+          id: 11,
+          term: 'aunt',
+          tier: 'core',
+          masteryRequirement: 'spelling',
+          passedAssessments: ['meaning_choice'],
+        },
+      ],
+    }
+    const sceneStudy = createSceneStudy({
+      state,
+      elements: {},
+      activeUnit: () => unit,
+      renderCurrentScene: () => {},
+      sameId: (a, b) => String(a) === String(b),
+    })
+
+    const eventN = {
+      key: 'n',
+      code: 'KeyN',
+      preventDefault: vi.fn(),
+    }
+    sceneStudy.handleChallengeKeydown(eventN)
+
+    expect(eventN.preventDefault).toHaveBeenCalled()
+    expect(state.sceneTypingTyped).toBe('aun')
+  })
+
+  it('toggles in-challenge-stage on sceneLearningStage during challenge and assessment stages', () => {
+    const stageClasses = new Set()
+    const elements = {
+      scenePlanToolbar: { classList: { toggle: vi.fn() } },
+      scenePlanSidebar: { classList: { toggle: vi.fn() } },
+      scenePlanLayout: { classList: { toggle: vi.fn() } },
+      scenePlanOverview: { classList: { toggle: vi.fn() } },
+      sceneLearningStage: {
+        classList: {
+          toggle: vi.fn((cls, val) => {
+            if (val) stageClasses.add(cls)
+            else stageClasses.delete(cls)
+          }),
+        },
+        querySelector: vi.fn().mockReturnValue({ classList: { toggle: vi.fn() } }),
+      },
+      sceneLearningFooter: { classList: { toggle: vi.fn() } },
+      sceneChallengeStage: { classList: { toggle: vi.fn() } },
+      sceneAssessmentPanel: { classList: { toggle: vi.fn() } },
+    }
+    const state = {
+      currentLearningPlan: { id: 1 },
+    }
+    const sceneStudy = createSceneStudy({
+      state,
+      elements,
+      activeUnit: () => ({ id: 10 }),
+      renderCurrentScene: () => {},
+      sameId: (a, b) => String(a) === String(b),
+    })
+
+    sceneStudy.applyStage('assessment')
+    expect(elements.sceneLearningStage.classList.toggle).toHaveBeenCalledWith('in-challenge-stage', true)
+
+    sceneStudy.applyStage('challenge')
+    expect(elements.sceneLearningStage.classList.toggle).toHaveBeenCalledWith('in-challenge-stage', true)
+
+    sceneStudy.applyStage('learning')
+    expect(elements.sceneLearningStage.classList.toggle).toHaveBeenCalledWith('in-challenge-stage', false)
+  })
 })

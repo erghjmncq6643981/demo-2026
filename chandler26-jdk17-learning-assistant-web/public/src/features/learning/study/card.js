@@ -366,6 +366,7 @@ export function createStudyCardFeature(ctx) {
     updateQuizLetters()
 
     board?.addEventListener('keydown', (event) => {
+      if (!event || typeof event.key !== 'string') return
       if (event.altKey || event.ctrlKey || event.metaKey) return
       const target = state.studyQuizTarget || ''
       if (event.key === 'Backspace') {
@@ -402,6 +403,33 @@ export function createStudyCardFeature(ctx) {
         updateQuizLetters()
         board?.focus()
       }
+    }
+  }
+
+  function openMiniQuizModal() {
+    if (!elements.miniQuizModal) return
+    elements.miniQuizModal.classList.remove('hidden')
+    const currentTerm = state.currentRecord?.lemma || state.currentRecord?.term || state.currentRecord?.normalizedTerm || state.studyQuizTarget
+    if (currentTerm && currentTerm !== 'Ready') {
+      renderMiniQuiz(currentTerm)
+    }
+    const board = elements.miniQuizBoard?.querySelector('.typing-board')
+    board?.focus()
+  }
+
+  function closeMiniQuizModal() {
+    if (!elements.miniQuizModal) return
+    elements.miniQuizModal.classList.add('hidden')
+  }
+
+  function toggleMiniQuizModal(forceState) {
+    if (!elements.miniQuizModal) return
+    const isOpen = !elements.miniQuizModal.classList.contains('hidden')
+    const next = typeof forceState === 'boolean' ? forceState : !isOpen
+    if (next) {
+      openMiniQuizModal()
+    } else {
+      closeMiniQuizModal()
     }
   }
 
@@ -542,5 +570,8 @@ export function createStudyCardFeature(ctx) {
     renderMemoryTips,
     renderAiPromptChips,
     renderMiniQuiz,
+    openMiniQuizModal,
+    closeMiniQuizModal,
+    toggleMiniQuizModal,
   }
 }

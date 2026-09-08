@@ -13,6 +13,7 @@ import com.chandler.learning.agent.identity.infrastructure.mapper.LearningUserMa
 import com.chandler.learning.agent.security.CurrentUserContext;
 import com.chandler.learning.agent.security.JwtClaims;
 import com.chandler.learning.agent.security.JwtTokenService;
+import com.chandler.learning.agent.security.UserContextCache;
 import com.chandler.learning.agent.common.constant.CommonConstants;
 import com.chandler.learning.agent.common.exception.LearningErrorCode;
 import com.chandler.learning.agent.security.constant.AuthConstants;
@@ -49,6 +50,7 @@ public class AuthService {
     private final SystemLogService systemLogService;
     private final UserDisplayNameService userDisplayNameService;
     private final CurrentUserContext currentUserContext;
+    private final UserContextCache userContextCache;
     private final SecureRandom secureRandom = new SecureRandom();
 
     /** 注册学习账户。 */
@@ -142,6 +144,7 @@ public class AuthService {
         if (changed) {
             user.setUpdateTime(LocalDateTime.now());
             userMapper.updateById(user);
+            userContextCache.evict(user.getId());
             systemLogService.record(user.getId(), SystemLogType.AUTH, "更新账户信息", user.getUsername());
             log.info("用户「{}」更新了账户信息，是否修改密码：{}",
                     userDisplayNameService.displayName(user),
@@ -154,7 +157,15 @@ public class AuthService {
     public void logout() {
         LearningUser user = currentUserContext.requireUser();
         SecurityContextHolder.clearContext();
+        userContextCache.evict(user.getId());
         log.info("用户「{}」退出登录", userDisplayNameService.displayName(user));
+    }
+
+    /**
+     * 淘汰指定用户的上下文缓存。
+     */
+    public void evictUserCache(Long userId) {
+        userContextCache.evict(userId);
     }
 
     /**
@@ -174,6 +185,7 @@ public class AuthService {
         update.setLastLoginTime(now);
         update.setUpdateTime(now);
         userMapper.updateById(update);
+        userContextCache.evict(user.getId());
 
         AuthResponse response = new AuthResponse();
         response.setToken(rawToken);
