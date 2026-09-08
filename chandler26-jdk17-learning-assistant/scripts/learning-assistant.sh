@@ -64,7 +64,13 @@ find_maven() {
     printf '%s\n' "${BACKEND_DIR}/mvnw"
     return
   fi
-  command -v mvn 2>/dev/null || true
+  local candidate
+  for candidate in "$(command -v mvn 2>/dev/null || true)" /opt/apache-maven-3.8.3/bin/mvn /opt/homebrew/bin/mvn /usr/local/bin/mvn; do
+    if [[ -n "${candidate}" && -x "${candidate}" ]]; then
+      printf '%s\n' "${candidate}"
+      return
+    fi
+  done
 }
 
 find_node() {
@@ -79,6 +85,14 @@ find_node() {
       return
     fi
   done
+  if [[ -d "${HOME}/.nvm/versions/node" ]]; then
+    local nvm_node
+    nvm_node="$(find "${HOME}/.nvm/versions/node" -maxdepth 3 -name node -perm +111 2>/dev/null | sort -V | tail -n 1 || true)"
+    if [[ -n "${nvm_node}" && -x "${nvm_node}" ]]; then
+      printf '%s\n' "${nvm_node}"
+      return
+    fi
+  fi
 }
 
 pid_alive() {
@@ -97,12 +111,12 @@ pid_value() {
 
 port_listening() {
   local port="$1"
-  if command -v lsof >/dev/null 2>&1; then
-    lsof -nP -iTCP:"${port}" -sTCP:LISTEN >/dev/null 2>&1
+  if command -v nc >/dev/null 2>&1; then
+    nc -z -G 1 127.0.0.1 "${port}" >/dev/null 2>&1
     return
   fi
-  if command -v nc >/dev/null 2>&1; then
-    nc -z 127.0.0.1 "${port}" >/dev/null 2>&1
+  if command -v lsof >/dev/null 2>&1; then
+    lsof -nP -iTCP:"${port}" -sTCP:LISTEN >/dev/null 2>&1
     return
   fi
   return 1
@@ -119,14 +133,29 @@ wait_for_port() {
   local name="$1"
   local port="$2"
   local seconds="$3"
+  local pid_file="${4:-}"
+  local log_file="${5:-}"
   local index=0
+
+  info "Waiting for ${name} to listen on port ${port} (up to ${seconds}s)..."
   while (( index < seconds )); do
     if port_listening "${port}"; then
-      info "${name} is listening on port ${port}"
+      info "${name} is listening on port ${port} (ready in ${index}s)"
       return 0
+    fi
+    if [[ -n "${pid_file}" ]] && ! pid_alive "${pid_file}"; then
+      warn "${name} process exited prematurely before port ${port} was open!"
+      if [[ -n "${log_file}" && -f "${log_file}" ]]; then
+        warn "Last lines from ${log_file}:"
+        tail -n 10 "${log_file}" >&2 || true
+      fi
+      return 1
     fi
     sleep 1
     index=$((index + 1))
+    if (( index % 5 == 0 )); then
+      info "Still waiting for ${name} on port ${port}... (${index}s/${seconds}s)"
+    fi
   done
   warn "${name} did not start listening on port ${port} within ${seconds}s"
   return 1
@@ -156,7 +185,7 @@ start_backend() {
     disown "${pid}" >/dev/null 2>&1 || true
   )
   info "Backend pid $(pid_value "${BACKEND_PID_FILE}"), log ${BACKEND_LOG}"
-  wait_for_port "Backend" "${BACKEND_PORT}" 90 || true
+  wait_for_port "Backend" "${BACKEND_PORT}" 90 "${BACKEND_PID_FILE}" "${BACKEND_LOG}" || true
 }
 
 start_frontend() {
@@ -184,7 +213,7 @@ start_frontend() {
     disown "${pid}" >/dev/null 2>&1 || true
   )
   info "Frontend pid $(pid_value "${FRONTEND_PID_FILE}"), log ${FRONTEND_LOG}"
-  wait_for_port "Frontend" "${FRONTEND_PORT}" 20 || true
+  wait_for_port "Frontend" "${FRONTEND_PORT}" 20 "${FRONTEND_PID_FILE}" "${FRONTEND_LOG}" || true
 }
 
 terminate_tree() {
@@ -206,23 +235,59 @@ terminate_tree() {
   kill -KILL "${pid}" >/dev/null 2>&1 || true
 }
 
+wait_for_port_free() {
+  local name="$1"
+  local port="$2"
+  local seconds="${3:-10}"
+  local index=0
+  while (( index < seconds )); do
+    if ! port_listening "${port}"; then
+      return 0
+    fi
+    sleep 1
+    index=$((index + 1))
+  done
+  return 1
+}
+
 stop_process() {
   local name="$1"
   local pid_file="$2"
-  if ! [[ -f "${pid_file}" ]]; then
-    info "${name} pid file not found; nothing to stop"
-    return
-  fi
-  local pid
-  pid="$(pid_value "${pid_file}")"
-  if [[ -z "${pid}" ]] || ! kill -0 "${pid}" >/dev/null 2>&1; then
-    info "${name} pid file is stale; removing ${pid_file}"
+  local port="${3:-}"
+  local stopped=0
+
+  if [[ -f "${pid_file}" ]]; then
+    local pid
+    pid="$(pid_value "${pid_file}")"
+    if [[ -n "${pid}" ]] && kill -0 "${pid}" >/dev/null 2>&1; then
+      info "Stopping ${name}, pid ${pid}"
+      terminate_tree "${pid}"
+      stopped=1
+    else
+      info "${name} pid file is stale; removing ${pid_file}"
+    fi
     rm -f "${pid_file}"
-    return
   fi
-  info "Stopping ${name}, pid ${pid}"
-  terminate_tree "${pid}"
-  rm -f "${pid_file}"
+
+  if [[ -n "${port}" ]] && port_listening "${port}"; then
+    local pids
+    pids="$(port_pids "${port}" | tr '\n' ' ')"
+    if [[ -n "${pids// }" ]]; then
+      info "Releasing ${name} port ${port} occupied by pid(s): ${pids}"
+      for p in ${pids}; do
+        terminate_tree "${p}"
+      done
+      stopped=1
+    fi
+  fi
+
+  if [[ -n "${port}" ]]; then
+    wait_for_port_free "${name}" "${port}" 10 || warn "${name} port ${port} still in use after stop"
+  fi
+
+  if (( stopped == 0 )) && ! [[ -f "${pid_file}" ]]; then
+    info "${name} is not running; nothing to stop"
+  fi
 }
 
 status_line() {
@@ -240,7 +305,7 @@ status_line() {
 
 start_service() {
   case "${1:-all}" in
-    all) start_backend; start_frontend ;;
+    all) start_frontend; start_backend ;;
     backend) start_backend ;;
     frontend) start_frontend ;;
     *) die "Unknown service: $1" ;;
@@ -249,9 +314,9 @@ start_service() {
 
 stop_service() {
   case "${1:-all}" in
-    all) stop_process "Frontend" "${FRONTEND_PID_FILE}"; stop_process "Backend" "${BACKEND_PID_FILE}" ;;
-    backend) stop_process "Backend" "${BACKEND_PID_FILE}" ;;
-    frontend) stop_process "Frontend" "${FRONTEND_PID_FILE}" ;;
+    all) stop_process "Frontend" "${FRONTEND_PID_FILE}" "${FRONTEND_PORT}"; stop_process "Backend" "${BACKEND_PID_FILE}" "${BACKEND_PORT}" ;;
+    backend) stop_process "Backend" "${BACKEND_PID_FILE}" "${BACKEND_PORT}" ;;
+    frontend) stop_process "Frontend" "${FRONTEND_PID_FILE}" "${FRONTEND_PORT}" ;;
     *) die "Unknown service: $1" ;;
   esac
 }
