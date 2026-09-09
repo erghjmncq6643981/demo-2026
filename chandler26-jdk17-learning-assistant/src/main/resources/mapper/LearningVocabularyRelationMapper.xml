@@ -6,21 +6,44 @@
     </delete>
     <delete id="physicalDeleteByVocabularyIds">
         DELETE FROM learning_vocabulary_relation
-        WHERE vocabulary_id IN
-        <foreach collection="vocabularyIds" item="id" open="(" separator="," close=")">#{id}</foreach>
+        WHERE
+        <choose>
+            <when test="vocabularyIds != null and vocabularyIds.size() > 0">
+                vocabulary_id IN
+                <foreach collection="vocabularyIds" item="id" open="(" separator="," close=")">#{id}</foreach>
+            </when>
+            <otherwise>
+                1 = 0
+            </otherwise>
+        </choose>
     </delete>
     <delete id="physicalDeleteByNormalizedTerms">
         DELETE FROM learning_vocabulary_relation
-        WHERE normalized_term IN
-        <foreach collection="normalizedTerms" item="term" open="(" separator="," close=")">#{term}</foreach>
+        WHERE
+        <choose>
+            <when test="normalizedTerms != null and normalizedTerms.size() > 0">
+                normalized_term IN
+                <foreach collection="normalizedTerms" item="term" open="(" separator="," close=")">#{term}</foreach>
+            </when>
+            <otherwise>
+                1 = 0
+            </otherwise>
+        </choose>
     </delete>
     <select id="selectByNormalizedTerms"
             resultType="com.chandler.learning.agent.vocabulary.domain.entity.LearningVocabularyRelation">
         SELECT *
         FROM learning_vocabulary_relation
         WHERE deleted = 0
-          AND normalized_term IN
-        <foreach collection="normalizedTerms" item="term" open="(" separator="," close=")">#{term}</foreach>
+        <choose>
+            <when test="normalizedTerms != null and normalizedTerms.size() > 0">
+                AND normalized_term IN
+                <foreach collection="normalizedTerms" item="term" open="(" separator="," close=")">#{term}</foreach>
+            </when>
+            <otherwise>
+                AND 1 = 0
+            </otherwise>
+        </choose>
         ORDER BY normalized_term, score DESC
     </select>
     <insert id="insertBatch">

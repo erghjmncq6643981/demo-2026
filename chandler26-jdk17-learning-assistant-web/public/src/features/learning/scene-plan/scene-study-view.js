@@ -36,6 +36,7 @@ export function createSceneStudyView({
     const inLearning = hasPlan && stage !== 'overview'
     elements.scenePlanToolbar?.classList.toggle('hidden', inLearning)
     elements.scenePlanSidebar?.classList.toggle('hidden', inLearning)
+    elements.scenePlanView?.classList.toggle('scene-focus-view', inLearning)
     elements.scenePlanLayout?.classList.toggle('scene-focus-layout', inLearning)
     elements.scenePlanOverview?.classList.toggle('hidden', inLearning)
     elements.sceneLearningStage?.classList.toggle('hidden', !inLearning)

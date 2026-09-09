@@ -47,11 +47,18 @@
             ON u.id = m.unit_id AND m.current_version = 1 AND m.deleted = 0
         WHERE u.plan_id = #{planId}
           AND u.deleted = 0
-          <if test="unitIds != null and !unitIds.isEmpty()">
-              AND u.id IN
-              <foreach collection="unitIds" item="uid" open="(" separator="," close=")">
-                  #{uid}
-              </foreach>
+          <if test="unitIds != null">
+              <choose>
+                  <when test="unitIds.size() > 0">
+                      AND u.id IN
+                      <foreach collection="unitIds" item="uid" open="(" separator="," close=")">
+                          #{uid}
+                      </foreach>
+                  </when>
+                  <otherwise>
+                      AND 1 = 0
+                  </otherwise>
+              </choose>
           </if>
         ORDER BY u.unit_no ASC
     </select>

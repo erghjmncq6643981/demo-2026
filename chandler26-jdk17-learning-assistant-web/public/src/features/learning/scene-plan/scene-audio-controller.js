@@ -89,7 +89,7 @@ export function createSceneAudioController({ state, elements, api, activeUnit, s
   }
 
   async function syncStatus(unitId) {
-    if (!unitId || state.preview) return
+    if (!unitId || state.preview || !state.token) return
     const item = getUnitAudioState(unitId)
     if (!item || ['playing', 'paused'].includes(item.status) || item.pollTimer) return
     try {
@@ -120,6 +120,11 @@ export function createSceneAudioController({ state, elements, api, activeUnit, s
     if (item.pollTimer) window.clearInterval(item.pollTimer)
     let pollCount = 0
     item.pollTimer = window.setInterval(async () => {
+      if (!state.token) {
+        window.clearInterval(item.pollTimer)
+        item.pollTimer = null
+        return
+      }
       pollCount += 1
       try {
         const result = await api.getSceneAudioStatus(unitId)

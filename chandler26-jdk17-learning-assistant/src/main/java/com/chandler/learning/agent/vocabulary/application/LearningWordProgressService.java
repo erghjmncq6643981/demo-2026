@@ -121,6 +121,9 @@ public class LearningWordProgressService {
     }
 
     private List<LearningWordProgress> findAll(Long userId, List<String> normalizedTerms) {
+        if (userId == null || normalizedTerms == null || normalizedTerms.isEmpty()) {
+            return List.of();
+        }
         return progressMapper.selectList(new LambdaQueryWrapper<LearningWordProgress>()
                 .eq(LearningWordProgress::getUserId, userId)
                 .in(LearningWordProgress::getNormalizedTerm, normalizedTerms)

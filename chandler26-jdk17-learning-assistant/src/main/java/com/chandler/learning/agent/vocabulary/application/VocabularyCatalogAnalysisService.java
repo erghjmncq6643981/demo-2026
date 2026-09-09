@@ -214,7 +214,8 @@ public class VocabularyCatalogAnalysisService {
             entryIdsByBatch.put(batch.getId(), entryIds);
             allEntryIds.addAll(entryIds);
         }
-        Map<Long, VocabularyCatalogEntry> entryById = entryMapper.selectBatchIds(allEntryIds).stream()
+        Map<Long, VocabularyCatalogEntry> entryById = allEntryIds.isEmpty() ? Map.of()
+                : entryMapper.selectBatchIds(allEntryIds).stream()
                 .collect(Collectors.toMap(VocabularyCatalogEntry::getId, item -> item, (left, right) -> left));
         if (entryById.size() != allEntryIds.size()) {
             throw LearningAssistantException.badRequest(LearningErrorCode.JSON_PARSE_FAILED);

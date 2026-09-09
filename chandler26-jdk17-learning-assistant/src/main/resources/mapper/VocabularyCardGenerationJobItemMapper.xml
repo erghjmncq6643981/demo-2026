@@ -31,8 +31,16 @@
             END,
             update_time = #{list[0].updateTime},
             update_by = #{list[0].updateBy}
-        WHERE id IN
-        <foreach collection="list" item="item" open="(" separator="," close=")">#{item.id}</foreach>
+        WHERE
+        <choose>
+            <when test="list != null and list.size() > 0">
+                id IN
+                <foreach collection="list" item="item" open="(" separator="," close=")">#{item.id}</foreach>
+            </when>
+            <otherwise>
+                1 = 0
+            </otherwise>
+        </choose>
     </update>
 
     <select id="selectProgress" resultType="com.chandler.learning.agent.vocabulary.domain.bo.VocabularyCardGenerationProgress">

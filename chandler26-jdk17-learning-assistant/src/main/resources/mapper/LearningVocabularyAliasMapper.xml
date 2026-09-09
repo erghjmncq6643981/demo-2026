@@ -17,14 +17,29 @@
         SELECT *
         FROM learning_vocabulary_alias
         WHERE deleted = 0
-          AND normalized_alias IN
-        <foreach collection="normalizedAliases" item="alias" open="(" separator="," close=")">#{alias}</foreach>
+        <choose>
+            <when test="normalizedAliases != null and normalizedAliases.size() > 0">
+                AND normalized_alias IN
+                <foreach collection="normalizedAliases" item="alias" open="(" separator="," close=")">#{alias}</foreach>
+            </when>
+            <otherwise>
+                AND 1 = 0
+            </otherwise>
+        </choose>
     </select>
 
     <delete id="physicalDeleteByVocabularyIds">
         DELETE FROM learning_vocabulary_alias
-        WHERE vocabulary_id IN
-        <foreach collection="vocabularyIds" item="id" open="(" separator="," close=")">#{id}</foreach>
+        WHERE
+        <choose>
+            <when test="vocabularyIds != null and vocabularyIds.size() > 0">
+                vocabulary_id IN
+                <foreach collection="vocabularyIds" item="id" open="(" separator="," close=")">#{id}</foreach>
+            </when>
+            <otherwise>
+                1 = 0
+            </otherwise>
+        </choose>
     </delete>
 
     <insert id="insertBatch">

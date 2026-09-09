@@ -6105,6 +6105,77 @@ input.sr-only:disabled + .file-upload-trigger {
     overflow: visible;
   }
 
+  #scenePlanView.view.active:has(.scene-focus-layout),
+  #scenePlanView.view.active.scene-focus-view {
+    grid-template-rows: minmax(0, 1fr);
+    height: 100%;
+    min-height: 0;
+    overflow: hidden;
+  }
+
+  .scene-plan-layout.scene-focus-layout {
+    height: 100%;
+    min-height: 0;
+    overflow: hidden;
+    display: flex;
+    flex-direction: column;
+  }
+
+  .scene-plan-layout.scene-focus-layout .scene-workspace {
+    height: 100%;
+    min-height: 0;
+    overflow: hidden;
+  }
+
+  .scene-plan-layout.scene-focus-layout .scene-learning-stage:not(.in-challenge-stage) {
+    height: 100%;
+    min-height: 0;
+    overflow: hidden;
+    display: flex;
+    flex-direction: column;
+  }
+
+  .scene-plan-layout.scene-focus-layout .scene-study-split-layout:not(.with-note-open) {
+    flex: 1 1 0%;
+    min-height: 0;
+    height: 100%;
+    overflow: hidden;
+  }
+
+  .scene-plan-layout.scene-focus-layout .scene-study-split-layout.with-note-open {
+    flex: 1 1 0%;
+    min-height: 0;
+    height: 100%;
+    display: flex;
+    flex-direction: column;
+    overflow-y: auto;
+    -webkit-overflow-scrolling: touch;
+  }
+
+  .scene-plan-layout.scene-focus-layout .scene-reading-panel {
+    flex: 1 1 0%;
+    min-height: 0;
+    height: 100%;
+    overflow-y: auto;
+    -webkit-overflow-scrolling: touch;
+    overscroll-behavior: contain;
+  }
+
+  .scene-plan-layout.scene-focus-layout .scene-study-split-layout.with-note-open .scene-reading-panel {
+    flex: 0 0 auto;
+    height: auto;
+    max-height: 45vh;
+  }
+
+  .scene-plan-layout.scene-focus-layout .scene-study-split-layout.with-note-open .scene-note-panel {
+    flex: 1 0 auto;
+    min-height: 240px;
+  }
+
+  .scene-learning-footer {
+    flex-shrink: 0;
+  }
+
   .vocabulary-import-form {
     grid-template-columns: repeat(2, minmax(0, 1fr));
   }

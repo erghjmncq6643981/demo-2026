@@ -32,10 +32,18 @@
             review_status = 'confirmed',
             update_time = #{list[0].updateTime},
             update_by = #{list[0].updateBy}
-        WHERE id IN
-        <foreach collection="list" item="item" open="(" separator="," close=")">
-            #{item.id}
-        </foreach>
+        WHERE
+        <choose>
+            <when test="list != null and list.size() > 0">
+                id IN
+                <foreach collection="list" item="item" open="(" separator="," close=")">
+                    #{item.id}
+                </foreach>
+            </when>
+            <otherwise>
+                1 = 0
+            </otherwise>
+        </choose>
     </update>
 
     <update id="markPublishedBatch">
@@ -43,10 +51,18 @@
         SET published = 1,
             update_time = #{updateTime},
             update_by = #{updateBy}
-        WHERE id IN
-        <foreach collection="ids" item="id" open="(" separator="," close=")">
-            #{id}
-        </foreach>
+        WHERE
+        <choose>
+            <when test="ids != null and ids.size() > 0">
+                id IN
+                <foreach collection="ids" item="id" open="(" separator="," close=")">
+                    #{id}
+                </foreach>
+            </when>
+            <otherwise>
+                1 = 0
+            </otherwise>
+        </choose>
     </update>
 
     <select id="selectUnanalyzedPublished" resultType="com.chandler.learning.agent.vocabulary.domain.entity.VocabularyCatalogEntry">

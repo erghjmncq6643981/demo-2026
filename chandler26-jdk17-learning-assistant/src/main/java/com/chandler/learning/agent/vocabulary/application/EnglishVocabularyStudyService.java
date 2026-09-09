@@ -136,11 +136,13 @@ public class EnglishVocabularyStudyService {
                 .filter(id -> !recordsById.containsKey(id))
                 .distinct()
                 .toList();
-        recordMapper.selectBatchIds(aliasVocabularyIds).forEach(aliasRecord -> {
-            if (aliasRecord != null && aliasRecord.getId() != null) {
-                recordsById.put(aliasRecord.getId(), aliasRecord);
-            }
-        });
+        if (!aliasVocabularyIds.isEmpty()) {
+            recordMapper.selectBatchIds(aliasVocabularyIds).forEach(aliasRecord -> {
+                if (aliasRecord != null && aliasRecord.getId() != null) {
+                    recordsById.put(aliasRecord.getId(), aliasRecord);
+                }
+            });
+        }
         for (String candidate : candidates) {
             EnglishVocabularyStudyRecord candidateRecord = recordsByTerm.get(candidate);
             if (candidateRecord != null && isConfirmedInflection(candidateRecord, normalizedTerm)) {

@@ -11,6 +11,7 @@ import org.springframework.util.StringUtils;
 
 import java.util.Collection;
 import java.util.LinkedHashMap;
+import java.util.List;
 import java.util.Map;
 
 /**
@@ -51,10 +52,12 @@ public class UserDisplayNameService {
         if (currentUser != null) {
             result.put(currentUser.getId(), displayName(currentUser));
         }
-        userMapper.selectBatchIds(userIds.stream().filter(java.util.Objects::nonNull).distinct().toList())
-                .forEach(user -> result.put(user.getId(), displayName(user)));
-        userIds.stream().filter(java.util.Objects::nonNull).distinct()
-                .forEach(id -> result.putIfAbsent(id, "用户#" + id));
+        List<Long> validUserIds = userIds.stream().filter(java.util.Objects::nonNull).distinct().toList();
+        if (!validUserIds.isEmpty()) {
+            userMapper.selectBatchIds(validUserIds)
+                    .forEach(user -> result.put(user.getId(), displayName(user)));
+        }
+        validUserIds.forEach(id -> result.putIfAbsent(id, "用户#" + id));
         return Map.copyOf(result);
     }
 

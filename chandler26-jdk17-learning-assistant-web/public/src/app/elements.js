@@ -137,6 +137,7 @@ export function createElements() {
   aiTaskDetailTitle: $('aiTaskDetailTitle'),
   aiTaskDetailMeta: $('aiTaskDetailMeta'),
   aiTaskDetailSteps: $('aiTaskDetailSteps'),
+  scenePlanView: $('scenePlanView'),
   scenePlanToolbar: $('scenePlanToolbar'),
   scenePlanLayout: $('scenePlanLayout'),
   scenePlanSidebar: $('scenePlanSidebar'),

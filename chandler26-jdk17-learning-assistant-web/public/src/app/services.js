@@ -14,8 +14,9 @@ export function createAppServices({ state, elements }) {
 
   async function request(path, options = {}) {
     const headers = { 'content-type': 'application/json', ...(options.headers || {}) }
-    if (state.token && !headers.Authorization) {
-      headers.Authorization = `Bearer ${state.token}`
+    const token = state.token || localStorage.getItem('learning.token') || ''
+    if (token && !headers.Authorization) {
+      headers.Authorization = `Bearer ${token}`
     }
     const response = await fetch(apiUrl(path), { headers, ...options })
     if (!response.ok) {

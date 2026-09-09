@@ -27,8 +27,15 @@
         SET card_status = #{cardStatus},
             update_time = #{updateTime}
         WHERE deleted = 0
-          AND id IN
-        <foreach collection="ids" item="id" open="(" separator="," close=")">#{id}</foreach>
+        <choose>
+            <when test="ids != null and ids.size() > 0">
+                AND id IN
+                <foreach collection="ids" item="id" open="(" separator="," close=")">#{id}</foreach>
+            </when>
+            <otherwise>
+                AND 1 = 0
+            </otherwise>
+        </choose>
     </update>
 
     <update id="updateBatch">
@@ -142,7 +149,14 @@
             version = version + 1,
         </trim>
         WHERE deleted = 0
-          AND id IN
-        <foreach collection="items" item="item" open="(" separator="," close=")">#{item.id}</foreach>
+        <choose>
+            <when test="items != null and items.size() > 0">
+                AND id IN
+                <foreach collection="items" item="item" open="(" separator="," close=")">#{item.id}</foreach>
+            </when>
+            <otherwise>
+                AND 1 = 0
+            </otherwise>
+        </choose>
     </update>
 </mapper>

@@ -26,3 +26,28 @@ test('preview keeps the learning flow usable from navigation to challenge', asyn
   await expect(page.locator('#sceneChallengeStage')).toBeVisible()
   await expect(page.locator('#sceneChallengeWords')).toContainText('本轮词数')
 })
+
+test('modals close smoothly when pressing Escape', async ({ page }) => {
+  await page.goto('/?preview=1')
+  if ((page.viewportSize()?.width || 1000) < 800) {
+    await page.getByRole('button', { name: '显示导航' }).click()
+  }
+
+  // Navigate to scenePlanView
+  await page.getByRole('button', { name: '词汇大挑战 计划、日历与词汇挑战', exact: true }).click()
+  await expect(page.locator('#scenePlanView')).toHaveClass(/active/)
+  await page.locator('#sceneStartLearningBtn').click()
+  await expect(page.locator('#sceneLearningStage')).toBeVisible()
+
+  // 1. Core words modal (待挑战核心词汇)
+  await page.locator('#sceneOpenCoreWordsBtn').click()
+  await expect(page.locator('#sceneCoreWordsModal')).toBeVisible()
+  await page.keyboard.press('Escape')
+  await expect(page.locator('#sceneCoreWordsModal')).toBeHidden()
+
+  // 2. Related words modal (场景相关词汇)
+  await page.locator('#sceneOpenRelatedWordsBtn').click()
+  await expect(page.locator('#sceneRelatedWordsModal')).toBeVisible()
+  await page.keyboard.press('Escape')
+  await expect(page.locator('#sceneRelatedWordsModal')).toBeHidden()
+})

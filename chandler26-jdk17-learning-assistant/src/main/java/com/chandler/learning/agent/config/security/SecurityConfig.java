@@ -33,10 +33,11 @@ public class SecurityConfig {
                 })
                 .sessionManagement(session -> session.sessionCreationPolicy(SessionCreationPolicy.STATELESS))
                 .authorizeHttpRequests(auth -> auth
+                        .dispatcherTypeMatchers(jakarta.servlet.DispatcherType.ASYNC, jakarta.servlet.DispatcherType.FORWARD).permitAll()
                         .requestMatchers(HttpMethod.OPTIONS, "/**").permitAll()
                         .requestMatchers("/api/v1/learning/auth/login", "/api/v1/learning/auth/register").permitAll()
-                        .requestMatchers("/api/v1/english/audio/**").permitAll()
-                        .requestMatchers("/api/v1/english/learning/scene-units/*/audio", "/api/v1/english/learning/scene-units/*/audio/**").permitAll()
+                        .requestMatchers(HttpMethod.GET, "/api/v1/english/audio/**").permitAll()
+                        .requestMatchers(HttpMethod.GET, "/api/v1/english/learning/scene-units/*/audio").permitAll()
                         .requestMatchers("/v3/api-docs/**", "/swagger-ui.html", "/swagger-ui/**", "/actuator/health").permitAll()
                         .anyRequest().authenticated())
                 .exceptionHandling(exceptions -> exceptions

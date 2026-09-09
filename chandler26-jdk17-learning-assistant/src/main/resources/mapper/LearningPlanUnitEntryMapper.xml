@@ -37,8 +37,16 @@
             END,
             update_time = #{list[0].updateTime},
             update_by = #{list[0].updateBy}
-        WHERE id IN
-        <foreach collection="list" item="item" open="(" separator="," close=")">#{item.id}</foreach>
+        WHERE
+        <choose>
+            <when test="list != null and list.size() > 0">
+                id IN
+                <foreach collection="list" item="item" open="(" separator="," close=")">#{item.id}</foreach>
+            </when>
+            <otherwise>
+                1 = 0
+            </otherwise>
+        </choose>
     </update>
 
     <select id="selectEntriesWithProgress" resultType="com.chandler.learning.agent.learning.domain.bo.LearningPlanUnitEntryItem">
@@ -74,11 +82,18 @@
             ON e.word_progress_id = p.id AND p.deleted = 0
         WHERE e.plan_id = #{planId}
           AND e.deleted = 0
-          <if test="unitIds != null and !unitIds.isEmpty()">
-              AND e.unit_id IN
-              <foreach collection="unitIds" item="uid" open="(" separator="," close=")">
-                  #{uid}
-              </foreach>
+          <if test="unitIds != null">
+              <choose>
+                  <when test="unitIds.size() > 0">
+                      AND e.unit_id IN
+                      <foreach collection="unitIds" item="uid" open="(" separator="," close=")">
+                          #{uid}
+                      </foreach>
+                  </when>
+                  <otherwise>
+                      AND 1 = 0
+                  </otherwise>
+              </choose>
           </if>
         ORDER BY e.unit_id ASC, e.sort_order ASC
     </select>
@@ -98,11 +113,18 @@
         WHERE e.plan_id = #{planId}
           AND e.deleted = 0
           AND e.tier = 'core'
-          <if test="unitIds != null and !unitIds.isEmpty()">
-              AND e.unit_id IN
-              <foreach collection="unitIds" item="uid" open="(" separator="," close=")">
-                  #{uid}
-              </foreach>
+          <if test="unitIds != null">
+              <choose>
+                  <when test="unitIds.size() > 0">
+                      AND e.unit_id IN
+                      <foreach collection="unitIds" item="uid" open="(" separator="," close=")">
+                          #{uid}
+                      </foreach>
+                  </when>
+                  <otherwise>
+                      AND 1 = 0
+                  </otherwise>
+              </choose>
           </if>
         ORDER BY e.unit_id ASC, e.sort_order ASC
     </select>

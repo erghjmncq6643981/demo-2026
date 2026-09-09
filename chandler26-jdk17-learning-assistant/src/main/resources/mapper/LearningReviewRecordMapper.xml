@@ -16,10 +16,17 @@
         SELECT entry_id, assessment_type
         FROM learning_review_record
         WHERE unit_id = #{unitId}
-          AND entry_id IN
-          <foreach collection="entryIds" item="entryId" open="(" separator="," close=")">
-              #{entryId}
-          </foreach>
+        <choose>
+            <when test="entryIds != null and entryIds.size() > 0">
+                AND entry_id IN
+                <foreach collection="entryIds" item="entryId" open="(" separator="," close=")">
+                    #{entryId}
+                </foreach>
+            </when>
+            <otherwise>
+                AND 1 = 0
+            </otherwise>
+        </choose>
           AND check_result = 'correct'
           AND deleted = 0
         GROUP BY entry_id, assessment_type
@@ -29,14 +36,22 @@
             resultType="com.chandler.learning.agent.learning.domain.bo.LearningAssessmentPassBO">
         SELECT unit_id AS unitId, entry_id AS entryId, assessment_type AS assessmentType
         FROM learning_review_record
-        WHERE unit_id IN
-        <foreach collection="unitIds" item="unitId" open="(" separator="," close=")">
-            #{unitId}
-        </foreach>
-          AND entry_id IN
-        <foreach collection="entryIds" item="entryId" open="(" separator="," close=")">
-            #{entryId}
-        </foreach>
+        WHERE
+        <choose>
+            <when test="unitIds != null and unitIds.size() > 0 and entryIds != null and entryIds.size() > 0">
+                unit_id IN
+                <foreach collection="unitIds" item="unitId" open="(" separator="," close=")">
+                    #{unitId}
+                </foreach>
+                AND entry_id IN
+                <foreach collection="entryIds" item="entryId" open="(" separator="," close=")">
+                    #{entryId}
+                </foreach>
+            </when>
+            <otherwise>
+                1 = 0
+            </otherwise>
+        </choose>
           AND check_result = 'correct'
           AND deleted = 0
         GROUP BY unit_id, entry_id, assessment_type

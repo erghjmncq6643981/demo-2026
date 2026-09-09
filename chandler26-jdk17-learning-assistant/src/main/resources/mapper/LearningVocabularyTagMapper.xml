@@ -6,16 +6,31 @@
     </delete>
     <delete id="physicalDeleteByVocabularyIds">
         DELETE FROM learning_vocabulary_tag
-        WHERE vocabulary_id IN
-        <foreach collection="vocabularyIds" item="id" open="(" separator="," close=")">#{id}</foreach>
+        WHERE
+        <choose>
+            <when test="vocabularyIds != null and vocabularyIds.size() > 0">
+                vocabulary_id IN
+                <foreach collection="vocabularyIds" item="id" open="(" separator="," close=")">#{id}</foreach>
+            </when>
+            <otherwise>
+                1 = 0
+            </otherwise>
+        </choose>
     </delete>
     <select id="selectByVocabularyIds"
             resultType="com.chandler.learning.agent.vocabulary.domain.entity.LearningVocabularyTag">
         SELECT *
         FROM learning_vocabulary_tag
         WHERE deleted = 0
-          AND vocabulary_id IN
-        <foreach collection="vocabularyIds" item="id" open="(" separator="," close=")">#{id}</foreach>
+        <choose>
+            <when test="vocabularyIds != null and vocabularyIds.size() > 0">
+                AND vocabulary_id IN
+                <foreach collection="vocabularyIds" item="id" open="(" separator="," close=")">#{id}</foreach>
+            </when>
+            <otherwise>
+                AND 1 = 0
+            </otherwise>
+        </choose>
         ORDER BY vocabulary_id, weight DESC, tag_type ASC
     </select>
     <insert id="insertBatch">

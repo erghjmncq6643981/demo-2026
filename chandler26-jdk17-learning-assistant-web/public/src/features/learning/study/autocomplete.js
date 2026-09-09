@@ -182,7 +182,9 @@ export function createStudyAutocomplete({
             onSelectTerm(term)
             return
           }
-          if (event.key === 'Escape') {
+          if (event.key === 'Escape' && dropdownElement && !dropdownElement.classList.contains('hidden')) {
+            event.preventDefault()
+            event.stopPropagation()
             hideDropdown()
             return
           }

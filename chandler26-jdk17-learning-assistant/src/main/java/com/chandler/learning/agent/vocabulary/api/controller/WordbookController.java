@@ -33,7 +33,6 @@ import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 
 import java.util.List;
-import java.util.concurrent.CompletableFuture;
 
 /**
  * 个人单词本接口控制器。
@@ -87,10 +86,10 @@ public class WordbookController {
     /** 学习活跃图。 */
     @GetMapping("/activity")
     @Operation(summary = "学习活跃图")
-    public CompletableFuture<LearningActivityResponse> activity(
+    public LearningActivityResponse activity(
             @RequestParam(defaultValue = "90") Integer days) {
         LearningUser user = currentUserContext.requireUser();
-        return wordbookService.activityAsync(user.getId(), days == null ? LearningActivityConstants.DEFAULT_DAYS : days);
+        return wordbookService.activity(user.getId(), days == null ? LearningActivityConstants.DEFAULT_DAYS : days);
     }
 
     /** 单词本词条列表。 */

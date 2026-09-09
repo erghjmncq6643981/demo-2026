@@ -167,4 +167,18 @@ class EnglishVocabularyStudyServiceAliasTest {
         EnglishVocabularyStudyRecord result = service.findRecord("modest");
         assertThat(result).isNull();
     }
+
+    @Test
+    @DisplayName("当别名列表为空时，不得调用 recordMapper.selectBatchIds，避免生成 WHERE id IN () 语法错误")
+    void shouldNotCallSelectBatchIdsWhenAliasListIsEmpty() {
+        when(recordMapper.selectOne(any())).thenReturn(null);
+        when(aliasMapper.findByNormalizedAlias(any())).thenReturn(null);
+        when(recordMapper.selectList(any())).thenReturn(List.of());
+        when(aliasMapper.findByNormalizedAliases(any())).thenReturn(List.of());
+
+        EnglishVocabularyStudyRecord record = service.findRecord("nearest");
+
+        assertThat(record).isNull();
+        verify(recordMapper, Mockito.never()).selectBatchIds(any());
+    }
 }

@@ -56,6 +56,7 @@ export function createAppShell(ctx) {
     state.user = null
     localStorage.removeItem('learning.token')
     localStorage.removeItem('learning.user')
+    clearSceneData?.()
     updateAuthView()
     updateShellVisibility()
     toast('登录状态已失效，请重新登录')

@@ -321,8 +321,12 @@ public class VocabularyImportService {
             pageResponse.setItems(List.of());
             return pageResponse;
         }
-        Set<Long> catalogIds = jobs.stream().map(VocabularyImportJob::getCatalogId).collect(Collectors.toSet());
-        Map<Long, VocabularyCatalog> catalogMap = catalogMapper.selectBatchIds(catalogIds).stream()
+        Set<Long> catalogIds = jobs.stream()
+                .map(VocabularyImportJob::getCatalogId)
+                .filter(Objects::nonNull)
+                .collect(Collectors.toSet());
+        Map<Long, VocabularyCatalog> catalogMap = catalogIds.isEmpty() ? Map.of()
+                : catalogMapper.selectBatchIds(catalogIds).stream()
                 .collect(Collectors.toMap(VocabularyCatalog::getId, c -> c, (a, b) -> a));
         pageResponse.setItems(jobs.stream().map(job -> {
             VocabularyCatalog catalog = catalogMap.get(job.getCatalogId());
