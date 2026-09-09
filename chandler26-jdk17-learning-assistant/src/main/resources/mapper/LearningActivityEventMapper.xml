@@ -1,0 +1,52 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "https://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.chandler.learning.agent.learning.infrastructure.mapper.LearningActivityEventMapper">
+    <insert id="insertIgnore">
+        INSERT IGNORE INTO learning_activity_event
+        (id, user_id, event_type, occurred_at, plan_id, unit_id, material_id, entry_id,
+         quantity, duration_seconds, result_code, idempotency_key, status, claim_token,
+         processed_time, create_by, create_time, update_by, update_time, deleted, version)
+        VALUES
+        (#{id}, #{userId}, #{eventType}, #{occurredAt}, #{planId}, #{unitId}, #{materialId}, #{entryId},
+         #{quantity}, #{durationSeconds}, #{resultCode}, #{idempotencyKey}, #{status}, #{claimToken},
+         #{processedTime}, #{createBy}, #{createTime}, #{updateBy}, #{updateTime}, #{deleted}, #{version})
+    </insert>
+
+    <update id="claimPendingBatch">
+        UPDATE learning_activity_event
+        SET status = 'processing', claim_token = #{claimToken}, update_time = CURRENT_TIMESTAMP
+        WHERE deleted = 0
+          AND status = 'pending'
+        ORDER BY create_time ASC, id ASC
+        LIMIT #{limit}
+    </update>
+
+    <select id="selectByClaimToken"
+            resultType="com.chandler.learning.agent.learning.domain.entity.LearningActivityEvent">
+        SELECT id, user_id, event_type, occurred_at, plan_id, unit_id, material_id, entry_id,
+               quantity, duration_seconds, result_code, idempotency_key, status, claim_token,
+               processed_time, create_by, create_time, update_by, update_time, deleted, version
+        FROM learning_activity_event
+        WHERE deleted = 0
+          AND status = 'processing'
+          AND claim_token = #{claimToken}
+        ORDER BY create_time ASC, id ASC
+    </select>
+
+    <update id="markSucceededByClaimToken">
+        UPDATE learning_activity_event
+        SET status = 'succeeded', claim_token = NULL, processed_time = CURRENT_TIMESTAMP,
+            update_time = CURRENT_TIMESTAMP
+        WHERE deleted = 0
+          AND status = 'processing'
+          AND claim_token = #{claimToken}
+    </update>
+
+    <update id="resetStaleProcessing">
+        UPDATE learning_activity_event
+        SET status = 'pending', claim_token = NULL, update_time = CURRENT_TIMESTAMP
+        WHERE deleted = 0
+          AND status = 'processing'
+          AND update_time &lt; #{cutoffTime}
+    </update>
+</mapper>

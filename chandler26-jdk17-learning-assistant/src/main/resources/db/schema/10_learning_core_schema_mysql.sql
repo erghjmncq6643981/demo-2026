@@ -242,6 +242,56 @@ CREATE TABLE IF NOT EXISTS learning_review_record (
     KEY idx_learning_review_record_unit_entry (unit_id, entry_id, check_result, deleted)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci COMMENT='逐词学习与复习检查记录';
 
+CREATE TABLE IF NOT EXISTS learning_activity_event (
+    id BIGINT NOT NULL COMMENT '活动事件主键',
+    create_by BIGINT NOT NULL DEFAULT 0 COMMENT '创建人用户 ID',
+    update_by BIGINT NOT NULL DEFAULT 0 COMMENT '更新人用户 ID',
+    user_id BIGINT NOT NULL COMMENT '活动所属用户 ID',
+    event_type VARCHAR(40) NOT NULL COMMENT '活动类型编码',
+    occurred_at DATETIME NOT NULL COMMENT '行为实际发生时间',
+    plan_id BIGINT DEFAULT NULL COMMENT '关联学习计划 ID',
+    unit_id BIGINT DEFAULT NULL COMMENT '关联场景单元 ID',
+    material_id BIGINT DEFAULT NULL COMMENT '关联场景材料或文章记录 ID',
+    entry_id BIGINT DEFAULT NULL COMMENT '关联个人单词本词条 ID',
+    quantity INT NOT NULL DEFAULT 1 COMMENT '本次行为涉及数量',
+    duration_seconds INT DEFAULT NULL COMMENT '有效学习时长，单位秒',
+    result_code VARCHAR(30) DEFAULT NULL COMMENT '行为结果编码',
+    idempotency_key VARCHAR(180) NOT NULL COMMENT '业务幂等键',
+    status VARCHAR(20) NOT NULL DEFAULT 'pending' COMMENT '投影状态：pending、processing、succeeded',
+    claim_token VARCHAR(64) DEFAULT NULL COMMENT '批量投影领取令牌',
+    processed_time DATETIME DEFAULT NULL COMMENT '投影成功时间',
+    create_time DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP COMMENT '创建时间',
+    update_time DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP COMMENT '更新时间',
+    deleted TINYINT(1) NOT NULL DEFAULT 0 COMMENT '是否逻辑删除',
+    version INT NOT NULL DEFAULT 0 COMMENT '乐观锁版本号',
+    PRIMARY KEY (id),
+    UNIQUE KEY uk_learning_activity_event_idempotency (user_id, idempotency_key),
+    KEY idx_learning_activity_event_pending (status, deleted, create_time),
+    KEY idx_learning_activity_event_user_time (user_id, deleted, occurred_at),
+    KEY idx_learning_activity_event_business (user_id, event_type, occurred_at)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci COMMENT='用户学习活动原始事件';
+
+CREATE TABLE IF NOT EXISTS learning_activity_daily (
+    id BIGINT NOT NULL AUTO_INCREMENT COMMENT '活动日汇总主键',
+    create_by BIGINT NOT NULL DEFAULT 0 COMMENT '创建人用户 ID',
+    update_by BIGINT NOT NULL DEFAULT 0 COMMENT '更新人用户 ID',
+    user_id BIGINT NOT NULL COMMENT '用户 ID',
+    activity_date DATE NOT NULL COMMENT '活动日期',
+    metric_type VARCHAR(40) NOT NULL COMMENT '日汇总指标编码',
+    metric_count INT NOT NULL DEFAULT 0 COMMENT '指标数量',
+    duration_seconds INT NOT NULL DEFAULT 0 COMMENT '有效时长，单位秒',
+    correct_count INT NOT NULL DEFAULT 0 COMMENT '正确数量',
+    total_count INT NOT NULL DEFAULT 0 COMMENT '尝试总数量',
+    create_time DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP COMMENT '创建时间',
+    update_time DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP COMMENT '更新时间',
+    deleted TINYINT(1) NOT NULL DEFAULT 0 COMMENT '是否逻辑删除',
+    version INT NOT NULL DEFAULT 0 COMMENT '乐观锁版本号',
+    PRIMARY KEY (id),
+    UNIQUE KEY uk_learning_activity_daily_user_date_metric (user_id, activity_date, metric_type),
+    KEY idx_learning_activity_daily_user_date (user_id, deleted, activity_date),
+    KEY idx_learning_activity_daily_metric_date (metric_type, activity_date)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci COMMENT='用户学习活动日汇总读模型';
+
 CREATE TABLE IF NOT EXISTS learning_user_preference (
     id BIGINT NOT NULL COMMENT '主键',
     create_by BIGINT NOT NULL DEFAULT 0 COMMENT '创建人用户 ID',

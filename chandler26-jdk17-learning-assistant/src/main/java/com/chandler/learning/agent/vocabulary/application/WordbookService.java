@@ -6,10 +6,7 @@ import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
 import com.github.benmanes.caffeine.cache.Cache;
 import com.github.benmanes.caffeine.cache.Caffeine;
 import com.chandler.learning.agent.vocabulary.domain.bo.WordbookEntrySummaryItem;
-import com.chandler.learning.agent.identity.domain.bo.LearningActivityDayBO;
 import com.chandler.learning.agent.vocabulary.api.request.AddWordbookEntryRequest;
-import com.chandler.learning.agent.identity.api.response.LearningActivityDayResponse;
-import com.chandler.learning.agent.identity.api.response.LearningActivityResponse;
 import com.chandler.learning.agent.vocabulary.api.request.ReviewSubmitRequest;
 import com.chandler.learning.agent.vocabulary.api.response.ReviewSubmitResponse;
 import com.chandler.learning.agent.vocabulary.api.response.VocabularyRelationResponse;
@@ -25,6 +22,7 @@ import com.chandler.learning.agent.vocabulary.api.request.VocabularyStudyRequest
 import com.chandler.learning.agent.vocabulary.api.response.VocabularyStudyResponse;
 import com.chandler.learning.agent.learning.domain.enums.ReviewResult;
 import com.chandler.learning.agent.learning.domain.enums.ReviewStatus;
+import com.chandler.learning.agent.learning.domain.enums.LearningActivityEventType;
 import com.chandler.learning.agent.system.domain.enums.SystemLogType;
 import com.chandler.learning.agent.vocabulary.domain.entity.LearningWordbook;
 import com.chandler.learning.agent.vocabulary.domain.entity.LearningWordbookEntry;
@@ -33,6 +31,7 @@ import com.chandler.learning.agent.exception.LearningAssistantException;
 import com.chandler.learning.agent.identity.application.UserDisplayNameService;
 import com.chandler.learning.agent.learning.application.ReviewSchedulePolicy;
 import com.chandler.learning.agent.learning.application.LearningReviewService;
+import com.chandler.learning.agent.learning.application.LearningActivityService;
 import com.chandler.learning.agent.learning.domain.entity.LearningReviewRecord;
 import com.chandler.learning.agent.vocabulary.domain.entity.LearningWordProgress;
 import com.chandler.learning.agent.vocabulary.domain.entity.VocabularyCatalogEntry;
@@ -44,7 +43,6 @@ import com.chandler.learning.agent.vocabulary.application.EnglishVocabularyStudy
 import com.chandler.learning.agent.ai.agent.domain.constant.AiScenarioConstants;
 import com.chandler.learning.agent.common.constant.CommonConstants;
 import com.chandler.learning.agent.common.exception.LearningErrorCode;
-import com.chandler.learning.agent.identity.domain.constant.LearningActivityConstants;
 import com.chandler.learning.agent.vocabulary.domain.constant.ReviewConstants;
 import com.chandler.learning.agent.vocabulary.domain.constant.VocabularyCardConstants;
 import com.chandler.learning.agent.task.application.AiAsyncTaskService;
@@ -56,10 +54,8 @@ import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.util.StringUtils;
-import org.springframework.beans.factory.annotation.Qualifier;
 
 import java.time.LocalDateTime;
-import java.time.LocalDate;
 import java.util.LinkedHashMap;
 import java.util.ArrayList;
 import java.util.Collection;
@@ -67,9 +63,6 @@ import java.util.List;
 import java.util.Locale;
 import java.util.Map;
 import java.util.Objects;
-import java.util.concurrent.CompletableFuture;
-import java.util.concurrent.ConcurrentHashMap;
-import java.util.concurrent.Executor;
 
 /**
  * 单词本与复习计划服务。
@@ -81,11 +74,6 @@ import java.util.concurrent.Executor;
 @RequiredArgsConstructor
 public class WordbookService {
 
-    /** 活动统计是读多写少的派生数据，短 TTL 避免个人中心反复聚合历史记录。 */
-    private final Cache<String, LearningActivityResponse> activityCache = Caffeine.newBuilder()
-            .maximumSize(2000)
-            .expireAfterWrite(java.time.Duration.ofSeconds(30))
-            .build();
     /** 单词本列表仅包含数量和状态等摘要，短 TTL 减少个人中心切换时的重复联表统计。 */
     private final Cache<Long, List<WordbookResponse>> wordbookSummaryCache = Caffeine.newBuilder()
             .maximumSize(2000)
@@ -106,33 +94,7 @@ public class WordbookService {
     private final ReviewSchedulePolicy reviewSchedulePolicy;
     private final WordbookResponseAssembler responseAssembler;
     private final AiAsyncTaskService aiAsyncTaskService;
-    /** 活动统计不属于页面首屏关键路径，使用独立查询线程池异步聚合。 */
-    @Qualifier("readQueryExecutor")
-    private final Executor readQueryExecutor;
-    private final ConcurrentHashMap<String, CompletableFuture<LearningActivityResponse>> activityRequests =
-            new ConcurrentHashMap<>();
-    /** 用户级活动数据版本；写入发生后，旧的异步查询结果不得回填缓存。 */
-    private final ConcurrentHashMap<Long, Long> activityVersions = new ConcurrentHashMap<>();
-
-    /** 异步读取活动统计；缓存未命中时不会占用 Web 请求线程。 */
-    public CompletableFuture<LearningActivityResponse> activityAsync(Long userId, int days) {
-        int resolvedDays = Math.max(LearningActivityConstants.MIN_DAYS,
-                Math.min(days, LearningActivityConstants.MAX_DAYS));
-        long version = activityVersion(userId);
-        String cacheKey = activityCacheKey(userId, resolvedDays, version);
-        LearningActivityResponse cached = activityCache.getIfPresent(cacheKey);
-        if (cached != null) {
-            return CompletableFuture.completedFuture(cached);
-        }
-        return activityRequests.computeIfAbsent(cacheKey, key ->
-                CompletableFuture.supplyAsync(() -> loadActivity(userId, resolvedDays), readQueryExecutor)
-                        .whenComplete((value, error) -> {
-                            activityRequests.remove(key);
-                            if (error == null && activityVersion(userId) == version) {
-                                activityCache.put(key, value);
-                            }
-                        }));
-    }
+    private final LearningActivityService activityService;
 
     /** 按用户批量统计有效个人单词本数，供系统用户中心使用。 */
     public Map<Long, Integer> countByUserIds(java.util.Collection<Long> userIds) {
@@ -367,85 +329,6 @@ public class WordbookService {
         return responseAssembler.toEntryResponse(source);
     }
 
-    /** 查询学习活动统计。 */
-    public LearningActivityResponse activity(Long userId, int days) {
-        int resolvedDays = Math.max(LearningActivityConstants.MIN_DAYS, Math.min(days, LearningActivityConstants.MAX_DAYS));
-        long version = activityVersion(userId);
-        String cacheKey = activityCacheKey(userId, resolvedDays, version);
-        LearningActivityResponse cached = activityCache.getIfPresent(cacheKey);
-        if (cached != null) {
-            return cached;
-        }
-        LearningActivityResponse response = loadActivity(userId, resolvedDays);
-        if (activityVersion(userId) == version) {
-            activityCache.put(cacheKey, response);
-        }
-        return response;
-    }
-
-    /** 执行活动统计聚合；不负责缓存，避免同步和异步入口互相覆盖版本。 */
-    private LearningActivityResponse loadActivity(Long userId, int resolvedDays) {
-        LocalDate endDate = LocalDate.now();
-        LocalDate startDate = endDate.minusDays(resolvedDays - 1L);
-        LocalDateTime startTime = startDate.atStartOfDay();
-
-        Map<LocalDate, LearningActivityDayResponse> dayMap = new LinkedHashMap<>();
-        for (int index = 0; index < resolvedDays; index++) {
-            LocalDate date = startDate.plusDays(index);
-            LearningActivityDayResponse item = new LearningActivityDayResponse();
-            item.setDate(date.toString());
-            item.setLearnedCount(0);
-            item.setReviewCount(0);
-            item.setTotalCount(0);
-            dayMap.put(date, item);
-        }
-
-        List<LearningActivityDayBO> aggregated = entryMapper.selectDailyActivity(userId, startTime);
-        for (LearningActivityDayBO activity : aggregated) {
-            LocalDate date = activity.getActivityDate();
-            LearningActivityDayResponse item = dayMap.get(date);
-            if (item != null) {
-                item.setLearnedCount(nullToZero(activity.getLearnedCount()));
-                item.setReviewCount(nullToZero(activity.getReviewCount()));
-            }
-        }
-
-        int learnedTotal = 0;
-        int reviewTotal = 0;
-        for (LearningActivityDayResponse item : dayMap.values()) {
-            int learnedCount = nullToZero(item.getLearnedCount());
-            int reviewCount = nullToZero(item.getReviewCount());
-            item.setTotalCount(learnedCount + reviewCount);
-            learnedTotal += learnedCount;
-            reviewTotal += reviewCount;
-        }
-
-        LearningActivityResponse response = new LearningActivityResponse();
-        response.setDays(resolvedDays);
-        response.setLearnedTotal(learnedTotal);
-        response.setReviewTotal(reviewTotal);
-        response.setItems(List.copyOf(dayMap.values()));
-        return response;
-    }
-
-    private long activityVersion(Long userId) {
-        return userId == null ? 0L : activityVersions.getOrDefault(userId, 0L);
-    }
-
-    private String activityCacheKey(Long userId, int days, long version) {
-        return userId + ":" + days + ":" + version;
-    }
-
-    /** 词条新增、删除或复习提交后清除用户活动统计缓存。 */
-    private void invalidateActivityCache(Long userId) {
-        if (userId == null) {
-            return;
-        }
-        activityVersions.merge(userId, 1L, Long::sum);
-        activityCache.asMap().keySet().removeIf(key -> key.startsWith(userId + ":"));
-        activityRequests.keySet().removeIf(key -> key.startsWith(userId + ":"));
-    }
-
     /** 单词本或词条摘要发生写入后清除用户的短 TTL 摘要缓存。 */
     private void invalidateWordbookCache(Long userId) {
         if (userId != null) {
@@ -457,6 +340,11 @@ public class WordbookService {
     public void evictDerivedCaches(Long userId) {
         invalidateActivityCache(userId);
         invalidateWordbookCache(userId);
+    }
+
+    /** 活动事件写入或复习提交后清理活动读模型缓存。 */
+    private void invalidateActivityCache(Long userId) {
+        activityService.invalidate(userId);
     }
 
     /**
@@ -490,6 +378,9 @@ public class WordbookService {
                         userDisplayNameService.userName(userId),
                         existing.getNormalizedTerm(),
                         wordbook.getName());
+                activityService.record(userId, LearningActivityEventType.WORD_ADDED, now,
+                        null, null, null, existing.getId(), 1, null, "restored",
+                        "word_added:" + existing.getId() + ":" + now);
             } else if (responseAssembler.refreshSnapshotIfVocabularyChanged(existing, vocabulary, now)) {
                 entryMapper.updateById(existing);
                 systemLogService.record(userId, SystemLogType.WORDBOOK, "刷新词条学习卡", existing.getNormalizedTerm());
@@ -519,6 +410,8 @@ public class WordbookService {
             systemLogService.record(userId, SystemLogType.WORDBOOK, "加入单词本并提交词卡任务", entry.getNormalizedTerm());
             log.info("用户「{}」把未知单词「{}」添加到单词本「{}」，已提交异步词卡任务",
                     userDisplayNameService.userName(userId), entry.getNormalizedTerm(), wordbook.getName());
+            activityService.record(userId, LearningActivityEventType.WORD_ADDED, now,
+                    null, null, null, entry.getId(), 1, null, "added", "word_added:" + entry.getId());
             invalidateActivityCache(userId);
             invalidateWordbookCache(userId);
             return responseAssembler.toEntryResponse(entry);
@@ -533,6 +426,8 @@ public class WordbookService {
                 userDisplayNameService.userName(userId),
                 entry.getNormalizedTerm(),
                 wordbook.getName());
+        activityService.record(userId, LearningActivityEventType.WORD_ADDED, now,
+                null, null, null, entry.getId(), 1, null, "added", "word_added:" + entry.getId());
         invalidateActivityCache(userId);
         invalidateWordbookCache(userId);
         return responseAssembler.toEntryResponse(entry);
@@ -685,6 +580,7 @@ public class WordbookService {
     /**
      * 保存一次复习结果，并根据记忆状态计算下一次复习时间。
      */
+    @Transactional(rollbackFor = Exception.class)
     public ReviewSubmitResponse submitReview(Long userId, Long entryId, ReviewSubmitRequest request) {
         LearningWordbookEntry entry = entryMapper.selectById(entryId);
         if (entry == null || Boolean.TRUE.equals(entry.getDeleted()) || !entry.getUserId().equals(userId)) {
@@ -729,6 +625,9 @@ public class WordbookService {
         record.setDurationSeconds(request.getDurationSeconds());
         record.setCreateTime(now);
         reviewService.record(record);
+        activityService.record(userId, LearningActivityEventType.WORD_REVIEWED, now,
+                request.getPlanId(), request.getUnitId(), null, entry.getId(), 1,
+                request.getDurationSeconds(), result.getCode(), "word_reviewed:" + record.getId());
 
         ReviewSubmitResponse response = new ReviewSubmitResponse();
         response.setEntryId(entry.getId());

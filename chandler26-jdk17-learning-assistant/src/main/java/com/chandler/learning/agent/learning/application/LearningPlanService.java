@@ -11,6 +11,7 @@ import com.baomidou.mybatisplus.core.conditions.update.LambdaUpdateWrapper;
 import com.baomidou.mybatisplus.core.toolkit.IdWorker;
 import com.chandler.learning.agent.learning.domain.bo.LearningAssessmentContextBO;
 import com.chandler.learning.agent.learning.domain.enums.ReviewResult;
+import com.chandler.learning.agent.learning.domain.enums.LearningActivityEventType;
 import com.chandler.learning.agent.ai.chat.application.AgentChatResponse;
 import com.chandler.learning.agent.learning.api.request.LearningAssessmentSubmitRequest;
 import com.chandler.learning.agent.learning.api.response.LearningAssessmentSubmitResponse;
@@ -104,6 +105,7 @@ public class LearningPlanService {
     private final LearningPlanJsonSupport jsonSupport;
     private final ApplicationEventPublisher eventPublisher;
     private final TransactionTemplate transactionTemplate;
+    private final LearningActivityService activityService;
 
     /** 创建自助学习计划；首个场景只入队，AI 由异步任务执行。 */
     public LearningPlanResponse create(Long userId, LearningPlanCreateRequest request) {
@@ -568,6 +570,12 @@ public class LearningPlanService {
         plan.setUpdateTime(now);
         planMapper.updateById(plan);
 
+        if (firstStart) {
+            activityService.record(userId, LearningActivityEventType.SCENE_STARTED, now,
+                    planId, unitId, unit.getSceneMaterialId(), null, 1, null, null,
+                    "scene_started:" + unitId);
+        }
+
         // 事务提交后异步写审计日志，不阻塞主流程，也不会改变状态结果。
         String traceId = org.slf4j.MDC.get("traceId");
         eventPublisher.publishEvent(new LearningUnitStartedEvent(
@@ -634,6 +642,7 @@ public class LearningPlanService {
                 ctx.getWordProgressId(), type, correct, nextReviewTime);
 
         int completedCoreCount = value(ctx.getCompletedCoreCount());
+        boolean newlyCompletedWord = false;
         if (correct) {
             List<String> passedList = reviewRecordMapper.selectPassedAssessmentTypes(unitId, ctx.getWordbookEntryId());
             Set<String> passedSet = new HashSet<>(passedList);
@@ -641,6 +650,7 @@ public class LearningPlanService {
             passedSet.add(type);
             boolean nowCompleted = isEntryComplete(ctx.getMasteryRequirement(), passedSet);
             if (!wasCompleted && nowCompleted) {
+                newlyCompletedWord = true;
                 completedCoreCount = completedCoreCount + CommonConstants.SEQUENCE_STEP;
                 LearningPlanUnit unitUpdate = new LearningPlanUnit();
                 unitUpdate.setId(unitId);
@@ -683,6 +693,15 @@ public class LearningPlanService {
         record.setUpdateTime(now);
         // 答题流水是学习进度的事实记录，必须与状态更新在同一事务内落库；异步事件只负责审计日志。
         reviewRecordMapper.insert(record);
+
+        activityService.record(userId, LearningActivityEventType.WORD_REVIEWED, now,
+                planId, unitId, null, ctx.getWordbookEntryId(), 1,
+                record.getDurationSeconds(), result.getCode(), "word_reviewed:" + record.getId());
+        if (newlyCompletedWord) {
+            activityService.record(userId, LearningActivityEventType.WORD_LEARNED, now,
+                    planId, unitId, null, ctx.getWordbookEntryId(), 1, null, "learned",
+                    "word_learned:" + ctx.getUnitEntryId());
+        }
 
         String userName = userDisplayNameService.userName(userId);
         eventPublisher.publishEvent(new LearningAssessmentSubmittedEvent(
@@ -762,6 +781,9 @@ public class LearningPlanService {
             }
             plan.setUpdateTime(now);
             planMapper.updateById(plan);
+            activityService.record(userId, LearningActivityEventType.SCENE_COMPLETED, now,
+                    planId, unitId, unit.getSceneMaterialId(), null, 1, null, null,
+                    "scene_completed:" + unitId);
             invalidateCalendar(plan.getId());
             systemLogService.record(userId, SystemLogType.LEARNING_PLAN, "完成场景学习单元",
                     plan.getName() + " / " + unit.getTitle());

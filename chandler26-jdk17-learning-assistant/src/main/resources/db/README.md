@@ -8,9 +8,9 @@
 
 ## 自动迁移（推荐）
 
-应用默认启用 Flyway：
+当前配置默认关闭 Flyway，启用需设置 `LEARNING_FLYWAY_ENABLED=true`：
 
-- 空数据库执行 Java 基线迁移 `V1__BaselineSchema`，按下述顺序加载当前 schema 和种子数据。
+- 空数据库先按下述手工初始化顺序创建完整结构；当前源码未包含 `V1__BaselineSchema`。
 - 未接入 Flyway 的存量非空数据库自动建立 `107` 基线，后续执行 `V108` 及更高版本迁移。
 - 新增存量库变更必须创建 `V109__*` 及后续 Flyway 迁移，不再新增根目录手工脚本。
 - 生产部署禁止 Flyway clean；部署前仍需备份数据库。
@@ -59,10 +59,13 @@
 24. Java 迁移 `V113__PerformanceQueryIndexes`：为公共词本、学习计划日历和精读历史摘要查询补充复合索引
 25. Java 迁移 `V114__ActivityAndAiSessionIndexes`：为活动统计和管理员 AI 会话摘要补充按用户/会话的复合索引
 26. Java 迁移 `V115__AsyncTaskCalendarIndex`：为词汇大挑战日历查询异步任务状态补充复合索引
+27. Java 迁移 `V116__LearningActivityEventAndDaily`：创建学习活动原始事件与日汇总读模型，并回填历史词条加入、复习统计
 
 迁移脚本都设计为可重复执行，但仍建议在执行前备份数据库并记录已执行版本。
 
 ## 当前领域结构
+
+活动统计升级：已有数据库在启动新版前执行 `migration/V116__LearningActivityEventAndDaily.sql`，或由已启用的 Flyway 按版本顺序执行。原始活动同步入库，后台每 5 秒批量汇总；日汇总与事件成功标记在同一事务提交，失败回滚后可重试。年度查询只读取日汇总。历史词条加入、复习数据回填为对应指标，无法还原的历史学习完成行为不推测补算。事件写入失败会记录诊断日志，目前不具备该失败事件的持久重试能力。
 
 | 脚本 | 内容 |
 | --- | --- |

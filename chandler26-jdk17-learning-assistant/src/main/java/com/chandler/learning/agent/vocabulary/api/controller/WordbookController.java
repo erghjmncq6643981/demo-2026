@@ -1,7 +1,6 @@
 package com.chandler.learning.agent.vocabulary.api.controller;
 
 import com.chandler.learning.agent.vocabulary.api.request.AddWordbookEntryRequest;
-import com.chandler.learning.agent.identity.api.response.LearningActivityResponse;
 import com.chandler.learning.agent.vocabulary.api.request.ReviewSubmitRequest;
 import com.chandler.learning.agent.vocabulary.api.response.ReviewSubmitResponse;
 import com.chandler.learning.agent.vocabulary.api.response.WordbookEntryResponse;
@@ -17,7 +16,6 @@ import com.chandler.learning.agent.security.CurrentUserContext;
 import com.chandler.learning.agent.vocabulary.application.WordbookService;
 import com.chandler.learning.agent.task.application.AiAsyncTaskService;
 import com.chandler.learning.agent.vocabulary.domain.constant.ReviewConstants;
-import com.chandler.learning.agent.identity.domain.constant.LearningActivityConstants;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.Valid;
@@ -81,15 +79,6 @@ public class WordbookController {
             @PathVariable Long wordbookId) {
         LearningUser user = currentUserContext.requireUser();
         wordbookService.deleteWordbook(user.getId(), wordbookId);
-    }
-
-    /** 学习活跃图。 */
-    @GetMapping("/activity")
-    @Operation(summary = "学习活跃图")
-    public LearningActivityResponse activity(
-            @RequestParam(defaultValue = "90") Integer days) {
-        LearningUser user = currentUserContext.requireUser();
-        return wordbookService.activity(user.getId(), days == null ? LearningActivityConstants.DEFAULT_DAYS : days);
     }
 
     /** 单词本词条列表。 */

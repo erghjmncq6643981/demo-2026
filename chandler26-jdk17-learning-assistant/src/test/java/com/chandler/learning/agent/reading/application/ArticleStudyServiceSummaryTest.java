@@ -7,6 +7,7 @@ import com.chandler.learning.agent.reading.domain.entity.LearningArticleStudyRec
 import com.chandler.learning.agent.reading.infrastructure.mapper.LearningArticleStudyRecordMapper;
 import com.chandler.learning.agent.system.application.SystemLogService;
 import com.chandler.learning.agent.vocabulary.application.LearningWordProgressService;
+import com.chandler.learning.agent.learning.application.LearningActivityService;
 import com.chandler.learning.agent.vocabulary.application.WordbookService;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import org.junit.jupiter.api.DisplayName;
@@ -29,7 +30,8 @@ class ArticleStudyServiceSummaryTest {
             mock(LearningWordProgressService.class),
             mock(SystemLogService.class),
             mock(UserDisplayNameService.class),
-            objectMapper
+            objectMapper,
+            mock(LearningActivityService.class)
     );
 
     @Test

@@ -2,7 +2,6 @@ package com.chandler.learning.agent.vocabulary.infrastructure.mapper;
 
 import com.baomidou.mybatisplus.core.mapper.BaseMapper;
 import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
-import com.chandler.learning.agent.identity.domain.bo.LearningActivityDayBO;
 import com.chandler.learning.agent.vocabulary.domain.bo.WordbookEntrySummaryItem;
 import com.chandler.learning.agent.vocabulary.domain.entity.LearningWordbookEntry;
 import org.apache.ibatis.annotations.Mapper;
@@ -73,11 +72,6 @@ public interface LearningWordbookEntryMapper extends BaseMapper<LearningWordbook
             @Param("userId") Long userId,
             @Param("wordbookId") Long wordbookId,
             @Param("limit") int limit);
-
-    /** 按日期聚合个人词本学习与复习活动，避免把整年实体加载到应用层。 */
-    List<LearningActivityDayBO> selectDailyActivity(
-            @Param("userId") Long userId,
-            @Param("startTime") java.time.LocalDateTime startTime);
 
     /** 一次查询词本与词汇缓存中的可下载发音词，避免维护任务分页循环访问数据库。 */
     List<String> selectDistinctAudioTerms();

@@ -37,7 +37,9 @@ class MapperXmlValidationTest {
                 "mapper/VocabularyCardGenerationJobItemMapper.xml",
                 "mapper/LearningSystemLogMapper.xml",
                 "mapper/LearningSystemLogOutboxMapper.xml",
-                "mapper/LearningReviewRecordMapper.xml");
+                "mapper/LearningReviewRecordMapper.xml",
+                "mapper/LearningActivityEventMapper.xml",
+                "mapper/LearningActivityDailyMapper.xml");
 
         for (String resource : resources) {
             try (InputStream input = Resources.getResourceAsStream(resource)) {
@@ -132,6 +134,18 @@ class MapperXmlValidationTest {
                 .isTrue();
         assertThat(configuration.hasStatement(
                 "com.chandler.learning.agent.system.infrastructure.mapper.LearningSystemLogOutboxMapper.claimPendingBatch"))
+                .isTrue();
+        assertThat(configuration.hasStatement(
+                "com.chandler.learning.agent.learning.infrastructure.mapper.LearningActivityEventMapper.insertIgnore"))
+                .isTrue();
+        assertThat(configuration.hasStatement(
+                "com.chandler.learning.agent.learning.infrastructure.mapper.LearningActivityEventMapper.claimPendingBatch"))
+                .isTrue();
+        assertThat(configuration.hasStatement(
+                "com.chandler.learning.agent.learning.infrastructure.mapper.LearningActivityDailyMapper.upsertBatch"))
+                .isTrue();
+        assertThat(configuration.hasStatement(
+                "com.chandler.learning.agent.learning.infrastructure.mapper.LearningActivityDailyMapper.selectMetrics"))
                 .isTrue();
     }
 }

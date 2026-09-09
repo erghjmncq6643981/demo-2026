@@ -97,6 +97,10 @@ learning:
     sync-enabled: ${LEARNING_AUDIO_SYNC_ENABLED:true}
     sync-cron: ${LEARNING_AUDIO_SYNC_CRON:0 0 1 * * ?}
     sync-throttle-ms: ${LEARNING_AUDIO_SYNC_THROTTLE_MS:50}
+  activity:
+    # 活动事件只写入待投影表，汇总任务按固定间隔异步执行。
+    projector-delay-ms: ${LEARNING_ACTIVITY_PROJECTOR_DELAY_MS:5000}
+    recovery-delay-ms: ${LEARNING_ACTIVITY_RECOVERY_DELAY_MS:30000}
   aliyun:
     nls:
       gateway-url: ${NLS_GATEWAY_URL:wss://nls-gateway-cn-shanghai.aliyuncs.com/ws/v1}

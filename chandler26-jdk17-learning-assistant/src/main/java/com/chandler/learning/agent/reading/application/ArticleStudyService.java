@@ -24,6 +24,7 @@ import com.chandler.learning.agent.reading.domain.enums.ArticleWordCountRange;
 import com.chandler.learning.agent.ai.chat.domain.enums.AiInvocationScene;
 import com.chandler.learning.agent.learning.domain.enums.LearningScene;
 import com.chandler.learning.agent.learning.domain.enums.ReviewStatus;
+import com.chandler.learning.agent.learning.domain.enums.LearningActivityEventType;
 import com.chandler.learning.agent.system.domain.enums.SystemLogType;
 import com.chandler.learning.agent.exception.LearningAssistantException;
 import com.chandler.learning.agent.identity.application.UserDisplayNameService;
@@ -37,6 +38,7 @@ import com.chandler.learning.agent.common.exception.LearningErrorCode;
 import com.chandler.learning.agent.reading.domain.constant.ArticleConstants;
 import com.chandler.learning.agent.system.application.SystemLogService;
 import com.chandler.learning.agent.vocabulary.application.LearningWordProgressService;
+import com.chandler.learning.agent.learning.application.LearningActivityService;
 import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
@@ -74,6 +76,7 @@ public class ArticleStudyService {
     private final SystemLogService systemLogService;
     private final UserDisplayNameService userDisplayNameService;
     private final ObjectMapper objectMapper;
+    private final LearningActivityService activityService;
 
     /** 生成或读取学习材料。 */
     public ArticleStudyResponse study(Long userId, ArticleStudyRequest request) {
@@ -189,6 +192,9 @@ public class ArticleStudyService {
         record.moveToStage(stage, LocalDateTime.now());
         articleStudyRecordMapper.updateById(record);
         if (firstStart) {
+            activityService.record(userId, LearningActivityEventType.ARTICLE_STARTED, record.getStartedTime(),
+                    record.getPlanId(), record.getPlanUnitId(), record.getId(), null, 1, null, null,
+                    "article_started:" + record.getId());
             systemLogService.record(userId, SystemLogType.REVIEW, "开始语境精读",
                     articleTitle(record) + "，" + readSelectedWords(record).size() + " 个目标词");
             log.info("用户「{}」开始语境精读「{}」，目标词 {} 个",
@@ -220,6 +226,13 @@ public class ArticleStudyService {
                 .map(ArticleStudyWordResponse::getTerm)
                 .filter(StringUtils::hasText)
                 .toList());
+        int durationSeconds = record.getStartedTime() == null
+                ? 0
+                : (int) Math.min(Integer.MAX_VALUE,
+                Math.max(0L, java.time.Duration.between(record.getStartedTime(), now).getSeconds()));
+        activityService.record(userId, LearningActivityEventType.ARTICLE_COMPLETED, now,
+                record.getPlanId(), record.getPlanUnitId(), record.getId(), null, 1,
+                durationSeconds, String.valueOf(result.score()), "article_completed:" + record.getId());
         systemLogService.record(userId, SystemLogType.REVIEW, "完成语境精读",
                 articleTitle(record) + "，检测 " + result.correct() + "/" + result.total());
         log.info("用户「{}」完成语境精读「{}」，阅读检测得分 {}，目标词 {} 个",

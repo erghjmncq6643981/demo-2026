@@ -80,6 +80,8 @@ class LearningPlanServiceSubmitAssessmentTest {
     private ApplicationEventPublisher eventPublisher;
     @Mock
     private TransactionTemplate transactionTemplate;
+    @Mock
+    private LearningActivityService activityService;
 
     private final ObjectMapper objectMapper = new ObjectMapper();
     private final ReviewSchedulePolicy reviewSchedulePolicy = new ReviewSchedulePolicy();
@@ -113,7 +115,8 @@ class LearningPlanServiceSubmitAssessmentTest {
                 progressQueryService,
                 jsonSupport,
                 eventPublisher,
-                transactionTemplate
+                transactionTemplate,
+                activityService
         );
     }
 

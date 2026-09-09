@@ -1,0 +1,39 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "https://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.chandler.learning.agent.learning.infrastructure.mapper.LearningActivityDailyMapper">
+    <insert id="upsertBatch">
+        INSERT INTO learning_activity_daily
+        (user_id, activity_date, metric_type, metric_count, duration_seconds,
+         correct_count, total_count, create_by, create_time, update_by, update_time, deleted, version)
+        VALUES
+        <foreach collection="list" item="item" separator=",">
+            (#{item.userId}, #{item.activityDate}, #{item.metricType}, #{item.metricCount},
+             #{item.durationSeconds}, #{item.correctCount}, #{item.totalCount}, #{item.createBy},
+             #{item.createTime}, #{item.updateBy}, #{item.updateTime}, #{item.deleted}, #{item.version})
+        </foreach>
+        ON DUPLICATE KEY UPDATE
+            metric_count = metric_count + VALUES(metric_count),
+            duration_seconds = duration_seconds + VALUES(duration_seconds),
+            correct_count = correct_count + VALUES(correct_count),
+            total_count = total_count + VALUES(total_count),
+            update_by = VALUES(update_by),
+            update_time = VALUES(update_time),
+            version = version + 1
+    </insert>
+
+    <select id="selectMetrics"
+            resultType="com.chandler.learning.agent.learning.domain.bo.LearningActivityMetricBO">
+        SELECT activity_date AS activityDate,
+               metric_type AS metricType,
+               SUM(metric_count) AS metricCount,
+               SUM(duration_seconds) AS durationSeconds,
+               SUM(correct_count) AS correctCount,
+               SUM(total_count) AS totalCount
+        FROM learning_activity_daily
+        WHERE user_id = #{userId}
+          AND deleted = 0
+          AND activity_date BETWEEN #{startDate} AND #{endDate}
+        GROUP BY activity_date, metric_type
+        ORDER BY activity_date ASC, metric_type ASC
+    </select>
+</mapper>

@@ -408,7 +408,7 @@ export function previewRecord(term = 'abandon') {
 }
 
 export function createPreviewActivity() {
-  const days = 90
+  const days = 365
   const items = Array.from({ length: days }, (_, index) => {
     const date = new Date()
     date.setDate(date.getDate() - (days - index - 1))
@@ -418,14 +418,22 @@ export function createPreviewActivity() {
     return {
       date: date.toISOString().slice(0, 10),
       learnedCount,
+      wordAddedCount: index % 17 === 0 ? 1 : 0,
       reviewCount,
-      totalCount: learnedCount + reviewCount,
+      sceneCompletedCount: index % 14 === 0 ? 1 : 0,
+      articleCompletedCount: index % 21 === 0 ? 1 : 0,
+      studySeconds: reviewCount * 90,
+      totalCount: learnedCount + reviewCount + (index % 17 === 0 ? 1 : 0) + (index % 14 === 0 ? 1 : 0) + (index % 21 === 0 ? 1 : 0),
     }
   })
   return {
     days,
     learnedTotal: items.reduce((sum, item) => sum + item.learnedCount, 0),
+    wordAddedTotal: items.reduce((sum, item) => sum + item.wordAddedCount, 0),
     reviewTotal: items.reduce((sum, item) => sum + item.reviewCount, 0),
+    sceneCompletedTotal: items.reduce((sum, item) => sum + item.sceneCompletedCount, 0),
+    articleCompletedTotal: items.reduce((sum, item) => sum + item.articleCompletedCount, 0),
+    studySecondsTotal: items.reduce((sum, item) => sum + item.studySeconds, 0),
     items,
   }
 }

@@ -30,7 +30,7 @@ export function createActivityProfileFeature(ctx) {
       elements.activityHeatmap.className = 'activity-heatmap loading'
       elements.activityHeatmap.textContent = '正在加载学习活跃数据...'
     }
-    activityRequest = request('/api/v1/learning/activity?days=90')
+    activityRequest = request('/api/v1/learning/activity?days=365')
       .then((activity) => {
         state.activity = activity
         renderActivityHeatmap()
@@ -52,7 +52,8 @@ export function createActivityProfileFeature(ctx) {
     const items = Array.isArray(state.activity?.items) ? state.activity.items : []
     const learnedTotal = state.activity?.learnedTotal ?? items.reduce((sum, item) => sum + Number(item.learnedCount || 0), 0)
     const reviewTotal = state.activity?.reviewTotal ?? items.reduce((sum, item) => sum + Number(item.reviewCount || 0), 0)
-    elements.activitySummary.textContent = `${learnedTotal} 学习 / ${reviewTotal} 复习`
+    const sceneCompletedTotal = state.activity?.sceneCompletedTotal ?? items.reduce((sum, item) => sum + Number(item.sceneCompletedCount || 0), 0)
+    elements.activitySummary.textContent = `${learnedTotal} 学习 / ${reviewTotal} 复习 / ${sceneCompletedTotal} 场景`
     if (!items.length) {
       elements.activityHeatmap.className = 'activity-heatmap empty'
       elements.activityHeatmap.textContent = state.token || state.preview ? '暂无学习活跃数据' : '登录后查看学习活跃图'
@@ -101,12 +102,20 @@ export function createActivityProfileFeature(ctx) {
       const date = parseLocalDate(dateKey)
       if (!date) return
       const learnedCount = Number(item.learnedCount || 0)
+      const wordAddedCount = Number(item.wordAddedCount || 0)
       const reviewCount = Number(item.reviewCount || 0)
+      const sceneCompletedCount = Number(item.sceneCompletedCount || 0)
+      const articleCompletedCount = Number(item.articleCompletedCount || 0)
+      const studySeconds = Number(item.studySeconds || 0)
       byDate.set(dateKey, {
         date: dateKey,
         learnedCount,
+        wordAddedCount,
         reviewCount,
-        totalCount: Number(item.totalCount ?? learnedCount + reviewCount),
+        sceneCompletedCount,
+        articleCompletedCount,
+        studySeconds,
+        totalCount: Number(item.totalCount ?? learnedCount + wordAddedCount + reviewCount + sceneCompletedCount + articleCompletedCount),
       })
     })
     const dateKeys = [...byDate.keys()].sort()
@@ -120,7 +129,11 @@ export function createActivityProfileFeature(ctx) {
         byDate.get(dateKey) || {
           date: dateKey,
           learnedCount: 0,
+          wordAddedCount: 0,
           reviewCount: 0,
+          sceneCompletedCount: 0,
+          articleCompletedCount: 0,
+          studySeconds: 0,
           totalCount: 0,
         },
       )
@@ -147,7 +160,7 @@ export function createActivityProfileFeature(ctx) {
     if (!item) return '<span class="activity-day placeholder" aria-hidden="true"></span>'
     const total = Number(item.totalCount || 0)
     const level = activityLevel(total, maxTotal)
-    const title = `${item.date}: 学习 ${item.learnedCount || 0}，复习 ${item.reviewCount || 0}`
+    const title = `${item.date}: 学习 ${item.learnedCount || 0}，加入 ${item.wordAddedCount || 0}，复习 ${item.reviewCount || 0}，场景 ${item.sceneCompletedCount || 0}，精读 ${item.articleCompletedCount || 0}`
     return `<span class="activity-day" data-level="${level}" title="${escapeHtml(title)}" aria-label="${escapeHtml(title)}"></span>`
   }
 

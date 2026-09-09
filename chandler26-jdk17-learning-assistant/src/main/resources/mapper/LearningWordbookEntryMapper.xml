@@ -158,34 +158,6 @@
         LIMIT #{limit}
     </select>
 
-    <select id="selectDailyActivity"
-            resultType="com.chandler.learning.agent.identity.domain.bo.LearningActivityDayBO">
-        SELECT activity_date AS activityDate,
-               SUM(learned_count) AS learnedCount,
-               SUM(review_count) AS reviewCount
-        FROM (
-            SELECT DATE(create_time) AS activity_date,
-                   COUNT(*) AS learned_count,
-                   0 AS review_count
-            FROM learning_wordbook_entry
-            WHERE user_id = #{userId}
-              AND deleted = 0
-              AND create_time &gt;= #{startTime}
-            GROUP BY DATE(create_time)
-            UNION ALL
-            SELECT DATE(create_time) AS activity_date,
-                   0 AS learned_count,
-                   COUNT(*) AS review_count
-            FROM learning_review_record
-            WHERE user_id = #{userId}
-              AND deleted = 0
-              AND create_time &gt;= #{startTime}
-            GROUP BY DATE(create_time)
-        ) activity
-        GROUP BY activity_date
-        ORDER BY activity_date ASC
-    </select>
-
     <select id="selectDistinctAudioTerms" resultType="string">
         SELECT normalized_term
         FROM learning_wordbook_entry

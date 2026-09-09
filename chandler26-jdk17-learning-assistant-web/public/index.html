@@ -6,6 +6,8 @@
     <title>English Learning Agent</title>
     <link rel="icon" href="data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22><text y=%22.9em%22 font-size=%2290%22>📖</text></svg>" />
     <link rel="stylesheet" href="/styles.css?v=20260522-03" />
+    <link rel="stylesheet" href="/src/features/identity/login-showcase.css" />
+    <script type="module" src="/src/features/identity/login-showcase.js"></script>
   </head>
   <body>
     <main class="app">
@@ -13,19 +15,56 @@
         <div class="login-visual">
           <p class="eyebrow">English Agent</p>
           <h1>学习助手</h1>
-          <p class="login-subtitle">把查词、理解、笔记和复习收进一个清爽的英语学习工作台。</p>
-          <div class="login-word-card" aria-hidden="true">
-            <div>
-              <span class="word-mark">abandon</span>
-              <small>/əˈbændən/</small>
+          <p class="login-subtitle">在场景中认识单词，在阅读中理解，用复习让记忆留下来。</p>
+          <section class="login-showcase" aria-label="学习功能预览" aria-roledescription="轮播">
+            <div class="showcase-slides">
+              <article class="showcase-slide" data-showcase-slide aria-label="1 / 3：词汇大挑战">
+                <div class="showcase-heading"><span>01 · SCENE</span><small>功能示意</small></div>
+                <h2>词汇大挑战</h2>
+                <p>跟随学习计划，把相关词汇放进一个真实场景。</p>
+                <div class="showcase-demo">
+                  <div class="showcase-week" aria-hidden="true"><span>一</span><span>二</span><span class="selected">三</span><span>四</span><span>五</span><span>六</span><span>日</span></div>
+                  <strong>周末大扫除</strong>
+                  <p>Open the <mark>cupboard</mark>, fold the <mark>blanket</mark>, and tidy the room.</p>
+                  <div class="showcase-tags"><span>cupboard · 橱柜</span><span>blanket · 毯子</span><span>tidy · 整理</span></div>
+                  <div class="showcase-path">场景文章 <span>→</span> 核心词汇 <span>→</span> 词汇挑战</div>
+                </div>
+              </article>
+              <article class="showcase-slide" data-showcase-slide aria-label="2 / 3：语境精读" hidden>
+                <div class="showcase-heading"><span>02 · READING</span><small>功能示意</small></div>
+                <h2>语境精读</h2>
+                <p>从目标词出发，读懂文章，再检查自己的理解。</p>
+                <div class="showcase-demo">
+                  <div class="showcase-tags"><span>目标词 · journey</span><span>目标词 · discover</span></div>
+                  <strong>A journey beyond the city</strong>
+                  <p>Every <mark>journey</mark> is a chance to <mark>discover</mark> something new.</p>
+                  <div class="showcase-definition">journey /ˈdʒɜːni/ <span>旅行；旅程</span></div>
+                  <div class="showcase-path">阅读材料 <span>→</span> 词句理解 <span>→</span> 阅读检测</div>
+                </div>
+              </article>
+              <article class="showcase-slide" data-showcase-slide aria-label="3 / 3：复习" hidden>
+                <div class="showcase-heading"><span>03 · REVIEW</span><small>功能示意</small></div>
+                <h2>复习</h2>
+                <p>按记忆状态安排复习，让学过的词逐渐变熟悉。</p>
+                <div class="showcase-demo">
+                  <div class="showcase-review-meta"><span>到期词汇</span><span>专注练习</span></div>
+                  <div class="showcase-typing"><strong>journey</strong><span>/ˈdʒɜːni/ · 旅行；旅程</span></div>
+                  <div class="showcase-tags"><span>忘记了</span><span>有点模糊</span><span class="selected">记住了 ✓</span></div>
+                  <div class="showcase-path">到期队列 <span>→</span> 跟敲回忆 <span>→</span> 下次复习</div>
+                </div>
+              </article>
             </div>
-            <p>放弃，遗弃</p>
-            <div class="login-word-row">
-              <span>example</span>
-              <span>memory</span>
-              <span>review</span>
+            <div class="showcase-controls">
+              <button type="button" data-showcase-prev aria-label="上一个功能">‹</button>
+              <div class="showcase-dots" aria-label="选择功能">
+                <button type="button" data-showcase-index="0" aria-label="查看词汇大挑战" aria-current="true"></button>
+                <button type="button" data-showcase-index="1" aria-label="查看语境精读"></button>
+                <button type="button" data-showcase-index="2" aria-label="查看复习"></button>
+              </div>
+              <button type="button" data-showcase-next aria-label="下一个功能">›</button>
+              <button type="button" data-showcase-pause aria-label="暂停自动轮播">暂停</button>
             </div>
-          </div>
+          </section>
         </div>
 
         <section class="login-panel">
@@ -162,7 +201,7 @@
                       <p class="eyebrow">Activity</p>
                       <h3>学习活跃图</h3>
                     </div>
-                    <span class="mini-pill" id="activitySummary">0 学习 / 0 复习</span>
+                    <span class="mini-pill" id="activitySummary">0 学习 / 0 复习 / 0 场景</span>
                   </div>
                   <div id="activityHeatmap" class="activity-heatmap empty">暂无学习活跃数据</div>
                   <div class="activity-legend">
