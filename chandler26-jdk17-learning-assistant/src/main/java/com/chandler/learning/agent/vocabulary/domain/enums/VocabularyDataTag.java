@@ -14,8 +14,17 @@ import java.util.List;
 @Getter
 public enum VocabularyDataTag {
 
+    /** 小升初。 */
+    PRIMARY_TO_MIDDLE("primary_to_middle", "小升初"),
+
+    /** 高考。 */
+    NCEE("ncee", "高考"),
+
     /** 自考英语。 */
     SELF_STUDY("self_study", "自考"),
+
+    /** 托福考试。 */
+    TOEFL("toefl", "托福"),
 
     /** 大学英语四级。 */
     CET4("cet4", "四级"),
