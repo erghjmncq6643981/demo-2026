@@ -14,10 +14,6 @@ export function createArticleApi(request) {
       'article-records',
       `/api/v1/learning/articles?wordbookId=${id(wordbookId)}&page=${page}&pageSize=${pageSize}`,
     ),
-    createStudy: (payload) => request('/api/v1/learning/articles/study', {
-      method: 'POST',
-      body: JSON.stringify(payload),
-    }),
     createStudyAsync: (payload) => request('/api/v1/learning/articles/study/async', {
       method: 'POST',
       body: JSON.stringify(payload),

@@ -408,7 +408,7 @@ export function previewRecord(term = 'abandon') {
 }
 
 export function createPreviewActivity() {
-  const days = 365
+  const days = 90
   const items = Array.from({ length: days }, (_, index) => {
     const date = new Date()
     date.setDate(date.getDate() - (days - index - 1))

@@ -65,12 +65,23 @@ public class LearningSceneRelatedVocabularyService {
         LearningSceneMaterial material = requireCurrentMaterial(userId, planId, unit);
         int target = Math.max(1, Math.min(targetCount == null ? DEFAULT_TARGET_COUNT : targetCount,
                 MAX_TARGET_COUNT));
-        int current = count(material.getId());
+        List<LearningPlanUnitEntry> coreEntries = entryMapper.selectList(
+                new LambdaQueryWrapper<LearningPlanUnitEntry>()
+                        .eq(LearningPlanUnitEntry::getUnitId, unit.getId())
+                        .eq(LearningPlanUnitEntry::getTier, ScenePlanConstants.TIER_CORE)
+                        .eq(LearningPlanUnitEntry::getDeleted, false)
+                        .orderByAsc(LearningPlanUnitEntry::getSortOrder));
+        List<LearningSceneRelatedWord> existing = relatedWordMapper.selectList(
+                new LambdaQueryWrapper<LearningSceneRelatedWord>()
+                        .eq(LearningSceneRelatedWord::getSceneMaterialId, material.getId())
+                        .eq(LearningSceneRelatedWord::getDeleted, false));
+        int current = existing.size();
         int consecutiveZeroBatches = 0;
         while (current < target) {
             int batchTarget = Math.min(BATCH_SIZE, target - current);
-            int inserted = generateBatch(plan, unit, material, modelConfigId, batchTarget);
-            if (inserted == CommonConstants.ZERO) {
+            List<LearningSceneRelatedWord> inserted = generateBatch(
+                    plan, unit, material, modelConfigId, batchTarget, coreEntries, existing);
+            if (inserted.isEmpty()) {
                 consecutiveZeroBatches++;
                 if (consecutiveZeroBatches >= 2) {
                     if (current > 0) {
@@ -84,7 +95,8 @@ public class LearningSceneRelatedVocabularyService {
                 }
             } else {
                 consecutiveZeroBatches = 0;
-                current += inserted;
+                existing.addAll(inserted);
+                current += inserted.size();
             }
         }
         return current;
@@ -97,18 +109,10 @@ public class LearningSceneRelatedVocabularyService {
                 .eq(LearningSceneRelatedWord::getDeleted, false)));
     }
 
-    private int generateBatch(LearningPlan plan, LearningPlanUnit unit, LearningSceneMaterial material,
-                              Long modelConfigId, int targetCount) {
-        List<LearningPlanUnitEntry> coreEntries = entryMapper.selectList(
-                new LambdaQueryWrapper<LearningPlanUnitEntry>()
-                        .eq(LearningPlanUnitEntry::getUnitId, unit.getId())
-                        .eq(LearningPlanUnitEntry::getTier, ScenePlanConstants.TIER_CORE)
-                        .eq(LearningPlanUnitEntry::getDeleted, false)
-                        .orderByAsc(LearningPlanUnitEntry::getSortOrder));
-        List<LearningSceneRelatedWord> existing = relatedWordMapper.selectList(
-                new LambdaQueryWrapper<LearningSceneRelatedWord>()
-                        .eq(LearningSceneRelatedWord::getSceneMaterialId, material.getId())
-                        .eq(LearningSceneRelatedWord::getDeleted, false));
+    private List<LearningSceneRelatedWord> generateBatch(LearningPlan plan, LearningPlanUnit unit,
+                                                         LearningSceneMaterial material, Long modelConfigId,
+                                                         int targetCount, List<LearningPlanUnitEntry> coreEntries,
+                                                         List<LearningSceneRelatedWord> existing) {
         Map<String, Object> variables = new LinkedHashMap<>();
         variables.put("learning_purpose", plan.getLearningPurpose());
         variables.put("scene_title", unit.getTitle());
@@ -135,7 +139,7 @@ public class LearningSceneRelatedVocabularyService {
         AgentChatResponse response = aiChatService.chat(request);
         JsonNode root = response.requireStructuredRoot(AiInvocationScene.VOCABULARY_SCENE_RELATED_WORDS);
         JsonNode words = extractWordsNode(root);
-        if (words == null || !words.isArray()) return CommonConstants.ZERO;
+        if (words == null || !words.isArray()) return List.of();
 
         Set<String> excluded = new HashSet<>();
         coreEntries.stream().map(LearningPlanUnitEntry::getNormalizedTerm).filter(StringUtils::hasText)
@@ -176,11 +180,11 @@ public class LearningSceneRelatedVocabularyService {
             entity.setVersion(CommonConstants.ZERO);
             batch.add(entity);
         }
-        if (batch.isEmpty()) return CommonConstants.ZERO;
+        if (batch.isEmpty()) return List.of();
         Objects.requireNonNull(transactionTemplate.execute(status -> relatedWordMapper.insertBatch(batch)));
         log.info("用户场景相关词汇批次已保存 userId={} planId={} unitId={} materialId={} count={}",
                 plan.getUserId(), plan.getId(), unit.getId(), material.getId(), batch.size());
-        return batch.size();
+        return batch;
     }
 
     private JsonNode extractWordsNode(JsonNode root) {

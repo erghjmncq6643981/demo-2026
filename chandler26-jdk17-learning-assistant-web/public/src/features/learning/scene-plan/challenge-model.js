@@ -23,3 +23,13 @@ export function pendingChallengeWords(unit) {
   if (detailedWords.length) return detailedWords.filter((word) => !isWordComplete(word))
   return asArray(unit?.pendingChallengeWords).filter((word) => !isWordComplete(word))
 }
+
+// 日历摘要不携带词面，仅返回待挑战数量；详情加载后优先使用真实词面计算。
+export function pendingChallengeCount(unit) {
+  const detailedWords = asArray(unit?.words).filter((word) => word.tier === 'core')
+  if (detailedWords.length) return detailedWords.filter((word) => !isWordComplete(word)).length
+  const summaryWords = asArray(unit?.pendingChallengeWords)
+  if (summaryWords.length) return summaryWords.filter((word) => !isWordComplete(word)).length
+  const count = Number(unit?.pendingChallengeCount)
+  return Number.isFinite(count) && count >= 0 ? count : 0
+}

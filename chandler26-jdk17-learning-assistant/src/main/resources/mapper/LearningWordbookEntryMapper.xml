@@ -26,6 +26,173 @@
         <foreach collection="normalizedTerms" item="term" open="(" separator="," close=")">#{term}</foreach>
     </select>
 
+    <select id="selectSummaryPage"
+            resultType="com.chandler.learning.agent.vocabulary.domain.bo.WordbookEntrySummaryItem">
+        SELECT
+            e.id,
+            e.wordbook_id AS wordbookId,
+            e.vocabulary_id AS vocabularyId,
+            e.term,
+            e.normalized_term AS normalizedTerm,
+            COALESCE(
+                JSON_UNQUOTE(JSON_EXTRACT(e.snapshot_parsed_json, '$.phonetic.uk')),
+                JSON_UNQUOTE(JSON_EXTRACT(e.snapshot_parsed_json, '$.phonetic.us')),
+                JSON_UNQUOTE(JSON_EXTRACT(e.snapshot_parsed_json, '$.phonetic_uk')),
+                JSON_UNQUOTE(JSON_EXTRACT(e.snapshot_parsed_json, '$.phonetic_us'))
+            ) AS phonetic,
+            COALESCE(
+                JSON_UNQUOTE(JSON_EXTRACT(e.snapshot_parsed_json, '$.definitions[0].meaning')),
+                JSON_UNQUOTE(JSON_EXTRACT(e.snapshot_parsed_json, '$.definitions[0].cn')),
+                JSON_UNQUOTE(JSON_EXTRACT(e.snapshot_parsed_json, '$.definitions[0].definition')),
+                JSON_UNQUOTE(JSON_EXTRACT(e.snapshot_parsed_json, '$.meaning'))
+            ) AS meaningText,
+            e.status,
+            e.review_stage AS reviewStage,
+            e.mastery_score AS masteryScore,
+            e.last_review_time AS lastReviewTime,
+            e.next_review_time AS nextReviewTime,
+            e.review_count AS reviewCount,
+            e.correct_count AS correctCount,
+            e.wrong_count AS wrongCount,
+            e.card_status AS cardStatus,
+            e.create_time AS createTime
+        FROM learning_wordbook_entry e
+        WHERE e.user_id = #{userId}
+          AND e.wordbook_id = #{wordbookId}
+          AND e.deleted = 0
+        <if test="status != null and status != ''">
+          AND e.status = #{status}
+        </if>
+        <if test="keyword != null and keyword != ''">
+          AND (e.term LIKE CONCAT(#{keyword}, '%')
+               OR e.normalized_term LIKE CONCAT(LOWER(#{keyword}), '%'))
+        </if>
+        <if test="dueOnly">
+          AND e.next_review_time &lt;= #{now}
+        </if>
+        ORDER BY e.next_review_time ASC, e.create_time DESC
+    </select>
+
+    <select id="selectDueSummary"
+            resultType="com.chandler.learning.agent.vocabulary.domain.bo.WordbookEntrySummaryItem">
+        SELECT
+            e.id,
+            e.wordbook_id AS wordbookId,
+            e.vocabulary_id AS vocabularyId,
+            e.term,
+            e.normalized_term AS normalizedTerm,
+            COALESCE(
+                JSON_UNQUOTE(JSON_EXTRACT(e.snapshot_parsed_json, '$.phonetic.uk')),
+                JSON_UNQUOTE(JSON_EXTRACT(e.snapshot_parsed_json, '$.phonetic.us')),
+                JSON_UNQUOTE(JSON_EXTRACT(e.snapshot_parsed_json, '$.phonetic_uk')),
+                JSON_UNQUOTE(JSON_EXTRACT(e.snapshot_parsed_json, '$.phonetic_us'))
+            ) AS phonetic,
+            COALESCE(
+                JSON_UNQUOTE(JSON_EXTRACT(e.snapshot_parsed_json, '$.definitions[0].meaning')),
+                JSON_UNQUOTE(JSON_EXTRACT(e.snapshot_parsed_json, '$.definitions[0].cn')),
+                JSON_UNQUOTE(JSON_EXTRACT(e.snapshot_parsed_json, '$.definitions[0].definition')),
+                JSON_UNQUOTE(JSON_EXTRACT(e.snapshot_parsed_json, '$.meaning'))
+            ) AS meaningText,
+            e.status,
+            e.review_stage AS reviewStage,
+            e.mastery_score AS masteryScore,
+            e.last_review_time AS lastReviewTime,
+            e.next_review_time AS nextReviewTime,
+            e.review_count AS reviewCount,
+            e.correct_count AS correctCount,
+            e.wrong_count AS wrongCount,
+            e.card_status AS cardStatus,
+            e.create_time AS createTime
+        FROM learning_wordbook_entry e
+        WHERE e.user_id = #{userId}
+          AND e.wordbook_id = #{wordbookId}
+          AND e.deleted = 0
+          AND e.next_review_time &lt;= #{now}
+        ORDER BY e.next_review_time ASC, e.create_time DESC
+        LIMIT #{limit}
+    </select>
+
+    <select id="selectRestartSummary"
+            resultType="com.chandler.learning.agent.vocabulary.domain.bo.WordbookEntrySummaryItem">
+        SELECT
+            e.id,
+            e.wordbook_id AS wordbookId,
+            e.vocabulary_id AS vocabularyId,
+            e.term,
+            e.normalized_term AS normalizedTerm,
+            COALESCE(
+                JSON_UNQUOTE(JSON_EXTRACT(e.snapshot_parsed_json, '$.phonetic.uk')),
+                JSON_UNQUOTE(JSON_EXTRACT(e.snapshot_parsed_json, '$.phonetic.us')),
+                JSON_UNQUOTE(JSON_EXTRACT(e.snapshot_parsed_json, '$.phonetic_uk')),
+                JSON_UNQUOTE(JSON_EXTRACT(e.snapshot_parsed_json, '$.phonetic_us'))
+            ) AS phonetic,
+            COALESCE(
+                JSON_UNQUOTE(JSON_EXTRACT(e.snapshot_parsed_json, '$.definitions[0].meaning')),
+                JSON_UNQUOTE(JSON_EXTRACT(e.snapshot_parsed_json, '$.definitions[0].cn')),
+                JSON_UNQUOTE(JSON_EXTRACT(e.snapshot_parsed_json, '$.definitions[0].definition')),
+                JSON_UNQUOTE(JSON_EXTRACT(e.snapshot_parsed_json, '$.meaning'))
+            ) AS meaningText,
+            e.status,
+            e.review_stage AS reviewStage,
+            e.mastery_score AS masteryScore,
+            e.last_review_time AS lastReviewTime,
+            e.next_review_time AS nextReviewTime,
+            e.review_count AS reviewCount,
+            e.correct_count AS correctCount,
+            e.wrong_count AS wrongCount,
+            e.card_status AS cardStatus,
+            e.create_time AS createTime
+        FROM learning_wordbook_entry e
+        WHERE e.user_id = #{userId}
+          AND e.wordbook_id = #{wordbookId}
+          AND e.deleted = 0
+        ORDER BY e.last_review_time ASC, e.mastery_score ASC,
+                 e.next_review_time ASC, e.create_time DESC
+        LIMIT #{limit}
+    </select>
+
+    <select id="selectDailyActivity"
+            resultType="com.chandler.learning.agent.identity.domain.bo.LearningActivityDayBO">
+        SELECT activity_date AS activityDate,
+               SUM(learned_count) AS learnedCount,
+               SUM(review_count) AS reviewCount
+        FROM (
+            SELECT DATE(create_time) AS activity_date,
+                   COUNT(*) AS learned_count,
+                   0 AS review_count
+            FROM learning_wordbook_entry
+            WHERE user_id = #{userId}
+              AND deleted = 0
+              AND create_time &gt;= #{startTime}
+            GROUP BY DATE(create_time)
+            UNION ALL
+            SELECT DATE(create_time) AS activity_date,
+                   0 AS learned_count,
+                   COUNT(*) AS review_count
+            FROM learning_review_record
+            WHERE user_id = #{userId}
+              AND deleted = 0
+              AND create_time &gt;= #{startTime}
+            GROUP BY DATE(create_time)
+        ) activity
+        GROUP BY activity_date
+        ORDER BY activity_date ASC
+    </select>
+
+    <select id="selectDistinctAudioTerms" resultType="string">
+        SELECT normalized_term
+        FROM learning_wordbook_entry
+        WHERE deleted = 0
+          AND normalized_term IS NOT NULL
+          AND normalized_term &lt;&gt; ''
+        UNION
+        SELECT normalized_term
+        FROM english_vocabulary_study_record
+        WHERE deleted = 0
+          AND normalized_term IS NOT NULL
+          AND normalized_term &lt;&gt; ''
+    </select>
+
     <update id="restoreDeletedById">
         UPDATE learning_wordbook_entry
         SET deleted = 0

@@ -113,5 +113,6 @@ export function createInitialState() {
       sentencePitch: readNumberStorage('learning.sentencePitch', 1),
     },
     speechSaveTimer: null,
+    initializing: false,
   }
 }

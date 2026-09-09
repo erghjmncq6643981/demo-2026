@@ -32,10 +32,6 @@ export function createScenePlanApi(request) {
       `/api/v1/learning/plans/${id(planId)}/units/${id(unitId)}/start`,
       { method: 'POST' },
     ),
-    regenerateDay: (planId, payload) => request(
-      `/api/v1/learning/plans/${id(planId)}/units/regenerate-day`,
-      { method: 'POST', body: JSON.stringify(payload) },
-    ),
     submitAssessment: (planId, unitId, payload) => request(
       `/api/v1/learning/plans/${id(planId)}/units/${id(unitId)}/assessments`,
       { method: 'POST', body: JSON.stringify(payload) },
@@ -47,10 +43,6 @@ export function createScenePlanApi(request) {
     completeUnit: (planId, unitId) => request(
       `/api/v1/learning/plans/${id(planId)}/units/${id(unitId)}/complete`,
       { method: 'POST' },
-    ),
-    generateNext: (planId, payload) => request(
-      `/api/v1/learning/plans/${id(planId)}/units/next`,
-      { method: 'POST', body: JSON.stringify(payload) },
     ),
     scheduleNext: (planId, payload) => request(
       `/api/v1/learning/plans/${id(planId)}/units/next/async`,

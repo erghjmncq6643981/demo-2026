@@ -7,6 +7,7 @@ import org.apache.ibatis.annotations.Mapper;
 import org.apache.ibatis.annotations.Param;
 
 import java.util.Collection;
+import java.time.LocalDate;
 import java.util.List;
 
 @Mapper
@@ -20,6 +21,9 @@ public interface LearningPlanUnitMapper extends BaseMapper<LearningPlanUnit> {
      */
     Integer selectMaxUnitNoIncludingDeleted(@Param("planId") Long planId);
 
+    /** 聚合查询计划已生成的核心词数量，避免加载全部单元实体。 */
+    Integer selectGeneratedCoreCount(@Param("planId") Long planId);
+
     /**
      * 联表查询单元及其生效中的场景材料。
      *
@@ -30,4 +34,11 @@ public interface LearningPlanUnitMapper extends BaseMapper<LearningPlanUnit> {
     List<LearningPlanUnitItem> selectUnitsWithMaterial(
             @Param("planId") Long planId,
             @Param("unitIds") Collection<Long> unitIds);
+
+    /**
+     * 查询日历所需的单元摘要字段，不读取场景文章、翻译等大字段。
+     */
+    List<LearningPlanUnit> selectCalendarSummaries(@Param("planId") Long planId,
+                                                   @Param("from") LocalDate from,
+                                                   @Param("to") LocalDate to);
 }

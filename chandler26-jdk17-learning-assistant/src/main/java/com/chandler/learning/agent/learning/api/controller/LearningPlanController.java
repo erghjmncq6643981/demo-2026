@@ -6,9 +6,9 @@ import com.chandler.learning.agent.learning.api.response.LearningPlanCalendarDay
 import com.chandler.learning.agent.learning.api.request.LearningPlanCreateRequest;
 import com.chandler.learning.agent.learning.api.request.LearningPlanNextUnitRequest;
 import com.chandler.learning.agent.learning.api.response.LearningPlanResponse;
+import com.chandler.learning.agent.learning.api.response.LearningPlanUnitResponse;
 import com.chandler.learning.agent.learning.api.request.LearningPlanUpdateRequest;
 import com.chandler.learning.agent.learning.api.response.LearningPlanUnitEntryResponse;
-import com.chandler.learning.agent.learning.api.response.LearningPlanUnitResponse;
 import com.chandler.learning.agent.task.api.response.AiAsyncTaskResponse;
 import com.chandler.learning.agent.task.api.request.AiAsyncTaskScheduleRequest;
 import com.chandler.learning.agent.identity.domain.entity.LearningUser;
@@ -17,6 +17,7 @@ import com.chandler.learning.agent.vocabulary.api.response.VocabularyCardGenerat
 import com.chandler.learning.agent.learning.domain.entity.LearningPlanUnit;
 import com.chandler.learning.agent.security.CurrentUserContext;
 import com.chandler.learning.agent.learning.application.LearningPlanService;
+import com.chandler.learning.agent.learning.application.LearningPlanTaskSubmissionService;
 import com.chandler.learning.agent.task.application.AiAsyncTaskService;
 import com.chandler.learning.agent.vocabulary.application.VocabularyCardBatchService;
 import io.swagger.v3.oas.annotations.Operation;
@@ -36,8 +37,8 @@ import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 
 import java.time.LocalDate;
-import java.util.List;
 import java.util.HashMap;
+import java.util.List;
 import java.util.Map;
 
 /**
@@ -52,6 +53,7 @@ public class LearningPlanController {
 
     private final CurrentUserContext currentUserContext;
     private final LearningPlanService learningPlanService;
+    private final LearningPlanTaskSubmissionService taskSubmissionService;
     private final VocabularyCardBatchService cardBatchService;
     private final AiAsyncTaskService aiAsyncTaskService;
 
@@ -139,26 +141,31 @@ public class LearningPlanController {
         return learningPlanService.cancel(user.getId(), planId);
     }
 
-    /** 按学习计划生成指定日期的场景材料，超过 50 词自动均分多篇。 */
+    /** 兼容旧路径：只提交指定日期的场景材料任务，不在 HTTP 请求中调用 AI。 */
     @PostMapping("/{planId}/units/next")
-    @Operation(summary = "按学习计划生成指定日期的场景材料，超过 50 词自动均分多篇")
-    public List<LearningPlanUnitResponse> nextUnit(
+    @Operation(summary = "提交指定日期的场景材料任务（兼容路径）")
+    public AiAsyncTaskResponse nextUnit(
             @PathVariable Long planId,
             @RequestBody(required = false) LearningPlanNextUnitRequest request) {
         LearningUser user = currentUserContext.requireUser();
         Long modelConfigId = request == null ? null : request.getModelConfigId();
         LocalDate recommendedDate = request == null ? null : request.getRecommendedDate();
-        return learningPlanService.generateNextUnit(user.getId(), planId, modelConfigId, recommendedDate);
+        AiAsyncTaskResponse task = aiAsyncTaskService.toResponse(taskSubmissionService.submitNext(
+                user.getId(), planId, modelConfigId, recommendedDate,
+                com.chandler.learning.agent.task.domain.constant.AiTaskConstants.EXECUTION_IMMEDIATE,
+                null, null));
+        return task;
     }
 
-    /** 重新生成指定日期的场景材料。 */
+    /** 兼容旧路径：只提交指定日期的重生成任务，不在 HTTP 请求中调用 AI。 */
     @PostMapping("/{planId}/units/regenerate-day")
-    @Operation(summary = "重新生成指定日期的场景材料")
-    public List<LearningPlanUnitResponse> regenerateDayUnits(
+    @Operation(summary = "提交指定日期的场景材料重生成任务（兼容路径）")
+    public AiAsyncTaskResponse regenerateDayUnits(
             @PathVariable Long planId,
             @Valid @RequestBody com.chandler.learning.agent.learning.api.request.LearningPlanRegenerateDayRequest request) {
         LearningUser user = currentUserContext.requireUser();
-        return learningPlanService.regenerateDayUnits(user.getId(), planId, request.getModelConfigId(), request.getRecommendedDate());
+        return aiAsyncTaskService.toResponse(taskSubmissionService.submitRegeneration(
+                user.getId(), planId, request.getModelConfigId(), request.getRecommendedDate()));
     }
 
     /** 异步生成当天场景材料新版本，并保留旧版本历史。 */
@@ -168,21 +175,8 @@ public class LearningPlanController {
             @PathVariable Long planId,
             @Valid @RequestBody com.chandler.learning.agent.learning.api.request.LearningPlanRegenerateDayRequest request) {
         LearningUser user = currentUserContext.requireUser();
-        learningPlanService.detail(user.getId(), planId);
-        String idempotencyKey = "scene_material_regeneration:" + planId + ":" + request.getRecommendedDate();
-        var active = aiAsyncTaskService.findActiveByKey(user.getId(),
-                com.chandler.learning.agent.task.domain.constant.AiTaskConstants.TYPE_SCENE_MATERIAL_REGENERATION,
-                planId, idempotencyKey);
-        if (active != null) return aiAsyncTaskService.toResponse(active);
-        Map<String, Object> payload = new HashMap<>();
-        if (request.getModelConfigId() != null) payload.put("modelConfigId", request.getModelConfigId());
-        payload.put("recommendedDate", request.getRecommendedDate().toString());
-        var task = aiAsyncTaskService.create(user.getId(),
-                com.chandler.learning.agent.task.domain.constant.AiTaskConstants.TYPE_SCENE_MATERIAL_REGENERATION,
-                 "重新生成 " + request.getRecommendedDate() + " 场景材料", planId, null, null,
-                 com.chandler.learning.agent.task.domain.constant.AiTaskConstants.EXECUTION_IMMEDIATE,
-                 null, null, 3, idempotencyKey, payload);
-        return aiAsyncTaskService.toResponse(task);
+        return aiAsyncTaskService.toResponse(taskSubmissionService.submitRegeneration(
+                user.getId(), planId, request.getModelConfigId(), request.getRecommendedDate()));
     }
 
     /** 预约生成场景材料，任务由低价时段调度器执行。 */
@@ -193,22 +187,10 @@ public class LearningPlanController {
             @RequestBody(required = false) AiAsyncTaskScheduleRequest request) {
         LearningUser user = currentUserContext.requireUser();
         AiAsyncTaskScheduleRequest resolved = request == null ? new AiAsyncTaskScheduleRequest() : request;
-        learningPlanService.detail(user.getId(), planId);
         LocalDate taskDate = resolved.getRecommendedDate() == null ? LocalDate.now() : resolved.getRecommendedDate();
-        String idempotencyKey = "scene_material:" + planId + ":" + taskDate;
-        var activeTask = aiAsyncTaskService.findActiveSceneMaterialTask(user.getId(), planId, idempotencyKey);
-        if (activeTask != null) {
-            return aiAsyncTaskService.toResponse(activeTask);
-        }
-        Map<String, Object> payload = new HashMap<>();
-        if (resolved.getModelConfigId() != null) payload.put("modelConfigId", resolved.getModelConfigId());
-        if (resolved.getRecommendedDate() != null) payload.put("recommendedDate", resolved.getRecommendedDate().toString());
-        var task = aiAsyncTaskService.create(user.getId(),
-                com.chandler.learning.agent.task.domain.constant.AiTaskConstants.TYPE_SCENE_MATERIAL,
-                 "批量生成 " + taskDate + " 场景材料", planId, null, null,
-                 resolved.getExecutionMode(), resolved.getScheduledTime(), resolved.getPriority(), 1,
-                 idempotencyKey, payload);
-        return aiAsyncTaskService.toResponse(task);
+        return aiAsyncTaskService.toResponse(taskSubmissionService.submitNext(
+                user.getId(), planId, resolved.getModelConfigId(), taskDate,
+                resolved.getExecutionMode(), resolved.getScheduledTime(), resolved.getPriority()));
     }
 
     /** 开始或切换到已生成的场景单元。 */

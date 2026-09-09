@@ -48,7 +48,6 @@ import com.chandler.learning.agent.learning.domain.bo.PreparedUnitGroup;
 import com.chandler.learning.agent.learning.domain.bo.PreparedVocabularyBatch;
 import com.chandler.learning.agent.task.application.AiTaskExecutionService;
 import com.fasterxml.jackson.databind.JsonNode;
-import com.fasterxml.jackson.databind.ObjectMapper;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.context.ApplicationEventPublisher;
@@ -102,20 +101,21 @@ public class LearningPlanService {
     private final LearningPlanAssessmentSupport assessmentSupport;
     private final LearningPlanScenePersistenceService scenePersistenceService;
     private final LearningPlanProgressQueryService progressQueryService;
+    private final LearningPlanJsonSupport jsonSupport;
     private final ApplicationEventPublisher eventPublisher;
-    private final ObjectMapper objectMapper;
     private final TransactionTemplate transactionTemplate;
 
-    /**
-     * 创建自助学习计划；默认立即生成第一个场景单元。
-     */
+    /** 创建自助学习计划；首个场景只入队，AI 由异步任务执行。 */
     public LearningPlanResponse create(Long userId, LearningPlanCreateRequest request) {
         LearningPlan plan = Objects.requireNonNull(transactionTemplate.execute(status -> createPlan(userId, request)));
+        Long initialTaskId = null;
         if (ScenePlanConstants.STATUS_ACTIVE.equals(plan.getStatus())
                 && !Boolean.FALSE.equals(request.getGenerateFirstUnit())) {
-            generateNextUnit(userId, plan.getId(), request.getModelConfigId(), null);
+            initialTaskId = lifecycleService.scheduleInitialSceneTask(userId, plan, request.getModelConfigId());
         }
-        return detail(userId, plan.getId());
+        LearningPlanResponse response = detail(userId, plan.getId());
+        response.setInitialSceneTaskId(initialTaskId);
+        return response;
     }
 
     /** 在短事务中创建计划主体，AI 场景生成必须在该事务提交后执行。 */
@@ -169,11 +169,7 @@ public class LearningPlanService {
         boolean generateFirstUnit = Boolean.TRUE.equals(transactionTemplate.execute(status ->
                 lifecycleService.update(userId, requirePlan(userId, planId), request).generateFirstUnit()));
         if (generateFirstUnit) {
-            try {
-                generateNextUnit(userId, planId, request.getModelConfigId(), null);
-            } catch (RuntimeException ex) {
-                log.warn("计划状态已更新，但自动生成首个场景失败 planId={} error={}", planId, ex.getMessage());
-            }
+            lifecycleService.scheduleInitialSceneTask(userId, planMapper.selectById(planId), request.getModelConfigId());
         }
         return detail(userId, planId);
     }
@@ -297,30 +293,38 @@ public class LearningPlanService {
                     LearningErrorCode.LEARNING_PLAN_STATE_ERROR,
                     "指定日期没有可重新生成的场景材料");
         }
+        List<Long> unitIds = existingUnits.stream().map(LearningPlanUnit::getId).toList();
+        Map<Long, List<LearningPlanUnitEntry>> entriesByUnit = unitEntryMapper.selectList(
+                        new LambdaQueryWrapper<LearningPlanUnitEntry>()
+                                .in(LearningPlanUnitEntry::getUnitId, unitIds)
+                                .in(LearningPlanUnitEntry::getTier, List.of(
+                                        ScenePlanConstants.TIER_CORE,
+                                        ScenePlanConstants.TIER_REVIEW))
+                                .eq(LearningPlanUnitEntry::getDeleted, false)
+                                .orderByAsc(LearningPlanUnitEntry::getUnitId)
+                                .orderByAsc(LearningPlanUnitEntry::getSortOrder))
+                .stream()
+                .collect(Collectors.groupingBy(LearningPlanUnitEntry::getUnitId,
+                        LinkedHashMap::new, Collectors.toList()));
         List<LearningPlanUnitResponse> generatedUnits = new ArrayList<>();
         for (LearningPlanUnit unit : existingUnits) {
             renewGenerationLock(plan.getId(), lockToken);
-            generatedUnits.add(regenerateUnitVersion(userId, plan, unit, modelConfigId));
+            generatedUnits.add(regenerateUnitVersion(userId, plan, unit, modelConfigId,
+                    entriesByUnit.getOrDefault(unit.getId(), List.of())));
         }
 
         systemLogService.record(userId, SystemLogType.LEARNING_PLAN, "重新生成场景学习材料",
                 plan.getName() + "（" + resolvedRecommendedDate + "）");
         log.info("用户「{}」重新生成了场景计划「{}」在「{}」的材料，共 {} 篇",
                 userDisplayNameService.userName(userId), plan.getName(), resolvedRecommendedDate, generatedUnits.size());
+        invalidateCalendar(plan.getId());
 
         return List.copyOf(generatedUnits);
     }
 
     private LearningPlanUnitResponse regenerateUnitVersion(Long userId, LearningPlan plan,
-                                                           LearningPlanUnit unit, Long modelConfigId) {
-        List<LearningPlanUnitEntry> entries = unitEntryMapper.selectList(
-                new LambdaQueryWrapper<LearningPlanUnitEntry>()
-                        .eq(LearningPlanUnitEntry::getUnitId, unit.getId())
-                        .in(LearningPlanUnitEntry::getTier, List.of(
-                                ScenePlanConstants.TIER_CORE,
-                                ScenePlanConstants.TIER_REVIEW))
-                        .eq(LearningPlanUnitEntry::getDeleted, false)
-                        .orderByAsc(LearningPlanUnitEntry::getSortOrder));
+                                                           LearningPlanUnit unit, Long modelConfigId,
+                                                           List<LearningPlanUnitEntry> entries) {
         List<LearningPlanSceneContentService.SceneCandidate> coreWords = entries.stream()
                 .filter(entry -> ScenePlanConstants.TIER_CORE.equals(entry.getTier()))
                 .map(entry -> new LearningPlanSceneContentService.SceneCandidate(
@@ -460,6 +464,8 @@ public class LearningPlanService {
                 .stream().collect(Collectors.toMap(VocabularyCatalogEntry::getId, e -> e, (a, b) -> a));
 
         List<LearningPlanUnitResponse> generatedUnits = new ArrayList<>();
+        // 单元序号在进入 AI 分片循环前一次读取，避免每篇材料再次查询 MAX(unit_no)。
+        int nextUnitNo = nextUnitNo(plan.getId());
         for (PreparedUnitGroup group : batch.getUnitGroups()) {
             ensureAsyncTaskActive(taskId);
             List<VocabularyCatalogEntry> candidates = group.getCandidateEntryIds().stream()
@@ -467,8 +473,9 @@ public class LearningPlanService {
             List<VocabularyCatalogEntry> reviewWords = group.getReviewEntryIds() == null ? List.of()
                     : group.getReviewEntryIds().stream().map(entryMap::get).filter(Objects::nonNull).toList();
             generatedUnits.add(generateSingleUnit(userId, plan, modelConfigId, resolvedRecommendedDate,
-                    today, candidates, group.getTargetCount(), reviewWords, taskId));
+                    today, candidates, group.getTargetCount(), reviewWords, nextUnitNo++, taskId));
         }
+        invalidateCalendar(planId);
         return List.copyOf(generatedUnits);
     }
 
@@ -490,10 +497,9 @@ public class LearningPlanService {
     private LearningPlanUnitResponse generateSingleUnit(Long userId, LearningPlan plan, Long modelConfigId,
                                                         LocalDate resolvedRecommendedDate, LocalDate today,
                                                         List<VocabularyCatalogEntry> candidates, int targetWordCount,
-                                                        List<VocabularyCatalogEntry> reviewWords,
+                                                        List<VocabularyCatalogEntry> reviewWords, int unitNo,
                                                         Long asyncTaskId) {
         ensureAsyncTaskActive(asyncTaskId);
-        int unitNo = nextUnitNo(plan.getId());
         AgentChatResponse aiResponse = sceneContentService.generateScene(plan, unitNo, candidates, reviewWords,
                 targetWordCount, modelConfigId);
         ensureAsyncTaskActive(asyncTaskId);
@@ -522,10 +528,9 @@ public class LearningPlanService {
 
     /**
      * 在多个已生成场景之间切换当前学习单元。
-     * <p>
-     * 通过 Spring Event + 异步线程池持久化单元状态切换和审计日志，
-     * 接口主线程无需等待任何写库和锁竞争，实现 0 毫秒级极速响应。
+     * <p>状态事实在短事务内完成，提交后的审计日志通过事件异步处理。</p>
      */
+    @Transactional(rollbackFor = Exception.class)
     public LearningPlanResponse startUnit(Long userId, Long planId, Long unitId) {
         LearningPlan plan = requirePlan(userId, planId);
         if (!ScenePlanConstants.STATUS_ACTIVE.equals(plan.getStatus())) {
@@ -536,21 +541,39 @@ public class LearningPlanService {
         LearningPlanUnit unit = requireUnit(plan, unitId);
         if (ScenePlanConstants.UNIT_COMPLETED.equals(unit.getStatus())) {
             plan.setCurrentUnitId(unit.getId());
+            plan.setUpdateTime(LocalDateTime.now());
+            planMapper.updateById(plan);
             return responseAssembler.toPlanResponse(plan, false);
         }
         LocalDateTime now = LocalDateTime.now();
         boolean firstStart = unit.getStartedTime() == null;
         Long previousUnitId = plan.getCurrentUnitId();
 
-        // 内存中即时设置当前单元指针，构造极速响应
+        // 当前单元和计划指针是学习事实，必须在接口事务内一起提交。
+        if (previousUnitId != null && !Objects.equals(previousUnitId, unitId)) {
+            LearningPlanUnit previousUnit = unitMapper.selectById(previousUnitId);
+            if (previousUnit != null && ScenePlanConstants.UNIT_IN_PROGRESS.equals(previousUnit.getStatus())) {
+                previousUnit.setStatus(ScenePlanConstants.UNIT_READY);
+                previousUnit.setUpdateTime(now);
+                unitMapper.updateById(previousUnit);
+            }
+        }
+        unit.setStatus(ScenePlanConstants.UNIT_IN_PROGRESS);
+        if (firstStart) {
+            unit.setStartedTime(now);
+        }
+        unit.setUpdateTime(now);
+        unitMapper.updateById(unit);
         plan.setCurrentUnitId(unit.getId());
         plan.setUpdateTime(now);
+        planMapper.updateById(plan);
 
-        // 发布领域事件，由异步线程池执行单元状态切换与系统审计日志持久化
-        String traceId = org.slf4j.MDC.get("TraceId");
+        // 事务提交后异步写审计日志，不阻塞主流程，也不会改变状态结果。
+        String traceId = org.slf4j.MDC.get("traceId");
         eventPublisher.publishEvent(new LearningUnitStartedEvent(
                 userId, planId, unitId, previousUnitId, firstStart, now,
                 plan.getName(), unit.getTitle(), traceId));
+        invalidateCalendar(planId);
 
         return responseAssembler.toPlanResponse(plan, false);
     }
@@ -581,7 +604,7 @@ public class LearningPlanService {
         boolean correct;
         double typingAccuracy = 100D;
         if (ScenePlanConstants.ASSESSMENT_MEANING_CHOICE.equals(type)) {
-            correctAnswer = requiredText(question, "correct_answer", "correctAnswer", "answer");
+            correctAnswer = jsonSupport.requiredText(question, "correct_answer", "correctAnswer", "answer");
             correct = assessmentSupport.normalizeAnswer(request.getAnswer()).equals(assessmentSupport.normalizeAnswer(correctAnswer));
         } else {
             List<String> accepted = assessmentSupport.readStringList(ctx.getAcceptedSpellingsJson());
@@ -658,11 +681,14 @@ public class LearningPlanService {
         record.setDurationSeconds(request.getDurationMillis() == null ? null : Math.toIntExact(Math.min(Integer.MAX_VALUE, request.getDurationMillis() / 1000L)));
         record.setCreateTime(now);
         record.setUpdateTime(now);
+        // 答题流水是学习进度的事实记录，必须与状态更新在同一事务内落库；异步事件只负责审计日志。
+        reviewRecordMapper.insert(record);
 
         String userName = userDisplayNameService.userName(userId);
         eventPublisher.publishEvent(new LearningAssessmentSubmittedEvent(
                 userId, record, ctx.getPlanName(), ctx.getUnitTitle(),
                 ctx.getTerm(), result.getLabel(), masteryBefore, masteryAfter, userName));
+        wordbookService.evictDerivedCaches(userId);
 
         LearningAssessmentSubmitResponse response = new LearningAssessmentSubmitResponse();
         response.setUnitEntryId(ctx.getUnitEntryId());
@@ -729,12 +755,14 @@ public class LearningPlanService {
                 nextUnit.setUpdateTime(now);
                 unitMapper.updateById(nextUnit);
             }
-            if (vocabularySelector.nextCandidates(plan, progressQueryService.targetWordCount(plan)).isEmpty()
+            if (!catalogQueryService.hasAvailableEntriesForPlan(
+                        plan.getId(), userId, plan.getCatalogVersionId())
                     && !progressQueryService.hasIncompleteUnit(plan.getId())) {
                 plan.setStatus(ScenePlanConstants.STATUS_COMPLETED);
             }
             plan.setUpdateTime(now);
             planMapper.updateById(plan);
+            invalidateCalendar(plan.getId());
             systemLogService.record(userId, SystemLogType.LEARNING_PLAN, "完成场景学习单元",
                     plan.getName() + " / " + unit.getTitle());
             log.info("用户「{}」完成了计划「{}」中的场景「{}」，可继续手动生成下一个场景",
@@ -813,7 +841,7 @@ public class LearningPlanService {
         question.put("prompt", "请选择“" + entry.getTerm() + "”在当前场景中的正确含义");
         question.put("options", List.copyOf(options));
         question.put("correct_answer", entry.getMeaningText());
-        entry.setAssessmentJson(writeJson(question));
+        entry.setAssessmentJson(jsonSupport.writeJson(question));
     }
 
     /** 判断单次答题后是否已经满足当前计划要求的评测阶段。 */
@@ -855,11 +883,6 @@ public class LearningPlanService {
 
     private LocalDate resolveRecommendedDate(LearningPlan plan, LocalDate requested, LocalDate today) {
         LocalDate resolved = requested == null ? today : requested;
-        if (plan.getStartTime() != null && resolved.isBefore(plan.getStartTime().toLocalDate())) {
-            throw LearningAssistantException.badRequest(
-                    LearningErrorCode.LEARNING_PLAN_STATE_ERROR,
-                    "场景日期不能早于学习计划开始日期");
-        }
         if (plan.getEndTime() != null && resolved.isAfter(plan.getEndTime().toLocalDate())) {
             throw LearningAssistantException.badRequest(
                     LearningErrorCode.LEARNING_PLAN_STATE_ERROR,
@@ -892,47 +915,15 @@ public class LearningPlanService {
         return wordbookService.requireOwnedWordbook(userId, wordbookId);
     }
 
-    private JsonNode node(JsonNode node, String... keys) {
-        if (node == null) {
-            return null;
-        }
-        for (String key : keys) {
-            JsonNode value = node.path(key);
-            if (!value.isMissingNode() && !value.isNull()) {
-                return value;
-            }
-        }
-        return null;
-    }
-
-    private String requiredText(JsonNode node, String... keys) {
-        String value = text(node, keys);
-        if (!StringUtils.hasText(value)) {
-            throw sceneInvalid("AI 场景结果缺少字段: " + String.join("/", keys));
-        }
-        return value;
-    }
-
-    private String text(JsonNode node, String... keys) {
-        JsonNode value = node(node, keys);
-        return value != null && value.isValueNode() && StringUtils.hasText(value.asText())
-                ? value.asText().trim()
-                : null;
-    }
-
-    private String writeJson(Object value) {
-        try {
-            return objectMapper.writeValueAsString(value);
-        } catch (Exception ex) {
-            throw LearningAssistantException.system(
-                    LearningErrorCode.JSON_SERIALIZE_FAILED,
-                    "场景学习数据序列化失败",
-                    ex);
-        }
-    }
-
     private int value(Integer value) {
         return value == null ? CommonConstants.ZERO : value;
+    }
+
+    /** 清理日历摘要缓存；单元测试可不装配日历服务。 */
+    private void invalidateCalendar(Long planId) {
+        if (calendarService != null) {
+            calendarService.evict(planId);
+        }
     }
 
     private LearningAssistantException sceneInvalid(String message) {
@@ -965,11 +956,7 @@ public class LearningPlanService {
 
         // 如果未开始的计划首次启动，且当前无生成单元，则在事务提交后生成第一个单元。
         if (plan.getCurrentUnitId() == null) {
-            try {
-                generateNextUnit(userId, planId, null, null);
-            } catch (RuntimeException ex) {
-                log.warn("计划已恢复，但自动生成首个场景失败 planId={} error={}", planId, ex.getMessage());
-            }
+            lifecycleService.scheduleInitialSceneTask(userId, plan, null);
         }
         return detail(userId, planId);
     }

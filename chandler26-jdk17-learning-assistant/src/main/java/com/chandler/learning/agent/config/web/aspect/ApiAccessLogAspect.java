@@ -21,6 +21,7 @@ import java.lang.reflect.Method;
 import java.util.Collection;
 import java.util.LinkedHashMap;
 import java.util.Map;
+import java.util.concurrent.CompletionStage;
 
 /**
  * 统一记录 Controller 业务访问摘要，避免各接口重复编写计时和错误日志。
@@ -41,22 +42,43 @@ public class ApiAccessLogAspect {
         long startedAt = System.nanoTime();
         HttpServletRequest request = currentRequest();
         String operation = operationName(joinPoint);
+        String method = request == null ? "-" : request.getMethod();
+        String path = request == null ? "-" : request.getRequestURI();
+        String currentUserId = userId();
+        String currentTraceId = traceId();
         try {
             Object result = joinPoint.proceed();
-            log.debug("event=api_access operation={} method={} path={} userId={} traceId={} costMs={} success=true errorCode=- pagination={}",
-                    operation, request == null ? "-" : request.getMethod(),
-                    request == null ? "-" : request.getRequestURI(), userId(), traceId(), elapsedMs(startedAt),
-                    pagination(result));
+            if (result instanceof CompletionStage<?> stage) {
+                stage.whenComplete((value, error) -> logCompletion(operation, method, path, currentUserId,
+                        currentTraceId, startedAt, value, error));
+            } else {
+                log.info("event=api_access operation={} method={} path={} userId={} traceId={} costMs={} success=true errorCode=- pagination={}",
+                        operation, method, path, currentUserId, currentTraceId, elapsedMs(startedAt), pagination(result));
+            }
             return result;
         } catch (Throwable error) {
             String errorCode = error instanceof LearningAssistantException business
                     ? business.getErrorCode() : error.getClass().getSimpleName();
-            log.debug("event=api_access operation={} method={} path={} userId={} traceId={} costMs={} success=false errorCode={} pagination={}",
-                    operation, request == null ? "-" : request.getMethod(),
-                    request == null ? "-" : request.getRequestURI(), userId(), traceId(), elapsedMs(startedAt),
+            log.info("event=api_access operation={} method={} path={} userId={} traceId={} costMs={} success=false errorCode={} pagination={}",
+                    operation, method, path, currentUserId, currentTraceId, elapsedMs(startedAt),
                     errorCode, Map.of());
             throw error;
         }
+    }
+
+    /** CompletionStage 返回值在异步完成时记录真实耗时，避免把排队时间和业务执行结果丢失。 */
+    private void logCompletion(String operation, String method, String path, String userId, String traceId,
+                               long startedAt, Object value, Throwable error) {
+        if (error == null) {
+            log.info("event=api_access operation={} method={} path={} userId={} traceId={} costMs={} success=true errorCode=- pagination={}",
+                    operation, method, path, userId, traceId, elapsedMs(startedAt), pagination(value));
+            return;
+        }
+        Throwable cause = error.getCause() == null ? error : error.getCause();
+        String errorCode = cause instanceof LearningAssistantException business
+                ? business.getErrorCode() : cause.getClass().getSimpleName();
+        log.info("event=api_access operation={} method={} path={} userId={} traceId={} costMs={} success=false errorCode={} pagination={}",
+                operation, method, path, userId, traceId, elapsedMs(startedAt), errorCode, Map.of());
     }
 
     private String operationName(ProceedingJoinPoint joinPoint) {

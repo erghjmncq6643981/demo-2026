@@ -1,6 +1,7 @@
 import { hideModal } from '/src/shared/modal.js'
 import { syncCurrentWordbookId } from '/src/shared/wordbook.js'
 import { firstExample } from '/src/shared/vocabulary.js'
+import { bindKeyboardShortcuts } from '/src/app/keyboard-shortcuts.js'
 
 export function bindAppEvents(ctx) {
   const {
@@ -88,7 +89,6 @@ export function bindAppEvents(ctx) {
     handleSceneNoteCompositionEnd,
     setSceneNoteMode,
     toggleSceneNotePanel,
-    toggleSceneNotePreview,
     closeSceneNotePanel,
     closeSceneNoteModal,
     openCoreWordsModal,
@@ -141,10 +141,8 @@ export function bindAppEvents(ctx) {
     closeForgottenDetailModal,
     openStudyNoteDrawer,
     closeStudyNoteDrawer,
-    toggleStudyNoteDrawer,
     openMiniQuizModal,
     closeMiniQuizModal,
-    toggleReviewNoteDrawer,
     closeReviewNoteModal,
     toggleReviewNotePreview,
     saveReviewNote,
@@ -153,10 +151,6 @@ export function bindAppEvents(ctx) {
     setProfileTab,
     setSystemTab,
     systemManagement,
-    handleReviewKeydown,
-    handleSceneChallengeKeydown,
-    openQuickLookup,
-    closeQuickLookup,
   } = ctx
 
 elements.loginBtn?.addEventListener('click', () => loginOrRegister('login'))
@@ -527,155 +521,7 @@ elements.aiSessionNextBtn?.addEventListener('click', () => systemManagement?.cha
 elements.reloadSystemJobsBtn?.addEventListener('click', () => systemManagement?.loadJobs())
 elements.closeAiSessionDetailBtn?.addEventListener('click', () => systemManagement?.closeDetail())
 elements.aiSessionDetailModal?.addEventListener('click', (event) => { if (event.target === elements.aiSessionDetailModal) systemManagement?.closeDetail() })
-  document.addEventListener('keydown', (event) => {
-    const key = event.key
-    const keyLower = String(event.key || '').toLowerCase()
-    const code = String(event.code || '')
-    const isMetaOrCtrl = Boolean(event.metaKey || event.ctrlKey)
-    const activeTag = document.activeElement ? document.activeElement.tagName.toLowerCase() : ''
-    const isTyping = ['input', 'textarea', 'select'].includes(activeTag)
-    // 全局统一笔记快捷键：⌘E / Ctrl+E（全面去除 N 快捷键，彻底避免与跟敲/拼写等文本输入产生冲突）
-    const isNoteShortcut = isMetaOrCtrl && (keyLower === 'e' || code === 'KeyE')
-
-    // 1. 全局快速查词 (⌘K / Ctrl+K)
-    if (isMetaOrCtrl && (keyLower === 'k' || code === 'KeyK')) {
-      event.preventDefault()
-      event.stopPropagation()
-      if (elements.quickLookupModal && !elements.quickLookupModal.classList.contains('hidden')) {
-        closeQuickLookup?.()
-      } else {
-        openQuickLookup?.()
-      }
-      return
-    }
-    if (key === 'Escape' && elements.quickLookupModal && !elements.quickLookupModal.classList.contains('hidden')) {
-      event.preventDefault()
-      event.stopPropagation()
-      closeQuickLookup?.()
-      return
-    }
-
-    // 2. 5秒跟敲巩固模态弹窗
-    if (key === 'Escape' && elements.miniQuizModal && !elements.miniQuizModal.classList.contains('hidden')) {
-      event.preventDefault()
-      event.stopPropagation()
-      closeMiniQuizModal?.()
-      return
-    }
-
-    // 3. 单词本单词卡片弹窗 (#wordbookCardModal) 笔记快捷键
-    const isWordCardModalOpen = Boolean(elements.wordbookCardModal && !elements.wordbookCardModal.classList.contains('hidden'))
-    if (isWordCardModalOpen) {
-      if (isNoteShortcut) {
-        event.preventDefault()
-        event.stopPropagation()
-        if (state.selectedEntry) {
-          state.currentNoteEntry = state.selectedEntry
-        }
-        editCurrentNote?.()
-        return
-      }
-      if (key === 'Escape') {
-        const isEditingNote = Boolean(elements.wordbookFocus?.querySelector('.note-editor'))
-        if (isEditingNote) {
-          event.preventDefault()
-          event.stopPropagation()
-          elements.wordbookFocus?.querySelector('[data-cancel-note]')?.click()
-          return
-        }
-        event.preventDefault()
-        event.stopPropagation()
-        hideModal(elements.wordbookCardModal)
-        return
-      }
-    }
-
-    // 4. 卡片学习视图 (#studyView)
-    const isStudyView = state.activeView === 'studyView' || elements.studyView?.classList.contains('active')
-    if (isStudyView) {
-      const isKeyT = keyLower === 't' || code === 'KeyT'
-      // 统一笔记快捷键：⌘E / Ctrl+E
-      if (isNoteShortcut) {
-        event.preventDefault()
-        event.stopPropagation()
-        toggleStudyNoteDrawer?.()
-        return
-      }
-      // 跟敲快捷键 T 或 Alt+T：唤起跟敲弹窗
-      if ((isKeyT && !isTyping) || (event.altKey && isKeyT)) {
-        event.preventDefault()
-        event.stopPropagation()
-        openMiniQuizModal?.()
-        return
-      }
-      // Esc 处理：如果学习笔记抽屉打开，关闭抽屉
-      if (key === 'Escape') {
-        const isDrawerOpen = Boolean(elements.studyNoteDrawer && !elements.studyNoteDrawer.classList.contains('hidden'))
-        if (isDrawerOpen) {
-          event.preventDefault()
-          event.stopPropagation()
-          const isEditing = Boolean(elements.studyNoteDrawer.querySelector('.note-editor'))
-          if (isEditing) {
-            elements.studyNoteDrawer.querySelector('[data-cancel-note]')?.click()
-          } else {
-            closeStudyNoteDrawer?.()
-          }
-          return
-        }
-      }
-    }
-
-    // 5. 复习视图 (#reviewView)
-    const isReviewView = state.activeView === 'reviewView' || elements.reviewView?.classList.contains('active')
-    if (isReviewView) {
-      const isReviewDrawerOpen = Boolean(elements.reviewNoteModal && !elements.reviewNoteModal.classList.contains('hidden'))
-      if (isNoteShortcut) {
-        event.preventDefault()
-        event.stopPropagation()
-        if (isReviewDrawerOpen && isMetaOrCtrl && (keyLower === 'e' || code === 'KeyE')) {
-          toggleReviewNotePreview?.()
-        } else {
-          toggleReviewNoteDrawer?.()
-        }
-        return
-      }
-      if (key === 'Escape' && isReviewDrawerOpen) {
-        event.preventDefault()
-        event.stopPropagation()
-        closeReviewNoteModal?.()
-        return
-      }
-    }
-
-    // 6. 场景笔记全局快捷键：Cmd+E / Ctrl+E 切换编辑/预览或打开笔记，Esc 在编辑时退出到预览
-    const isSceneView = state.activeView === 'scenePlanView' || elements.scenePlanView?.classList.contains('active')
-    if (isSceneView) {
-      if (isNoteShortcut) {
-        event.preventDefault()
-        event.stopPropagation()
-        if (!state.sceneNotePanelOpen) {
-          toggleSceneNotePanel?.(true)
-          setSceneNoteMode?.('edit')
-        } else {
-          toggleSceneNotePreview?.()
-        }
-        return
-      }
-      if ((keyLower === 'escape' || code === 'Escape') && state.sceneNotePanelOpen) {
-        event.preventDefault()
-        event.stopPropagation()
-        if (state.sceneNoteMode === 'edit') {
-          setSceneNoteMode?.('preview')
-        } else {
-          closeSceneNotePanel?.()
-        }
-        return
-      }
-    }
-
-    handleReviewKeydown?.(event)
-    handleSceneChallengeKeydown?.(event)
-  })
+  bindKeyboardShortcuts(ctx)
 
   window.addEventListener('unhandledrejection', (event) => {
     const error = event.reason

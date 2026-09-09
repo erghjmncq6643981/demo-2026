@@ -84,6 +84,7 @@ class LearningPlanServiceSubmitAssessmentTest {
     private final ObjectMapper objectMapper = new ObjectMapper();
     private final ReviewSchedulePolicy reviewSchedulePolicy = new ReviewSchedulePolicy();
     private final LearningPlanAssessmentSupport assessmentSupport = new LearningPlanAssessmentSupport(objectMapper);
+    private final LearningPlanJsonSupport jsonSupport = new LearningPlanJsonSupport(objectMapper);
 
     private LearningPlanService service;
 
@@ -110,8 +111,8 @@ class LearningPlanServiceSubmitAssessmentTest {
                 assessmentSupport,
                 scenePersistenceService,
                 progressQueryService,
+                jsonSupport,
                 eventPublisher,
-                objectMapper,
                 transactionTemplate
         );
     }

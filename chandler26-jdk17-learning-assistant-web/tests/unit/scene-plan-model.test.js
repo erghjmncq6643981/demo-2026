@@ -3,7 +3,7 @@ import { localDateKey, number } from '../../public/src/features/learning/scene-p
 import { createUnitList } from '../../public/src/features/learning/scene-plan/unit-list.js'
 import { parsePreviewMarkdown, suggestedSplitCorrection } from '../../public/src/features/learning/scene-plan/markdown-parser.js'
 import { calendarDates, startOfWeek } from '../../public/src/features/learning/scene-plan/calendar-model.js'
-import { isWordComplete, nextAssessment, pendingChallengeWords } from '../../public/src/features/learning/scene-plan/challenge-model.js'
+import { isWordComplete, nextAssessment, pendingChallengeWords, pendingChallengeCount } from '../../public/src/features/learning/scene-plan/challenge-model.js'
 
 describe('scene plan model', () => {
   it('formats dates using the local calendar date', () => {
@@ -61,6 +61,10 @@ describe('场景挑战规则', () => {
       ],
     }
     expect(pendingChallengeWords(unit).map((word) => word.term)).toEqual(['one'])
+  })
+
+  it('日历摘要没有词面时使用服务端待挑战数量', () => {
+    expect(pendingChallengeCount({ coreWordCount: 40, completedCoreCount: 12, pendingChallengeCount: 28 })).toBe(28)
   })
 })
 

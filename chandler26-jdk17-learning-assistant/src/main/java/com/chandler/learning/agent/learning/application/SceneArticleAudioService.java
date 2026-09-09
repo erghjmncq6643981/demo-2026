@@ -427,7 +427,9 @@ public class SceneArticleAudioService {
             } catch (LearningAssistantException lae) {
                 throw lae;
             } catch (Exception ex) {
-                log.error("合成场景文章语音异常 unitId={}: {}", unitId, ex.getMessage(), ex);
+                log.warn("event=scene_audio result=failed unitId={} errorType={}",
+                        unitId, ex.getClass().getSimpleName());
+                log.debug("合成场景文章语音异常 unitId={}", unitId, ex);
                 throw LearningAssistantException.externalService(LearningErrorCode.EXTERNAL_SERVICE_CALL_FAILED, "语音合成失败: " + ex.getMessage(), ex);
             } finally {
                 unitLocks.remove(unitId);

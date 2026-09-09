@@ -47,6 +47,10 @@ public class LearningPlanUnitResponse {
     @Schema(description = "已完成核心词数量")
     private Integer completedCoreCount;
 
+    /** 日历摘要中的待挑战核心词数量；完整词面通过单元详情接口按需加载。 */
+    @Schema(description = "待挑战核心词数量")
+    private Integer pendingChallengeCount;
+
     @Schema(description = "建议学习日期")
     private LocalDate recommendedDate;
 

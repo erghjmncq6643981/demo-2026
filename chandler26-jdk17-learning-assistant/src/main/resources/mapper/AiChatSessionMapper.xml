@@ -91,8 +91,11 @@
         s.update_time AS updateTime
     </sql>
 
-    <sql id="adminSessionJoins">
+    <sql id="adminSessionUserJoin">
         LEFT JOIN learning_user u ON u.id = s.user_id
+    </sql>
+
+    <sql id="adminSessionMetricJoins">
         LEFT JOIN (
             SELECT session_id, COUNT(*) AS message_count
             FROM ai_chat_message
@@ -106,12 +109,17 @@
                    SUM(CASE WHEN success = 0 THEN 1 ELSE 0 END) AS failed_count,
                    COALESCE(SUM(total_tokens), 0) AS total_tokens,
                    COALESCE(ROUND(AVG(latency_ms)), 0) AS average_latency_ms,
-                   SUBSTRING_INDEX(GROUP_CONCAT(provider ORDER BY create_time DESC), ',', 1) AS last_provider,
-                   SUBSTRING_INDEX(GROUP_CONCAT(model_name ORDER BY create_time DESC), ',', 1) AS last_model_name
+                   SUBSTRING_INDEX(GROUP_CONCAT(provider ORDER BY create_time DESC, id DESC), ',', 1) AS last_provider,
+                   SUBSTRING_INDEX(GROUP_CONCAT(model_name ORDER BY create_time DESC, id DESC), ',', 1) AS last_model_name
             FROM ai_model_call_record
             WHERE deleted = 0
             GROUP BY session_id
         ) c ON c.session_id = s.id
+    </sql>
+
+    <sql id="adminSessionJoins">
+        <include refid="adminSessionUserJoin"/>
+        <include refid="adminSessionMetricJoins"/>
     </sql>
 
     <select id="selectAdminSessionPage"
@@ -127,7 +135,7 @@
     <select id="countAdminSessions" resultType="long">
         SELECT COUNT(*)
         FROM ai_chat_session s
-        LEFT JOIN learning_user u ON u.id = s.user_id
+        <include refid="adminSessionUserJoin"/>
         WHERE <include refid="adminSessionFilters"/>
     </select>
 

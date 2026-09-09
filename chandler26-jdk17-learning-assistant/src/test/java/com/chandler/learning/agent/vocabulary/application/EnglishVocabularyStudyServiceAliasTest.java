@@ -120,9 +120,11 @@ class EnglishVocabularyStudyServiceAliasTest {
                 """);
         appleRecord.setLookupCount(3);
 
-        // 第一调用 findByNormalizedTerm("apples") 返回 null，后续候选词 findByNormalizedTerm("apple") 返回 appleRecord
-        when(recordMapper.selectOne(any())).thenReturn(null, appleRecord);
+        // 直接查询未命中，候选词通过一次批量查询返回 appleRecord。
+        when(recordMapper.selectOne(any())).thenReturn(null);
+        when(recordMapper.selectList(any())).thenReturn(List.of(appleRecord));
         when(aliasMapper.findByNormalizedAlias(any())).thenReturn(null);
+        when(aliasMapper.findByNormalizedAliases(any())).thenReturn(List.of());
 
         VocabularyStudyRequest request = new VocabularyStudyRequest();
         request.setTerm("apples");
@@ -156,9 +158,11 @@ class EnglishVocabularyStudyServiceAliasTest {
                 """);
         modeRecord.setLookupCount(2);
 
-        // findByNormalizedTerm("modest") 返回 null, findByNormalizedTerm("mode") 返回 modeRecord
-        when(recordMapper.selectOne(any())).thenReturn(null, modeRecord);
+        // 直接查询未命中，候选词通过批量查询返回 modeRecord；非屈折词仍应拒绝误关联。
+        when(recordMapper.selectOne(any())).thenReturn(null);
+        when(recordMapper.selectList(any())).thenReturn(List.of(modeRecord));
         when(aliasMapper.findByNormalizedAlias(any())).thenReturn(null);
+        when(aliasMapper.findByNormalizedAliases(any())).thenReturn(List.of());
 
         EnglishVocabularyStudyRecord result = service.findRecord("modest");
         assertThat(result).isNull();

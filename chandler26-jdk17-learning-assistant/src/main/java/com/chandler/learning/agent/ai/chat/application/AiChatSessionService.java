@@ -44,6 +44,8 @@ public class AiChatSessionService {
     private static final int DEFAULT_ADMIN_PAGE_SIZE = 20;
     private static final int MAX_ADMIN_PAGE_SIZE = 100;
     private static final int MAX_SESSION_LIST_SIZE = 100;
+    /** 会话消息接口的单次返回上限，避免旧会话积累后把整段历史一次性传给前端。 */
+    private static final int MAX_SESSION_MESSAGES = 200;
     private static final int MAX_ADMIN_DETAIL_MESSAGES = 200;
     private static final int MAX_ADMIN_DETAIL_CALLS = 200;
 
@@ -123,6 +125,7 @@ public class AiChatSessionService {
     public List<AiChatMessage> getHistory(Long sessionId) {
         return messageMapper.selectList(new LambdaQueryWrapper<AiChatMessage>()
                 .eq(AiChatMessage::getSessionId, sessionId)
+                .eq(AiChatMessage::getDeleted, false)
                 .orderByDesc(AiChatMessage::getSequence)
                 .last("LIMIT " + AiChatConstants.MAX_HISTORY_SIZE))
                 .stream()
@@ -157,20 +160,30 @@ public class AiChatSessionService {
         return session == null ? null : toSessionResponse(session);
     }
 
-    /** 查询指定 AI 会话的消息列表。 */
-    public List<ChatMessageResponse> listMessages(Long sessionId) {
+    /** 查询指定 AI 会话的最近消息；按序返回且限制单次 payload 大小。 */
+    public List<ChatMessageResponse> listMessages(Long sessionId, Integer limit) {
         Long userId = currentUserId();
         if (userId == null || getOwnedSession(userId, sessionId) == null) {
             throw LearningAssistantException.notFound(
                     LearningErrorCode.CHAT_SESSION_NOT_FOUND,
                     "会话不存在: " + sessionId);
         }
+        int resolvedLimit = limit == null ? MAX_SESSION_MESSAGES
+                : Math.max(1, Math.min(limit, MAX_SESSION_MESSAGES));
         return messageMapper.selectList(new LambdaQueryWrapper<AiChatMessage>()
                         .eq(AiChatMessage::getSessionId, sessionId)
-                        .orderByAsc(AiChatMessage::getSequence))
+                        .eq(AiChatMessage::getDeleted, false)
+                        .orderByDesc(AiChatMessage::getSequence)
+                        .last("LIMIT " + resolvedLimit))
                 .stream()
+                .sorted((left, right) -> Integer.compare(left.getSequence(), right.getSequence()))
                 .map(this::toMessageResponse)
                 .toList();
+    }
+
+    /** 兼容旧调用方，默认读取最近 200 条消息。 */
+    public List<ChatMessageResponse> listMessages(Long sessionId) {
+        return listMessages(sessionId, MAX_SESSION_MESSAGES);
     }
 
     /** 更新 AI 会话标题。 */
@@ -279,6 +292,7 @@ public class AiChatSessionService {
         }
         List<ChatMessageResponse> messages = messageMapper.selectList(new LambdaQueryWrapper<AiChatMessage>()
                         .eq(AiChatMessage::getSessionId, sessionId)
+                        .eq(AiChatMessage::getDeleted, false)
                         .orderByDesc(AiChatMessage::getCreateTime)
                         .orderByDesc(AiChatMessage::getSequence)
                         .last("LIMIT " + MAX_ADMIN_DETAIL_MESSAGES))
@@ -314,7 +328,8 @@ public class AiChatSessionService {
         response.setCreateTime(session.getCreateTime());
         response.setUpdateTime(session.getUpdateTime());
         response.setMessageCount(messageMapper.selectCount(new LambdaQueryWrapper<AiChatMessage>()
-                .eq(AiChatMessage::getSessionId, session.getId())).intValue());
+                .eq(AiChatMessage::getSessionId, session.getId())
+                .eq(AiChatMessage::getDeleted, false)).intValue());
         return response;
     }
 

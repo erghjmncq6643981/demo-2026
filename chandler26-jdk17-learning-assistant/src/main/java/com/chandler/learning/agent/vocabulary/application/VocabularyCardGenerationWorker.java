@@ -22,7 +22,8 @@ public class VocabularyCardGenerationWorker {
         try {
             cardBatchService.executeJob(event.userId(), event.jobId(), event.modelConfigId());
         } catch (RuntimeException ex) {
-            log.error("event=vocabulary_card_job result=failed jobId={} error={}", event.jobId(), ex.getMessage());
+            log.warn("event=vocabulary_card_job result=failed jobId={} errorType={}",
+                    event.jobId(), ex.getClass().getSimpleName());
             log.debug("异步词卡任务执行失败 jobId={}", event.jobId(), ex);
         }
     }

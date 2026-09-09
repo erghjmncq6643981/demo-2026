@@ -8,6 +8,13 @@
         WHERE plan_id = #{planId}
     </select>
 
+    <select id="selectGeneratedCoreCount" resultType="java.lang.Integer">
+        SELECT COALESCE(SUM(core_word_count), 0)
+        FROM learning_plan_unit
+        WHERE plan_id = #{planId}
+          AND deleted = 0
+    </select>
+
     <select id="selectUnitsWithMaterial" resultType="com.chandler.learning.agent.learning.domain.bo.LearningPlanUnitItem">
         SELECT
             u.id,
@@ -47,5 +54,35 @@
               </foreach>
           </if>
         ORDER BY u.unit_no ASC
+    </select>
+
+    <select id="selectCalendarSummaries"
+            resultType="com.chandler.learning.agent.learning.domain.entity.LearningPlanUnit">
+        SELECT
+            u.id,
+            u.plan_id AS planId,
+            u.unit_no AS unitNo,
+            u.title,
+            u.scenario_type AS scenarioType,
+            u.summary,
+            u.status,
+            u.core_word_count AS coreWordCount,
+            u.extended_word_count AS extendedWordCount,
+            u.supplementary_word_count AS supplementaryWordCount,
+            u.completed_core_count AS completedCoreCount,
+            u.scene_material_id AS sceneMaterialId,
+            u.recommended_date AS recommendedDate,
+            u.generated_time AS generatedTime,
+            u.started_time AS startedTime,
+            u.completed_time AS completedTime,
+            u.create_time AS createTime,
+            u.update_time AS updateTime,
+            u.deleted,
+            u.version
+        FROM learning_plan_unit u
+        WHERE u.plan_id = #{planId}
+          AND u.recommended_date BETWEEN #{from} AND #{to}
+          AND u.deleted = 0
+        ORDER BY u.recommended_date ASC, u.unit_no ASC
     </select>
 </mapper>

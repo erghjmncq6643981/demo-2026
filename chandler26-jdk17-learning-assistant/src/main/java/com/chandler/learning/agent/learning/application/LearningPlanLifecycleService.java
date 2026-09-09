@@ -16,6 +16,7 @@ import org.springframework.stereotype.Service;
 import org.springframework.util.StringUtils;
 
 import java.time.LocalDateTime;
+import java.time.LocalDate;
 
 /** 学习计划的编辑、暂停、恢复和取消等生命周期状态转换。 */
 @Slf4j
@@ -27,6 +28,7 @@ public class LearningPlanLifecycleService {
     private final WordbookService wordbookService;
     private final SystemLogService systemLogService;
     private final UserDisplayNameService userDisplayNameService;
+    private final LearningPlanTaskSubmissionService taskSubmissionService;
 
     /** 更新计划基础信息与状态，并告知调用方是否需要在事务提交后生成首个场景。 */
     public UpdateOutcome update(Long userId, LearningPlan plan, LearningPlanUpdateRequest request) {
@@ -122,5 +124,16 @@ public class LearningPlanLifecycleService {
     }
 
     public record UpdateOutcome(boolean generateFirstUnit) {
+    }
+
+    /** 将首个场景生成提交到统一任务中心，只持久化任务，不触发 AI/HTTP。 */
+    public Long scheduleInitialSceneTask(Long userId, LearningPlan plan, Long modelConfigId) {
+        if (plan == null || !ScenePlanConstants.STATUS_ACTIVE.equals(plan.getStatus())) {
+            return null;
+        }
+        var task = taskSubmissionService.submitInitial(userId, plan.getId(), modelConfigId);
+        log.info("用户提交首个场景生成任务 userId={} planId={} taskId={} date={}",
+                userId, plan.getId(), task.getId(), LocalDate.now());
+        return task.getId();
     }
 }

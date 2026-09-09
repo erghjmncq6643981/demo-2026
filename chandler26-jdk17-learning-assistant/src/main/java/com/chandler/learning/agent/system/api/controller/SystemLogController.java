@@ -1,6 +1,7 @@
 package com.chandler.learning.agent.system.api.controller;
 
 import com.chandler.learning.agent.system.api.response.SystemLogResponse;
+import com.chandler.learning.agent.system.api.response.SystemLogPageResponse;
 import com.chandler.learning.agent.system.api.request.SystemLogRequest;
 import com.chandler.learning.agent.identity.domain.entity.LearningUser;
 import com.chandler.learning.agent.security.CurrentUserContext;
@@ -41,6 +42,16 @@ public class SystemLogController {
             @RequestParam(defaultValue = SystemLogConstants.DEFAULT_LIMIT_PARAM) Integer limit) {
         LearningUser user = currentUserContext.requireUser();
         return systemLogService.list(user.getId(), limit == null ? SystemLogConstants.DEFAULT_LIMIT : limit);
+    }
+
+    /** 分页查询系统日志，个人中心按需加载当前页。 */
+    @GetMapping("/page")
+    @Operation(summary = "分页查询系统日志")
+    public SystemLogPageResponse page(
+            @RequestParam(defaultValue = "1") Integer page,
+            @RequestParam(defaultValue = SystemLogConstants.DEFAULT_LIMIT_PARAM) Integer pageSize) {
+        LearningUser user = currentUserContext.requireUser();
+        return systemLogService.page(user.getId(), page, pageSize);
     }
 
     /** 接收前端产品交互日志并异步写入；日志排队不阻断当前用户操作。 */

@@ -71,6 +71,32 @@ public class AsyncTaskConfig {
                 new ThreadPoolExecutor.CallerRunsPolicy());
     }
 
+    /** 读模型后台计算使用独立有界线程池，队列满时拒绝而不回压 Web 请求线程。 */
+    @Bean("readQueryExecutor")
+    public Executor readQueryExecutor() {
+        return createExecutor(
+                1,
+                2,
+                50,
+                60,
+                30,
+                "learning-query-",
+                new ThreadPoolExecutor.AbortPolicy());
+    }
+
+    /** 音频、索引等低优先级维护任务使用独立线程池，避免占用 AI 或学习事件执行器。 */
+    @Bean("maintenanceExecutor")
+    public Executor maintenanceExecutor() {
+        return createExecutor(
+                1,
+                2,
+                4,
+                60,
+                30,
+                "learning-maintenance-",
+                new ThreadPoolExecutor.AbortPolicy());
+    }
+
     private ThreadPoolTaskExecutor createExecutor(
             int corePoolSize,
             int maxPoolSize,

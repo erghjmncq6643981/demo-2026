@@ -10,6 +10,7 @@ import com.chandler.learning.agent.learning.domain.entity.LearningPlan;
 import com.chandler.learning.agent.learning.domain.entity.LearningPlanUnit;
 import com.chandler.learning.agent.learning.domain.entity.LearningPlanUnitEntry;
 import com.chandler.learning.agent.learning.domain.bo.LearningPlanUnitEntryItem;
+import com.chandler.learning.agent.learning.domain.bo.LearningAssessmentPassBO;
 import com.chandler.learning.agent.learning.domain.bo.LearningPlanUnitItem;
 import com.chandler.learning.agent.learning.domain.bo.LearningPlanUnitWordSummaryItem;
 import com.chandler.learning.agent.learning.domain.entity.LearningReviewRecord;
@@ -117,20 +118,18 @@ public class LearningPlanResponseAssembler {
                 .filter(Objects::nonNull)
                 .distinct()
                 .toList();
-        Map<Long, Set<String>> passedByEntry = wordbookEntryIds.isEmpty()
+        Map<String, Set<String>> passedByUnitEntry = wordbookEntryIds.isEmpty()
                 ? Map.of()
-                : reviewRecordMapper.selectList(new LambdaQueryWrapper<LearningReviewRecord>()
-                                .in(LearningReviewRecord::getEntryId, wordbookEntryIds)
-                                .in(LearningReviewRecord::getUnitId, unitIds)
-                                .eq(LearningReviewRecord::getCheckResult, ScenePlanConstants.CHECK_CORRECT)
-                                .eq(LearningReviewRecord::getDeleted, false))
+                : reviewRecordMapper.selectPassedAssessmentTypesByUnits(unitIds, wordbookEntryIds)
                         .stream()
-                        .filter(record -> record.getEntryId() != null && record.getAssessmentType() != null)
-                        .collect(Collectors.groupingBy(LearningReviewRecord::getEntryId,
-                                Collectors.mapping(LearningReviewRecord::getAssessmentType, Collectors.toSet())));
+                        .filter(item -> item.getUnitId() != null && item.getEntryId() != null
+                                && item.getAssessmentType() != null)
+                        .collect(Collectors.groupingBy(item -> unitEntryKey(item.getUnitId(), item.getEntryId()),
+                                Collectors.mapping(LearningAssessmentPassBO::getAssessmentType, Collectors.toSet())));
         Map<Long, List<LearningPlanUnitWordSummaryResponse>> wordsByUnit = entries.stream()
                 .collect(Collectors.groupingBy(LearningPlanUnitWordSummaryItem::getUnitId,
-                        Collectors.mapping(entry -> toWordSummaryResponse(entry, passedByEntry.getOrDefault(entry.getWordbookEntryId(), Set.of())),
+                        Collectors.mapping(entry -> toWordSummaryResponse(entry,
+                                        passedByUnitEntry.getOrDefault(unitEntryKey(entry.getUnitId(), entry.getWordbookEntryId()), Set.of())),
                                 Collectors.toList())));
         return units.stream()
                 .map(unit -> toUnitSummaryResponse(unit, wordsByUnit.getOrDefault(unit.getId(), List.of())))
@@ -151,6 +150,8 @@ public class LearningPlanResponseAssembler {
         response.setExtendedWordCount(unit.getExtendedWordCount());
         response.setSupplementaryWordCount(unit.getSupplementaryWordCount());
         response.setCompletedCoreCount(unit.getCompletedCoreCount());
+        response.setPendingChallengeCount(Math.max(0,
+                value(unit.getCoreWordCount()) - value(unit.getCompletedCoreCount())));
         response.setRecommendedDate(unit.getRecommendedDate());
         response.setSceneMaterialId(unit.getSceneMaterialId());
         response.setMaterialAvailable(unit.getSceneMaterialId() != null);
@@ -185,6 +186,10 @@ public class LearningPlanResponseAssembler {
         Long entryId = item.getWordbookEntryId() == null ? -1L : item.getWordbookEntryId();
         response.setCompleted(!isPending(item, Map.of(entryId, passedAssessments)));
         return response;
+    }
+
+    private String unitEntryKey(Long unitId, Long entryId) {
+        return String.valueOf(unitId) + ':' + String.valueOf(entryId);
     }
 
     /** 装配单个词条，适用于提升词汇等单条命令响应。 */
@@ -376,5 +381,10 @@ public class LearningPlanResponseAssembler {
             response.setCardStatus(progress.getCardStatus());
         }
         return response;
+    }
+
+    /** 将数据库中的可空计数安全转换为非负整数。 */
+    private int value(Integer count) {
+        return count == null ? 0 : Math.max(0, count);
     }
 }

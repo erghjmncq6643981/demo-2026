@@ -3,6 +3,10 @@ package com.chandler.learning.agent.vocabulary.application;
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import com.baomidou.mybatisplus.core.conditions.update.LambdaUpdateWrapper;
 import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
+import com.github.benmanes.caffeine.cache.Cache;
+import com.github.benmanes.caffeine.cache.Caffeine;
+import com.chandler.learning.agent.vocabulary.domain.bo.WordbookEntrySummaryItem;
+import com.chandler.learning.agent.identity.domain.bo.LearningActivityDayBO;
 import com.chandler.learning.agent.vocabulary.api.request.AddWordbookEntryRequest;
 import com.chandler.learning.agent.identity.api.response.LearningActivityDayResponse;
 import com.chandler.learning.agent.identity.api.response.LearningActivityResponse;
@@ -43,12 +47,16 @@ import com.chandler.learning.agent.common.exception.LearningErrorCode;
 import com.chandler.learning.agent.identity.domain.constant.LearningActivityConstants;
 import com.chandler.learning.agent.vocabulary.domain.constant.ReviewConstants;
 import com.chandler.learning.agent.vocabulary.domain.constant.VocabularyCardConstants;
+import com.chandler.learning.agent.task.application.AiAsyncTaskService;
+import com.chandler.learning.agent.task.domain.constant.AiTaskConstants;
+import com.chandler.learning.agent.task.domain.entity.AiAsyncTask;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.util.StringUtils;
+import org.springframework.beans.factory.annotation.Qualifier;
 
 import java.time.LocalDateTime;
 import java.time.LocalDate;
@@ -59,6 +67,9 @@ import java.util.List;
 import java.util.Locale;
 import java.util.Map;
 import java.util.Objects;
+import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.Executor;
 
 /**
  * 单词本与复习计划服务。
@@ -69,6 +80,17 @@ import java.util.Objects;
 @Service
 @RequiredArgsConstructor
 public class WordbookService {
+
+    /** 活动统计是读多写少的派生数据，短 TTL 避免个人中心反复聚合历史记录。 */
+    private final Cache<String, LearningActivityResponse> activityCache = Caffeine.newBuilder()
+            .maximumSize(2000)
+            .expireAfterWrite(java.time.Duration.ofSeconds(30))
+            .build();
+    /** 单词本列表仅包含数量和状态等摘要，短 TTL 减少个人中心切换时的重复联表统计。 */
+    private final Cache<Long, List<WordbookResponse>> wordbookSummaryCache = Caffeine.newBuilder()
+            .maximumSize(2000)
+            .expireAfterWrite(java.time.Duration.ofSeconds(15))
+            .build();
 
     private static final int WRITE_BATCH_SIZE = 200;
 
@@ -83,6 +105,34 @@ public class WordbookService {
     private final ObjectMapper objectMapper;
     private final ReviewSchedulePolicy reviewSchedulePolicy;
     private final WordbookResponseAssembler responseAssembler;
+    private final AiAsyncTaskService aiAsyncTaskService;
+    /** 活动统计不属于页面首屏关键路径，使用独立查询线程池异步聚合。 */
+    @Qualifier("readQueryExecutor")
+    private final Executor readQueryExecutor;
+    private final ConcurrentHashMap<String, CompletableFuture<LearningActivityResponse>> activityRequests =
+            new ConcurrentHashMap<>();
+    /** 用户级活动数据版本；写入发生后，旧的异步查询结果不得回填缓存。 */
+    private final ConcurrentHashMap<Long, Long> activityVersions = new ConcurrentHashMap<>();
+
+    /** 异步读取活动统计；缓存未命中时不会占用 Web 请求线程。 */
+    public CompletableFuture<LearningActivityResponse> activityAsync(Long userId, int days) {
+        int resolvedDays = Math.max(LearningActivityConstants.MIN_DAYS,
+                Math.min(days, LearningActivityConstants.MAX_DAYS));
+        long version = activityVersion(userId);
+        String cacheKey = activityCacheKey(userId, resolvedDays, version);
+        LearningActivityResponse cached = activityCache.getIfPresent(cacheKey);
+        if (cached != null) {
+            return CompletableFuture.completedFuture(cached);
+        }
+        return activityRequests.computeIfAbsent(cacheKey, key ->
+                CompletableFuture.supplyAsync(() -> loadActivity(userId, resolvedDays), readQueryExecutor)
+                        .whenComplete((value, error) -> {
+                            activityRequests.remove(key);
+                            if (error == null && activityVersion(userId) == version) {
+                                activityCache.put(key, value);
+                            }
+                        }));
+    }
 
     /** 按用户批量统计有效个人单词本数，供系统用户中心使用。 */
     public Map<Long, Integer> countByUserIds(java.util.Collection<Long> userIds) {
@@ -167,6 +217,7 @@ public class WordbookService {
         for (int start = 0; start < upserts.size(); start += WRITE_BATCH_SIZE) {
             entryMapper.upsertLearningBatch(upserts.subList(start, Math.min(start + WRITE_BATCH_SIZE, upserts.size())));
         }
+        invalidateWordbookCache(userId);
         List<String> normalizedTerms = new ArrayList<>(uniqueCommands.keySet());
         Map<String, LearningWordbookEntry> result = new LinkedHashMap<>();
         entryMapper.selectByNormalizedTermsIncludingDeleted(wordbookId, normalizedTerms).forEach(entry ->
@@ -188,6 +239,7 @@ public class WordbookService {
         LocalDateTime now = LocalDateTime.now();
         LearningWordbook wordbook = LearningWordbook.createDefault(userId, now);
         wordbookMapper.insert(wordbook);
+        invalidateWordbookCache(userId);
         systemLogService.record(userId, SystemLogType.WORDBOOK, "创建默认单词本", wordbook.getName());
         log.info("用户「{}」创建了默认单词本「{}」", userDisplayNameService.userName(userId), wordbook.getName());
         return wordbook;
@@ -195,8 +247,14 @@ public class WordbookService {
 
     /** 查询当前用户的个人单词本列表。 */
     public List<WordbookResponse> listWordbooks(Long userId) {
+        List<WordbookResponse> cached = wordbookSummaryCache.getIfPresent(userId);
+        if (cached != null) {
+            return cached;
+        }
         ensureDefaultWordbook(userId);
-        return wordbookMapper.selectWordbookSummaries(userId);
+        List<WordbookResponse> result = List.copyOf(wordbookMapper.selectWordbookSummaries(userId));
+        wordbookSummaryCache.put(userId, result);
+        return result;
     }
 
     /** 创建当前用户的个人单词本。 */
@@ -209,6 +267,7 @@ public class WordbookService {
         LearningWordbook wordbook = LearningWordbook.create(userId, request.getName().trim(),
                 trimToNull(request.getDescription()), Boolean.TRUE.equals(request.getIsDefault()), now);
         wordbookMapper.insert(wordbook);
+        invalidateWordbookCache(userId);
         systemLogService.record(userId, SystemLogType.WORDBOOK, "创建单词本", wordbook.getName());
         log.info("用户「{}」创建了单词本「{}」，是否设为默认：{}",
                 userDisplayNameService.userName(userId),
@@ -226,6 +285,7 @@ public class WordbookService {
         wordbook.updateProfile(request.getName().trim(), trimToNull(request.getDescription()),
                 Boolean.TRUE.equals(request.getIsDefault()), LocalDateTime.now());
         wordbookMapper.updateById(wordbook);
+        invalidateWordbookCache(userId);
         systemLogService.record(userId, SystemLogType.WORDBOOK, "更新单词本", wordbook.getName());
         log.info("用户「{}」更新了单词本「{}」，是否设为默认：{}",
                 userDisplayNameService.userName(userId),
@@ -257,7 +317,6 @@ public class WordbookService {
                 .eq(LearningWordbookEntry::getUserId, userId)
                 .eq(LearningWordbookEntry::getWordbookId, wordbookId)
                 .eq(LearningWordbookEntry::getDeleted, false));
-
         LearningWordbook nextDefault = wordbookMapper.selectOne(new LambdaQueryWrapper<LearningWordbook>()
                 .eq(LearningWordbook::getUserId, userId)
                 .eq(LearningWordbook::getDeleted, false)
@@ -267,6 +326,7 @@ public class WordbookService {
             nextDefault.changeDefault(true, now);
             wordbookMapper.updateById(nextDefault);
         }
+        invalidateWordbookCache(userId);
         systemLogService.record(userId, SystemLogType.WORDBOOK, "删除单词本", wordbook.getName());
         log.info("用户「{}」删除了单词本「{}」", userDisplayNameService.userName(userId), wordbook.getName());
         log.debug("单词本删除后重新选择默认单词本 userId={} deletedWordbookId={} nextDefaultId={}",
@@ -292,6 +352,7 @@ public class WordbookService {
                     userDisplayNameService.userName(userId),
                     source.getNormalizedTerm(),
                     targetWordbook.getName());
+            invalidateWordbookCache(userId);
             return responseAssembler.toEntryResponse(clone);
         }
         source.moveTo(targetWordbook.getId(), now);
@@ -302,12 +363,28 @@ public class WordbookService {
                 userDisplayNameService.userName(userId),
                 source.getNormalizedTerm(),
                 targetWordbook.getName());
+        invalidateWordbookCache(userId);
         return responseAssembler.toEntryResponse(source);
     }
 
     /** 查询学习活动统计。 */
     public LearningActivityResponse activity(Long userId, int days) {
         int resolvedDays = Math.max(LearningActivityConstants.MIN_DAYS, Math.min(days, LearningActivityConstants.MAX_DAYS));
+        long version = activityVersion(userId);
+        String cacheKey = activityCacheKey(userId, resolvedDays, version);
+        LearningActivityResponse cached = activityCache.getIfPresent(cacheKey);
+        if (cached != null) {
+            return cached;
+        }
+        LearningActivityResponse response = loadActivity(userId, resolvedDays);
+        if (activityVersion(userId) == version) {
+            activityCache.put(cacheKey, response);
+        }
+        return response;
+    }
+
+    /** 执行活动统计聚合；不负责缓存，避免同步和异步入口互相覆盖版本。 */
+    private LearningActivityResponse loadActivity(Long userId, int resolvedDays) {
         LocalDate endDate = LocalDate.now();
         LocalDate startDate = endDate.minusDays(resolvedDays - 1L);
         LocalDateTime startTime = startDate.atStartOfDay();
@@ -323,23 +400,13 @@ public class WordbookService {
             dayMap.put(date, item);
         }
 
-        List<LearningWordbookEntry> learned = entryMapper.selectList(new LambdaQueryWrapper<LearningWordbookEntry>()
-                .eq(LearningWordbookEntry::getUserId, userId)
-                .ge(LearningWordbookEntry::getCreateTime, startTime));
-        for (LearningWordbookEntry entry : learned) {
-            LocalDate date = entry.getCreateTime() == null ? null : entry.getCreateTime().toLocalDate();
+        List<LearningActivityDayBO> aggregated = entryMapper.selectDailyActivity(userId, startTime);
+        for (LearningActivityDayBO activity : aggregated) {
+            LocalDate date = activity.getActivityDate();
             LearningActivityDayResponse item = dayMap.get(date);
             if (item != null) {
-                item.setLearnedCount(nullToZero(item.getLearnedCount()) + CommonConstants.SEQUENCE_STEP);
-            }
-        }
-
-        List<LearningReviewRecord> reviews = reviewService.listSince(userId, startTime);
-        for (LearningReviewRecord review : reviews) {
-            LocalDate date = review.getCreateTime() == null ? null : review.getCreateTime().toLocalDate();
-            LearningActivityDayResponse item = dayMap.get(date);
-            if (item != null) {
-                item.setReviewCount(nullToZero(item.getReviewCount()) + CommonConstants.SEQUENCE_STEP);
+                item.setLearnedCount(nullToZero(activity.getLearnedCount()));
+                item.setReviewCount(nullToZero(activity.getReviewCount()));
             }
         }
 
@@ -361,7 +428,43 @@ public class WordbookService {
         return response;
     }
 
-    /** 向个人单词本添加词条并保存词卡快照。 */
+    private long activityVersion(Long userId) {
+        return userId == null ? 0L : activityVersions.getOrDefault(userId, 0L);
+    }
+
+    private String activityCacheKey(Long userId, int days, long version) {
+        return userId + ":" + days + ":" + version;
+    }
+
+    /** 词条新增、删除或复习提交后清除用户活动统计缓存。 */
+    private void invalidateActivityCache(Long userId) {
+        if (userId == null) {
+            return;
+        }
+        activityVersions.merge(userId, 1L, Long::sum);
+        activityCache.asMap().keySet().removeIf(key -> key.startsWith(userId + ":"));
+        activityRequests.keySet().removeIf(key -> key.startsWith(userId + ":"));
+    }
+
+    /** 单词本或词条摘要发生写入后清除用户的短 TTL 摘要缓存。 */
+    private void invalidateWordbookCache(Long userId) {
+        if (userId != null) {
+            wordbookSummaryCache.invalidate(userId);
+        }
+    }
+
+    /** 复习等跨领域写操作完成后清理用户的派生摘要缓存。 */
+    public void evictDerivedCaches(Long userId) {
+        invalidateActivityCache(userId);
+        invalidateWordbookCache(userId);
+    }
+
+    /**
+     * 向个人单词本添加词条并保存词卡快照。
+     * <p>
+     * 公共词汇缓存未命中时只创建基础词条并提交异步词卡任务，避免在 HTTP 请求线程等待模型响应。
+     */
+    @Transactional(rollbackFor = Exception.class)
     public WordbookEntryResponse addEntry(Long userId, Long wordbookId, AddWordbookEntryRequest request) {
         LearningWordbook wordbook = requireWordbook(userId, wordbookId);
         String normalizedTerm = normalize(request.getTerm());
@@ -396,23 +499,31 @@ public class WordbookService {
                         wordbook.getName());
             }
             log.debug("单词本中已存在单词 userId={} wordbookId={} term={}", userId, wordbook.getId(), normalizedTerm);
+            invalidateActivityCache(userId);
+            invalidateWordbookCache(userId);
             return responseAssembler.toEntryResponse(existing);
         }
 
+        LocalDateTime now = LocalDateTime.now();
         EnglishVocabularyStudyRecord vocabulary = findVocabulary(normalizedTerm);
         if (vocabulary == null) {
-            VocabularyStudyRequest studyRequest = new VocabularyStudyRequest();
-            studyRequest.setTerm(request.getTerm());
-            vocabularyStudyService.study(studyRequest);
-            vocabulary = findVocabulary(normalizedTerm);
-        }
-        if (vocabulary == null) {
-            throw LearningAssistantException.notFound(
-                    LearningErrorCode.VOCABULARY_RECORD_NOT_FOUND,
-                    "词汇学习记录不存在: " + normalizedTerm);
+            // 先保存可展示的基础词条，再由任务处理器补齐 AI 词卡和公共缓存关联。
+            LearningWordbookEntry entry = LearningWordbookEntry.createImported(
+                    userId, wordbook.getId(), null, null, request.getTerm(), normalizedTerm,
+                    null, now);
+            entry.setNote(trimToNull(request.getNote()));
+            entry.setCardStatus(VocabularyCardConstants.STATUS_MISSING);
+            entryMapper.insert(entry);
+            submitCardGenerationTask(userId, entry.getId(), false);
+            entry.setCardStatus(VocabularyCardConstants.STATUS_GENERATING);
+            systemLogService.record(userId, SystemLogType.WORDBOOK, "加入单词本并提交词卡任务", entry.getNormalizedTerm());
+            log.info("用户「{}」把未知单词「{}」添加到单词本「{}」，已提交异步词卡任务",
+                    userDisplayNameService.userName(userId), entry.getNormalizedTerm(), wordbook.getName());
+            invalidateActivityCache(userId);
+            invalidateWordbookCache(userId);
+            return responseAssembler.toEntryResponse(entry);
         }
 
-        LocalDateTime now = LocalDateTime.now();
         LearningWordbookEntry entry = LearningWordbookEntry.createNew(userId, wordbook.getId(),
                 vocabulary, trimToNull(request.getNote()), now);
         responseAssembler.applyVocabularySnapshot(entry, vocabulary, now);
@@ -422,6 +533,8 @@ public class WordbookService {
                 userDisplayNameService.userName(userId),
                 entry.getNormalizedTerm(),
                 wordbook.getName());
+        invalidateActivityCache(userId);
+        invalidateWordbookCache(userId);
         return responseAssembler.toEntryResponse(entry);
     }
 
@@ -432,34 +545,10 @@ public class WordbookService {
         int current = page == null || page < 1 ? 1 : page;
         int size = pageSize == null || pageSize < 1 ? 30 : Math.min(pageSize, 100);
         String trimmedKeyword = StringUtils.hasText(keyword) ? keyword.trim() : null;
-        Page<LearningWordbookEntry> result = new Page<>(current, size);
-        LambdaQueryWrapper<LearningWordbookEntry> wrapper = new LambdaQueryWrapper<LearningWordbookEntry>()
-                .select(LearningWordbookEntry::getId,
-                        LearningWordbookEntry::getWordbookId,
-                        LearningWordbookEntry::getVocabularyId,
-                        LearningWordbookEntry::getTerm,
-                        LearningWordbookEntry::getNormalizedTerm,
-                        LearningWordbookEntry::getSnapshotParsedJson,
-                        LearningWordbookEntry::getStatus,
-                        LearningWordbookEntry::getReviewStage,
-                        LearningWordbookEntry::getMasteryScore,
-                        LearningWordbookEntry::getLastReviewTime,
-                        LearningWordbookEntry::getNextReviewTime,
-                        LearningWordbookEntry::getReviewCount,
-                        LearningWordbookEntry::getCorrectCount,
-                        LearningWordbookEntry::getWrongCount,
-                        LearningWordbookEntry::getCardStatus,
-                        LearningWordbookEntry::getCreateTime)
-                .eq(LearningWordbookEntry::getUserId, userId)
-                .eq(LearningWordbookEntry::getWordbookId, wordbookId)
-                .eq(LearningWordbookEntry::getDeleted, false)
-                .eq(StringUtils.hasText(status), LearningWordbookEntry::getStatus, normalizeStatus(status))
-                .and(trimmedKeyword != null, q -> q.likeRight(LearningWordbookEntry::getTerm, trimmedKeyword)
-                        .or().likeRight(LearningWordbookEntry::getNormalizedTerm, trimmedKeyword.toLowerCase(Locale.ROOT)))
-                .le(dueOnly, LearningWordbookEntry::getNextReviewTime, LocalDateTime.now())
-                .orderByAsc(LearningWordbookEntry::getNextReviewTime)
-                .orderByDesc(LearningWordbookEntry::getCreateTime);
-        entryMapper.selectPage(result, wrapper);
+        String normalizedStatus = StringUtils.hasText(status) ? normalizeStatus(status) : null;
+        Page<WordbookEntrySummaryItem> result = entryMapper.selectSummaryPage(
+                new Page<>(current, size), userId, wordbookId, normalizedStatus, trimmedKeyword,
+                dueOnly, LocalDateTime.now());
         WordbookEntryPageResponse response = new WordbookEntryPageResponse();
         response.setItems(result.getRecords().stream().map(responseAssembler::toSummaryResponse).toList());
         response.setTotal(result.getTotal());
@@ -480,32 +569,10 @@ public class WordbookService {
                 Math.min(limit == null ? ReviewConstants.DUE_DEFAULT_LIMIT : limit,
                         ReviewConstants.DUE_MAX_LIMIT));
         LocalDateTime now = LocalDateTime.now();
-        List<LearningWordbookEntry> entries = entryMapper.selectList(new LambdaQueryWrapper<LearningWordbookEntry>()
-                .select(LearningWordbookEntry::getId,
-                        LearningWordbookEntry::getWordbookId,
-                        LearningWordbookEntry::getVocabularyId,
-                        LearningWordbookEntry::getTerm,
-                        LearningWordbookEntry::getNormalizedTerm,
-                        LearningWordbookEntry::getSnapshotParsedJson,
-                        LearningWordbookEntry::getStatus,
-                        LearningWordbookEntry::getReviewStage,
-                        LearningWordbookEntry::getMasteryScore,
-                        LearningWordbookEntry::getLastReviewTime,
-                        LearningWordbookEntry::getNextReviewTime,
-                        LearningWordbookEntry::getReviewCount,
-                        LearningWordbookEntry::getCorrectCount,
-                        LearningWordbookEntry::getWrongCount,
-                        LearningWordbookEntry::getCardStatus,
-                        LearningWordbookEntry::getCreateTime)
-                .eq(LearningWordbookEntry::getUserId, userId)
-                .eq(LearningWordbookEntry::getWordbookId, resolvedWordbookId)
-                .eq(LearningWordbookEntry::getDeleted, false)
-                .le(LearningWordbookEntry::getNextReviewTime, now)
-                .orderByAsc(LearningWordbookEntry::getNextReviewTime)
-                .orderByDesc(LearningWordbookEntry::getCreateTime)
-                .last("LIMIT " + resolvedLimit));
+        List<WordbookEntrySummaryItem> entries = entryMapper.selectDueSummary(
+                userId, resolvedWordbookId, now, resolvedLimit);
         if (!entries.isEmpty()) {
-            List<Long> entryIds = entries.stream().map(LearningWordbookEntry::getId).toList();
+            List<Long> entryIds = entries.stream().map(WordbookEntrySummaryItem::getId).toList();
             entryMapper.update(null, new LambdaUpdateWrapper<LearningWordbookEntry>()
                     .in(LearningWordbookEntry::getId, entryIds)
                     .eq(LearningWordbookEntry::getUserId, userId)
@@ -514,7 +581,6 @@ public class WordbookService {
                     .le(LearningWordbookEntry::getNextReviewTime, now)
                     .setSql("due_count = COALESCE(due_count, 0) + 1")
                     .set(LearningWordbookEntry::getUpdateTime, now));
-            entries.forEach(entry -> entry.markDue(now));
         }
         log.debug("待复习词条已查询 userId={} wordbookId={} count={}",
                 userId,
@@ -533,29 +599,7 @@ public class WordbookService {
         int resolvedLimit = Math.max(ReviewConstants.RESTART_MIN_LIMIT,
                 Math.min(limit == null ? ReviewConstants.RESTART_DEFAULT_LIMIT : limit,
                         ReviewConstants.RESTART_MAX_LIMIT));
-        List<LearningWordbookEntry> entries = entryMapper.selectList(new LambdaQueryWrapper<LearningWordbookEntry>()
-                .select(LearningWordbookEntry::getId,
-                        LearningWordbookEntry::getWordbookId,
-                        LearningWordbookEntry::getTerm,
-                        LearningWordbookEntry::getNormalizedTerm,
-                        LearningWordbookEntry::getStatus,
-                        LearningWordbookEntry::getReviewStage,
-                        LearningWordbookEntry::getMasteryScore,
-                        LearningWordbookEntry::getLastReviewTime,
-                        LearningWordbookEntry::getNextReviewTime,
-                        LearningWordbookEntry::getReviewCount,
-                        LearningWordbookEntry::getCorrectCount,
-                        LearningWordbookEntry::getWrongCount,
-                        LearningWordbookEntry::getCardStatus,
-                        LearningWordbookEntry::getCreateTime)
-                .eq(LearningWordbookEntry::getUserId, userId)
-                .eq(LearningWordbookEntry::getWordbookId, wordbook.getId())
-                .eq(LearningWordbookEntry::getDeleted, false)
-                .orderByAsc(LearningWordbookEntry::getLastReviewTime)
-                .orderByAsc(LearningWordbookEntry::getMasteryScore)
-                .orderByAsc(LearningWordbookEntry::getNextReviewTime)
-                .orderByDesc(LearningWordbookEntry::getCreateTime)
-                .last("LIMIT " + resolvedLimit));
+        List<WordbookEntrySummaryItem> entries = entryMapper.selectRestartSummary(userId, wordbook.getId(), resolvedLimit);
         systemLogService.record(userId, SystemLogType.REVIEW, "重新生成复习任务",
                 wordbook.getName() + "，共 " + entries.size() + " 个单词");
         log.info("用户「{}」重新生成了单词本「{}」的复习任务，共 {} 个单词",
@@ -603,6 +647,8 @@ public class WordbookService {
                 entry.getNormalizedTerm(),
                 statusLabel(entry.getStatus()),
                 request.getNote() != null);
+        invalidateActivityCache(userId);
+        invalidateWordbookCache(userId);
         return responseAssembler.toEntryResponse(entry);
     }
 
@@ -615,6 +661,8 @@ public class WordbookService {
         log.info("用户「{}」从单词本中删除了单词「{}」",
                 userDisplayNameService.userName(userId),
                 entry.getNormalizedTerm());
+        invalidateActivityCache(userId);
+        invalidateWordbookCache(userId);
     }
 
     /**
@@ -699,6 +747,7 @@ public class WordbookService {
         log.debug("复习排期已更新 userId={} entryId={} result={} stage={}=>{} mastery={}=>{} nextReviewTime={}",
                 userId, entryId, result.getCode(), outcome.stageBefore(), outcome.stageAfter(),
                 outcome.masteryBefore(), outcome.masteryAfter(), nextReviewTime);
+        evictDerivedCaches(userId);
         return response;
     }
 
@@ -779,6 +828,48 @@ public class WordbookService {
                 userDisplayNameService.userName(userId), entry.getNormalizedTerm(),
                 forceRefresh ? "重新生成" : "生成");
         return responseAssembler.toEntryResponse(requireEntry(userId, entryId));
+    }
+
+    /** 提交单词本词条词卡异步任务，HTTP 请求不再等待模型返回。 */
+    public AiAsyncTask submitCardGenerationTask(Long userId, Long entryId, boolean forceRefresh) {
+        LearningWordbookEntry entry = requireEntry(userId, entryId);
+        String idempotencyKey = "vocabulary_card_single:" + entryId;
+        AiAsyncTask active = aiAsyncTaskService.findActiveByKey(userId,
+                AiTaskConstants.TYPE_VOCABULARY_CARD_SINGLE, null, idempotencyKey);
+        if (active != null) {
+            return active;
+        }
+        entry.setCardStatus(VocabularyCardConstants.STATUS_GENERATING);
+        entry.setCardErrorMessage(null);
+        entry.setUpdateTime(LocalDateTime.now());
+        entryMapper.updateById(entry);
+        Map<String, Object> payload = new LinkedHashMap<>();
+        payload.put("entryId", entryId);
+        payload.put("forceRefresh", forceRefresh);
+        AiAsyncTask task = aiAsyncTaskService.create(userId,
+                AiTaskConstants.TYPE_VOCABULARY_CARD_SINGLE,
+                "生成单词词卡 · " + entry.getTerm(),
+                null, null, entryId,
+                AiTaskConstants.EXECUTION_IMMEDIATE, null, null, 1,
+                idempotencyKey, payload);
+        systemLogService.record(userId, SystemLogType.AI, "提交单词词卡生成任务", entry.getNormalizedTerm());
+        log.info("用户「{}」为单词「{}」提交异步词卡任务 taskId={}",
+                userDisplayNameService.userName(userId), entry.getNormalizedTerm(), task.getId());
+        return task;
+    }
+
+    /** 由异步任务处理器执行实际 AI 词卡生成。 */
+    public WordbookEntryResponse generateCardNow(Long userId, Long entryId, boolean forceRefresh) {
+        return generateCard(userId, entryId, forceRefresh);
+    }
+
+    /** 异步词卡任务失败时记录词条级状态，便于前端显示失败并支持再次提交。 */
+    public void markCardGenerationFailed(Long userId, Long entryId, String errorMessage) {
+        LearningWordbookEntry entry = requireEntry(userId, entryId);
+        entry.setCardStatus(VocabularyCardConstants.STATUS_FAILED);
+        entry.setCardErrorMessage(errorMessage == null ? "词卡生成失败" : errorMessage.substring(0, Math.min(500, errorMessage.length())));
+        entry.setUpdateTime(LocalDateTime.now());
+        entryMapper.updateById(entry);
     }
 
     private LearningWordbook requireWordbook(Long userId, Long wordbookId) {

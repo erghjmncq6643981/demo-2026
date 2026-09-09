@@ -4,12 +4,16 @@ import com.chandler.learning.agent.learning.application.SceneArticleAudioService
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Value;
+import org.springframework.beans.factory.annotation.Qualifier;
+import org.springframework.core.task.TaskRejectedException;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Component;
 
 import java.util.List;
 import java.util.Set;
+import java.util.concurrent.Executor;
+import java.util.concurrent.atomic.AtomicBoolean;
 
 /**
  * 词汇发音与场景材料 AI 真人朗读音频缺省定时检查与自动补全调度器。
@@ -22,6 +26,9 @@ public class VocabularyAudioSyncScheduler {
 
     private final VocabularyAudioService vocabularyAudioService;
     private final SceneArticleAudioService sceneArticleAudioService;
+    @Qualifier("maintenanceExecutor")
+    private final Executor maintenanceExecutor;
+    private final AtomicBoolean syncRunning = new AtomicBoolean();
 
     @Value("${learning.audio.sync-throttle-ms:50}")
     private long throttleMs;
@@ -31,8 +38,27 @@ public class VocabularyAudioSyncScheduler {
      */
     @Scheduled(cron = "${learning.audio.sync-cron:0 0 3 * * ?}")
     public void scheduleSyncMissingAudio() {
-        log.info("开始执行词汇与场景文章音频缺省定时检查与补全任务...");
-        syncMissingAudio();
+        if (!syncRunning.compareAndSet(false, true)) {
+            log.info("event=audio_sync result=skipped reason=previous_run_active");
+            return;
+        }
+        try {
+            maintenanceExecutor.execute(() -> {
+                try {
+                    log.info("开始执行词汇与场景文章音频缺省定时检查与补全任务...");
+                    syncMissingAudio();
+                } catch (RuntimeException ex) {
+                    log.warn("event=audio_sync result=failed error={}", ex.getClass().getSimpleName());
+                    log.debug("音频缺省巡检异常", ex);
+                } finally {
+                    syncRunning.set(false);
+                }
+            });
+        } catch (TaskRejectedException ex) {
+            syncRunning.set(false);
+            log.info("event=audio_sync result=deferred reason=executor_saturated");
+            log.debug("提交音频缺省巡检失败", ex);
+        }
     }
 
     /**

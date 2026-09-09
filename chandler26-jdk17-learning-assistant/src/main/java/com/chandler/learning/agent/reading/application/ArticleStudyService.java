@@ -16,6 +16,7 @@ import com.chandler.learning.agent.reading.api.response.ArticleStudySummaryRespo
 import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
 import com.chandler.learning.agent.reading.api.response.ArticleStudyWordResponse;
 import com.chandler.learning.agent.reading.domain.entity.LearningArticleStudyRecord;
+import com.chandler.learning.agent.reading.domain.bo.ArticleStudySummaryItem;
 import com.chandler.learning.agent.vocabulary.domain.entity.LearningWordbook;
 import com.chandler.learning.agent.vocabulary.domain.entity.LearningWordbookEntry;
 import com.chandler.learning.agent.reading.domain.enums.ArticleDifficulty;
@@ -157,25 +158,8 @@ public class ArticleStudyService {
         Long resolvedWordbookId = wordbookId == null ? null : requireWordbook(userId, wordbookId).getId();
         int current = page == null || page < 1 ? 1 : page;
         int size = pageSize == null || pageSize < 1 ? 10 : Math.min(pageSize, 50);
-        Page<LearningArticleStudyRecord> result = new Page<>(current, size);
-        articleStudyRecordMapper.selectPage(result, new LambdaQueryWrapper<LearningArticleStudyRecord>()
-                        .select(LearningArticleStudyRecord::getId,
-                                LearningArticleStudyRecord::getWordbookId,
-                                LearningArticleStudyRecord::getSelectedTermsJson,
-                                LearningArticleStudyRecord::getParsedJson,
-                                LearningArticleStudyRecord::getWordCountRange,
-                                LearningArticleStudyRecord::getDifficulty,
-                                LearningArticleStudyRecord::getStudyStatus,
-                                LearningArticleStudyRecord::getCurrentStage,
-                                LearningArticleStudyRecord::getPracticeTotal,
-                                LearningArticleStudyRecord::getPracticeCorrect,
-                                LearningArticleStudyRecord::getPracticeScore,
-                                LearningArticleStudyRecord::getCreateTime,
-                                LearningArticleStudyRecord::getUpdateTime)
-                        .eq(LearningArticleStudyRecord::getUserId, userId)
-                        .eq(resolvedWordbookId != null, LearningArticleStudyRecord::getWordbookId, resolvedWordbookId)
-                        .eq(LearningArticleStudyRecord::getDeleted, false)
-                        .orderByDesc(LearningArticleStudyRecord::getCreateTime));
+        Page<ArticleStudySummaryItem> result = articleStudyRecordMapper.selectSummaryPage(
+                new Page<>(current, size), userId, resolvedWordbookId);
         ArticleStudyPageResponse response = new ArticleStudyPageResponse();
         response.setItems(result.getRecords().stream().map(this::toSummaryResponse).toList());
         response.setTotal(result.getTotal());
@@ -444,6 +428,25 @@ public class ArticleStudyService {
         return response;
     }
 
+    /** 将精读历史轻量投影转换为接口摘要。 */
+    private ArticleStudySummaryResponse toSummaryResponse(ArticleStudySummaryItem item) {
+        ArticleStudySummaryResponse response = new ArticleStudySummaryResponse();
+        response.setId(item.getId());
+        response.setWordbookId(item.getWordbookId());
+        response.setTitle(item.getTitle());
+        response.setSelectedWords(readSelectedWords(item.getSelectedTermsJson(), item.getId()));
+        response.setWordCountRange(item.getWordCountRange());
+        response.setDifficulty(item.getDifficulty());
+        response.setStudyStatus(item.getStudyStatus());
+        response.setCurrentStage(item.getCurrentStage());
+        response.setPracticeTotal(item.getPracticeTotal());
+        response.setPracticeCorrect(item.getPracticeCorrect());
+        response.setPracticeScore(item.getPracticeScore());
+        response.setCreateTime(item.getCreateTime());
+        response.setUpdateTime(item.getUpdateTime());
+        return response;
+    }
+
     private String articleSummaryTitle(LearningArticleStudyRecord record) {
         if (record == null || !StringUtils.hasText(record.getParsedJson())) {
             return null;
@@ -456,14 +459,18 @@ public class ArticleStudyService {
     }
 
     private List<ArticleStudyWordResponse> readSelectedWords(LearningArticleStudyRecord record) {
-        if (!StringUtils.hasText(record.getSelectedTermsJson())) {
+        return readSelectedWords(record.getSelectedTermsJson(), record.getId());
+    }
+
+    private List<ArticleStudyWordResponse> readSelectedWords(String selectedTermsJson, Long recordId) {
+        if (!StringUtils.hasText(selectedTermsJson)) {
             return List.of();
         }
         try {
-            return objectMapper.readValue(record.getSelectedTermsJson(), new TypeReference<List<ArticleStudyWordResponse>>() {
+            return objectMapper.readValue(selectedTermsJson, new TypeReference<List<ArticleStudyWordResponse>>() {
             });
         } catch (Exception ex) {
-            log.debug("语境精读词汇摘要读取失败 recordId={} error={}", record.getId(), ex.getMessage());
+            log.debug("语境精读词汇摘要读取失败 recordId={} error={}", recordId, ex.getMessage());
             return List.of();
         }
     }

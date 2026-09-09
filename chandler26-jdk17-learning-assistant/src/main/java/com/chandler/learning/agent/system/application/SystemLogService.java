@@ -1,7 +1,9 @@
 package com.chandler.learning.agent.system.application;
 
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
+import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
 import com.chandler.learning.agent.system.api.response.SystemLogResponse;
+import com.chandler.learning.agent.system.api.response.SystemLogPageResponse;
 import com.chandler.learning.agent.system.domain.entity.LearningSystemLog;
 import com.chandler.learning.agent.system.domain.entity.LearningSystemLogOutbox;
 import com.chandler.learning.agent.system.domain.enums.SystemLogOutboxStatus;
@@ -96,6 +98,27 @@ public class SystemLogService {
                 .stream()
                 .map(this::toResponse)
                 .toList();
+    }
+
+    /** 分页查询用户可见的系统日志，避免历史日志一次性进入内存和响应体。 */
+    public SystemLogPageResponse page(Long userId, Integer page, Integer pageSize) {
+        int resolvedPage = page == null || page < 1 ? 1 : page;
+        int resolvedPageSize = pageSize == null || pageSize < 1
+                ? SystemLogConstants.DEFAULT_LIMIT
+                : Math.min(pageSize, SystemLogConstants.MAX_LIMIT);
+        Page<LearningSystemLog> result = systemLogMapper.selectPage(
+                new Page<>(resolvedPage, resolvedPageSize),
+                new LambdaQueryWrapper<LearningSystemLog>()
+                        .eq(LearningSystemLog::getUserId, userId)
+                        .eq(LearningSystemLog::getDeleted, false)
+                        .orderByDesc(LearningSystemLog::getCreateTime)
+                        .orderByDesc(LearningSystemLog::getId));
+        SystemLogPageResponse response = new SystemLogPageResponse();
+        response.setItems(result.getRecords().stream().map(this::toResponse).toList());
+        response.setTotal(result.getTotal());
+        response.setPage(resolvedPage);
+        response.setPageSize(resolvedPageSize);
+        return response;
     }
 
     /** 清理系统日志。 */

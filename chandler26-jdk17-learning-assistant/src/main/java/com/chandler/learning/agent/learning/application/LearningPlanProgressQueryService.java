@@ -45,12 +45,7 @@ public class LearningPlanProgressQueryService {
             LocalDate startForRemaining = today.isAfter(planStart) ? today : planStart;
             long remainingDays = ChronoUnit.DAYS.between(startForRemaining, planEnd) + 1;
             if (remainingDays > 0) {
-                int generatedCoreCount = unitMapper.selectList(new LambdaQueryWrapper<LearningPlanUnit>()
-                                .eq(LearningPlanUnit::getPlanId, plan.getId())
-                                .eq(LearningPlanUnit::getDeleted, false))
-                        .stream()
-                        .mapToInt(unit -> value(unit.getCoreWordCount()))
-                        .sum();
+                int generatedCoreCount = value(unitMapper.selectGeneratedCoreCount(plan.getId()));
                 int remainingToGenerate = Math.max(0, value(plan.getTotalCatalogWords()) - generatedCoreCount);
                 target = (int) Math.ceil((double) remainingToGenerate / remainingDays);
             }

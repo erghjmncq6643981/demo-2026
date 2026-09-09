@@ -1,15 +1,16 @@
 import { sameId } from '/src/shared/ids.js'
 import { hideModal, showModal } from '/src/shared/modal.js'
 import { escapeHtml, formatDateTime } from '/src/shared/text.js'
-import { normalizeArray, normalizeDefinitions, readText, statusLabel, stringifyValue } from '/src/shared/vocabulary.js'
+import { normalizeArray, normalizeDefinitions, readText } from '/src/shared/vocabulary.js'
 import { syncCurrentWordbookId } from '/src/shared/wordbook.js'
 import { isRequestAbort } from '/src/shared/latest-request.js'
 import { createArticleApi } from '/src/features/reading/article-api.js'
+import { createArticleTaskController } from '/src/features/reading/article-task-controller.js'
+import { createArticleWordSelector } from '/src/features/reading/article-word-selector.js'
+import { createArticleLearningView } from '/src/features/reading/article-learning-view.js'
 import {
-  ARTICLE_WORD_LIMIT,
   articleStatusLabel,
   formatArticleErrorForLog,
-  normalizeAnswerValue,
   normalizeArticleError,
   normalizeArticleStage,
   readArticleError,
@@ -18,10 +19,6 @@ import {
 import {
   buildPreviewArticleRecord,
   renderArticleError,
-  renderBilingualArticle,
-  renderGrammarPoints,
-  renderSimpleList,
-  renderVocabularyFocus,
 } from '/src/features/reading/article-render.js'
 
 export function createWordbookArticleFeature(ctx) {
@@ -37,106 +34,57 @@ export function createWordbookArticleFeature(ctx) {
     setFocusMode,
   } = ctx
   const api = createArticleApi(request)
-  let articleTaskPollTimer = null
-  let articleTaskResultLoadingId = null
-
-  const ACTIVE_TASK_STATUSES = ['pending', 'running', 'retry_wait']
-  const TERMINAL_TASK_STATUSES = ['completed', 'partial_failed', 'attention_required', 'failed', 'cancelled']
-
-  function clearArticleTaskPoll() {
-    if (articleTaskPollTimer) {
-      window.clearTimeout(articleTaskPollTimer)
-      articleTaskPollTimer = null
-    }
-  }
-
-  function isActiveArticleTask(status) {
-    return ACTIVE_TASK_STATUSES.includes(status)
-  }
-
-  function isTerminalArticleTask(status) {
-    return TERMINAL_TASK_STATUSES.includes(status)
-  }
-
-  function startArticleTaskPoll(taskId) {
-    clearArticleTaskPoll()
-    if (state.preview || !taskId) return
-    const poll = () => {
-      if (!state.articleGenerationTask || !sameId(state.articleGenerationTask.id, taskId)) return
-      api.getTask(taskId)
-        .then((task) => {
-          if (!state.articleGenerationTask || !sameId(state.articleGenerationTask.id, taskId)) return
-          applyArticleTaskUpdate({ ...task, id: task.id || taskId })
-          if (isActiveArticleTask(task.status)) {
-            articleTaskPollTimer = window.setTimeout(poll, 4000)
-          } else {
-            clearArticleTaskPoll()
-          }
-        })
-        .catch((error) => {
-          if (isRequestAbort(error)) return
-          logEvent('error', '精读任务状态查询失败', error.message)
-          // 网络短暂失败不改变任务状态，下一轮继续查询。
-          articleTaskPollTimer = window.setTimeout(poll, 6000)
-        })
-    }
-    poll()
-  }
-
-  function applyArticleTaskUpdate(detail) {
-    if (!detail || detail.taskType !== 'article_material' || !state.articleGenerationTask
-      || !sameId(detail.id, state.articleGenerationTask.id)) return
-    const status = detail.status || state.articleGenerationTask.status
-    state.articleGenerationTask = { ...state.articleGenerationTask, ...detail, status }
-    if (isActiveArticleTask(status)) {
-      state.articlePreviewLoading = true
-      renderArticleModalPreview(null)
-      return
-    }
-    state.articlePreviewLoading = false
-    if (status === 'completed') {
-      if (!detail.businessId) {
-        state.articlePreviewError = normalizeArticleError(new Error('精读任务已完成，但未关联材料记录，请在任务中心查看详情'))
-        renderArticleModalPreview(null)
-        toast(state.articlePreviewError.message)
-        return
-      }
-      if (articleTaskResultLoadingId && sameId(articleTaskResultLoadingId, detail.id)) return
-      if (state.articleDraftRecord && sameId(state.articleDraftRecord.id, detail.businessId)) return
-      articleTaskResultLoadingId = detail.id
-      state.articlePreviewLoading = true
-      renderArticleModalPreview(null)
-      api.getRecord(detail.businessId)
-        .then((record) => {
-          if (!state.articleGenerationTask || !sameId(state.articleGenerationTask.id, detail.id)) return
-          state.articleDraftRecord = record
-          state.articleGenerationTask = { ...state.articleGenerationTask, businessId: detail.businessId, resultLoaded: true }
-          state.articlePreviewLoading = false
-          renderArticleModalPreview(record)
-          loadArticleHistory()
-          toast('精读材料已生成，可开始学习')
-        })
-        .catch((error) => {
-          state.articlePreviewLoading = false
-          logEvent('error', '精读材料结果加载失败', error.message)
-          toast(`精读材料已生成，但详情加载失败：${error.message}`)
-          renderArticleModalPreview(null)
-        })
-        .finally(() => {
-          articleTaskResultLoadingId = null
-        })
-      return
-    }
-    if (['failed', 'partial_failed', 'attention_required', 'cancelled'].includes(status)) {
-      state.articlePreviewError = normalizeArticleError(new Error(detail.errorMessage || '精读材料生成任务未完成'))
-      renderArticleModalPreview(null)
-      toast(status === 'cancelled' ? '精读材料生成任务已取消' : '精读材料生成失败，可在任务中心重试')
-    }
-  }
-
-  window.addEventListener('learning:ai-task-updated', (event) => {
-    applyArticleTaskUpdate(event?.detail || {})
+  const taskController = createArticleTaskController({
+    state,
+    api,
+    sameId,
+    logEvent,
+    toast,
+    renderPreview: (...args) => renderArticleModalPreview(...args),
+    loadHistory: () => loadArticleHistory(),
+    normalizeError: normalizeArticleError,
   })
+  const wordSelector = createArticleWordSelector({
+    state,
+    elements,
+    toast,
+    sameId,
+    entryMatchesFilter,
+    renderPreview: (...args) => renderArticleModalPreview(...args),
+  })
+  const learningView = createArticleLearningView({
+    state,
+    speakSentence,
+    currentWordbookName,
+    changeArticleStage,
+    setArticleAnswer,
+    articleAnswers,
+    articleRecordKey,
+    completeArticleStudy,
+    renderArticleResult,
+    cssEscape,
+    articleStatusLabel,
+    wordCountLabel,
+    difficultyLabel,
+  })
+
+  window.addEventListener('learning:ai-task-updated', (event) => taskController.apply(event?.detail || {}))
+
+  function renderArticleWords() {
+    wordSelector.render()
+  }
+
+  function toggleArticleEntry(entryId) {
+    wordSelector.toggle(entryId)
+  }
+
+  function clearArticleSelection() {
+    wordSelector.clear()
+  }
+
+  function recommendArticleWords() {
+    wordSelector.recommend()
+  }
 
   async function changeArticleWordbook(wordbookId) {
     syncCurrentWordbookId(state, elements, wordbookId)
@@ -145,8 +93,7 @@ export function createWordbookArticleFeature(ctx) {
     state.selectedArticleEntryIds = []
     state.currentArticleRecord = null
     state.articleDraftRecord = null
-    clearArticleTaskPoll()
-    articleTaskResultLoadingId = null
+    taskController.clear()
     state.articleGenerationTask = null
     state.articleStage = 'reading'
     state.articleAnswerSets = {}
@@ -168,9 +115,8 @@ export function createWordbookArticleFeature(ctx) {
     state.articleModalOpen = true
     state.articleDraftRecord = null
     state.articlePreviewError = ''
-    if (state.articleGenerationTask && isTerminalArticleTask(state.articleGenerationTask.status)) {
+    if (state.articleGenerationTask && taskController.isTerminal(state.articleGenerationTask.status)) {
       state.articleGenerationTask = null
-      articleTaskResultLoadingId = null
     }
     renderArticleModalPreview(null)
     showModal(elements.articleStudyModal)
@@ -267,91 +213,6 @@ export function createWordbookArticleFeature(ctx) {
     loadArticleHistory()
   }
 
-  function renderArticleWords() {
-    if (!elements.articleWordGrid) return
-    const entries = filteredArticleEntries()
-    elements.articleSelectedCount.textContent = `已选 ${state.selectedArticleEntryIds.length}`
-    const maxPage = Math.max(1, Math.ceil((state.articleWordTotal || entries.length) / (state.articleWordPageSize || 50)))
-    if (elements.articleWordPageInfo) elements.articleWordPageInfo.textContent = `第 ${state.articleWordPage || 1} / ${maxPage} 页 · 共 ${state.articleWordTotal || entries.length} 个`
-    if (elements.articleWordPrevBtn) elements.articleWordPrevBtn.disabled = (state.articleWordPage || 1) <= 1
-    if (elements.articleWordNextBtn) elements.articleWordNextBtn.disabled = (state.articleWordPage || 1) >= maxPage
-    if (!entries.length) {
-      elements.articleWordGrid.className = 'article-word-grid empty'
-      elements.articleWordGrid.textContent = state.token ? '当前筛选下暂无单词' : '登录后查看单词本词汇'
-      return
-    }
-    elements.articleWordGrid.className = 'article-word-grid'
-    elements.articleWordGrid.innerHTML = entries.map(renderArticleWordCard).join('')
-    elements.articleWordGrid.querySelectorAll('[data-article-entry-id]').forEach((button) => {
-      button.addEventListener('click', () => toggleArticleEntry(button.getAttribute('data-article-entry-id')))
-    })
-  }
-
-  function filteredArticleEntries() {
-    const prefix = String(state.articlePrefixFilter || elements.articlePrefixInput?.value || '').trim().toLowerCase()
-    const status = elements.articleStatusFilter?.value || ''
-    const statusFiltered = status ? state.articleEntries.filter((entry) => (entry.status || 'vague') === status) : state.articleEntries
-    return prefix ? statusFiltered.filter((entry) => entryMatchesFilter(entry, prefix)) : statusFiltered
-  }
-
-  function renderArticleWordCard(entry) {
-    const selected = state.selectedArticleEntryIds.some((id) => sameId(id, entry.id))
-    const definition = normalizeDefinitions(entry.parsed || {})[0] || {}
-    const meaning = definition.cn || definition.en || '暂无核心含义'
-    const pos = definition.pos || 'meaning'
-    return `
-      <button class="article-word-card ${selected ? 'selected' : ''}" type="button" data-article-entry-id="${escapeHtml(entry.id)}" aria-pressed="${selected}">
-        <span class="article-word-topline">
-          <strong>${escapeHtml(entry.term || entry.normalizedTerm)}</strong>
-          <small>${escapeHtml(statusLabel(entry.status))}</small>
-        </span>
-        <p>${escapeHtml(pos)} · ${escapeHtml(meaning)}</p>
-        <span class="selection-dot" aria-hidden="true"></span>
-      </button>
-    `
-  }
-
-  function toggleArticleEntry(entryId) {
-    const exists = state.selectedArticleEntryIds.some((id) => sameId(id, entryId))
-    if (exists) {
-      state.selectedArticleEntryIds = state.selectedArticleEntryIds.filter((id) => !sameId(id, entryId))
-    } else if (state.selectedArticleEntryIds.length >= ARTICLE_WORD_LIMIT) {
-      toast(`一次最多选择 ${ARTICLE_WORD_LIMIT} 个单词`)
-      return
-    } else {
-      state.selectedArticleEntryIds.push(entryId)
-    }
-    state.articleDraftRecord = null
-    state.articlePreviewError = ''
-    renderArticleWords()
-    renderArticleModalPreview(null)
-  }
-
-  function clearArticleSelection() {
-    state.selectedArticleEntryIds = []
-    state.articleDraftRecord = null
-    state.articlePreviewError = ''
-    renderArticleWords()
-    renderArticleModalPreview(null)
-  }
-
-  function recommendArticleWords() {
-    const priority = { forgotten: 0, vague: 1, familiar: 2 }
-    const candidates = [...filteredArticleEntries()]
-      .sort((left, right) => {
-        const statusDelta = (priority[left.status] ?? 1) - (priority[right.status] ?? 1)
-        if (statusDelta !== 0) return statusDelta
-        return Number(left.masteryScore || 0) - Number(right.masteryScore || 0)
-      })
-      .slice(0, Math.min(8, ARTICLE_WORD_LIMIT))
-    state.selectedArticleEntryIds = candidates.map((entry) => entry.id)
-    state.articleDraftRecord = null
-    state.articlePreviewError = ''
-    renderArticleWords()
-    renderArticleModalPreview(null)
-    toast(candidates.length ? `已推荐 ${candidates.length} 个优先学习词` : '当前筛选下没有可推荐词汇')
-  }
-
   async function generateArticlePreview(options = {}) {
     if (!state.selectedArticleEntryIds.length) {
       toast('请先勾选要学习的词汇')
@@ -394,10 +255,9 @@ export function createWordbookArticleFeature(ctx) {
       }
       const task = await api.createStudyAsync(payload)
       state.articleGenerationTask = task
-      articleTaskResultLoadingId = null
       state.articlePreviewLoading = false
       renderArticleModalPreview(null)
-      startArticleTaskPoll(task?.id)
+      taskController.start(task?.id)
       logEvent('ai', '提交语境精读材料任务', selectedWordsText({
         selectedWords: state.articleEntries.filter((entry) => state.selectedArticleEntryIds.some((id) => sameId(id, entry.id))),
       }))
@@ -519,7 +379,7 @@ export function createWordbookArticleFeature(ctx) {
     if (!sameId(previousRecordId, record.id)) {
       state.articleStage = record.studyStatus === 'completed' ? 'check' : normalizeArticleStage(record.currentStage)
     }
-    renderArticleContent(elements.articleResult, elements.articleResultBadge, record)
+    learningView.renderContent(elements.articleResult, elements.articleResultBadge, record)
     renderArticleHistory()
   }
 
@@ -545,7 +405,7 @@ export function createWordbookArticleFeature(ctx) {
       updateArticlePreviewControls()
       return
     }
-    renderArticleContent(elements.articleModalPreview, elements.articleModalPreviewBadge, record, { compact: true })
+    learningView.renderContent(elements.articleModalPreview, elements.articleModalPreviewBadge, record, { compact: true })
     updateArticlePreviewControls()
   }
 
@@ -558,250 +418,6 @@ export function createWordbookArticleFeature(ctx) {
     if (elements.saveArticleStudyBtn) {
       elements.saveArticleStudyBtn.disabled = state.articlePreviewLoading || !state.articleDraftRecord
     }
-  }
-
-  function renderArticleContent(container, badge, record, options = {}) {
-    const parsed = record.parsed || {}
-    const title = readText(parsed, ['title']) || '语境精读'
-    const article = readText(parsed, ['article', 'text', 'content'])
-    const translation = readText(parsed, ['translation', 'translation_cn', 'translationCn', 'cn', 'zh'])
-    const vocabularyFocus = normalizeArray(parsed.vocabulary_focus || parsed.vocabularyFocus || parsed.words || [])
-    const grammarPoints = normalizeArray(parsed.grammar_points || parsed.grammarPoints || [])
-    const keyPoints = normalizeArray(parsed.key_points || parsed.keyPoints || [])
-    const tips = normalizeArray(parsed.study_tips || parsed.studyTips || parsed.tips || [])
-
-    badge.textContent = `${articleStatusLabel(record.studyStatus)} · ${wordCountLabel(record.wordCountRange)} · ${difficultyLabel(record.difficulty)}`
-    container.className = `article-result${options.compact ? ' article-result-preview' : ''}`
-    if (options.compact) {
-      container.innerHTML = renderArticlePreview(record, title, article, translation, vocabularyFocus)
-      container.querySelector('[data-article-speak]')?.addEventListener('click', () => speakSentence(article))
-      return
-    }
-    const stage = record.studyStatus === 'completed' ? state.articleStage : normalizeArticleStage(state.articleStage)
-    container.innerHTML = `
-      <article class="article-learning-card">
-        <header class="article-learning-head">
-          <div>
-            <p class="eyebrow">${escapeHtml(currentWordbookName(record.wordbookId))}</p>
-            <h4>${escapeHtml(title)}</h4>
-            <div class="article-target-summary">${renderTargetWordChips(record.selectedWords)}</div>
-          </div>
-          <button class="icon-button" type="button" data-article-speak title="朗读英文文章" aria-label="朗读英文文章">▶</button>
-        </header>
-        ${renderArticleStageNav(stage, record)}
-        <div class="article-stage-body">
-          ${stage === 'vocabulary'
-            ? renderVocabularyStage(record, vocabularyFocus, grammarPoints, keyPoints, tips)
-            : stage === 'check'
-              ? renderCheckStage(record)
-              : renderReadingStage(record, article, translation)}
-        </div>
-      </article>
-    `
-    bindArticleLearningEvents(container, record, article)
-  }
-
-  function renderArticlePreview(record, title, article, translation, vocabularyFocus) {
-    return `
-      <article class="article-learning-card article-learning-card-preview">
-        <header class="article-learning-head">
-          <div>
-            <p class="eyebrow">${escapeHtml(currentWordbookName(record.wordbookId))}</p>
-            <h4>${escapeHtml(title)}</h4>
-            <div class="article-target-summary">${renderTargetWordChips(record.selectedWords)}</div>
-          </div>
-          <button class="icon-button" type="button" data-article-speak title="朗读英文文章" aria-label="朗读英文文章">▶</button>
-        </header>
-        <section class="article-section">
-          <h5>双语正文</h5>
-          ${renderBilingualArticle(article, translation, { showTranslation: true, selectedWords: record.selectedWords })}
-        </section>
-        ${renderVocabularyFocus(vocabularyFocus)}
-      </article>
-    `
-  }
-
-  function renderArticleStageNav(stage, record) {
-    const stages = [
-      { code: 'reading', number: 1, label: '通读文章' },
-      { code: 'vocabulary', number: 2, label: '词汇精讲' },
-      { code: 'check', number: 3, label: '阅读检测' },
-    ]
-    const activeIndex = Math.max(0, stages.findIndex((item) => item.code === stage))
-    const progress = record.studyStatus === 'completed' ? 100 : ((activeIndex + 1) / stages.length) * 100
-    return `
-      <div class="article-stage-shell">
-        <nav class="article-stage-nav" aria-label="精读阶段">
-          ${stages.map((item, index) => `
-            <button class="article-stage-tab ${item.code === stage ? 'active' : ''} ${index < activeIndex || record.studyStatus === 'completed' ? 'done' : ''}"
-              type="button" data-article-stage="${item.code}" aria-current="${item.code === stage ? 'step' : 'false'}">
-              <span>${item.number}</span><strong>${item.label}</strong>
-            </button>
-          `).join('')}
-        </nav>
-        <div class="article-stage-progress" aria-hidden="true"><span style="width:${progress}%"></span></div>
-      </div>
-    `
-  }
-
-  function renderReadingStage(record, article, translation) {
-    const showTranslation = state.articleReadingMode === 'bilingual'
-    return `
-      <section class="article-stage-section article-reading-stage">
-        <div class="article-stage-toolbar">
-          <h5>英文原文</h5>
-          <div class="article-mode-switch" role="group" aria-label="译文显示方式">
-            <button type="button" class="${showTranslation ? '' : 'active'}" data-article-reading-mode="english">仅英文</button>
-            <button type="button" class="${showTranslation ? 'active' : ''}" data-article-reading-mode="bilingual">双语</button>
-          </div>
-        </div>
-        ${renderBilingualArticle(article, translation, { showTranslation, selectedWords: record.selectedWords })}
-        <div class="article-stage-actions">
-          <button class="primary-button" type="button" data-article-next-stage="vocabulary">进入词汇精讲</button>
-        </div>
-      </section>
-    `
-  }
-
-  function renderVocabularyStage(record, vocabularyFocus, grammarPoints, keyPoints, tips) {
-    return `
-      <section class="article-stage-section article-vocabulary-stage">
-        ${renderVocabularyFocus(vocabularyFocus, record.selectedWords)}
-        ${renderGrammarPoints(grammarPoints)}
-        ${renderSimpleList('阅读要点', keyPoints)}
-        ${renderSimpleList('复习建议', tips)}
-        <div class="article-stage-actions article-stage-actions-split">
-          <button class="secondary-button" type="button" data-article-next-stage="reading">返回通读</button>
-          <button class="primary-button" type="button" data-article-next-stage="check">开始阅读检测</button>
-        </div>
-      </section>
-    `
-  }
-
-  function renderCheckStage(record) {
-    const parsed = record.parsed || {}
-    const practice = normalizeArray(parsed.practice || parsed.questions || [])
-    if (!practice.length) {
-      return '<section class="article-stage-section"><div class="empty">当前材料没有可用的阅读检测</div></section>'
-    }
-    const answers = articleAnswers(record)
-    const completed = record.studyStatus === 'completed'
-    const checked = completed || Boolean(state.articleCheckedRecords[articleRecordKey(record)])
-    const result = completed
-      ? {
-          total: Number(record.practiceTotal || practice.length),
-          correct: Number(record.practiceCorrect || 0),
-          score: Number(record.practiceScore || 0),
-        }
-      : scoreArticlePractice(practice, answers)
-    const allAnswered = practice.every((_, index) => String(answers[index] || '').trim())
-    return `
-      <section class="article-stage-section article-check-stage">
-        <div class="article-check-heading">
-          <div><h5>阅读检测</h5><span>${practice.length} 题</span></div>
-          ${checked ? `<strong>${result.score} 分</strong>` : `<strong>${answers.filter((answer) => String(answer || '').trim()).length}/${practice.length}</strong>`}
-        </div>
-        <div class="article-practice-list">
-          ${practice.map((item, index) => renderPracticeQuestion(item, index, answers[index], checked, completed)).join('')}
-        </div>
-        ${checked ? renderPracticeResult(result, completed) : ''}
-        <div class="article-stage-actions article-stage-actions-split">
-          <button class="secondary-button" type="button" data-article-next-stage="vocabulary">返回词汇精讲</button>
-          ${completed
-            ? '<button class="primary-button" type="button" data-article-next-stage="reading">再次阅读</button>'
-            : checked
-              ? '<span class="article-check-commands"><button class="secondary-button" type="button" data-article-reset-check>重新作答</button><button class="primary-button" type="button" data-article-complete>完成本次精读</button></span>'
-              : `<button class="primary-button" type="button" data-article-check ${allAnswered ? '' : 'disabled'}>检查答案</button>`}
-        </div>
-      </section>
-    `
-  }
-
-  function renderPracticeQuestion(item, index, selectedAnswer, checked, completed) {
-    const question = readText(item, ['question', 'stem']) || `问题 ${index + 1}`
-    const options = normalizeArray(item?.options || [])
-    const correctAnswer = readText(item, ['correct_answer', 'correctAnswer', 'answer'])
-    const explanation = readText(item, ['explanation', 'analysis'])
-    const selected = String(selectedAnswer || '')
-    const correct = normalizeAnswerValue(selected) === normalizeAnswerValue(correctAnswer)
-    const questionState = checked && !completed ? (correct ? 'correct' : 'incorrect') : ''
-    return `
-      <article class="article-practice-question ${questionState}">
-        <header><span>${index + 1}</span><strong>${escapeHtml(question)}</strong></header>
-        ${options.length
-          ? `<div class="article-practice-options">
-              ${options.map((option) => {
-                const value = stringifyValue(option)
-                const optionSelected = normalizeAnswerValue(value) === normalizeAnswerValue(selected)
-                const optionCorrect = normalizeAnswerValue(value) === normalizeAnswerValue(correctAnswer)
-                const classes = [optionSelected ? 'selected' : '', checked && optionCorrect ? 'correct' : '', checked && optionSelected && !optionCorrect ? 'incorrect' : ''].filter(Boolean).join(' ')
-                return `<button type="button" class="${classes}" data-article-answer-index="${index}" data-article-answer="${escapeHtml(value)}" ${checked ? 'disabled' : ''}>${escapeHtml(value)}</button>`
-              }).join('')}
-            </div>`
-          : `<label class="article-free-answer"><span class="sr-only">第 ${index + 1} 题答案</span><input data-article-free-answer="${index}" value="${escapeHtml(selected)}" placeholder="输入答案" ${checked ? 'disabled' : ''} /></label>`}
-        ${checked ? `<div class="article-answer-feedback"><strong>${correct || completed ? '正确答案' : '本题未答对'}：${escapeHtml(correctAnswer || '暂无')}</strong>${explanation ? `<p>${escapeHtml(explanation)}</p>` : ''}</div>` : ''}
-      </article>
-    `
-  }
-
-  function renderPracticeResult(result, completed) {
-    return `
-      <div class="article-check-result ${result.score >= 60 ? 'passed' : 'needs-review'}">
-        <strong>${completed ? '本次精读已完成' : result.score >= 60 ? '检测通过' : '建议回看文章'}</strong>
-        <span>${result.correct}/${result.total} 题正确 · ${result.score} 分</span>
-      </div>
-    `
-  }
-
-  function renderTargetWordChips(words) {
-    const values = Array.isArray(words) ? words : []
-    return values.length
-      ? values.map((item) => `<span>${escapeHtml(item.term || item.normalizedTerm)}</span>`).join('')
-      : '<span>暂无目标词</span>'
-  }
-
-  function bindArticleLearningEvents(container, record, article) {
-    container.querySelector('[data-article-speak]')?.addEventListener('click', () => speakSentence(article))
-    container.querySelectorAll('[data-article-stage], [data-article-next-stage]').forEach((button) => {
-      button.addEventListener('click', () => changeArticleStage(button.dataset.articleStage || button.dataset.articleNextStage))
-    })
-    container.querySelectorAll('[data-article-reading-mode]').forEach((button) => {
-      button.addEventListener('click', () => {
-        state.articleReadingMode = button.dataset.articleReadingMode
-        renderArticleResult(record)
-      })
-    })
-    container.querySelectorAll('[data-article-target]').forEach((button) => {
-      button.addEventListener('click', async () => {
-        const term = button.dataset.articleTarget
-        await changeArticleStage('vocabulary')
-        elements.articleResult?.querySelector(`[data-article-focus-word="${cssEscape(term)}"]`)?.scrollIntoView({ behavior: 'smooth', block: 'center' })
-      })
-    })
-    container.querySelectorAll('[data-article-answer-index]').forEach((button) => {
-      button.addEventListener('click', () => {
-        setArticleAnswer(record, Number(button.dataset.articleAnswerIndex), button.dataset.articleAnswer)
-        renderArticleResult(record)
-      })
-    })
-    container.querySelectorAll('[data-article-free-answer]').forEach((input) => {
-      input.addEventListener('input', () => {
-        setArticleAnswer(record, Number(input.dataset.articleFreeAnswer), input.value)
-        const practice = normalizeArray(record.parsed?.practice || record.parsed?.questions || [])
-        const allAnswered = practice.every((_, index) => String(articleAnswers(record)[index] || '').trim())
-        container.querySelector('[data-article-check]')?.toggleAttribute('disabled', !allAnswered)
-      })
-    })
-    container.querySelector('[data-article-check]')?.addEventListener('click', () => {
-      state.articleCheckedRecords[articleRecordKey(record)] = true
-      renderArticleResult(record)
-    })
-    container.querySelector('[data-article-reset-check]')?.addEventListener('click', () => {
-      state.articleCheckedRecords[articleRecordKey(record)] = false
-      state.articleAnswerSets[articleRecordKey(record)] = []
-      renderArticleResult(record)
-    })
-    container.querySelector('[data-article-complete]')?.addEventListener('click', completeArticleStudy)
   }
 
   async function changeArticleStage(stage) {

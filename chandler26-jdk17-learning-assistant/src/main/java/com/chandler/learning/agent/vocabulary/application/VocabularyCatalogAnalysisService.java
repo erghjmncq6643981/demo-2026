@@ -2,6 +2,8 @@ package com.chandler.learning.agent.vocabulary.application;
 
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import com.baomidou.mybatisplus.core.conditions.update.LambdaUpdateWrapper;
+import com.github.benmanes.caffeine.cache.Cache;
+import com.github.benmanes.caffeine.cache.Caffeine;
 import com.chandler.learning.agent.ai.chat.application.AgentChatRequest;
 import com.chandler.learning.agent.ai.chat.application.AgentChatResponse;
 import com.chandler.learning.agent.vocabulary.api.request.VocabularyCatalogAnalysisRequest;
@@ -49,8 +51,10 @@ import java.util.LinkedHashMap;
 import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
+import java.util.Objects;
 import java.util.Set;
 import java.util.stream.Collectors;
+import java.util.concurrent.TimeUnit;
 import org.springframework.dao.DuplicateKeyException;
 
 /**
@@ -81,6 +85,11 @@ public class VocabularyCatalogAnalysisService {
     private final UserDisplayNameService userDisplayNameService;
     private final ObjectMapper objectMapper;
     private final TransactionTemplate transactionTemplate;
+    /** 场景选词高频读取已完成分析结果，短 TTL 降低跨表排序查询压力。 */
+    private final Cache<Long, List<VocabularyCatalogEntryAnalysis>> readyEntriesCache = Caffeine.newBuilder()
+            .maximumSize(64)
+            .expireAfterWrite(45, TimeUnit.SECONDS)
+            .build();
 
     /** 为已发布词本创建一次可重试的语义分析任务。 */
     public VocabularyCatalogAnalysisResponse trigger(Long userId, Long catalogVersionId,
@@ -197,6 +206,28 @@ public class VocabularyCatalogAnalysisService {
                                 VocabularyCatalogAnalysisConstants.ITEM_FAILED))
                         .eq(VocabularyCatalogAnalysisBatch::getDeleted, false)
                         .orderByAsc(VocabularyCatalogAnalysisBatch::getBatchNo));
+        // 任务涉及的词条与已有分析结果一次性读取，批次循环不再执行 N+1 查询。
+        Map<Long, List<Long>> entryIdsByBatch = new LinkedHashMap<>();
+        Set<Long> allEntryIds = new LinkedHashSet<>();
+        for (VocabularyCatalogAnalysisBatch batch : batches) {
+            List<Long> entryIds = readIds(batch.getEntryIdsJson());
+            entryIdsByBatch.put(batch.getId(), entryIds);
+            allEntryIds.addAll(entryIds);
+        }
+        Map<Long, VocabularyCatalogEntry> entryById = entryMapper.selectBatchIds(allEntryIds).stream()
+                .collect(Collectors.toMap(VocabularyCatalogEntry::getId, item -> item, (left, right) -> left));
+        if (entryById.size() != allEntryIds.size()) {
+            throw LearningAssistantException.badRequest(LearningErrorCode.JSON_PARSE_FAILED);
+        }
+        Set<Long> analyzedEntryIds = entryAnalysisMapper.selectList(
+                        new LambdaQueryWrapper<VocabularyCatalogEntryAnalysis>()
+                                .eq(VocabularyCatalogEntryAnalysis::getJobId, jobId)
+                                .in(!allEntryIds.isEmpty(), VocabularyCatalogEntryAnalysis::getCatalogEntryId, allEntryIds)
+                                .eq(VocabularyCatalogEntryAnalysis::getDeleted, false))
+                .stream()
+                .map(VocabularyCatalogEntryAnalysis::getCatalogEntryId)
+                .collect(Collectors.toCollection(LinkedHashSet::new));
+        final Long analysisCatalogVersionId = job.getCatalogVersionId();
         int successCount = value(job.getSuccessCount());
         int failedCount = value(job.getFailedCount());
         for (VocabularyCatalogAnalysisBatch batch : batches) {
@@ -209,21 +240,13 @@ public class VocabularyCatalogAnalysisService {
             int batchSuccessCount = CommonConstants.ZERO;
             int batchFailedCount = CommonConstants.ZERO;
             try {
-                List<Long> entryIds = readIds(batch.getEntryIdsJson());
-                List<VocabularyCatalogEntry> entries = entryMapper.selectBatchIds(entryIds);
-                Map<Long, VocabularyCatalogEntry> entryMap = entries.stream()
-                        .collect(Collectors.toMap(VocabularyCatalogEntry::getId, item -> item));
-                if (entryMap.size() != entryIds.size()) {
-                    throw LearningAssistantException.badRequest(LearningErrorCode.JSON_PARSE_FAILED);
-                }
-
-                Set<Long> alreadyAnalyzedIds = entryAnalysisMapper.selectList(
-                        new LambdaQueryWrapper<VocabularyCatalogEntryAnalysis>()
-                                .eq(VocabularyCatalogEntryAnalysis::getJobId, jobId)
-                                .in(VocabularyCatalogEntryAnalysis::getCatalogEntryId, entryIds)
-                                .eq(VocabularyCatalogEntryAnalysis::getDeleted, false))
-                        .stream()
-                        .map(VocabularyCatalogEntryAnalysis::getCatalogEntryId)
+                List<Long> entryIds = entryIdsByBatch.getOrDefault(batch.getId(), List.of());
+                List<VocabularyCatalogEntry> entries = entryIds.stream()
+                        .map(entryById::get)
+                        .filter(Objects::nonNull)
+                        .toList();
+                Set<Long> alreadyAnalyzedIds = entryIds.stream()
+                        .filter(analyzedEntryIds::contains)
                         .collect(Collectors.toSet());
 
                 List<VocabularyCatalogEntry> pendingEntries = entries.stream()
@@ -256,7 +279,9 @@ public class VocabularyCatalogAnalysisService {
                             AnalysisParseResult parsed = parseAnalyses(job, batch, chunk, response);
                             if (!parsed.analyses().isEmpty()) {
                                 transactionTemplate.executeWithoutResult(status -> saveBatchResult(
-                                        batch, parsed.analyses(), userId));
+                                        batch, parsed.analyses(), userId, analysisCatalogVersionId));
+                                analyzedEntryIds.addAll(parsed.analyses().stream()
+                                        .map(VocabularyCatalogEntryAnalysis::getCatalogEntryId).toList());
                                 batchSuccessCount += parsed.analyses().size();
                             }
                             unresolvedEntryIds.addAll(parsed.unresolvedEntryIds());
@@ -270,7 +295,7 @@ public class VocabularyCatalogAnalysisService {
                         }
                     }
                     boolean batchFullyCompleted = unresolvedEntryIds.isEmpty()
-                            && (alreadyAnalyzedIds.size() + batchSuccessCount) >= entries.size();
+                            && entryIds.stream().allMatch(analyzedEntryIds::contains);
                     batch.setStatus(batchFullyCompleted
                             ? VocabularyCatalogAnalysisConstants.ITEM_COMPLETED
                             : VocabularyCatalogAnalysisConstants.ITEM_FAILED);
@@ -281,18 +306,10 @@ public class VocabularyCatalogAnalysisService {
                     batchMapper.updateById(batch);
                 }
 
-                int jobSuccessCount = entryAnalysisMapper.selectCount(
-                        new LambdaQueryWrapper<VocabularyCatalogEntryAnalysis>()
-                                .eq(VocabularyCatalogEntryAnalysis::getJobId, jobId)
-                                .eq(VocabularyCatalogEntryAnalysis::getDeleted, false)).intValue();
-                successCount = jobSuccessCount;
+                successCount = analyzedEntryIds.size();
                 failedCount = Math.max(0, value(job.getTotalCount()) - successCount);
             } catch (RuntimeException ex) {
-                int jobSuccessCount = entryAnalysisMapper.selectCount(
-                        new LambdaQueryWrapper<VocabularyCatalogEntryAnalysis>()
-                                .eq(VocabularyCatalogEntryAnalysis::getJobId, jobId)
-                                .eq(VocabularyCatalogEntryAnalysis::getDeleted, false)).intValue();
-                successCount = jobSuccessCount;
+                successCount = analyzedEntryIds.size();
                 failedCount = Math.max(0, value(job.getTotalCount()) - successCount);
                 batch.setStatus(VocabularyCatalogAnalysisConstants.ITEM_FAILED);
                 batch.setErrorMessage(limitError(ex.getMessage()));
@@ -344,6 +361,10 @@ public class VocabularyCatalogAnalysisService {
 
     /** 返回各次成功任务中每个词条最新的分析结果，供学习计划候选统筹复用。 */
     public List<VocabularyCatalogEntryAnalysis> readyEntries(Long catalogVersionId) {
+        List<VocabularyCatalogEntryAnalysis> cached = readyEntriesCache.getIfPresent(catalogVersionId);
+        if (cached != null) {
+            return cached;
+        }
         List<VocabularyCatalogAnalysisJob> jobs = jobMapper.selectList(
                 new LambdaQueryWrapper<VocabularyCatalogAnalysisJob>()
                         .eq(VocabularyCatalogAnalysisJob::getCatalogVersionId, catalogVersionId)
@@ -357,7 +378,7 @@ public class VocabularyCatalogAnalysisService {
         }
         Map<Long, Integer> jobVersion = jobs.stream().collect(Collectors.toMap(
                 VocabularyCatalogAnalysisJob::getId, VocabularyCatalogAnalysisJob::getAnalysisVersion));
-        return entryAnalysisMapper.selectList(new LambdaQueryWrapper<VocabularyCatalogEntryAnalysis>()
+        List<VocabularyCatalogEntryAnalysis> result = entryAnalysisMapper.selectList(new LambdaQueryWrapper<VocabularyCatalogEntryAnalysis>()
                         .in(VocabularyCatalogEntryAnalysis::getJobId, jobVersion.keySet())
                         .eq(VocabularyCatalogEntryAnalysis::getDeleted, false)
                         .in(VocabularyCatalogEntryAnalysis::getStatus, List.of(
@@ -370,6 +391,8 @@ public class VocabularyCatalogAnalysisService {
                 .collect(Collectors.toMap(VocabularyCatalogEntryAnalysis::getCatalogEntryId,
                         item -> item, (latest, older) -> latest, LinkedHashMap::new))
                 .values().stream().toList();
+        readyEntriesCache.put(catalogVersionId, result);
+        return result;
     }
 
     private VocabularyCatalogAnalysisJob createJob(Long userId, VocabularyCatalog catalog,
@@ -591,13 +614,16 @@ public class VocabularyCatalogAnalysisService {
     }
 
     private void saveBatchResult(VocabularyCatalogAnalysisBatch batch,
-                                 List<VocabularyCatalogEntryAnalysis> analyses, Long userId) {
+                                 List<VocabularyCatalogEntryAnalysis> analyses, Long userId,
+                                 Long catalogVersionId) {
         List<Long> ids = analyses.stream().map(VocabularyCatalogEntryAnalysis::getCatalogEntryId).toList();
         if (!ids.isEmpty()) {
             entryAnalysisMapper.delete(new LambdaQueryWrapper<VocabularyCatalogEntryAnalysis>()
                     .eq(VocabularyCatalogEntryAnalysis::getJobId, batch.getJobId())
                     .in(VocabularyCatalogEntryAnalysis::getCatalogEntryId, ids));
             entryAnalysisMapper.insertBatch(analyses);
+            // 新分析结果提交后立即让场景选词缓存失效，避免等待 TTL 才看到标签和相关性。
+            readyEntriesCache.invalidate(catalogVersionId);
         }
     }
 

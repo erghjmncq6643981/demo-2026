@@ -56,6 +56,9 @@
 21. Java 迁移 `V110__WordbookEntrySortIndex`：个人单词本词条列表复合排序索引，消除 Filesort
 22. Java 迁移 `V111__DropAiForeignKeys`：移除 AI 模块物理外键约束，转为代码逻辑与事务保证数据完整性
 23. Java 迁移 `V112__VocabularyMorphAlias`：创建英语词汇形态变形与别名索引表，支持名词复数与动词时态容错命中
+24. Java 迁移 `V113__PerformanceQueryIndexes`：为公共词本、学习计划日历和精读历史摘要查询补充复合索引
+25. Java 迁移 `V114__ActivityAndAiSessionIndexes`：为活动统计和管理员 AI 会话摘要补充按用户/会话的复合索引
+26. Java 迁移 `V115__AsyncTaskCalendarIndex`：为词汇大挑战日历查询异步任务状态补充复合索引
 
 迁移脚本都设计为可重复执行，但仍建议在执行前备份数据库并记录已执行版本。
 

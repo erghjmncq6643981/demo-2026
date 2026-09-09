@@ -1,9 +1,9 @@
 import { normalizeId, sameId } from '/src/shared/ids.js'
 import { hideModal, showModal } from '/src/shared/modal.js'
-import { escapeHtml, formatDateTime } from '/src/shared/text.js'
-import { cardStatusLabel, statusLabel } from '/src/shared/vocabulary.js'
+import { escapeHtml } from '/src/shared/text.js'
 import { normalizeWordbooks, resolveSelectedWordbookId, syncCurrentWordbookId } from '/src/shared/wordbook.js'
 import { createWordbookDetailFeature } from '/src/features/vocabulary/wordbook-detail.js'
+import { createWordbookEntryListFeature } from '/src/features/vocabulary/wordbook-entry-list.js'
 
 export function createWordbookProfileFeature(ctx) {
   const {
@@ -29,15 +29,36 @@ export function createWordbookProfileFeature(ctx) {
     openEntryStatusModal,
   })
 
+  const entryListFeature = createWordbookEntryListFeature({
+    state,
+    elements,
+    sameId,
+    normalizeDefinitions: ctx.normalizeDefinitions,
+    entryMatchesKeyword,
+    renderWordbookFocus: (entry) => detailFeature.renderWordbookFocus(entry),
+    renderNotes: (entry) => ctx.renderNotes(entry),
+    openEntryStatusModal,
+    generateEntryCardWithConfirm,
+    deleteWordbookEntry,
+    openEntryTransferModal,
+    loadWordbookEntryDetail,
+    selectWordbookEntry,
+  })
+
   function renderWordbookFocus(entry) {
     return detailFeature.renderWordbookFocus(entry)
   }
 
-  function loadWordbooks() {
+  function renderWordbookEntries() {
+    entryListFeature.render()
+  }
+
+  function loadWordbooks(options = {}) {
+    const loadEntries = options.loadEntries !== false
     if (state.preview) {
       renderWordbooks()
       renderPublicCatalogs()
-      renderWordbookEntries()
+      if (loadEntries) renderWordbookEntries()
       renderProfileMetrics()
       return Promise.resolve()
     }
@@ -58,7 +79,7 @@ export function createWordbookProfileFeature(ctx) {
       }
       renderWordbooks()
       renderPublicCatalogs()
-      return loadWordbookEntries()
+      return loadEntries ? loadWordbookEntries() : undefined
     }).catch((error) => {
       logEvent('error', '单词本加载失败', error.message)
       toast(`单词本加载失败：${error.message}`)
@@ -415,207 +436,12 @@ export function createWordbookProfileFeature(ctx) {
     try {
       await request(`/api/v1/learning/wordbook-entries/${encodeURIComponent(entryId)}`, { method: 'DELETE' })
       await Promise.allSettled([loadWordbooks(), loadWordbookEntries(), loadDueReviewsFromCtx()])
-      await loadActivity()
+      loadActivity()?.catch?.(() => {})
       toast('已从单词本删除')
     } catch (error) {
       logEvent('error', '删除词条失败', error.message)
       toast(`删除词条失败：${error.message}`)
     }
-  }
-
-  function renderWordbookEntries() {
-    let entries = state.wordbookEntries
-    if (state.preview) {
-      const filter = elements.wordStatusFilter?.value || ''
-      const keyword = String(elements.wordPrefixInput?.value || '').trim().toLowerCase()
-      if (filter) {
-        entries = entries.filter((entry) => (entry.status || 'vague') === filter)
-      }
-      if (keyword) {
-        entries = entries.filter((entry) => entryMatchesKeyword(entry, keyword))
-      }
-    }
-
-    const totalCount = Number(state.wordbookTotal ?? entries.length)
-    if (elements.wordbookCountSummary) {
-      elements.wordbookCountSummary.textContent = `共 ${totalCount} 个单词`
-      const maxPage = Math.max(1, Math.ceil(totalCount / (state.wordbookPageSize || 30)))
-      const currentPage = Number(state.wordbookPage || 1)
-      elements.wordbookPageInfo.textContent = `第 ${currentPage} / ${maxPage} 页`
-      if (elements.wordbookPrevBtn) {
-        elements.wordbookPrevBtn.disabled = currentPage <= 1
-      }
-      if (elements.wordbookNextBtn) {
-        elements.wordbookNextBtn.disabled = currentPage >= maxPage
-      }
-    }
-
-    if (!entries.length) {
-      const keyword = String(elements.wordPrefixInput?.value || '').trim()
-      elements.wordbookEntryList.innerHTML = `
-        <tr>
-          <td colspan="8" class="empty" style="text-align: center; padding: 48px 16px;">
-            ${keyword ? '没有匹配搜索条件的单词' : state.token ? '当前单词本还没有单词' : '登录后查看单词本'}
-          </td>
-        </tr>
-      `
-      state.selectedEntry = null
-      renderWordbookFocus(null)
-      ctx.renderNotes(null)
-      return
-    }
-
-    const selectedEntry = state.selectedEntry && entries.some((entry) => sameId(entry.id, state.selectedEntry.id)) ? state.selectedEntry : entries[0]
-    state.selectedEntry = selectedEntry
-
-    elements.wordbookEntryList.innerHTML = entries
-      .map((entry) => {
-        const parsed = entry.parsed || {}
-        const phonetic = parsed.phonetic?.uk
-          ? `UK /${parsed.phonetic.uk}/`
-          : parsed.phonetic?.us
-            ? `US /${parsed.phonetic.us}/`
-            : entry.phonetic
-              ? `/${entry.phonetic}/`
-              : '-'
-        const definitions = typeof ctx.normalizeDefinitions === 'function' ? ctx.normalizeDefinitions(parsed) : []
-        const meaningSummary = definitions.length
-          ? definitions
-              .map((d) => {
-                const pos = d.pos && d.pos !== 'meaning' && d.pos !== 'pos' ? (d.pos.endsWith('.') ? d.pos : d.pos + '.') : ''
-                const text = (d.cn || d.en || '').trim()
-                if (pos && !text.startsWith(pos)) {
-                  return `${pos} ${text}`
-                }
-                return text
-              })
-              .join('； ')
-          : entry.meaningText || entry.definition || '-'
-        const cardCode = entry.cardStatus || 'missing'
-        const cardText = cardStatusLabel(cardCode)
-        const isClickable = ['missing', 'not_required', 'failed'].includes(cardCode)
-        const cardTitle = cardCode === 'missing'
-          ? '未生成 AI 完整词卡，点击二次确认触发生成'
-          : cardCode === 'failed'
-            ? 'AI 词卡生成失败，点击二次确认重新生成'
-            : cardCode === 'not_required'
-              ? '基础静态词条，点击二次确认生成 AI 深度词卡'
-              : cardCode === 'ready'
-                ? 'AI 完整词卡已就绪'
-                : '词卡生成中...'
-        const stateCode = entry.status || 'vague'
-        const stateText = statusLabel(stateCode)
-        const stageText = `阶段 ${entry.reviewStage ?? 0}`
-        const mastery = entry.masteryScore ?? 0
-        const nextReview = entry.nextReviewTime ? formatDateTime(entry.nextReviewTime) : '-'
-
-        return `
-          <tr class="wordbook-row ${sameId(selectedEntry.id, entry.id) ? 'active' : ''}" data-entry-id="${escapeHtml(entry.id)}">
-            <td class="cell-term">
-              <button class="word-link-btn" type="button" data-word-card="${escapeHtml(entry.id)}" title="点击查看词卡">
-                <strong class="term-text">${escapeHtml(entry.term || entry.normalizedTerm)}</strong>
-              </button>
-            </td>
-            <td class="cell-phonetic">
-              <span class="phonetic-text">${escapeHtml(phonetic)}</span>
-            </td>
-            <td class="cell-meaning">
-              <span class="meaning-text expandable" data-toggle-expand title="点击展开/收起完整释义">${escapeHtml(meaningSummary)}</span>
-            </td>
-            <td class="cell-card-status">
-              ${isClickable
-                ? `<button class="card-status-pill card-status-btn card-status-${escapeHtml(cardCode)}" type="button" data-generate-entry-card="${escapeHtml(entry.id)}" title="${escapeHtml(cardTitle)}">
-                    ${escapeHtml(cardText)}<span class="card-action-hint">⚡</span>
-                   </button>`
-                : `<span class="card-status-pill card-status-${escapeHtml(cardCode)}" title="${escapeHtml(cardTitle)}">${escapeHtml(cardText)}</span>`
-              }
-            </td>
-            <td class="cell-status">
-              <button class="status-pill status-pill-btn status-${escapeHtml(stateCode)}" type="button" data-change-status="${escapeHtml(entry.id)}" title="点击修改掌握状态（如标记为熟悉以无需/减少复习）">
-                ${escapeHtml(stateText)} · ${escapeHtml(stageText)}<span class="status-edit-hint">✎</span>
-              </button>
-            </td>
-            <td class="cell-mastery">
-              <span class="mastery-score">${mastery}</span>
-            </td>
-            <td class="cell-next-review">
-              <span class="next-review-text">${escapeHtml(nextReview)}</span>
-            </td>
-            <td class="cell-actions" style="text-align: center;">
-              <div class="row-actions" style="justify-content: center; gap: 6px;">
-                <button class="icon-action-button" type="button" data-entry-status="${escapeHtml(entry.id)}" title="修改掌握状态（可免复习）" aria-label="修改掌握状态">✎</button>
-                <button class="icon-action-button" type="button" data-entry-transfer="${escapeHtml(entry.id)}" title="复制或移动到其他单词本" aria-label="复制或移动到其他单词本">＋</button>
-                <button class="danger-icon-button" type="button" data-entry-delete="${escapeHtml(entry.id)}" title="从单词本删除" aria-label="删除">×</button>
-              </div>
-            </td>
-          </tr>
-        `
-      })
-      .join('')
-
-    elements.wordbookEntryList.onclick = (e) => {
-      const statusBtn = e.target.closest('[data-change-status], [data-entry-status]')
-      if (statusBtn) {
-        e.stopPropagation()
-        const entryId = statusBtn.getAttribute('data-change-status') || statusBtn.getAttribute('data-entry-status')
-        openEntryStatusModal(entryId)
-        return
-      }
-
-      const generateCardBtn = e.target.closest('[data-generate-entry-card]')
-      if (generateCardBtn) {
-        e.stopPropagation()
-        const entryId = generateCardBtn.getAttribute('data-generate-entry-card')
-        const entry = state.wordbookEntries.find((item) => sameId(item.id, entryId))
-        if (entry) {
-          generateEntryCardWithConfirm(entry, generateCardBtn)
-        }
-        return
-      }
-
-      const deleteBtn = e.target.closest('[data-entry-delete]')
-      if (deleteBtn) {
-        e.stopPropagation()
-        deleteWordbookEntry(deleteBtn.getAttribute('data-entry-delete'))
-        return
-      }
-
-      const transferBtn = e.target.closest('[data-entry-transfer]')
-      if (transferBtn) {
-        e.stopPropagation()
-        openEntryTransferModal(transferBtn.getAttribute('data-entry-transfer'))
-        return
-      }
-
-      const expandEl = e.target.closest('[data-toggle-expand]')
-      if (expandEl) {
-        e.stopPropagation()
-        expandEl.classList.toggle('expanded')
-        return
-      }
-
-      const wordTarget = e.target.closest('[data-word-card], .cell-term')
-      if (wordTarget) {
-        e.stopPropagation()
-        const row = wordTarget.closest('tr[data-entry-id]')
-        const entryId = row?.getAttribute('data-entry-id') || wordTarget.getAttribute('data-word-card')
-        const entry = state.wordbookEntries.find((item) => sameId(item.id, entryId))
-        if (entry) {
-          selectWordbookEntry(entry, { silent: true })
-          const modal = elements.wordbookCardModal || document.getElementById('wordbookCardModal')
-          if (modal) {
-            showModal(modal)
-          }
-
-          const hasDetail = entry.parsed && typeof entry.parsed === 'object'
-          if (!state.preview && !hasDetail) loadWordbookEntryDetail(entry)
-        }
-        return
-      }
-    }
-
-    renderWordbookFocus(selectedEntry)
-    ctx.renderNotes(selectedEntry)
   }
 
   async function generateEntryCardWithConfirm(entry, button) {
@@ -643,16 +469,17 @@ export function createWordbookProfileFeature(ctx) {
       button.innerHTML = `<span class="card-loading-spinner"></span>生成中...`
     }
     try {
-      const updated = await request(`/api/v1/learning/wordbook-entries/${encodeURIComponent(entry.id)}/generate-card?forceRefresh=true`, {
+      await request(`/api/v1/learning/wordbook-entries/${encodeURIComponent(entry.id)}/generate-card/async?forceRefresh=true`, {
         method: 'POST',
       })
+      const updated = { ...entry, cardStatus: 'generating', cardErrorMessage: null }
       if (updated) {
         const idx = state.wordbookEntries.findIndex((item) => sameId(item.id, entry.id))
         if (idx >= 0) {
           state.wordbookEntries[idx] = {
             ...state.wordbookEntries[idx],
             ...updated,
-            cardStatus: updated.cardStatus || 'ready',
+            cardStatus: 'generating',
             phonetic: updated.phonetic || state.wordbookEntries[idx].phonetic,
             meaningText: updated.meaningText || state.wordbookEntries[idx].meaningText,
           }
@@ -662,8 +489,8 @@ export function createWordbookProfileFeature(ctx) {
           renderWordbookFocus(state.selectedEntry)
         }
         renderWordbookEntries()
-        logEvent?.('ai', '生成词卡成功', term)
-        toast?.(`单词「${term}」AI 词卡生成成功！`)
+        logEvent?.('ai', '提交词卡生成任务', term)
+        toast?.(`单词「${term}」词卡任务已提交，可在任务中心查看进度`)
       }
     } catch (err) {
       logEvent?.('error', '生成词卡失败', err.message)

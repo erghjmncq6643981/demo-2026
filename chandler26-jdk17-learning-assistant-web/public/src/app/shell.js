@@ -132,23 +132,25 @@ export function createAppShell(ctx) {
     if (!options.silent) {
       logEvent('navigation', `进入${title}`)
     }
-    if (viewId === 'reviewView' && !options.skipReviewReload) loadDueReviews()
-    if (viewId === 'wordbookView') loadWordbookEntries()
-    if (viewId === 'articleStudyView') {
-      loadArticleWords?.()
-      loadArticleHistory?.()
-    }
-    if (viewId === 'scenePlanView') {
-      loadSceneData?.({ keepStage: Boolean(state.sceneChallengeStage && state.sceneChallengeStage !== 'overview') })
-    }
-    if (viewId === 'profileView') {
-      mountProfilePanels()
-      const activeTab = state.activeProfileTab || 'accountPanel'
-      setProfileTab(activeTab)
-    }
-    if (viewId === 'systemAdminView') {
-      systemManagement?.mountPanels()
-      systemManagement?.renderSystemTab(state.activeSystemTab || 'adminUserPanel')
+    if (!state.initializing) {
+      if (viewId === 'reviewView' && !options.skipReviewReload) loadDueReviews()
+      if (viewId === 'wordbookView') loadWordbookEntries()
+      if (viewId === 'articleStudyView') {
+        loadArticleWords?.()
+        loadArticleHistory?.()
+      }
+      if (viewId === 'scenePlanView') {
+        loadSceneData?.({ keepStage: Boolean(state.sceneChallengeStage && state.sceneChallengeStage !== 'overview') })
+      }
+      if (viewId === 'profileView') {
+        mountProfilePanels()
+        const activeTab = state.activeProfileTab || 'accountPanel'
+        setProfileTab(activeTab)
+      }
+      if (viewId === 'systemAdminView') {
+        systemManagement?.mountPanels()
+        systemManagement?.renderSystemTab(state.activeSystemTab || 'adminUserPanel')
+      }
     }
     if (window.matchMedia('(max-width: 1100px)').matches) {
       setSidebarCollapsed(true)
@@ -199,8 +201,14 @@ export function createAppShell(ctx) {
       localStorage.setItem('learning.token', state.token)
       localStorage.setItem('learning.user', JSON.stringify(state.user))
       elements.passwordInput.value = ''
+      state.initializing = true
       updateAuthView()
-      await loadInitialData()
+      try {
+        await loadInitialData()
+      } finally {
+        state.initializing = false
+      }
+      setView(state.activeView || 'profileView', { silent: true })
       logEvent('auth', mode === 'login' ? '登录成功' : '注册成功', state.user?.username || '')
       toast(mode === 'login' ? '登录成功' : '注册成功，已创建默认词书')
     } catch (error) {
@@ -276,13 +284,13 @@ export function createAppShell(ctx) {
       loadPreviewData()
       return
     }
-    await Promise.allSettled([loadAgents(), loadWordbooks(), loadModelConfigs(), loadPromptTemplates(), loadSpeechPreferences(), loadActivity(), loadSystemLogs(), loadAiTasks?.()])
-    await Promise.allSettled([loadLearningSettings?.()])
-    await Promise.allSettled([loadDueReviews(), loadWordbookEntries()])
-    await Promise.allSettled([loadSceneData?.()])
-    if (state.activeView === 'articleStudyView') {
-      await Promise.allSettled([loadArticleWords?.(), loadArticleHistory?.()])
-    }
+    // 首屏只等待登录后立即需要的数据；活动统计是辅助信息，后台加载不能阻塞进入应用。
+    await Promise.allSettled([loadWordbooks({ loadEntries: false }), loadSpeechPreferences()])
+    window.setTimeout(() => {
+      Promise.resolve(loadActivity?.()).catch((error) => {
+        logEvent('error', '学习活跃图后台加载失败', error.message)
+      })
+    }, 0)
   }
 
   function loadPreviewData() {

@@ -9,6 +9,9 @@ import lombok.Data;
 @Data
 public class LearningAssessmentPassBO {
 
+    /** 场景单元 ID；日历跨多个单元时用于隔离同一词条的检查状态。 */
+    private Long unitId;
+
     /** 场景单元词条对应的个人单词本词条 ID。 */
     private Long entryId;
 

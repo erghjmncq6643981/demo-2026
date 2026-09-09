@@ -164,14 +164,21 @@ public class AiChatService {
             trySaveSuccessRecord(record, modelResponse, costTime);
             aiCallMetrics.recordSuccess(invocationScene, provider, modelName,
                     modelResponse.getPromptTokens(), modelResponse.getCompletionTokens(), costTime);
-            log.info("event=ai_call result=success sessionId={} invocationScene={} agent={} provider={} model={} tokens={} costMs={} responseJson={}",
+            log.info("event=ai_call result=success sessionId={} invocationScene={} agent={} provider={} model={} tokens={} costMs={} finishReason={} contentChars={} parser={} parseStage={} repairs={}",
                     session.getId(),
                     invocationScene.getCode(),
                     agent.getCode(),
                     provider,
                     modelName,
                     modelResponse.getTotalTokens(),
-                    costTime,modelResponse.getResponseJson());
+                    costTime,
+                    modelResponse.getFinishReason(),
+                    modelResponse.getContent() == null ? 0 : modelResponse.getContent().length(),
+                    modelResponse.getStructuredParser(),
+                    modelResponse.getStructuredParseStage(),
+                    modelResponse.getStructuredRepairs() == null ? 0 : modelResponse.getStructuredRepairs().size());
+            log.debug("AI 调用原始响应已受控保存 sessionId={} responseChars={}，正文仅在审计详情中按权限查看",
+                    session.getId(), modelResponse.getResponseJson() == null ? 0 : modelResponse.getResponseJson().length());
 
             AgentChatResponse response = new AgentChatResponse();
             response.setSessionId(session.getId());

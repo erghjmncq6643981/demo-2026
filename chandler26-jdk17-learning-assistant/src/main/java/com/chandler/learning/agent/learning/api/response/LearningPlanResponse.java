@@ -55,6 +55,10 @@ public class LearningPlanResponse {
     @Schema(description = "AI 会话标识")
     private Long aiSessionId;
 
+    /** 创建或启动计划后提交的首个场景异步任务标识。 */
+    @Schema(description = "首个场景生成异步任务标识")
+    private Long initialSceneTaskId;
+
     @Schema(description = "是否满足该条件")
     private Boolean canGenerateNext;
 

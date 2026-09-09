@@ -1,6 +1,6 @@
 import { hideModal, showModal } from '/src/shared/modal.js'
 import { asArray, localDateKey, number } from '/src/features/learning/scene-plan/model.js'
-import { pendingChallengeWords, isWordComplete } from '/src/features/learning/scene-plan/challenge-model.js'
+import { pendingChallengeCount, isWordComplete } from '/src/features/learning/scene-plan/challenge-model.js'
 
 export function createSceneOverview({
   state,
@@ -51,7 +51,13 @@ export function createSceneOverview({
         const summaryWords = coreWords.length
           ? coreWords
           : asArray(unit.pendingChallengeWords).map((word) => typeof word === 'string' ? { term: word, tier: 'core' } : word)
-        summaryWords.forEach((word) => isWordComplete(word) ? completedTotal++ : pendingTotal++)
+        if (summaryWords.length) {
+          summaryWords.forEach((word) => isWordComplete(word) ? completedTotal++ : pendingTotal++)
+        } else {
+          const unitPending = pendingChallengeCount(unit)
+          pendingTotal += unitPending
+          completedTotal += Math.max(0, number(unit.coreWordCount) - unitPending)
+        }
       })
       elements.sceneVocabularyPreviewTitle.textContent = displayDate
         ? `${formatCalendarDate(new Date(`${displayDate}T12:00:00`), true)} · 场景词汇`
@@ -68,7 +74,9 @@ export function createSceneOverview({
           const displayWords = coreWords.length
             ? coreWords
             : asArray(unit.pendingChallengeWords).map((word) => typeof word === 'string' ? { term: word, tier: 'core' } : word)
-          const unitPending = displayWords.filter((w) => !isWordComplete(w)).length
+          const unitPending = displayWords.length
+            ? displayWords.filter((w) => !isWordComplete(w)).length
+            : pendingChallengeCount(unit)
           const pillText = unitPending > 0 ? `${unitPending} 待挑战词` : '已全部完成'
           return `<section class="scene-vocabulary-preview-group">
             <div class="scene-vocabulary-preview-heading"><div><strong>${escapeHtml(unit.title || '场景单元')}</strong><small>Scene ${number(unit.unitNo)} · ${unitStatusLabel(unit)}</small></div><span class="mini-pill ${unitPending === 0 ? 'ok' : ''}">${pillText}</span></div>
@@ -88,7 +96,10 @@ export function createSceneOverview({
     renderModal()
     showModal(elements.sceneVocabularyPreviewModal)
 
-    const unitsNeedDetail = selectedUnits.filter((u) => !asArray(u.words).length && !asArray(u.pendingChallengeWords).length)
+    // 日历摘要明确返回空数组时表示该单元没有待挑战词（例如已全部完成），
+    // 不应因为“没有词面”再次拉取包含文章和词卡的大对象。
+    const unitsNeedDetail = selectedUnits.filter((u) =>
+      !asArray(u.words).length && !Array.isArray(u.pendingChallengeWords))
     if (unitsNeedDetail.length > 0 && !state.preview && api?.getUnit) {
       try {
         await Promise.all(unitsNeedDetail.map(async (u) => {
@@ -148,7 +159,7 @@ export function createSceneOverview({
       const dayData = dayDataFor(key)
       const isGenerating = isDayGenerating(key)
       const generated = number(dayData?.generatedUnitCount) > 0 || units.length > 0
-      const pendingCount = dayData ? number(dayData.pendingChallengeCount) : units.reduce((sum, unit) => sum + pendingChallengeWords(unit).length, 0)
+      const pendingCount = dayData ? number(dayData.pendingChallengeCount) : units.reduce((sum, unit) => sum + pendingChallengeCount(unit), 0)
       const overdue = number(dayData?.overdueCount) > 0 || (isPast && pendingCount > 0)
       const isCompleted = units.length && units.every((unit) => unit.status === 'completed')
       let count = pendingCount
@@ -207,7 +218,7 @@ export function createSceneOverview({
     const units = unitsForDate(plan, key)
     const isGenerating = isDayGenerating(key)
     if (units.length > 1) {
-      const totalPending = units.reduce((sum, unit) => sum + pendingChallengeWords(unit).length, 0)
+      const totalPending = units.reduce((sum, unit) => sum + pendingChallengeCount(unit), 0)
       const totalCompleted = units.reduce((sum, unit) => sum + number(unit.completedCoreCount || unit.coreWordCount), 0)
       const allCompleted = units.every((unit) => unit.status === 'completed')
       const statusLabel = isGenerating ? '生成中...' : (allCompleted ? '已完成' : (isToday ? '今日任务' : '待学习'))
@@ -215,7 +226,7 @@ export function createSceneOverview({
       const dayMeta = isGenerating ? 'AI 正在后台生成场景材料与练习题...' : (allCompleted ? `共 ${units.length} 篇场景材料 · ${totalCompleted} 个已完成词汇` : `共 ${units.length} 篇场景材料 · ${totalPending} 个待挑战词汇`)
       return `<div class="scene-overview-day-group ${isToday ? 'today' : ''} ${isPast ? 'past' : ''}"><div class="day-group-header"><div class="day-group-date-info"><span class="day-group-date">${formatCalendarDate(date, true)}</span><span class="unit-status-tag ${statusClass}">${statusLabel}</span><span class="day-group-meta">${dayMeta}</span></div><div class="day-group-actions">${isGenerating ? '<button class="secondary-button compact" type="button" disabled>生成中...</button>' : `<button class="secondary-button compact" type="button" data-action-regenerate-date="${key}" ${plan.status !== 'active' ? 'disabled' : ''}>重新生成</button>`}</div></div><div class="day-group-units">${units.map((unit, idx) => {
         const isComplete = unit.status === 'completed'
-        const pendingCount = pendingChallengeWords(unit).length
+        const pendingCount = pendingChallengeCount(unit)
         const completedCount = number(unit.completedCoreCount || unit.coreWordCount)
         const wordInfo = isComplete ? `${completedCount} 个已完成词汇 · 已完成` : `${pendingCount} 个待挑战词汇 · ${unitStatusLabel(unit)}`
         return `<div class="day-unit-sub-row"><button class="unit-preview-button" type="button" data-preview-date="${key}" data-preview-unit="${escapeHtml(unit.id)}" aria-label="预览第 ${idx + 1} 篇 ${escapeHtml(unit.title || '场景单元')} 的词汇"><span class="unit-index-badge">篇章 ${idx + 1}/${units.length}</span><span class="unit-detail-info"><strong class="unit-title">${escapeHtml(unit.title || '场景单元')}</strong><span class="unit-words-count">${wordInfo}</span></span></button><div class="unit-action-button"><button class="primary-button compact-primary" type="button" data-action-learn="${escapeHtml(unit.id)}">${isComplete ? '回顾场景' : '开始学习'}</button></div></div>`
@@ -223,7 +234,7 @@ export function createSceneOverview({
     }
     const unit = units.length === 1 ? units[0] : null
     const isComplete = unit?.status === 'completed'
-    const pendingCount = unit ? pendingChallengeWords(unit).length : 0
+    const pendingCount = unit ? pendingChallengeCount(unit) : 0
     const completedCount = unit ? number(unit.completedCoreCount || unit.coreWordCount) : 0
     const wordInfo = isGenerating ? 'AI 正在后台异步生成场景短文与练习题，请稍候...' : (unit ? (isComplete ? `${completedCount} 个已完成词汇 · 已完成` : `${pendingCount} 个待挑战词汇 · ${unitStatusLabel(unit)}`) : '场景生成后可预览待挑战与已完成词汇')
     const tagLabel = isGenerating ? '生成中...' : (unit ? unitStatusLabel(unit) : '待生成')

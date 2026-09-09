@@ -28,6 +28,8 @@ import org.springframework.util.StringUtils;
 
 import java.time.LocalDateTime;
 import java.util.HashSet;
+import java.util.Collection;
+import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
@@ -114,6 +116,23 @@ public class AiTaskExecutionService {
         } finally {
             heartbeat.cancel(false);
         }
+    }
+
+    /**
+     * 更新批量步骤的条目进度。
+     * <p>步骤仍由 execute 持有租约，进度写入使用状态条件，避免旧 Worker 覆盖新的执行结果。</p>
+     */
+    public void updateProgress(Long taskId, String stepCode, int totalCount, int completedCount) {
+        int resolvedTotal = Math.max(0, totalCount);
+        int resolvedCompleted = Math.max(0, Math.min(resolvedTotal, completedCount));
+        stepMapper.update(null, new LambdaUpdateWrapper<AiAsyncTaskStep>()
+                .eq(AiAsyncTaskStep::getTaskId, taskId)
+                .eq(AiAsyncTaskStep::getStepCode, stepCode)
+                .eq(AiAsyncTaskStep::getStatus, AiTaskStepStatus.RUNNING.getCode())
+                .eq(AiAsyncTaskStep::getDeleted, false)
+                .set(AiAsyncTaskStep::getTotalCount, resolvedTotal)
+                .set(AiAsyncTaskStep::getCompletedCount, resolvedCompleted)
+                .set(AiAsyncTaskStep::getUpdateTime, LocalDateTime.now()));
     }
 
     private ScheduledFuture<?> startHeartbeat(Long stepId, String leaseToken) {
@@ -218,6 +237,40 @@ public class AiTaskExecutionService {
                 .eq(AiAsyncTaskStep::getDeleted, false)
                 .last(CommonConstants.SQL_LIMIT_ONE));
         return step != null && AiTaskStepStatus.COMPLETED.getCode().equals(step.getStatus());
+    }
+
+    /** 批量判断场景任务的材料步骤，调度器每轮只访问一次步骤表。 */
+    public Set<Long> findMaterialStepCompletedTaskIds(Collection<AiAsyncTask> tasks) {
+        if (tasks == null || tasks.isEmpty()) {
+            return Set.of();
+        }
+        Map<Long, String> expectedStepByTask = new HashMap<>();
+        for (AiAsyncTask task : tasks) {
+            if (task == null || task.getId() == null) {
+                continue;
+            }
+            if (AiTaskType.SCENE_MATERIAL_REGENERATION.getCode().equals(task.getTaskType())) {
+                expectedStepByTask.put(task.getId(), "generate_revision");
+            } else if (AiTaskType.SCENE_MATERIAL.getCode().equals(task.getTaskType())) {
+                expectedStepByTask.put(task.getId(), "generate_material");
+            }
+        }
+        if (expectedStepByTask.isEmpty()) {
+            return Set.of();
+        }
+        List<AiAsyncTaskStep> completed = stepMapper.selectList(new LambdaQueryWrapper<AiAsyncTaskStep>()
+                .in(AiAsyncTaskStep::getTaskId, expectedStepByTask.keySet())
+                .in(AiAsyncTaskStep::getStepCode, expectedStepByTask.values())
+                .eq(AiAsyncTaskStep::getStatus, AiTaskStepStatus.COMPLETED.getCode())
+                .eq(AiAsyncTaskStep::getDeleted, false));
+        Set<Long> result = new HashSet<>();
+        for (AiAsyncTaskStep step : completed) {
+            if (step != null && step.getTaskId() != null
+                    && step.getStepCode().equals(expectedStepByTask.get(step.getTaskId()))) {
+                result.add(step.getTaskId());
+            }
+        }
+        return Set.copyOf(result);
     }
 
     /** 查询指定学习计划下所有处于活动状态的任务在 prepare_vocabulary 步骤中锁定的词表 Entry ID 集合。 */
@@ -354,18 +407,22 @@ public class AiTaskExecutionService {
 
     private void finishStep(Long stepId, String leaseToken, String status, String error, boolean completed) {
         LocalDateTime now = LocalDateTime.now();
-        stepMapper.update(null, new LambdaUpdateWrapper<AiAsyncTaskStep>()
+        LambdaUpdateWrapper<AiAsyncTaskStep> wrapper = new LambdaUpdateWrapper<AiAsyncTaskStep>()
                 .eq(AiAsyncTaskStep::getId, stepId)
                 .eq(AiAsyncTaskStep::getLeaseToken, leaseToken)
                 .eq(AiAsyncTaskStep::getDeleted, false)
                 .set(AiAsyncTaskStep::getStatus, status)
-                .set(AiAsyncTaskStep::getCompletedCount, completed ? 1 : 0)
                 .set(AiAsyncTaskStep::getErrorMessage, limit(error))
                 .set(AiAsyncTaskStep::getLeaseToken, null)
                 .set(AiAsyncTaskStep::getLeaseUntil, null)
                 .set(AiAsyncTaskStep::getHeartbeatTime, now)
                 .set(AiAsyncTaskStep::getFinishedTime, now)
-                .set(AiAsyncTaskStep::getUpdateTime, now));
+                .set(AiAsyncTaskStep::getUpdateTime, now);
+        // 失败步骤保留已经完成的条目数，任务中心可以准确显示部分成功并支持断点重试。
+        if (completed) {
+            wrapper.setSql("completed_count = total_count");
+        }
+        stepMapper.update(null, wrapper);
     }
 
     private void finishAttempt(Long attemptId, String status, String error) {

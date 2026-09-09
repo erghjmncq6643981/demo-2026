@@ -72,8 +72,9 @@ public class AiChatSessionController {
     /** 会话消息列表。 */
     @GetMapping("/{sessionId}/messages")
     @Operation(summary = "会话消息列表")
-    public List<ChatMessageResponse> messages(@PathVariable Long sessionId) {
-        return chatSessionService.listMessages(sessionId);
+    public List<ChatMessageResponse> messages(@PathVariable Long sessionId,
+                                              @RequestParam(required = false, defaultValue = "200") Integer limit) {
+        return chatSessionService.listMessages(sessionId, limit);
     }
 
     /** 更新会话标题。 */

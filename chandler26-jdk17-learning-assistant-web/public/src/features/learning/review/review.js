@@ -330,7 +330,7 @@ export function createReviewFeature(ctx) {
         body: JSON.stringify({ result }),
       })
       await Promise.allSettled([loadWordbooks(), loadWordbookEntries()])
-      await loadActivity()
+      loadActivity()?.catch?.(() => {})
       state.reviewTyped = ''
       state.reviewWrongCount = 0
       feature.closeReviewModal({ skipRender: true })

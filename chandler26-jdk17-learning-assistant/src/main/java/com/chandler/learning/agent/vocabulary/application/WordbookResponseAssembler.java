@@ -7,6 +7,7 @@ import com.chandler.learning.agent.vocabulary.api.response.VocabularyTagResponse
 import com.chandler.learning.agent.vocabulary.api.response.WordbookEntryResponse;
 import com.chandler.learning.agent.vocabulary.api.response.WordbookEntrySummaryResponse;
 import com.chandler.learning.agent.vocabulary.api.response.WordbookResponse;
+import com.chandler.learning.agent.vocabulary.domain.bo.WordbookEntrySummaryItem;
 import com.chandler.learning.agent.vocabulary.domain.entity.EnglishVocabularyStudyRecord;
 import com.chandler.learning.agent.vocabulary.domain.entity.LearningWordbook;
 import com.chandler.learning.agent.vocabulary.domain.entity.LearningWordbookEntry;
@@ -112,6 +113,33 @@ public class WordbookResponseAssembler {
         response.setCardStatus(entry.getCardStatus());
         response.setCreateTime(entry.getCreateTime());
         populateSummaryCardInfo(response, entry);
+        return response;
+    }
+
+    /** 将轻量 SQL 投影转换为列表响应，避免解析完整词卡 JSON。 */
+    public WordbookEntrySummaryResponse toSummaryResponse(WordbookEntrySummaryItem item) {
+        if (item == null) {
+            return null;
+        }
+        // 投影已经包含首个音标和释义，不能再复用实体装配器，否则会因为缺少快照 JSON
+        // 按词条回查公共词卡，形成列表接口的 N+1 SQL。
+        WordbookEntrySummaryResponse response = new WordbookEntrySummaryResponse();
+        response.setId(item.getId());
+        response.setWordbookId(item.getWordbookId());
+        response.setTerm(item.getTerm());
+        response.setNormalizedTerm(item.getNormalizedTerm());
+        response.setStatus(StringUtils.hasText(item.getStatus()) ? item.getStatus() : inferStatus(item.toEntity()));
+        response.setReviewStage(item.getReviewStage());
+        response.setMasteryScore(item.getMasteryScore());
+        response.setLastReviewTime(item.getLastReviewTime());
+        response.setNextReviewTime(item.getNextReviewTime());
+        response.setReviewCount(item.getReviewCount());
+        response.setCorrectCount(item.getCorrectCount());
+        response.setWrongCount(item.getWrongCount());
+        response.setCardStatus(item.getCardStatus());
+        response.setCreateTime(item.getCreateTime());
+        response.setPhonetic(item.getPhonetic());
+        response.setMeaningText(item.getMeaningText());
         return response;
     }
 

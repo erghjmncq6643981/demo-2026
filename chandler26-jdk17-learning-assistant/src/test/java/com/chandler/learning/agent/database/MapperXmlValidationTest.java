@@ -95,6 +95,9 @@ class MapperXmlValidationTest {
                 "com.chandler.learning.agent.vocabulary.infrastructure.mapper.VocabularyCatalogEntryMapper.selectUnanalyzedPublished"))
                 .isTrue();
         assertThat(configuration.hasStatement(
+                "com.chandler.learning.agent.vocabulary.infrastructure.mapper.VocabularyCatalogEntryMapper.countAvailableForPlan"))
+                .isTrue();
+        assertThat(configuration.hasStatement(
                 "com.chandler.learning.agent.vocabulary.infrastructure.mapper.LearningWordProgressMapper.updateBatch"))
                 .isTrue();
         assertThat(configuration.hasStatement(
@@ -102,6 +105,9 @@ class MapperXmlValidationTest {
                 .isTrue();
         assertThat(configuration.hasStatement(
                 "com.chandler.learning.agent.vocabulary.infrastructure.mapper.LearningWordbookEntryMapper.updateVocabularyCardBatch"))
+                .isTrue();
+        assertThat(configuration.hasStatement(
+                "com.chandler.learning.agent.vocabulary.infrastructure.mapper.LearningWordbookEntryMapper.selectDistinctAudioTerms"))
                 .isTrue();
         assertThat(configuration.hasStatement(
                 "com.chandler.learning.agent.vocabulary.infrastructure.mapper.LearningWordbookMapper.selectWordbookSummaries"))

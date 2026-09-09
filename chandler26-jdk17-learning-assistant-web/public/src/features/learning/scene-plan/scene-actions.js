@@ -17,6 +17,64 @@ export function createSceneActions({
   sameId,
   createPreviewCookingUnit,
 }) {
+  let cardPollTimer = null
+  let cardPollToken = 0
+
+  function stopCardPolling() {
+    cardPollToken += 1
+    if (cardPollTimer) {
+      window.clearTimeout(cardPollTimer)
+      cardPollTimer = null
+    }
+  }
+
+  function updateCardButton(job) {
+    if (!elements.sceneGenerateCardsBtn || !job) return
+    const failed = number(job.failedCount)
+    elements.sceneGenerateCardsBtn.textContent = failed ? `重试失败词 (${failed})` : '补齐词卡'
+  }
+
+  async function pollCardJob(job, planId, unitId, token) {
+    const terminal = new Set(['completed', 'partial_failed', 'failed'])
+    if (!job?.jobId || terminal.has(job.status) || token !== cardPollToken) {
+      return
+    }
+    try {
+      const current = await request(`/api/v1/vocabulary-card-jobs/${encodeURIComponent(job.jobId)}`)
+      if (token !== cardPollToken) return
+      state.sceneCardJob = current
+      if (terminal.has(current?.status)) {
+        updateCardButton(current)
+        await selectPlan(planId, { quiet: true, keepStage: true })
+        const failed = number(current.failedCount)
+        const failureReason = current.errorMessage ? `，原因：${current.errorMessage}` : ''
+        toast(`词卡任务完成：成功 ${number(current.successCount)}，失败 ${failed}${failureReason}`)
+        cardPollTimer = null
+        return
+      }
+      cardPollTimer = window.setTimeout(() => {
+        pollCardJob(current, planId, unitId, token)
+      }, 1200)
+    } catch (error) {
+      if (token !== cardPollToken) return
+      logEvent('error', '批量词卡任务状态查询失败', error.message)
+      // 状态查询失败不改变任务本身，稍后继续尝试，避免短暂网络波动误报任务失败。
+      cardPollTimer = window.setTimeout(() => {
+        pollCardJob(job, planId, unitId, token)
+      }, 3000)
+    }
+  }
+
+  function startCardPolling(job, planId, unitId) {
+    stopCardPolling()
+    const token = cardPollToken
+    if (!job?.jobId || ['completed', 'partial_failed', 'failed'].includes(job.status)) {
+      updateCardButton(job)
+      return
+    }
+    cardPollTimer = window.setTimeout(() => pollCardJob(job, planId, unitId, token), 800)
+  }
+
   async function promoteWord(entryId) {
     const plan = state.currentLearningPlan
     const unit = activeUnit(plan)
@@ -152,7 +210,7 @@ export function createSceneActions({
     const plan = state.currentLearningPlan
     const unit = activeUnit(plan)
     if (!plan || !unit) return
-    setButtonLoading(elements.sceneGenerateCardsBtn, true, '生成中...')
+    setButtonLoading(elements.sceneGenerateCardsBtn, true, '提交中...')
     try {
       if (state.preview) {
         const targets = asArray(unit.words).filter((word) => ['core', 'review'].includes(word.tier) && ['missing', 'failed'].includes(word.cardStatus))
@@ -166,16 +224,7 @@ export function createSceneActions({
       const path = retry ? `/api/v1/vocabulary-card-jobs/${encodeURIComponent(state.sceneCardJob.jobId)}/retry` : `/api/v1/learning/plans/${encodeURIComponent(plan.id)}/units/${encodeURIComponent(unit.id)}/cards/generate`
       state.sceneCardJob = await request(path, { method: 'POST', body: JSON.stringify({ batchSize: 15 }) })
       toast('词卡任务已提交，正在生成...')
-      state.sceneCardJob = await waitForCardJob(state.sceneCardJob)
-      await selectPlan(plan.id, { quiet: true })
-      if (['pending', 'running'].includes(state.sceneCardJob.status)) {
-        toast('词卡仍在后台生成，可稍后再次查看进度')
-        return
-      }
-      const failed = number(state.sceneCardJob.failedCount)
-      elements.sceneGenerateCardsBtn.textContent = failed ? `重试失败词 (${failed})` : '补齐词卡'
-      const failureReason = state.sceneCardJob.errorMessage ? `，原因：${state.sceneCardJob.errorMessage}` : ''
-      toast(`词卡任务完成：成功 ${number(state.sceneCardJob.successCount)}，失败 ${failed}${failureReason}`)
+      startCardPolling(state.sceneCardJob, plan.id, unit.id)
     } catch (error) {
       logEvent('error', '批量词卡生成失败', error.message)
       toast(`批量词卡生成失败：${error.message}`)
@@ -223,17 +272,9 @@ export function createSceneActions({
     }
   }
 
-  async function waitForCardJob(initialJob) {
-    let current = initialJob
-    const terminal = new Set(['completed', 'partial_failed', 'failed'])
-    if (!current?.jobId || terminal.has(current.status)) return current
-    for (let attempt = 0; attempt < 120; attempt += 1) {
-      await new Promise((resolve) => window.setTimeout(resolve, 1000))
-      current = await request(`/api/v1/vocabulary-card-jobs/${encodeURIComponent(current.jobId)}`)
-      if (terminal.has(current.status)) return current
-    }
-    return current
+  function stopAsyncTasks() {
+    stopCardPolling()
   }
 
-  return { promoteWord, completeCurrentUnit, generateNextUnit, scheduleNextUnit, generateCards, scheduleCards, generateRelatedWords }
+  return { promoteWord, completeCurrentUnit, generateNextUnit, scheduleNextUnit, generateCards, scheduleCards, generateRelatedWords, stopAsyncTasks }
 }

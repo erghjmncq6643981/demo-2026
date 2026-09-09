@@ -1,8 +1,5 @@
 package com.chandler.learning.agent.vocabulary.application;
 
-import com.baomidou.mybatisplus.core.conditions.query.QueryWrapper;
-import com.baomidou.mybatisplus.core.metadata.IPage;
-import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
 import com.chandler.learning.agent.vocabulary.domain.constant.VocabularyAudioConstants;
 import com.chandler.learning.agent.vocabulary.domain.entity.EnglishVocabularyStudyRecord;
 import com.chandler.learning.agent.vocabulary.domain.entity.LearningWordbookEntry;
@@ -272,58 +269,14 @@ public class VocabularyAudioService {
      */
     public Set<String> collectAllVocabularyTerms() {
         Set<String> allTerms = new LinkedHashSet<>();
-        long pageSize = 500;
-
-        // 1. 从个人单词本词条表批量扫描
-        long current = 1;
-        while (true) {
-            Page<LearningWordbookEntry> page = new Page<>(current, pageSize);
-            QueryWrapper<LearningWordbookEntry> qw = new QueryWrapper<>();
-            qw.select("DISTINCT normalized_term");
-            qw.isNotNull("normalized_term");
-            qw.ne("normalized_term", "");
-            IPage<LearningWordbookEntry> result = wordbookEntryMapper.selectPage(page, qw);
-            if (result == null || result.getRecords().isEmpty()) {
-                break;
-            }
-            for (LearningWordbookEntry entry : result.getRecords()) {
-                if (StringUtils.hasText(entry.getNormalizedTerm())) {
-                    String clean = normalizeAudioTerm(entry.getNormalizedTerm());
-                    if (StringUtils.hasText(clean) && isDownloadableDictTerm(clean)) {
-                        allTerms.add(clean);
-                    }
+        // 词本和 AI 缓存通过一次 UNION 查询去重，后续循环只做内存规范化，不在遍历中发 SQL。
+        for (String normalizedTerm : wordbookEntryMapper.selectDistinctAudioTerms()) {
+            if (StringUtils.hasText(normalizedTerm)) {
+                String clean = normalizeAudioTerm(normalizedTerm);
+                if (StringUtils.hasText(clean) && isDownloadableDictTerm(clean)) {
+                    allTerms.add(clean);
                 }
             }
-            if (current >= result.getPages()) {
-                break;
-            }
-            current++;
-        }
-
-        // 2. 从 AI 学习记录缓存表批量扫描
-        current = 1;
-        while (true) {
-            Page<EnglishVocabularyStudyRecord> page = new Page<>(current, pageSize);
-            QueryWrapper<EnglishVocabularyStudyRecord> qw = new QueryWrapper<>();
-            qw.select("DISTINCT normalized_term");
-            qw.isNotNull("normalized_term");
-            qw.ne("normalized_term", "");
-            IPage<EnglishVocabularyStudyRecord> result = studyRecordMapper.selectPage(page, qw);
-            if (result == null || result.getRecords().isEmpty()) {
-                break;
-            }
-            for (EnglishVocabularyStudyRecord record : result.getRecords()) {
-                if (StringUtils.hasText(record.getNormalizedTerm())) {
-                    String clean = normalizeAudioTerm(record.getNormalizedTerm());
-                    if (StringUtils.hasText(clean) && isDownloadableDictTerm(clean)) {
-                        allTerms.add(clean);
-                    }
-                }
-            }
-            if (current >= result.getPages()) {
-                break;
-            }
-            current++;
         }
 
         allTerms.remove("");

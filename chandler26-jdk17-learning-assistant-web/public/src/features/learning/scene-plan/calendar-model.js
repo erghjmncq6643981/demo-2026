@@ -1,5 +1,5 @@
 import { asArray, localDateKey } from '/src/features/learning/scene-plan/model.js'
-import { pendingChallengeWords } from '/src/features/learning/scene-plan/challenge-model.js'
+import { pendingChallengeCount } from '/src/features/learning/scene-plan/challenge-model.js'
 
 export function addDays(date, count) {
   const result = new Date(date)
@@ -74,6 +74,6 @@ export function calendarDaySummary(plan, date) {
   const units = unitsForDate(plan, localDateKey(date))
   return {
     units,
-    pendingCount: units.reduce((sum, unit) => sum + pendingChallengeWords(unit).length, 0),
+    pendingCount: units.reduce((sum, unit) => sum + pendingChallengeCount(unit), 0),
   }
 }

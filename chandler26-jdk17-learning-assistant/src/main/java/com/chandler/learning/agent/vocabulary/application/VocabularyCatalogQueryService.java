@@ -1,6 +1,8 @@
 package com.chandler.learning.agent.vocabulary.application;
 
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
+import com.github.benmanes.caffeine.cache.Cache;
+import com.github.benmanes.caffeine.cache.Caffeine;
 import com.chandler.learning.agent.exception.LearningAssistantException;
 import com.chandler.learning.agent.common.constant.CommonConstants;
 import com.chandler.learning.agent.common.exception.LearningErrorCode;
@@ -15,7 +17,9 @@ import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 
 import java.util.Collection;
+import java.util.ArrayList;
 import java.util.List;
+import java.util.concurrent.TimeUnit;
 
 /** 公共词表对其他业务域开放的只读应用边界。 */
 @Service
@@ -25,6 +29,11 @@ public class VocabularyCatalogQueryService {
     private final VocabularyCatalogMapper catalogMapper;
     private final VocabularyCatalogVersionMapper versionMapper;
     private final VocabularyCatalogEntryMapper entryMapper;
+    /** 公共词表词条是高频只读数据，短 TTL 避免场景生成反复加载 5000+ 词条。 */
+    private final Cache<Long, List<VocabularyCatalogEntry>> publishedEntriesCache = Caffeine.newBuilder()
+            .maximumSize(64)
+            .expireAfterWrite(45, TimeUnit.SECONDS)
+            .build();
 
     /** 校验已发布版本及其词表访问权限。 */
     public VocabularyCatalogVersion requirePublishedVersion(Long userId, Long versionId) {
@@ -67,13 +76,31 @@ public class VocabularyCatalogQueryService {
                 .eq(VocabularyCatalogEntry::getDeleted, false)).intValue();
     }
 
+    /**
+     * 判断计划是否仍有可编排词条。
+     * <p>供学习计划完成判定使用，避免在事务内读取并排序整本公共词表。</p>
+     */
+    public boolean hasAvailableEntriesForPlan(Long planId, Long userId, Long catalogVersionId) {
+        if (planId == null || userId == null || catalogVersionId == null) {
+            return false;
+        }
+        return entryMapper.countAvailableForPlan(planId, userId, catalogVersionId) > CommonConstants.ZERO;
+    }
+
     /** 按词表顺序返回版本中的已发布词条。 */
     public List<VocabularyCatalogEntry> listPublishedEntries(Long versionId) {
-        return entryMapper.selectList(new LambdaQueryWrapper<VocabularyCatalogEntry>()
+        List<VocabularyCatalogEntry> cached = publishedEntriesCache.getIfPresent(versionId);
+        if (cached != null) {
+            // 选词策略会对结果排序，不能把缓存中的 List 暴露给调用方直接修改。
+            return new ArrayList<>(cached);
+        }
+        List<VocabularyCatalogEntry> entries = entryMapper.selectList(new LambdaQueryWrapper<VocabularyCatalogEntry>()
                 .eq(VocabularyCatalogEntry::getCatalogVersionId, versionId)
                 .eq(VocabularyCatalogEntry::getPublished, true)
                 .eq(VocabularyCatalogEntry::getDeleted, false)
                 .orderByAsc(VocabularyCatalogEntry::getSourceOrder));
+        publishedEntriesCache.put(versionId, List.copyOf(entries));
+        return new ArrayList<>(entries);
     }
 
     /** 按归一化词批量查询指定版本词条。 */

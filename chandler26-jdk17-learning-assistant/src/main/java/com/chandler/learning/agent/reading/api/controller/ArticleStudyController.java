@@ -7,8 +7,8 @@ import com.chandler.learning.agent.reading.api.response.ArticleStudyResponse;
 import com.chandler.learning.agent.reading.api.response.ArticleStudyPageResponse;
 import com.chandler.learning.agent.identity.domain.entity.LearningUser;
 import com.chandler.learning.agent.reading.application.ArticleStudyService;
+import com.chandler.learning.agent.reading.application.ArticleStudyTaskSubmissionService;
 import com.chandler.learning.agent.security.CurrentUserContext;
-import com.chandler.learning.agent.task.domain.constant.AiTaskConstants;
 import com.chandler.learning.agent.task.api.response.AiAsyncTaskResponse;
 import com.chandler.learning.agent.task.application.AiAsyncTaskService;
 import io.swagger.v3.oas.annotations.Operation;
@@ -24,9 +24,6 @@ import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 
 import java.util.List;
-import java.util.Map;
-import com.fasterxml.jackson.databind.ObjectMapper;
-import com.fasterxml.jackson.core.type.TypeReference;
 
 /**
  * 语境精读接口控制器。
@@ -39,36 +36,25 @@ public class ArticleStudyController {
 
     private final CurrentUserContext currentUserContext;
     private final ArticleStudyService articleStudyService;
+    private final ArticleStudyTaskSubmissionService taskSubmissionService;
     private final AiAsyncTaskService aiAsyncTaskService;
-    private final ObjectMapper objectMapper;
 
-    /** 基于单词本目标词生成语境精读材料。 */
+    /** 兼容旧路径：提交语境精读材料任务，不在 HTTP 请求中等待 AI。 */
     @PostMapping("/study")
-    @Operation(summary = "基于单词本目标词生成语境精读材料")
-    public ArticleStudyResponse study(
+    @Operation(summary = "提交语境精读材料任务（兼容路径）")
+    public AiAsyncTaskResponse study(
             @Valid @RequestBody ArticleStudyRequest request) {
         LearningUser user = currentUserContext.requireUser();
-        return articleStudyService.study(user.getId(), request);
+        return aiAsyncTaskService.toResponse(taskSubmissionService.submit(user.getId(), request));
     }
 
     /** 提交异步语境精读材料生成任务。 */
     @PostMapping("/study/async")
     @Operation(summary = "提交异步语境精读材料生成任务")
     public AiAsyncTaskResponse studyAsync(
-            @Valid @RequestBody ArticleStudyRequest request) {
+        @Valid @RequestBody ArticleStudyRequest request) {
         LearningUser user = currentUserContext.requireUser();
-        Map<String, Object> payload = objectMapper.convertValue(request, new TypeReference<>() {
-        });
-        String idempotencyKey = "article_material:" + user.getId() + ":" + request.getWordbookId()
-                + ":" + String.valueOf(request.getEntryIds()) + ":" + request.getWordCountRange()
-                + ":" + request.getDifficulty();
-        var active = aiAsyncTaskService.findActiveByKey(user.getId(),
-                AiTaskConstants.TYPE_ARTICLE_MATERIAL, null, idempotencyKey);
-        if (active != null) return aiAsyncTaskService.toResponse(active);
-        var task = aiAsyncTaskService.create(user.getId(), AiTaskConstants.TYPE_ARTICLE_MATERIAL,
-                "生成语境精读材料", null, null, null,
-                AiTaskConstants.EXECUTION_IMMEDIATE, null, null, 1, idempotencyKey, payload);
-        return aiAsyncTaskService.toResponse(task);
+        return aiAsyncTaskService.toResponse(taskSubmissionService.submit(user.getId(), request));
     }
 
     /** 语境精读历史记录。 */

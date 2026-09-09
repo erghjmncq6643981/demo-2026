@@ -103,8 +103,46 @@ public class EnglishVocabularyStudyService {
         }
         // 3. 词形还原推导原型查找
         List<String> candidates = lemmatizer.candidateLemmas(normalizedTerm);
+        if (candidates.isEmpty()) {
+            return null;
+        }
+        // 候选词可能包含多个词形，统一批量读取，避免在循环内反复访问数据库。
+        Map<String, EnglishVocabularyStudyRecord> recordsByTerm = recordMapper.selectList(
+                        new LambdaQueryWrapper<EnglishVocabularyStudyRecord>()
+                                .in(EnglishVocabularyStudyRecord::getNormalizedTerm, candidates))
+                .stream()
+                .filter(candidateRecord -> StringUtils.hasText(candidateRecord.getNormalizedTerm()))
+                .collect(java.util.stream.Collectors.toMap(
+                        EnglishVocabularyStudyRecord::getNormalizedTerm,
+                        candidateRecord -> candidateRecord,
+                        (left, right) -> left));
+        List<LearningVocabularyAlias> aliases = aliasMapper.findByNormalizedAliases(candidates);
+        Map<String, LearningVocabularyAlias> aliasesByTerm = (aliases == null ? List.<LearningVocabularyAlias>of() : aliases)
+                .stream()
+                .filter(alias -> StringUtils.hasText(alias.getNormalizedAlias()))
+                .collect(java.util.stream.Collectors.toMap(
+                        LearningVocabularyAlias::getNormalizedAlias,
+                        alias -> alias,
+                        (left, right) -> left));
+        Map<Long, EnglishVocabularyStudyRecord> recordsById = new HashMap<>();
+        for (EnglishVocabularyStudyRecord candidateRecord : recordsByTerm.values()) {
+            if (candidateRecord.getId() != null) {
+                recordsById.put(candidateRecord.getId(), candidateRecord);
+            }
+        }
+        List<Long> aliasVocabularyIds = aliasesByTerm.values().stream()
+                .map(LearningVocabularyAlias::getVocabularyId)
+                .filter(java.util.Objects::nonNull)
+                .filter(id -> !recordsById.containsKey(id))
+                .distinct()
+                .toList();
+        recordMapper.selectBatchIds(aliasVocabularyIds).forEach(aliasRecord -> {
+            if (aliasRecord != null && aliasRecord.getId() != null) {
+                recordsById.put(aliasRecord.getId(), aliasRecord);
+            }
+        });
         for (String candidate : candidates) {
-            EnglishVocabularyStudyRecord candidateRecord = findByNormalizedTerm(candidate);
+            EnglishVocabularyStudyRecord candidateRecord = recordsByTerm.get(candidate);
             if (candidateRecord != null && isConfirmedInflection(candidateRecord, normalizedTerm)) {
                 try {
                     vocabularyInsightService.syncInsights(candidateRecord);
@@ -112,16 +150,18 @@ public class EnglishVocabularyStudyService {
                 }
                 return candidateRecord;
             }
-            try {
-                LearningVocabularyAlias candidateAlias = aliasMapper.findByNormalizedAlias(candidate);
-                if (candidateAlias != null && candidateAlias.getVocabularyId() != null) {
-                    EnglishVocabularyStudyRecord matched = recordMapper.selectById(candidateAlias.getVocabularyId());
-                    if (isValidAliasMatch(candidate, matched, candidateAlias) && isConfirmedInflection(matched, normalizedTerm)) {
+            LearningVocabularyAlias candidateAlias = aliasesByTerm.get(candidate);
+            if (candidateAlias != null && candidateAlias.getVocabularyId() != null) {
+                EnglishVocabularyStudyRecord matched = recordsById.get(candidateAlias.getVocabularyId());
+                if (isValidAliasMatch(candidate, matched, candidateAlias)
+                        && isConfirmedInflection(matched, normalizedTerm)) {
+                    try {
                         vocabularyInsightService.syncInsights(matched);
-                        return matched;
+                    } catch (Exception ignored) {
+                        log.debug("词汇别名命中后同步词汇洞察失败 term={}", normalizedTerm);
                     }
+                    return matched;
                 }
-            } catch (Exception ignored) {
             }
         }
         return null;

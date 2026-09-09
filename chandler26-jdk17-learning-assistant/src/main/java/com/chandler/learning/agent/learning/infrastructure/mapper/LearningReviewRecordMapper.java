@@ -29,4 +29,9 @@ public interface LearningReviewRecordMapper extends BaseMapper<LearningReviewRec
     List<LearningAssessmentPassBO> selectPassedAssessmentTypesBatch(
             @Param("unitId") Long unitId,
             @Param("entryIds") Collection<Long> entryIds);
+
+    /** 批量查询多个场景单元的通过评测投影，不返回题目和答案等大字段。 */
+    List<LearningAssessmentPassBO> selectPassedAssessmentTypesByUnits(
+            @Param("unitIds") Collection<Long> unitIds,
+            @Param("entryIds") Collection<Long> entryIds);
 }

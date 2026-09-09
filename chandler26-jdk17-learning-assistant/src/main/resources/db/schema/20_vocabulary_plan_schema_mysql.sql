@@ -18,7 +18,8 @@ CREATE TABLE IF NOT EXISTS vocabulary_catalog (
     version INT NOT NULL DEFAULT 0 COMMENT '乐观锁版本号',
     PRIMARY KEY (id),
     KEY idx_vocabulary_catalog_owner (owner_user_id, deleted, update_time),
-    KEY idx_vocabulary_catalog_status (status, visibility, deleted)
+    KEY idx_vocabulary_catalog_status (status, visibility, deleted),
+    KEY idx_vocabulary_catalog_public_list (status, visibility, deleted, update_time)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci COMMENT='可导入并生成学习计划的词表';
 
 CREATE TABLE IF NOT EXISTS vocabulary_catalog_version (
@@ -149,7 +150,8 @@ CREATE TABLE IF NOT EXISTS learning_plan_unit (
     version INT NOT NULL DEFAULT 0 COMMENT '乐观锁版本号',
     PRIMARY KEY (id),
     UNIQUE KEY uk_learning_plan_unit_no (plan_id, unit_no),
-    KEY idx_learning_plan_unit_status (plan_id, status, deleted)
+    KEY idx_learning_plan_unit_status (plan_id, status, deleted),
+    KEY idx_learning_plan_unit_calendar (plan_id, recommended_date, deleted, unit_no)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci COMMENT='场景学习单元';
 
 CREATE TABLE IF NOT EXISTS learning_word_progress (
@@ -300,7 +302,7 @@ CREATE TABLE IF NOT EXISTS learning_ai_async_task (
     operator_user_id BIGINT DEFAULT NULL COMMENT '最近一次继续或干预的用户 ID',
     trigger_type VARCHAR(20) NOT NULL DEFAULT 'user' COMMENT '触发来源：user、admin、system',
     visibility VARCHAR(20) NOT NULL DEFAULT 'owner_admin' COMMENT '可见范围：owner_admin、admin',
-    task_type VARCHAR(40) NOT NULL COMMENT '任务类型：场景材料、相关词、词卡、词本分析、语境精读',
+    task_type VARCHAR(40) NOT NULL COMMENT '任务类型：场景材料、相关词、单词词卡、词本分析、语境精读、音频',
     task_name VARCHAR(160) NOT NULL COMMENT '任务展示名称',
     plan_id BIGINT DEFAULT NULL COMMENT '关联学习计划 ID',
     unit_id BIGINT DEFAULT NULL COMMENT '关联场景单元 ID',
@@ -330,6 +332,7 @@ CREATE TABLE IF NOT EXISTS learning_ai_async_task (
     PRIMARY KEY (id),
     KEY idx_learning_ai_task_user_status (user_id, status, deleted, update_time),
     KEY idx_learning_ai_task_owner_status (owner_user_id, status, deleted, update_time),
+    KEY idx_learning_ai_task_calendar (owner_user_id, plan_id, task_type, status, deleted),
     KEY idx_learning_ai_task_schedule (status, scheduled_time, priority, deleted),
     KEY idx_learning_ai_task_plan (plan_id, unit_id, deleted),
     KEY idx_learning_ai_task_idempotency (idempotency_key, status, deleted)

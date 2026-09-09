@@ -1,6 +1,8 @@
 package com.chandler.learning.agent.vocabulary.application;
 
 import cn.hutool.crypto.digest.DigestUtil;
+import com.github.benmanes.caffeine.cache.Cache;
+import com.github.benmanes.caffeine.cache.Caffeine;
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import com.chandler.learning.agent.vocabulary.api.request.VocabularyImportBatchConfirmRequest;
 import com.chandler.learning.agent.vocabulary.api.response.VocabularyImportEntryResponse;
@@ -59,6 +61,8 @@ import java.util.stream.Collectors;
 @RequiredArgsConstructor
 public class VocabularyImportService {
 
+    private static final String PUBLIC_CATALOG_CACHE_KEY = "all";
+
     private static final TypeReference<List<String>> STRING_LIST_TYPE = new TypeReference<>() {};
 
     private final MarkdownVocabularyParser markdownParser;
@@ -72,6 +76,11 @@ public class VocabularyImportService {
     private final SystemLogService systemLogService;
     private final UserDisplayNameService userDisplayNameService;
     private final ObjectMapper objectMapper;
+    /** 公共词本列表变化低频，短 TTL 缓存避免每个页面重复联表查询。 */
+    private final Cache<String, List<VocabularyCatalogResponse>> publicCatalogCache = Caffeine.newBuilder()
+            .maximumSize(1)
+            .expireAfterWrite(java.time.Duration.ofSeconds(30))
+            .build();
 
     /**
      * 导入 Markdown 并创建待审核版本。
@@ -165,6 +174,7 @@ public class VocabularyImportService {
                 catalog.getName() + "，共 " + parsed.size() + " 词，疑似断词 " + warningCount + " 个");
         log.info("用户「{}」导入了词表「{}」，共 {} 个词，其中 {} 个需要人工确认",
                 userDisplayNameService.userName(userId), catalog.getName(), parsed.size(), warningCount);
+        invalidatePublicCatalogCache();
         return detail(userId, job.getId(), warningCount > 0, null,
                 VocabularyImportConstants.DEFAULT_PAGE,
                 VocabularyImportConstants.DEFAULT_PAGE_SIZE);
@@ -172,6 +182,16 @@ public class VocabularyImportService {
 
     /** 查询已发布的公共词本，供所有学习者创建计划。 */
     public List<VocabularyCatalogResponse> listPublicCatalogs() {
+        List<VocabularyCatalogResponse> cached = publicCatalogCache.getIfPresent(PUBLIC_CATALOG_CACHE_KEY);
+        if (cached != null) {
+            return cached;
+        }
+        List<VocabularyCatalogResponse> result = loadPublicCatalogs();
+        publicCatalogCache.put(PUBLIC_CATALOG_CACHE_KEY, result);
+        return result;
+    }
+
+    private List<VocabularyCatalogResponse> loadPublicCatalogs() {
         List<VocabularyCatalog> catalogs = catalogMapper.selectList(new LambdaQueryWrapper<VocabularyCatalog>()
                 .eq(VocabularyCatalog::getStatus, VocabularyImportConstants.CATALOG_STATUS_PUBLISHED)
                 .eq(VocabularyCatalog::getVisibility, VocabularyImportConstants.VISIBILITY_PUBLIC)
@@ -195,7 +215,7 @@ public class VocabularyImportService {
                 .orderByDesc(VocabularyImportJob::getUpdateTime))
                 .stream().collect(Collectors.toMap(VocabularyImportJob::getCatalogVersionId, j -> j, (a, b) -> a));
 
-        return catalogs.stream().map(catalog -> {
+        return List.copyOf(catalogs.stream().map(catalog -> {
             VocabularyCatalogVersion version = catalog.getLatestVersionId() == null ? null : versionMap.get(catalog.getLatestVersionId());
             VocabularyImportJob job = version == null ? null : jobMap.get(version.getId());
             VocabularyCatalogResponse response = new VocabularyCatalogResponse();
@@ -209,7 +229,12 @@ public class VocabularyImportService {
             response.setTotalCount(version == null ? 0 : version.getTotalCount());
             response.setPublishedTime(version == null ? null : version.getPublishedTime());
             return response;
-        }).toList();
+        }).toList());
+    }
+
+    /** 管理员发布、修改或删除公共词本后立即清除列表缓存。 */
+    private void invalidatePublicCatalogCache() {
+        publicCatalogCache.invalidateAll();
     }
 
     /**
@@ -383,6 +408,7 @@ public class VocabularyImportService {
         systemLogService.record(userId, SystemLogType.VOCABULARY_IMPORT, "删除导入词表记录",
                 "任务ID: " + jobId + "，对应的公共词本及词条已软删除");
         log.info("用户「{}」删除了词表导入历史，任务ID = {}", userDisplayNameService.userName(userId), jobId);
+        invalidatePublicCatalogCache();
     }
 
     /**
@@ -404,6 +430,7 @@ public class VocabularyImportService {
         importJobMapper.updateById(job);
 
         log.info("用户「{}」更新了词表导入任务 {} 的元数据", userDisplayNameService.userName(userId), jobId);
+        invalidatePublicCatalogCache();
         return detail(userId, jobId, false, null,
                 VocabularyImportConstants.DEFAULT_PAGE,
                 VocabularyImportConstants.DEFAULT_PAGE_SIZE);
@@ -507,6 +534,7 @@ public class VocabularyImportService {
                 catalog.getName() + " -> " + target + "，新增个人词条 " + inserted + " 词");
         log.info("用户「{}」发布了公共词本「{}」，目标 {}，词表共 {} 个词，新增个人词条 {} 个",
                 userDisplayNameService.userName(userId), catalog.getName(), target, entries.size(), inserted);
+        invalidatePublicCatalogCache();
         return detail(userId, jobId, false, null,
                 VocabularyImportConstants.DEFAULT_PAGE,
                 VocabularyImportConstants.DEFAULT_PAGE_SIZE);

@@ -173,7 +173,7 @@ export function createPlanWorkflow({
       return
     }
     const isFuture = startTime && new Date(startTime) > new Date()
-    setButtonLoading(elements.createScenePlanBtn, true, isFuture ? '创建中...' : '生成首个场景中...')
+    setButtonLoading(elements.createScenePlanBtn, true, isFuture ? '创建中...' : '提交场景任务中...')
     try {
       const modelConfigId = elements.scenePlanModelSelect.value
       let plan
@@ -185,10 +185,19 @@ export function createPlanWorkflow({
         plan = await api.createPlan({ catalogVersionId, wordbookId: wordbookId || null, name, learningPurpose, modelConfigId: modelConfigId || null, generateFirstUnit: !isFuture, startTime, endTime })
       }
       state.currentLearningPlan = plan
+      if (plan?.initialSceneTaskId) {
+        state.sceneScheduledTask = {
+          id: plan.initialSceneTaskId,
+          planId: plan.id,
+          taskType: 'scene_material',
+          status: 'pending',
+          progressPercent: 0,
+        }
+      }
       await loadSceneData({ planId: plan.id })
       closeModal()
       logEvent('learning', '创建学习计划', name)
-      toast(isFuture ? '学习计划已成功创建（未开始）' : '学习计划和首个场景已生成')
+      toast(isFuture ? '学习计划已成功创建（未开始）' : '学习计划已创建，首个场景正在后台生成')
     } catch (error) {
       logEvent('error', '创建场景学习计划失败', error.message)
       toast(`创建计划失败：${error.message}`)

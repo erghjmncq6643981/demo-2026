@@ -17,7 +17,6 @@ import com.chandler.learning.agent.common.constant.CommonConstants;
 import com.chandler.learning.agent.common.exception.LearningErrorCode;
 import com.chandler.learning.agent.task.domain.constant.AiTaskConstants;
 import com.fasterxml.jackson.core.JsonProcessingException;
-import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -27,12 +26,12 @@ import org.springframework.util.StringUtils;
 
 import java.time.LocalDate;
 import java.time.LocalDateTime;
-import java.util.HashSet;
 import java.util.ArrayList;
 import java.util.Collection;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
+import java.util.stream.Collectors;
 
 /**
  * AI 异步任务统一生命周期服务。
@@ -114,14 +113,8 @@ public class AiAsyncTaskService {
         int current = page == null || page < 1 ? 1 : page;
         int size = pageSize == null || pageSize < 1 ? AiTaskConstants.DEFAULT_PAGE_SIZE
                 : Math.min(pageSize, AiTaskConstants.MAX_PAGE_SIZE);
-        LambdaQueryWrapper<AiAsyncTask> wrapper = new LambdaQueryWrapper<AiAsyncTask>()
-                .eq(AiAsyncTask::getOwnerUserId, userId)
-                .eq(AiAsyncTask::getDeleted, false)
-                .orderByDesc(AiAsyncTask::getCreateTime);
-        if (StringUtils.hasText(status)) {
-            wrapper.eq(AiAsyncTask::getStatus, status.trim());
-        }
-        Page<AiAsyncTask> taskPage = taskMapper.selectPage(new Page<>(current, size), wrapper);
+        Page<AiAsyncTask> taskPage = taskMapper.selectSummaryPage(
+                new Page<>(current, size), userId, trimStatus(status));
         AiAsyncTaskPageResponse response = new AiAsyncTaskPageResponse();
         response.setItems(toResponses(taskPage.getRecords()));
         response.setTotal(taskPage.getTotal());
@@ -135,13 +128,8 @@ public class AiAsyncTaskService {
         int current = page == null || page < 1 ? 1 : page;
         int size = pageSize == null || pageSize < 1 ? AiTaskConstants.DEFAULT_PAGE_SIZE
                 : Math.min(pageSize, AiTaskConstants.MAX_PAGE_SIZE);
-        LambdaQueryWrapper<AiAsyncTask> wrapper = new LambdaQueryWrapper<AiAsyncTask>()
-                .eq(AiAsyncTask::getDeleted, false)
-                .orderByDesc(AiAsyncTask::getCreateTime);
-        if (StringUtils.hasText(status)) {
-            wrapper.eq(AiAsyncTask::getStatus, status.trim());
-        }
-        Page<AiAsyncTask> taskPage = taskMapper.selectPage(new Page<>(current, size), wrapper);
+        Page<AiAsyncTask> taskPage = taskMapper.selectSummaryPage(
+                new Page<>(current, size), null, trimStatus(status));
         AiAsyncTaskPageResponse response = new AiAsyncTaskPageResponse();
         response.setItems(toResponses(taskPage.getRecords()));
         response.setTotal(taskPage.getTotal());
@@ -254,47 +242,18 @@ public class AiAsyncTaskService {
 
     /** 查询指定计划下所有处于活动状态的场景生成或重构任务对应的推荐日期。 */
     public Set<LocalDate> findActiveGeneratingDatesForPlan(Long ownerUserId, Long planId) {
-        List<AiAsyncTask> tasks = taskMapper.selectList(new LambdaQueryWrapper<AiAsyncTask>()
-                .eq(AiAsyncTask::getOwnerUserId, ownerUserId)
-                .eq(AiAsyncTask::getPlanId, planId)
-                .in(AiAsyncTask::getTaskType, List.of(
+        if (ownerUserId == null || planId == null) {
+            return Set.of();
+        }
+        return taskMapper.selectActiveGeneratingDates(ownerUserId, planId,
                         AiTaskConstants.TYPE_SCENE_MATERIAL,
-                        AiTaskConstants.TYPE_SCENE_MATERIAL_REGENERATION))
-                .in(AiAsyncTask::getStatus, List.of(
+                        AiTaskConstants.TYPE_SCENE_MATERIAL_REGENERATION,
                         AiTaskConstants.STATUS_PENDING,
                         AiTaskConstants.STATUS_RUNNING,
-                        AiTaskConstants.STATUS_RETRY_WAIT))
-                .eq(AiAsyncTask::getDeleted, false));
-        Set<LocalDate> dates = new HashSet<>();
-        for (AiAsyncTask task : tasks) {
-            LocalDate d = extractTaskDate(task);
-            if (d != null) dates.add(d);
-        }
-        return dates;
-    }
-
-    private LocalDate extractTaskDate(AiAsyncTask task) {
-        if (task == null) return null;
-        if (StringUtils.hasText(task.getPayloadJson())) {
-            try {
-                JsonNode node = objectMapper.readTree(task.getPayloadJson());
-                String dateStr = node.path("recommendedDate").asText(null);
-                if (StringUtils.hasText(dateStr)) {
-                    return LocalDate.parse(dateStr.trim());
-                }
-            } catch (Exception ignored) {
-            }
-        }
-        if (StringUtils.hasText(task.getIdempotencyKey())) {
-            String[] parts = task.getIdempotencyKey().split(":");
-            if (parts.length >= 3) {
-                try {
-                    return LocalDate.parse(parts[parts.length - 1].trim());
-                } catch (Exception ignored) {
-                }
-            }
-        }
-        return null;
+                        AiTaskConstants.STATUS_RETRY_WAIT)
+                .stream()
+                .filter(java.util.Objects::nonNull)
+                .collect(Collectors.toUnmodifiableSet());
     }
 
     /** 原子领取任务，防止多实例或事件与调度器重复执行。 */
@@ -716,6 +675,10 @@ public class AiAsyncTaskService {
     private String limitError(String value) {
         if (value == null) return null;
         return value.length() <= 1000 ? value : value.substring(0, 1000);
+    }
+
+    private String trimStatus(String status) {
+        return StringUtils.hasText(status) ? status.trim() : null;
     }
 
     private String limitIdempotencyKey(String value) {

@@ -16,6 +16,7 @@ import org.mockito.junit.jupiter.MockitoExtension;
 
 import java.time.LocalDateTime;
 import java.util.List;
+import java.util.Set;
 
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.never;
@@ -75,8 +76,8 @@ class AiAsyncTaskSchedulerTest {
         AiAsyncTask runningTask = createTask(99L, 1001L, "2026-08-30");
         runningTask.setStatus(AiTaskConstants.STATUS_RUNNING);
 
-        when(executionService.isMaterialStepCompleted(99L, AiTaskConstants.TYPE_SCENE_MATERIAL))
-                .thenReturn(false);
+        when(executionService.findMaterialStepCompletedTaskIds(any()))
+                .thenReturn(Set.of());
 
         when(taskMapper.selectList(any(Wrapper.class)))
                 .thenReturn(List.of(runningTask)) // occupied query
@@ -97,8 +98,8 @@ class AiAsyncTaskSchedulerTest {
         runningTask.setStatus(AiTaskConstants.STATUS_RUNNING);
 
         // runningTask 的材料生成步骤已 COMPLETED
-        when(executionService.isMaterialStepCompleted(99L, AiTaskConstants.TYPE_SCENE_MATERIAL))
-                .thenReturn(true);
+        when(executionService.findMaterialStepCompletedTaskIds(any()))
+                .thenReturn(Set.of(99L));
 
         when(taskMapper.selectList(any(Wrapper.class)))
                 .thenReturn(List.of(runningTask)) // occupied query

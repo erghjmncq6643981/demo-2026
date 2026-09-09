@@ -25,4 +25,12 @@ public interface VocabularyCatalogEntryMapper extends BaseMapper<VocabularyCatal
 
     /** 统计尚未产生有效语义分析结果的已发布词条数。 */
     int countUnanalyzedPublished(@Param("catalogVersionId") Long catalogVersionId);
+
+    /**
+     * 统计学习计划仍可编排的公共词条数量。
+     * <p>查询在数据库内完成已编排词和已掌握词的排除，避免完成场景时加载整本词表。</p>
+     */
+    int countAvailableForPlan(@Param("planId") Long planId,
+                              @Param("userId") Long userId,
+                              @Param("catalogVersionId") Long catalogVersionId);
 }

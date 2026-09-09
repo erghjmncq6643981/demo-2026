@@ -124,7 +124,7 @@ public class OpenAiCompatibleModelClient implements AiModelClient {
                 model,
                 System.currentTimeMillis() - startTime,
                 responseBody == null ? CommonConstants.ZERO : responseBody.length());
-        return parseResponse(responseBody);
+        return parseResponse(responseBody, connectionTest);
     }
 
     /**
@@ -184,7 +184,16 @@ public class OpenAiCompatibleModelClient implements AiModelClient {
         return baseUrl + chatPath;
     }
 
+    /** 保留严格解析入口，供历史测试和普通业务调用使用。 */
     private ModelChatResponse parseResponse(String responseBody) {
+        return parseResponse(responseBody, false);
+    }
+
+    /**
+     * 解析供应商响应；连接测试只验证链路可用，即使 Kimi 推理模型把短响应耗尽在
+     * reasoning_content 中，也应返回“已连通”，不把探活误判成业务失败。
+     */
+    private ModelChatResponse parseResponse(String responseBody, boolean connectionTest) {
         try {
             JsonNode root = objectMapper.readTree(responseBody);
             JsonNode choices = root.path("choices");
@@ -201,8 +210,13 @@ public class OpenAiCompatibleModelClient implements AiModelClient {
             if (content == null) {
                 content = firstChoice.path("text").asText(null);
             }
+            String reasoningContent = message.isMissingNode()
+                    ? null : message.path("reasoning_content").asText(null);
             String finishReason = firstChoice.path("finish_reason").asText(null);
-            if ("length".equalsIgnoreCase(finishReason)) {
+            if (connectionTest && !StringUtils.hasText(content) && StringUtils.hasText(reasoningContent)) {
+                content = reasoningContent;
+            }
+            if ("length".equalsIgnoreCase(finishReason) && !connectionTest) {
                 throw LearningAssistantException.externalService(
                         LearningErrorCode.AI_RESPONSE_PARSE_FAILED,
                         "AI 输出达到长度上限，请减少本次输入后重试",

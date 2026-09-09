@@ -7,6 +7,7 @@ public static final String TYPE_SCENE_MATERIAL = "scene_material";
         public static final String TYPE_SCENE_MATERIAL_REGENERATION = "scene_material_regeneration";
         public static final String TYPE_SCENE_RELATED_VOCABULARY = "scene_related_vocabulary";
         public static final String TYPE_VOCABULARY_CARD = "vocabulary_card";
+        public static final String TYPE_VOCABULARY_CARD_SINGLE = "vocabulary_card_single";
         public static final String TYPE_VOCABULARY_CATALOG_ANALYSIS = "vocabulary_catalog_analysis";
         public static final String TYPE_ARTICLE_MATERIAL = "article_material";
         public static final String TYPE_SCENE_ARTICLE_AUDIO = "scene_article_audio";

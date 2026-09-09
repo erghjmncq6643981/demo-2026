@@ -69,11 +69,15 @@ public class AiAsyncTaskScheduler {
                 .in(AiAsyncTask::getStatus, List.of(
                         AiTaskConstants.STATUS_RUNNING,
                         AiTaskConstants.STATUS_RETRY_WAIT))
+                .in(AiAsyncTask::getTaskType, List.of(
+                        AiTaskConstants.TYPE_SCENE_MATERIAL,
+                        AiTaskConstants.TYPE_SCENE_MATERIAL_REGENERATION))
                 .isNotNull(AiAsyncTask::getPlanId)
                 .eq(AiAsyncTask::getDeleted, false));
 
+        Set<Long> completedMaterialTasks = executionService.findMaterialStepCompletedTaskIds(activePlanTasks);
         Set<Long> occupiedPlanIds = activePlanTasks.stream()
-                .filter(task -> !executionService.isMaterialStepCompleted(task.getId(), task.getTaskType()))
+                .filter(task -> !completedMaterialTasks.contains(task.getId()))
                 .map(AiAsyncTask::getPlanId)
                 .filter(Objects::nonNull)
                 .collect(Collectors.toCollection(HashSet::new));

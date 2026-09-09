@@ -41,6 +41,7 @@ CREATE TABLE IF NOT EXISTS learning_article_study_record (
     KEY idx_learning_article_user_status (user_id, study_status, deleted, update_time),
     KEY idx_learning_article_user_time (user_id, deleted, update_time),
     KEY idx_learning_article_wordbook_time (wordbook_id, deleted, update_time),
+    KEY idx_learning_article_summary_page (user_id, wordbook_id, deleted, create_time),
     KEY idx_learning_article_plan_unit (plan_id, plan_unit_id, deleted),
     KEY idx_learning_article_session (session_id)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci COMMENT='语境精读文章学习记录';

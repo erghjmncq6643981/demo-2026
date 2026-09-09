@@ -2,6 +2,8 @@ package com.chandler.learning.agent.ai.model.application;
 
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import com.baomidou.mybatisplus.core.conditions.update.LambdaUpdateWrapper;
+import com.github.benmanes.caffeine.cache.Cache;
+import com.github.benmanes.caffeine.cache.Caffeine;
 import com.chandler.learning.agent.ai.agent.application.AiAgentBindingService;
 import com.chandler.learning.agent.ai.chat.application.AiModelUsageQueryService;
 import com.chandler.learning.agent.ai.model.api.response.AiModelConfigResponse;
@@ -44,12 +46,19 @@ import java.util.stream.Collectors;
 @RequiredArgsConstructor
 public class AiModelConfigService {
 
+    private static final String ENABLED_OPTIONS_CACHE_KEY = "enabled";
+
     private final AiModelConfigMapper modelConfigMapper;
     private final AiAgentBindingService agentBindingService;
     private final AiModelUsageQueryService modelUsageQueryService;
     private final ApiKeyCryptoService apiKeyCryptoService;
     private final SystemLogService systemLogService;
     private final UserDisplayNameService userDisplayNameService;
+    /** 学习页面只需要启用模型选项，短 TTL 缓存可减少重复配置查询。 */
+    private final Cache<String, List<AiModelOptionResponse>> enabledOptionsCache = Caffeine.newBuilder()
+            .maximumSize(1)
+            .expireAfterWrite(java.time.Duration.ofSeconds(30))
+            .build();
 
     /** 查询列表AI 模型。 */
     public List<AiModelConfigResponse> list(boolean enabledOnly) {
@@ -73,6 +82,16 @@ public class AiModelConfigService {
      * 查询学习界面可选择的启用模型，不返回连接地址、密钥信息和治理指标。
      */
     public List<AiModelOptionResponse> listAvailableOptions() {
+        List<AiModelOptionResponse> cached = enabledOptionsCache.getIfPresent(ENABLED_OPTIONS_CACHE_KEY);
+        if (cached != null) {
+            return cached;
+        }
+        List<AiModelOptionResponse> result = loadAvailableOptions();
+        enabledOptionsCache.put(ENABLED_OPTIONS_CACHE_KEY, result);
+        return result;
+    }
+
+    private List<AiModelOptionResponse> loadAvailableOptions() {
         return modelConfigMapper.selectList(new LambdaQueryWrapper<AiModelConfig>()
                         .eq(AiModelConfig::getDeleted, false)
                         .eq(AiModelConfig::getEnabled, true)
@@ -82,6 +101,11 @@ public class AiModelConfigService {
                 .filter(config -> AiModelDefinition.supports(config.getProvider(), config.getModelName()))
                 .map(this::toOptionResponse)
                 .toList();
+    }
+
+    /** 模型配置变更后立即失效学习页面模型选项缓存。 */
+    private void invalidateEnabledOptionsCache() {
+        enabledOptionsCache.invalidateAll();
     }
 
     /** 按主键查询配置详情。 */
@@ -157,6 +181,7 @@ public class AiModelConfigService {
         if (Boolean.TRUE.equals(config.getEnabled())) {
             bindMatchingUnboundAgents(config);
         }
+        invalidateEnabledOptionsCache();
         systemLogService.record(null, SystemLogType.AI_MODEL, "创建模型配置", config.getName());
         log.info("用户「{}」新增了 AI 模型「{}」，供应商「{}」，明细模型「{}」，状态为「{}」，优先级为 {}",
                 userDisplayNameService.currentUserName(),
@@ -190,6 +215,7 @@ public class AiModelConfigService {
         if (Boolean.TRUE.equals(config.getEnabled())) {
             bindMatchingUnboundAgents(config);
         }
+        invalidateEnabledOptionsCache();
         systemLogService.record(null, SystemLogType.AI_MODEL, "更新模型配置", config.getName());
         log.info("用户「{}」更新了 AI 模型「{}」，供应商「{}」，明细模型「{}」，状态为「{}」，优先级为 {}",
                 userDisplayNameService.currentUserName(),
@@ -221,6 +247,7 @@ public class AiModelConfigService {
         if (enabled) {
             bindMatchingUnboundAgents(config);
         }
+        invalidateEnabledOptionsCache();
         systemLogService.record(null, SystemLogType.AI_MODEL, enabled ? "启用模型配置" : "停用模型配置", config.getName());
         log.info("用户「{}」{}了 AI 模型「{}」",
                 userDisplayNameService.currentUserName(),
@@ -246,6 +273,7 @@ public class AiModelConfigService {
             clearDefault(id);
         }
         modelConfigMapper.updateById(config);
+        invalidateEnabledOptionsCache();
         systemLogService.record(null, SystemLogType.AI_MODEL, "更新模型优先级", config.getName());
         log.info("用户「{}」把 AI 模型「{}」的优先级调整为 {}，是否默认模型：{}",
                 userDisplayNameService.currentUserName(),
@@ -265,6 +293,7 @@ public class AiModelConfigService {
         config.setDeleted(true);
         config.setUpdateTime(LocalDateTime.now());
         modelConfigMapper.updateById(config);
+        invalidateEnabledOptionsCache();
         systemLogService.record(null, SystemLogType.AI_MODEL, "删除模型配置", config.getName());
         log.info("用户「{}」删除了 AI 模型「{}」，供应商「{}」，明细模型「{}」",
                 userDisplayNameService.currentUserName(),

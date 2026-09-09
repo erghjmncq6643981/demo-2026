@@ -1,6 +1,8 @@
 package com.chandler.learning.agent.learning.application;
 
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
+import com.github.benmanes.caffeine.cache.Cache;
+import com.github.benmanes.caffeine.cache.Caffeine;
 import com.chandler.learning.agent.exception.LearningAssistantException;
 import com.chandler.learning.agent.learning.api.response.LearningPlanCalendarDayResponse;
 import com.chandler.learning.agent.learning.api.response.LearningPlanUnitResponse;
@@ -24,6 +26,7 @@ import java.util.Map;
 import java.util.Objects;
 import java.util.Set;
 import java.util.stream.Collectors;
+import java.util.concurrent.TimeUnit;
 
 /** 词汇大挑战日历的按需汇总查询，避免加载单元完整材料。 */
 @Service
@@ -34,6 +37,12 @@ public class LearningPlanCalendarService {
     private final LearningPlanUnitMapper unitMapper;
     private final LearningPlanResponseAssembler responseAssembler;
     private final AiAsyncTaskService aiAsyncTaskService;
+
+    /** 日历只包含摘要数据，短 TTL 缓存可避免同一视图切换或轮询时重复聚合。 */
+    private final Cache<String, List<LearningPlanCalendarDayResponse>> calendarCache = Caffeine.newBuilder()
+            .maximumSize(256)
+            .expireAfterWrite(8, TimeUnit.SECONDS)
+            .build();
 
     /** 查询一段日期内的日历摘要；一次最多 63 天。 */
     public List<LearningPlanCalendarDayResponse> calendar(Long userId, Long planId,
@@ -52,18 +61,18 @@ public class LearningPlanCalendarService {
                     LearningErrorCode.LEARNING_PLAN_STATE_ERROR,
                     "单次日历查询不能超过 63 天");
         }
-        List<LearningPlanUnit> units = unitMapper.selectList(new LambdaQueryWrapper<LearningPlanUnit>()
-                .eq(LearningPlanUnit::getPlanId, plan.getId())
-                .ge(LearningPlanUnit::getRecommendedDate, resolvedFrom)
-                .le(LearningPlanUnit::getRecommendedDate, resolvedTo)
-                .eq(LearningPlanUnit::getDeleted, false)
-                .orderByAsc(LearningPlanUnit::getRecommendedDate)
-                .orderByAsc(LearningPlanUnit::getUnitNo));
+        String cacheKey = userId + ":" + planId + ":" + resolvedFrom + ":" + resolvedTo;
+        List<LearningPlanCalendarDayResponse> cached = calendarCache.getIfPresent(cacheKey);
+        if (cached != null) {
+            return cached;
+        }
+        List<LearningPlanUnit> units = unitMapper.selectCalendarSummaries(
+                plan.getId(), resolvedFrom, resolvedTo);
         Map<LocalDate, List<LearningPlanUnit>> unitsByDate = units.stream()
                 .collect(Collectors.groupingBy(LearningPlanUnit::getRecommendedDate,
                         LinkedHashMap::new, Collectors.toList()));
         Map<Long, LearningPlanUnitResponse> summariesByUnit = responseAssembler
-                .toUnitSummaryResponses(units, plan.getId())
+                .toUnitSummaryResponses(units)
                 .stream()
                 .collect(Collectors.toMap(LearningPlanUnitResponse::getId, response -> response));
         Set<LocalDate> generatingDates = aiAsyncTaskService.findActiveGeneratingDatesForPlan(userId, plan.getId());
@@ -86,7 +95,17 @@ public class LearningPlanCalendarService {
                     .filter(Objects::nonNull).toList());
             result.add(day);
         }
-        return result;
+        List<LearningPlanCalendarDayResponse> snapshot = List.copyOf(result);
+        calendarCache.put(cacheKey, snapshot);
+        return snapshot;
+    }
+
+    /** 计划单元或完成度变化后清理该计划的日历快照。 */
+    public void evict(Long planId) {
+        if (planId == null) {
+            return;
+        }
+        calendarCache.asMap().keySet().removeIf(key -> key.contains(":" + planId + ":"));
     }
 
     private LearningPlan requirePlan(Long userId, Long planId) {

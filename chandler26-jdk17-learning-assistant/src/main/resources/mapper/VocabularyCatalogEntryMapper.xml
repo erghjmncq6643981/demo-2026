@@ -81,4 +81,27 @@
                 AND a.deleted = 0
           )
     </select>
+
+    <select id="countAvailableForPlan" resultType="int">
+        SELECT COUNT(DISTINCT e.id)
+        FROM vocabulary_catalog_entry e
+        INNER JOIN learning_plan p
+                ON p.id = #{planId}
+               AND p.user_id = #{userId}
+               AND p.catalog_version_id = #{catalogVersionId}
+               AND p.deleted = 0
+        LEFT JOIN learning_plan_unit_entry pe
+               ON pe.plan_id = p.id
+              AND pe.catalog_entry_id = e.id
+              AND pe.deleted = 0
+        LEFT JOIN learning_word_progress wp
+               ON wp.user_id = p.user_id
+              AND wp.normalized_term = e.normalized_term
+              AND wp.deleted = 0
+        WHERE e.catalog_version_id = p.catalog_version_id
+          AND e.published = 1
+          AND e.deleted = 0
+          AND pe.id IS NULL
+          AND (wp.id IS NULL OR wp.learning_state &lt;&gt; 'mastered')
+    </select>
 </mapper>
