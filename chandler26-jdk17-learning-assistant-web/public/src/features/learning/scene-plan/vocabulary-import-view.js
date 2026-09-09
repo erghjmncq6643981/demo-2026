@@ -35,7 +35,7 @@ export function createVocabularyImportView({
     if (elements.vocabularyImportHistoryNextBtn) elements.vocabularyImportHistoryNextBtn.disabled = page >= pages
     if (!imports.length) {
       elements.sceneImportList.className = 'scene-import-list empty'
-      elements.sceneImportList.textContent = '暂无导入记录'
+      elements.sceneImportList.textContent = '暂无公共词本管理记录'
       return
     }
     elements.sceneImportList.className = 'scene-import-list'

@@ -135,18 +135,43 @@ export function createVocabularyImportWorkflow({
   }
 
   async function reloadHistory() {
-    if (state.preview || !state.token) {
+    if (state.preview) {
+      if (!asArray(state.vocabularyImports).length) {
+        const catalog = state.publicVocabularyCatalogs?.[0] || {
+          catalogId: 1,
+          catalogVersionId: 1,
+          catalogName: '自考英语（二）全部词汇',
+          sourceType: 'self_study',
+          totalCount: 5087,
+        }
+        state.vocabularyImports = [
+          { jobId: 1, ...catalog, importerUserId: 1, importerName: '系统管理员', status: 'published', fileName: '自学考试(二)全部词汇5087_正序版.md', warningCount: 3, reviewedWarningCount: 3, pendingWarningCount: 0, items: [], filteredTotal: 0, page: 1, pageSize: state.vocabularyImportPageSize || 20, createTime: new Date(Date.now() - 86400000 * 5).toISOString() },
+          { jobId: 2, catalogId: 2, catalogVersionId: 2, catalogName: '大学英语四级核心词汇', sourceType: 'cet4', totalCount: 3260, importerUserId: 2, importerName: '内容管理员', status: 'reviewing', fileName: 'cet4-core.md', warningCount: 8, reviewedWarningCount: 5, pendingWarningCount: 3, items: [], filteredTotal: 0, page: 1, pageSize: state.vocabularyImportPageSize || 20, createTime: new Date(Date.now() - 86400000 * 2).toISOString() },
+        ]
+        state.vocabularyImportHistoryTotal = state.vocabularyImports.length
+        state.vocabularyImportHistoryPage = 1
+      }
       renderImportList()
       renderSourceOptions()
       return
     }
-    const imports = await catalogApi.listImports(
-      state.vocabularyImportHistoryPage,
-      state.vocabularyImportHistoryPageSize,
-    )
-    applyHistoryPage(imports)
-    renderImportList()
-    renderSourceOptions()
+    if (!state.token) {
+      renderImportList()
+      renderSourceOptions()
+      return
+    }
+    try {
+      const imports = await catalogApi.listImports(
+        state.vocabularyImportHistoryPage || 1,
+        state.vocabularyImportHistoryPageSize || 20,
+      )
+      applyHistoryPage(imports)
+      renderImportList()
+      renderSourceOptions()
+    } catch (error) {
+      logEvent('error', '公共词本管理列表加载失败', error.message)
+      toast(`公共词本管理列表加载失败：${error.message}`)
+    }
   }
 
   function applyHistoryPage(result) {

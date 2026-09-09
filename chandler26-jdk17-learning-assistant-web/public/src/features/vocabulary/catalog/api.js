@@ -9,6 +9,7 @@ export function createVocabularyCatalogApi(request) {
     listImports: (page = 1, pageSize = 20) => requests.latest(
       'imports', `/api/v1/vocabulary-imports?page=${encodeURIComponent(page)}&pageSize=${encodeURIComponent(pageSize)}`,
     ),
+    listTags: () => requests.latest('vocabulary-tags', '/api/v1/vocabulary-imports/tags'),
     importMarkdown: (payload) => request('/api/v1/vocabulary-imports/markdown', {
       method: 'POST', body: JSON.stringify(payload),
     }),

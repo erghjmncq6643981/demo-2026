@@ -62,6 +62,11 @@ const systemManagement = createSystemManagementFeature({
   logEvent,
   confirmDelete,
   loadAiTasks: (...args) => profile.loadAiTasks(...args),
+  reloadVocabularyImports: (...args) => scenePlan.reloadVocabularyImports?.(...args),
+  loadModelConfigs: (...args) => profile.loadModelConfigs?.(...args),
+  loadAgents: (...args) => profile.loadAgents?.(...args),
+  loadPromptTemplates: (...args) => profile.loadPromptTemplates?.(...args),
+  loadSystemLogs: (...args) => profile.loadSystemLogs?.(...args),
 })
 
 function setGlobalFocusMode(viewId, active) {
@@ -160,6 +165,7 @@ const {
   loadActivity: profile.loadActivity,
   loadSystemLogs: profile.loadSystemLogs,
   loadAiTasks: profile.loadAiTasks,
+  reloadVocabularyImports: scenePlan.reloadVocabularyImports,
   systemManagement,
   clearFocusMode: () => setGlobalFocusMode(null, false),
   loadDueReviews: review.loadDueReviews,

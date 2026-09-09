@@ -12,6 +12,8 @@ import com.chandler.learning.agent.vocabulary.api.request.VocabularyImportMetada
 import com.chandler.learning.agent.vocabulary.api.response.VocabularyImportResponse;
 import com.chandler.learning.agent.vocabulary.api.response.VocabularyImportPageResponse;
 import com.chandler.learning.agent.vocabulary.api.response.VocabularyCatalogResponse;
+import com.chandler.learning.agent.vocabulary.api.response.VocabularyDataTagResponse;
+import com.chandler.learning.agent.vocabulary.domain.enums.VocabularyDataTag;
 import com.chandler.learning.agent.vocabulary.api.request.VocabularyMarkdownImportRequest;
 import com.chandler.learning.agent.vocabulary.domain.entity.LearningWordProgress;
 import com.chandler.learning.agent.vocabulary.domain.entity.LearningWordbook;
@@ -189,6 +191,13 @@ public class VocabularyImportService {
         List<VocabularyCatalogResponse> result = loadPublicCatalogs();
         publicCatalogCache.put(PUBLIC_CATALOG_CACHE_KEY, result);
         return result;
+    }
+
+    /** 查询支持的词汇数据标签列表。 */
+    public List<VocabularyDataTagResponse> listDataTags() {
+        return VocabularyDataTag.all().stream()
+                .map(tag -> new VocabularyDataTagResponse(tag.getCode(), tag.getLabel()))
+                .toList();
     }
 
     private List<VocabularyCatalogResponse> loadPublicCatalogs() {
@@ -733,23 +742,8 @@ public class VocabularyImportService {
     }
 
     private String normalizeSourceType(String sourceType, String legacyExamType) {
-        String value = StringUtils.hasText(sourceType) ? sourceType.trim().toLowerCase(Locale.ROOT)
-                : trimToNull(legacyExamType);
-        if ("自考".equals(value) || VocabularyImportConstants.SOURCE_SELF_STUDY.equals(value)) {
-            return VocabularyImportConstants.SOURCE_SELF_STUDY;
-        }
-        if ("四级".equals(value) || VocabularyImportConstants.SOURCE_CET4.equals(value)) {
-            return VocabularyImportConstants.SOURCE_CET4;
-        }
-        if ("六级".equals(value) || VocabularyImportConstants.SOURCE_CET6.equals(value)) {
-            return VocabularyImportConstants.SOURCE_CET6;
-        }
-        if ("雅思".equals(value) || VocabularyImportConstants.SOURCE_IELTS.equals(value)) {
-            return VocabularyImportConstants.SOURCE_IELTS;
-        }
-        throw LearningAssistantException.badRequest(
-                LearningErrorCode.VOCABULARY_IMPORT_INVALID,
-                "数据源类型仅支持自考、四级、六级或雅思");
+        String value = StringUtils.hasText(sourceType) ? sourceType : legacyExamType;
+        return VocabularyDataTag.require(value).getCode();
     }
 
     private VocabularyCatalogResponse toCatalogResponse(VocabularyCatalog catalog) {

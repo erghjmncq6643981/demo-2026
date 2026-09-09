@@ -24,7 +24,7 @@ public class VocabularyCatalogResponse {
     @Schema(description = "公共词本名称")
     private String catalogName;
 
-    @Schema(description = "数据源类型")
+    @Schema(description = "数据标签")
     private String sourceType;
 
     @Schema(description = "学习目标")

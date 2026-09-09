@@ -14,8 +14,8 @@ public class VocabularyMarkdownImportRequest {
     @Schema(description = "公共词本名称")
     private String catalogName;
 
-    @NotBlank(message = "数据源类型不能为空")
-    @Schema(description = "数据源类型：self_study、cet4、cet6、ielts")
+    @NotBlank(message = "数据标签不能为空")
+    @Schema(description = "数据标签：self_study、cet4、cet6、ielts")
     private String sourceType;
 
     /** 兼容旧客户端；新客户端请使用 sourceType。 */

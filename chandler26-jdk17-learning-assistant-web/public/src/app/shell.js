@@ -19,6 +19,7 @@ export function createAppShell(ctx) {
     loadActivity,
     loadSystemLogs,
     loadAiTasks,
+    reloadVocabularyImports,
     systemManagement,
     clearFocusMode,
     loadDueReviews,
@@ -380,6 +381,7 @@ export function createAppShell(ctx) {
             loadPromptTemplates?.(),
             loadSystemLogs?.(),
             loadAiTasks?.({ all: true }),
+            reloadVocabularyImports?.(),
           ])
           toast('已刷新系统管理数据')
           break

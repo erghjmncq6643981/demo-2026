@@ -51,3 +51,26 @@ test('modals close smoothly when pressing Escape', async ({ page }) => {
   await page.keyboard.press('Escape')
   await expect(page.locator('#sceneRelatedWordsModal')).toBeHidden()
 })
+
+test('admin public vocabulary management displays public catalogs', async ({ page }) => {
+  await page.goto('/?preview=1')
+  if ((page.viewportSize()?.width || 1000) < 800) {
+    await page.getByRole('button', { name: '显示导航' }).click()
+  }
+
+  // Navigate to systemAdminView
+  await page.getByRole('button', { name: '系统管理 用户、词本与 AI 治理', exact: true }).click()
+  await expect(page.locator('#systemAdminView')).toHaveClass(/active/)
+
+  // Click on "公共词本" tab
+  await page.locator('[data-system-tab="adminVocabularyPanel"]').click()
+  await expect(page.locator('[data-system-tab="adminVocabularyPanel"]')).toHaveClass(/active/)
+  await expect(page.locator('#adminVocabularyPanel')).toHaveClass(/active/)
+
+  // Check that public wordbook cards are visible in #sceneImportList
+  await expect(page.locator('#sceneImportList')).not.toHaveClass(/empty/)
+  await expect(page.locator('#sceneImportList .scene-import-card')).toHaveCount(2)
+  await expect(page.locator('#sceneImportList .scene-import-card').first()).toBeVisible()
+  await expect(page.locator('#sceneImportList')).toContainText('自考英语（二）全部词汇')
+  await expect(page.locator('#vocabularyImportHistoryPageInfo')).toContainText('第 1 / 1 页')
+})

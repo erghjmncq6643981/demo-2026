@@ -44,9 +44,18 @@ export function createSystemManagementFeature(ctx) {
       section.classList.toggle('active', section.id === fallback)
     })
     if (fallback === 'adminUserPanel') loadUsers()
-    if (fallback === 'modelManagePanel') aiSessions.loadAiSessions()
+    if (fallback === 'adminVocabularyPanel') ctx.reloadVocabularyImports?.()
+    if (fallback === 'modelManagePanel') {
+      aiSessions.loadAiSessions()
+      ctx.loadModelConfigs?.()
+    }
+    if (fallback === 'agentManagePanel') {
+      ctx.loadAgents?.()
+      ctx.loadPromptTemplates?.()
+    }
     if (fallback === 'aiTaskPanel') ctx.loadAiTasks?.({ all: true })
     if (fallback === 'systemJobPanel') jobManagement.loadJobs()
+    if (fallback === 'systemLogPanel') ctx.loadSystemLogs?.()
   }
 
   async function loadUsers() {

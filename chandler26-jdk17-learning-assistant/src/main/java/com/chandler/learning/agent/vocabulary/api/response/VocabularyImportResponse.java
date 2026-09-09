@@ -36,7 +36,7 @@ public class VocabularyImportResponse {
     @Schema(description = "学习目标")
     private String learningPurpose;
 
-    @Schema(description = "数据源类型")
+    @Schema(description = "数据标签")
     private String sourceType;
 
     @Schema(description = "文件名称")

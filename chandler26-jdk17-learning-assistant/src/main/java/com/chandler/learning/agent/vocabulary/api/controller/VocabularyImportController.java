@@ -8,6 +8,7 @@ import com.chandler.learning.agent.vocabulary.api.request.VocabularyImportMetada
 import com.chandler.learning.agent.vocabulary.api.response.VocabularyImportResponse;
 import com.chandler.learning.agent.vocabulary.api.response.VocabularyImportPageResponse;
 import com.chandler.learning.agent.vocabulary.api.response.VocabularyCatalogResponse;
+import com.chandler.learning.agent.vocabulary.api.response.VocabularyDataTagResponse;
 import com.chandler.learning.agent.vocabulary.api.request.VocabularyMarkdownImportRequest;
 import com.chandler.learning.agent.identity.domain.entity.LearningUser;
 import com.chandler.learning.agent.security.CurrentUserContext;
@@ -61,6 +62,14 @@ public class VocabularyImportController {
             @RequestParam(defaultValue = "20") Integer pageSize) {
         LearningUser user = currentUserContext.requireUser();
         return importService.list(user.getId(), page, pageSize);
+    }
+
+    /** 查询支持的词汇数据标签列表。 */
+    @GetMapping("/tags")
+    @Operation(summary = "查询支持的词汇数据标签列表")
+    public List<VocabularyDataTagResponse> tags() {
+        currentUserContext.requireUser();
+        return importService.listDataTags();
     }
 
     /** 查询已发布公共词本。 */
