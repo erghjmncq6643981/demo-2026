@@ -38,7 +38,8 @@ public class VocabularyCatalogAnalysisTaskHandler implements AiTaskHandler {
     public void execute(AiAsyncTask task, Map<String, Object> payload) {
         Long modelConfigId = AiTaskPayload.longValue(payload, "modelConfigId");
         executionService.execute(task.getId(), "analyze_catalog", task.getOperatorUserId(), modelConfigId, () -> {
-            analysisService.executeJob(task.getOwnerUserId(), task.getRelatedJobId(), modelConfigId);
+            analysisService.executeJob(task.getOwnerUserId(), task.getRelatedJobId(), modelConfigId,
+                    Boolean.TRUE.equals(payload.get("force")));
             return task.getRelatedJobId();
         });
     }

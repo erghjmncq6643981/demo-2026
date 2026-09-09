@@ -158,9 +158,10 @@ export function createVocabularyImportView({
     const total = number(analysis?.publishedCount) || number(current.totalCount)
     const pending = Math.max(0, number(analysis?.unanalyzedCount) || (total - analyzed))
     const groups = number(analysis?.groupCount)
+    const inherited = number(analysis?.inheritedCount)
     const isAllAnalyzed = total > 0 && analyzed >= total && pending === 0
     const effectiveStatus = isAllAnalyzed ? 'completed' : status
-    elements.vocabularyAnalysisStatus.textContent = `词本关联分析：${ANALYSIS_STATUS_LABELS[effectiveStatus] || effectiveStatus} · ${analyzed}/${total} 词${groups ? ` · ${groups} 组` : ''}`
+    elements.vocabularyAnalysisStatus.textContent = `词本关联分析：${ANALYSIS_STATUS_LABELS[effectiveStatus] || effectiveStatus} · ${analyzed}/${total} 词${groups ? ` · ${groups} 组` : ''}${inherited ? ` · 本次复用 ${inherited} 词` : ''}`
     const running = !isAllAnalyzed && (status === 'pending' || status === 'running')
     elements.triggerVocabularyAnalysisBtn.disabled = running || pending === 0 || analysis?.canTrigger === false || isAllAnalyzed
     elements.triggerVocabularyAnalysisBtn.textContent = running ? (status === 'running' ? '分析中...' : '等待执行') : (pending > 0 ? `分析剩余 ${pending} 词` : '分析已完成')

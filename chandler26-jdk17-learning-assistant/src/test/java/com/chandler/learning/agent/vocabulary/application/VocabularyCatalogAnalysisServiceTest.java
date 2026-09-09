@@ -52,13 +52,15 @@ class VocabularyCatalogAnalysisServiceTest {
     private UserDisplayNameService userDisplayNameService;
     @Mock
     private TransactionTemplate transactionTemplate;
+    @Mock
+    private VocabularySemanticReuseService semanticReuseService;
 
     @Test
     void keepsValidItemsWhenAiResponseCoversOnlyPartOfTheBatch() throws Exception {
         VocabularyCatalogAnalysisService service = new VocabularyCatalogAnalysisService(
                 catalogMapper, versionMapper, entryMapper, jobMapper, batchMapper,
                 entryAnalysisMapper, asyncTaskService, aiChatService, systemLogService,
-                userDisplayNameService, new ObjectMapper(), transactionTemplate);
+                userDisplayNameService, new ObjectMapper(), transactionTemplate, semanticReuseService);
 
         VocabularyCatalogAnalysisJob job = new VocabularyCatalogAnalysisJob();
         job.setId(10L);

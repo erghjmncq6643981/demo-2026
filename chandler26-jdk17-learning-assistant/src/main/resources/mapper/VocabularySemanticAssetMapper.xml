@@ -1,0 +1,29 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "https://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.chandler.learning.agent.vocabulary.infrastructure.mapper.VocabularySemanticAssetMapper">
+    <select id="findByTerms" resultType="com.chandler.learning.agent.vocabulary.domain.entity.VocabularySemanticAsset">
+        SELECT id, language, normalized_term, semantic_json, related_terms_json, source_job_id
+        FROM vocabulary_semantic_asset
+        WHERE language = 'en' AND deleted = 0 AND normalized_term IN
+        <foreach collection="terms" item="term" open="(" separator="," close=")">#{term}</foreach>
+    </select>
+    <insert id="upsertBatch">
+        INSERT INTO vocabulary_semantic_asset
+        (id, language, normalized_term, semantic_json, related_terms_json, source_job_id,
+         create_by, update_by, create_time, update_time, deleted, version)
+        VALUES
+        <foreach collection="list" item="item" separator=",">
+            (#{item.id}, 'en', #{item.normalizedTerm}, #{item.semanticJson}, #{item.relatedTermsJson},
+             #{item.sourceJobId}, #{item.createBy}, #{item.updateBy}, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP, 0, 0)
+        </foreach>
+        ON DUPLICATE KEY UPDATE semantic_json = VALUES(semantic_json),
+            related_terms_json = VALUES(related_terms_json), source_job_id = VALUES(source_job_id),
+            update_by = VALUES(update_by), update_time = CURRENT_TIMESTAMP, deleted = 0, version = version + 1
+    </insert>
+    <select id="acquireGenerationLock" resultType="java.lang.Integer" useCache="false" flushCache="true">
+        SELECT GET_LOCK(CONCAT('vocabulary_semantic:', MD5(DATABASE())), 30)
+    </select>
+    <select id="releaseGenerationLock" resultType="java.lang.Integer" useCache="false" flushCache="true">
+        SELECT RELEASE_LOCK(CONCAT('vocabulary_semantic:', MD5(DATABASE())))
+    </select>
+</mapper>

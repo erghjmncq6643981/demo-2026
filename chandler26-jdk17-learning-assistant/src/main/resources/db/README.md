@@ -60,12 +60,13 @@
 25. Java 迁移 `V114__ActivityAndAiSessionIndexes`：为活动统计和管理员 AI 会话摘要补充按用户/会话的复合索引
 26. Java 迁移 `V115__AsyncTaskCalendarIndex`：为词汇大挑战日历查询异步任务状态补充复合索引
 27. Java 迁移 `V116__LearningActivityEventAndDaily`：创建学习活动原始事件与日汇总读模型，并回填历史词条加入、复习统计
+28. Java 迁移 `V117__GlobalVocabularySemanticAssets`：创建全局词汇语义资产，并从已有有效分析结果初始化
 
 迁移脚本都设计为可重复执行，但仍建议在执行前备份数据库并记录已执行版本。
 
 ## 当前领域结构
 
-活动统计升级：已有数据库在启动新版前执行 `migration/V116__LearningActivityEventAndDaily.sql`，或由已启用的 Flyway 按版本顺序执行。原始活动同步入库，后台每 5 秒批量汇总；日汇总与事件成功标记在同一事务提交，失败回滚后可重试。年度查询只读取日汇总。历史词条加入、复习数据回填为对应指标，无法还原的历史学习完成行为不推测补算。事件写入失败会记录诊断日志，目前不具备该失败事件的持久重试能力。
+活动统计升级：已有数据库在启动新版前按顺序执行 `migration/V116__LearningActivityEventAndDaily.sql`、`migration/V117__GlobalVocabularySemanticAssets.sql`，或由已启用的 Flyway 按版本顺序执行。V117 将同一语言、标准化单词的有效语义分析沉淀为全局资产；后续词本分析先批量复用，只有缺失词调用 AI，部分结果可重试。冷批次使用数据库命名锁避免并发重复分析，锁超时后由任务重试。原始活动同步入库，后台每 5 秒批量汇总；年度查询只读取日汇总。事件写入失败会记录诊断日志，目前不具备该失败事件的持久重试能力。测试环境可设置 `LEARNING_SEMANTIC_MYSQL_TEST=true` 执行隔离表集成验证。
 
 | 脚本 | 内容 |
 | --- | --- |

@@ -85,6 +85,7 @@ public class VocabularyCatalogAnalysisService {
     private final UserDisplayNameService userDisplayNameService;
     private final ObjectMapper objectMapper;
     private final TransactionTemplate transactionTemplate;
+    private final VocabularySemanticReuseService semanticReuseService;
     /** 场景选词高频读取已完成分析结果，短 TTL 降低跨表排序查询压力。 */
     private final Cache<Long, List<VocabularyCatalogEntryAnalysis>> readyEntriesCache = Caffeine.newBuilder()
             .maximumSize(64)
@@ -101,12 +102,12 @@ public class VocabularyCatalogAnalysisService {
         int batchSize = resolveBatchSize(resolved.getBatchSize());
         boolean force = Boolean.TRUE.equals(resolved.getForce());
         VocabularyCatalogAnalysisJob latest = latestJob(catalogVersionId);
-        if (!force && latest != null) {
+        if (latest != null) {
             if (List.of(VocabularyCatalogAnalysisConstants.STATUS_PENDING,
                     VocabularyCatalogAnalysisConstants.STATUS_RUNNING).contains(latest.getStatus())) {
                 return toResponse(latest);
             }
-            if (List.of(VocabularyCatalogAnalysisConstants.STATUS_COMPLETED,
+            if (!force && List.of(VocabularyCatalogAnalysisConstants.STATUS_COMPLETED,
                     VocabularyCatalogAnalysisConstants.STATUS_PARTIAL_FAILED,
                     VocabularyCatalogAnalysisConstants.STATUS_FAILED).contains(latest.getStatus())
                     && !hasUnanalyzedEntries(version.getId())) {
@@ -171,6 +172,11 @@ public class VocabularyCatalogAnalysisService {
 
     /** 异步 Worker 执行任务，AI 调用发生在事务之外。 */
     public void executeJob(Long userId, Long jobId, Long modelConfigId) {
+        executeJob(userId, jobId, modelConfigId, false);
+    }
+
+    /** 显式重新分析标记从持久化任务载荷传入；重试仍复用本任务已经产生的资产。 */
+    public void executeJob(Long userId, Long jobId, Long modelConfigId, boolean force) {
         VocabularyCatalogAnalysisJob job = jobMapper.selectById(jobId);
         if (job == null || !job.getUserId().equals(userId)) {
             throw LearningAssistantException.notFound(LearningErrorCode.AI_ASYNC_TASK_NOT_FOUND);
@@ -229,6 +235,15 @@ public class VocabularyCatalogAnalysisService {
                 .map(VocabularyCatalogEntryAnalysis::getCatalogEntryId)
                 .collect(Collectors.toCollection(LinkedHashSet::new));
         final Long analysisCatalogVersionId = job.getCatalogVersionId();
+        final VocabularyCatalogAnalysisJob executingJob = job;
+        // 仅加载关系映射所需的小对象，不把已分析词条重新发送给模型。
+        Map<Long, VocabularyCatalogEntry> catalogEntries = entryMapper.selectList(
+                new LambdaQueryWrapper<VocabularyCatalogEntry>()
+                        .select(VocabularyCatalogEntry::getId, VocabularyCatalogEntry::getNormalizedTerm)
+                        .eq(VocabularyCatalogEntry::getCatalogVersionId, analysisCatalogVersionId)
+                        .eq(VocabularyCatalogEntry::getPublished, true)
+                        .eq(VocabularyCatalogEntry::getDeleted, false)).stream()
+                .collect(Collectors.toMap(VocabularyCatalogEntry::getId, item -> item));
         int successCount = value(job.getSuccessCount());
         int failedCount = value(job.getFailedCount());
         for (VocabularyCatalogAnalysisBatch batch : batches) {
@@ -238,6 +253,7 @@ public class VocabularyCatalogAnalysisService {
             }
             markBatchRunning(batch, userId);
             List<Long> unresolvedEntryIds = new ArrayList<>();
+            boolean semanticBusy = false;
             int batchSuccessCount = CommonConstants.ZERO;
             int batchFailedCount = CommonConstants.ZERO;
             try {
@@ -271,13 +287,23 @@ public class VocabularyCatalogAnalysisService {
                             return;
                         }
                         try {
-                            AgentChatResponse response = requestBatch(job, chunk, modelConfigId);
+                            List<VocabularyCatalogEntryAnalysis> resolved = semanticReuseService.resolve(
+                                    executingJob, chunk, catalogEntries, force, cold -> {
+                                        AgentChatResponse response = requestBatch(executingJob, cold, modelConfigId);
+                                        if (isAnalysisCancelled(executingJob)) {
+                                            throw new com.chandler.learning.agent.exception.AiAsyncTaskCancelledException();
+                                        }
+                                        return parseAnalyses(executingJob, batch, cold, response).analyses();
+                                    });
                             if (isAnalysisCancelled(job)) {
                                 markAnalysisCancelled(job, batch,
                                         successCount + batchSuccessCount, failedCount + batchFailedCount);
                                 return;
                             }
-                            AnalysisParseResult parsed = parseAnalyses(job, batch, chunk, response);
+                            Set<Long> resolvedIds = resolved.stream()
+                                    .map(VocabularyCatalogEntryAnalysis::getCatalogEntryId).collect(Collectors.toSet());
+                            AnalysisParseResult parsed = new AnalysisParseResult(resolved, chunk.stream()
+                                    .map(VocabularyCatalogEntry::getId).filter(id -> !resolvedIds.contains(id)).toList());
                             if (!parsed.analyses().isEmpty()) {
                                 transactionTemplate.executeWithoutResult(status -> saveBatchResult(
                                         batch, parsed.analyses(), userId, analysisCatalogVersionId));
@@ -288,6 +314,10 @@ public class VocabularyCatalogAnalysisService {
                             unresolvedEntryIds.addAll(parsed.unresolvedEntryIds());
                             batchFailedCount += parsed.unresolvedEntryIds().size();
                         } catch (RuntimeException ex) {
+                            if (ex instanceof LearningAssistantException business
+                                    && LearningErrorCode.VOCABULARY_SEMANTIC_BUSY.getCode().equals(business.getErrorCode())) {
+                                semanticBusy = true;
+                            }
                             unresolvedEntryIds.addAll(chunk.stream()
                                     .map(VocabularyCatalogEntry::getId).toList());
                             batchFailedCount += chunk.size();
@@ -301,7 +331,8 @@ public class VocabularyCatalogAnalysisService {
                             ? VocabularyCatalogAnalysisConstants.ITEM_COMPLETED
                             : VocabularyCatalogAnalysisConstants.ITEM_FAILED);
                     batch.setErrorMessage(batchFullyCompleted
-                            ? null : partialBatchError(entries, unresolvedEntryIds));
+                            ? null : semanticBusy ? LearningErrorCode.VOCABULARY_SEMANTIC_BUSY.getDefaultMessage()
+                            : partialBatchError(entries, unresolvedEntryIds));
                     batch.setFinishedTime(LocalDateTime.now());
                     batch.setUpdateTime(LocalDateTime.now());
                     batchMapper.updateById(batch);
@@ -445,6 +476,7 @@ public class VocabularyCatalogAnalysisService {
 
         Map<String, Object> payload = new HashMap<>();
         payload.put("analysisJobId", job.getId());
+        payload.put("force", Boolean.TRUE.equals(request.getForce()));
         payload.put("modelConfigId", request.getModelConfigId() == null ? "" : request.getModelConfigId());
         AiAsyncTask task = asyncTaskService.create(userId,
                 AiTaskConstants.TYPE_VOCABULARY_CATALOG_ANALYSIS,
@@ -502,7 +534,6 @@ public class VocabularyCatalogAnalysisService {
                 .collect(Collectors.toMap(e -> e.getNormalizedTerm().toLowerCase().trim(), e -> e, (a, b) -> a));
 
         Map<Long, JsonNode> resultById = new LinkedHashMap<>();
-        int arrayIndex = 0;
         for (JsonNode item : array) {
             Long entryId = longValue(item, "entry_id", "entryId", "id");
             if (entryId != null && sourceById.containsKey(entryId) && !resultById.containsKey(entryId)) {
@@ -514,14 +545,8 @@ public class VocabularyCatalogAnalysisService {
                     if (!resultById.containsKey(matchedId)) {
                         resultById.put(matchedId, item);
                     }
-                } else if (arrayIndex < entries.size()) {
-                    Long positionalId = entries.get(arrayIndex).getId();
-                    if (!resultById.containsKey(positionalId)) {
-                        resultById.put(positionalId, item);
-                    }
                 }
             }
-            arrayIndex++;
         }
 
         LocalDateTime now = LocalDateTime.now();
@@ -619,9 +644,6 @@ public class VocabularyCatalogAnalysisService {
                                  Long catalogVersionId) {
         List<Long> ids = analyses.stream().map(VocabularyCatalogEntryAnalysis::getCatalogEntryId).toList();
         if (!ids.isEmpty()) {
-            entryAnalysisMapper.delete(new LambdaQueryWrapper<VocabularyCatalogEntryAnalysis>()
-                    .eq(VocabularyCatalogEntryAnalysis::getJobId, batch.getJobId())
-                    .in(VocabularyCatalogEntryAnalysis::getCatalogEntryId, ids));
             entryAnalysisMapper.insertBatch(analyses);
             // 新分析结果提交后立即让场景选词缓存失效，避免等待 TTL 才看到标签和相关性。
             readyEntriesCache.invalidate(catalogVersionId);
@@ -746,6 +768,11 @@ public class VocabularyCatalogAnalysisService {
         response.setBatchSize(job.getBatchSize());
         response.setTotalCount(job.getTotalCount());
         response.setSuccessCount(job.getSuccessCount());
+        response.setInheritedCount(entryAnalysisMapper.selectCount(
+                new LambdaQueryWrapper<VocabularyCatalogEntryAnalysis>()
+                        .eq(VocabularyCatalogEntryAnalysis::getJobId, job.getId())
+                        .eq(VocabularyCatalogEntryAnalysis::getSource, VocabularyCatalogAnalysisConstants.SOURCE_INHERITED)
+                        .eq(VocabularyCatalogEntryAnalysis::getDeleted, false)).intValue());
         response.setFailedCount(job.getFailedCount());
         response.setGroupCount(job.getGroupCount());
         fillCoverage(response, job.getCatalogVersionId());

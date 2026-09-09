@@ -37,6 +37,9 @@ public class VocabularyCatalogAnalysisResponse {
     /** 成功分析词条数。 */
     @Schema(description = "处理成功数量")
     private Integer successCount;
+    /** 本次任务成功词条中直接复用全局结果的数量。 */
+    @Schema(description = "本次任务复用全局语义结果的词条数")
+    private Integer inheritedCount;
     /** 失败词条数。 */
     @Schema(description = "失败数量")
     private Integer failedCount;

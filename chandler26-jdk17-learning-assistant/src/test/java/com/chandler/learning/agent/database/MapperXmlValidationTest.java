@@ -26,6 +26,7 @@ class MapperXmlValidationTest {
                 "mapper/LearningSceneRelatedWordMapper.xml",
                 "mapper/VocabularyCatalogAnalysisBatchMapper.xml",
                 "mapper/VocabularyCatalogEntryAnalysisMapper.xml",
+                "mapper/VocabularySemanticAssetMapper.xml",
                 "mapper/VocabularyCatalogEntryMapper.xml",
                 "mapper/LearningWordProgressMapper.xml",
                 "mapper/LearningWordbookEntryMapper.xml",

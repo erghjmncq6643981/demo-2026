@@ -17,6 +17,8 @@ public static final String STATUS_PENDING = "pending";
         public static final String ENTRY_LOW_CONFIDENCE = "low_confidence";
         public static final String ENTRY_FAILED = "failed";
         public static final String SOURCE_AI = "ai";
+        /** 从全局标准词语义资产复用。 */
+        public static final String SOURCE_INHERITED = "inherited";
         public static final String STRATEGY_VERSION = "semantic_coordinator_v1";
         public static final int DEFAULT_BATCH_SIZE = 25;
         public static final int MIN_BATCH_SIZE = 10;

@@ -500,3 +500,20 @@ CREATE TABLE IF NOT EXISTS vocabulary_catalog_entry_analysis (
     KEY idx_vocabulary_catalog_entry_analysis_version (catalog_version_id, status, deleted),
     KEY idx_vocabulary_catalog_entry_analysis_group (catalog_version_id, primary_group_code, deleted)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci COMMENT='公共词本词条语义索引结果';
+
+CREATE TABLE IF NOT EXISTS vocabulary_semantic_asset (
+    id BIGINT NOT NULL COMMENT '全局语义资产主键',
+    language VARCHAR(16) NOT NULL DEFAULT 'en' COMMENT '词汇语言',
+    normalized_term VARCHAR(255) COLLATE utf8mb4_bin NOT NULL COMMENT '标准词，跨词本唯一',
+    semantic_json JSON NOT NULL COMMENT '不含词本身份的可复用语义结果',
+    related_terms_json JSON NOT NULL COMMENT '相关标准词数组',
+    source_job_id BIGINT NOT NULL COMMENT '最近生成该结果的任务 ID',
+    create_by BIGINT NOT NULL DEFAULT 0 COMMENT '创建人',
+    update_by BIGINT NOT NULL DEFAULT 0 COMMENT '更新人',
+    create_time DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP COMMENT '创建时间',
+    update_time DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP COMMENT '更新时间',
+    deleted TINYINT(1) NOT NULL DEFAULT 0 COMMENT '逻辑删除标记',
+    version INT NOT NULL DEFAULT 0 COMMENT '版本号',
+    PRIMARY KEY (id),
+    UNIQUE KEY uk_vocabulary_semantic_term (language, normalized_term)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci COMMENT='跨词本全局词汇语义资产';
