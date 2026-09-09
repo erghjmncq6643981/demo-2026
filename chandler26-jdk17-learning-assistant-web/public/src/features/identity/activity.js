@@ -3,6 +3,7 @@ import { logTypeLabel } from '/src/shared/vocabulary.js'
 
 export function createActivityProfileFeature(ctx) {
   const { state, elements, request, toast, logEvent, confirmDelete, createPreviewActivity } = ctx
+  let activityRequest = null
 
   function renderProfileMetrics() {
     const wordbookCount = state.wordbooks.length
@@ -24,15 +25,26 @@ export function createActivityProfileFeature(ctx) {
       renderActivityHeatmap()
       return Promise.resolve()
     }
-    return request('/api/v1/learning/activity?days=365')
+    if (activityRequest) return activityRequest
+    if (elements.activityHeatmap) {
+      elements.activityHeatmap.className = 'activity-heatmap loading'
+      elements.activityHeatmap.textContent = '正在加载学习活跃数据...'
+    }
+    activityRequest = request('/api/v1/learning/activity?days=90')
       .then((activity) => {
         state.activity = activity
         renderActivityHeatmap()
+        return activity
       })
       .catch((error) => {
         logEvent('error', '学习活跃图加载失败', error.message)
         renderActivityHeatmap()
+        throw error
       })
+      .finally(() => {
+        activityRequest = null
+      })
+    return activityRequest
   }
 
   function renderActivityHeatmap() {
@@ -210,9 +222,10 @@ export function createActivityProfileFeature(ctx) {
       renderSystemLogs()
       return Promise.resolve()
     }
-    return request('/api/v1/learning/system-logs?limit=80')
-      .then((logs) => {
-        state.systemLogs = Array.isArray(logs) ? logs : []
+    return request('/api/v1/learning/system-logs/page?page=1&pageSize=40')
+      .then((result) => {
+        // 日志接口按页返回，个人中心只展示最近一页，避免历史记录拖慢首屏。
+        state.systemLogs = Array.isArray(result) ? result : (Array.isArray(result?.items) ? result.items : [])
         localStorage.removeItem('learning.systemLogs')
         renderSystemLogs()
       })

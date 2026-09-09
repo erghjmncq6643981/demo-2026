@@ -123,7 +123,7 @@ export function createStudyWordbookFeature(ctx) {
       })
       await Promise.allSettled([loadWordbooks(), loadDueReviews()])
       await loadWordbookEntries()
-      await loadActivity()
+      loadActivity()?.catch?.(() => {})
       renderNotes(entry)
       closeAddWordbookModal()
       logEvent('wordbook', '加入单词本', `${term} -> ${currentWordbookName(normalizedWordbookId)}`)

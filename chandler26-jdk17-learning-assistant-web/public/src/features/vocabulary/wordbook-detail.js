@@ -171,17 +171,19 @@ export function createWordbookDetailFeature(ctx) {
           if (typeof toast === 'function') toast('设计预览：模拟生成词卡完成')
           return
         }
-        const updated = await request(`/api/v1/learning/wordbook-entries/${encodeURIComponent(entryId)}/generate-card?forceRefresh=true`, {
+        await request(`/api/v1/learning/wordbook-entries/${encodeURIComponent(entryId)}/generate-card/async?forceRefresh=true`, {
           method: 'POST',
         })
-        if (updated) {
+        const current = state.wordbookEntries.find((item) => sameId(item.id, entryId))
+        if (current) {
+          const updated = { ...current, cardStatus: 'generating', cardErrorMessage: null }
           const idx = state.wordbookEntries.findIndex((item) => sameId(item.id, entryId))
           if (idx >= 0) {
             state.wordbookEntries[idx] = updated
           }
           state.selectedEntry = updated
           renderWordbookFocus(updated)
-          if (typeof toast === 'function') toast(`单词「${updated.term || updated.normalizedTerm}」AI 词卡已生成`)
+          if (typeof toast === 'function') toast(`单词「${updated.term || updated.normalizedTerm}」词卡任务已提交，可在任务中心查看进度`)
         }
       } catch (err) {
         if (typeof toast === 'function') toast(`生成词卡失败：${err.message}`)

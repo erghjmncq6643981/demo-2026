@@ -73,7 +73,8 @@ export function createWordbookTransferFeature(ctx) {
         method: 'POST',
         body: JSON.stringify({ targetWordbookId: targetWordbookIdValue, copy }),
       })
-      await Promise.allSettled([ctx.loadWordbooks(), ctx.loadWordbookEntries(), ctx.loadDueReviews(), ctx.loadActivity()])
+      await Promise.allSettled([ctx.loadWordbooks(), ctx.loadWordbookEntries(), ctx.loadDueReviews()])
+      ctx.loadActivity?.()?.catch?.(() => {})
       closeEntryTransferModal()
       ctx.toast(copy ? '已复制到其它单词本' : '已移动到其它单词本')
     } catch (error) {
