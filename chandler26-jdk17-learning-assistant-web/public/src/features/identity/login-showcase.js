@@ -18,7 +18,7 @@ if (root) {
     stop()
     if (paused || hovered || document.hidden || root.contains(document.activeElement)
       || !root.getClientRects().length) return
-    timer = setTimeout(() => show(index + 1), 6000)
+    timer = setTimeout(() => show(index + 1), 4000)
   }
 
   function show(next) {
