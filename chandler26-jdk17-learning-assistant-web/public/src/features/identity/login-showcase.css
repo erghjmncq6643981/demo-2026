@@ -1,13 +1,13 @@
 .login-showcase { margin-top: 28px; min-width: 0; }
 .showcase-slides { display: grid; }
-.showcase-slide { grid-area: 1 / 1; padding: 20px; border: 1px solid var(--line); border-radius: 14px; background: linear-gradient(145deg, #213447, #141d30); min-height: 176px; }
+.showcase-slide { grid-area: 1 / 1; box-sizing: border-box; height: 250px; padding: 20px; border: 1px solid var(--line); border-radius: 14px; background: linear-gradient(145deg, #213447, #141d30); }
 .showcase-slide[hidden] { display: none; }
 .showcase-heading, .showcase-review-meta { display: flex; justify-content: space-between; gap: 12px; color: var(--green); font-size: 11px; letter-spacing: 1px; }
 .showcase-heading { display: none; }
 .showcase-heading small { color: var(--muted); }
 .showcase-slide h2 { margin: 10px 0 5px; font-size: 22px; }
 .showcase-slide > p { color: var(--muted); font-size: 13px; line-height: 1.5; min-height: 0; margin: 0 0 10px; }
-.showcase-demo { display: flex; flex-direction: column; justify-content: space-between; gap: 9px; min-height: 105px; padding: 12px; border: 1px solid var(--line); border-radius: 10px; background: #111c2d; }
+.showcase-demo { display: flex; flex-direction: column; justify-content: space-between; gap: 9px; box-sizing: border-box; height: 145px; padding: 12px; border: 1px solid var(--line); border-radius: 10px; background: #111c2d; }
 .showcase-demo > p { margin: 0; font-size: 15px; line-height: 1.9; color: #d2dbe8; }
 .showcase-demo mark { background: #29463f; color: #b6f0cc; border-radius: 3px; padding: 1px 3px; }
 .showcase-week { display: grid; grid-template-columns: repeat(7, 1fr); gap: 5px; text-align: center; color: var(--muted); font-size: 12px; }
