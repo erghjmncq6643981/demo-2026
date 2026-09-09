@@ -1,12 +1,12 @@
 .login-showcase { margin-top: 28px; min-width: 0; }
 .showcase-slides { display: grid; }
-.showcase-slide { grid-area: 1 / 1; padding: 24px; border: 1px solid var(--line); border-radius: 18px; background: linear-gradient(145deg, #213447, #141d30); }
+.showcase-slide { grid-area: 1 / 1; padding: 20px; border: 1px solid var(--line); border-radius: 14px; background: linear-gradient(145deg, #213447, #141d30); min-height: 176px; }
 .showcase-slide[hidden] { display: none; }
 .showcase-heading, .showcase-review-meta { display: flex; justify-content: space-between; gap: 12px; color: var(--green); font-size: 11px; letter-spacing: 1px; }
 .showcase-heading small { color: var(--muted); }
-.showcase-slide h2 { margin: 16px 0 8px; font-size: 26px; }
-.showcase-slide > p { color: var(--muted); font-size: 14px; line-height: 1.7; min-height: 48px; margin: 0 0 18px; }
-.showcase-demo { display: flex; flex-direction: column; justify-content: space-between; gap: 16px; min-height: 242px; padding: 18px; border: 1px solid var(--line); border-radius: 12px; background: #111c2d; }
+.showcase-slide h2 { margin: 10px 0 5px; font-size: 22px; }
+.showcase-slide > p { color: var(--muted); font-size: 13px; line-height: 1.5; min-height: 0; margin: 0 0 10px; }
+.showcase-demo { display: flex; flex-direction: column; justify-content: space-between; gap: 9px; min-height: 105px; padding: 12px; border: 1px solid var(--line); border-radius: 10px; background: #111c2d; }
 .showcase-demo > p { margin: 0; font-size: 15px; line-height: 1.9; color: #d2dbe8; }
 .showcase-demo mark { background: #29463f; color: #b6f0cc; border-radius: 3px; padding: 1px 3px; }
 .showcase-week { display: grid; grid-template-columns: repeat(7, 1fr); gap: 5px; text-align: center; color: var(--muted); font-size: 12px; }
@@ -18,6 +18,12 @@
 .showcase-path span { color: var(--green); }
 .showcase-definition { font-size: 14px; color: #bdd6f9; }
 .showcase-definition span { display: block; margin-top: 6px; color: var(--muted); }
+.showcase-word-card { margin: 0; min-height: 105px; padding: 14px; background: linear-gradient(145deg, #2b4057, #172334); border: 1px solid #4b6278; border-radius: 10px; color: #dce8f5; }
+.showcase-word-card .word-mark { display: block; font-size: 32px; font-weight: 700; letter-spacing: 1px; color: #b6f0cc; }
+.showcase-word-card small { color: #9db1c8; }
+.showcase-word-card p { margin: 12px 0; color: #d2dbe8; }
+.showcase-word-card .login-word-row { display: flex; gap: 16px; color: #8fa8c2; font-size: 12px; }
+.showcase-slide:not(:last-of-type) .showcase-path { display: none; }
 .showcase-typing { display: grid; gap: 10px; text-align: center; }
 .showcase-typing strong { font-family: monospace; font-size: 34px; letter-spacing: 4px; color: #b6f0cc; }
 .showcase-typing span { font-size: 13px; color: var(--muted); }
