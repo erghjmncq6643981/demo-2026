@@ -92,10 +92,10 @@ public class VocabularyCatalogAnalysisService {
             .expireAfterWrite(45, TimeUnit.SECONDS)
             .build();
 
-    /** 为已发布词本创建一次可重试的语义分析任务。 */
+    /** 为待发布或已发布词本创建一次可重试的语义分析任务。 */
     public VocabularyCatalogAnalysisResponse trigger(Long userId, Long catalogVersionId,
                                                       VocabularyCatalogAnalysisRequest request) {
-        VocabularyCatalogVersion version = requirePublishedVersion(catalogVersionId);
+        VocabularyCatalogVersion version = requireAnalyzableVersion(catalogVersionId, userId);
         requireCatalogReadable(userId, version.getCatalogId());
         VocabularyCatalogAnalysisRequest resolved = request == null
                 ? new VocabularyCatalogAnalysisRequest() : request;
@@ -118,7 +118,6 @@ public class VocabularyCatalogAnalysisService {
         List<VocabularyCatalogEntry> entries = force
                 ? entryMapper.selectList(new LambdaQueryWrapper<VocabularyCatalogEntry>()
                 .eq(VocabularyCatalogEntry::getCatalogVersionId, catalogVersionId)
-                .eq(VocabularyCatalogEntry::getPublished, true)
                 .eq(VocabularyCatalogEntry::getDeleted, false)
                 .orderByAsc(VocabularyCatalogEntry::getSourceOrder))
                 : entryMapper.selectUnanalyzedPublished(catalogVersionId);
@@ -156,7 +155,7 @@ public class VocabularyCatalogAnalysisService {
 
     /** 查询当前词本版本最新分析任务。 */
     public VocabularyCatalogAnalysisResponse detail(Long userId, Long catalogVersionId) {
-        VocabularyCatalogVersion version = requirePublishedVersion(catalogVersionId);
+        VocabularyCatalogVersion version = requireAnalyzableVersion(catalogVersionId, userId);
         requireCatalogReadable(userId, version.getCatalogId());
         VocabularyCatalogAnalysisJob job = latestJob(catalogVersionId);
         if (job == null) {
@@ -241,7 +240,6 @@ public class VocabularyCatalogAnalysisService {
                 new LambdaQueryWrapper<VocabularyCatalogEntry>()
                         .select(VocabularyCatalogEntry::getId, VocabularyCatalogEntry::getNormalizedTerm)
                         .eq(VocabularyCatalogEntry::getCatalogVersionId, analysisCatalogVersionId)
-                        .eq(VocabularyCatalogEntry::getPublished, true)
                         .eq(VocabularyCatalogEntry::getDeleted, false)).stream()
                 .collect(Collectors.toMap(VocabularyCatalogEntry::getId, item -> item));
         int successCount = value(job.getSuccessCount());
@@ -732,14 +730,24 @@ public class VocabularyCatalogAnalysisService {
                 .filter(StringUtils::hasText).findFirst().orElse(null);
     }
 
-    private VocabularyCatalogVersion requirePublishedVersion(Long versionId) {
+    private VocabularyCatalogVersion requireAnalyzableVersion(Long versionId, Long userId) {
         VocabularyCatalogVersion version = versionMapper.selectOne(new LambdaQueryWrapper<VocabularyCatalogVersion>()
                 .eq(VocabularyCatalogVersion::getId, versionId)
-                .eq(VocabularyCatalogVersion::getStatus, VocabularyImportConstants.VERSION_STATUS_PUBLISHED)
+                .in(VocabularyCatalogVersion::getStatus, List.of(
+                        VocabularyImportConstants.VERSION_STATUS_REVIEWING,
+                        VocabularyImportConstants.VERSION_STATUS_PUBLISHED))
                 .eq(VocabularyCatalogVersion::getDeleted, false)
                 .last(CommonConstants.SQL_LIMIT_ONE));
         if (version == null) {
             throw LearningAssistantException.notFound(LearningErrorCode.VOCABULARY_CATALOG_NOT_FOUND);
+        }
+        if (VocabularyImportConstants.VERSION_STATUS_REVIEWING.equals(version.getStatus())) {
+            int warningCount = version.getWarningCount() == null ? 0 : version.getWarningCount();
+            int reviewedWarningCount = version.getReviewedWarningCount() == null ? 0 : version.getReviewedWarningCount();
+            if (warningCount > reviewedWarningCount) {
+                throw LearningAssistantException.badRequest(LearningErrorCode.VOCABULARY_IMPORT_NOT_REVIEWED,
+                        "仍有 " + (warningCount - reviewedWarningCount) + " 个疑似断词未确认，请先完成断词确认后再分析");
+            }
         }
         return version;
     }
@@ -749,7 +757,9 @@ public class VocabularyCatalogAnalysisService {
                 .eq(VocabularyCatalog::getId, catalogId)
                 .and(wrapper -> wrapper.eq(VocabularyCatalog::getOwnerUserId, userId)
                         .or().eq(VocabularyCatalog::getVisibility, VocabularyImportConstants.VISIBILITY_PUBLIC))
-                .eq(VocabularyCatalog::getStatus, VocabularyImportConstants.CATALOG_STATUS_PUBLISHED)
+                .in(VocabularyCatalog::getStatus, List.of(
+                        VocabularyImportConstants.CATALOG_STATUS_DRAFT,
+                        VocabularyImportConstants.CATALOG_STATUS_PUBLISHED))
                 .eq(VocabularyCatalog::getDeleted, false)
                 .last(CommonConstants.SQL_LIMIT_ONE));
         if (catalog == null) {
@@ -785,16 +795,15 @@ public class VocabularyCatalogAnalysisService {
     }
 
     private void fillCoverage(VocabularyCatalogAnalysisResponse response, Long catalogVersionId) {
-        int publishedCount = entryMapper.selectCount(new LambdaQueryWrapper<VocabularyCatalogEntry>()
+        int totalVersionCount = entryMapper.selectCount(new LambdaQueryWrapper<VocabularyCatalogEntry>()
                 .eq(VocabularyCatalogEntry::getCatalogVersionId, catalogVersionId)
-                .eq(VocabularyCatalogEntry::getPublished, true)
                 .eq(VocabularyCatalogEntry::getDeleted, false)).intValue();
         int unanalyzedCount = entryMapper.countUnanalyzedPublished(catalogVersionId);
-        int analyzedCount = Math.max(0, publishedCount - unanalyzedCount);
-        response.setPublishedCount(publishedCount);
+        int analyzedCount = Math.max(0, totalVersionCount - unanalyzedCount);
+        response.setPublishedCount(totalVersionCount);
         response.setAnalyzedCount(analyzedCount);
         response.setUnanalyzedCount(unanalyzedCount);
-        if (publishedCount > 0 && unanalyzedCount == 0) {
+        if (totalVersionCount > 0 && unanalyzedCount == 0) {
             response.setStatus(VocabularyCatalogAnalysisConstants.STATUS_COMPLETED);
             response.setCanTrigger(false);
         } else {

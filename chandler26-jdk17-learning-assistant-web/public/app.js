@@ -397,6 +397,7 @@ bindAppEvents({
   saveVocabularyImportMetadata: scenePlan.saveVocabularyImportMetadata,
   loadImportReview: scenePlan.loadImportReview,
   changeImportSearch: scenePlan.changeImportSearch,
+  changeImportWarningOnly: scenePlan.changeImportWarningOnly,
   confirmAllWarnings: scenePlan.confirmAllWarnings,
   previousImportPage: scenePlan.previousImportPage,
   nextImportPage: scenePlan.nextImportPage,

@@ -48,6 +48,7 @@ export function bindAppEvents(ctx) {
     saveVocabularyImportMetadata,
     loadImportReview,
     changeImportSearch,
+    changeImportWarningOnly,
     confirmAllWarnings,
     previousImportPage,
     nextImportPage,
@@ -305,10 +306,17 @@ elements.vocabularyImportFile?.addEventListener('change', () => {
     placeholder.textContent = file ? file.name : '选择 Markdown 文件'
   }
 })
-elements.vocabularyWarningOnly?.addEventListener('change', () => loadImportReview())
+elements.vocabularyWarningOnly?.addEventListener('change', () => {
+  if (typeof changeImportWarningOnly === 'function') {
+    changeImportWarningOnly()
+  } else {
+    if (state) state.vocabularyImportPage = 1
+    loadImportReview?.()
+  }
+})
 elements.vocabularyImportKeyword?.addEventListener('input', changeImportSearch)
 elements.vocabularyBatchConfirmBtn?.addEventListener('click', confirmAllWarnings)
-elements.vocabularyReloadReviewBtn?.addEventListener('click', () => loadImportReview())
+elements.vocabularyReloadReviewBtn?.addEventListener('click', () => loadImportReview?.())
 elements.vocabularyPrevPageBtn?.addEventListener('click', previousImportPage)
 elements.vocabularyNextPageBtn?.addEventListener('click', nextImportPage)
 elements.vocabularyImportHistoryPrevBtn?.addEventListener('click', () => previousImportHistoryPage())

@@ -142,15 +142,20 @@ export function createVocabularyImportView({
     elements.vocabularyPageInfo.textContent = `第 ${page} / ${pages} 页 · ${number(current.filteredTotal)} 条`
     elements.vocabularyPrevPageBtn.disabled = page <= 1
     elements.vocabularyNextPageBtn.disabled = page >= pages
-    if (canManageCatalogs && current.status === 'published') renderAnalysis(current)
+    if (canManageCatalogs && current?.catalogVersionId) renderAnalysis(current)
     else elements.vocabularyAnalysisAction?.classList.add('hidden')
   }
 
   function renderAnalysis(current = state.currentVocabularyImport) {
     if (!elements.vocabularyAnalysisAction) return
-    const published = current?.status === 'published'
-    elements.vocabularyAnalysisAction.classList.toggle('hidden', !published)
-    if (!published) return
+    const canManageCatalogs = state.preview || state.user?.roleCode === 'ADMIN'
+    const canShow = canManageCatalogs && Boolean(current?.catalogVersionId)
+    elements.vocabularyAnalysisAction.classList.toggle('hidden', !canShow)
+    if (!canShow) return
+
+    const pendingWarnings = number(current.pendingWarningCount)
+    const hasPendingWarnings = pendingWarnings > 0
+
     const analysis = sameId(state.currentVocabularyAnalysis?.catalogVersionId, current.catalogVersionId)
       ? state.currentVocabularyAnalysis : null
     const status = analysis?.status || 'not_started'
@@ -161,6 +166,14 @@ export function createVocabularyImportView({
     const inherited = number(analysis?.inheritedCount)
     const isAllAnalyzed = total > 0 && analyzed >= total && pending === 0
     const effectiveStatus = isAllAnalyzed ? 'completed' : status
+
+    if (hasPendingWarnings) {
+      elements.vocabularyAnalysisStatus.textContent = `词本关联分析：请先确认上方 ${pendingWarnings} 个疑似断词后方可开始分析`
+      elements.triggerVocabularyAnalysisBtn.disabled = true
+      elements.triggerVocabularyAnalysisBtn.textContent = '待确认断词'
+      return
+    }
+
     elements.vocabularyAnalysisStatus.textContent = `词本关联分析：${ANALYSIS_STATUS_LABELS[effectiveStatus] || effectiveStatus} · ${analyzed}/${total} 词${groups ? ` · ${groups} 组` : ''}${inherited ? ` · 本次复用 ${inherited} 词` : ''}`
     const running = !isAllAnalyzed && (status === 'pending' || status === 'running')
     elements.triggerVocabularyAnalysisBtn.disabled = running || pending === 0 || analysis?.canTrigger === false || isAllAnalyzed

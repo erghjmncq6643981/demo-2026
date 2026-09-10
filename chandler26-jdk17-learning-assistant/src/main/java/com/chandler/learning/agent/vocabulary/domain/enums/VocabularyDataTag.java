@@ -79,7 +79,7 @@ public enum VocabularyDataTag {
         }
         throw LearningAssistantException.badRequest(
                 LearningErrorCode.VOCABULARY_IMPORT_INVALID,
-                "数据标签仅支持自考、四级、六级或雅思");
+                "数据标签仅支持小升初、高考、自考、托福、四级、六级或雅思");
     }
 
     /**

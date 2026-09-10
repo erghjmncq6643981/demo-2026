@@ -16,7 +16,10 @@ public final class VocabularyImportConstants {
         public static final String CATALOG_STATUS_PUBLISHED = "published";
         public static final String VISIBILITY_PRIVATE = "private";
         public static final String VISIBILITY_PUBLIC = "public";
+        public static final String SOURCE_PRIMARY_TO_MIDDLE = VocabularyDataTag.PRIMARY_TO_MIDDLE.getCode();
+        public static final String SOURCE_NCEE = VocabularyDataTag.NCEE.getCode();
         public static final String SOURCE_SELF_STUDY = VocabularyDataTag.SELF_STUDY.getCode();
+        public static final String SOURCE_TOEFL = VocabularyDataTag.TOEFL.getCode();
         public static final String SOURCE_CET4 = VocabularyDataTag.CET4.getCode();
         public static final String SOURCE_CET6 = VocabularyDataTag.CET6.getCode();
         public static final String SOURCE_IELTS = VocabularyDataTag.IELTS.getCode();

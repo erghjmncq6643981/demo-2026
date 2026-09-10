@@ -19,9 +19,18 @@ class VocabularyDataTagTest {
 
     @ParameterizedTest
     @CsvSource({
+            "primary_to_middle, PRIMARY_TO_MIDDLE",
+            "PRIMARY_TO_MIDDLE, PRIMARY_TO_MIDDLE",
+            "小升初, PRIMARY_TO_MIDDLE",
+            "ncee, NCEE",
+            "NCEE, NCEE",
+            "高考, NCEE",
             "self_study, SELF_STUDY",
             "SELF_STUDY, SELF_STUDY",
             "自考, SELF_STUDY",
+            "toefl, TOEFL",
+            "TOEFL, TOEFL",
+            "托福, TOEFL",
             "cet4, CET4",
             "CET4, CET4",
             "四级, CET4",
@@ -38,7 +47,7 @@ class VocabularyDataTagTest {
     }
 
     @ParameterizedTest
-    @ValueSource(strings = {"", " ", "   ", "toefl", "考研", "unknown"})
+    @ValueSource(strings = {"", " ", "   ", "考研", "gre", "unknown"})
     @DisplayName("空白或不支持的文本返回 null")
     void testFromInvalid(String input) {
         assertThat(VocabularyDataTag.from(input)).isNull();
@@ -58,18 +67,21 @@ class VocabularyDataTagTest {
         assertThat(tag.getCode()).isEqualTo("cet4");
         assertThat(tag.getLabel()).isEqualTo("四级");
 
+        assertThat(VocabularyDataTag.require("小升初").getCode()).isEqualTo("primary_to_middle");
+        assertThat(VocabularyDataTag.require("ncee").getCode()).isEqualTo("ncee");
         assertThat(VocabularyDataTag.require("self_study").getCode()).isEqualTo("self_study");
+        assertThat(VocabularyDataTag.require("托福").getCode()).isEqualTo("toefl");
         assertThat(VocabularyDataTag.require("六级").getCode()).isEqualTo("cet6");
         assertThat(VocabularyDataTag.require("雅思").getCode()).isEqualTo("ielts");
     }
 
     @ParameterizedTest
-    @ValueSource(strings = {"", "   ", "toefl", "考研"})
+    @ValueSource(strings = {"", "   ", "考研", "gre"})
     @DisplayName("require 不支持的文本抛出业务异常")
     void testRequireInvalid(String input) {
         assertThatThrownBy(() -> VocabularyDataTag.require(input))
                 .isInstanceOf(LearningAssistantException.class)
-                .hasMessage("数据标签仅支持自考、四级、六级或雅思")
+                .hasMessage("数据标签仅支持小升初、高考、自考、托福、四级、六级或雅思")
                 .satisfies(ex -> assertThat(((LearningAssistantException) ex).getErrorCode())
                         .isEqualTo(LearningErrorCode.VOCABULARY_IMPORT_INVALID.getCode()));
     }
@@ -79,15 +91,18 @@ class VocabularyDataTagTest {
     void testRequireNull() {
         assertThatThrownBy(() -> VocabularyDataTag.require(null))
                 .isInstanceOf(LearningAssistantException.class)
-                .hasMessage("数据标签仅支持自考、四级、六级或雅思");
+                .hasMessage("数据标签仅支持小升初、高考、自考、托福、四级、六级或雅思");
     }
 
     @Test
-    @DisplayName("all 包含全部4个数据标签")
+    @DisplayName("all 包含全部7个数据标签")
     void testAll() {
         List<VocabularyDataTag> all = VocabularyDataTag.all();
         assertThat(all).containsExactly(
+                VocabularyDataTag.PRIMARY_TO_MIDDLE,
+                VocabularyDataTag.NCEE,
                 VocabularyDataTag.SELF_STUDY,
+                VocabularyDataTag.TOEFL,
                 VocabularyDataTag.CET4,
                 VocabularyDataTag.CET6,
                 VocabularyDataTag.IELTS

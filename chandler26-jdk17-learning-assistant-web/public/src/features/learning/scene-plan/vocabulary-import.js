@@ -1,5 +1,5 @@
 import { showModal, hideModal } from '/src/shared/modal.js'
-import { asArray, number } from '/src/features/learning/scene-plan/model.js'
+import { SOURCE_LABELS, asArray, number } from '/src/features/learning/scene-plan/model.js'
 import { parsePreviewMarkdown as parseMarkdown } from '/src/features/learning/scene-plan/markdown-parser.js'
 import { createVocabularyImportView } from '/src/features/learning/scene-plan/vocabulary-import-view.js'
 
@@ -31,6 +31,50 @@ export function createVocabularyImportWorkflow({
     onSaveEntry: (entryId) => saveEntry(entryId),
   })
 
+  async function ensureDataTags() {
+    if (state.preview) {
+      if (!state.vocabularyDataTags?.length) {
+        state.vocabularyDataTags = [
+          { code: 'primary_to_middle', label: '小升初' },
+          { code: 'ncee', label: '高考' },
+          { code: 'self_study', label: '自考' },
+          { code: 'toefl', label: '托福' },
+          { code: 'cet4', label: '四级' },
+          { code: 'cet6', label: '六级' },
+          { code: 'ielts', label: '雅思' },
+        ]
+      }
+      renderTagOptions()
+      return
+    }
+    if (!state.token) return
+    if (!state.vocabularyDataTags?.length) {
+      try {
+        const tags = await catalogApi.listTags()
+        if (Array.isArray(tags) && tags.length) {
+          state.vocabularyDataTags = tags
+          tags.forEach((tag) => {
+            if (tag?.code && tag?.label) SOURCE_LABELS[tag.code] = tag.label
+          })
+        }
+      } catch (error) {
+        logEvent('warn', '获取词汇数据标签失败', error.message)
+      }
+    }
+    renderTagOptions()
+  }
+
+  function renderTagOptions(selected) {
+    if (!elements.vocabularyImportSourceType) return
+    const tags = asArray(state.vocabularyDataTags)
+    if (!tags.length) return
+    const current = selected || elements.vocabularyImportSourceType.value || tags[0]?.code
+    elements.vocabularyImportSourceType.innerHTML = tags.map((tag) =>
+      `<option value="${escapeHtml(tag.code)}">${escapeHtml(tag.label || tag.name)}</option>`
+    ).join('')
+    elements.vocabularyImportSourceType.value = tags.some((t) => t.code === current) ? current : (tags[0]?.code || '')
+  }
+
   function renderImportList() {
     importView.renderImportList()
   }
@@ -43,15 +87,18 @@ export function createVocabularyImportWorkflow({
     importView.renderAnalysis(current)
   }
 
-  function open() {
+  async function open() {
+    await ensureDataTags()
     renderSourceOptions()
     state.currentVocabularyImport = null
     state.currentVocabularyAnalysis = null
     state.vocabularyImportPage = 1
+    if (elements.vocabularyWarningOnly) elements.vocabularyWarningOnly.checked = false
+    if (elements.vocabularyImportKeyword) elements.vocabularyImportKeyword.value = ''
     elements.vocabularyImportFile.value = ''
     elements.vocabularyImportName.value = ''
     elements.vocabularyImportPurpose.value = ''
-    elements.vocabularyImportSourceType.value = 'self_study'
+    elements.vocabularyImportSourceType.value = state.vocabularyDataTags?.[0]?.code || 'self_study'
     elements.vocabularyImportFile.disabled = false
     elements.vocabularyImportName.disabled = false
     elements.vocabularyImportSourceType.disabled = false
@@ -121,6 +168,8 @@ export function createVocabularyImportWorkflow({
       }
       state.currentVocabularyImport = result
       state.vocabularyImportPage = 1
+      if (elements.vocabularyWarningOnly) elements.vocabularyWarningOnly.checked = false
+      if (elements.vocabularyImportKeyword) elements.vocabularyImportKeyword.value = ''
       elements.vocabularyReviewSection.classList.remove('hidden')
       await loadReview(result.jobId)
       await reloadHistory()
@@ -189,6 +238,7 @@ export function createVocabularyImportWorkflow({
   }
 
   async function openReview(jobId) {
+    await ensureDataTags()
     state.currentVocabularyAnalysis = null
     state.vocabularyImportPage = 1
     elements.vocabularyWarningOnly.checked = false
@@ -224,7 +274,7 @@ export function createVocabularyImportWorkflow({
       source.pendingWarningCount = allItems.filter((item) => item.suspicious && item.reviewStatus !== 'confirmed').length
       source.reviewedWarningCount = allItems.filter((item) => item.suspicious && item.reviewStatus === 'confirmed').length
       state.currentVocabularyImport = source
-      if (source.status === 'published' && source.catalogVersionId) {
+      if (source.catalogVersionId && !state.currentVocabularyAnalysis) {
         const total = number(source.totalCount)
         state.currentVocabularyAnalysis = {
           catalogId: source.catalogId,
@@ -251,7 +301,7 @@ export function createVocabularyImportWorkflow({
       state.currentVocabularyImport = await catalogApi.getImport(jobId, params)
       renderReview()
       const canManageCatalogs = state.preview || state.user?.roleCode === 'ADMIN'
-      if (canManageCatalogs && state.currentVocabularyImport.status === 'published') {
+      if (canManageCatalogs && state.currentVocabularyImport?.catalogVersionId) {
         await loadAnalysis(state.currentVocabularyImport.catalogVersionId, { quiet: true })
       }
     } catch (error) {
@@ -284,7 +334,12 @@ export function createVocabularyImportWorkflow({
     const canManageCatalogs = state.preview || state.user?.roleCode === 'ADMIN'
     if (!canManageCatalogs) return
     const current = state.currentVocabularyImport
-    if (!current || current.status !== 'published') return
+    if (!current || !current.catalogVersionId) return
+    const pendingWarnings = number(current.pendingWarningCount)
+    if (pendingWarnings > 0) {
+      toast(`仍有 ${pendingWarnings} 个疑似断词未确认，请先完成断词确认后再开始分析`)
+      return
+    }
     const pending = number(state.currentVocabularyAnalysis?.unanalyzedCount) || number(current.totalCount)
     if (pending <= 0) return
     const confirmed = await confirmAction({
@@ -368,9 +423,22 @@ export function createVocabularyImportWorkflow({
       toast('请先确认所有疑似断词')
       return
     }
+
+    const analysis = sameId(state.currentVocabularyAnalysis?.catalogVersionId, current.catalogVersionId)
+      ? state.currentVocabularyAnalysis : null
+    const total = number(current.totalCount)
+    const analyzed = number(analysis?.analyzedCount)
+    const unanalyzed = Math.max(0, number(analysis?.unanalyzedCount) || (total - analyzed))
+    const isAllAnalyzed = total > 0 && analyzed >= total && unanalyzed === 0
+
+    let message = `确认将「${current.catalogName}」发布为公共词本？发布后可用于新建学习计划，导入阶段不会批量生成 AI 词卡。`
+    if (!isAllAnalyzed) {
+      message = `当前词本尚未完成 AI 语义关联分析（已完成 ${analyzed}/${total} 词）。未分析的词本在学习者场景规划中暂无语义分组支持。\n\n建议先点击下方「开始分析」完成后再发布。确定要直接发布吗？`
+    }
+
     const confirmed = await confirmAction({
-      title: '发布公共词本',
-      message: `确认将「${current.catalogName}」发布为公共词本？发布后可用于新建学习计划，导入阶段不会批量生成 AI 词卡。`,
+      title: isAllAnalyzed ? '发布公共词本' : '发布未完全分析的词本',
+      message,
       acceptText: '确认发布',
     })
     if (!confirmed) return
@@ -381,11 +449,10 @@ export function createVocabularyImportWorkflow({
         const catalog = { catalogId: current.catalogId, catalogVersionId: current.catalogVersionId, catalogName: current.catalogName, sourceType: current.sourceType, learningPurpose: current.learningPurpose, status: 'published', totalCount: current.totalCount, publishedTime: new Date().toISOString() }
         state.publicVocabularyCatalogs = [catalog, ...state.publicVocabularyCatalogs.filter((item) => !sameId(item.catalogVersionId, catalog.catalogVersionId))]
         state.currentVocabularyImport = current
-        state.currentVocabularyAnalysis = { catalogId: current.catalogId, catalogVersionId: current.catalogVersionId, status: 'not_started', publishedCount: number(current.totalCount), analyzedCount: 0, unanalyzedCount: number(current.totalCount), canTrigger: number(current.totalCount) > 0 }
       } else {
         state.currentVocabularyImport = await catalogApi.publish(current.jobId)
         const canManageCatalogs = state.preview || state.user?.roleCode === 'ADMIN'
-        if (canManageCatalogs && state.currentVocabularyImport.status === 'published') {
+        if (canManageCatalogs && state.currentVocabularyImport?.catalogVersionId) {
           await loadAnalysis(state.currentVocabularyImport.catalogVersionId, { quiet: true })
         }
       }
@@ -461,6 +528,11 @@ export function createVocabularyImportWorkflow({
     }, 280)
   }
 
+  function changeWarningOnly() {
+    state.vocabularyImportPage = 1
+    loadReview()
+  }
+
   function previousPage() {
     state.vocabularyImportPage = Math.max(1, number(state.vocabularyImportPage) - 1)
     loadReview()
@@ -504,6 +576,7 @@ export function createVocabularyImportWorkflow({
     renderAnalysis,
     loadAnalysis,
     changeSearch,
+    changeWarningOnly,
     previousPage,
     nextPage,
     previousHistoryPage,

@@ -35,7 +35,10 @@ export const ASSESSMENT_LABELS = {
 }
 
 export const SOURCE_LABELS = {
+  primary_to_middle: '小升初',
+  ncee: '高考',
   self_study: '自考',
+  toefl: '托福',
   cet4: '四级',
   cet6: '六级',
   ielts: '雅思',

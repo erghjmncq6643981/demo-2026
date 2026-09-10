@@ -79,6 +79,16 @@ export function createScenePlanFeature(ctx) {
     ;[elements.sceneWordbookSelect, elements.vocabularyImportWordbook, elements.scenePlanWordbookSelect].forEach((select) => renderSelectOptions(select, wordbooks, select?.value || preferredWordbook, (item) => `${item.name} · ${item.entryCount || 0}词`, '暂无单词本'))
     renderSelectOptions(elements.sceneCatalogSelect, asArray(state.publicVocabularyCatalogs).map((item) => ({ ...item, id: item.catalogVersionId })), elements.sceneCatalogSelect?.value, (item) => `${item.catalogName} · ${SOURCE_LABELS[item.sourceType] || item.sourceType || '公共'} · ${item.totalCount || 0}词`, '请先导入并发布公共词本')
     renderSelectOptions(elements.scenePlanSelect, asArray(state.learningPlans), state.currentLearningPlan?.id || elements.scenePlanSelect?.value, (item) => `${item.name} · ${number(item.learnedCoreWords)}/${number(item.totalCatalogWords)}词`, '暂无学习计划')
+    if (elements.vocabularyImportSourceType && asArray(state.vocabularyDataTags).length) {
+      const current = elements.vocabularyImportSourceType.value
+      renderSelectOptions(
+        elements.vocabularyImportSourceType,
+        state.vocabularyDataTags.map((item) => ({ ...item, id: item.code })),
+        current,
+        (item) => item.label || item.name,
+        '暂无数据标签'
+      )
+    }
     if (elements.scenePlanModelSelect) {
       const current = elements.scenePlanModelSelect.value
       const enabledModels = asArray(state.modelConfigs).filter((item) => item.enabled)
@@ -108,6 +118,17 @@ export function createScenePlanFeature(ctx) {
 
   async function loadSceneData(options = {}) {
     if (state.preview) {
+      if (!state.vocabularyDataTags?.length) {
+        state.vocabularyDataTags = [
+          { code: 'primary_to_middle', label: '小升初' },
+          { code: 'ncee', label: '高考' },
+          { code: 'self_study', label: '自考' },
+          { code: 'toefl', label: '托福' },
+          { code: 'cet4', label: '四级' },
+          { code: 'cet6', label: '六级' },
+          { code: 'ielts', label: '雅思' },
+        ]
+      }
       if (!state.publicVocabularyCatalogs.length) state.publicVocabularyCatalogs = [previewCatalog()]
       if (!state.vocabularyImports.length) {
         const catalog = state.publicVocabularyCatalogs[0]
@@ -129,7 +150,18 @@ export function createScenePlanFeature(ctx) {
     const selectedPlanId = options.planId || options.preferredPlanId || state.currentLearningPlan?.id
     try {
       const canManageCatalogs = state.user?.roleCode === 'ADMIN'
-      const [imports, publicCatalogs, plans] = await Promise.all([canManageCatalogs ? api.listImports() : Promise.resolve([]), api.listPublicCatalogs(), api.listPlans()])
+      const [imports, publicCatalogs, plans, tags] = await Promise.all([
+        canManageCatalogs ? api.listImports() : Promise.resolve([]),
+        api.listPublicCatalogs(),
+        api.listPlans(),
+        catalogApi.listTags().catch(() => []),
+      ])
+      if (Array.isArray(tags) && tags.length) {
+        state.vocabularyDataTags = tags
+        tags.forEach((tag) => {
+          if (tag?.code && tag?.label) SOURCE_LABELS[tag.code] = tag.label
+        })
+      }
       applyImportHistoryPage(imports)
       state.publicVocabularyCatalogs = asArray(publicCatalogs)
       state.learningPlans = asArray(plans)
@@ -317,7 +349,7 @@ export function createScenePlanFeature(ctx) {
   sceneAudioController = createSceneAudioController({ state, elements, api, activeUnit, sameId, toast, logEvent })
   const studyEngine = createStudyEngine({ state, elements, applyStage: (stage) => { sceneAudioController.stop(); sceneStudy?.applyStage(stage) }, renderChallengeWords: (words) => sceneStudy?.renderChallengeWords(words), renderAssessment: (unit) => sceneStudy?.renderAssessment(unit), prepareUnit: ensureActiveUnitDetail, coreWords: (unit) => asArray(unit?.words).filter((word) => word.tier === 'core'), isWordComplete, onChallengeStart: (word) => { state.currentSceneWordId = word?.id || null; state.sceneAssessmentStartedAt = Date.now(); sceneStudy?.resetAssessment() } })
   const importWorkflow = createVocabularyImportWorkflow({ state, elements, catalogApi, renderSourceOptions, setButtonLoading, toast, logEvent, confirmAction, escapeHtml, sameId, loadWordbooks })
-  const { open: openVocabularyImport, close: closeVocabularyImport, start: startVocabularyImport, remove: deleteImportJob, saveMetadata: saveVocabularyImportMetadata, loadReview: loadImportReview, openReview: openImportReview, confirmAll: confirmAllWarnings, publish: publishVocabularyImport, triggerAnalysis: triggerVocabularyAnalysis, applyHistoryPage: applyImportHistoryPage, renderImportList, changeSearch: changeImportSearch, previousPage: previousImportPage, nextPage: nextImportPage, previousHistoryPage: previousHistoryPage, nextHistoryPage: nextHistoryPage } = importWorkflow
+  const { open: openVocabularyImport, close: closeVocabularyImport, start: startVocabularyImport, remove: deleteImportJob, saveMetadata: saveVocabularyImportMetadata, loadReview: loadImportReview, openReview: openImportReview, confirmAll: confirmAllWarnings, publish: publishVocabularyImport, triggerAnalysis: triggerVocabularyAnalysis, applyHistoryPage: applyImportHistoryPage, renderImportList, changeSearch: changeImportSearch, changeWarningOnly: changeImportWarningOnly, previousPage: previousImportPage, nextPage: nextImportPage, previousHistoryPage: previousHistoryPage, nextHistoryPage: nextHistoryPage } = importWorkflow
 
   sceneNote = createSceneNote({ state, elements, api, activeUnit, sameId, toast, logEvent })
   sceneActions = createSceneActions({ state, elements, api, request, activeUnit, selectPlan, loadSceneData, renderSceneView, renderCurrentScene, setButtonLoading, confirmAction, toast, logEvent, sameId, createPreviewCookingUnit })
@@ -328,7 +360,11 @@ export function createScenePlanFeature(ctx) {
 
   return {
     loadSceneData, clearSceneData, renderSceneView, renderRelatedWords: () => sceneStudy.renderRelatedWords(activeUnit()),
-    openVocabularyImport, closeVocabularyImport, startVocabularyImport, deleteImportJob, saveVocabularyImportMetadata, loadReview: loadImportReview, openReview: openImportReview, confirmAllWarnings, publishVocabularyImport, triggerVocabularyAnalysis,
+    openVocabularyImport, closeVocabularyImport, startVocabularyImport, deleteImportJob, saveVocabularyImportMetadata,
+    loadImportReview, loadReview: loadImportReview,
+    openImportReview, openReview: openImportReview,
+    changeImportWarningOnly,
+    confirmAllWarnings, publishVocabularyImport, triggerVocabularyAnalysis,
     reloadVocabularyImports: importWorkflow.reloadHistory,
     renderVocabularyImports: importWorkflow.renderImportList,
     openScenePlanModal: planWorkflow.openModal, closeScenePlanModal: planWorkflow.closeModal, createScenePlan: planWorkflow.savePlan, changePlanCatalog: planWorkflow.changeCatalog, changeSceneWordbook: planWorkflow.changeWordbook,

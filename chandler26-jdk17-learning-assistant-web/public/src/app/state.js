@@ -62,6 +62,7 @@ export function createInitialState() {
     vocabularyImports: [],
     currentVocabularyImport: null,
     currentVocabularyAnalysis: null,
+    vocabularyDataTags: [],
     vocabularyImportPage: 1,
     vocabularyImportPageSize: 100,
     vocabularyImportHistoryPage: 1,
