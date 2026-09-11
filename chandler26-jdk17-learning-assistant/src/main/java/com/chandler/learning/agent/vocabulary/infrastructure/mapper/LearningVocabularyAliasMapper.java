@@ -23,6 +23,9 @@ public interface LearningVocabularyAliasMapper extends BaseMapper<LearningVocabu
     /** 批量删除指定词卡的别名索引。 */
     int physicalDeleteByVocabularyIds(@Param("vocabularyIds") Collection<Long> vocabularyIds);
 
+    /** 批量物理删除指定归一化别名的索引记录。 */
+    int physicalDeleteByNormalizedAliases(@Param("normalizedAliases") Collection<String> normalizedAliases);
+
     /** 批量新增别名记录（支持忽略重复项）。 */
     int insertBatch(@Param("list") List<LearningVocabularyAlias> list);
 }

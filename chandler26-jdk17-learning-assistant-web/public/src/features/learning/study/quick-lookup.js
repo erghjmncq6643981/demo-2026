@@ -67,31 +67,35 @@ export function createQuickLookupFeature({
     elements.quickLookupModal.classList.add('hidden')
   }
 
-  async function lookup(term) {
+  async function lookup(term, options = {}) {
     const clean = String(term || '').trim()
     if (!clean) return
     currentLookupTerm = clean
     isLookingUp = true
     showLoading(clean)
 
+    const forceRefresh = Boolean(options.forceRefresh)
     try {
-      // 1. 优先查询本地/服务端缓存
-      const cached = await request(`/api/v1/english/vocabularies/${encodeURIComponent(clean)}`)
-      if (cached && !cached.generating) {
-        if (currentLookupTerm === clean) {
-          isLookingUp = false
-          renderQuickRecord(cached)
+      // 1. 若非强制刷新，优先查询本地/服务端缓存
+      if (!forceRefresh) {
+        const cached = await request(`/api/v1/english/vocabularies/${encodeURIComponent(clean)}`)
+        if (cached && !cached.generating) {
+          if (currentLookupTerm === clean) {
+            isLookingUp = false
+            renderQuickRecord(cached)
+          }
+          return
         }
-        return
       }
 
-      // 2. 若未缓存或后台生成中，调用 study 接口（后端自动合并并发，避免重复请求模型）
+      // 2. 若未缓存、后台生成中或强制刷新，调用 study 接口（后端自动合并并发，避免重复请求模型）
       const studyRecord = await request('/api/v1/english/vocabularies/study', {
         method: 'POST',
         body: JSON.stringify({
           term: clean,
           agentCode: elements.agentSelect?.value || 'english_vocabulary_plan',
           templateCode: elements.templateSelect?.value || 'vocabulary_card_single',
+          forceRefresh,
         }),
       })
 
@@ -134,8 +138,11 @@ export function createQuickLookupFeature({
     elements.quickLookupContent.innerHTML = `
       ${record?.isAliasHit || (record?.queriedTerm && record.queriedTerm.toLowerCase() !== (term || '').toLowerCase()) ? `
         <div class="quick-lemma-notice">
-          <span class="quick-lemma-icon">🔀</span>
-          <span>检索词：<strong class="quick-lemma-highlight">${escapeHtml(record.queriedTerm)}</strong> · 已关联至原形单词 <strong class="quick-lemma-highlight">${escapeHtml(record.lemma || term)}</strong></span>
+          <div class="quick-lemma-info">
+            <span class="quick-lemma-icon">🔀</span>
+            <span>检索词：<strong class="quick-lemma-highlight">${escapeHtml(record.queriedTerm)}</strong> · 已关联至原形单词 <strong class="quick-lemma-highlight">${escapeHtml(record.lemma || term)}</strong></span>
+          </div>
+          <button type="button" class="quick-lemma-standalone-btn" data-standalone-term="${escapeHtml(record.queriedTerm)}" title="不关联至原形，坚持以「${escapeHtml(record.queriedTerm)}」生成独立词卡">以独立单词查询 →</button>
         </div>
       ` : ''}
       <div class="quick-card-hero">
@@ -239,6 +246,18 @@ export function createQuickLookupFeature({
         console.error('发音播放异常:', error)
         toast?.('发音播放异常')
       }
+    })
+
+    elements.quickLookupContent.querySelectorAll('[data-standalone-term]')?.forEach((btn) => {
+      btn.addEventListener('click', (e) => {
+        e.preventDefault()
+        e.stopPropagation()
+        const standaloneTerm = btn.getAttribute('data-standalone-term')
+        if (standaloneTerm) {
+          if (elements.quickLookupInput) elements.quickLookupInput.value = standaloneTerm
+          lookup(standaloneTerm, { forceRefresh: true })
+        }
+      })
     })
 
     elements.quickLookupContent.querySelector('[data-quick-goto]')?.addEventListener('click', () => {

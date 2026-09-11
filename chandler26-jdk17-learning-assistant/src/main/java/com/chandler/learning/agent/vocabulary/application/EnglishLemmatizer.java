@@ -156,6 +156,21 @@ public class EnglishLemmatizer {
             "tempest", "manifest", "arrest", "infest", "molest", "ingest", "crest", "quest", "priest"
     );
 
+    private static final Set<String> INDEPENDENT_S_WORDS = Set.of(
+            // 常复数与成对名词（服饰、工具、日常用品等）
+            "pants", "trousers", "shorts", "jeans", "clothes", "glasses", "sunglasses",
+            "scissors", "binoculars", "tweezers", "pliers", "tongs", "compasses", "goggles",
+            "leggings", "pajamas", "pyjamas", "underpants", "drawers", "overalls", "breeches", "tights",
+            // 专有意义/固定复数名词
+            "goods", "customs", "arms", "savings", "premises", "scales", "belongings",
+            "surroundings", "congratulations", "thanks", "contents", "stairs", "ruins",
+            "outskirts", "species", "series", "means", "news", "refreshments", "earnings",
+            "wages", "credentials", "fireworks", "crossroads", "headquarters", "billiards", "darts",
+            // 学科与活动专有名词（以 -ics 结尾等）
+            "physics", "mathematics", "maths", "economics", "politics", "electronics", "athletics",
+            "gymnastics", "statistics", "mechanics", "optics", "aerobics", "linguistics", "genetics"
+    );
+
     /**
      * 判断单词是否为不规则形态词，若是则返回其精确原型（如 went -> go）。
      */
@@ -167,8 +182,8 @@ public class EnglishLemmatizer {
     }
 
     /**
-     * 判断单词是否为非屈折变化的独立名词/形容词/词根（如 sibling, modest, forest 等），
-     * 这类词汇严禁被误当做分词或比较级/最高级屈折进行推导还原。
+     * 判断单词是否为非屈折变化的独立名词/形容词/词根（如 sibling, modest, forest, pants 等），
+     * 这类词汇严禁被误当做分词、比较级/最高级或动词/复数屈折进行推导还原。
      */
     public boolean isNonInflectional(String rawTerm) {
         if (!StringUtils.hasText(rawTerm)) {
@@ -177,6 +192,7 @@ public class EnglishLemmatizer {
         String term = rawTerm.trim().toLowerCase(Locale.ROOT);
         return NON_INFLECTIONAL_ING_WORDS.contains(term)
                 || NON_INFLECTIONAL_EST_WORDS.contains(term)
+                || INDEPENDENT_S_WORDS.contains(term)
                 || (term.endsWith("ling") && term.length() > 4);
     }
 
@@ -196,7 +212,13 @@ public class EnglishLemmatizer {
             candidates.add(IRREGULAR_MAP.get(term));
         }
 
-        // 2. 动词 -ing 还原（排除非屈折变化独立名词及 -ling 名词后缀）
+        // 2. 独立词汇判定（非屈折变化的独立名词/形容词/常复数，如 pants, sibling, forest 等）
+        if (isNonInflectional(term)) {
+            candidates.remove(term);
+            return new ArrayList<>(candidates);
+        }
+
+        // 3. 动词 -ing 还原（排除非屈折变化独立名词及 -ling 名词后缀）
         if (term.endsWith("ing") && term.length() > 4 && !NON_INFLECTIONAL_ING_WORDS.contains(term) && !term.endsWith("ling")) {
             String stem = term.substring(0, term.length() - 3);
             if (term.endsWith("ying") && stem.length() >= 1) {

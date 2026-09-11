@@ -98,6 +98,9 @@ public class VocabularyInsightService {
         }
         try {
             aliasMapper.physicalDeleteByVocabularyIds(vocabularyIds);
+            if (!normalizedTerms.isEmpty()) {
+                aliasMapper.physicalDeleteByNormalizedAliases(normalizedTerms);
+            }
         } catch (Exception ignored) {
         }
         LocalDateTime now = LocalDateTime.now();

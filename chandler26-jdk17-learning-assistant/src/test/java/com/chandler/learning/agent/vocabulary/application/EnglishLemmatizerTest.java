@@ -75,6 +75,30 @@ class EnglishLemmatizerTest {
     }
 
     @Test
+    @DisplayName("常复数与专有复数独立名词（如 pants, shorts, glasses, goods, physics）不应被误推导截断变形")
+    void shouldNotFalselyStemIndependentPluralNouns() {
+        assertThat(lemmatizer.candidateLemmas("pants")).isEmpty();
+        assertThat(lemmatizer.candidateLemmas("shorts")).isEmpty();
+        assertThat(lemmatizer.candidateLemmas("jeans")).isEmpty();
+        assertThat(lemmatizer.candidateLemmas("glasses")).isEmpty();
+        assertThat(lemmatizer.candidateLemmas("scissors")).isEmpty();
+        assertThat(lemmatizer.candidateLemmas("clothes")).isEmpty();
+        assertThat(lemmatizer.candidateLemmas("goods")).isEmpty();
+        assertThat(lemmatizer.candidateLemmas("customs")).isEmpty();
+        assertThat(lemmatizer.candidateLemmas("physics")).isEmpty();
+        assertThat(lemmatizer.candidateLemmas("economics")).isEmpty();
+
+        assertThat(lemmatizer.isNonInflectional("pants")).isTrue();
+        assertThat(lemmatizer.isNonInflectional("shorts")).isTrue();
+        assertThat(lemmatizer.isNonInflectional("jeans")).isTrue();
+        assertThat(lemmatizer.isNonInflectional("glasses")).isTrue();
+        assertThat(lemmatizer.isNonInflectional("goods")).isTrue();
+        assertThat(lemmatizer.isNonInflectional("physics")).isTrue();
+        assertThat(lemmatizer.isNonInflectional("apples")).isFalse();
+        assertThat(lemmatizer.isNonInflectional("watches")).isFalse();
+    }
+
+    @Test
     @DisplayName("空值或单字符应安全处理")
     void shouldHandleEmptyOrSingleCharSafely() {
         assertThat(lemmatizer.candidateLemmas(null)).isEmpty();

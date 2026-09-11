@@ -181,4 +181,41 @@ class EnglishVocabularyStudyServiceAliasTest {
         assertThat(record).isNull();
         verify(recordMapper, Mockito.never()).selectBatchIds(any());
     }
+
+    @Test
+    @DisplayName("独立常复数单词（如 pants）绝不能被误关联至动词原形词（如 pant）")
+    void shouldNotMistakePantsForPant() {
+        LearningVocabularyAlias alias = new LearningVocabularyAlias();
+        alias.setId(5001L);
+        alias.setVocabularyId(6001L);
+        alias.setAliasTerm("pants");
+        alias.setNormalizedAlias("pants");
+        alias.setLemma("pant");
+        alias.setNormalizedLemma("pant");
+        alias.setAliasType("inflection");
+        alias.setSource("ai");
+
+        EnglishVocabularyStudyRecord pantRecord = new EnglishVocabularyStudyRecord();
+        pantRecord.setId(6001L);
+        pantRecord.setTerm("pant");
+        pantRecord.setNormalizedTerm("pant");
+        pantRecord.setParsedJson("""
+                {
+                  "term": "pant",
+                  "lemma": "pant",
+                  "inflections": ["pants", "panted", "panting"],
+                  "definitions": [{"part_of_speech": "verb", "meaning": "喘气"}]
+                }
+                """);
+        pantRecord.setLookupCount(1);
+
+        when(recordMapper.selectOne(any())).thenReturn(null);
+        when(aliasMapper.findByNormalizedAlias("pants")).thenReturn(alias);
+        when(recordMapper.selectById(6001L)).thenReturn(pantRecord);
+        when(recordMapper.selectList(any())).thenReturn(List.of());
+        when(aliasMapper.findByNormalizedAliases(any())).thenReturn(List.of());
+
+        EnglishVocabularyStudyRecord result = service.findRecord("pants");
+        assertThat(result).isNull();
+    }
 }
