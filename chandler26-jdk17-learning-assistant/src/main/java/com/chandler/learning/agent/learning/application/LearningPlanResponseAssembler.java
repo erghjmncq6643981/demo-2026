@@ -9,6 +9,7 @@ import com.chandler.learning.agent.learning.api.response.SceneRelatedWordRespons
 import com.chandler.learning.agent.learning.domain.entity.LearningPlan;
 import com.chandler.learning.agent.learning.domain.entity.LearningPlanUnit;
 import com.chandler.learning.agent.learning.domain.entity.LearningPlanUnitEntry;
+import com.chandler.learning.agent.learning.domain.bo.LearningPlanGeneratedCountBO;
 import com.chandler.learning.agent.learning.domain.bo.LearningPlanUnitEntryItem;
 import com.chandler.learning.agent.learning.domain.bo.LearningAssessmentPassBO;
 import com.chandler.learning.agent.learning.domain.bo.LearningPlanUnitItem;
@@ -32,6 +33,7 @@ import org.springframework.stereotype.Component;
 import org.springframework.util.StringUtils;
 
 import java.util.ArrayList;
+import java.util.HashMap;
 import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
@@ -59,6 +61,12 @@ public class LearningPlanResponseAssembler {
 
     /** 装配计划摘要或完整详情。 */
     public LearningPlanResponse toPlanResponse(LearningPlan plan, boolean includeUnits) {
+        Integer generatedCount = plan.getId() != null ? unitMapper.selectGeneratedCoreCount(plan.getId()) : 0;
+        return toPlanResponse(plan, includeUnits, generatedCount != null ? generatedCount : 0);
+    }
+
+    /** 装配计划并使用已预查好的已生成核心词计数，消除列表查询时的循环 SQL。 */
+    public LearningPlanResponse toPlanResponse(LearningPlan plan, boolean includeUnits, Integer generatedCoreWords) {
         LearningPlanResponse response = new LearningPlanResponse();
         response.setId(plan.getId());
         response.setCatalogId(plan.getCatalogId());
@@ -70,6 +78,7 @@ public class LearningPlanResponseAssembler {
         response.setEndTime(plan.getEndTime());
         response.setStatus(plan.getStatus());
         response.setTotalCatalogWords(plan.getTotalCatalogWords());
+        response.setGeneratedCoreWords(generatedCoreWords != null ? generatedCoreWords : 0);
         response.setLearnedCoreWords(plan.getLearnedCoreWords());
         response.setCompletedUnitCount(plan.getCompletedUnitCount());
         response.setCurrentUnitId(plan.getCurrentUnitId());
@@ -79,6 +88,28 @@ public class LearningPlanResponseAssembler {
         response.setCreateTime(plan.getCreateTime());
         response.setUpdateTime(plan.getUpdateTime());
         return response;
+    }
+
+    /** 批量装配计划列表，聚合已生成核心词计数，严格杜绝循环查询。 */
+    public List<LearningPlanResponse> toPlanResponses(List<LearningPlan> plans) {
+        if (plans == null || plans.isEmpty()) {
+            return List.of();
+        }
+        List<Long> planIds = plans.stream().map(LearningPlan::getId).filter(Objects::nonNull).toList();
+        Map<Long, Integer> generatedCounts = new HashMap<>();
+        if (!planIds.isEmpty()) {
+            List<LearningPlanGeneratedCountBO> counts = unitMapper.selectGeneratedCoreCounts(planIds);
+            if (counts != null) {
+                for (LearningPlanGeneratedCountBO bo : counts) {
+                    if (bo.getPlanId() != null) {
+                        generatedCounts.put(bo.getPlanId(), bo.getGeneratedCoreCount());
+                    }
+                }
+            }
+        }
+        return plans.stream().map(plan ->
+                toPlanResponse(plan, false, generatedCounts.getOrDefault(plan.getId(), 0))
+        ).toList();
     }
 
     /** 装配单个刚刚变化的单元。 */

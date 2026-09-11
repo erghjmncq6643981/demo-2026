@@ -54,6 +54,7 @@ class LearningPlanResponseAssemblerTest {
         LearningPlanUnitItem firstUnit = unitItem(101L, 10L, 1, 1001L, "Scene text", "{}");
         LearningPlanUnitItem secondUnit = unitItem(102L, 10L, 2, null, null, null);
         when(unitMapper.selectUnitsWithMaterial(10L, null)).thenReturn(List.of(firstUnit, secondUnit));
+        when(unitMapper.selectGeneratedCoreCount(10L)).thenReturn(40);
         when(relatedWordMapper.selectList(any(Wrapper.class))).thenReturn(List.of());
 
         LearningPlanUnitEntryItem firstEntry = entryItem(1001L, 101L, 2001L, 3001L, "airport", "learning");
@@ -71,6 +72,7 @@ class LearningPlanResponseAssemblerTest {
 
         LearningPlanResponse response = assembler.toPlanResponse(plan, true);
 
+        assertThat(response.getGeneratedCoreWords()).isEqualTo(40);
         assertThat(response.getUnits()).hasSize(2);
         assertThat(response.getUnits().get(0).getLearningText()).isEqualTo("Scene text");
         assertThat(response.getUnits().get(1).getWords().get(0).getPassedAssessments())

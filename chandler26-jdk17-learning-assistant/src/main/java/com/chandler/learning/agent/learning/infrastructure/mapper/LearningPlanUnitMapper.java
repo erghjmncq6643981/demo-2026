@@ -2,6 +2,7 @@ package com.chandler.learning.agent.learning.infrastructure.mapper;
 
 import com.baomidou.mybatisplus.core.mapper.BaseMapper;
 import com.chandler.learning.agent.learning.domain.entity.LearningPlanUnit;
+import com.chandler.learning.agent.learning.domain.bo.LearningPlanGeneratedCountBO;
 import com.chandler.learning.agent.learning.domain.bo.LearningPlanUnitItem;
 import org.apache.ibatis.annotations.Mapper;
 import org.apache.ibatis.annotations.Param;
@@ -23,6 +24,9 @@ public interface LearningPlanUnitMapper extends BaseMapper<LearningPlanUnit> {
 
     /** 聚合查询计划已生成的核心词数量，避免加载全部单元实体。 */
     Integer selectGeneratedCoreCount(@Param("planId") Long planId);
+
+    /** 批量聚合查询多个计划已生成的核心词数量。 */
+    List<LearningPlanGeneratedCountBO> selectGeneratedCoreCounts(@Param("planIds") Collection<Long> planIds);
 
     /**
      * 联表查询单元及其生效中的场景材料。

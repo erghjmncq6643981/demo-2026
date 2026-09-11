@@ -43,6 +43,9 @@ public class LearningPlanResponse {
     @Schema(description = "公共词本词汇总数")
     private Integer totalCatalogWords;
 
+    @Schema(description = "已生成场景的核心词总数")
+    private Integer generatedCoreWords;
+
     @Schema(description = "已完成首次学习的核心词数量")
     private Integer learnedCoreWords;
 

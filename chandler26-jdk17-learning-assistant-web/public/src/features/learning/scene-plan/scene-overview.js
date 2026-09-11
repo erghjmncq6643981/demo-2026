@@ -137,9 +137,12 @@ export function createSceneOverview({
     const todayKey = dateKey(today)
     const planStartKey = plan.startTime ? plan.startTime.split('T')[0] : null
     const planEndKey = plan.endTime ? plan.endTime.split('T')[0] : null
-    const remainingWords = Math.max(0, number(plan.totalCatalogWords) - number(plan.learnedCoreWords))
-    let suggestedDailyCount = 8
-    if (plan.endTime) {
+    const generatedWords = plan.generatedCoreWords !== undefined && plan.generatedCoreWords !== null
+      ? number(plan.generatedCoreWords)
+      : asArray(plan.units).reduce((sum, u) => sum + number(u.coreWordCount), 0)
+    const remainingWords = Math.max(0, number(plan.totalCatalogWords) - generatedWords)
+    let suggestedDailyCount = remainingWords > 0 ? 8 : 0
+    if (remainingWords > 0 && plan.endTime) {
       const planEnd = dateFromKey(plan.endTime.split('T')[0])
       const startForRemaining = planStartKey && todayKey < planStartKey ? dateFromKey(planStartKey) : new Date(today.getTime())
       startForRemaining.setHours(12, 0, 0, 0)
@@ -178,7 +181,7 @@ export function createSceneOverview({
         label = '未生成'
       } else {
         count = suggestedDailyCount
-        label = isToday ? '待生成' : '预计待挑战'
+        label = suggestedDailyCount === 0 ? '已全部生成' : (isToday ? '待生成' : '预计待挑战')
       }
       return `<button class="scene-calendar-day ${isToday ? 'today' : ''} ${isPast ? 'past' : ''} ${!withinPlan ? 'outside-plan' : ''} ${overdue ? 'overdue' : ''} ${isCompleted ? 'completed-day' : ''} ${isGenerating ? 'generating-day' : ''}" type="button" data-calendar-preview="${key}" aria-label="预览 ${formatCalendarDate(date, true)} 的词汇"><span>${range === 'month' ? `${date.getDate()}日` : formatCalendarDate(date, true)}</span><strong>${count}</strong><small>${label}</small></button>`
     }).join('')}</div>`

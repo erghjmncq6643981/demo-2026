@@ -15,6 +15,22 @@
           AND deleted = 0
     </select>
 
+    <select id="selectGeneratedCoreCounts" resultType="com.chandler.learning.agent.learning.domain.bo.LearningPlanGeneratedCountBO">
+        SELECT plan_id AS planId, COALESCE(SUM(core_word_count), 0) AS generatedCoreCount
+        FROM learning_plan_unit
+        WHERE deleted = 0
+        <choose>
+            <when test="planIds != null and planIds.size() > 0">
+                AND plan_id IN
+                <foreach collection="planIds" item="id" open="(" separator="," close=")">#{id}</foreach>
+            </when>
+            <otherwise>
+                AND 1 = 0
+            </otherwise>
+        </choose>
+        GROUP BY plan_id
+    </select>
+
     <select id="selectUnitsWithMaterial" resultType="com.chandler.learning.agent.learning.domain.bo.LearningPlanUnitItem">
         SELECT
             u.id,

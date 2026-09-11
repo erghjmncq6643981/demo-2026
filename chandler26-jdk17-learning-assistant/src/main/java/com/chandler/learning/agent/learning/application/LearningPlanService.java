@@ -178,13 +178,11 @@ public class LearningPlanService {
 
     /** 查询列表场景学习计划。 */
     public List<LearningPlanResponse> list(Long userId) {
-        return planMapper.selectList(new LambdaQueryWrapper<LearningPlan>()
+        List<LearningPlan> plans = planMapper.selectList(new LambdaQueryWrapper<LearningPlan>()
                         .eq(LearningPlan::getUserId, userId)
                         .eq(LearningPlan::getDeleted, false)
-                        .orderByDesc(LearningPlan::getUpdateTime))
-                .stream()
-                .map(plan -> responseAssembler.toPlanResponse(plan, false))
-                .toList();
+                        .orderByDesc(LearningPlan::getUpdateTime));
+        return responseAssembler.toPlanResponses(plans);
     }
 
     /** 查询详情场景学习计划。 */
