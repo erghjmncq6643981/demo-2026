@@ -353,7 +353,30 @@ export function createScenePlanFeature(ctx) {
 
   sceneNote = createSceneNote({ state, elements, api, activeUnit, sameId, toast, logEvent })
   sceneActions = createSceneActions({ state, elements, api, request, activeUnit, selectPlan, loadSceneData, renderSceneView, renderCurrentScene, setButtonLoading, confirmAction, toast, logEvent, sameId, createPreviewCookingUnit })
-  sceneStudy = createSceneStudy({ state, elements, api, activeUnit, renderCurrentScene, setButtonLoading, escapeHtml, sameId, toast, logEvent, completeCurrentUnit: (...args) => sceneActions.completeCurrentUnit(...args), backToReading: () => studyEngine.backToReading(), startChallenge: () => studyEngine.startChallenge(), generateRelatedWords: (...args) => sceneActions.generateRelatedWords?.(...args), promoteWord: (...args) => sceneActions.promoteWord(...args), speak: (...args) => ctx.speak?.(...args), preloadAudio: (...args) => ctx.preloadAudio?.(...args) })
+  sceneStudy = createSceneStudy({
+    state,
+    elements,
+    api,
+    activeUnit,
+    renderCurrentScene,
+    setButtonLoading,
+    escapeHtml,
+    sameId,
+    toast,
+    logEvent,
+    completeCurrentUnit: (...args) => sceneActions.completeCurrentUnit(...args),
+    backToReading: () => studyEngine.backToReading(),
+    startChallenge: () => studyEngine.startChallenge(),
+    generateRelatedWords: (...args) => sceneActions.generateRelatedWords?.(...args),
+    promoteWord: (...args) => sceneActions.promoteWord(...args),
+    speak: (...args) => ctx.speak?.(...args),
+    preloadAudio: (...args) => ctx.preloadAudio?.(...args),
+    toggleAudio: () => sceneAudioController.toggle(),
+    replayAudio: () => sceneAudioController.replay(),
+    pauseAudio: () => sceneAudioController.pause(),
+    resumeAudio: () => sceneAudioController.resume(),
+    speakSentence: (...args) => speakSentence(...args),
+  })
   sceneOverview = createSceneOverview({ state, elements, api, unitList, activeUnit, calendarDates, calendarTitle, dateFromKey, formatCalendarDate, unitDateKey, unitStatusLabel, unitsForDate, createPreviewCookingUnit, loadSceneData, loadSceneNote: (unit) => sceneNote?.scheduleLoad?.(unit) || sceneNote?.load(unit), startLearning: studyEngine.startLearning, renderCurrentScene, setButtonLoading, confirmAction, toast, logEvent, escapeHtml, sameId, preview: state.preview })
   planWorkflow = createPlanWorkflow({ state, elements, api, loadSceneData, renderSourceOptions, changeSelectedPlan, targetPlan: planManager.targetPlan, setButtonLoading, toast, logEvent, confirmAction, escapeHtml, sameId })
   createAsyncListener({ state, refreshCalendar: refreshCalendarData }).bind()
@@ -372,7 +395,33 @@ export function createScenePlanFeature(ctx) {
     completeCurrentUnit: sceneActions.completeCurrentUnit, generateNextUnit: sceneActions.generateNextUnit, scheduleNextUnit: sceneActions.scheduleNextUnit, generateCards: sceneActions.generateCards, scheduleCards: sceneActions.scheduleCards,
     startLearning: studyEngine.startLearning, showChallengeWords: studyEngine.showChallengeWords, startChallenge: studyEngine.startChallenge, backToReading: studyEngine.backToReading, backToPlanOverview: () => sceneStudy.applyStage('overview'),
     changeCalendarRange, changeCalendarOffset: calendarView.changeOffset, resetCalendar: calendarView.reset, changeSelectedPlan, pausePlan: planWorkflow.pausePlan, resumePlan: planWorkflow.resumePlan, cancelPlan: planWorkflow.cancelPlan,
-    speakCurrentScene: () => speakSentence(activeUnit()?.learningText || ''), toggleSceneTtsAudio: sceneAudioController.toggle, stopSceneTtsAudio: sceneAudioController.stop, cycleSceneTtsPlaybackRate: sceneAudioController.cyclePlaybackRate, renderSceneTtsRateBtn: sceneAudioController.renderRateButton, scheduleSceneNoteLoad: (unit) => sceneNote?.scheduleLoad?.(unit), loadSceneNote: sceneNote.load, renderSceneNote: sceneNote.render, saveSceneNote: sceneNote.save, flushSceneNoteSave: () => sceneNote.flushSave?.(), toggleSceneNotePreview: sceneNote.togglePreview, handleSceneNoteInput: sceneNote.handleInput, handleSceneNoteKeydown: (event) => sceneNote.handleKeydown?.(event), handleSceneNoteCompositionStart: () => sceneNote.handleCompositionStart?.(), handleSceneNoteCompositionEnd: (event) => sceneNote.handleCompositionEnd?.(event), setSceneNoteMode: sceneNote.setMode, toggleSceneNotePanel: sceneNote.togglePanel, openSceneNotePanel: sceneNote.openPanel, closeSceneNotePanel: sceneNote.closePanel, openSceneNoteModal: sceneNote.openPanel, closeSceneNoteModal: sceneNote.closePanel,
+    speakCurrentScene: () => {
+      sceneAudioController.stop()
+      speakSentence(activeUnit()?.learningText || '')
+    },
+    toggleSceneTtsAudio: sceneAudioController.toggle,
+    stopSceneTtsAudio: sceneAudioController.stop,
+    replaySceneTtsAudio: sceneAudioController.replay,
+    pauseSceneTtsAudio: sceneAudioController.pause,
+    resumeSceneTtsAudio: sceneAudioController.resume,
+    cycleSceneTtsPlaybackRate: sceneAudioController.cyclePlaybackRate,
+    renderSceneTtsRateBtn: sceneAudioController.renderRateButton,
+    scheduleSceneNoteLoad: (unit) => sceneNote?.scheduleLoad?.(unit),
+    loadSceneNote: sceneNote.load,
+    renderSceneNote: sceneNote.render,
+    saveSceneNote: sceneNote.save,
+    flushSceneNoteSave: () => sceneNote.flushSave?.(),
+    toggleSceneNotePreview: sceneNote.togglePreview,
+    handleSceneNoteInput: sceneNote.handleInput,
+    handleSceneNoteKeydown: (event) => sceneNote.handleKeydown?.(event),
+    handleSceneNoteCompositionStart: () => sceneNote.handleCompositionStart?.(),
+    handleSceneNoteCompositionEnd: (event) => sceneNote.handleCompositionEnd?.(event),
+    setSceneNoteMode: sceneNote.setMode,
+    toggleSceneNotePanel: sceneNote.togglePanel,
+    openSceneNotePanel: sceneNote.openPanel,
+    closeSceneNotePanel: sceneNote.closePanel,
+    openSceneNoteModal: sceneNote.openPanel,
+    closeSceneNoteModal: sceneNote.closePanel,
     closeSceneVocabularyPreview: sceneOverview.closeVocabularyPreview, openCoreWordsModal: sceneStudy.openCoreWordsModal, closeCoreWordsModal: sceneStudy.closeCoreWordsModal, openRelatedWordsModal: sceneStudy.openRelatedWordsModal, closeRelatedWordsModal: sceneStudy.closeRelatedWordsModal, generateRelatedWords: () => sceneActions.generateRelatedWords?.(),
     handleSceneChallengeKeydown: (event) => sceneStudy?.handleChallengeKeydown?.(event),
   }

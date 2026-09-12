@@ -36,28 +36,34 @@ export function createSceneAudioController({ state, elements, api, activeUnit, s
     if (!item) {
       button.disabled = false
       button.innerHTML = '🎙️ AI 真人朗读'
+      button.title = 'AI 真人朗读 (快捷键: 空格或 P 播放/暂停，R 重新播放)'
       button.classList.remove('playing')
       return
     }
     if (item.status === 'playing') {
       button.disabled = false
       button.innerHTML = '⏸ 暂停朗读'
+      button.title = '暂停朗读 (快捷键: 空格或 P，R 重新播放)'
       button.classList.add('playing')
     } else if (item.status === 'paused') {
       button.disabled = false
       button.innerHTML = '▶ 继续朗读'
+      button.title = '继续朗读 (快捷键: 空格或 P，R 重新播放)'
       button.classList.remove('playing')
     } else if (item.status === 'checking') {
       button.disabled = true
       button.innerHTML = '⏳ 正在检查语音...'
+      button.title = '正在检查语音可用性...'
       button.classList.remove('playing')
     } else if (item.status === 'pending' || item.status === 'running') {
       button.disabled = true
       button.innerHTML = '🎙️ 正在生成真人语音...'
+      button.title = '正在后台生成真人原声语音...'
       button.classList.remove('playing')
     } else {
       button.disabled = false
       button.innerHTML = '🎙️ AI 真人朗读'
+      button.title = 'AI 真人朗读 (快捷键: 空格或 P 播放/暂停，R 重新播放)'
       button.classList.remove('playing')
     }
   }
@@ -79,6 +85,7 @@ export function createSceneAudioController({ state, elements, api, activeUnit, s
     else if (elements.sceneTtsAudioBtn) {
       elements.sceneTtsAudioBtn.disabled = false
       elements.sceneTtsAudioBtn.innerHTML = '🎙️ AI 真人朗读'
+      elements.sceneTtsAudioBtn.title = 'AI 真人朗读 (快捷键: 空格或 P 播放/暂停，R 重新播放)'
       elements.sceneTtsAudioBtn.classList.remove('playing')
     }
   }
@@ -173,6 +180,13 @@ export function createSceneAudioController({ state, elements, api, activeUnit, s
 
   async function play(unitId) {
     if (!isUserOnSceneArticle(unitId)) return
+    if ('speechSynthesis' in window && window.speechSynthesis.speaking) {
+      try {
+        window.speechSynthesis.cancel()
+      } catch {
+        /* ignore */
+      }
+    }
     const item = getUnitAudioState(unitId)
     const base = state?.apiBase ? state.apiBase.replace(/\/$/, '') : ''
     const audioUrl = `${base}/api/v1/english/learning/scene-units/${encodeURIComponent(unitId)}/audio?t=${Date.now()}`
@@ -189,6 +203,7 @@ export function createSceneAudioController({ state, elements, api, activeUnit, s
       if (sameId(activeUnit()?.id, unitId) && button) {
         button.disabled = false
         button.innerHTML = '⏸ 暂停朗读'
+        button.title = '暂停朗读 (快捷键: 空格或 P，R 重新播放)'
         button.classList.add('playing')
       }
     })
@@ -197,6 +212,7 @@ export function createSceneAudioController({ state, elements, api, activeUnit, s
       if (sameId(activeUnit()?.id, unitId) && button) {
         button.disabled = false
         button.innerHTML = '▶ 继续朗读'
+        button.title = '继续朗读 (快捷键: 空格或 P，R 重新播放)'
         button.classList.remove('playing')
       }
     })
@@ -205,6 +221,7 @@ export function createSceneAudioController({ state, elements, api, activeUnit, s
       if (sameId(activeUnit()?.id, unitId) && button) {
         button.disabled = false
         button.innerHTML = '🎙️ AI 真人朗读'
+        button.title = 'AI 真人朗读 (快捷键: 空格或 P 播放/暂停，R 重新播放)'
         button.classList.remove('playing')
       }
       activeAudio = null
@@ -216,6 +233,7 @@ export function createSceneAudioController({ state, elements, api, activeUnit, s
       if (sameId(activeUnit()?.id, unitId) && button) {
         button.disabled = false
         button.innerHTML = '🎙️ AI 真人朗读'
+        button.title = 'AI 真人朗读 (快捷键: 空格或 P 播放/暂停，R 重新播放)'
         button.classList.remove('playing')
       }
       activeAudio = null
@@ -279,6 +297,10 @@ export function createSceneAudioController({ state, elements, api, activeUnit, s
       toast('当前场景文章语音正在后台生成中，请稍候...')
       return
     }
+    if (item.hasAudio || item.status === 'completed') {
+      if (isUserOnSceneArticle(unit.id)) await play(unit.id)
+      return
+    }
     stop()
     item.status = 'checking'
     updateButton(unit.id)
@@ -314,6 +336,68 @@ export function createSceneAudioController({ state, elements, api, activeUnit, s
     }
   }
 
+  function pause() {
+    if (activeAudio && !activeAudio.paused) {
+      activeAudio.pause()
+      const item = getUnitAudioState(activeAudioUnitId)
+      if (item) item.status = 'paused'
+      if (activeAudioUnitId) updateButton(activeAudioUnitId)
+      return true
+    }
+    return false
+  }
+
+  function resume() {
+    if (activeAudio && activeAudio.paused) {
+      const item = getUnitAudioState(activeAudioUnitId)
+      if (item) item.status = 'playing'
+      if (activeAudioUnitId) updateButton(activeAudioUnitId)
+      activeAudio.play().catch(() => {})
+      return true
+    }
+    return false
+  }
+
+  async function replay() {
+    const unit = activeUnit()
+    if (!unit || !unit.id) {
+      toast('暂无可朗读的场景文章')
+      return
+    }
+    if (state.preview) {
+      toast('预览模式暂不支持 AI 真人朗读')
+      return
+    }
+    if ('speechSynthesis' in window && window.speechSynthesis.speaking) {
+      try {
+        window.speechSynthesis.cancel()
+      } catch {
+        /* ignore */
+      }
+    }
+    const item = getUnitAudioState(unit.id)
+    if (activeAudio && sameId(activeAudioUnitId, unit.id)) {
+      activeAudio.currentTime = 0
+      item.status = 'playing'
+      updateButton(unit.id)
+      try {
+        await activeAudio.play()
+        toast('重新播放')
+      } catch (error) {
+        logEvent('warn', '重新播放受阻', error.message)
+      }
+      return
+    }
+    if (item.hasAudio || item.status === 'completed') {
+      if (isUserOnSceneArticle(unit.id)) {
+        await play(unit.id)
+        toast('重新播放')
+      }
+      return
+    }
+    await toggle()
+  }
+
   function clear() {
     stop()
     for (const item of audioStates.values()) {
@@ -330,6 +414,11 @@ export function createSceneAudioController({ state, elements, api, activeUnit, s
     stopIfDifferent,
     syncStatus,
     toggle,
+    pause,
+    resume,
+    replay,
+    isPlaying: () => Boolean(activeAudio && !activeAudio.paused),
+    isPaused: () => Boolean(activeAudio && activeAudio.paused),
     renderRateButton,
     cyclePlaybackRate,
     updateButton,

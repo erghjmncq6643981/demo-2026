@@ -170,4 +170,214 @@ describe('scene study keydown', () => {
     sceneStudy.applyStage('learning')
     expect(elements.sceneLearningStage.classList.toggle).toHaveBeenCalledWith('in-challenge-stage', false)
   })
+
+  it('toggles scene audio play/pause with Space or KeyP during learning stage and prevents default scrolling', () => {
+    const state = {
+      activeView: 'scenePlanView',
+      sceneChallengeStage: 'learning',
+    }
+    const elements = {
+      sceneLearningStage: { classList: { contains: () => false } },
+    }
+    const toggleAudio = vi.fn()
+    const replayAudio = vi.fn()
+    const sceneStudy = createSceneStudy({
+      state,
+      elements,
+      activeUnit: () => ({ id: 10 }),
+      renderCurrentScene: () => {},
+      sameId: (a, b) => String(a) === String(b),
+      toggleAudio,
+      replayAudio,
+    })
+
+    const eventSpace = {
+      key: ' ',
+      code: 'Space',
+      preventDefault: vi.fn(),
+    }
+    sceneStudy.handleChallengeKeydown(eventSpace)
+    expect(eventSpace.preventDefault).toHaveBeenCalled()
+    expect(toggleAudio).toHaveBeenCalledTimes(1)
+
+    const eventP = {
+      key: 'p',
+      code: 'KeyP',
+      preventDefault: vi.fn(),
+    }
+    sceneStudy.handleChallengeKeydown(eventP)
+    expect(eventP.preventDefault).toHaveBeenCalled()
+    expect(toggleAudio).toHaveBeenCalledTimes(2)
+  })
+
+  it('replays scene audio with KeyR or Shift+Space during learning stage', () => {
+    const state = {
+      activeView: 'scenePlanView',
+      sceneChallengeStage: 'learning',
+    }
+    const elements = {
+      sceneLearningStage: { classList: { contains: () => false } },
+    }
+    const toggleAudio = vi.fn()
+    const replayAudio = vi.fn()
+    const sceneStudy = createSceneStudy({
+      state,
+      elements,
+      activeUnit: () => ({ id: 10 }),
+      renderCurrentScene: () => {},
+      sameId: (a, b) => String(a) === String(b),
+      toggleAudio,
+      replayAudio,
+    })
+
+    const eventR = {
+      key: 'r',
+      code: 'KeyR',
+      preventDefault: vi.fn(),
+    }
+    sceneStudy.handleChallengeKeydown(eventR)
+    expect(eventR.preventDefault).toHaveBeenCalled()
+    expect(replayAudio).toHaveBeenCalledTimes(1)
+
+    const eventShiftSpace = {
+      key: ' ',
+      code: 'Space',
+      shiftKey: true,
+      preventDefault: vi.fn(),
+    }
+    sceneStudy.handleChallengeKeydown(eventShiftSpace)
+    expect(eventShiftSpace.preventDefault).toHaveBeenCalled()
+    expect(replayAudio).toHaveBeenCalledTimes(2)
+  })
+
+  it('does not trigger audio shortcuts when typing inside an input or textarea', () => {
+    const state = {
+      activeView: 'scenePlanView',
+      sceneChallengeStage: 'learning',
+    }
+    const elements = {
+      sceneLearningStage: { classList: { contains: () => false } },
+    }
+    const toggleAudio = vi.fn()
+    const replayAudio = vi.fn()
+    const sceneStudy = createSceneStudy({
+      state,
+      elements,
+      activeUnit: () => ({ id: 10 }),
+      renderCurrentScene: () => {},
+      sameId: (a, b) => String(a) === String(b),
+      toggleAudio,
+      replayAudio,
+    })
+
+    const mockInput = document.createElement('textarea')
+    document.body.appendChild(mockInput)
+    mockInput.focus()
+
+    const eventSpace = {
+      key: ' ',
+      code: 'Space',
+      preventDefault: vi.fn(),
+    }
+    sceneStudy.handleChallengeKeydown(eventSpace)
+    expect(eventSpace.preventDefault).not.toHaveBeenCalled()
+    expect(toggleAudio).not.toHaveBeenCalled()
+
+    const eventR = {
+      key: 'r',
+      code: 'KeyR',
+      preventDefault: vi.fn(),
+    }
+    sceneStudy.handleChallengeKeydown(eventR)
+    expect(eventR.preventDefault).not.toHaveBeenCalled()
+    expect(replayAudio).not.toHaveBeenCalled()
+
+    document.body.removeChild(mockInput)
+  })
+
+  it('does not trigger audio shortcuts when metaKey, ctrlKey or altKey is held (e.g. Cmd+R, Ctrl+R, Cmd+P)', () => {
+    const state = {
+      activeView: 'scenePlanView',
+      sceneChallengeStage: 'learning',
+    }
+    const elements = {
+      sceneLearningStage: { classList: { contains: () => false } },
+    }
+    const toggleAudio = vi.fn()
+    const replayAudio = vi.fn()
+    const sceneStudy = createSceneStudy({
+      state,
+      elements,
+      activeUnit: () => ({ id: 10 }),
+      renderCurrentScene: () => {},
+      sameId: (a, b) => String(a) === String(b),
+      toggleAudio,
+      replayAudio,
+    })
+
+    const eventCmdR = {
+      key: 'r',
+      code: 'KeyR',
+      metaKey: true,
+      preventDefault: vi.fn(),
+    }
+    sceneStudy.handleChallengeKeydown(eventCmdR)
+    expect(eventCmdR.preventDefault).not.toHaveBeenCalled()
+    expect(replayAudio).not.toHaveBeenCalled()
+
+    const eventCtrlP = {
+      key: 'p',
+      code: 'KeyP',
+      ctrlKey: true,
+      preventDefault: vi.fn(),
+    }
+    sceneStudy.handleChallengeKeydown(eventCtrlP)
+    expect(eventCtrlP.preventDefault).not.toHaveBeenCalled()
+    expect(toggleAudio).not.toHaveBeenCalled()
+  })
+
+  it('pauses and resumes speech synthesis if speechSynthesis is speaking during learning stage', () => {
+    const state = {
+      activeView: 'scenePlanView',
+      sceneChallengeStage: 'learning',
+    }
+    const elements = {
+      sceneLearningStage: { classList: { contains: () => false } },
+    }
+    const toast = vi.fn()
+    const origSynthesis = window.speechSynthesis
+    window.speechSynthesis = {
+      speaking: true,
+      paused: false,
+      pause: vi.fn(),
+      resume: vi.fn(),
+      cancel: vi.fn(),
+    }
+
+    const sceneStudy = createSceneStudy({
+      state,
+      elements,
+      activeUnit: () => ({ id: 10 }),
+      renderCurrentScene: () => {},
+      sameId: (a, b) => String(a) === String(b),
+      toast,
+    })
+
+    const eventSpace = {
+      key: ' ',
+      code: 'Space',
+      preventDefault: vi.fn(),
+    }
+    sceneStudy.handleChallengeKeydown(eventSpace)
+    expect(window.speechSynthesis.pause).toHaveBeenCalled()
+    expect(toast).toHaveBeenCalledWith('已暂停朗读')
+
+    window.speechSynthesis.paused = true
+    sceneStudy.handleChallengeKeydown(eventSpace)
+    expect(window.speechSynthesis.resume).toHaveBeenCalled()
+    expect(toast).toHaveBeenCalledWith('继续朗读')
+
+    if (origSynthesis) window.speechSynthesis = origSynthesis
+    else delete window.speechSynthesis
+  })
 })

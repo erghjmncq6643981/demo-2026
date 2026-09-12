@@ -44,4 +44,36 @@ class OpenAiCompatibleModelClientResponseTest {
         assertThat(((com.chandler.learning.agent.ai.gateway.protocol.ModelChatResponse) parsed).getContent())
                 .isEqualTo("链路可用");
     }
+
+    @Test
+    void formatsConnectionRefusedErrorMessageClearly() {
+        OpenAiCompatibleModelClient client = new OpenAiCompatibleModelClient(
+                mock(RestTemplate.class),
+                mock(com.chandler.learning.agent.ai.model.application.AiModelConfigService.class),
+                new ObjectMapper(),
+                mock(AiModelRequestAdapterRegistry.class));
+        org.springframework.web.client.ResourceAccessException ex = new org.springframework.web.client.ResourceAccessException(
+                "I/O error on POST request for \"https://api.moonshot.cn/v1/chat/completions\": Connection refused",
+                new java.net.ConnectException("Connection refused"));
+
+        String message = ReflectionTestUtils.invokeMethod(client, "buildNetworkErrorMessage", "kimi", "kimi-k2.6", ex);
+
+        assertThat(message).contains("连接被拒绝").contains("kimi / kimi-k2.6").contains("代理端口");
+    }
+
+    @Test
+    void formatsConnectionTimeoutErrorMessageClearly() {
+        OpenAiCompatibleModelClient client = new OpenAiCompatibleModelClient(
+                mock(RestTemplate.class),
+                mock(com.chandler.learning.agent.ai.model.application.AiModelConfigService.class),
+                new ObjectMapper(),
+                mock(AiModelRequestAdapterRegistry.class));
+        org.springframework.web.client.ResourceAccessException ex = new org.springframework.web.client.ResourceAccessException(
+                "I/O error: Connect timed out",
+                new java.net.SocketTimeoutException("Connect timed out"));
+
+        String message = ReflectionTestUtils.invokeMethod(client, "buildNetworkErrorMessage", "deepseek", "deepseek-chat", ex);
+
+        assertThat(message).contains("连接超时").contains("deepseek / deepseek-chat");
+    }
 }

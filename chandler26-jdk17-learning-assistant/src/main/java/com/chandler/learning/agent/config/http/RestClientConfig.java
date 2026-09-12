@@ -25,7 +25,7 @@ public class RestClientConfig {
                                      @Value("${learning.ai.http.read-timeout:300s}") Duration readTimeout,
                                      @Value("${learning.ai.http.proxy.enabled:false}") boolean proxyEnabled,
                                      @Value("${learning.ai.http.proxy.host:127.0.0.1}") String proxyHost,
-                                     @Value("${learning.ai.http.proxy.port:7897}") int proxyPort) {
+                                     @Value("${learning.ai.http.proxy.port:7890}") int proxyPort) {
         if (proxyEnabled && StringUtils.hasText(proxyHost) && proxyPort > 0) {
             SimpleClientHttpRequestFactory factory = new SimpleClientHttpRequestFactory();
             factory.setConnectTimeout((int) connectTimeout.toMillis());

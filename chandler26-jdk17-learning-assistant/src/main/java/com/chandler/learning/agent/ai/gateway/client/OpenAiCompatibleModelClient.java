@@ -148,14 +148,16 @@ public class OpenAiCompatibleModelClient implements AiModelClient {
                     message,
                     ex);
         } catch (ResourceAccessException ex) {
-            log.debug("模型 HTTP 网络异常 provider={} model={} cost={}ms error={}",
+            String message = buildNetworkErrorMessage(provider, model, ex);
+            log.warn("模型 HTTP 网络异常 provider={} model={} cost={}ms message={}",
                     provider,
                     model,
                     System.currentTimeMillis() - startTime,
-                    ex.getMessage());
+                    message);
+            log.debug("模型 HTTP 网络异常技术堆栈 provider={} model={}", provider, model, ex);
             throw LearningAssistantException.externalService(
                     LearningErrorCode.AI_MODEL_CALL_FAILED,
-                    "AI 模型连接失败，请稍后重试或切换可用模型",
+                    message,
                     ex);
         }
     }
@@ -301,6 +303,25 @@ public class OpenAiCompatibleModelClient implements AiModelClient {
         return normalized.contains("insufficient balance")
                 || normalized.contains("insufficient_balance")
                 || normalized.contains("余额不足");
+    }
+
+    private String buildNetworkErrorMessage(String provider, String model, ResourceAccessException ex) {
+        Throwable rootCause = ex.getMostSpecificCause() != null ? ex.getMostSpecificCause() : ex;
+        String raw = rootCause.getMessage() != null ? rootCause.getMessage() : ex.getMessage();
+        if (StringUtils.hasText(raw)) {
+            String lower = raw.toLowerCase();
+            if (lower.contains("connection refused") || lower.contains("connect refused")) {
+                return "AI 模型连接被拒绝（" + provider + " / " + model + "），请检查网络或代理端口配置是否正确";
+            }
+            if (lower.contains("timed out") || lower.contains("timeout")) {
+                return "AI 模型连接超时（" + provider + " / " + model + "），请检查网络延迟或代理设置";
+            }
+            if (lower.contains("unknownhost") || lower.contains("unknown host")) {
+                return "AI 模型域名解析失败（" + provider + " / " + model + "），请检查网络 DNS 或 Base URL 配置";
+            }
+            return "AI 模型网络连接失败（" + provider + " / " + model + "）：" + truncate(raw);
+        }
+        return "AI 模型网络连接失败（" + provider + " / " + model + "），请检查网络或代理配置";
     }
 
     private String truncate(String value) {

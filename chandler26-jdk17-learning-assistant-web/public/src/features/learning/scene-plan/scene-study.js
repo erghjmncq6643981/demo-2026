@@ -25,6 +25,11 @@ export function createSceneStudy({
   speak,
   preloadAudio,
   startChallenge,
+  toggleAudio,
+  replayAudio,
+  pauseAudio,
+  resumeAudio,
+  speakSentence,
 }) {
   let assessmentFeedback = null
   const studyView = createSceneStudyView({
@@ -126,6 +131,32 @@ export function createSceneStudy({
     shakeTypingBoard()
   }
 
+  function handleSceneAudioPlayPause() {
+    if ('speechSynthesis' in window && window.speechSynthesis.speaking) {
+      if (window.speechSynthesis.paused) {
+        window.speechSynthesis.resume()
+        toast?.('继续朗读')
+      } else {
+        window.speechSynthesis.pause()
+        toast?.('已暂停朗读')
+      }
+      return
+    }
+    toggleAudio?.()
+  }
+
+  function handleSceneAudioReplay() {
+    if ('speechSynthesis' in window && window.speechSynthesis.speaking) {
+      window.speechSynthesis.cancel()
+      if (typeof speakSentence === 'function') {
+        speakSentence(activeUnit()?.learningText || '')
+      }
+      toast?.('重新开始朗读')
+      return
+    }
+    replayAudio?.()
+  }
+
   function handleChallengeKeydown(event) {
     if (!event || typeof event.key !== 'string') return
     const isSceneView = state.activeView === 'scenePlanView' || elements.scenePlanView?.classList.contains('active')
@@ -137,7 +168,7 @@ export function createSceneStudy({
     if (elements.scenePlanModal && !elements.scenePlanModal.classList.contains('hidden')) return
 
     const activeTag = document.activeElement?.tagName?.toLowerCase()
-    const isTypingInInput = ['input', 'textarea'].includes(activeTag)
+    const isTypingInInput = ['input', 'textarea'].includes(activeTag) || Boolean(document.activeElement?.isContentEditable)
 
     if (state.sceneChallengeStage === 'challenge') {
       if ((event.key === 'Enter' || event.key === ' ' || event.code === 'Space' || event.code === 'Enter') && !isTypingInInput) {
@@ -148,7 +179,38 @@ export function createSceneStudy({
     }
 
     const isAssessment = state.sceneChallengeStage === 'assessment' || (elements.sceneAssessmentPanel && !elements.sceneAssessmentPanel.classList.contains('hidden'))
-    if (!isAssessment) return
+    if (!isAssessment) {
+      const isLearningStage = (!state.sceneChallengeStage || state.sceneChallengeStage === 'learning') &&
+        (!elements.sceneLearningStage || !elements.sceneLearningStage.classList.contains('hidden')) &&
+        (!elements.sceneChallengeStage || elements.sceneChallengeStage.classList.contains('hidden')) &&
+        (!elements.sceneAssessmentPanel || elements.sceneAssessmentPanel.classList.contains('hidden'))
+
+      if (isLearningStage && !isTypingInInput) {
+        const isMetaOrCtrl = Boolean(event.metaKey || event.ctrlKey)
+        if (isMetaOrCtrl || event.altKey) return
+
+        const key = event.key
+        const code = event.code
+        const isPlayPauseKey = (key === ' ' || code === 'Space' || key === 'p' || key === 'P' || code === 'KeyP') && !event.shiftKey
+        const isReplayKey = key === 'r' || key === 'R' || code === 'KeyR' || (event.shiftKey && (key === ' ' || code === 'Space' || key === 'r' || key === 'R' || code === 'KeyR'))
+
+        if (isReplayKey) {
+          event.preventDefault()
+          handleSceneAudioReplay()
+          return
+        }
+
+        if (isPlayPauseKey) {
+          event.preventDefault()
+          if (document.activeElement && typeof document.activeElement.blur === 'function' && !isTypingInInput) {
+            document.activeElement.blur()
+          }
+          handleSceneAudioPlayPause()
+          return
+        }
+      }
+      return
+    }
 
     const unit = activeUnit()
     if (!unit) return

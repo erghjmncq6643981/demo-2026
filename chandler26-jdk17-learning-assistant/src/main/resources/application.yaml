@@ -70,7 +70,7 @@ learning:
       proxy:
         enabled: ${LEARNING_AI_HTTP_PROXY_ENABLED:false}
         host: ${LEARNING_AI_HTTP_PROXY_HOST:127.0.0.1}
-        port: ${LEARNING_AI_HTTP_PROXY_PORT:7897}
+        port: ${LEARNING_AI_HTTP_PROXY_PORT:7890}
     audit:
       # 生产默认只保留请求/响应摘要；本地排障可显式设置为 true。
       store-content: ${LEARNING_AI_AUDIT_STORE_CONTENT:false}
