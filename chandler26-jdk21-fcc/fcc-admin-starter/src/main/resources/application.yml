@@ -1,0 +1,15 @@
+spring:
+  application:
+    name: fcc-admin
+  profiles:
+    active: ${SPRING_PROFILES_ACTIVE:local}
+
+server:
+  port: ${SERVER_PORT:8089}
+
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,info
+

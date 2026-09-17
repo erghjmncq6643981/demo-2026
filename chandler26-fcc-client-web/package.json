@@ -1,0 +1,11 @@
+{
+  "name": "chandler26-fcc-client-web",
+  "version": "1.0.0",
+  "description": "FCC Cyber-Tech Agent Desktop Client",
+  "scripts": {
+    "dev": "npx serve ."
+  },
+  "keywords": ["fcc", "call-center", "agent-desktop", "cyberpunk"],
+  "author": "chandler",
+  "license": "ISC"
+}

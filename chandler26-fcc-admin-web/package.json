@@ -1,0 +1,11 @@
+{
+  "name": "chandler26-fcc-admin-web",
+  "version": "1.0.0",
+  "description": "FCC Cyber Operations War Room & Admin Console",
+  "scripts": {
+    "dev": "npx serve ."
+  },
+  "keywords": ["fcc", "call-center", "admin-console", "cyberpunk", "dashboard"],
+  "author": "chandler",
+  "license": "ISC"
+}
