@@ -59,24 +59,22 @@ export function renderMarkdown(markdown) {
       }
       continue
     }
-    if (text.startsWith('## ')) {
+    const headingMatch = text.match(/^(#{1,6})\s+(.+)$/)
+    if (headingMatch) {
       if (listOpen) {
         html.push('</ul>')
         listOpen = false
       }
-      html.push(`<h4>${inlineMarkdown(text.slice(3))}</h4>`)
-    } else if (text.startsWith('# ')) {
-      if (listOpen) {
-        html.push('</ul>')
-        listOpen = false
-      }
-      html.push(`<h3>${inlineMarkdown(text.slice(2))}</h3>`)
-    } else if (text.startsWith('- ')) {
+      const level = headingMatch[1].length
+      const title = inlineMarkdown(headingMatch[2])
+      html.push(`<h${level}>${title}</h${level}>`)
+    } else if (/^[-*+•]\s+/.test(text)) {
       if (!listOpen) {
         html.push('<ul>')
         listOpen = true
       }
-      html.push(`<li>${inlineMarkdown(text.slice(2))}</li>`)
+      const itemContent = text.replace(/^[-*+•]\s+/, '')
+      html.push(`<li>${inlineMarkdown(itemContent)}</li>`)
     } else {
       if (listOpen) {
         html.push('</ul>')

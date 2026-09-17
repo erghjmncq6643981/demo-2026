@@ -172,6 +172,69 @@ export function md5(string) {
   return (wordToHex(a) + wordToHex(b) + wordToHex(c) + wordToHex(d)).toLowerCase()
 }
 
+/**
+ * 处理多行文本框的 Tab / Shift+Tab 缩进与反缩进操作
+ * @param {HTMLTextAreaElement} textarea 文本框 DOM 元素
+ * @param {boolean} isShift 是否按下了 Shift 键（反缩进）
+ */
+export function handleTextareaTabIndent(textarea, isShift = false) {
+  if (!textarea) return
+  const start = textarea.selectionStart ?? 0
+  const end = textarea.selectionEnd ?? 0
+  const value = textarea.value || ''
+  const INDENT = '  '
+
+  if (start !== end) {
+    const lineStart = value.lastIndexOf('\n', start - 1) + 1
+    const lineEndIndex = value.indexOf('\n', end)
+    const lineEnd = lineEndIndex === -1 ? value.length : lineEndIndex
+    const selectedText = value.slice(lineStart, lineEnd)
+    const lines = selectedText.split('\n')
+
+    if (isShift) {
+      let charsRemovedTotal = 0
+      let firstLineRemoved = 0
+      const newLines = lines.map((line, idx) => {
+        let removed = 0
+        if (line.startsWith('  ')) {
+          removed = 2
+        } else if (line.startsWith(' ') || line.startsWith('\t')) {
+          removed = 1
+        }
+        if (idx === 0) firstLineRemoved = removed
+        charsRemovedTotal += removed
+        return line.slice(removed)
+      })
+      textarea.value = value.slice(0, lineStart) + newLines.join('\n') + value.slice(lineEnd)
+      textarea.selectionStart = Math.max(lineStart, start - firstLineRemoved)
+      textarea.selectionEnd = Math.max(textarea.selectionStart, end - charsRemovedTotal)
+    } else {
+      const newLines = lines.map((line) => INDENT + line)
+      textarea.value = value.slice(0, lineStart) + newLines.join('\n') + value.slice(lineEnd)
+      textarea.selectionStart = start + INDENT.length
+      textarea.selectionEnd = end + (INDENT.length * lines.length)
+    }
+  } else {
+    if (isShift) {
+      const lineStart = value.lastIndexOf('\n', start - 1) + 1
+      const beforeCursorOnLine = value.slice(lineStart, start)
+      let removed = 0
+      if (beforeCursorOnLine.startsWith('  ')) {
+        removed = 2
+      } else if (beforeCursorOnLine.startsWith(' ') || beforeCursorOnLine.startsWith('\t')) {
+        removed = 1
+      }
+      if (removed > 0) {
+        textarea.value = value.slice(0, lineStart) + value.slice(lineStart + removed)
+        textarea.selectionStart = textarea.selectionEnd = Math.max(lineStart, start - removed)
+      }
+    } else {
+      textarea.value = value.slice(0, start) + INDENT + value.slice(end)
+      textarea.selectionStart = textarea.selectionEnd = start + INDENT.length
+    }
+  }
+}
+
 export function createSceneNote({ state, elements, api, activeUnit, sameId, toast, logEvent }) {
   let saveTimer = null
   let idleRefreshTimer = null
@@ -443,7 +506,16 @@ export function createSceneNote({ state, elements, api, activeUnit, sameId, toas
       return
     }
 
-    // 3. 在编辑状态下按 Escape 自动退出到预览模式并保存
+    // 3. Tab 键缩进 / Shift+Tab 反缩进，避免失焦导致意外触发提交或保存
+    if (key === 'tab' || code === 'Tab') {
+      event.preventDefault()
+      event.stopPropagation()
+      handleTextareaTabIndent(elements.sceneNoteInput, Boolean(event.shiftKey))
+      handleInput()
+      return
+    }
+
+    // 4. 在编辑状态下按 Escape 自动退出到预览模式并保存
     if ((key === 'escape' || code === 'Escape') && state.sceneNoteMode === 'edit') {
       event.preventDefault()
       event.stopPropagation()

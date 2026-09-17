@@ -1,6 +1,7 @@
 import { sameId } from '/src/shared/ids.js'
 import { escapeHtml } from '/src/shared/text.js'
 import { renderMarkdown } from '/src/shared/vocabulary.js'
+import { handleTextareaTabIndent } from '/src/features/learning/scene-plan/scene-note.js'
 
 export function createStudyNotesFeature(ctx) {
   const {
@@ -116,6 +117,12 @@ export function createStudyNotesFeature(ctx) {
             e.preventDefault()
             e.stopPropagation()
             saveCurrentNote(ta)
+            return
+          }
+          if (e.key === 'Tab') {
+            e.preventDefault()
+            e.stopPropagation()
+            handleTextareaTabIndent(ta, Boolean(e.shiftKey))
             return
           }
           if (e.key === 'Escape') {

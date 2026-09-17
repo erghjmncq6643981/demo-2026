@@ -1,5 +1,6 @@
 import { describe, expect, it, vi, beforeEach, afterEach } from 'vitest'
-import { createSceneNote, md5 } from '../../public/src/features/learning/scene-plan/scene-note.js'
+import { createSceneNote, md5, handleTextareaTabIndent } from '../../public/src/features/learning/scene-plan/scene-note.js'
+import { renderMarkdown } from '../../public/src/shared/vocabulary.js'
 
 describe('MD5 Hashing', () => {
   it('computes standard MD5 hashes accurately', () => {
@@ -258,5 +259,77 @@ describe('Scene Note Smart Auto-Save with MD5, UpdateTime and 15s Idle Refresh',
     // 用户主动点击打开笔记面板，立即取消计时器并即时请求
     fixture.sceneNote.openPanel()
     expect(fixture.api.getNote).toHaveBeenCalledWith('plan-1', 'unit-3')
+  })
+
+  it('supports Tab key to indent without blur or exiting edit mode', async () => {
+    fixture = createTestFixture('Line 1')
+    await fixture.sceneNote.load()
+    fixture.state.sceneNoteMode = 'edit'
+    fixture.elements.sceneNoteInput.selectionStart = 6
+    fixture.elements.sceneNoteInput.selectionEnd = 6
+
+    const eventTab = {
+      metaKey: false,
+      ctrlKey: false,
+      key: 'Tab',
+      code: 'Tab',
+      shiftKey: false,
+      preventDefault: vi.fn(),
+      stopPropagation: vi.fn(),
+    }
+    fixture.sceneNote.handleKeydown(eventTab)
+
+    expect(eventTab.preventDefault).toHaveBeenCalled()
+    expect(eventTab.stopPropagation).toHaveBeenCalled()
+    expect(fixture.elements.sceneNoteInput.value).toBe('Line 1  ')
+    expect(fixture.elements.sceneNoteInput.selectionStart).toBe(8)
+    expect(fixture.state.sceneNoteMode).toBe('edit')
+  })
+})
+
+describe('Markdown Heading and Bullet List Rendering', () => {
+  it('renders # through #### as semantic h1 through h4 headings', () => {
+    expect(renderMarkdown('# 大标题')).toBe('<h1>大标题</h1>')
+    expect(renderMarkdown('## gate和entrance的区别')).toBe('<h2>gate和entrance的区别</h2>')
+    expect(renderMarkdown('### 三级标题')).toBe('<h3>三级标题</h3>')
+    expect(renderMarkdown('#### 四级标题')).toBe('<h4>四级标题</h4>')
+  })
+
+  it('renders standard and unicode bullet lists inside ul', () => {
+    const markdown = '• item 1\n• item 2'
+    expect(renderMarkdown(markdown)).toBe('<ul><li>item 1</li><li>item 2</li></ul>')
+
+    const mixed = '- dash\n* star\n+ plus'
+    expect(renderMarkdown(mixed)).toBe('<ul><li>dash</li><li>star</li><li>plus</li></ul>')
+  })
+})
+
+describe('Textarea Tab Indentation (handleTextareaTabIndent)', () => {
+  it('inserts 2 spaces at single cursor position on Tab', () => {
+    const ta = { value: 'hello', selectionStart: 5, selectionEnd: 5 }
+    handleTextareaTabIndent(ta, false)
+    expect(ta.value).toBe('hello  ')
+    expect(ta.selectionStart).toBe(7)
+    expect(ta.selectionEnd).toBe(7)
+  })
+
+  it('removes up to 2 leading spaces on Shift+Tab for single line', () => {
+    const ta = { value: '  • item', selectionStart: 8, selectionEnd: 8 }
+    handleTextareaTabIndent(ta, true)
+    expect(ta.value).toBe('• item')
+    expect(ta.selectionStart).toBe(6)
+    expect(ta.selectionEnd).toBe(6)
+  })
+
+  it('indents multiple lines when text is selected', () => {
+    const ta = { value: 'line1\nline2', selectionStart: 0, selectionEnd: 11 }
+    handleTextareaTabIndent(ta, false)
+    expect(ta.value).toBe('  line1\n  line2')
+  })
+
+  it('unindents multiple lines when Shift+Tab is pressed with selection', () => {
+    const ta = { value: '  line1\n  line2', selectionStart: 0, selectionEnd: 15 }
+    handleTextareaTabIndent(ta, true)
+    expect(ta.value).toBe('line1\nline2')
   })
 })

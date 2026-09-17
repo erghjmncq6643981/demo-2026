@@ -4079,8 +4079,53 @@ input[type="range"] {
   line-height: 1.65;
 }
 
+.note-view h1,
+.note-view h2,
 .note-view h3,
 .note-view h4,
+.note-view h5,
+.note-view h6 {
+  margin: 12px 0 6px;
+  color: #f8fafc;
+  font-weight: 600;
+  line-height: 1.4;
+}
+
+.note-view h1 {
+  font-size: 20px;
+  font-weight: 700;
+  margin-top: 16px;
+}
+
+.note-view h2 {
+  font-size: 17px;
+  font-weight: 600;
+  margin-top: 14px;
+}
+
+.note-view h3 {
+  font-size: 15px;
+  font-weight: 600;
+  margin-top: 12px;
+}
+
+.note-view h4 {
+  font-size: 14px;
+  font-weight: 600;
+  margin-top: 10px;
+}
+
+.note-view h5,
+.note-view h6 {
+  font-size: 13px;
+  font-weight: 600;
+  margin-top: 8px;
+}
+
+.note-view > :first-child {
+  margin-top: 0;
+}
+
 .note-view p,
 .note-view ul {
   margin: 0 0 10px;
@@ -5231,9 +5276,48 @@ input[type="range"] {
 .scene-note-preview h1,
 .scene-note-preview h2,
 .scene-note-preview h3,
-.scene-note-preview h4 {
-  margin: 0 0 8px;
+.scene-note-preview h4,
+.scene-note-preview h5,
+.scene-note-preview h6 {
+  margin: 12px 0 6px;
   color: #f8fafc;
+  font-weight: 600;
+  line-height: 1.4;
+}
+
+.scene-note-preview h1 {
+  font-size: 20px;
+  font-weight: 700;
+  margin-top: 16px;
+}
+
+.scene-note-preview h2 {
+  font-size: 17px;
+  font-weight: 600;
+  margin-top: 14px;
+}
+
+.scene-note-preview h3 {
+  font-size: 15px;
+  font-weight: 600;
+  margin-top: 12px;
+}
+
+.scene-note-preview h4 {
+  font-size: 14px;
+  font-weight: 600;
+  margin-top: 10px;
+}
+
+.scene-note-preview h5,
+.scene-note-preview h6 {
+  font-size: 13px;
+  font-weight: 600;
+  margin-top: 8px;
+}
+
+.scene-note-preview > :first-child {
+  margin-top: 0;
 }
 
 .scene-note-preview p {
