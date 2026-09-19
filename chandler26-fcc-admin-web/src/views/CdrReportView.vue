@@ -522,10 +522,7 @@ const exportCdrCsv = async () => {
 <template>
   <div class="h-full flex-1 flex flex-col gap-6 overflow-y-auto pr-1">
     
-    <!-- 顶部浮动 Toast 消息 -->
-    <div v-if="toastMsg" class="fixed top-6 right-8 z-50 bg-slate-900 text-white px-5 py-3 rounded-2xl shadow-2xl text-sm font-bold flex items-center gap-2.5 animate-bounce border border-slate-700">
-      <span>🔔</span><span>{{ toastMsg }}</span>
-    </div>
+    <!-- 提示已统一收敛到全局反馈层 (src/utils/feedback.ts) -->
 
     <!-- 1. 顶部 Bento Grid 4 张话务与回拨指标卡片 -->
     <div class="grid grid-cols-12 gap-5 shrink-0">
@@ -768,7 +765,7 @@ const exportCdrCsv = async () => {
             </thead>
             <tbody class="divide-y divide-slate-50">
               <!-- 空状态提示 (真实测试环境引导) -->
-              <tr v-if="filteredCallRecords.length === 0">
+              <tr v-if="callRecords.length === 0">
                 <td colspan="11" class="py-16 text-center">
                   <div class="flex flex-col items-center justify-center">
                     <div class="w-14 h-14 rounded-2xl bg-blue-50 border border-blue-100 flex items-center justify-center text-2xl mb-3 shadow-xs">
@@ -948,7 +945,7 @@ const exportCdrCsv = async () => {
               重置
             </button>
             <button
-              @click="showAlert(`查询完成，共匹配 ${filteredCallbackRecords.length} 条未接待回拨记录`)"
+              @click="handleSearchCallback"
               class="px-5 py-2 bg-[#1677FF] hover:bg-blue-600 text-white rounded-xl text-xs font-black shadow-md shadow-blue-500/25 flex items-center gap-1.5 transition-all cursor-pointer"
             >
               <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"/></svg>

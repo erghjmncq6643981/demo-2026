@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { ref, computed, watch, onMounted } from 'vue';
 import { extensionApi } from '../api/extensionApi';
+import { toast, confirmAction } from '../utils/feedback';
 
 const props = withDefaults(defineProps<{
   initialTab?: 'extensions' | 'sysvars' | 'clients';
@@ -113,7 +114,7 @@ const batchExt = ref({
 const handleConfirmAddExt = async () => {
   if (addMode.value === 'single') {
     if (!singleExt.value.ext.trim()) {
-      alert('请填写分机号');
+      toast('请填写分机号', 'warning');
       return;
     }
     try {
@@ -199,7 +200,7 @@ const handleConfirm0000Bind = async () => {
   const ext = targetExtFor0000.value;
   const inputNum = dtmfInput.value.trim();
   if (!inputNum) {
-    alert('请通过键盘输入坐席 6 位工号');
+    toast('请通过键盘输入坐席 6 位工号', 'warning');
     return;
   }
   
@@ -428,7 +429,8 @@ const openRegisterRecords = (ext: ExtensionItem) => {
 };
 
 const handleDeleteExt = async (ext: ExtensionItem) => {
-  if (confirm(`确认销户并删除分机账号【${ext.ext}】吗？`)) {
+  const ok = await confirmAction(`确认销户并删除分机账号【${ext.ext}】吗？`, { title: '销户分机', danger: true, confirmText: '确认销户' });
+  if (ok) {
     try {
       await extensionApi.delete(ext.id);
       triggerToast(`分机 ${ext.ext} 已销户！已同步清理 FreeSWITCH 配置`);
@@ -648,10 +650,12 @@ const handleConfirmEditVar = () => {
 };
 
 const handleDeleteVar = (v: SysVariable) => {
-  if (confirm(`确认删除业务变量【${v.key}】吗？`)) {
-    sysVariables.value = sysVariables.value.filter(item => item.id !== v.id);
-    triggerToast(`业务变量【${v.key}】已删除！`);
-  }
+  confirmAction(`确认删除业务变量【${v.key}】吗？`, { title: '删除业务变量', danger: true, confirmText: '确认删除' }).then((ok) => {
+    if (ok) {
+      sysVariables.value = sysVariables.value.filter(item => item.id !== v.id);
+      triggerToast(`业务变量【${v.key}】已删除！`);
+    }
+  });
 };
 
 const handleToggleVarStatus = (v: SysVariable) => {
@@ -839,14 +843,6 @@ const handleConfirmAddClient = () => {
 
 <template>
   <div class="h-full flex-1 flex flex-col overflow-hidden text-slate-800">
-    <!-- Toast 通知提示 -->
-    <div
-      v-if="toastMsg"
-      class="fixed top-5 right-8 z-50 bg-slate-900/90 backdrop-blur-sm text-white px-5 py-2.5 rounded-xl shadow-xl text-sm font-semibold flex items-center gap-2 transition-all"
-    >
-      <span>🔔</span>
-      <span>{{ toastMsg }}</span>
-    </div>
 
     <!-- ========================================================================= -->
     <!-- 模块 1: 分机管理 (Extension Management) -->

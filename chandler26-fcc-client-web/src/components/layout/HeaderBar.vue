@@ -64,6 +64,7 @@
 import { computed } from 'vue';
 import { useAgentStore } from '../../stores/agentStore';
 import { wsService } from '../../services/websocketService';
+import { confirmAction } from '../../utils/feedback';
 
 defineEmits<{
   (e: 'openWsDiagnostics'): void;
@@ -74,7 +75,8 @@ const agentStore = useAgentStore();
 const wsConnected = computed(() => wsService.isConnected.value);
 
 async function handleLogout() {
-  if (confirm('确认注销当前坐席登录状态吗？')) {
+  const ok = await confirmAction('确认注销当前坐席登录状态吗？', { title: '退出登录', confirmText: '退出登录' });
+  if (ok) {
     await agentStore.logout();
   }
 }

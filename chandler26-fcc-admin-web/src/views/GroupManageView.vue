@@ -7,6 +7,7 @@ import {
   type AgentGroupMemberVO,
   type AgentVO
 } from '../api/agentApi';
+import { toast, confirmAction, errorText } from '../utils/feedback';
 
 // ==================== 1. 组织架构树与真实数据库状态 ====================
 const searchOrg = ref('');
@@ -26,12 +27,8 @@ const exclusiveNumberPool = ref(false); // 是否独占号码池
 const selectedCarrier = ref('全部'); // 运营商筛选: 全部 / 电信 / 移动 / 联通
 const searchMemberQuery = ref(''); // 组员姓名/工号搜索
 
-// Toast 提示
-const toastMsg = ref('');
-const triggerToast = (msg: string) => {
-  toastMsg.value = msg;
-  setTimeout(() => { toastMsg.value = ''; }, 3200);
-};
+// Toast 提示统一走全局反馈层 (应用内 toast)
+const triggerToast = (msg: string) => toast(msg, 'success');
 
 // 成员数据源 (真实从数据库拉取)
 const currentMembers = ref<AgentGroupMemberVO[]>([]);
@@ -241,7 +238,7 @@ const openDeleteDept = () => {
   const targetNode = contextMenu.value.node;
   if (!targetNode) return;
   if (targetNode.id === '1' || targetNode.level === 0) {
-    alert('顶级企业根节点受系统保护，不可删除！');
+    toast('顶级企业根节点受系统保护，不可删除！', 'warning');
     closeContextMenu();
     return;
   }
@@ -253,7 +250,7 @@ const openDeleteDept = () => {
 // 确认新增子部门
 const handleConfirmAddDept = async () => {
   if (!newDeptName.value.trim() || !newDeptCode.value.trim()) {
-    alert('请填写部门名称和唯一编码！');
+    toast('请填写部门名称和唯一编码！', 'warning');
     return;
   }
   const parentNode = contextMenu.value.node || treeData.value.find(n => n.id === selectedNodeId.value);
@@ -271,14 +268,14 @@ const handleConfirmAddDept = async () => {
     triggerToast(`成功在【${parentNode?.name || '根节点'}】下新增部门【${newDeptName.value}】！`);
     await loadOrgTree(String(newId));
   } catch (err: any) {
-    alert('创建失败: ' + (err.message || '请检查编码是否冲突'));
+    toast('创建失败: ' + (err.message || '请检查编码是否冲突'), 'error');
   }
 };
 
 // 确认修改部门
 const handleConfirmEditDept = async () => {
   if (!editDeptName.value.trim() || !editDeptCode.value.trim()) {
-    alert('部门名称和编码不能为空！');
+    toast('部门名称和编码不能为空！', 'warning');
     return;
   }
 
@@ -294,7 +291,7 @@ const handleConfirmEditDept = async () => {
     triggerToast(`部门【${editDeptName.value}】配置已成功保存！`);
     await loadOrgTree(String(editDeptId.value));
   } catch (err: any) {
-    alert('修改失败: ' + (err.message || '网络错误'));
+    toast('修改失败: ' + (err.message || '网络错误'), 'error');
   }
 };
 
@@ -313,7 +310,7 @@ const handleConfirmDeleteDept = async () => {
     }
     await loadOrgTree(selectedNodeId.value);
   } catch (err: any) {
-    alert('删除失败: ' + (err.message || '系统繁忙'));
+    toast('删除失败: ' + (err.message || '系统繁忙'), 'error');
   }
 };
 
@@ -330,7 +327,7 @@ const handleSaveGroupConfig = async () => {
     triggerToast(`技能组【${selectedDept.value}】话务路由策略已更新为【${strategyDesc.value}】！`);
     await loadOrgTree(selectedNodeId.value);
   } catch (err: any) {
-    alert('保存失败: ' + (err.message || '请重试'));
+    toast('保存失败: ' + (err.message || '请重试'), 'error');
   }
 };
 
@@ -387,7 +384,7 @@ const openAddAgentModal = () => {
 
 const handleConfirmCreateAgent = async () => {
   if (!newAgentName.value.trim() || !newAgentWorkNo.value.trim()) {
-    alert('坐席姓名和工号为必填项！');
+    toast('坐席姓名和工号为必填项！', 'warning');
     return;
   }
   try {
@@ -403,7 +400,7 @@ const handleConfirmCreateAgent = async () => {
     triggerToast(`坐席 ${newAgentName.value} (${newAgentWorkNo.value}) 创建并加入【${selectedDept.value}】成功！`);
     await loadMembers(Number(selectedNodeId.value));
   } catch (err: any) {
-    alert('创建坐席失败: ' + (err.message || '请检查工号是否已被占用'));
+    toast('创建坐席失败: ' + (err.message || '请检查工号是否已被占用'), 'error');
   }
 };
 
@@ -439,7 +436,7 @@ const availableAgentsToBind = computed(() => {
 
 const handleConfirmBindAgent = async () => {
   if (!selectedBindAgentId.value) {
-    alert('请选择要绑定的坐席！');
+    toast('请选择要绑定的坐席！', 'warning');
     return;
   }
   try {
@@ -453,7 +450,7 @@ const handleConfirmBindAgent = async () => {
     triggerToast(`坐席已成功绑定至【${selectedDept.value}】！`);
     await loadMembers(Number(selectedNodeId.value));
   } catch (err: any) {
-    alert('绑定失败: ' + (err.message || '网络异常'));
+    toast('绑定失败: ' + (err.message || '网络异常'), 'error');
   }
 };
 
@@ -485,35 +482,37 @@ const handleConfirmEditMember = async () => {
     triggerToast(`组员 ${editingMember.value.agentName} 权限已更新！`);
     await loadMembers(Number(selectedNodeId.value));
   } catch (err: any) {
-    alert('修改失败: ' + (err.message || '网络异常'));
+    toast('修改失败: ' + (err.message || '网络异常'), 'error');
   }
 };
 
 // 解绑坐席 (从当前组移出，保留账号)
 const handleUnbindMember = async (mem: AgentGroupMemberVO) => {
-  if (!confirm(`确认将坐席 ${mem.agentName} (${mem.workNo}) 从【${selectedDept.value}】解绑移出吗？\n（注：坐席人员账号依然完好保留在系统中）`)) {
+  const ok = await confirmAction(`确认将坐席 ${mem.agentName} (${mem.workNo}) 从【${selectedDept.value}】解绑移出吗？\n（注：坐席人员账号依然完好保留在系统中）`, { title: '解绑坐席' });
+  if (!ok) {
     return;
   }
   try {
     await agentApi.removeMemberFromGroup(Number(selectedNodeId.value), mem.agentId);
-    triggerToast(`坐席 ${mem.agentName} 已成功从技能组解绑！`);
+    toast(`坐席 ${mem.agentName} 已成功从技能组解绑！`, 'success');
     await loadMembers(Number(selectedNodeId.value));
   } catch (err: any) {
-    alert('解绑失败: ' + (err.message || '网络错误'));
+    toast('解绑失败: ' + (err.message || '网络错误'), 'error');
   }
 };
 
 // 彻底删除坐席档案
 const handleDeleteMemberAccount = async (mem: AgentGroupMemberVO) => {
-  if (!confirm(`⚠️ 危险操作：确认彻底注销并删除坐席【${mem.agentName} (${mem.workNo})】的档案吗？`)) {
+  const ok = await confirmAction(`确认彻底注销并删除坐席【${mem.agentName} (${mem.workNo})】的档案吗？`, { title: '删除坐席档案', danger: true, confirmText: '确认删除' });
+  if (!ok) {
     return;
   }
   try {
     await agentApi.delete(mem.agentId);
-    triggerToast(`坐席档案【${mem.agentName}】已删除！`);
+    toast(`坐席档案【${mem.agentName}】已删除！`, 'success');
     await loadMembers(Number(selectedNodeId.value));
   } catch (err: any) {
-    alert('删除失败: ' + (err.message || '系统繁忙'));
+    toast('删除失败: ' + (err.message || '系统繁忙'), 'error');
   }
 };
 
@@ -531,11 +530,7 @@ const strategyDesc = computed(() => {
 <template>
   <div class="h-full flex-1 flex gap-5 overflow-hidden">
     
-    <!-- 顶部全局 Toast 浮动提示 -->
-    <div v-if="toastMsg" class="fixed top-6 right-8 z-50 bg-slate-900/95 text-white px-5 py-3 rounded-2xl shadow-2xl text-sm font-bold flex items-center gap-2.5 animate-bounce border border-slate-700 backdrop-blur-md">
-      <span class="text-blue-400">🔔</span>
-      <span>{{ toastMsg }}</span>
-    </div>
+    <!-- 提示已统一收敛到全局反馈层 (src/utils/feedback.ts) -->
 
     <!-- ========================================================================= -->
     <!-- 1. 左侧企业组织架构树 (真实数据库驱动，单一顶级根节点初始) -->

@@ -1,4 +1,7 @@
 <template>
+  <!-- 全局反馈层宿主 (Toast / Confirm)，替代浏览器原生弹窗 -->
+  <FeedbackHost />
+
   <!-- 1. 未登录状态: 呈现全新企业级全屏双栏登录页 (左侧品牌/系统信息，右侧极简登录卡片) -->
   <LoginView v-if="!agentStore.isLoggedIn" />
 
@@ -83,6 +86,7 @@ import OutboundBar from './components/records/OutboundBar.vue';
 import CallbackQueue from './components/records/CallbackQueue.vue';
 import AgentMonitorView from './components/agents/AgentMonitorView.vue';
 import LoginView from './views/LoginView.vue';
+import FeedbackHost from './components/layout/FeedbackHost.vue';
 
 import { useAgentStore } from './stores/agentStore';
 import { useCallStore } from './stores/callStore';
