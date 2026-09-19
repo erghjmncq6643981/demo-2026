@@ -56,10 +56,10 @@ public class DefaultActionExecutorsManager {
             mergedData.putAll(callInfo.getData());
         }
         if (callInfo.getCtrlId() != null) {
-            mergedData.putIfAbsent("ctrlUuid", callInfo.getCtrlId());
+            mergedData.put("ctrlId", callInfo.getCtrlId());
         }
         if (callInfo.getCallId() != null) {
-            mergedData.putIfAbsent("callUuid", callInfo.getCallId());
+            mergedData.put("callId", callInfo.getCallId());
         }
         if (callInfo.getCallerNumber() != null) {
             mergedData.putIfAbsent("callerNumber", callInfo.getCallerNumber());
@@ -69,11 +69,10 @@ public class DefaultActionExecutorsManager {
         }
         if (callInfo.getAgentChannelUuid() != null) {
             mergedData.putIfAbsent("agentChannelUuid", callInfo.getAgentChannelUuid());
-            mergedData.putIfAbsent("uuidB", callInfo.getAgentChannelUuid());
         }
         if (callInfo.getGuestChannelUuid() != null) {
             mergedData.putIfAbsent("guestChannelUuid", callInfo.getGuestChannelUuid());
-            mergedData.putIfAbsent("uuidA", callInfo.getGuestChannelUuid());
+            mergedData.putIfAbsent("channelUuid", callInfo.getGuestChannelUuid());
         }
         if (callInfo.getAgentExt() != null) {
             mergedData.putIfAbsent("agentExt", callInfo.getAgentExt());

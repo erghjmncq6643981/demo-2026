@@ -11,7 +11,7 @@ export interface FlowVersionVO {
 }
 
 export interface FlowDefinitionVO {
-  id: number;
+  id: string;
   flowKey: string;
   flowName: string;
   modelType: string;
@@ -41,10 +41,10 @@ export interface FlowSimulateReq {
 
 export interface FlowSimulateRespVO {
   success: boolean;
-  simulationId: string;
+  simulationId: string | null;
   decisionResult: string;
-  targetAgentWorkNo: string;
-  targetAgentName: string;
+  targetAgentWorkNo: string | null;
+  targetAgentName: string | null;
   traces: any[];
 }
 

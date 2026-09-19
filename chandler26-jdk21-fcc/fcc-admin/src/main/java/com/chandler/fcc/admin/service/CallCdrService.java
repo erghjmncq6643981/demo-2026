@@ -124,12 +124,9 @@ public class CallCdrService {
         String callee = trimToNull(req.getCallee());
         wrapper.like(callee != null, CallSessionEntity::getDestinationNumber, callee);
 
-        // 坐席工号：agent_work_no 为事实列，primary_work_no 为历史列，两列同时兼容
+        // 坐席工号只匹配新模型的事实列 agent_work_no。
         String agentWorkNo = trimToNull(req.getAgentWorkNo());
-        wrapper.and(agentWorkNo != null, w -> w
-                .like(CallSessionEntity::getAgentWorkNo, agentWorkNo)
-                .or()
-                .like(CallSessionEntity::getPrimaryWorkNo, agentWorkNo));
+        wrapper.like(agentWorkNo != null, CallSessionEntity::getAgentWorkNo, agentWorkNo);
 
         // 坐席姓名：优先匹配话单冗余列；在册坐席姓名变更时回退到 fcc_agent 反查工号集合
         String agentName = trimToNull(req.getAgentName());
@@ -219,7 +216,6 @@ public class CallCdrService {
         ).toList();
 
         vo.setLegs(legVOs);
-        vo.setExecutionTrace(buildExecutionTrace(session, vo.getAgentName()));
         return vo;
     }
 
@@ -228,7 +224,7 @@ public class CallCdrService {
      */
     private CallCdrVO buildCdrVO(CallSessionEntity session) {
         // 1. 查询坐席姓名 (优先从实体直读)
-        String agentWorkNo = session.getAgentWorkNo() != null ? session.getAgentWorkNo() : session.getPrimaryWorkNo();
+        String agentWorkNo = session.getAgentWorkNo();
         String agentName = session.getAgentName();
         if (agentName == null && agentWorkNo != null) {
             AgentEntity agent = agentMapper.selectOne(new LambdaQueryWrapper<AgentEntity>()
@@ -279,30 +275,7 @@ public class CallCdrService {
                 : talkSec;
         String audioDuration = String.format("%02d:%02d", recordSec / 60, recordSec % 60);
 
-        // 4. 解析运营商与主叫客户姓名
-        String caller = session.getCallerNumber() != null ? session.getCallerNumber() : "";
-        String carrier = "中国移动";
-        String callerName = "外部客户";
-        if (caller.startsWith("134") || caller.startsWith("189") || caller.startsWith("180")) {
-            carrier = "中国电信";
-            callerName = "王建国 (司机热线)";
-        } else if (caller.startsWith("130") || caller.startsWith("186") || caller.startsWith("176")) {
-            carrier = "中国联通";
-            callerName = "李志强";
-        } else if (caller.startsWith("153") || caller.startsWith("138")) {
-            carrier = "中国移动";
-            callerName = "张闯";
-        }
-
-        String flowCode = session.getFlowCode() != null
-                ? session.getFlowCode()
-                : ("INBOUND".equalsIgnoreCase(session.getDirection()) ? "FLOW-INBOUND" : "FLOW-OUTBOUND");
-
-        String routeMode = session.getRouteMode() != null
-                ? session.getRouteMode()
-                : ("INBOUND".equalsIgnoreCase(session.getDirection()) ? "HTTP_CALLBACK" : null);
-
-        // 5. 话单结果状态严格归一化 (参考 call-center-backend: 历史话单只有2个状态: 已接听 / 未接听，绝不暴露 CALLING)
+        // 4. 对外话单仅暴露已接听与未接听结果，不暴露内部流转状态。
         boolean answered = session.getAnsweredAt() != null
                 || (session.getTalkDurationMs() != null && session.getTalkDurationMs() > 0)
                 || (session.getAudioDurationSec() != null && session.getAudioDurationSec() > 0)
@@ -318,14 +291,14 @@ public class CallCdrService {
                 .ctrlId(session.getCtrlId())
                 .bizId(session.getBizId())
                 .modelType(session.getModelType())
-                .flowCode(flowCode)
-                .routeMode(routeMode)
+                .flowCode(session.getFlowCode())
+                .routeMode(session.getRouteMode())
                 .routeTargetType(session.getRouteTargetType())
                 .routeTargetId(session.getRouteTargetId())
                 .direction(session.getDirection())
                 .caller(session.getCallerNumber())
-                .callerName(callerName)
-                .carrier(carrier)
+                .callerName(null)
+                .carrier(null)
                 .callee(session.getDestinationNumber())
                 .status(normalizedStatus)
                 .answerType(answerType)
@@ -345,214 +318,4 @@ public class CallCdrService {
                 .build();
     }
 
-    /**
-     * 构建全生命周期 4 阶段时序流水线跟踪 (Stage + Action)
-     */
-    private List<com.chandler.fcc.admin.model.vo.CallTraceStepVO> buildExecutionTrace(CallSessionEntity session, String agentName) {
-        List<com.chandler.fcc.admin.model.vo.CallTraceStepVO> steps = new java.util.ArrayList<>();
-        boolean isInbound = !"OUTBOUND".equalsIgnoreCase(session.getDirection());
-        String finalAgentName = agentName != null ? agentName : (session.getPrimaryWorkNo() != null ? session.getPrimaryWorkNo() : "坐席");
-
-        if (isInbound) {
-            // 阶段 1: TRIGGER (进线应答)
-            steps.add(com.chandler.fcc.admin.model.vo.CallTraceStepVO.builder()
-                    .timeOffset("+00:00.0s")
-                    .stage("TRIGGER")
-                    .stageName("进线应答")
-                    .actionCode("ANSWER")
-                    .actionName("运营商进线应答")
-                    .detail("主叫 " + session.getCallerNumber() + " 进线呼入 DID: 021-5088XXXX，建立信令通道")
-                    .status("SUCCESS")
-                    .build());
-
-            // 阶段 2: ROUTE (路由决策)
-            steps.add(com.chandler.fcc.admin.model.vo.CallTraceStepVO.builder()
-                    .timeOffset("+00:00.4s")
-                    .stage("ROUTE")
-                    .stageName("路由决策")
-                    .actionCode("READ_DTMF")
-                    .actionName("按键导航收号")
-                    .detail("播报 IVR 欢迎语并收号，客户输入按键 \"1\"")
-                    .status("SUCCESS")
-                    .duration("1.8s")
-                    .build());
-
-            String routeMode = session.getRouteMode() != null ? session.getRouteMode() : "HTTP_CALLBACK";
-            if ("DID_DIRECT".equalsIgnoreCase(routeMode)) {
-                steps.add(com.chandler.fcc.admin.model.vo.CallTraceStepVO.builder()
-                        .timeOffset("+00:02.2s")
-                        .stage("ROUTE")
-                        .stageName("路由决策")
-                        .actionCode("DID_DIRECT")
-                        .actionName("DID 专线号码直通")
-                        .detail("根据 DID 匹配直通专席坐席: " + finalAgentName)
-                        .status("SUCCESS")
-                        .duration("10ms")
-                        .build());
-            } else if ("RULE_ENGINE".equalsIgnoreCase(routeMode)) {
-                steps.add(com.chandler.fcc.admin.model.vo.CallTraceStepVO.builder()
-                        .timeOffset("+00:02.2s")
-                        .stage("ROUTE")
-                        .stageName("路由决策")
-                        .actionCode("RULE_ENGINE")
-                        .actionName("多维规则引擎")
-                        .detail("时间窗 (09:00-18:00) + VIP权重加成，分配目标技能组")
-                        .status("SUCCESS")
-                        .duration("45ms")
-                        .build());
-            } else {
-                steps.add(com.chandler.fcc.admin.model.vo.CallTraceStepVO.builder()
-                        .timeOffset("+00:02.2s")
-                        .stage("ROUTE")
-                        .stageName("路由决策")
-                        .actionCode("HTTP_CALLBACK")
-                        .actionName("回调业务线接口")
-                        .detail("POST /api/v1/driver/hotline/match ➔ 匹配坐席: " + finalAgentName)
-                        .status("SUCCESS")
-                        .duration("140ms")
-                        .build());
-            }
-
-            steps.add(com.chandler.fcc.admin.model.vo.CallTraceStepVO.builder()
-                    .timeOffset("+00:02.4s")
-                    .stage("ROUTE")
-                    .stageName("路由决策")
-                    .actionCode("DIAL_AGENT")
-                    .actionName("坐席分机振铃")
-                    .detail("呼叫坐席 " + finalAgentName + " 分机，坐席振铃应答")
-                    .status("SUCCESS")
-                    .duration(session.getRingDurationMs() != null ? (session.getRingDurationMs() / 1000 + "s") : "5.0s")
-                    .build());
-
-            // 阶段 3: CONNECTED (通话中)
-            steps.add(com.chandler.fcc.admin.model.vo.CallTraceStepVO.builder()
-                    .timeOffset("+00:07.4s")
-                    .stage("CONNECTED")
-                    .stageName("通话中")
-                    .actionCode("BRIDGE")
-                    .actionName("通道媒体流桥接")
-                    .detail("双方 RTP 媒体直通，FreeSWITCH uuid_bridge 桥接就绪")
-                    .status("SUCCESS")
-                    .build());
-
-            steps.add(com.chandler.fcc.admin.model.vo.CallTraceStepVO.builder()
-                    .timeOffset("+00:07.6s")
-                    .stage("CONNECTED")
-                    .stageName("通话中")
-                    .actionCode("RECORD_START")
-                    .actionName("自动开启双轨录音")
-                    .detail("生成双轨无损录音: rec_" + session.getId() + ".wav (16kHz 立体声分轨)")
-                    .status("SUCCESS")
-                    .build());
-
-            // 阶段 4: END (结束收尾)
-            steps.add(com.chandler.fcc.admin.model.vo.CallTraceStepVO.builder()
-                    .timeOffset("+01:21.6s")
-                    .stage("END")
-                    .stageName("结束阶段")
-                    .actionCode("RECORD_STOP")
-                    .actionName("通话停止录音")
-                    .detail("通话正常完成，停止录音并上传")
-                    .status("SUCCESS")
-                    .build());
-
-            if (session.getEvaluationScore() != null) {
-                steps.add(com.chandler.fcc.admin.model.vo.CallTraceStepVO.builder()
-                        .timeOffset("+01:21.8s")
-                        .stage("END")
-                        .stageName("结束阶段")
-                        .actionCode("POST_SURVEY")
-                        .actionName("满意度评价收号")
-                        .detail("播放满意度引导语，客户按键 \"" + session.getEvaluationScore() + "\" 星")
-                        .status("SUCCESS")
-                        .duration("3.2s")
-                        .build());
-            }
-
-            steps.add(com.chandler.fcc.admin.model.vo.CallTraceStepVO.builder()
-                    .timeOffset("+01:25.0s")
-                    .stage("END")
-                    .stageName("结束阶段")
-                    .actionCode("HANGUP")
-                    .actionName("挂机归档")
-                    .detail("正常挂断释放，生成 CDR 话单归档")
-                    .status("SUCCESS")
-                    .build());
-        } else {
-            // 外呼流
-            steps.add(com.chandler.fcc.admin.model.vo.CallTraceStepVO.builder()
-                    .timeOffset("+00:00.0s")
-                    .stage("TRIGGER")
-                    .stageName("起呼触发")
-                    .actionCode("START")
-                    .actionName("坐席发起外呼")
-                    .detail("坐席 " + finalAgentName + " 触发一键外呼 " + session.getDestinationNumber())
-                    .status("SUCCESS")
-                    .build());
-
-            steps.add(com.chandler.fcc.admin.model.vo.CallTraceStepVO.builder()
-                    .timeOffset("+00:00.3s")
-                    .stage("ROUTE")
-                    .stageName("路由阶段")
-                    .actionCode("DIAL_AGENT")
-                    .actionName("呼叫坐席端")
-                    .detail("呼叫坐席分机 (WebRTC / SIP)")
-                    .status("SUCCESS")
-                    .duration("200ms")
-                    .build());
-
-            steps.add(com.chandler.fcc.admin.model.vo.CallTraceStepVO.builder()
-                    .timeOffset("+00:00.6s")
-                    .stage("ROUTE")
-                    .stageName("路由阶段")
-                    .actionCode("DIAL_GUEST")
-                    .actionName("呼叫外部客户")
-                    .detail("经 SIP Trunk 专线发出 INVITE，客户开始振铃")
-                    .status("SUCCESS")
-                    .duration(session.getRingDurationMs() != null ? (session.getRingDurationMs() / 1000 + "s") : "8.0s")
-                    .build());
-
-            steps.add(com.chandler.fcc.admin.model.vo.CallTraceStepVO.builder()
-                    .timeOffset("+00:08.6s")
-                    .stage("CONNECTED")
-                    .stageName("通话中")
-                    .actionCode("CHANNEL_BRIDGE")
-                    .actionName("通道桥接成功")
-                    .detail("客户接听，FreeSWITCH uuid_bridge 媒体流打通")
-                    .status("SUCCESS")
-                    .build());
-
-            steps.add(com.chandler.fcc.admin.model.vo.CallTraceStepVO.builder()
-                    .timeOffset("+00:08.8s")
-                    .stage("CONNECTED")
-                    .stageName("通话中")
-                    .actionCode("RECORD_START")
-                    .actionName("启动双轨录音")
-                    .detail("文件: rec_" + session.getId() + ".wav (16kHz 立体声分轨)")
-                    .status("SUCCESS")
-                    .build());
-
-            steps.add(com.chandler.fcc.admin.model.vo.CallTraceStepVO.builder()
-                    .timeOffset("+00:28.8s")
-                    .stage("END")
-                    .stageName("结束阶段")
-                    .actionCode("RECORD_STOP")
-                    .actionName("停止录音")
-                    .detail("通话正常结束")
-                    .status("SUCCESS")
-                    .build());
-
-            steps.add(com.chandler.fcc.admin.model.vo.CallTraceStepVO.builder()
-                    .timeOffset("+00:29.0s")
-                    .stage("END")
-                    .stageName("结束阶段")
-                    .actionCode("HANGUP")
-                    .actionName("通道挂机释放")
-                    .detail("主叫挂断，生成 CDR 话单并推送至统计库")
-                    .status("SUCCESS")
-                    .build());
-        }
-
-        return steps;
-    }
 }

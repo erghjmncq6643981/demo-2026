@@ -47,6 +47,8 @@ import cn.dev33.satoken.stp.StpUtil;
 @RequiredArgsConstructor
 public class AgentService {
 
+    private final SipCredentialCipher credentialCipher;
+
     /**
      * 系统生成的坐席初始口令长度
      */
@@ -120,8 +122,11 @@ public class AgentService {
         // 自动为坐席工号开通 WebRTC 软话机分机。
         // 分机注册口令随机生成并随分机一并落库，取代以往全体共用的固定口令。
         String registrationSecret = PasswordHasher.generateInitialPassword(EXTENSION_SECRET_LENGTH);
+        byte[] encryptedSecret = credentialCipher.encrypt(registrationSecret);
+        boolean provisioned = false;
         try {
-            sidecarAdminClient.createExtension(workNo, registrationSecret);
+            var response = sidecarAdminClient.createExtension(workNo, registrationSecret);
+            provisioned = response != null && (response.getCode() == 200 || response.getCode() == 0);
         } catch (Exception e) {
             log.warn("[AgentService] 同步工号分机至 FreeSWITCH 告警: {}", e.getMessage());
         }
@@ -134,15 +139,16 @@ public class AgentService {
                     .tenantId(0L)
                     .extension(workNo)
                     .endpointType("WEBRTC")
-                    .credentialSecret(registrationSecret.getBytes(StandardCharsets.UTF_8))
-                    .status("ENABLED")
+                    .credentialSecret(encryptedSecret)
+                    .status(provisioned ? "ENABLED" : "PROVISIONING_FAILED")
                     .agentWorkNo(workNo)
                     .agentName(entity.getAgentName())
                     .createdAt(now)
                     .updatedAt(now)
                     .build());
         } else {
-            existingExtension.setCredentialSecret(registrationSecret.getBytes(StandardCharsets.UTF_8));
+            existingExtension.setCredentialSecret(encryptedSecret);
+            existingExtension.setStatus(provisioned ? "ENABLED" : "PROVISIONING_FAILED");
             existingExtension.setAgentWorkNo(workNo);
             existingExtension.setAgentName(entity.getAgentName());
             existingExtension.setUpdatedAt(now);
@@ -196,7 +202,6 @@ public class AgentService {
                 .account(workNo)
                 .displayName(entity.getAgentName())
                 .initialPassword(passwordGenerated ? plainPassword : null)
-                .extensionSecret(registrationSecret)
                 .hint(passwordGenerated
                         ? "请立即将初始口令交付本人并提醒其首次登录后修改"
                         : "口令已按指定值设置")
@@ -848,8 +853,8 @@ public class AgentService {
         String activeEndpointType = "WEBRTC";
         String activeEndpointValue = workNo.trim();
         String webrtcWorkNo = workNo.trim();
-        String sipExtension = "1007";
-        String mobilePhone = agent.getPhoneNumber() != null ? agent.getPhoneNumber() : "13800000001";
+        String sipExtension = null;
+        String mobilePhone = agent.getPhoneNumber();
 
         for (AgentEndpointBindingEntity b : bindings) {
             if ("WEBRTC".equalsIgnoreCase(b.getEndpointType())) {
@@ -921,9 +926,12 @@ public class AgentService {
             if ("WEBRTC".equalsIgnoreCase(targetType)) {
                 targetValue = workNo;
             } else if ("SIP".equalsIgnoreCase(targetType) && (targetValue == null || targetValue.isBlank())) {
-                targetValue = "1007";
+                throw new IllegalArgumentException("SIP 接听方式必须选择已绑定分机");
             } else if ("MOBILE".equalsIgnoreCase(targetType) && (targetValue == null || targetValue.isBlank())) {
-                targetValue = agent.getPhoneNumber() != null ? agent.getPhoneNumber() : "13800000001";
+                if (agent.getPhoneNumber() == null || agent.getPhoneNumber().isBlank()) {
+                    throw new IllegalArgumentException("移动接听方式必须先维护手机号");
+                }
+                targetValue = agent.getPhoneNumber();
             }
             targetBinding = AgentEndpointBindingEntity.builder()
                     .id(IdUtil.nextId())

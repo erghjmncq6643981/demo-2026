@@ -48,6 +48,7 @@ public class ExtensionService {
     private final AgentMapper agentMapper;
     private final SidecarAdminClient sidecarAdminClient;
     private final StringRedisTemplate stringRedisTemplate;
+    private final SipCredentialCipher credentialCipher;
 
     /**
      * 创建并同步分机至 FreeSWITCH
@@ -66,6 +67,7 @@ public class ExtensionService {
             throw new IllegalArgumentException("分机号已存在: " + ext);
         }
 
+        byte[] encryptedSecret = credentialCipher.encrypt(req.getPassword().trim());
         // 2. 同步调用 Go Sidecar HTTP 接口下发 FreeSWITCH XML 目录配置
         SidecarResponse<?> resp = sidecarAdminClient.createExtension(ext, req.getPassword().trim());
         boolean sidecarOk = resp != null && (resp.getCode() == 200 || resp.getCode() == 0);
@@ -83,8 +85,8 @@ public class ExtensionService {
                 .tenantId(0L)
                 .extension(ext)
                 .endpointType(req.getEndpointType() == null ? "SIP" : req.getEndpointType().trim())
-                .credentialSecret(req.getPassword().trim().getBytes(StandardCharsets.UTF_8))
-                .status("ENABLED")
+                .credentialSecret(encryptedSecret)
+                .status(sidecarOk ? "ENABLED" : "PROVISIONING_FAILED")
                 .createdAt(now)
                 .updatedAt(now)
                 .build();

@@ -1,5 +1,6 @@
 package com.chandler.fcc.admin.controller;
 
+import cn.dev33.satoken.stp.StpUtil;
 import com.chandler.fcc.admin.model.CommonResult;
 import com.chandler.fcc.admin.model.dto.SystemConfigReq;
 import com.chandler.fcc.admin.model.vo.SystemConfigVO;
@@ -34,7 +35,7 @@ public class SystemConfigController {
     @Operation(summary = "保存或更新系统配置项")
     @PostMapping
     public CommonResult<Long> saveConfig(@Valid @RequestBody SystemConfigReq req) {
-        Long id = configService.saveOrUpdateConfig(req, "admin");
+        Long id = configService.saveOrUpdateConfig(req, StpUtil.getLoginIdAsString());
         return CommonResult.success(id);
     }
 

@@ -31,7 +31,7 @@ export async function triggerOutboundCall(
  */
 export async function triggerHangupCall(
   workNo: string,
-  callId?: string,
+  callId: string,
   reason?: string
 ): Promise<CommonResult<unknown>> {
   const res = (await telephonyApi.post('/call/hangup', {
@@ -49,12 +49,12 @@ export async function triggerHoldCall(
   workNo: string,
   callId: string,
   hold: boolean
-): Promise<CommonResult<{ isHeld: boolean }>> {
+): Promise<CommonResult<{ status: 'ACCEPTED'; callId: string }>> {
   const res = (await telephonyApi.post('/call/hold', {
     workNo,
     callId,
     hold,
-  })) as unknown as CommonResult<{ isHeld: boolean }>;
+  })) as unknown as CommonResult<{ status: 'ACCEPTED'; callId: string }>;
   return res;
 }
 
@@ -98,12 +98,12 @@ export async function triggerSuperviseCall(
 export async function triggerTransferCall(
   workNo: string,
   targetNumber: string,
-  callId?: string
-): Promise<CommonResult<{ target: string; executed: boolean }>> {
+  callId: string
+): Promise<CommonResult<{ status: 'ACCEPTED'; callId: string }>> {
   const res = (await telephonyApi.post('/call/transfer', {
     workNo,
     targetNumber,
     callId,
-  })) as unknown as CommonResult<{ target: string; executed: boolean }>;
+  })) as unknown as CommonResult<{ status: 'ACCEPTED'; callId: string }>;
   return res;
 }

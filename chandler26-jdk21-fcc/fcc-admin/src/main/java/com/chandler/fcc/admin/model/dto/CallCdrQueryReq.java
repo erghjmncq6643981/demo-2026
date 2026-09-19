@@ -32,7 +32,7 @@ public class CallCdrQueryReq implements Serializable {
     @Schema(description = "被叫号码", example = "1001")
     private String callee;
 
-    @Schema(description = "服务坐席工号 (兼容 agent_work_no 与历史 primary_work_no 两列)", example = "901001")
+    @Schema(description = "服务坐席工号", example = "901001")
     private String agentWorkNo;
 
     @Schema(description = "服务坐席姓名 (模糊匹配，同时兼顾 fcc_agent 中的在册姓名)", example = "张三")

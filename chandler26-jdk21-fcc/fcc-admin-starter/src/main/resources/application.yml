@@ -28,6 +28,14 @@ mybatis-plus:
       id-type: input
 
 fcc:
+  sip:
+    encryption-key: ${FCC_SIP_ENCRYPTION_KEY:}
+    ws-url: ${FCC_SIP_WS_URL:}
+    domain: ${FCC_SIP_DOMAIN:}
+  flow:
+    reload-token: ${FCC_FLOW_RELOAD_TOKEN:}
+  server:
+    base-url: ${FCC_SERVER_BASE_URL:http://127.0.0.1:8085}
   sidecar-admin-url: ${SIDECAR_ADMIN_URL:http://127.0.0.1:8088}
   # 录音共享存储：必须与 fcc-server 使用同一份配置，否则无法定位 FreeSWITCH 写出的录音文件。
   # 管理端据此对 fcc_call_recording.object_key 记录的路径做共享目录范围内的合法性校验。

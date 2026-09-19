@@ -143,15 +143,17 @@ public class SidecarAdminClient {
      */
     public Map<String, Object> healthCheck() {
         String url = sidecarAdminUrl + "/api/v1/health";
-        log.info("🌐 [Sidecar HTTP] 探活请求: {}", url);
+        log.info("[Sidecar HTTP] 开始执行节点健康探测");
         try {
             @SuppressWarnings("unchecked")
             Map<String, Object> resp = restTemplate.getForObject(url, Map.class);
-            log.info("🌐 [Sidecar HTTP] 探活响应: {}", resp);
+            log.info("[Sidecar HTTP] 节点健康探测完成: status={}, fsAlive={}",
+                    resp == null ? null : resp.get("status"),
+                    resp == null ? null : resp.get("fs_alive"));
             return resp;
         } catch (Exception e) {
-            log.error("❌ [Sidecar HTTP] 节点健康探活失败: {}", e.getMessage(), e);
-            return Map.of("status", "UNHEALTHY", "error", e.getMessage());
+            log.warn("[Sidecar HTTP] 节点健康探测失败: {}", e.getMessage());
+            return Map.of("status", "UNHEALTHY");
         }
     }
 }

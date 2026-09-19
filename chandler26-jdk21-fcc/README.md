@@ -1,33 +1,116 @@
 # chandler26-jdk21-fcc
 
-基于 Java 21、Spring Boot 4、NATS 与 FreeSWITCH Sidecar 的 FCC（FreeSWITCH Call Center）控制面多模块工程。
+Current FCC control-plane backend for the admin and agent frontends. It is a Java 21, Spring Boot 4.1.1 modular monolith that controls FreeSWITCH through NATS and the Go Sidecar.
 
-当前版本只包含工程骨架、架构设计和数据库 DDL，不包含业务实现。
+The earlier statement that this repository contained only a skeleton is no longer accurate. The source now includes administration APIs, call-control APIs, persistence, authentication, WebSocket delivery, flow handling, recording access, and integration tests.
 
-## 模块
+## Modules
 
-- `fcc-common`：跨模块共享的基础类型、异常、枚举和工具。
-- `fcc-server`：通话控制、流程编排、FCC/NATS 通信及持久化核心。
-- `fcc-server-starter`：核心服务可执行入口。
-- `fcc-admin`：管理端查询、配置及运维接口。
-- `fcc-admin-starter`：管理服务可执行入口。
+| Module | Responsibility |
+| --- | --- |
+| `fcc-common` | shared FCC contracts, command/event DTOs, enums, entities, and utilities |
+| `fcc-server` | call control, flow/actions, NATS commands/events, runtime persistence, recording metadata, and agent WebSocket |
+| `fcc-server-starter` | executable control service, default port `8085` |
+| `fcc-admin` | authentication, agents/groups/endpoints, extensions, CDR/recordings, callbacks, flows, resources, configuration, and fleet administration |
+| `fcc-admin-starter` | executable administration service, default port `8089` |
 
-## 环境
+Starters contain runtime assembly; domain behavior remains in `fcc-server` and `fcc-admin`.
+
+## Runtime architecture
+
+```text
+fcc-admin-web :8000 --> fcc-admin :8089 ----> MySQL / Redis
+                                  |
+                                  +---------> Sidecar :8088 (selected admin operations)
+
+fcc-client-web :8888 --> fcc-admin :8089
+                       +> fcc-server :8085 --> NATS --> Sidecar --> FreeSWITCH
+                       +> /ws/agent :8085
+                       +> FreeSWITCH SIP WebSocket for media
+```
+
+Java does not connect to ESL directly.
+
+## Implemented contracts
+
+### fcc-server
+
+- `POST /api/telephony/call/outbound`
+- `POST /api/telephony/call/hangup`
+- `POST /api/telephony/call/hold`
+- `POST /api/telephony/call/dtmf`
+- `POST /api/telephony/call/supervise`
+- `POST /api/telephony/call/transfer`
+- `POST /api/telephony/call/flow/reload`
+- `WS /ws/agent` with authenticated subprotocol headers; query parameters do not establish identity.
+
+The server sends `FNode.*` commands to `fs.cmd.{nodeId}`, subscribes to `fs.event.>`, drives flow actions, persists call/session facts, and pushes screen-pop/call events to connected agents.
+
+Recording commands persist the declared file path. Sidecar and Java now use only `Event.Recording` on `fs.event.{nodeId}.record`. Contract tests exist on both sides; live recording completion still requires FreeSWITCH/NATS verification.
+
+### fcc-admin
+
+The `/api/admin` surface includes:
+
+- authentication and current user;
+- administrator and agent accounts;
+- groups, members, endpoint bindings, and substitutions;
+- extensions and IVR binding;
+- paginated CDR, statistics, detail, recordings, and callback tasks;
+- flow definitions, versions, drafts, publication, and simulation;
+- telephony resources, system configuration, and client fleet data.
+
+## Storage
+
+- MySQL is the source of truth for FCC business facts and configuration.
+- Redis accelerates reconstructable runtime state such as extension presence and publication notifications.
+- NATS Core provides request/reply and current event delivery.
+- FreeSWITCH media files are shared through the configured recording base directory.
+- `docs/fcc-schema.sql` is the baseline schema. Not every baseline table has a complete runtime workflow yet; mapper/service coverage is the implementation boundary.
+
+Active calls also use an in-memory session index for event correlation. MySQL remains necessary for durable facts; recovery behavior must not be inferred solely from the in-memory map.
+
+The shared `FccIdentifierJacksonModule` is registered in admin/server and serializes Long bean properties named `id` or ending in `Id` as strings. Numeric measurements stay numeric. Its unit test passes under the temporary JDK 21; Map values, other names and actual Spring HTTP integration still require verification.
+
+## Configuration
+
+Both starters use environment-driven configuration. Important variables include:
+
+- `SERVER_PORT`
+- `MYSQL_HOST`, `MYSQL_PORT`, `MYSQL_DATABASE`, `MYSQL_USERNAME`, `MYSQL_PASSWORD`
+- `REDIS_HOST`, `REDIS_PORT`
+- `NATS_URL`
+- `FCC_DEFAULT_NODE_ID`
+- `SIDECAR_ADMIN_URL`
+- `FCC_RECORDING_BASE_DIR`
+- `FCC_ADMIN_BASE_URL`, `FCC_SERVER_BASE_URL`, `FCC_FLOW_RELOAD_TOKEN`, `FCC_WS_ALLOWED_ORIGINS`
+- `FCC_SIP_WS_URL`, `FCC_SIP_DOMAIN`, `FCC_SIP_ENCRYPTION_KEY` (admin only)
+
+The Java node ID must exactly match the Sidecar `NODE_ID`. Database, Redis, NATS, Sidecar, SIP, and recording credentials/paths must be supplied by deployment configuration rather than committed defaults.
+
+## Build and test
+
+Prerequisites:
 
 - JDK 21
 - Maven 3.6.3+
-- MySQL 8.0+
-- Redis 7+
-- NATS 2.x
-
-## 构建
+- MySQL 8 and Redis 7 for environment-dependent integration tests
+- NATS and Sidecar/FreeSWITCH for telephony integration
 
 ```bash
-mvn clean verify
+mvn -q -DskipTests compile
+mvn -q test
 ```
 
-## 文档
+Test sources cover utilities, WebSocket behavior, database connectivity, telephony flow, agents, resources, CDR, callback, extension, and flow-definition paths. Their presence does not prove that external dependencies were available in a particular run.
 
-- [架构设计](docs/DESIGN.md)
-- [数据库 DDL](docs/fcc-schema.sql)
+## Documentation
 
+- [Architecture and current boundaries](./docs/DESIGN.md)
+- [Product design and completion priorities](../docs/fcc-product-design.md)
+- [Frontend/backend contract findings](../docs/fcc-contract-alignment.md)
+- [Contract remediation and deployment order](../docs/fcc-contract-remediation.md)
+- [Baseline schema](./docs/fcc-schema.sql)
+- [Project rules](./AGENTS.md)
+- [Cross-project frontend architecture](../docs/frontend-architecture-and-ui-design.md)
+- [Testing status and acceptance](../docs/testing-architecture-and-test-cases.md)

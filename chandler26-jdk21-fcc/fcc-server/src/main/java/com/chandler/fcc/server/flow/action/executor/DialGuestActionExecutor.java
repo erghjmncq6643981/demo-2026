@@ -30,16 +30,27 @@ public class DialGuestActionExecutor extends AbstractFccActionExecutor {
 
     private final CallSessionManager sessionManager;
 
+    /**
+     * 返回执行器支持的动作类型。
+     * @return 业务动作类型
+     */
     @Override
     public ActionType getActionType() {
         return ActionType.DIAL_GUEST;
     }
 
+    /**
+     * 根据明确的运行时标识执行呼叫动作。
+     * @param callUuid 业务通话标识，不作为话道或控制标识
+     * @param flowUuid 流程步骤实例标识
+     * @param flowNode 包含独立控制、话道及动作参数的节点
+     * @throws IllegalArgumentException 必需参数缺失时抛出
+     */
     @Override
     public void execute(String callUuid, String flowUuid, FlowNode flowNode) {
-        String destNumber = flowNode.getDataStr("destNumber", "1008");
-        String callerNumber = flowNode.getDataStr("callerNumber", "02150880000");
-        String ctrlUuid = flowNode.getDataStr("ctrlUuid", callUuid);
+        String destNumber = requiredData(flowNode, "destNumber");
+        String callerNumber = requiredData(flowNode, "callerNumber");
+        String ctrlUuid = requiredData(flowNode, "ctrlId");
         String guestChannelUuid = flowNode.getDataStr("guestChannelUuid", null);
 
         if (guestChannelUuid == null || guestChannelUuid.trim().isEmpty()) {

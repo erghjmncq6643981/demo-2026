@@ -7,7 +7,7 @@ The parent `AGENTS.md` also applies. When rules conflict, use the narrower rule 
 - This project is a Java 21, Spring Boot 4 modular monolith for the FCC control plane. Java controls FreeSWITCH through NATS and a Sidecar Agent; it must not open direct ESL connections.
 - Keep the declared Maven modules and their responsibilities stable:
   - `fcc-common`: stable cross-module contracts, value objects, enums, error codes, and dependency-light utilities.
-  - `fcc-server`: call control, Call/Leg/Bridge state, flow orchestration, routing, FCC commands/events, recording metadata, and runtime persistence.
+  - `fcc-server`: phone-binding runtime, inbound/outbound call control, automatic outbound scheduling, customer data, Windows screen-pop business orchestration, Call/Leg/Bridge state, routing, FCC commands/events, recording metadata, and runtime persistence. Windows clients execute local OS interactions only; Sidecar does not own these business capabilities.
   - `fcc-server-starter`: executable bootstrap, environment configuration, observability, and deployment assembly for the control service.
   - `fcc-admin`: administration commands/queries for agents, groups, flows, numbers, trunks, nodes, calls, and operational audit.
   - `fcc-admin-starter`: executable bootstrap and deployment assembly for the admin service.
@@ -54,13 +54,13 @@ The parent `AGENTS.md` also applies. When rules conflict, use the narrower rule 
 
 - All FreeSWITCH control goes through the FCC gateway and `FNode.*` JSON-RPC methods. Raw ESL commands are allowed only behind an explicitly named escape-hatch adapter with audit, validation, and restricted callers.
 - Centralize NATS subject construction. Standard subjects are `fs.cmd.{nodeId}`, `fs.event.{nodeId}.{category}`, and `fs.status.{nodeId}.heartbeat`; do not concatenate subject strings throughout business code.
-- Keep wire DTOs separate from domain objects. Protocol mappers own snake_case/camelCase conversion, default values, compatibility, and unknown fields.
+- Keep wire DTOs separate from domain objects. Protocol mappers own snake_case/camelCase conversion, required-field validation, defaults, and unknown fields. Do not add legacy aliases copied from reference projects.
 - Every command has `command_id`, target `node_id`, timeout, status, and idempotency key. A synchronous NATS reply confirms RPC handling, not necessarily the final telephony outcome.
 - Every event has `event_id`, `node_id`, source time, receive time, type, and raw/normalized payload. Enforce deduplication before state mutation.
 - Core NATS is appropriate for request/reply and disposable heartbeats. Use JetStream for events that require durable delivery or replay. Document stream, subject, retention, consumer, acknowledgement, and redelivery policy before adding one.
 - NATS callbacks must not run blocking database/business work on the client dispatch thread. Hand off to a bounded executor or durable consumer with explicit backpressure.
 - Handle timeout, no responders, reconnect, duplicate delivery, late reply, and partial node failure as separate outcomes. Do not collapse them into a generic communication exception.
-- Protocol changes require compatibility notes and contract fixtures for both Java and Sidecar representations.
+- This is a new system without a legacy production contract. Protocol changes update Java, Sidecar, fixtures, and documentation together and use one canonical representation.
 
 ## Transactions, Idempotency, And Recovery
 
@@ -140,4 +140,5 @@ The parent `AGENTS.md` also applies. When rules conflict, use the narrower rule 
 - For SQL, migrations, indexing, pagination, batching, or high-volume event storage, use the parent `../agents/data-performance.md` playbook.
 - For cross-layer behavior and regression acceptance, use `../agents/end-to-end-quality.md`.
 - For authentication, admin operations, tenant isolation, secrets, recordings, and personal data, use `../agents/security-and-authorization.md`.
-- For telephony changes, reviewers must additionally trace `command -> NATS -> Sidecar -> FreeSWITCH event -> deduplication -> Leg transition -> Call/Flow projection` and report the first boundary that lacks evidence.
+- For telephony, event, WebSocket, SIP/WebRTC, recording, or recovery work, use `../agents/fcc-realtime-reliability.md` and report the first boundary that lacks evidence.
+- For documentation, generated artifacts, build configuration, or broad repository cleanup, use `../agents/repository-integrity.md`.

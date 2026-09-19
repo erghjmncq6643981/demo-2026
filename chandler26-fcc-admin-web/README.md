@@ -1,39 +1,64 @@
-# 箱箱呼叫中心 - 运营管理后台 (chandler26-fcc-admin-web)
+# chandler26-fcc-admin-web
 
-基于现代轻奢 B 端美学规范（Planti & Orizon Style）构建的电信级呼叫中心运营调度与治理中台原型系统。
+FCC operations and business administration frontend built with Vue 3, TypeScript, Pinia, Element Plus, Tailwind CSS, and Vite.
 
-## 核心设计与品牌规范
-- **品牌名称**：箱箱呼叫中心 / 箱箱通讯（📦 Logo）
-- **视觉风格**：浅色轻奢商业化风格，32px/36px 大圆角卡片，多层微弥散柔和阴影（`shadow-dashboard`），通透清爽、动效细腻
-- **服务团队**：陈松、钱丁君、舒欣、森林、志行、苏宁、亚峰、张闯、鹏飞
+## Runtime relationship
 
-## 核心功能模块
-1. **IVR 流程可视化编排画布 (Flow Studio)**：
-   - 交互式节点编排（入口触发器 ➔ 欢迎语音播报 ➔ DTMF 按键采集 ➔ 技能组排队路由 ➔ 溢出漏话任务）；
-   - 节点参数抽屉配置（音频试听、TTS 文字备选、超时时间、重试次数配置）；
-   - **IVR 流程在线沙箱测试模拟器**：支持输入测试主叫号码，单步执行并输出 FreeSWITCH Dialplan 实时日志与 DTMF 模拟分流。
-2. **路由与实时通话记录**：
-   - 热数据与历史冷库一键切换；
-   - 话单详情深度下钻（坐席服务过程、底层呼叫控制状态机、号码生命周期使用记录）；
-   - 全局微光双轨录音声波播放器。
-3. **通信资源中台 (Telephony Resources Center)**：
-   - **分机与终端**：WebRTC / SIP 硬件分机鉴权、注册状态与工号绑定；
-   - **SIP 中继网关**：运营商级中继网关 IP、通道并发限制与主备探活；
-   - **外呼防封号码池**：频控状态监控（可用/冷却中/封禁）与呼叫限额保护。
-4. **FreeSWITCH 集群健康态势与平滑排水 (Draining Mode)**：
-   - 多节点 CPU、并发通道监控与 NATS JetStream 总线吞吐指标；
-   - 支持一键开启「平滑排水」模式，零中断维护停机。
-5. **组织与技能组治理**：
-   - 组织树架构与分发策略（最长空闲/熟客记忆/技能分值/轮询）；
-   - 组员技能绑定与权限配置。
-6. **效能报表与 24h 坐席状态时段甘特图**：
-   - 基于 DDL `fcc_agent_state_interval` 的 24 小时状态切片可视化甘特图与 KPI 榜单。
-7. **未接待回拨总池**：
-   - 漏话待办工单实时指派与流转闭环。
+```text
+Browser :8000
+    |
+    | /api/admin
+    v
+fcc-admin-starter :8089
+    |             |
+    v             v
+ MySQL          Redis
 
-## 相关设计与规格文档
-- [呼入 3 种路由模式与 CDR 通话过程详情设计规范](./docs/CALL_FLOW_AND_TRACE_DESIGN.md)
-- [IVR 流程自上而下模型与二期动态编排/版本发布设计规范](./docs/IVR_FLOW_ORCHESTRATION_DESIGN.md)
+fcc-admin may call the Sidecar :8088 for extension and telephony-resource operations.
+```
 
-## 快速预览与运行
-在浏览器中直接打开 `index.html` 即可完整体验全套交互。
+This frontend does not call NATS, ESL, or FreeSWITCH directly.
+
+## Implemented modules
+
+- Administrator login and current-user session.
+- Call records, aggregate statistics, call details, recordings, and callback tasks.
+- Agent accounts, endpoint bindings, groups, membership, and organization reporting.
+- Extension management and IVR binding.
+- Flow list, version history, draft save and publish. The simulation endpoint explicitly reports that its engine is unavailable.
+- Runtime/operations overview and client/resource management surfaces.
+
+The source of truth is the `/api/admin` contract implemented by `chandler26-jdk21-fcc/fcc-admin`. Large call/flow payloads should be loaded from detail APIs rather than copied into list responses.
+
+## Development
+
+Prerequisites:
+
+- Node.js compatible with Vite 6; model tests require Node.js 22.18+ with native TypeScript stripping.
+- `fcc-admin-starter` running on port `8089`.
+- MySQL and Redis configured for the backend.
+
+```bash
+npm ci
+npm run dev
+npm run build
+node --test tests/governance.test.mjs
+```
+
+Development URL: `http://localhost:8000`.
+
+Authentication uses the backend-defined `satoken` header. Browser state is not an authorization boundary; all permissions must also be enforced by the backend.
+
+## Engineering baseline
+
+Project-specific rules are in [AGENTS.md](./AGENTS.md). Feature domains must own their API adapter, state/composable, UI, and tests. `App.vue` and the layout remain composition only.
+
+Known debt:
+
+- Extension management composes extensions, settings and fleet features. Flow, CDR and group state now belongs to feature composables; flow JSON, CDR mapping and group trees have separate pure models. CDR and group rendering still exceed 600 lines and require further component review before growth.
+- Updated administration API IDs use opaque strings; new adapters must preserve this contract.
+- Generated Vite configuration output and TypeScript build metadata have been removed from tracked sources and are ignored.
+- Four model tests cover flow JSON boundaries, group ordering/string IDs/cycles and absent/zero CDR measurements. Permission, pagination and publication interactions still need browser regression coverage.
+- Existing product copy and some screens still contain prototype data or optimistic claims. Live data, simulated data, and unavailable metrics must be visibly distinct.
+
+See [the FCC frontend architecture](../docs/frontend-architecture-and-ui-design.md) for shared boundaries and acceptance rules.

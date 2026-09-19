@@ -28,6 +28,9 @@ export interface AgentUserInfoVO {
 }
 
 export const authApi = {
+  sipConfig(): Promise<{ code: number; data: { extension: string; wsUrl: string; domain: string; password: string } }> {
+    return adminApi.get('/auth/sip-config');
+  },
   login(data: AgentLoginReq): Promise<{ code: number; message: string; data: AgentLoginRespVO }> {
     return adminApi.post('/auth/login', data);
   },

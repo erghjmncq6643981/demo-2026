@@ -1,97 +1,145 @@
 import { defineStore } from 'pinia';
-import { ref } from 'vue';
-import type { CallState, IncomingScreenPopPayload } from '../types/telephony';
+import { computed, ref } from 'vue';
+import type { IncomingScreenPopPayload } from '../types/telephony';
 import { audioService } from '../services/audioService';
+import { toast, toastError } from '../utils/feedback';
 import { sipWebRtcService } from '../services/sipWebRtcService';
 import { triggerHangupCall, triggerHoldCall, triggerDtmfCall } from '../api/telephonyApi';
+import {
+  initialCallLifecycle,
+  reduceCallLifecycle,
+  type CallLifecycleEvent,
+} from '../features/call/model/callStateMachine';
 
 export const useCallStore = defineStore('call', () => {
-  const callState = ref<CallState>('IDLE');
+  const lifecycle = ref(initialCallLifecycle());
+  const callState = computed(() => lifecycle.value.state);
   const currentCall = ref<IncomingScreenPopPayload | null>(null);
   const durationSeconds = ref(0);
   const isHeld = ref(false);
+  const holdRequested = ref(false);
+  const holdPending = ref(false);
+  const controlMessage = ref('');
   const isMuted = ref(false);
   const showAcwDrawer = ref(false);
 
   let callTimerInterval: number | null = null;
+  let hangupRequestKey: string | null = null;
+
+  function applyLifecycle(event: CallLifecycleEvent): boolean {
+    const previous = lifecycle.value;
+    const next = reduceCallLifecycle(previous, event);
+    lifecycle.value = next;
+    return next !== previous;
+  }
 
   function getWorkNo(): string {
-    return localStorage.getItem('fcc_agent_workno') || '901001';
+    return localStorage.getItem('fcc_agent_workno') || '';
   }
 
-  function triggerIncoming(payload: IncomingScreenPopPayload) {
-    currentCall.value = payload;
-    callState.value = 'RINGING';
-    audioService.startRingtone();
-  }
-
-  function answerCall() {
-    audioService.stopRingtone();
-    // 触发真实 WebRTC 应答以打通双向语音媒体流
-    sipWebRtcService.answer();
-    callState.value = 'CONNECTED';
-    durationSeconds.value = 0;
-    isHeld.value = false;
-
-    if (callTimerInterval !== null) clearInterval(callTimerInterval);
-    callTimerInterval = window.setInterval(() => {
-      durationSeconds.value++;
-    }, 1000);
-  }
-
-  async function rejectCall() {
-    audioService.stopRingtone();
-    sipWebRtcService.hangup();
-    const callId = currentCall.value?.callId;
-    callState.value = 'IDLE';
-    currentCall.value = null;
-
-    if (callId) {
-      try {
-        await triggerHangupCall(getWorkNo(), callId, 'USER_REJECT');
-      } catch (e) {
-        console.warn('Reject call api failed:', e);
-      }
-    }
-  }
-
-  async function hangupCall(reason?: string) {
-    audioService.stopRingtone();
-    sipWebRtcService.hangup();
+  function stopCallTimer() {
     if (callTimerInterval !== null) {
       clearInterval(callTimerInterval);
       callTimerInterval = null;
     }
-    const callId = currentCall.value?.callId;
-    callState.value = 'ACW';
-    showAcwDrawer.value = true;
+  }
 
-    if (callId) {
-      try {
-        await triggerHangupCall(getWorkNo(), callId, reason || 'NORMAL_CLEARING');
-      } catch (e) {
-        console.warn('Hangup call api failed:', e);
+  function startCallTimer() {
+    stopCallTimer();
+    durationSeconds.value = 0;
+    callTimerInterval = window.setInterval(() => {
+      durationSeconds.value += 1;
+    }, 1000);
+  }
+
+  function triggerIncoming(payload: IncomingScreenPopPayload) {
+    if (callState.value === 'RINGING' && currentCall.value) {
+      currentCall.value = { ...currentCall.value, ...payload };
+      if (!lifecycle.value.callId || lifecycle.value.callId.startsWith('sip-')) {
+        lifecycle.value = { ...lifecycle.value, callId: payload.callId };
       }
+      return;
     }
+    if (!applyLifecycle({ type: 'INCOMING', callId: payload.callId })) return;
+    currentCall.value = payload;
+    audioService.startRingtone();
+  }
+
+  function startOutbound(callId?: string) {
+    applyLifecycle({ type: 'OUTBOUND_STARTED', callId });
+  }
+
+  function answerCall() {
+    audioService.stopRingtone();
+    sipWebRtcService.answer();
+  }
+
+  function observeAnswered(callId?: string) {
+    if (!applyLifecycle({ type: 'ANSWERED', callId })) return;
+    audioService.stopRingtone();
+    isHeld.value = false;
+    holdRequested.value = false;
+    controlMessage.value = '';
+    startCallTimer();
+  }
+
+  async function rejectCall() {
+    await hangupCall('USER_REJECT');
+  }
+
+  async function hangupCall(reason?: string) {
+    const callId = currentCall.value?.callId;
+    if (!callId || callState.value === 'ACW' || callState.value === 'ENDING' || hangupRequestKey) return;
+    hangupRequestKey = callId;
+    try {
+      if (!callId.startsWith('sip-')) {
+        const workNo = getWorkNo();
+        if (!workNo) throw new Error('登录身份不可用');
+        const result = await triggerHangupCall(workNo, callId, reason || 'NORMAL_CLEARING');
+        if (currentCall.value?.callId !== callId) return;
+        controlMessage.value = result.message;
+      }
+      audioService.stopRingtone();
+      applyLifecycle({ type: 'HANGUP_REQUESTED', callId });
+      sipWebRtcService.hangup();
+    } catch (error) {
+      controlMessage.value = error instanceof Error ? error.message : '挂机请求失败';
+      toastError(controlMessage.value);
+    } finally { hangupRequestKey = null; }
+  }
+
+  function observeEnded(callId?: string) {
+    if (!applyLifecycle({ type: 'ENDED', callId })) return;
+    audioService.stopRingtone();
+    stopCallTimer();
+    showAcwDrawer.value = true;
+    hangupRequestKey = null;
   }
 
   function closeAcw() {
+    if (!applyLifecycle({ type: 'ACW_COMPLETED' })) return;
     showAcwDrawer.value = false;
-    callState.value = 'IDLE';
     currentCall.value = null;
     durationSeconds.value = 0;
+    isHeld.value = false;
+    isMuted.value = false;
   }
 
   async function toggleHold() {
-    isHeld.value = !isHeld.value;
     const callId = currentCall.value?.callId;
-    if (callId) {
-      try {
-        await triggerHoldCall(getWorkNo(), callId, isHeld.value);
-      } catch (e) {
-        console.warn('Toggle hold api failed:', e);
-      }
-    }
+    const nextHeld = !holdRequested.value;
+    const workNo = getWorkNo();
+    if (!callId || !workNo || holdPending.value) return;
+    holdPending.value = true;
+    try {
+      const result = await triggerHoldCall(workNo, callId, nextHeld);
+      if (currentCall.value?.callId !== callId) return;
+      holdRequested.value = nextHeld;
+      controlMessage.value = result.message;
+      toast(result.message, 'info');
+    } catch (error) {
+      toastError(error instanceof Error ? error.message : '保持请求失败');
+    } finally { holdPending.value = false; }
   }
 
   function toggleMute() {
@@ -100,14 +148,13 @@ export const useCallStore = defineStore('call', () => {
   }
 
   async function sendDtmf(digit: string) {
-    sipWebRtcService.sendDtmf(digit);
     const callId = currentCall.value?.callId;
-    if (callId) {
-      try {
-        await triggerDtmfCall(getWorkNo(), callId, digit);
-      } catch (e) {
-        console.warn('Send DTMF api failed:', e);
-      }
+    const workNo = getWorkNo();
+    if (!callId || !workNo) return;
+    try {
+      await triggerDtmfCall(workNo, callId, digit);
+    } catch (error) {
+      toastError(error instanceof Error ? error.message : 'DTMF 请求失败');
     }
   }
 
@@ -116,12 +163,18 @@ export const useCallStore = defineStore('call', () => {
     currentCall,
     durationSeconds,
     isHeld,
+    holdRequested,
+    holdPending,
+    controlMessage,
     isMuted,
     showAcwDrawer,
     triggerIncoming,
+    startOutbound,
     answerCall,
+    observeAnswered,
     rejectCall,
     hangupCall,
+    observeEnded,
     closeAcw,
     toggleHold,
     toggleMute,

@@ -1,6 +1,5 @@
 package com.chandler.fcc.common.entity;
 
-import com.fasterxml.jackson.annotation.JsonAlias;
 import com.fasterxml.jackson.annotation.JsonProperty;
 import lombok.*;
 
@@ -29,7 +28,6 @@ public class FNodeResult implements Serializable {
      * 响应节点标识符
      */
     @JsonProperty("node_id")
-    @JsonAlias({"nodeId"})
     private String nodeId;
 
     /**
@@ -53,7 +51,6 @@ public class FNodeResult implements Serializable {
      * 关联的控制流程标识
      */
     @JsonProperty("ctrl_uuid")
-    @JsonAlias({"ctrlUuid", "ctrl_id", "ctrlId"})
     private String ctrlUuid;
 
     /**
@@ -75,21 +72,18 @@ public class FNodeResult implements Serializable {
      * 节点当前活跃并发通道数
      */
     @JsonProperty("active_channels")
-    @JsonAlias({"activeChannels"})
     private Long activeChannels;
 
     /**
      * 节点最大支持并发通道数
      */
     @JsonProperty("max_channels")
-    @JsonAlias({"maxChannels"})
     private Integer maxChannels;
 
     /**
      * 节点运行时长（秒）
      */
     @JsonProperty("uptime_seconds")
-    @JsonAlias({"uptimeSeconds"})
     private Long uptimeSeconds;
 
     /**

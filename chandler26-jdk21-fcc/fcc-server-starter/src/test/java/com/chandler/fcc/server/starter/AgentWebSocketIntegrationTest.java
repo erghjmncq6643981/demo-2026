@@ -50,7 +50,7 @@ public class AgentWebSocketIntegrationTest {
 
     private static final Logger log = LoggerFactory.getLogger(AgentWebSocketIntegrationTest.class);
 
-    private static final String WORK_NO = "901001";
+    private static final String WORK_NO = System.getenv("FCC_TEST_AGENT_WORK_NO");
 
     @LocalServerPort
     private int port;
@@ -63,6 +63,7 @@ public class AgentWebSocketIntegrationTest {
     @Test
     @DisplayName("测试 1: 验证坐席 WebSocket 连接建立、工号订阅与心跳双向响应")
     void testWebSocketConnectionAndHeartbeat() throws Exception {
+        org.junit.jupiter.api.Assumptions.assumeTrue(WORK_NO != null && !WORK_NO.isBlank(), "需配置真实测试坐席工号");
         BlockingQueue<String> messageQueue = new LinkedBlockingQueue<>();
         WebSocketSession session = connect(WORK_NO, messageQueue);
 
@@ -96,24 +97,17 @@ public class AgentWebSocketIntegrationTest {
     }
 
     @Test
-    @DisplayName("测试 2: 缺少坐席工号的建链请求被拒绝，不会回落默认工号")
-    void testConnectionWithoutWorkNoIsRejected() throws Exception {
+    @DisplayName("测试 2: 缺少认证令牌的握手被拒绝")
+    void testConnectionWithoutTokenIsRejected() throws Exception {
         BlockingQueue<String> messageQueue = new LinkedBlockingQueue<>();
-        WebSocketSession session = connect(null, messageQueue);
-
-        // 服务端应主动关闭连接，且不下发任何业务消息
-        boolean closed = false;
-        for (int i = 0; i < 20 && !closed; i++) {
-            Thread.sleep(100);
-            closed = !session.isOpen();
-        }
-        assertTrue(closed, "缺少 workNo 的连接应被服务端关闭");
-        assertNull(messageQueue.poll(500, TimeUnit.MILLISECONDS), "被拒绝的连接不应收到任何消息");
+        assertThrows(java.util.concurrent.ExecutionException.class, () -> connect(null, messageQueue));
+        assertNull(messageQueue.poll(500, TimeUnit.MILLISECONDS), "未认证连接不得收到业务消息");
     }
 
     @Test
     @DisplayName("测试 3: 真实话务弹屏按通话事实装配并推送，同一通话同一坐席只弹一次")
     void testRealScreenPopPush() throws Exception {
+        org.junit.jupiter.api.Assumptions.assumeTrue(WORK_NO != null && !WORK_NO.isBlank(), "需配置真实测试坐席工号");
         BlockingQueue<String> messageQueue = new LinkedBlockingQueue<>();
         WebSocketSession session = connect(WORK_NO, messageQueue);
         messageQueue.poll(3, TimeUnit.SECONDS);
@@ -173,8 +167,14 @@ public class AgentWebSocketIntegrationTest {
      * @return WebSocket 会话
      */
     private WebSocketSession connect(String workNo, BlockingQueue<String> messageQueue) throws Exception {
-        String query = workNo != null ? "?workNo=" + workNo : "";
-        URI uri = new URI("ws://127.0.0.1:" + port + "/ws/agent" + query);
+        URI uri = new URI("ws://127.0.0.1:" + port + "/ws/agent");
+        var headers = new org.springframework.web.socket.WebSocketHttpHeaders();
+        if (workNo != null) {
+            String token = System.getenv("FCC_TEST_AGENT_TOKEN");
+            org.junit.jupiter.api.Assumptions.assumeTrue(token != null && !token.isBlank(), "需提供本人有效测试令牌");
+            headers.setSecWebSocketProtocol(java.util.List.of("fcc-agent", "auth." + java.util.Base64.getUrlEncoder().withoutPadding()
+                    .encodeToString(token.getBytes(java.nio.charset.StandardCharsets.UTF_8))));
+        }
 
         StandardWebSocketClient client = new StandardWebSocketClient();
         return client.execute(new TextWebSocketHandler() {
@@ -183,6 +183,6 @@ public class AgentWebSocketIntegrationTest {
                 log.debug("🧪 [Test Client] 收到服务端消息: {}", message.getPayload());
                 messageQueue.offer(message.getPayload());
             }
-        }, null, uri).get(5, TimeUnit.SECONDS);
+        }, headers, uri).get(5, TimeUnit.SECONDS);
     }
 }

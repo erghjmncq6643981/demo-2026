@@ -6,22 +6,22 @@ import { fetchAgentEndpoints, switchAgentEndpoint } from '../api/agentApi';
 
 export const useAgentStore = defineStore('agent', () => {
   const token = ref<string | null>(localStorage.getItem('fcc_agent_satoken'));
-  const workNo = ref(localStorage.getItem('fcc_agent_workno') || '901001');
-  const agentName = ref(localStorage.getItem('fcc_agent_name') || '钱丁君');
-  const role = ref(localStorage.getItem('fcc_agent_role') || 'SUPERVISOR');
+  const workNo = ref(localStorage.getItem('fcc_agent_workno') || '');
+  const agentName = ref(localStorage.getItem('fcc_agent_name') || '');
+  const role = ref(localStorage.getItem('fcc_agent_role') || '');
   const permissions = ref<string[]>([]);
   const status = ref<AgentStatus>('READY');
   const endpoint = ref<AnswerEndpointType>((localStorage.getItem('fcc_agent_endpoint') as AnswerEndpointType) || 'WEBRTC');
-  const extension = ref(localStorage.getItem('fcc_agent_extension') || '901001');
-  const serviceGroup = ref('客服一组');
+  const extension = ref(localStorage.getItem('fcc_agent_extension') || '');
+  const serviceGroup = ref('');
 
   // 三端具体配置
-  const boundSipExtension = ref(localStorage.getItem('fcc_bound_sip_extension') || '1007');
-  const boundMobile = ref(localStorage.getItem('fcc_bound_mobile') || '13800000001');
-  const availableSipExtensions = ref<string[]>(['1007', '1008', '1017']);
+  const boundSipExtension = ref(localStorage.getItem('fcc_bound_sip_extension') || '');
+  const boundMobile = ref(localStorage.getItem('fcc_bound_mobile') || '');
+  const availableSipExtensions = ref<string[]>([]);
 
   const isLoggedIn = computed(() => !!token.value);
-  const isSupervisor = computed(() => role.value === 'SUPERVISOR' || workNo.value === '901001');
+  const isSupervisor = computed(() => role.value === 'SUPERVISOR');
 
   function setStatus(newStatus: AgentStatus) {
     status.value = newStatus;
@@ -66,22 +66,19 @@ export const useAgentStore = defineStore('agent', () => {
     let finalValue = targetValue;
     if (!finalValue) {
       if (targetType === 'WEBRTC') finalValue = workNo.value;
-      else if (targetType === 'SIP') finalValue = boundSipExtension.value || '1007';
-      else if (targetType === 'MOBILE') finalValue = boundMobile.value || '13800000001';
+      else if (targetType === 'SIP') finalValue = boundSipExtension.value || extension.value;
+      else if (targetType === 'MOBILE') finalValue = boundMobile.value;
     }
+    if (!finalValue) throw new Error('当前接听方式没有可用的已绑定终端');
 
-    // 乐观更新本地接听方式，保障即时反馈
-    endpoint.value = targetType;
-    localStorage.setItem('fcc_agent_endpoint', targetType);
+    const data = await switchAgentEndpoint({
+      workNo: workNo.value,
+      endpointType: targetType,
+      endpointValue: finalValue,
+    });
 
-    try {
-      const data = await switchAgentEndpoint({
-        workNo: workNo.value,
-        endpointType: targetType,
-        endpointValue: finalValue,
-      });
-
-      if (data) {
+    if (data) {
+      endpoint.value = targetType;
       localStorage.setItem('fcc_agent_endpoint', targetType);
       extension.value = data.activeEndpointValue;
       localStorage.setItem('fcc_agent_extension', data.activeEndpointValue);
@@ -95,10 +92,7 @@ export const useAgentStore = defineStore('agent', () => {
         localStorage.setItem('fcc_bound_mobile', data.mobilePhone);
       }
     }
-      return data;
-    } catch (e) {
-      console.warn('Backend switchAgentEndpoint failed, keeping optimistic state:', e);
-    }
+    return data;
   }
 
   async function login(workNumber: string, pass: string) {

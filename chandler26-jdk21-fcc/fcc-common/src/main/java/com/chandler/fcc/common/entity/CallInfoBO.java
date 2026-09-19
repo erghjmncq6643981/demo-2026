@@ -153,41 +153,4 @@ public class CallInfoBO implements Serializable {
         this.data.put(key, value);
     }
 
-    // ================= 兼容性代理方法 =================
-
-    /**
-     * 兼容旧版 callUuid 访问（等价于 callId）
-     *
-     * @return 全局通话唯一标识
-     */
-    public String getCallUuid() {
-        return this.callId;
-    }
-
-    /**
-     * 兼容旧版 callUuid 设置（等价于 callId）
-     *
-     * @param callUuid 全局通话唯一标识
-     */
-    public void setCallUuid(String callUuid) {
-        this.callId = callUuid;
-    }
-
-    /**
-     * 兼容旧版 ctrlUuid 访问（等价于 ctrlId）
-     *
-     * @return 控制流程关联标识
-     */
-    public String getCtrlUuid() {
-        return this.ctrlId;
-    }
-
-    /**
-     * 兼容旧版 ctrlUuid 设置（等价于 ctrlId）
-     *
-     * @param ctrlUuid 控制流程关联标识
-     */
-    public void setCtrlUuid(String ctrlUuid) {
-        this.ctrlId = ctrlUuid;
-    }
 }

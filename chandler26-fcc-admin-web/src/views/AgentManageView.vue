@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { ref, onMounted } from 'vue';
 import { agentApi, type AgentVO, type WhitelistItem, type AgentBindingReq } from '../api/agentApi';
-import { extensionApi, type ExtensionVO } from '../api/extensionApi';
+import { extensionApi, type ExtensionVO } from '../features/extensions/api/extensionApi';
 import { Users, UserPlus, Link2, ShieldCheck, RefreshCw, CheckCircle, AlertCircle, Award, PhoneCall } from 'lucide-vue-next';
 
 const agents = ref<AgentVO[]>([]);
@@ -19,17 +19,17 @@ const formError = ref('');
 
 // New Agent Form
 const newAgent = ref({
-  workNo: '901001',
-  agentName: '钱丁君',
-  roleCode: 'SUPERVISOR',
-  phoneNumber: '13800000001',
+  workNo: '',
+  agentName: '',
+  roleCode: 'AGENT',
+  phoneNumber: '',
 });
 
 // Binding Form
 const bindingForm = ref<AgentBindingReq>({
-  agentId: 0,
+  agentId: '',
   endpointType: 'WEBRTC',
-  endpointValue: '1007',
+  endpointValue: '',
   priority: 0,
 });
 const currentAgentForBinding = ref<AgentVO | null>(null);
@@ -61,10 +61,10 @@ const handleSelectWhitelist = (item: WhitelistItem) => {
 
 const openCreateModal = () => {
   newAgent.value = {
-    workNo: '901001',
-    agentName: '钱丁君',
-    roleCode: 'SUPERVISOR',
-    phoneNumber: '13800000001',
+    workNo: '',
+    agentName: '',
+    roleCode: 'AGENT',
+    phoneNumber: '',
   };
   formError.value = '';
   isCreateModalOpen.value = true;
@@ -102,15 +102,13 @@ const openBindingModal = (agent: AgentVO) => {
   if (initialType === 'WEBRTC') {
     initialValue = agent.workNo;
   } else if (initialType === 'MOBILE') {
-    initialValue = agent.phoneNumber || '13800000001';
-  } else if (!initialValue) {
-    initialValue = '1007';
+    initialValue = agent.phoneNumber;
   }
 
   bindingForm.value = {
     agentId: agent.id,
     endpointType: initialType,
-    endpointValue: initialValue,
+    endpointValue: initialValue || '',
     priority: 0,
   };
   formError.value = '';

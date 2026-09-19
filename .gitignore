@@ -142,3 +142,11 @@ target
 **/dist/
 **/test-results/
 **/playwright-report/
+**/*.tsbuildinfo
+chandler26-fcc-admin-web/vite.config.js
+chandler26-fcc-admin-web/vite.config.d.ts
+chandler26-fcc-client-web/vite.config.js
+chandler26-fcc-client-web/vite.config.d.ts
+**/.env
+**/.env.local
+**/.env.*.local

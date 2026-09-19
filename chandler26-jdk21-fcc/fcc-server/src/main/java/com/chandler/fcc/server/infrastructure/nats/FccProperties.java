@@ -27,7 +27,7 @@ public class FccProperties {
     /**
      * 默认软交换与 Sidecar 节点标识符 (node_id)
      */
-    private String defaultNodeId = "qiandingjundeMacBook-Pro.local";
+    private String defaultNodeId;
 
     /**
      * 控制流程标识符默认前缀

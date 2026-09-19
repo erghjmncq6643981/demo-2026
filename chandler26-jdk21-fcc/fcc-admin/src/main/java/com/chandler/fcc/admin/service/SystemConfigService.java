@@ -67,7 +67,7 @@ public class SystemConfigService {
                     .updatedAt(now)
                     .build();
             configMapper.insert(entity);
-            log.info("[SystemConfigService] 新增系统配置: scope={}, key={}, val={}", scope, propName, req.getPropValue());
+            log.info("[SystemConfigService] 新增系统配置: scope={}, key={}, operator={}", scope, propName, operator);
         } else {
             entity.setPropValue(req.getPropValue());
             if (req.getPropType() != null) {
@@ -79,7 +79,7 @@ public class SystemConfigService {
             entity.setUpdatedBy(operator);
             entity.setUpdatedAt(now);
             configMapper.updateById(entity);
-            log.info("[SystemConfigService] 更新系统配置: scope={}, key={}, val={}", scope, propName, req.getPropValue());
+            log.info("[SystemConfigService] 更新系统配置: scope={}, key={}, operator={}", scope, propName, operator);
         }
 
         // 缓存到 Redis

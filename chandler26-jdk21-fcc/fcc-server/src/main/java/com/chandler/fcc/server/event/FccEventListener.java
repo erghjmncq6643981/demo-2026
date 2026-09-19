@@ -7,6 +7,7 @@ import com.chandler.fcc.common.enums.ActionType;
 import com.chandler.fcc.common.enums.CallStageState;
 import com.chandler.fcc.common.enums.DirectionType;
 import com.chandler.fcc.common.enums.FlowModelType;
+import com.chandler.fcc.common.protocol.FccEventMethods;
 import com.chandler.fcc.common.util.IdUtil;
 import com.chandler.fcc.server.call.CallSessionManager;
 import com.chandler.fcc.server.command.FccClient;
@@ -101,13 +102,13 @@ public class FccEventListener {
                 return;
             }
 
-            if ("Event.Channel".equalsIgnoreCase(method)) {
+            if (FccEventMethods.CHANNEL.equalsIgnoreCase(method)) {
                 handleChannelEvent(params);
-            } else if ("Event.DTMF".equalsIgnoreCase(method)) {
+            } else if (FccEventMethods.DTMF.equalsIgnoreCase(method)) {
                 handleDTMFEvent(params);
-            } else if ("Event.Registration".equalsIgnoreCase(method)) {
+            } else if (FccEventMethods.REGISTRATION.equalsIgnoreCase(method)) {
                 handleRegistrationEvent(params);
-            } else if ("Event.Recording".equalsIgnoreCase(method)) {
+            } else if (FccEventMethods.RECORDING.equalsIgnoreCase(method)) {
                 handleRecordingEvent(params);
             }
         } catch (Exception e) {
@@ -121,6 +122,11 @@ public class FccEventListener {
      * @param params 事件载荷
      */
     private void handleChannelEvent(JsonNode params) {
+        String nodeId = getNodeText(params, "node_id");
+        if (nodeId == null || nodeId.isBlank()) {
+            log.warn("[话务事件] 缺少节点归属，拒绝处理 Channel 事件");
+            return;
+        }
         String state = getNodeText(params, "state");
         String uuid = getNodeText(params, "uuid");
         String peerUuid = getNodeText(params, "peer_uuid");
@@ -137,8 +143,7 @@ public class FccEventListener {
                 .orElse(null);
 
         if (callInfo == null) {
-            boolean isInbound = "inbound".equalsIgnoreCase(direction)
-                    || "9000".equals(destNumber) || "8000".equals(destNumber) || "9999".equals(destNumber);
+            boolean isInbound = "inbound".equalsIgnoreCase(direction);
             String effectiveCtrlUuid = (ctrlUuid != null && !ctrlUuid.isEmpty())
                     ? ctrlUuid
                     : IdUtil.getCtrlId("fcc-inbound");
@@ -146,6 +151,7 @@ public class FccEventListener {
             String modelKey = isInbound ? FlowModelType.INBOUND_CUSTOMER_SERVICE.name() : FlowModelType.OUTBOUND_TWO_WAY_CALL.name();
 
             callInfo = CallInfoBO.builder()
+                    .nodeId(nodeId)
                     .callId(effectiveCallId)
                     .ctrlId(effectiveCtrlUuid)
                     .guestChannelUuid(uuid)
@@ -159,15 +165,19 @@ public class FccEventListener {
                     .hangupCause(cause)
                     .data(new HashMap<>())
                     .build();
-            callInfo.putData("ctrlUuid", effectiveCtrlUuid);
-            callInfo.putData("callUuid", effectiveCallId);
+            callInfo.putData("ctrlId", effectiveCtrlUuid);
+            callInfo.putData("callId", effectiveCallId);
             callInfo.putData("guestChannelUuid", uuid);
             callInfo.putData("enableSurvey", "true");
-            callInfo.putData("agentExt", "1007");
 
             sessionManager.registerSession(callInfo);
             sessionManager.bindChannel(uuid, effectiveCtrlUuid);
         } else {
+            if (callInfo.getNodeId() != null && !nodeId.equals(callInfo.getNodeId())) {
+                log.warn("[话务事件] 节点归属不一致，拒绝改变会话: callId={}", callInfo.getCallId());
+                return;
+            }
+            callInfo.setNodeId(nodeId);
             if (duration != null) callInfo.setDuration(duration);
             if (billsec != null) callInfo.setBillsec(billsec);
             if (cause != null) callInfo.setHangupCause(cause);
@@ -236,7 +246,7 @@ public class FccEventListener {
                         com.chandler.fcc.server.infrastructure.persistence.entity.CallLegEntity.builder()
                                 .channelUuid(uuid)
                                 .callId(com.chandler.fcc.server.infrastructure.persistence.service.CallPersistenceService.parseNumericId(callInfo.getCallId()))
-                                .nodeId("fcc-node")
+                                .nodeId(nodeId)
                                 .roleType(isAgentLeg ? "AGENT" : "CUSTOMER")
                                 .direction(direction != null ? direction.toUpperCase() : (callInfo.getDirection() != null ? callInfo.getDirection().name() : "INBOUND"))
                                 .callerNumber(cidNumber != null ? cidNumber : callInfo.getCallerNumber())
@@ -256,7 +266,7 @@ public class FccEventListener {
                 // 3. 记录事件流
                 callPersistenceService.recordEvent(com.chandler.fcc.server.infrastructure.persistence.entity.CallEventEntity.builder()
                         .eventId(IdUtil.getEventId())
-                        .nodeId("fcc-node")
+                        .nodeId(nodeId)
                         .callId(com.chandler.fcc.server.infrastructure.persistence.service.CallPersistenceService.parseNumericId(callInfo.getCallId()))
                         .channelUuid(uuid)
                         .eventType("Event.Channel." + state)
@@ -319,9 +329,9 @@ public class FccEventListener {
                         log.info("🔗 [双向外呼协同] 双方均已应答 (READY)，自动触发话道桥接! Agent: {}, Guest: {}",
                                 agentChan, guestChan);
                         Map<String, Object> bridgeData = new HashMap<>();
-                        bridgeData.put("uuidA", guestChan);
-                        bridgeData.put("uuidB", agentChan);
-                        bridgeData.put("ctrlUuid", callInfo.getCtrlId() != null ? callInfo.getCtrlId() : "");
+                        bridgeData.put("guestChannelUuid", guestChan);
+                        bridgeData.put("agentChannelUuid", agentChan);
+                        bridgeData.put("ctrlId", callInfo.getCtrlId() != null ? callInfo.getCtrlId() : "");
 
                         FlowNode bridgeNode = FlowNode.builder()
                                 .actionType(ActionType.CHANNEL_BRIDGE)
@@ -358,9 +368,9 @@ public class FccEventListener {
                         log.info("🔗 [呼入流程协同] 客户与坐席均已就绪，触发话道桥接! Guest: {}, Agent: {}",
                                 guestChan, agentChan);
                         Map<String, Object> bridgeData = new HashMap<>();
-                        bridgeData.put("uuidA", guestChan);
-                        bridgeData.put("uuidB", agentChan);
-                        bridgeData.put("ctrlUuid", callInfo.getCtrlId() != null ? callInfo.getCtrlId() : "");
+                        bridgeData.put("guestChannelUuid", guestChan);
+                        bridgeData.put("agentChannelUuid", agentChan);
+                        bridgeData.put("ctrlId", callInfo.getCtrlId() != null ? callInfo.getCtrlId() : "");
 
                         FlowNode bridgeNode = FlowNode.builder()
                                 .actionType(ActionType.CHANNEL_BRIDGE)
@@ -479,8 +489,8 @@ public class FccEventListener {
                         session.putData("ivrSelectedDigit", digit);
 
                         // 动态根据坐席接听方式解析目标分机
-                        String targetExt = "1007";
-                        String targetWorkNo = "90101";
+                        String targetExt = null;
+                        String targetWorkNo = null;
                         String targetAgentName = null;
                         if (jdbcTemplate != null) {
                             try {
@@ -489,8 +499,9 @@ public class FccEventListener {
                                         "b.endpoint_type, b.endpoint_value " +
                                         "FROM fcc_agent a " +
                                         "LEFT JOIN fcc_agent_endpoint_binding b ON a.id = b.agent_id AND b.status = 'ENABLED' " +
-                                        "WHERE a.status = 'ENABLED' AND (a.current_extension IS NOT NULL OR a.work_no = '90101' OR a.work_no = '901001') " +
-                                        "ORDER BY (a.work_no = '90101') DESC, (a.current_extension IS NOT NULL) DESC, a.updated_at DESC LIMIT 1");
+                                        "WHERE a.status = 'ENABLED' AND a.deleted_at IS NULL " +
+                                        "AND (a.current_extension IS NOT NULL OR b.endpoint_value IS NOT NULL) " +
+                                        "ORDER BY b.priority ASC, a.updated_at DESC LIMIT 1");
                                 if (!agents.isEmpty()) {
                                     java.util.Map<String, Object> a = agents.getFirst();
                                     targetWorkNo = String.valueOf(a.get("work_no"));
@@ -515,6 +526,17 @@ public class FccEventListener {
                             } catch (Exception e) {
                                 log.warn("⚠️ 动态查询坐席接听分机异常: {}", e.getMessage());
                             }
+                        }
+
+                        if (targetWorkNo == null || targetExt == null) {
+                            log.warn("⚠️ [呼入导航] 没有可用坐席终端，停止路由: digit={}, ctrlId={}", digit, session.getCtrlId());
+                            handlersManager.recordAudit(session, "ivr-navigation-no-agent", "READ_DTMF", Map.of(
+                                    "digit", digit,
+                                    "result", "FAILED",
+                                    "detail", "没有可用坐席终端",
+                                    "targetUuid", uuid
+                            ));
+                            return;
                         }
 
                         session.setAgentExt(targetExt);
@@ -624,7 +646,7 @@ public class FccEventListener {
     }
 
     /**
-     * 处理录音事件 (Event.Record)
+     * 处理录音事件（{@code Event.Recording}）
      * <p>
      * 录音地址的事实来源是「下发指令时声明的共享路径」，本方法只做补齐与结账：
      * START 事件到来时将地址登记为 RECORDING，STOP 事件到来时补齐时长、文件大小并结账为 COMPLETED。
@@ -638,8 +660,7 @@ public class FccEventListener {
         String ctrlUuid = getNodeText(params, "ctrl_uuid");
         String channelUuid = getNodeText(params, "uuid");
         String action = getNodeText(params, "action");
-        // Sidecar 归一化后的字段名为 file_path，同时兼容历史 path 字段
-        String declaredPath = firstNonBlank(getNodeText(params, "file_path"), getNodeText(params, "path"));
+        String declaredPath = getNodeText(params, "file_path");
         Integer seconds = getNodeInt(params, "seconds");
         boolean stopping = "stop".equalsIgnoreCase(action);
 

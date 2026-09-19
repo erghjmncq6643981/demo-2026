@@ -49,21 +49,38 @@ public class DialAgentActionExecutor extends AbstractFccActionExecutor {
 
     @Override
     public void execute(String callUuid, String flowUuid, FlowNode flowNode) {
-        String agentExt = flowNode.getDataStr("agentExt", "1007");
-        String callerNumber = flowNode.getDataStr("callerNumber", "1008");
-        String ctrlUuid = flowNode.getDataStr("ctrlUuid", callUuid);
+        String agentExt = flowNode.getDataStr("agentExt", null);
+        String callerNumber = flowNode.getDataStr("callerNumber", null);
+        String ctrlId = flowNode.getDataStr("ctrlId", null);
         String agentChannelUuid = flowNode.getDataStr("agentChannelUuid", null);
 
-        // 优先读取 session 中动态绑定的坐席分机 (如 90101 绑定的 1007)
-        CallInfoBO session = sessionManager.getByCtrlUuid(ctrlUuid)
-                .or(() -> sessionManager.getByCallId(callUuid))
-                .orElse(null);
+        CallInfoBO session = sessionManager.getByCallId(callUuid).orElse(null);
+        if (session == null && ctrlId != null) {
+            session = sessionManager.getByCtrlUuid(ctrlId).orElse(null);
+        }
+        if (session != null && (ctrlId == null || ctrlId.isBlank())) {
+            ctrlId = session.getCtrlId();
+        }
         if (session != null) {
             if (session.getDataStr("agentExt", null) != null && !session.getDataStr("agentExt", "").isBlank()) {
                 agentExt = session.getDataStr("agentExt", agentExt);
             } else if (session.getAgentExt() != null && !session.getAgentExt().isBlank()) {
                 agentExt = session.getAgentExt();
             }
+            if (callerNumber == null || callerNumber.isBlank()) {
+                callerNumber = session.getCallerNumber();
+            }
+        }
+
+        String workNo = resolveWorkNo(session, flowNode);
+        if ((agentExt == null || agentExt.isBlank()) && workNo != null) {
+            agentExt = callFactsQueryService.findAgentExtension(workNo).orElse(null);
+        }
+        if (ctrlId == null || ctrlId.isBlank()) {
+            throw new IllegalStateException("DIAL_AGENT 缺少 ctrlId");
+        }
+        if (agentExt == null || agentExt.isBlank()) {
+            throw new IllegalStateException("DIAL_AGENT 未解析到坐席终端");
         }
 
         if (agentChannelUuid == null || agentChannelUuid.trim().isEmpty()) {
@@ -71,10 +88,9 @@ public class DialAgentActionExecutor extends AbstractFccActionExecutor {
         }
 
         // 绑定坐席通道与控制会话
-        sessionManager.bindChannel(agentChannelUuid, ctrlUuid);
+        sessionManager.bindChannel(agentChannelUuid, ctrlId);
         final String finalAgentUuid = agentChannelUuid;
         final String finalAgentExt = agentExt;
-        String workNo = resolveWorkNo(session, flowNode);
         if (session != null) {
             session.setAgentChannelUuid(finalAgentUuid);
             session.setAgentExt(finalAgentExt);
@@ -84,13 +100,13 @@ public class DialAgentActionExecutor extends AbstractFccActionExecutor {
                 session.setAgentWorkNo(workNo);
                 session.putData("primaryWorkNo", workNo);
                 // 坐席姓名同样取自坐席主数据实数，供落库后作为"前序接待人"事实
-                callFactsQueryService.findAgentName(workNo)
-                        .ifPresent(name -> session.putData("agentName", name));
+                String agentName = callFactsQueryService.findAgentName(workNo).orElse(null);
+                if (agentName != null) session.putData("agentName", agentName);
             }
         }
 
         log.info("📞 [FCC 执行动作: 呼叫坐席] CallUUID: {}, AgentExt: {}, WorkNo: {}, CtrlUUID: {}, Channel: {}",
-                callUuid, agentExt, workNo, ctrlUuid, agentChannelUuid);
+                callUuid, agentExt, workNo, ctrlId, agentChannelUuid);
 
         Map<String, String> channelVars = new HashMap<>();
         channelVars.put("hangup_after_bridge", "false");
@@ -108,7 +124,7 @@ public class DialAgentActionExecutor extends AbstractFccActionExecutor {
                 .build();
 
         FNodeDialDTO dialDTO = FNodeDialDTO.builder()
-                .ctrlUuid(ctrlUuid)
+                .ctrlUuid(ctrlId)
                 .uuid(agentChannelUuid)
                 .destination(FNodeDialDTO.Destination.builder()
                         .callParams(Collections.singletonList(callParam))

@@ -1,29 +1,66 @@
-# 箱箱呼叫中心 - PC 坐席工作台 (chandler26-fcc-client-web)
+# chandler26-fcc-client-web
 
-基于现代轻奢 B 端美学规范（Planti & Orizon Style）打造的高保真呼叫中心坐席工作台与班长监控驾驶舱原型系统。
+FCC agent desktop built with Vue 3, TypeScript, Pinia, JsSIP, Tailwind CSS, and Vite.
 
-## 核心设计与品牌规范
-- **品牌名称**：箱箱呼叫中心 / 箱箱通讯（📦 Logo）
-- **视觉风格**：浅色轻奢商业化风格，32px/36px 大圆角卡片，多层微弥散柔和阴影（`shadow-dashboard`），双声道跳动音频波形
-- **当前主角坐席**：钱丁君（工号 901001，保险投保组主管 / 班长坐席）
-- **服务团队**：陈松、钱丁君、舒欣、森林、志行、苏宁、亚峰、张闯、鹏飞
+## Runtime relationship
 
-## 核心功能模块
-1. **话务控制与软电话核心舱**：
-   - 支持接听方式无缝切换：`WebRTC 网页耳麦 (1007)` / `SIP 硬件话机 (1007)` / `随行手机接听`；
-   - 拨号防撞单智能雷达：输入号码实时检测 24 小时内全团队拨打记录，支持前序录音就地波形试听；
-   - 通话控制条：外呼、接听仿真、挂机、保持/恢复、静音、转接、咨询、三方通话与软键盘；
-   - **VoIP 电信级网络质量 HUD**：实时显示 MOS 4.3、RTT、丢包率与编码格式；
-   - **⭐ 邀评按键**：一键触发 FreeSWITCH IVR 满意度采集流程；
-   - **话后处理 (ACW) 抽屉**：支持挂机责任方（CUSTOMER/AGENT/SYSTEM）归因与客户满意度录入，自动归档并恢复示闲。
-2. **班长/组长监控驾驶舱 (快捷键 F2)**：
-   - **坐席实时态势矩阵**：实时呈现 9 位组员（空闲/通话中/后处理/小休）；
-   - **组长实时话务干预**：对通话中组员（陈松、森林）执行 🎧 监听 (Spy)、🗣️ 耳语 (Coach)、👥 强插 (Barge-in)、✂️ 强拆 (Kill)；
-   - **悬浮干预控制面板**：实时波形跳动、模式热切换与强制释放；
-   - **组员历史通话抽屉**：下钻查阅任意组员的历史通话流水并在线试听双轨录音；
-   - **坐席效能报表**：9 位坐席的今日呼入量、呼出量、通话时长、接通率及转化率 KPI 报表。
-3. **快捷话术库与客户资料**：
-   - 常用标准话术（开场白、投保推荐、理赔核实），支持一键复制与引用。
+```text
+                              +--> fcc-admin :8089
+                              |    identity, endpoints, CDR, callbacks
+Browser :8888 -- REST -------+
+       |
+       +-- REST / WebSocket ------> fcc-server :8085
+       |                            call control and screen-pop events
+       |
+       +-- SIP over WebSocket ----> FreeSWITCH :5066/:7443
+                                    WebRTC signaling and media
+```
 
-## 快速预览与运行
-在浏览器中直接打开 `index.html` 即可完整体验全套交互。
+The three channels have independent lifecycle and failure states. A successful REST response is only command acknowledgement; final call state comes from telephony events and SIP session state.
+
+## Implemented workflows
+
+- Agent login and endpoint loading/switching.
+- WebRTC, SIP phone, and mobile answer-mode selection.
+- Agent business WebSocket with heartbeat and reconnect.
+- JsSIP registration, incoming/outbound session handling, remote audio, DTMF, mute, answer, and hangup.
+- Outbound call, hold, transfer, supervisor actions, and call-end handling.
+- Incoming screen pop, in-call workspace, ACW, callback queue, CDR list, and agent monitoring.
+
+The client uses `/api/admin` for business data, `/api/telephony` for call commands, and `/ws/agent` for business events.
+
+## Development
+
+Prerequisites:
+
+- Node.js compatible with Vite 6.
+- `fcc-admin-starter` on `8089`.
+- `fcc-server-starter` on `8085`.
+- A browser-reachable FreeSWITCH SIP WebSocket endpoint and valid extension credentials.
+
+```bash
+npm ci
+npm run dev
+npm run build
+```
+
+Development URL: `http://localhost:8888`.
+
+## Engineering baseline
+
+Project-specific rules are in [AGENTS.md](./AGENTS.md). Call state, business WebSocket state, and SIP/media state must remain separate and be reconciled by an explicit coordinator.
+
+Known debt:
+
+- Business WebSocket and ICE configuration lives in `src/shared/config/runtimeConfig.ts`. SIP address/domain and credentials now come from authenticated `/api/admin/auth/sip-config`, remain in memory and are never embedded as a Vite password. The business WebSocket authenticates using subprotocol headers and defaults to the page origin with HTTPS/WSS.
+- Hold and transfer report accepted requests, not final media outcomes; failures preserve the active view. Supervisor actions are explicitly unavailable. Real media confirmation still requires integration checks.
+- Some components call API functions directly instead of dispatching a feature use case/store action.
+- Generated Vite/declaration/build-info files have been removed from tracked sources and ignored.
+- Ten tests cover selected configuration, lifecycle, control outcomes, DTMF single-path delivery and WebSocket identity boundaries. Real SIP registration, media failure and authenticated browser workflows remain unverified.
+- Other agents' presence and endpoints are now shown as unknown; authoritative team presence is still unavailable.
+
+See [the FCC frontend architecture](../docs/frontend-architecture-and-ui-design.md) for shared boundaries and acceptance rules.
+
+See [contract findings](../docs/fcc-contract-alignment.md) and [product priorities](../docs/fcc-product-design.md) for remaining functional gaps.
+
+Deployment and credential format changes are documented in [the remediation record](../docs/fcc-contract-remediation.md).

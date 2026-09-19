@@ -1,7 +1,8 @@
 <script setup lang="ts">
-import { ref, onMounted } from 'vue';
+import { computed, ref, onMounted } from 'vue';
 import { useAdminAuthStore } from '../stores/adminAuthStore';
 import { callbackApi } from '../api/callbackApi';
+import { healthApi, type SidecarHealthVO } from '../features/monitoring/api/healthApi';
 import { toast, confirmAction } from '../utils/feedback';
 
 defineProps<{
@@ -14,8 +15,26 @@ const emit = defineEmits<{
 
 const authStore = useAdminAuthStore();
 const showProbeModal = ref(false);
-const probeResult = ref('');
+const probeResult = ref<SidecarHealthVO | null>(null);
+const probeError = ref('');
 const probing = ref(false);
+const userName = computed(() => authStore.user?.realName || authStore.user?.loginId || '管理员');
+const userInitial = computed(() => userName.value.slice(0, 1).toUpperCase());
+const roleLabel = computed(() => authStore.user?.role || 'ADMIN');
+const greeting = computed(() => {
+  const hour = new Date().getHours();
+  if (hour < 6) return '夜间好';
+  if (hour < 12) return '上午好';
+  if (hour < 18) return '下午好';
+  return '晚上好';
+});
+const healthLabel = computed(() => {
+  if (probing.value) return '探测中';
+  if (!probeResult.value) return '状态未探测';
+  if (probeResult.value.status === 'HEALTHY') return '节点健康';
+  if (probeResult.value.status === 'DEGRADED') return '节点降级';
+  return '节点不可用';
+});
 
 // 铃铛角标取自真实的未接待回拨待办数，不再使用写死的假红点
 const pendingCallbackCount = ref(0);
@@ -30,9 +49,9 @@ const loadPendingCallbackCount = async () => {
 };
 
 onMounted(() => {
-  // 确保根字号使用 CSS clamp 自适应流体缩放
   document.documentElement.style.fontSize = '';
   loadPendingCallbackCount();
+  void probeHealth(false);
 });
 
 const handleLogout = async () => {
@@ -45,24 +64,21 @@ const handleLogout = async () => {
   }
 };
 
-const handleProbe = () => {
-  showProbeModal.value = true;
+const probeHealth = async (openModal: boolean) => {
+  if (openModal) showProbeModal.value = true;
   probing.value = true;
-  probeResult.value = '正在向 FreeSWITCH (127.0.0.1:8021) 与 NATS (127.0.0.1:4222) 发送探活探测包...';
-  setTimeout(() => {
+  probeError.value = '';
+  try {
+    probeResult.value = await healthApi.getSidecarHealth();
+  } catch (error) {
+    probeResult.value = null;
+    probeError.value = (error as { message?: string })?.message || '健康探测请求失败';
+  } finally {
     probing.value = false;
-    probeResult.value = `[HEALTH PROBE SUCCESS]
-==================================================
-Node ID: qiandingjundeMacBook-Pro.local
-FreeSWITCH Core: 1.11.3 (HEALTHY, 1000 max sessions)
-ESL Interface: 127.0.0.1:8021 (CONNECTED, latency: 0.4ms)
-NATS Event Bus: 127.0.0.1:4222 (READY, 4 subjects bound)
-PostgreSQL Database: freeswitch:5432 (SYNCED, 4 extensions online)
-WebRTC / SIP: 192.168.3.132:5060 / :5080 (ALL PORTS LISTENING)
-==================================================
-状态评定: A+ (极佳运行状态，网络延时 0.4ms，无呼叫拥塞)`;
-  }, 600);
+  }
 };
+
+const handleProbe = () => probeHealth(true);
 
 /**
  * 提醒铃铛：只汇报数据库里真实存在的待办，不再拼造"全网接通率良好"之类的结论
@@ -219,7 +235,7 @@ const handleNotify = () => {
           ⚡
         </div>
         <div class="text-sm font-bold text-slate-800 mb-0.5">通信中间件集群</div>
-        <p class="text-xs text-slate-500 mb-3 leading-relaxed font-medium">FreeSWITCH 1.11.3 + NATS</p>
+        <p class="text-xs text-slate-500 mb-3 leading-relaxed font-medium">FreeSWITCH + Sidecar</p>
         <button
           @click="handleProbe"
           class="w-full py-2.5 bg-white hover:bg-slate-50 text-brand-600 text-xs font-extrabold rounded-xl shadow-xs transition-all cursor-pointer"
@@ -236,10 +252,13 @@ const handleNotify = () => {
       <header class="px-8 pt-6 pb-4 flex items-center justify-between shrink-0">
         <div>
           <h1 class="text-2xl font-black text-slate-900 tracking-tight flex items-center gap-3">
-            <span>下午好，钱丁君！</span>
-            <span class="text-xs font-bold px-3 py-1 rounded-full bg-emerald-100 text-emerald-800 flex items-center gap-1.5 shadow-2xs">
-              <span class="w-2 h-2 rounded-full bg-emerald-500 pulse-dot"></span>
-              <span>集群运营中</span>
+            <span>{{ greeting }}，{{ userName }}！</span>
+            <span
+              class="text-xs font-bold px-3 py-1 rounded-full flex items-center gap-1.5 shadow-2xs"
+              :class="probeResult?.status === 'HEALTHY' ? 'bg-emerald-100 text-emerald-800' : probeResult ? 'bg-amber-100 text-amber-800' : 'bg-slate-100 text-slate-600'"
+            >
+              <span class="w-2 h-2 rounded-full" :class="probeResult?.status === 'HEALTHY' ? 'bg-emerald-500' : probeResult ? 'bg-amber-500' : 'bg-slate-400'"></span>
+              <span>{{ healthLabel }}</span>
             </span>
           </h1>
         </div>
@@ -266,11 +285,11 @@ const handleNotify = () => {
           <!-- 管理员头像与登出 -->
           <div class="flex items-center gap-3 pl-2">
             <div class="w-11 h-11 rounded-full bg-gradient-to-tr from-amber-400 via-orange-500 to-indigo-600 text-white font-extrabold flex items-center justify-center text-base shadow-sm ring-2 ring-white">
-              钱
+              {{ userInitial }}
             </div>
             <div class="hidden xl:block">
-              <div class="text-sm font-bold text-slate-900 leading-tight">钱丁君</div>
-              <div class="text-xs text-slate-400 font-medium">总调度管理员</div>
+              <div class="text-sm font-bold text-slate-900 leading-tight">{{ userName }}</div>
+              <div class="text-xs text-slate-400 font-medium">{{ roleLabel }}</div>
             </div>
             <button
               @click="handleLogout"
@@ -294,12 +313,22 @@ const handleNotify = () => {
       <div class="bg-white rounded-3xl p-6 max-w-xl w-full shadow-popover border border-slate-100 space-y-4">
         <div class="flex justify-between items-center pb-3 border-b border-slate-100">
           <div class="flex items-center gap-2">
-            <span class="w-2.5 h-2.5 rounded-full bg-emerald-500 animate-pulse"></span>
+            <span class="w-2.5 h-2.5 rounded-full" :class="probing ? 'bg-blue-500 animate-pulse' : probeResult?.status === 'HEALTHY' ? 'bg-emerald-500' : 'bg-amber-500'"></span>
             <span class="font-bold text-base text-slate-900">通信中间件集群健康报告</span>
           </div>
           <button @click="showProbeModal = false" class="text-slate-400 hover:text-slate-600 text-lg cursor-pointer">✕</button>
         </div>
-        <pre class="bg-slate-900 text-emerald-400 p-4 rounded-2xl font-mono text-xs overflow-x-auto leading-relaxed">{{ probeResult }}</pre>
+        <div v-if="probing" class="bg-slate-50 border border-slate-200 p-4 text-sm text-slate-600">正在通过管理端查询 Sidecar 与 FreeSWITCH 实时状态...</div>
+        <div v-else-if="probeError" class="bg-rose-50 border border-rose-200 p-4 text-sm text-rose-700">{{ probeError }}</div>
+        <dl v-else-if="probeResult" class="grid grid-cols-2 gap-x-5 gap-y-3 bg-slate-50 border border-slate-200 p-4 text-sm">
+          <dt class="text-slate-500">综合状态</dt><dd class="font-semibold text-slate-900">{{ probeResult.status }}</dd>
+          <dt class="text-slate-500">节点标识</dt><dd class="font-mono text-xs text-slate-900 break-all">{{ probeResult.nodeId || '-' }}</dd>
+          <dt class="text-slate-500">节点状态</dt><dd class="font-semibold text-slate-900">{{ probeResult.nodeState || '-' }}</dd>
+          <dt class="text-slate-500">FreeSWITCH</dt><dd :class="probeResult.freeSwitchAlive ? 'text-emerald-700' : 'text-rose-700'">{{ probeResult.freeSwitchAlive ? '可用' : '不可用' }}</dd>
+          <dt class="text-slate-500">PostgreSQL</dt><dd :class="probeResult.databaseConnected ? 'text-emerald-700' : 'text-rose-700'">{{ probeResult.databaseConnected ? '可用' : '不可用' }}</dd>
+          <dt class="text-slate-500">活跃通道</dt><dd class="font-mono text-slate-900">{{ probeResult.activeChannels ?? '-' }} / {{ probeResult.maxChannels ?? '-' }}</dd>
+          <dt class="text-slate-500">探测时间</dt><dd class="text-slate-900">{{ probeResult.checkedAt }}</dd>
+        </dl>
         <div class="flex justify-end">
           <button @click="showProbeModal = false" class="px-6 py-2 bg-brand-500 hover:bg-brand-600 text-white rounded-xl text-xs font-bold shadow-xs transition cursor-pointer">关闭</button>
         </div>

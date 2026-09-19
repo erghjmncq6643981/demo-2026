@@ -202,10 +202,10 @@ public class P0P1CoreFeaturesTest {
     }
 
     /**
-     * 3. 测试 CDR 4 阶段流水线与路由模式归因
+     * 3. 测试 CDR 持久事实与缺失客户资料边界。
      */
     @Test
-    @DisplayName("测试CDR 4阶段时序过程流水线详情与路由模式")
+    @DisplayName("测试 CDR 持久事实及缺失资料不造假")
     void testCdrTracePipeline() {
         Long callId = IdUtil.nextId();
         LocalDateTime now = LocalDateTime.now();
@@ -241,18 +241,11 @@ public class P0P1CoreFeaturesTest {
         assertEquals("FLOW-INBOUND", detail.getFlowCode());
         assertEquals("HTTP_CALLBACK", detail.getRouteMode());
         assertEquals("01:14", detail.getAudioDuration());
-        assertEquals("王建国 (司机热线)", detail.getCallerName());
-        assertEquals("中国电信", detail.getCarrier());
+        assertNull(detail.getCallerName());
+        assertNull(detail.getCarrier());
 
-        // 验证 4 阶段流水线追踪
-        List<CallTraceStepVO> traces = detail.getExecutionTrace();
-        assertNotNull(traces);
-        assertFalse(traces.isEmpty());
-
-        assertTrue(traces.stream().anyMatch(t -> "TRIGGER".equals(t.getStage())));
-        assertTrue(traces.stream().anyMatch(t -> "ROUTE".equals(t.getStage()) && "HTTP_CALLBACK".equals(t.getActionCode())));
-        assertTrue(traces.stream().anyMatch(t -> "CONNECTED".equals(t.getStage())));
-        assertTrue(traces.stream().anyMatch(t -> "END".equals(t.getStage()) && "POST_SURVEY".equals(t.getActionCode())));
+        // 只有 Call 摘要事实，不能再要求后端凭空构造四阶段执行轨迹。
+        assertEquals(session.getTalkDurationMs(), detail.getTalkDurationMs());
     }
 
     /**

@@ -49,16 +49,26 @@ public class RecordActionExecutor extends AbstractFccActionExecutor {
     @Autowired(required = false)
     private CallPersistenceService callPersistenceService;
 
+    /**
+     * 返回执行器支持的动作类型。
+     * @return 业务动作类型
+     */
     @Override
     public ActionType getActionType() {
         return ActionType.RECORD;
     }
 
+    /**
+     * 根据明确的运行时标识执行呼叫动作。
+     * @param callUuid 业务通话标识，不作为话道或控制标识
+     * @param flowUuid 流程步骤实例标识
+     * @param flowNode 包含独立控制、话道及动作参数的节点
+     * @throws IllegalArgumentException 必需参数缺失时抛出
+     */
     @Override
     public void execute(String callUuid, String flowUuid, FlowNode flowNode) {
-        String targetUuid = flowNode.getDataStr("targetUuid",
-                flowNode.getDataStr("guestChannelUuid", flowNode.getDataStr("uuidA", callUuid)));
-        String ctrlUuid = flowNode.getDataStr("ctrlUuid", callUuid);
+        String targetUuid = requiredData(flowNode, "channelUuid");
+        String ctrlUuid = requiredData(flowNode, "ctrlId");
         String action = normalizeAction(flowNode.getDataStr("action", ACTION_START));
 
         // 1. 确定录音地址：流程节点可显式声明 path，否则按共享存储布局自动推导

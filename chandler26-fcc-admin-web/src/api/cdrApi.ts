@@ -1,8 +1,8 @@
 import apiClient from './apiClient';
-import type { PageResult } from './extensionApi';
+import type { PageResult } from '../shared/api/page';
 
 export interface CallLegVO {
-  id: number;
+  id: string;
   legType: string;
   legChannelId: string;
   destination: string;
@@ -13,7 +13,7 @@ export interface CallLegVO {
 }
 
 export interface CallCdrVO {
-  id: number;
+  id: string;
   ctrlId: string;
   bizId?: string;
   modelType: string;
@@ -43,7 +43,6 @@ export interface CallCdrVO {
   answeredAt?: string;
   endedAt?: string;
   legs?: CallLegVO[];
-  executionTrace?: any[];
 }
 
 export interface CdrStatsVO {
@@ -77,7 +76,7 @@ export const cdrApi = {
   list(params?: CallCdrQueryReq): Promise<PageResult<CallCdrVO>> {
     return apiClient.get('/cdrs', { params });
   },
-  getDetail(id: number): Promise<CallCdrVO> {
+  getDetail(id: string): Promise<CallCdrVO> {
     return apiClient.get(`/cdrs/${id}`);
   },
   /** 今日话单 KPI 聚合指标 (由数据库聚合，与列表分页无关) */

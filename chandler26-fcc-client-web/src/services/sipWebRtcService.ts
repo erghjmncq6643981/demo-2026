@@ -8,6 +8,7 @@
 
 import JsSIP from 'jssip';
 import { ref } from 'vue';
+import type { SipRuntimeConfig } from '../shared/config/runtimeConfig';
 
 export type SipRegistrationState = 'UNREGISTERED' | 'CONNECTING' | 'REGISTERED' | 'REGISTRATION_FAILED';
 export type WebRtcSessionState = 'IDLE' | 'CALLING' | 'RINGING' | 'CONNECTED' | 'TERMINATED';
@@ -16,6 +17,7 @@ class SipWebRtcService {
   private ua: JsSIP.UA | null = null;
   private currentSession: any = null;
   private remoteAudioElement: HTMLAudioElement | null = null;
+  private runtimeConfig: SipRuntimeConfig | null = null;
 
   public registrationState = ref<SipRegistrationState>('UNREGISTERED');
   public sessionState = ref<WebRtcSessionState>('IDLE');
@@ -48,26 +50,31 @@ class SipWebRtcService {
   /**
    * 注册与初始化 WebRTC SIP 客户端
    */
-  public init(extension: string, domain?: string, wsPort: number = 5066, password: string = '1234') {
+  public init(extension: string, runtimeConfig: SipRuntimeConfig | null) {
     if (this.ua) {
       this.destroy();
     }
 
-    const isLocalhost = !window.location.hostname || window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1';
-    const host = domain || (isLocalhost ? '192.168.3.132' : window.location.hostname);
-    const wsUrl = `ws://${host}:${wsPort}`;
-    const sipUri = `sip:${extension}@${host}`;
+    if (!runtimeConfig) {
+      this.registrationState.value = 'REGISTRATION_FAILED';
+      this.isRegistered.value = false;
+      this.lastError.value = 'SIP 运行时配置不完整，软话机未启动';
+      return;
+    }
 
-    console.log(`[WebRTC SIP] 正在初始化 WebRTC SIP 客户端: ${sipUri}, WS: ${wsUrl}`);
+    this.runtimeConfig = runtimeConfig;
+    const sipUri = `sip:${extension}@${runtimeConfig.domain}`;
+
+    console.log(`[WebRTC SIP] 正在初始化 WebRTC SIP 客户端: ${sipUri}, WS: ${runtimeConfig.wsUrl}`);
     this.registrationState.value = 'CONNECTING';
 
     try {
-      const socket = new JsSIP.WebSocketInterface(wsUrl);
+      const socket = new JsSIP.WebSocketInterface(runtimeConfig.wsUrl);
 
       const configuration = {
         sockets: [socket],
         uri: sipUri,
-        password: password,
+        password: runtimeConfig.password,
         register: true,
         session_timers: false,
         user_agent: 'FCC-Agent-WebRTC/2.0'
@@ -115,9 +122,9 @@ class SipWebRtcService {
 
       this.ua.start();
     } catch (err: any) {
-      console.error('[WebRTC SIP] 初始化异常:', err);
+      console.error('[WebRTC SIP] 初始化失败，请核对本人终端配置');
       this.registrationState.value = 'REGISTRATION_FAILED';
-      this.lastError.value = err.message || '初始化异常';
+      this.lastError.value = 'SIP 初始化失败，请核对本人终端配置';
     }
   }
 
@@ -203,7 +210,7 @@ class SipWebRtcService {
       this.currentSession.answer({
         mediaConstraints: { audio: true, video: false },
         pcConfig: {
-          iceServers: []
+          iceServers: this.runtimeConfig?.iceServers ?? []
         }
       });
       return true;
@@ -234,20 +241,19 @@ class SipWebRtcService {
   /**
    * 发起 WebRTC 外呼直拨
    */
-  public call(targetNumber: string, domain?: string): boolean {
-    if (!this.ua || !this.isRegistered.value) {
+  public call(targetNumber: string): boolean {
+    if (!this.ua || !this.isRegistered.value || !this.runtimeConfig) {
       console.warn('[WebRTC SIP] 客户端未注册，无法发起呼叫');
       return false;
     }
 
-    const host = domain || window.location.hostname || '192.168.3.132';
-    const targetUri = `sip:${targetNumber}@${host}`;
+    const targetUri = `sip:${targetNumber}@${this.runtimeConfig.domain}`;
 
     try {
       this.ua.call(targetUri, {
         mediaConstraints: { audio: true, video: false },
         pcConfig: {
-          iceServers: []
+          iceServers: this.runtimeConfig.iceServers
         }
       });
       return true;
@@ -327,6 +333,7 @@ class SipWebRtcService {
     this.registrationState.value = 'UNREGISTERED';
     this.isRegistered.value = false;
     this.sessionState.value = 'IDLE';
+    this.runtimeConfig = null;
   }
 }
 

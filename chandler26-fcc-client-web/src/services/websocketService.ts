@@ -1,45 +1,62 @@
 import { ref } from 'vue';
 import type { WsMessage } from '../types/telephony';
+import { getRuntimeConfig } from '../shared/config/runtimeConfig';
 
 type MessageHandler = (msg: WsMessage) => void;
 
 class WebSocketService {
   private ws: WebSocket | null = null;
-  private workNo: string = '901001';
+  private workNo: string = '';
   private handlers: Set<MessageHandler> = new Set();
   private reconnectTimer: number | null = null;
   private heartbeatTimer: number | null = null;
+  private awaitingPongSince: number | null = null;
+  private reconnectAttempt = 0;
+  private shouldReconnect = false;
   
   // 使用 Vue 的 ref 保证响应式联动
   public isConnected = ref(false);
   public lastPingTime: number = 0;
-  public rttMs = ref(5);
+  public rttMs = ref(0);
   public connectionUrl = ref('');
+  public connectionState = ref<'DISCONNECTED' | 'CONNECTING' | 'CONNECTED' | 'RECONNECTING'>('DISCONNECTED');
 
   public connect(workNo: string) {
     this.workNo = workNo;
-    const host = window.location.hostname || '127.0.0.1';
-    this.connectionUrl.value = `ws://${host}:8085/ws/agent?workNo=${encodeURIComponent(this.workNo)}`;
+    this.shouldReconnect = true;
+    const url = new URL(getRuntimeConfig().agentWebSocketUrl);
+    this.connectionUrl.value = url.toString();
+    this.connectionState.value = this.reconnectAttempt > 0 ? 'RECONNECTING' : 'CONNECTING';
 
     try {
       if (this.ws) {
+        this.ws.onclose = null;
         this.ws.close();
       }
 
-      this.ws = new WebSocket(this.connectionUrl.value);
+      const token = localStorage.getItem('fcc_agent_satoken');
+      if (!token) { this.disconnect(); return; }
+      const encoded = btoa(token).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '');
+      const socket = new WebSocket(this.connectionUrl.value, ['fcc-agent', `auth.${encoded}`]);
+      this.ws = socket;
 
-      this.ws.onopen = () => {
+      socket.onopen = () => {
+        if (this.ws !== socket) return;
         console.log('🔌 [WebSocket] 信道建立成功:', this.connectionUrl.value);
         this.isConnected.value = true;
+        this.connectionState.value = 'CONNECTED';
+        this.reconnectAttempt = 0;
         this.startHeartbeat();
       };
 
-      this.ws.onmessage = (event) => {
+      socket.onmessage = (event) => {
+        if (this.ws !== socket) return;
         try {
           const msg = JSON.parse(event.data) as WsMessage;
           // 心跳响应只用于计算 RTT，不再向下游业务分发
           if (msg.type === 'HEARTBEAT_PONG') {
             this.rttMs.value = Math.max(1, Date.now() - this.lastPingTime);
+            this.awaitingPongSince = null;
             return;
           }
           this.handlers.forEach((fn) => fn(msg));
@@ -48,13 +65,21 @@ class WebSocketService {
         }
       };
 
-      this.ws.onclose = () => {
+      socket.onclose = () => {
+        if (this.ws !== socket) return;
         this.isConnected.value = false;
         this.stopHeartbeat();
-        this.scheduleReconnect();
+        this.ws = null;
+        if (this.shouldReconnect) {
+          this.connectionState.value = 'RECONNECTING';
+          this.scheduleReconnect();
+        } else {
+          this.connectionState.value = 'DISCONNECTED';
+        }
       };
 
-      this.ws.onerror = (err) => {
+      socket.onerror = (err) => {
+        if (this.ws !== socket) return;
         console.error('🔌 [WebSocket] 通信异常:', err);
         this.isConnected.value = false;
       };
@@ -68,7 +93,13 @@ class WebSocketService {
     this.stopHeartbeat();
     this.heartbeatTimer = window.setInterval(() => {
       if (this.ws && this.ws.readyState === WebSocket.OPEN) {
+        if (this.awaitingPongSince !== null && Date.now() - this.awaitingPongSince > 20000) {
+          console.warn('[WebSocket] 心跳响应超时，主动关闭连接以触发重连');
+          this.ws.close(4000, 'heartbeat timeout');
+          return;
+        }
         this.lastPingTime = Date.now();
+        this.awaitingPongSince = this.lastPingTime;
         this.ws.send(JSON.stringify({
           type: 'HEARTBEAT_PING',
           workNo: this.workNo,
@@ -83,15 +114,19 @@ class WebSocketService {
       clearInterval(this.heartbeatTimer);
       this.heartbeatTimer = null;
     }
+    this.awaitingPongSince = null;
   }
 
   private scheduleReconnect() {
     if (this.reconnectTimer !== null) return;
+    const delayMs = Math.min(30000, 1000 * (2 ** this.reconnectAttempt));
+    this.reconnectAttempt += 1;
     this.reconnectTimer = window.setTimeout(() => {
       this.reconnectTimer = null;
-      console.log('🔄 [WebSocket] 尝试自动断线重连...');
+      if (!this.shouldReconnect) return;
+      console.log(`🔄 [WebSocket] 执行第 ${this.reconnectAttempt} 次自动重连`);
       this.connect(this.workNo);
-    }, 4000);
+    }, delayMs);
   }
 
   public subscribe(handler: MessageHandler) {
@@ -106,6 +141,7 @@ class WebSocketService {
   }
 
   public disconnect() {
+    this.shouldReconnect = false;
     this.stopHeartbeat();
     if (this.reconnectTimer !== null) {
       clearTimeout(this.reconnectTimer);
@@ -116,6 +152,8 @@ class WebSocketService {
       this.ws = null;
     }
     this.isConnected.value = false;
+    this.connectionState.value = 'DISCONNECTED';
+    this.reconnectAttempt = 0;
     console.log('🔌 [WebSocket] 信道已安全注销关闭');
   }
 }

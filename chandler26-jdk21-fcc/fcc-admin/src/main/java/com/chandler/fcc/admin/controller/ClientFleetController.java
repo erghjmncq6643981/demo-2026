@@ -1,5 +1,6 @@
 package com.chandler.fcc.admin.controller;
 
+import cn.dev33.satoken.stp.StpUtil;
 import com.chandler.fcc.admin.model.CommonResult;
 import com.chandler.fcc.admin.model.dto.ClientVersionReleaseReq;
 import com.chandler.fcc.admin.model.vo.ClientHardwareRecordVO;
@@ -35,7 +36,7 @@ public class ClientFleetController {
     @Operation(summary = "发布客户端新版本")
     @PostMapping("/versions")
     public CommonResult<Long> publishVersion(@Valid @RequestBody ClientVersionReleaseReq req) {
-        Long id = fleetService.publishVersion(req, "admin");
+        Long id = fleetService.publishVersion(req, StpUtil.getLoginIdAsString());
         return CommonResult.success(id);
     }
 

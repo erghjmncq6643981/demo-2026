@@ -24,7 +24,7 @@
     <main class="flex-1 px-4 sm:px-6 pb-4 pt-1 overflow-y-auto flex flex-col min-h-0">
       
       <!-- 通话中沉浸式业务查询工作台 (通话中触发，挂断后自动平滑切回) -->
-      <InCallWorkspace v-if="callStore.callState === 'CONNECTED'" />
+      <InCallWorkspace v-if="callStore.callState === 'CONNECTED' || callStore.callState === 'ENDING'" />
 
       <!-- 待命态: 业务 Tab 切换与智能外呼栏 + 数据表格 -->
       <div v-else class="flex-1 flex flex-col min-h-0">
@@ -93,6 +93,9 @@ import { useCallStore } from './stores/callStore';
 import { useCdrStore } from './stores/cdrStore';
 import { wsService } from './services/websocketService';
 import { sipWebRtcService } from './services/sipWebRtcService';
+import { getRuntimeConfig } from './shared/config/runtimeConfig';
+import { authApi } from './api/authApi';
+import { toastError } from './utils/feedback';
 import type { IncomingScreenPopPayload, WsMessage } from './types/telephony';
 
 // 核心规则：未接待回拨记录的优先级最高，首屏默认展示 callback
@@ -114,11 +117,26 @@ function handleKeyDown(e: KeyboardEvent) {
   }
 }
 
-function syncWebRtcRegistration() {
+let registrationGeneration = 0;
+async function syncWebRtcRegistration() {
+  const generation = ++registrationGeneration;
   if (agentStore.isLoggedIn && agentStore.endpoint === 'WEBRTC') {
-    const ext = agentStore.boundSipExtension || '1001';
-    sipWebRtcService.init(ext);
+    const extension = agentStore.boundSipExtension || agentStore.extension;
+    if (!extension) {
+      sipWebRtcService.init('', null);
+      return;
+    }
+    try {
+      const result = await authApi.sipConfig();
+      if (generation !== registrationGeneration || !agentStore.isLoggedIn || agentStore.endpoint !== 'WEBRTC') return;
+      sipWebRtcService.init(result.data.extension, { ...result.data, iceServers: getRuntimeConfig().iceServers });
+    } catch (error) {
+      if (generation !== registrationGeneration) return;
+      toastError('无法取得本人 SIP 配置，请检查分机开通及接入配置');
+      sipWebRtcService.init(extension, null);
+    }
   } else {
+    registrationGeneration++;
     sipWebRtcService.destroy();
   }
 }
@@ -130,6 +148,7 @@ watch(() => agentStore.isLoggedIn, (loggedIn) => {
     agentStore.loadEndpoints();
     syncWebRtcRegistration();
   } else {
+    registrationGeneration++;
     wsService.disconnect();
     sipWebRtcService.destroy();
   }
@@ -154,22 +173,18 @@ onMounted(() => {
     if (callStore.callState !== 'RINGING') {
       // 软电话侧只掌握 INVITE 带来的真实主叫号码，其余弹屏字段由后端按事实补齐
       callStore.triggerIncoming({
-        callId: session.id,
+        callId: `sip-${session.id}`,
         callerNumber: caller,
       });
     }
   });
 
   sipWebRtcService.onCallConnected(() => {
-    if (callStore.callState !== 'CONNECTED') {
-      callStore.answerCall();
-    }
+    callStore.observeAnswered();
   });
 
-  sipWebRtcService.onCallEnded((cause) => {
-    if (callStore.callState === 'CONNECTED' || callStore.callState === 'RINGING') {
-      callStore.hangupCall(cause);
-    }
+  sipWebRtcService.onCallEnded((_cause) => {
+    callStore.observeEnded();
   });
 
   // 监听后端推送的真实话务事件
@@ -178,18 +193,15 @@ onMounted(() => {
     if (msg.type === 'SCREEN_POP' && msg.data) {
       callStore.triggerIncoming(msg.data as IncomingScreenPopPayload);
     } else if (msg.type === 'CALL_ANSWERED') {
-      if (callStore.callState !== 'CONNECTED') {
-        callStore.answerCall();
-      }
+      callStore.observeAnswered(msg.callId);
     } else if (msg.type === 'CALL_HANGUP') {
-      if (callStore.callState === 'CONNECTED' || callStore.callState === 'RINGING') {
-        callStore.hangupCall();
-      }
+      callStore.observeEnded(msg.callId);
     }
   });
 });
 
 onUnmounted(() => {
+  registrationGeneration++;
   window.removeEventListener('keydown', handleKeyDown);
   if (unsubscribeWs) unsubscribeWs();
   wsService.disconnect();

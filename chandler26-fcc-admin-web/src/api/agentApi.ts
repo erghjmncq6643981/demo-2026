@@ -1,5 +1,5 @@
 import apiClient from './apiClient';
-import type { PageResult } from './extensionApi';
+import type { PageResult } from '../shared/api/page';
 
 export interface WhitelistItem {
   realName: string;
@@ -9,7 +9,7 @@ export interface WhitelistItem {
 }
 
 export interface AgentVO {
-  id: number;
+  id: string;
   workNo: string;
   realName?: string;
   agentName?: string;
@@ -38,15 +38,15 @@ export interface AgentCreateReq {
 }
 
 export interface AgentBindingReq {
-  agentId: number;
+  agentId: string;
   endpointType: string;
   endpointValue: string;
   priority?: number;
 }
 
 export interface AgentBindingVO {
-  id: number;
-  agentId: number;
+  id: string;
+  agentId: string;
   endpointType: string;
   extension?: string;
   status: string;
@@ -54,8 +54,8 @@ export interface AgentBindingVO {
 }
 
 export interface AgentGroupVO {
-  id: number;
-  parentId?: number;
+  id: string;
+  parentId?: string;
   groupCode: string;
   groupName: string;
   groupType?: string;
@@ -68,13 +68,13 @@ export interface AgentGroupVO {
 export interface AgentGroupCreateReq {
   groupCode: string;
   groupName: string;
-  parentId?: number;
+  parentId?: string;
   groupType?: string;
   routingStrategy?: string;
 }
 
 export interface AgentGroupUpdateReq {
-  id: number;
+  id: string;
   groupName?: string;
   groupCode?: string;
   groupType?: string;
@@ -83,9 +83,9 @@ export interface AgentGroupUpdateReq {
 }
 
 export interface AgentGroupMemberVO {
-  id: number;
-  groupId: number;
-  agentId: number;
+  id: string;
+  groupId: string;
+  agentId: string;
   workNo: string;
   agentName: string;
   phoneNumber?: string;
@@ -97,8 +97,8 @@ export interface AgentGroupMemberVO {
 }
 
 export interface AgentGroupMemberReq {
-  groupId: number;
-  agentId: number;
+  groupId: string;
+  agentId: string;
   memberRole?: string;
   priority?: number;
 }
@@ -119,46 +119,46 @@ export const agentApi = {
   list(params?: { pageNum?: number; pageSize?: number; workNo?: string; realName?: string; status?: string; role?: string }): Promise<PageResult<AgentVO>> {
     return apiClient.get('/agents', { params });
   },
-  get(id: number): Promise<AgentVO> {
+  get(id: string): Promise<AgentVO> {
     return apiClient.get(`/agents/${id}`);
   },
-  create(data: AgentCreateReq): Promise<number> {
+  create(data: AgentCreateReq): Promise<string> {
     return apiClient.post('/agents', data);
   },
-  delete(id: number): Promise<void> {
+  delete(id: string): Promise<void> {
     return apiClient.delete(`/agents/${id}`);
   },
-  bindEndpoint(data: AgentBindingReq): Promise<number> {
+  bindEndpoint(data: AgentBindingReq): Promise<string> {
     return apiClient.post('/agents/bindings', data);
   },
-  listBindings(agentId: number): Promise<AgentBindingVO[]> {
+  listBindings(agentId: string): Promise<AgentBindingVO[]> {
     return apiClient.get(`/agents/${agentId}/bindings`);
   },
   listGroups(): Promise<AgentGroupVO[]> {
     return apiClient.get('/agents/groups');
   },
-  createGroup(data: AgentGroupCreateReq): Promise<number> {
+  createGroup(data: AgentGroupCreateReq): Promise<string> {
     return apiClient.post('/agents/groups', data);
   },
   updateGroup(data: AgentGroupUpdateReq): Promise<void> {
     return apiClient.put('/agents/groups', data);
   },
-  deleteGroup(id: number): Promise<void> {
+  deleteGroup(id: string): Promise<void> {
     return apiClient.delete(`/agents/groups/${id}`);
   },
-  listGroupMembers(groupId: number): Promise<AgentGroupMemberVO[]> {
+  listGroupMembers(groupId: string): Promise<AgentGroupMemberVO[]> {
     return apiClient.get(`/agents/groups/${groupId}/members`);
   },
   addMemberToGroup(data: AgentGroupMemberReq): Promise<void> {
     return apiClient.post('/agents/groups/members', data);
   },
-  createAndBindAgent(groupId: number, data: AgentCreateAndBindGroupReq): Promise<number> {
+  createAndBindAgent(groupId: string, data: AgentCreateAndBindGroupReq): Promise<string> {
     return apiClient.post(`/agents/groups/${groupId}/create-and-bind`, data);
   },
-  updateGroupMember(groupId: number, agentId: number, data: { memberRole?: string; priority?: number }): Promise<void> {
+  updateGroupMember(groupId: string, agentId: string, data: { memberRole?: string; priority?: number }): Promise<void> {
     return apiClient.put(`/agents/groups/${groupId}/members/${agentId}`, data);
   },
-  removeMemberFromGroup(groupId: number, agentId: number): Promise<void> {
+  removeMemberFromGroup(groupId: string, agentId: string): Promise<void> {
     return apiClient.delete(`/agents/groups/${groupId}/members/${agentId}`);
   },
 };

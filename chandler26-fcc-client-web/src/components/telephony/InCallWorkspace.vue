@@ -1,6 +1,7 @@
 <template>
   <!-- 通话中沉浸式业务工作台 (方便通话过程中快速查询运单、客户档案与记录便签) -->
   <div class="flex-1 flex flex-col gap-4 animate-in fade-in zoom-in-95 duration-200">
+    <p v-if="callStore.controlMessage" role="status" class="rounded border border-amber-200 bg-amber-50 p-3 text-sm text-amber-900">{{ callStore.controlMessage }}</p>
     
     <!-- 1. 顶部通话核心态势与话务控制卡片 -->
     <div class="bg-gradient-to-r from-slate-900 via-indigo-950 to-slate-900 text-white rounded-3xl p-5 shadow-xl border border-white/10 flex flex-wrap items-center justify-between gap-4">
@@ -15,7 +16,7 @@
               {{ callStore.currentCall?.callerNumber || '未知号码' }}
             </span>
             <span class="text-xs bg-emerald-500 text-slate-950 font-extrabold px-2.5 py-0.5 rounded-full">
-              ● 通话中
+              {{ callStore.callState === 'ENDING' ? '等待结束事件' : '● 通话中' }}
             </span>
             <span
               v-if="callStore.currentCall?.customerName"
@@ -67,7 +68,7 @@
             callStore.isHeld ? 'bg-amber-400 text-slate-950 border-amber-400 font-extrabold' : 'bg-white/10 hover:bg-white/20 text-white border-white/15'
           ]"
         >
-          <span>{{ callStore.isHeld ? '▶ 恢复通话' : '⏸️ 保持' }}</span>
+          <span>{{ callStore.holdPending ? '提交中' : callStore.holdRequested ? '请求恢复' : '请求保持' }}</span>
         </button>
 
         <button
@@ -312,6 +313,7 @@ import { useCallStore } from '../../stores/callStore';
 import { useCdrStore } from '../../stores/cdrStore';
 import { useAgentStore } from '../../stores/agentStore';
 import { triggerTransferCall } from '../../api/telephonyApi';
+import { toast } from '../../utils/feedback';
 
 const callStore = useCallStore();
 const cdrStore = useCdrStore();
@@ -380,23 +382,26 @@ function handleHangupAndReturn() {
 
   // 2. 挂机并重置话务态，自然退回原所在界面 (未接待回拨 Table 或 话单列表)
   callStore.hangupCall();
-  callStore.closeAcw();
 }
 
 // 呼叫转接弹窗状态与操作
 const isTransferModalOpen = ref(false);
-const transferTarget = ref('1017');
+const transferTarget = ref('');
 const transferring = ref(false);
 const transferError = ref('');
 
 function openTransferModal() {
-  transferTarget.value = '1017';
+  transferTarget.value = '';
   transferError.value = '';
   isTransferModalOpen.value = true;
 }
 
 async function handleTransferSubmit() {
   const target = transferTarget.value.trim();
+  if (!callStore.currentCall?.callId) {
+    transferError.value = '业务通话尚未关联，无法转接';
+    return;
+  }
   if (!target) {
     transferError.value = '请输入目标坐席工号或分机号';
     return;
@@ -411,7 +416,7 @@ async function handleTransferSubmit() {
     );
     if (res.code === 200) {
       isTransferModalOpen.value = false;
-      handleHangupAndReturn();
+      toast('转接指令已受理，等待话务事件确认；当前通话保持显示', 'info');
     } else {
       transferError.value = res.message || '转接失败';
     }

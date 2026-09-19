@@ -69,7 +69,7 @@ public class CallCdrVO implements Serializable {
     @Schema(description = "通话结果状态 (ANSWERED: 已接听, NO_ANSWER: 未接听)", example = "ANSWERED")
     private String status;
 
-    @Schema(description = "响应类型 (ANSWER: 已接听, MISSED: 未接听，对标 call-center-backend)", example = "ANSWER")
+    @Schema(description = "响应类型 (ANSWER: 已接听, MISSED: 未接听)", example = "ANSWER")
     private String answerType;
 
     @Schema(description = "挂机释放原因", example = "NORMAL_CLEARING")
@@ -110,10 +110,6 @@ public class CallCdrVO implements Serializable {
             example = "/api/admin/recordings/by-rec-id/rec-call-123/download")
     private String recordingDownloadUrl;
 
-    @Schema(description = "录音文件地址事实 (共享存储绝对路径或远端对象存储 URL)",
-            example = "/Users/chandler/fcc-records/2026/09/19/call-123.wav")
-    private String recordingPath;
-
     @Schema(description = "录音业务唯一标识", example = "rec-call-123")
     private String recordingId;
 
@@ -129,6 +125,4 @@ public class CallCdrVO implements Serializable {
     @Schema(description = "通话分段 Leg 列表")
     private List<CallLegVO> legs;
 
-    @Schema(description = "全生命周期时序流水线追踪链路")
-    private List<CallTraceStepVO> executionTrace;
 }

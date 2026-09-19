@@ -168,7 +168,7 @@
                   callStore.isHeld ? 'bg-amber-100 text-amber-800 border border-amber-300' : 'bg-slate-100 hover:bg-slate-200 text-slate-700'
                 ]"
               >
-                <span>{{ callStore.isHeld ? '▶ 恢复' : '⏸️ 保持' }}</span>
+                <span>{{ callStore.holdPending ? '提交中' : callStore.holdRequested ? '请求恢复' : '请求保持' }}</span>
               </button>
             </div>
             <button
@@ -327,20 +327,19 @@ async function handleCall() {
   if (sipWebRtcService.isRegistered.value) {
     const ok = sipWebRtcService.call(num);
     if (ok) {
-      callStore.callState = 'CALLING';
+      callStore.startOutbound();
       return;
     }
   }
 
   try {
-    const caller = agentStore.boundSipExtension || agentStore.extension || agentStore.workNo || '901001';
-    await triggerOutboundCall(
-      agentStore.workNo || '901001',
+    const caller = agentStore.boundSipExtension || agentStore.extension || agentStore.workNo;
+    const response = await triggerOutboundCall(
+      agentStore.workNo,
       caller,
       num,
-      '目标联系人',
-      '普通客户'
     );
+    callStore.startOutbound(response.data?.callId);
   } catch (e) {
     console.error('Softphone call failed:', e);
   }

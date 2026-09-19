@@ -124,7 +124,7 @@ public class ClientFleetService {
                 .build();
 
         hardwareMapper.insert(record);
-        log.info("[ClientFleetService] 记录坐席硬件指纹: agentId={}, workNum={}, mac={}", agentId, workNum, macAddr);
+        log.info("[ClientFleetService] 记录坐席硬件指纹: agentId={}, workNum={}", agentId, workNum);
         return id;
     }
 

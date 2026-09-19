@@ -5,7 +5,7 @@
  * 前端不再自造别名（历史上曾出现后端推 SCREEN_POP、前端监听 CALL_STATE_CHANGE 之类的错位）。
  */
 
-export type CallState = 'IDLE' | 'CALLING' | 'RINGING' | 'CONNECTED' | 'ACW';
+export type CallState = 'IDLE' | 'CALLING' | 'RINGING' | 'CONNECTED' | 'ENDING' | 'ACW';
 
 export type AgentStatus = 'READY' | 'REST' | 'BUSY' | 'ACW';
 

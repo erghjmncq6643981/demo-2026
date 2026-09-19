@@ -211,6 +211,15 @@ public class AuthService {
 
         SaSession session = StpUtil.getSession();
         List<String> roles = (List<String>) session.get("roles");
+        if (SUBJECT_AGENT.equals(session.getString("accountType"))) {
+            AgentEntity active = agentMapper.selectOne(new LambdaQueryWrapper<AgentEntity>()
+                    .eq(AgentEntity::getWorkNo, StpUtil.getLoginIdAsString())
+                    .eq(AgentEntity::getStatus, STATUS_ENABLED).isNull(AgentEntity::getDeletedAt));
+            if (active == null) {
+                StpUtil.logout();
+                throw new IllegalArgumentException("坐席账号已停用或不存在");
+            }
+        }
         List<String> permissions = (List<String>) session.get("permissions");
 
         return UserInfoVO.builder()
@@ -247,10 +256,7 @@ public class AuthService {
         } else if (SUBJECT_AGENT.equals(accountType)) {
             changeAgentPassword(loginId, req);
         } else {
-            // 兼容历史会话：按账号逐表定位主体
-            if (!tryChangeConsolePassword(loginId, req)) {
-                changeAgentPassword(loginId, req);
-            }
+            throw new IllegalArgumentException("会话缺少有效账号类型，请重新登录");
         }
     }
 
@@ -284,20 +290,6 @@ public class AuthService {
         user.setUpdatedAt(now);
         adminUserMapper.updateById(user);
         log.info("🔑 [Sa-Token] 控制台账号 {} 修改口令成功", username);
-    }
-
-    /**
-     * 尝试按控制台账号改口令，主体不存在时返回 false
-     */
-    private boolean tryChangeConsolePassword(String username, ChangePasswordReq req) {
-        Long exists = adminUserMapper.selectCount(new LambdaQueryWrapper<AdminUserEntity>()
-                .eq(AdminUserEntity::getUsername, username)
-                .isNull(AdminUserEntity::getDeletedAt));
-        if (exists == null || exists == 0) {
-            return false;
-        }
-        changeConsolePassword(username, req);
-        return true;
     }
 
     /**

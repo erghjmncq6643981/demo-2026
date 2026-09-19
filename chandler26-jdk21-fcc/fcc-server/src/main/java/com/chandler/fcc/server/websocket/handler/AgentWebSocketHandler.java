@@ -28,7 +28,25 @@ import java.util.concurrent.CopyOnWriteArraySet;
  */
 @Slf4j
 @Component
-public class AgentWebSocketHandler extends TextWebSocketHandler {
+public class AgentWebSocketHandler extends TextWebSocketHandler implements org.springframework.web.socket.SubProtocolCapable {
+
+    @org.springframework.beans.factory.annotation.Autowired
+    private com.chandler.fcc.server.telephony.application.AgentIdentityService identity;
+
+    /** 只回显业务子协议，不将令牌回显给客户端。 */
+    @Override
+    public List<String> getSubProtocols() { return List.of("fcc-agent"); }
+
+    /** 每次收发前验证身份，注销或过期后关闭连接。 */
+    private boolean authorized(WebSocketSession session) throws IOException {
+        try {
+            return identity.authenticate((String) session.getAttributes().get("AUTH_TOKEN"))
+                    .equals(session.getAttributes().get(ATTR_WORK_NO));
+        } catch (RuntimeException e) {
+            session.close(CloseStatus.POLICY_VIOLATION.withReason("登录已失效或认证不可用"));
+            return false;
+        }
+    }
 
     private final ObjectMapper objectMapper = new ObjectMapper();
 
@@ -45,8 +63,7 @@ public class AgentWebSocketHandler extends TextWebSocketHandler {
 
     @Override
     public void afterConnectionEstablished(WebSocketSession session) throws Exception {
-        String workNo = extractQueryParam(session.getUri(), "workNo");
-        String agentId = extractQueryParam(session.getUri(), "agentId");
+        String workNo = (String) session.getAttributes().get(ATTR_WORK_NO);
 
         // 坐席工号是话务路由与弹屏投递的唯一寻址依据，缺失即拒绝建链，
         // 不再回落默认工号，避免消息被投递到非预期坐席。
@@ -57,9 +74,6 @@ public class AgentWebSocketHandler extends TextWebSocketHandler {
         }
 
         session.getAttributes().put(ATTR_WORK_NO, workNo);
-        if (StringUtils.hasText(agentId)) {
-            session.getAttributes().put(ATTR_AGENT_ID, agentId);
-        }
 
         agentSessions.computeIfAbsent(workNo, k -> new CopyOnWriteArraySet<>()).add(session);
         log.info("🔌 [Agent WebSocket] 坐席连接成功: sessionId={}, workNo={}, 当前在线工号数={}",
@@ -77,6 +91,7 @@ public class AgentWebSocketHandler extends TextWebSocketHandler {
 
     @Override
     protected void handleTextMessage(WebSocketSession session, TextMessage message) throws Exception {
+        if (!authorized(session)) return;
         String payload = message.getPayload();
         log.debug("📨 [Agent WebSocket] 收到坐席消息: sessionId={}, payload={}", session.getId(), payload);
 
@@ -146,7 +161,7 @@ public class AgentWebSocketHandler extends TextWebSocketHandler {
             String json = objectMapper.writeValueAsString(message);
             TextMessage textMessage = new TextMessage(json);
             for (WebSocketSession session : sessions) {
-                if (session.isOpen()) {
+                if (session.isOpen() && authorized(session)) {
                     session.sendMessage(textMessage);
                     successCount++;
                 }
@@ -170,7 +185,7 @@ public class AgentWebSocketHandler extends TextWebSocketHandler {
             TextMessage textMessage = new TextMessage(json);
             for (CopyOnWriteArraySet<WebSocketSession> sessions : agentSessions.values()) {
                 for (WebSocketSession session : sessions) {
-                    if (session.isOpen()) {
+                    if (session.isOpen() && authorized(session)) {
                         session.sendMessage(textMessage);
                         count++;
                     }

@@ -650,7 +650,7 @@ CREATE TABLE IF NOT EXISTS fcc_outbox_event (
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci COMMENT='Transactional outbox';
 
 -- -----------------------------------------------------------------------------
--- System configuration & Fleet governance (Derived from call-center-backend)
+-- System configuration & Fleet governance
 -- -----------------------------------------------------------------------------
 
 CREATE TABLE IF NOT EXISTS fcc_system_config (

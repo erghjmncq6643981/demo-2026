@@ -68,23 +68,4 @@ public class FlowCtrlRecord implements Serializable {
      */
     private LocalDateTime createTime;
 
-    // ================= 兼容性代理方法 =================
-
-    /**
-     * 兼容获取 callUuid
-     *
-     * @return 业务通话唯一标识符
-     */
-    public String getCallUuid() {
-        return this.callId;
-    }
-
-    /**
-     * 兼容设置 callUuid
-     *
-     * @param callUuid 业务通话唯一标识符
-     */
-    public void setCallUuid(String callUuid) {
-        this.callId = callUuid;
-    }
 }

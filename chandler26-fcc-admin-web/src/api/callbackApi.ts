@@ -1,5 +1,5 @@
 import apiClient from './apiClient';
-import type { PageResult } from './extensionApi';
+import type { PageResult } from '../shared/api/page';
 
 export interface CallbackTaskVO {
   id: string;
@@ -31,10 +31,10 @@ export const callbackApi = {
   list(params?: CallbackTaskQueryReq): Promise<PageResult<CallbackTaskVO>> {
     return apiClient.get('/callbacks', { params });
   },
-  assign(id: string | number, data: CallbackTaskAssignReq): Promise<void> {
+  assign(id: string, data: CallbackTaskAssignReq): Promise<void> {
     return apiClient.post(`/callbacks/${id}/assign`, data);
   },
-  call(id: string | number): Promise<void> {
+  call(id: string): Promise<void> {
     return apiClient.post(`/callbacks/${id}/call`);
   },
 };

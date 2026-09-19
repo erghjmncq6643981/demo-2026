@@ -18,9 +18,9 @@ const rawCdrs = ref<CallCdrVO[]>([]);
 const rawAgents = ref<AgentVO[]>([]);
 
 // 当前选中的组织节点
-const selectedNodeId = ref('1');
-const selectedNodeName = ref('箱箱物流科技');
-const selectedNodePath = ref('箱箱物流科技');
+const selectedNodeId = ref('');
+const selectedNodeName = ref('');
+const selectedNodePath = ref('');
 
 const handleSelectTreeNode = (node: OrgNode) => {
   selectedNodeId.value = node.id;
@@ -111,15 +111,16 @@ const loadAllData = async () => {
 
 const buildOrgTree = (groups: AgentGroupVO[]) => {
   if (groups.length === 0) {
-    treeData.value = [
-      { id: '1', name: '箱箱物流科技', level: 0, icon: 'company', expanded: true, children: [] }
-    ];
+    treeData.value = [];
+    selectedNodeId.value = '';
+    selectedNodeName.value = '';
+    selectedNodePath.value = '';
     return;
   }
 
-  const root = groups.find(g => !g.parentId || g.parentId === 0 || g.id === 1) || groups[0];
+  const root = groups.find(g => !g.parentId || g.groupType === 'COMPANY') || groups[0];
   const children = groups.filter(g => g.id !== root.id).map(g => ({
-    id: String(g.id),
+    id: g.id,
     name: g.groupName,
     level: 1,
     icon: 'group' as const,
@@ -129,7 +130,7 @@ const buildOrgTree = (groups: AgentGroupVO[]) => {
 
   treeData.value = [
     {
-      id: String(root.id),
+      id: root.id,
       name: root.groupName,
       level: 0,
       icon: 'company',
@@ -139,6 +140,7 @@ const buildOrgTree = (groups: AgentGroupVO[]) => {
   ];
   selectedNodeName.value = root.groupName;
   selectedNodePath.value = root.groupName;
+  selectedNodeId.value = root.id;
 };
 
 const buildAgentMetrics = () => {
@@ -173,7 +175,7 @@ const buildAgentMetrics = () => {
     const efficiency = totalCalls > 0 ? ((totalSucc / totalCalls) * 100).toFixed(1) + '%' : '就绪待测';
 
     return {
-      id: String(agent.id),
+      id: agent.id,
       name: agent.agentName || agent.realName || `坐席${workNo}`,
       workNo,
       role: agent.isSupervisor ? '主管' : (agent.role || '坐席'),

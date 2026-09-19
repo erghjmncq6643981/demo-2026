@@ -9,17 +9,17 @@
             <span>👥</span>
             <span>坐席实时态势 & 班长监控工作台</span>
             <span class="text-[10px] font-mono font-bold bg-brand-50 text-brand-700 px-2 py-0.5 rounded-full border border-brand-200">
-              法定 9 人团队白名单
+              已开通坐席
             </span>
             <span
               class="text-[10px] font-mono font-bold px-2 py-0.5 rounded-full border"
               :class="agentStore.isSupervisor ? 'bg-amber-50 text-amber-800 border-amber-200' : 'bg-slate-100 text-slate-600 border-slate-200'"
             >
-              {{ agentStore.isSupervisor ? '👑 班长席 (具备干预权)' : '👤 普通坐席 (只读视界)' }}
+              {{ agentStore.isSupervisor ? '👑 班长席' : '👤 普通坐席 (只读视界)' }}
             </span>
           </h3>
           <p class="text-xs text-slate-400 mt-0.5">
-            实时感知团队组员在席状态、信道占线情况，支持班长席现场干预调度
+            仅本人状态来自本地工作台；其他坐席实时状态未知，班长干预尚未开放
           </p>
         </div>
 
@@ -57,7 +57,7 @@
         </div>
         <div class="bg-slate-50 border border-slate-200/60 p-3 rounded-2xl flex items-center justify-between">
           <span class="text-slate-500 font-semibold">离线 (Offline)</span>
-          <span class="font-mono font-extrabold text-lg text-slate-700">0 人</span>
+          <span class="font-mono font-extrabold text-lg text-slate-700">未知</span>
         </div>
       </div>
     </div>
@@ -131,7 +131,7 @@
                   {{ member.currentCall.tag }}
                 </span>
               </div>
-              <span v-else class="text-slate-400 font-mono text-[11px]">- 空闲待命 -</span>
+              <span v-else class="text-slate-400 font-mono text-[11px]">暂无通话事实</span>
             </td>
 
             <!-- 持续时长 -->
@@ -150,6 +150,7 @@
                 <!-- 仅班长主管具备干预权限 (钱丁君 901001) -->
                 <template v-if="agentStore.isSupervisor">
                   <button
+                    disabled
                     @click="handleIntervention('SPY', member)"
                     class="px-2.5 py-1 bg-indigo-50 hover:bg-brand-500 hover:text-white text-brand-600 font-bold rounded-lg text-[11px] transition-all shadow-2xs cursor-pointer"
                     title="静默监听坐席与客户通话"
@@ -157,6 +158,7 @@
                     🎧 监听
                   </button>
                   <button
+                    disabled
                     @click="handleIntervention('COACH', member)"
                     class="px-2.5 py-1 bg-amber-50 hover:bg-amber-500 hover:text-white text-amber-700 font-bold rounded-lg text-[11px] transition-all shadow-2xs cursor-pointer"
                     title="仅向坐席单向指导，客户不可见"
@@ -164,6 +166,7 @@
                     🗣️ 耳语
                   </button>
                   <button
+                    disabled
                     @click="handleIntervention('BARGE', member)"
                     class="px-2.5 py-1 bg-purple-50 hover:bg-purple-600 hover:text-white text-purple-700 font-bold rounded-lg text-[11px] transition-all shadow-2xs cursor-pointer"
                     title="插入通话转为三方联合通话"
@@ -171,6 +174,7 @@
                     👥 强插
                   </button>
                   <button
+                    disabled
                     @click="handleIntervention('KILL', member)"
                     class="px-2.5 py-1 bg-rose-50 hover:bg-rose-600 hover:text-white text-rose-600 font-bold rounded-lg text-[11px] transition-all cursor-pointer"
                     title="强制挂断异常信道"
@@ -212,7 +216,6 @@
 <script setup lang="ts">
 import { ref, computed, onMounted } from 'vue';
 import { fetchAgentWhitelist } from '../../api/agentApi';
-import { triggerSuperviseCall } from '../../api/telephonyApi';
 import { useAgentStore } from '../../stores/agentStore';
 import { useCallStore } from '../../stores/callStore';
 
@@ -225,7 +228,7 @@ interface AgentRow {
   name: string;
   workNo: string;
   isSupervisor: boolean;
-  state: 'READY' | 'CALLING' | 'REST' | 'ACW';
+  state: 'READY' | 'CALLING' | 'REST' | 'ACW' | 'UNKNOWN';
   currentCall?: { phone: string; tag: string };
   duration: string;
   endpoint: string;
@@ -241,9 +244,9 @@ async function loadAgents() {
     if (list && list.length > 0) {
       agentList.value = list.map((item) => {
         const isCurrent = item.defaultWorkNo === agentStore.workNo;
-        let st: 'READY' | 'CALLING' | 'REST' | 'ACW' = 'READY';
+        let st: 'READY' | 'CALLING' | 'REST' | 'ACW' | 'UNKNOWN' = 'UNKNOWN';
         let currentCallInfo: { phone: string; tag: string } | undefined = undefined;
-        let dur = '00:00:00';
+        let dur = '—';
 
         if (isCurrent) {
           if (callStore.callState === 'CONNECTED' || callStore.callState === 'RINGING' || callStore.callState === 'CALLING') {
@@ -266,10 +269,7 @@ async function loadAgents() {
           }
         }
 
-        let endpointStr = '💻 WebRTC耳麦';
-        if (item.isSupervisor) {
-          endpointStr = '💻 班长席WebRTC';
-        }
+        const endpointStr = isCurrent ? agentStore.endpoint : '未知';
 
         return {
           name: item.realName,
@@ -298,32 +298,18 @@ onMounted(async () => {
 
 async function refreshAgents() {
   await loadAgents();
-  interventionMessage.value = '坐席态势数据已实时同步至最新状态';
+  interventionMessage.value = '坐席名单已刷新；他人实时状态尚未接入';
   setTimeout(() => {
     interventionMessage.value = '';
   }, 3000);
 }
 
-async function handleIntervention(type: 'SPY' | 'COACH' | 'BARGE' | 'KILL', member: AgentRow) {
-  try {
-    await triggerSuperviseCall(agentStore.workNo || '901001', member.workNo, type);
-    if (type === 'SPY') {
-      interventionMessage.value = `🎧 [静默监听] 已连通 ${member.name} (${member.workNo}) 信道，正在实时收听`;
-    } else if (type === 'COACH') {
-      interventionMessage.value = `🗣️ [耳语辅导] 已开启向 ${member.name} 的单向语音通道，客户无法听见`;
-    } else if (type === 'BARGE') {
-      interventionMessage.value = `👥 [三方强插] 已成功加入 ${member.name} 与对端的通话，转为三方通话`;
-    } else if (type === 'KILL') {
-      interventionMessage.value = `✂️ [强制强拆] 已向核心交换服务下发挂机指令，已拆除 ${member.name} 的当前通话`;
-      member.state = 'READY';
-      member.currentCall = undefined;
-    }
-  } catch (err) {
-    interventionMessage.value = `⚠️ 班长干预执行失败: ${err}`;
-  }
+function handleIntervention(_type: string, _member: AgentRow) {
+  interventionMessage.value = '班长干预尚未实现，操作未执行';
 }
 
 function stateLabel(state: AgentRow['state']) {
+  if (state === 'UNKNOWN') return '状态未知';
   if (state === 'READY') return '示闲就绪 (Ready)';
   if (state === 'CALLING') return '通话中 (Busy)';
   if (state === 'REST') return '小休 (Rest)';

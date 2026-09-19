@@ -21,10 +21,18 @@ import org.springframework.web.socket.config.annotation.WebSocketHandlerRegistry
 public class WebSocketConfig implements WebSocketConfigurer {
 
     private final AgentWebSocketHandler agentWebSocketHandler;
+    private final AgentHandshakeInterceptor handshake;
+
+    @org.springframework.beans.factory.annotation.Value("${fcc.websocket.allowed-origins:}")
+    private String allowedOrigins;
 
     @Override
     public void registerWebSocketHandlers(WebSocketHandlerRegistry registry) {
-        registry.addHandler(agentWebSocketHandler, "/ws/agent")
-                .setAllowedOrigins("*");
+        var registration = registry.addHandler(agentWebSocketHandler, "/ws/agent").addInterceptors(handshake);
+        if (!allowedOrigins.isBlank()) {
+            String[] origins = java.util.Arrays.stream(allowedOrigins.split(",")).map(String::trim).toArray(String[]::new);
+            if (java.util.Arrays.asList(origins).contains("*")) throw new IllegalArgumentException("WebSocket Origin 不允许通配符");
+            registration.setAllowedOrigins(origins);
+        }
     }
 }
