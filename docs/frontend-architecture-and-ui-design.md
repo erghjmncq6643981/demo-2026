@@ -282,11 +282,28 @@ stateDiagram-v2
    - `POST /agent/operate/threeWay`：三方会话转接（callUuid, targetExt, workNum）。
    - `POST /agent/operate/hangup`：挂断通话。
    - `POST /agent/operate/change/answer-type`：修改接听终端。
-2. **实时事件推送订阅 (NATS / WebSocket)**：
+2. **客户端生命周期与合规审计 REST API**：
+   - `GET /client/valid-version`：拉取当前有效客户端版本，校验是否需要静默热更或阻断强更。
+   - `POST /client/used-version`：坐席登录时上报五维硬件指纹（MAC、Disk、CPU、BIOS、OS），实现安全审计与设备白名单校验。
+   - `POST /client/substitute/all`：分页查询代班记录。
+   - `POST /client/substitute/add`：发起临时代班/夜班交接申请（PP/PG, NIGHT_OFF）。
+   - `POST /client/substitute/operation`：代班人确认或驳回代班申请。
+   - `GET /client/config/all`：获取前端作用域（WEB/CLIENT）动态业务配置。
+
+3. **软交换管理面 HTTP 同步 REST API 与探活**：
+   - `POST /api/v1/extensions`：管理后台同步创建分机（写入 FreeSWITCH XML 并热重载 `reloadxml`）。
+   - `DELETE /api/v1/extensions`：管理后台同步注销分机（删除 XML 并热重载）。
+   - `GET /api/v1/extensions`：检查分机物理文件配置与 FreeSWITCH 内存 SIP 注册态。
+   - `GET /api/v1/health`：Sidecar 节点与 FreeSWITCH ESL 链路健康探活。
+
+4. **实时事件推送订阅 (NATS / WebSocket)**：
    - `fcc.agent.{workNum}.status`：广播坐席最新状态与持续时长。
    - `fcc.call.{callUuid}.ringing`：来电振铃事件，驱动全局振铃通知条与驾驶舱。
    - `fcc.call.{callUuid}.bridged`：话道接通事件，启动秒级计时器与 Canvas 频谱。
    - `fcc.call.{callUuid}.hangup`：通话结束事件，驱动进入 ACW 话后小结。
+   - `fcc.config.reload`：系统参数热变更广播，驱动前端秒级刷新本地配置缓存。
+   - `fs.event.{nodeId}.registration`：Sofia SIP 分机注册/注销/过期事件，实时驱动话机在线指示灯更新。
+
 
 ---
 

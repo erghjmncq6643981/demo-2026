@@ -89,11 +89,14 @@ CREATE TABLE IF NOT EXISTS fcc_extension (
     endpoint_type       VARCHAR(32) NOT NULL DEFAULT 'SIP',
     credential_secret   VARBINARY(512) NULL,
     status              VARCHAR(32) NOT NULL DEFAULT 'ENABLED',
+    agent_work_no       VARCHAR(64) NULL COMMENT '当前绑定的坐席工号',
+    agent_name          VARCHAR(128) NULL COMMENT '当前绑定的坐席姓名',
     created_at          DATETIME(3) NOT NULL DEFAULT CURRENT_TIMESTAMP(3),
     updated_at          DATETIME(3) NOT NULL DEFAULT CURRENT_TIMESTAMP(3) ON UPDATE CURRENT_TIMESTAMP(3),
     deleted_at          DATETIME(3) NULL,
     PRIMARY KEY (id),
-    UNIQUE KEY uk_extension_tenant_number (tenant_id, extension)
+    UNIQUE KEY uk_extension_tenant_number (tenant_id, extension),
+    KEY idx_ext_agent_work_no (tenant_id, agent_work_no)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci COMMENT='SIP/WebRTC extension';
 
 CREATE TABLE IF NOT EXISTS fcc_endpoint_registration_event (
@@ -120,21 +123,48 @@ CREATE TABLE IF NOT EXISTS fcc_endpoint_registration_event (
 -- -----------------------------------------------------------------------------
 
 CREATE TABLE IF NOT EXISTS fcc_agent (
-    id                  BIGINT UNSIGNED NOT NULL,
-    tenant_id           BIGINT UNSIGNED NOT NULL DEFAULT 0,
-    work_no             VARCHAR(64) NOT NULL,
-    agent_name          VARCHAR(128) NOT NULL,
-    phone_number        VARCHAR(32) NULL,
-    role_code           VARCHAR(64) NULL,
-    status              VARCHAR(32) NOT NULL DEFAULT 'ENABLED',
-    metadata            JSON NULL,
-    created_at          DATETIME(3) NOT NULL DEFAULT CURRENT_TIMESTAMP(3),
-    updated_at          DATETIME(3) NOT NULL DEFAULT CURRENT_TIMESTAMP(3) ON UPDATE CURRENT_TIMESTAMP(3),
-    deleted_at          DATETIME(3) NULL,
+    id                    BIGINT UNSIGNED NOT NULL,
+    tenant_id             BIGINT UNSIGNED NOT NULL DEFAULT 0,
+    work_no               VARCHAR(64) NOT NULL,
+    agent_name            VARCHAR(128) NOT NULL,
+    phone_number          VARCHAR(32) NULL,
+    role_code             VARCHAR(64) NULL,
+    status                VARCHAR(32) NOT NULL DEFAULT 'ENABLED',
+    password_hash         VARCHAR(255) NULL COMMENT '坐席登录口令派生串 pbkdf2-sha256$iterations$salt$hash，为空表示禁止登录',
+    password_updated_at   DATETIME(3) NULL COMMENT '口令最近一次设置时间',
+    last_login_at         DATETIME(3) NULL COMMENT '最近一次成功登录时间',
+    current_extension     VARCHAR(32) NULL COMMENT '当前绑定使用的分机号',
+    metadata              JSON NULL,
+    created_at            DATETIME(3) NOT NULL DEFAULT CURRENT_TIMESTAMP(3),
+    updated_at            DATETIME(3) NOT NULL DEFAULT CURRENT_TIMESTAMP(3) ON UPDATE CURRENT_TIMESTAMP(3),
+    deleted_at            DATETIME(3) NULL,
     PRIMARY KEY (id),
     UNIQUE KEY uk_agent_tenant_work_no (tenant_id, work_no),
-    KEY idx_agent_phone (tenant_id, phone_number)
+    KEY idx_agent_phone (tenant_id, phone_number),
+    KEY idx_agent_cur_ext (tenant_id, current_extension)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci COMMENT='Agent master data';
+
+-- -----------------------------------------------------------------------------
+-- Console accounts
+-- -----------------------------------------------------------------------------
+
+CREATE TABLE IF NOT EXISTS fcc_admin_user (
+    id                    BIGINT UNSIGNED NOT NULL,
+    tenant_id             BIGINT UNSIGNED NOT NULL DEFAULT 0,
+    username              VARCHAR(64) NOT NULL COMMENT '管理控制台登录账号',
+    real_name             VARCHAR(128) NOT NULL COMMENT '账号显示姓名',
+    password_hash         VARCHAR(255) NOT NULL COMMENT '口令派生串 pbkdf2-sha256$iterations$salt$hash',
+    password_updated_at   DATETIME(3) NULL COMMENT '口令最近一次设置时间',
+    role_code             VARCHAR(64) NOT NULL DEFAULT 'ADMIN' COMMENT '控制台角色: ADMIN / OPERATOR / AUDITOR',
+    status                VARCHAR(32) NOT NULL DEFAULT 'ENABLED' COMMENT 'ENABLED / DISABLED',
+    last_login_at         DATETIME(3) NULL COMMENT '最近一次成功登录时间',
+    created_at            DATETIME(3) NOT NULL DEFAULT CURRENT_TIMESTAMP(3),
+    updated_at            DATETIME(3) NOT NULL DEFAULT CURRENT_TIMESTAMP(3) ON UPDATE CURRENT_TIMESTAMP(3),
+    deleted_at            DATETIME(3) NULL,
+    PRIMARY KEY (id),
+    UNIQUE KEY uk_admin_user_username (username),
+    KEY idx_admin_user_status (status)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci COMMENT='Management console account';
 
 CREATE TABLE IF NOT EXISTS fcc_agent_group (
     id                  BIGINT UNSIGNED NOT NULL,
@@ -225,6 +255,10 @@ CREATE TABLE IF NOT EXISTS fcc_call_session (
     biz_id              VARCHAR(128) NULL,
     ctrl_id             VARCHAR(128) NOT NULL,
     model_type          VARCHAR(64) NOT NULL,
+    flow_code           VARCHAR(64) NULL COMMENT '绑定的流程编码(如 FLOW-INBOUND)',
+    route_mode          VARCHAR(32) NULL COMMENT '呼入路由模式(DID_DIRECT, RULE_ENGINE, HTTP_CALLBACK)',
+    route_target_type   VARCHAR(32) NULL COMMENT '目标类型(AGENT, GROUP)',
+    route_target_id     VARCHAR(64) NULL COMMENT '目标标识(工号/组ID)',
     direction           VARCHAR(16) NOT NULL,
     caller_number       VARCHAR(32) NULL,
     destination_number  VARCHAR(32) NULL,
@@ -236,12 +270,16 @@ CREATE TABLE IF NOT EXISTS fcc_call_session (
     ended_at            DATETIME(3) NULL,
     ring_duration_ms    BIGINT UNSIGNED NULL,
     talk_duration_ms    BIGINT UNSIGNED NULL,
+    audio_duration_sec  INT UNSIGNED NULL DEFAULT 0 COMMENT '净通话时长(秒)',
     total_duration_ms   BIGINT UNSIGNED NULL,
     hangup_cause        VARCHAR(64) NULL,
     hangup_initiator    VARCHAR(32) NULL,
     primary_agent_id    BIGINT UNSIGNED NULL,
     primary_work_no     VARCHAR(64) NULL,
+    agent_work_no       VARCHAR(64) NULL COMMENT '接听坐席工号',
+    agent_name          VARCHAR(128) NULL COMMENT '接听坐席姓名',
     evaluation_score    SMALLINT UNSIGNED NULL,
+    record_file_id      VARCHAR(128) NULL COMMENT '录音文件标识或路径',
     attributes          JSON NULL,
     version             BIGINT UNSIGNED NOT NULL DEFAULT 0,
     created_at          DATETIME(3) NOT NULL DEFAULT CURRENT_TIMESTAMP(3),
@@ -253,7 +291,9 @@ CREATE TABLE IF NOT EXISTS fcc_call_session (
     KEY idx_call_caller_started (tenant_id, caller_number, started_at),
     KEY idx_call_destination_started (tenant_id, destination_number, started_at),
     KEY idx_call_agent_started (tenant_id, primary_agent_id, started_at),
-    KEY idx_call_eval_started (tenant_id, evaluation_score, started_at)
+    KEY idx_call_eval_started (tenant_id, evaluation_score, started_at),
+    KEY idx_cs_route_mode (tenant_id, route_mode),
+    KEY idx_cs_agent_work_no (tenant_id, agent_work_no)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci COMMENT='Business call aggregate';
 
 CREATE TABLE IF NOT EXISTS fcc_call_leg (
@@ -375,10 +415,11 @@ CREATE TABLE IF NOT EXISTS fcc_call_recording (
     call_id             BIGINT UNSIGNED NOT NULL,
     leg_id              BIGINT UNSIGNED NULL,
     bridge_id           BIGINT UNSIGNED NULL,
+    node_id             VARCHAR(128) NULL COMMENT '写出该录音文件的 Sidecar/FreeSWITCH 节点',
     status              VARCHAR(32) NOT NULL,
     storage_type        VARCHAR(32) NOT NULL DEFAULT 'OBJECT_STORAGE',
     bucket_name         VARCHAR(128) NULL,
-    object_key          VARCHAR(512) NOT NULL,
+    object_key          VARCHAR(512) NOT NULL COMMENT '录音文件地址: 共享存储绝对路径，或远端对象存储 URL',
     media_format        VARCHAR(32) NULL,
     size_bytes          BIGINT UNSIGNED NULL,
     duration_ms         BIGINT UNSIGNED NULL,
@@ -452,6 +493,7 @@ CREATE TABLE IF NOT EXISTS fcc_flow_step_execution (
     tenant_id           BIGINT UNSIGNED NOT NULL DEFAULT 0,
     flow_instance_id    BIGINT UNSIGNED NOT NULL,
     call_id             BIGINT UNSIGNED NOT NULL,
+    stage               VARCHAR(32) NULL COMMENT '流水线阶段(TRIGGER, ROUTE, CONNECTED, END)',
     step_key            VARCHAR(128) NOT NULL,
     action_type         VARCHAR(64) NOT NULL,
     attempt_no          INT UNSIGNED NOT NULL DEFAULT 1,
@@ -568,19 +610,26 @@ CREATE TABLE IF NOT EXISTS fcc_dial_attempt (
 CREATE TABLE IF NOT EXISTS fcc_callback_task (
     id                  BIGINT UNSIGNED NOT NULL,
     tenant_id           BIGINT UNSIGNED NOT NULL DEFAULT 0,
-    source_call_id      BIGINT UNSIGNED NOT NULL,
-    assignee_agent_id   BIGINT UNSIGNED NULL,
-    customer_number     VARCHAR(32) NOT NULL,
-    status              VARCHAR(32) NOT NULL DEFAULT 'PENDING',
+    source_call_id      BIGINT UNSIGNED NOT NULL COMMENT '关联原未接通通话ID',
+    customer_number     VARCHAR(32) NOT NULL COMMENT '客户手机号',
+    did_number          VARCHAR(32) NULL COMMENT '进线DID号码',
+    missed_at           DATETIME(3) NOT NULL COMMENT '漏话时间',
+    missed_reason       VARCHAR(128) NULL COMMENT '漏话原因(坐席忙未接起放弃/排队超时/客户主动挂断等)',
+    wait_duration_ms    BIGINT UNSIGNED NULL DEFAULT 0 COMMENT '等待时长毫秒',
+    status              VARCHAR(32) NOT NULL DEFAULT 'PENDING' COMMENT '状态(PENDING-待办, ASSIGNED-已派单, CALLED-已呼出, COMPLETED-已回访, CANCELLED-已取消)',
     priority            INT NOT NULL DEFAULT 0,
-    due_at              DATETIME(3) NULL,
-    handled_at          DATETIME(3) NULL,
-    result              VARCHAR(64) NULL,
+    assignee_agent_id   BIGINT UNSIGNED NULL,
+    assignee_work_no    VARCHAR(64) NULL COMMENT '指派跟进坐席工号',
+    assignee_name       VARCHAR(128) NULL COMMENT '指派跟进坐席姓名',
+    call_attempts       INT UNSIGNED NOT NULL DEFAULT 0 COMMENT '回访呼叫尝试次数',
+    last_called_at      DATETIME(3) NULL COMMENT '最后回拨时间',
+    notes               VARCHAR(512) NULL COMMENT '跟进备注',
     created_at          DATETIME(3) NOT NULL DEFAULT CURRENT_TIMESTAMP(3),
     updated_at          DATETIME(3) NOT NULL DEFAULT CURRENT_TIMESTAMP(3) ON UPDATE CURRENT_TIMESTAMP(3),
     PRIMARY KEY (id),
-    UNIQUE KEY uk_callback_source_call (tenant_id, source_call_id),
-    KEY idx_callback_dispatch (tenant_id, status, priority, due_at)
+    KEY idx_callback_source_call (tenant_id, source_call_id),
+    KEY idx_callback_status_time (tenant_id, status, missed_at),
+    KEY idx_callback_assignee (tenant_id, assignee_work_no)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci COMMENT='Missed-call callback workflow';
 
 CREATE TABLE IF NOT EXISTS fcc_outbox_event (
@@ -599,4 +648,85 @@ CREATE TABLE IF NOT EXISTS fcc_outbox_event (
     KEY idx_outbox_publish (status, next_retry_at, created_at),
     KEY idx_outbox_aggregate (aggregate_type, aggregate_id)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci COMMENT='Transactional outbox';
+
+-- -----------------------------------------------------------------------------
+-- System configuration & Fleet governance (Derived from call-center-backend)
+-- -----------------------------------------------------------------------------
+
+CREATE TABLE IF NOT EXISTS fcc_system_config (
+    id                  BIGINT UNSIGNED NOT NULL,
+    tenant_id           BIGINT UNSIGNED NOT NULL DEFAULT 0,
+    prop_name           VARCHAR(128) NOT NULL,
+    prop_value          TEXT NOT NULL,
+    prop_type           VARCHAR(32) NOT NULL DEFAULT 'STRING',
+    scope               VARCHAR(32) NOT NULL DEFAULT 'BACKEND' COMMENT 'WEB, BACKEND, CLIENT, SYSTEM',
+    description         VARCHAR(255) NULL,
+    created_by          VARCHAR(64) NULL,
+    updated_by          VARCHAR(64) NULL,
+    created_at          DATETIME(3) NOT NULL DEFAULT CURRENT_TIMESTAMP(3),
+    updated_at          DATETIME(3) NOT NULL DEFAULT CURRENT_TIMESTAMP(3) ON UPDATE CURRENT_TIMESTAMP(3),
+    PRIMARY KEY (id),
+    UNIQUE KEY uk_config_tenant_scope_prop (tenant_id, scope, prop_name),
+    KEY idx_config_scope (tenant_id, scope)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci COMMENT='Dynamic system business configuration';
+
+CREATE TABLE IF NOT EXISTS fcc_client_version_release (
+    id                  BIGINT UNSIGNED NOT NULL,
+    tenant_id           BIGINT UNSIGNED NOT NULL DEFAULT 0,
+    version             VARCHAR(32) NOT NULL,
+    platform            VARCHAR(32) NOT NULL DEFAULT 'WINDOWS' COMMENT 'WINDOWS, MAC, LINUX, WEB',
+    download_url        VARCHAR(512) NOT NULL,
+    file_md5            VARCHAR(64) NULL,
+    force_update        TINYINT(1) NOT NULL DEFAULT 0,
+    status              VARCHAR(32) NOT NULL DEFAULT 'DRAFT' COMMENT 'DRAFT, RELEASED, DEPRECATED',
+    release_notes       TEXT NULL,
+    released_at         DATETIME(3) NULL,
+    created_by          VARCHAR(64) NULL,
+    created_at          DATETIME(3) NOT NULL DEFAULT CURRENT_TIMESTAMP(3),
+    updated_at          DATETIME(3) NOT NULL DEFAULT CURRENT_TIMESTAMP(3) ON UPDATE CURRENT_TIMESTAMP(3),
+    PRIMARY KEY (id),
+    UNIQUE KEY uk_version_tenant_platform (tenant_id, platform, version),
+    KEY idx_version_status (tenant_id, platform, status)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci COMMENT='PC client version release and auto-update';
+
+CREATE TABLE IF NOT EXISTS fcc_client_hardware_record (
+    id                  BIGINT UNSIGNED NOT NULL,
+    tenant_id           BIGINT UNSIGNED NOT NULL DEFAULT 0,
+    agent_id            BIGINT UNSIGNED NOT NULL,
+    work_num            VARCHAR(32) NOT NULL,
+    client_version      VARCHAR(32) NOT NULL,
+    mac_addr            VARCHAR(64) NOT NULL,
+    disk_seq            VARCHAR(128) NULL,
+    cpu_seq             VARCHAR(128) NULL,
+    bios_seq            VARCHAR(128) NULL,
+    os                  VARCHAR(128) NULL,
+    ip_addr             VARCHAR(64) NULL,
+    login_time          DATETIME(3) NOT NULL,
+    created_at          DATETIME(3) NOT NULL DEFAULT CURRENT_TIMESTAMP(3),
+    PRIMARY KEY (id),
+    KEY idx_hardware_agent_login (tenant_id, agent_id, login_time),
+    KEY idx_hardware_mac (tenant_id, mac_addr)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci COMMENT='Agent client hardware fingerprint audit';
+
+CREATE TABLE IF NOT EXISTS fcc_agent_substitute_record (
+    id                  BIGINT UNSIGNED NOT NULL,
+    tenant_id           BIGINT UNSIGNED NOT NULL DEFAULT 0,
+    applicant_agent_id  BIGINT UNSIGNED NOT NULL,
+    substitute_agent_id BIGINT UNSIGNED NOT NULL,
+    substitute_type     VARCHAR(32) NOT NULL DEFAULT 'PP' COMMENT 'PP: Agent-to-Agent, PG: Agent-to-Group',
+    scope               VARCHAR(32) NOT NULL DEFAULT 'NIGHT_OFF' COMMENT 'NIGHT_OFF, TEMPORARY_LEAVE',
+    start_time          DATETIME(3) NOT NULL,
+    end_time            DATETIME(3) NOT NULL,
+    priority            INT NOT NULL DEFAULT 99,
+    status              VARCHAR(32) NOT NULL DEFAULT 'UNCONFIRM' COMMENT 'UNCONFIRM, CONFIRMED, CANCELLED',
+    reason              VARCHAR(255) NULL,
+    confirmed_at        DATETIME(3) NULL,
+    created_at          DATETIME(3) NOT NULL DEFAULT CURRENT_TIMESTAMP(3),
+    updated_at          DATETIME(3) NOT NULL DEFAULT CURRENT_TIMESTAMP(3) ON UPDATE CURRENT_TIMESTAMP(3),
+    PRIMARY KEY (id),
+    KEY idx_substitute_applicant (tenant_id, applicant_agent_id, start_time, end_time),
+    KEY idx_substitute_agent (tenant_id, substitute_agent_id, start_time, end_time),
+    KEY idx_substitute_status (tenant_id, status)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci COMMENT='Agent shift substitution and night transfer';
+
 

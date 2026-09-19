@@ -1,0 +1,107 @@
+# ================================================================
+# Jenkins LTS 持久化部署清单 (Local Persistent Storage)
+# 数据持久化目录: /Users/chandler/docker-volumes/jenkins/jenkins_home
+# 支持挂载宿主机 Docker 套接字，流水线可直接构建并推送容器镜像
+# ================================================================
+apiVersion: v1
+kind: PersistentVolume
+metadata:
+  name: jenkins-local-pv
+spec:
+  capacity:
+    storage: 20Gi
+  accessModes:
+    - ReadWriteOnce
+  persistentVolumeReclaimPolicy: Retain # 关键：即使 Pod/Deployment 删除，磁盘数据绝对不丢
+  storageClassName: local-storage
+  hostPath:
+    path: /Users/chandler/docker-volumes/jenkins/jenkins_home
+    type: DirectoryOrCreate
+---
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: jenkins-pvc
+  namespace: devops
+spec:
+  accessModes:
+    - ReadWriteOnce
+  storageClassName: local-storage
+  resources:
+    requests:
+      storage: 20Gi
+  volumeName: jenkins-local-pv
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: jenkins
+  namespace: devops
+  labels:
+    app: jenkins
+spec:
+  replicas: 1
+  strategy:
+    type: Recreate
+  selector:
+    matchLabels:
+      app: jenkins
+  template:
+    metadata:
+      labels:
+        app: jenkins
+    spec:
+      securityContext:
+        fsGroup: 0 # root 权限运行，确保能顺利访问 docker.sock
+      containers:
+        - name: jenkins
+          image: jenkins/jenkins:lts-jdk17
+          imagePullPolicy: IfNotPresent
+          securityContext:
+            runAsUser: 0
+          resources:
+            requests:
+              cpu: "300m"
+              memory: "512Mi"
+            limits:
+              cpu: "1500m"
+              memory: "2048Mi"
+          ports:
+            - containerPort: 8080
+              name: http
+            - containerPort: 50000
+              name: agent
+          volumeMounts:
+            - name: jenkins-storage
+              mountPath: /var/jenkins_home
+            - name: docker-sock
+              mountPath: /var/run/docker.sock
+      volumes:
+        - name: jenkins-storage
+          persistentVolumeClaim:
+            claimName: jenkins-pvc
+        - name: docker-sock
+          hostPath:
+            path: /var/run/docker.sock
+            type: Socket
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: jenkins-service
+  namespace: devops
+  labels:
+    app: jenkins
+spec:
+  type: NodePort
+  selector:
+    app: jenkins
+  ports:
+    - name: http
+      port: 8080
+      targetPort: 8080
+      nodePort: 30080 # 宿主机可通过 http://localhost:30080 访问 Jenkins Web 页面
+    - name: agent
+      port: 50000
+      targetPort: 50000
+      nodePort: 30500

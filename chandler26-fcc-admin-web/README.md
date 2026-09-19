@@ -31,5 +31,9 @@
 7. **未接待回拨总池**：
    - 漏话待办工单实时指派与流转闭环。
 
+## 相关设计与规格文档
+- [呼入 3 种路由模式与 CDR 通话过程详情设计规范](./docs/CALL_FLOW_AND_TRACE_DESIGN.md)
+- [IVR 流程自上而下模型与二期动态编排/版本发布设计规范](./docs/IVR_FLOW_ORCHESTRATION_DESIGN.md)
+
 ## 快速预览与运行
 在浏览器中直接打开 `index.html` 即可完整体验全套交互。

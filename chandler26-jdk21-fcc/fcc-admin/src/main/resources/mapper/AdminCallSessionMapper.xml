@@ -1,0 +1,30 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
+        "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.chandler.fcc.admin.infrastructure.persistence.mapper.AdminCallSessionMapper">
+
+    <!--
+      话单 KPI 区间聚合。
+      「已接通」的判定刻意与 CallCdrService 的话单状态归一化口径保持一致
+      (answered_at / talk_duration_ms / audio_duration_sec / status / result 任一成立即为已接通)，
+      避免顶部卡片与下方列表的状态互相打架。
+    -->
+    <select id="selectStatsSince" resultType="java.util.LinkedHashMap">
+        SELECT COUNT(*) AS totalCalls,
+               SUM(CASE
+                       WHEN answered_at IS NOT NULL
+                           OR (talk_duration_ms IS NOT NULL AND talk_duration_ms &gt; 0)
+                           OR (audio_duration_sec IS NOT NULL AND audio_duration_sec &gt; 0)
+                           OR UPPER(IFNULL(status, '')) IN ('ANSWERED', 'COMPLETED')
+                           OR UPPER(IFNULL(result, '')) = 'ANSWER'
+                       THEN 1 ELSE 0 END) AS answeredCalls,
+               IFNULL(SUM(IFNULL(talk_duration_ms, 0)), 0) AS totalTalkMs,
+               IFNULL(SUM(CASE WHEN UPPER(IFNULL(direction, '')) = 'INBOUND'
+                               THEN IFNULL(talk_duration_ms, 0) ELSE 0 END), 0) AS inboundTalkMs,
+               IFNULL(SUM(CASE WHEN UPPER(IFNULL(direction, '')) = 'OUTBOUND'
+                               THEN IFNULL(talk_duration_ms, 0) ELSE 0 END), 0) AS outboundTalkMs
+        FROM fcc_call_session
+        WHERE started_at &gt;= #{startTime}
+    </select>
+
+</mapper>

@@ -1,15 +1,64 @@
+server:
+  port: ${SERVER_PORT:8089}
+
 spring:
   application:
     name: fcc-admin
   profiles:
     active: ${SPRING_PROFILES_ACTIVE:local}
+  datasource:
+    driver-class-name: com.mysql.cj.jdbc.Driver
+    url: jdbc:mysql://${MYSQL_HOST:127.0.0.1}:${MYSQL_PORT:3306}/${MYSQL_DATABASE:chandler26_fcc}?useUnicode=true&characterEncoding=utf-8&serverTimezone=UTC&useSSL=false&allowPublicKeyRetrieval=true
+    username: ${MYSQL_USERNAME:fcc}
+    password: ${MYSQL_PASSWORD:123456}
+  data:
+    redis:
+      host: ${REDIS_HOST:127.0.0.1}
+      port: ${REDIS_PORT:6379}
+      timeout: 3000ms
 
-server:
-  port: ${SERVER_PORT:8089}
+mybatis-plus:
+  configuration:
+    map-underscore-to-camel-case: true
+    log-impl: org.apache.ibatis.logging.slf4j.Slf4jImpl
+  mapper-locations: classpath*:mapper/*.xml
+  global-config:
+    banner: false
+    db-config:
+      id-type: input
+
+fcc:
+  sidecar-admin-url: ${SIDECAR_ADMIN_URL:http://127.0.0.1:8088}
+  # 录音共享存储：必须与 fcc-server 使用同一份配置，否则无法定位 FreeSWITCH 写出的录音文件。
+  # 管理端据此对 fcc_call_recording.object_key 记录的路径做共享目录范围内的合法性校验。
+  # 本地演示默认落到 ~/fcc-records（随当前用户 home 展开）；生产用 FCC_RECORDING_BASE_DIR 指定共享挂载点。
+  recording:
+    base-dir: ${FCC_RECORDING_BASE_DIR:${user.home}/fcc-records}
+    sub-dir-pattern: yyyy/MM/dd
+    file-format: wav
+    allow-outside-base-dir: false
+    stream-buffer-bytes: 8192
 
 management:
   endpoints:
     web:
       exposure:
         include: health,info
+
+logging:
+  level:
+    com.chandler.fcc: DEBUG
+    org.springframework: INFO
+
+sa-token:
+  token-name: satoken
+  timeout: 86400
+  active-timeout: -1
+  is-concurrent: true
+  is-share: true
+  token-style: uuid
+  is-log: false
+  is-read-head: true
+  is-read-body: false
+
 

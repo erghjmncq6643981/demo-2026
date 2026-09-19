@@ -1,11 +1,29 @@
 {
   "name": "chandler26-fcc-admin-web",
-  "version": "1.0.0",
-  "description": "FCC Cyber Operations War Room & Admin Console",
+  "version": "2.0.0",
+  "type": "module",
+  "private": true,
+  "description": "FCC Production Management Console (Vue 3 + Vite + TypeScript + Pinia)",
   "scripts": {
-    "dev": "npx serve ."
+    "dev": "vite --host 0.0.0.0 --port 8000",
+    "build": "vue-tsc -b && vite build",
+    "preview": "vite preview --host 0.0.0.0 --port 8000"
   },
-  "keywords": ["fcc", "call-center", "admin-console", "cyberpunk", "dashboard"],
-  "author": "chandler",
-  "license": "ISC"
+  "dependencies": {
+    "axios": "^1.7.9",
+    "element-plus": "^2.14.6",
+    "lucide-vue-next": "^0.475.0",
+    "pinia": "^2.3.1",
+    "vue": "^3.5.13"
+  },
+  "devDependencies": {
+    "@types/node": "^26.6.1",
+    "@vitejs/plugin-vue": "^5.2.1",
+    "autoprefixer": "^10.4.20",
+    "postcss": "^8.5.1",
+    "tailwindcss": "^3.4.17",
+    "typescript": "^5.7.3",
+    "vite": "^6.1.1",
+    "vue-tsc": "^2.2.0"
+  }
 }

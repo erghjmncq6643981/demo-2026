@@ -1,15 +1,59 @@
+server:
+  port: ${SERVER_PORT:8085}
+
 spring:
   application:
     name: fcc-server
   profiles:
     active: ${SPRING_PROFILES_ACTIVE:local}
+  datasource:
+    driver-class-name: com.mysql.cj.jdbc.Driver
+    url: jdbc:mysql://${MYSQL_HOST:127.0.0.1}:${MYSQL_PORT:3306}/${MYSQL_DATABASE:chandler26_fcc}?useUnicode=true&characterEncoding=utf-8&serverTimezone=UTC&useSSL=false&allowPublicKeyRetrieval=true
+    username: ${MYSQL_USERNAME:fcc}
+    password: ${MYSQL_PASSWORD:123456}
+  data:
+    redis:
+      host: ${REDIS_HOST:127.0.0.1}
+      port: ${REDIS_PORT:6379}
+      timeout: 3000ms
 
-server:
-  port: ${SERVER_PORT:8088}
+mybatis-plus:
+  configuration:
+    map-underscore-to-camel-case: true
+    log-impl: org.apache.ibatis.logging.slf4j.Slf4jImpl
+  mapper-locations: classpath*:mapper/*.xml
+  global-config:
+    banner: false
+    db-config:
+      id-type: input
+
+fcc:
+  nats-url: ${NATS_URL:nats://127.0.0.1:4222}
+  default-node-id: ${FCC_DEFAULT_NODE_ID:qiandingjundeMacBook-Pro.local}
+  ctrl-id-prefix: fcc-ctrl
+  rpc-timeout-millis: 5000
+  sidecar-admin-url: ${SIDECAR_ADMIN_URL:http://127.0.0.1:8088}
+  # 通话录音共享存储：FreeSWITCH 容器与 FCC 服务必须以完全相同的绝对路径挂载该目录。
+  # 下发录音指令时会在 base-dir 之下按 yyyy/MM/dd 分层生成 {call_id}.wav 的绝对路径，
+  # FreeSWITCH 写入同一路径，控制面据此落库，管理端再从同一路径复播与下载。
+  # 本地演示默认落到 ~/fcc-records（随当前用户 home 展开）；生产用 FCC_RECORDING_BASE_DIR 指定共享挂载点。
+  recording:
+    base-dir: ${FCC_RECORDING_BASE_DIR:${user.home}/fcc-records}
+    sub-dir-pattern: yyyy/MM/dd
+    file-format: wav
+    # 生产环境请保持 false：仅允许读取共享录音目录之内的文件，防止任意文件读取
+    allow-outside-base-dir: false
+    stream-buffer-bytes: 8192
 
 management:
   endpoints:
     web:
       exposure:
         include: health,info
+
+logging:
+  level:
+    com.chandler.fcc: DEBUG
+    org.springframework: INFO
+
 

@@ -1,0 +1,133 @@
+# ================================================================
+# Nacos 2.4.3 单机持久化部署清单 (Local Persistent Storage)
+# 数据持久化目录: /Users/chandler/docker-volumes/nacos/data
+# ================================================================
+apiVersion: v1
+kind: PersistentVolume
+metadata:
+  name: nacos-local-pv
+spec:
+  capacity:
+    storage: 10Gi
+  accessModes:
+    - ReadWriteOnce
+  persistentVolumeReclaimPolicy: Retain # 关键：即使 Pod/PVC 删除，Mac 本地文件绝对不丢失
+  storageClassName: local-storage
+  hostPath:
+    path: /Users/chandler/docker-volumes/nacos/data
+    type: DirectoryOrCreate
+---
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: nacos-pvc
+  namespace: infra
+spec:
+  accessModes:
+    - ReadWriteOnce
+  storageClassName: local-storage
+  resources:
+    requests:
+      storage: 10Gi
+  volumeName: nacos-local-pv
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: nacos-server
+  namespace: infra
+  labels:
+    app: nacos-server
+spec:
+  replicas: 1
+  strategy:
+    type: Recreate # 单机存储避免多个 Pod 同时争用 SQLite/Derby 文件
+  selector:
+    matchLabels:
+      app: nacos-server
+  template:
+    metadata:
+      labels:
+        app: nacos-server
+    spec:
+      containers:
+        - name: nacos
+          image: nacos/nacos-server:v3.2.4
+          imagePullPolicy: IfNotPresent
+          resources:
+            requests:
+              cpu: "200m"
+              memory: "512Mi"
+            limits:
+              cpu: "2000m"
+              memory: "2048Mi"
+          env:
+            - name: MODE
+              value: "standalone"
+            - name: PREFER_HOST_MODE
+              value: "hostname"
+            - name: FUNCTION_MODE
+              value: "microservice"
+            - name: NACOS_CONSOLE_PORT
+              value: "8849"
+            - name: NACOS_AUTH_ENABLE
+              value: "false"
+            - name: NACOS_AUTH_CONSOLE_ENABLE
+              value: "false"
+            - name: NACOS_AUTH_ADMIN_ENABLE
+              value: "false"
+            - name: NACOS_AUTH_TOKEN
+              value: "SecretKey012345678901234567890123456789012345678901234567890123456789="
+            - name: NACOS_AUTH_IDENTITY_KEY
+              value: "serverIdentity"
+            - name: NACOS_AUTH_IDENTITY_VALUE
+              value: "security"
+            - name: JVM_XMS
+              value: "512m"
+            - name: JVM_XMX
+              value: "1024m"
+          ports:
+            - containerPort: 8848
+              name: http
+            - containerPort: 8849
+              name: console
+            - containerPort: 9848
+              name: client-grpc
+            - containerPort: 9849
+              name: server-grpc
+          volumeMounts:
+            - name: nacos-storage
+              mountPath: /home/nacos/data
+      volumes:
+        - name: nacos-storage
+          persistentVolumeClaim:
+            claimName: nacos-pvc
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: nacos-service
+  namespace: infra
+  labels:
+    app: nacos-server
+spec:
+  type: NodePort
+  selector:
+    app: nacos-server
+  ports:
+    - name: http
+      port: 8848
+      targetPort: 8848
+      nodePort: 30848 # Nacos 核心 OpenAPI / 客户端 HTTP 通信
+    - name: console
+      port: 8849
+      targetPort: 8849
+      nodePort: 30849 # Nacos 3.x 独立控制台 Web 端口
+    - name: client-grpc
+      port: 9848
+      targetPort: 9848
+      nodePort: 30948 # Java 客户端 gRPC 通信端口
+    - name: server-grpc
+      port: 9849
+      targetPort: 9849
+      nodePort: 30949

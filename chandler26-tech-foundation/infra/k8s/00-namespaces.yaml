@@ -1,0 +1,20 @@
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: infra
+  labels:
+    purpose: infrastructure
+---
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: devops
+  labels:
+    purpose: ci-cd-pipelines
+---
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: prod
+  labels:
+    purpose: business-services

@@ -87,6 +87,9 @@ The parent `AGENTS.md` also applies. When rules conflict, use the narrower rule 
 - Put custom SQL in the owning module's `src/main/resources/mapper/*.xml`, with explicit Mapper parameters and XML validation. Never issue SQL in an iteration; use joins, bounded batch operations, or explicit bulk queries.
 - Paginate all growable admin list APIs. Detail APIs load large payloads such as raw events, command payloads, flow definitions, and recording metadata separately.
 - All serializable request/response fields require business-readable Chinese OpenAPI descriptions. `Long` IDs are serialized as strings at the shared Jackson boundary and treated as opaque values by clients.
+- **类与方法注释规范**：所有类、接口、抽象类与方法必须具备清晰完整的 Javadoc 注释，明确阐释业务职责、入参说明（`@param`）、返回值（`@return`）及抛出异常（`@throws`），严禁未注释的裸类或裸方法。
+- **DTO 对象与 Swagger 注解规范**：所有 DTO、VO、Request、Response 等数据传输对象类与属性字段必须增加 Swagger/OpenAPI 注解（`@Schema(description = "...")`），且 description 内容必须为通俗清晰的中文业务说明与示例，保障接口自解释性。
+- **枚举规范与中文属性约束**：所有业务枚举类（Enum）不仅要有标准英文字面量，必须显式具备中文业务描述属性（如 `private final String desc` 或 `label` / `description` 及对应 getter 方法），严禁只有裸英文字面量而无中文业务属性。
 - Preserve the baseline model in `docs/fcc-schema.sql`. Once executable migrations are introduced, place immutable versioned migrations under the selected migration tool directory and document execution order. Never rewrite an already executed migration.
 - Every schema change includes: forward DDL, data backfill strategy, compatibility window, rollback/repair strategy, index impact, and update to the design/DDL documentation.
 - Core fact/event tables do not use logical deletion. Master/configuration tables use `deleted_at` when recovery is required. Do not mix `Boolean`, `Byte`, and `Integer` deletion semantics.

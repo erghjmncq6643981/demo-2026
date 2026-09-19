@@ -139,6 +139,55 @@ runTest("TC-12: 校验全网人名纯洁性白名单 (9 人白名单，0 违规�
   });
 });
 
+runTest("TC-13: 校验软交换管理面 HTTP 同步分机开销户与 Sofia 注册态感知 (双平面治理)", () => {
+  // PC 坐席工作台断言
+  assert(clientContent.includes("sipPresencePill"), "PC 客户端必须包含 Sofia SIP 注册态指示药丸");
+  assert(clientContent.includes("sipPresenceModal"), "PC 客户端必须包含 SIP 注册态感知模态框");
+  assert(clientContent.includes("simulateReRegister("), "PC 客户端必须支持模拟重新注册与 Event.Registration 监听");
+
+  // 运营管理后台断言
+  assert(adminContent.includes("addExtensionModal"), "管理后台必须包含 HTTP 同步新增分机模态框");
+  assert(adminContent.includes("inspectExtensionModal"), "管理后台必须包含分机 Sofia 探活模态框");
+  assert(adminContent.includes("sidecarHealthModal"), "管理后台必须包含 Sidecar 节点链路健康探活模态框");
+  assert(adminContent.includes("manage_extension.sh"), "管理后台必须明确标注本地脚本与 reloadxml 机制");
+  assert(adminContent.includes("submitAddExtension("), "管理后台必须包含同步提交开户逻辑");
+  assert(adminContent.includes("deleteExtension("), "管理后台必须包含同步销户逻辑");
+  assert(adminContent.includes("inspectExtension("), "管理后台必须包含分机实时诊断逻辑");
+  assert(adminContent.includes("checkSidecarHealth("), "管理后台必须包含节点探活函数");
+});
+
+runTest("TC-14: 校验 PC 客户端来电全景弹屏 (Screen Pop) 与 WebSocket 实时双向通信", () => {
+  // 顶栏 WebSocket 信道指示
+  assert(clientContent.includes("wsStatusPill"), "PC 客户端必须包含 WebSocket 实时信道状态指示药丸");
+  assert(clientContent.includes("wsDetailsModal"), "PC 客户端必须包含 WebSocket 信道诊断模态框");
+  assert(clientContent.includes("initWebSocket("), "PC 客户端必须包含 WebSocket 初始化与自动重连函数");
+
+  // 来电全景弹屏容器与核心字段
+  assert(clientContent.includes("incomingScreenPopModal"), "PC 客户端必须包含现代化来电全景弹屏模态框");
+  assert(clientContent.includes("popCallerNumber"), "弹屏必须呈现主叫客户号码");
+  assert(clientContent.includes("popDidNumber"), "弹屏必须呈现接入 DID 热线");
+  assert(clientContent.includes("popIvrPath"), "弹屏必须呈现 IVR 导航按键轨迹");
+  assert(clientContent.includes("popRoutingReason"), "弹屏必须包含熟客记忆路由原因");
+  assert(clientContent.includes("popRingCountdownText"), "弹屏必须包含振铃超时倒计时");
+
+  // 客户 360 画像与防撞单工单
+  assert(clientContent.includes("popCustomerName"), "弹屏必须呈现客户联系人姓名");
+  assert(clientContent.includes("popCompanyName"), "弹屏必须呈现客户所属企业全称");
+  assert(clientContent.includes("popCustomerLevel"), "弹屏必须呈现 VIP 客户等级");
+  assert(clientContent.includes("popCustomerTags"), "弹屏必须呈现客户画像特征标签");
+  assert(clientContent.includes("popLastAgentName"), "弹屏必须对齐 24h 防撞单前序坐席 (陈松)");
+  assert(clientContent.includes("popPendingTicketId"), "弹屏必须呈现关联在途待办工单");
+  assert(clientContent.includes("popRecommendedScript"), "弹屏必须包含 AI 智能开场白推荐话术");
+
+  // 决策控制与电信级音效
+  assert(clientContent.includes("playIncomingRingtone("), "必须包含 Web Audio 仿真振铃音效函数");
+  assert(clientContent.includes("showDesktopIncomingNotification("), "必须支持操作系统级原生桌面弹屏气泡");
+  assert(clientContent.includes("answerIncomingCall("), "必须包含一键接听并无缝升起通话条函数");
+  assert(clientContent.includes("rejectIncomingCall("), "必须包含拒接/示忙通话函数");
+  assert(clientContent.includes("transferScreenPopCall("), "必须包含快速盲转 9 人白名单组员函数");
+  assert(clientContent.includes("sendScreenPopToCallback("), "必须包含超时或手动转未接待回拨任务函数");
+});
+
 console.log("\n====================================================================");
 console.log(`🎉 [FCC Test Runner] 执行完毕! 共执行: ${passedCount + failedCount} 项, 成功: \x1b[32m${passedCount}\x1b[0m, 失败: \x1b[31m${failedCount}\x1b[0m`);
 console.log("====================================================================\n");

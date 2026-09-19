@@ -19,6 +19,7 @@
 - Frontend treats Snowflake/`Long` IDs as opaque strings; backend serializes them through shared Jackson configuration.
 - Lists and calendars return compact summaries. Article, card, assessment, note, and other large data load from a single-object detail API.
 - Schema changes need an upgrade migration strategy, init/schema updates where applicable, and documented execution order.
+- 代码注释与规范：所有类与方法必须增加清晰完整的 Javadoc 注释；所有 DTO/VO 对象及其属性字段必须增加 Swagger/OpenAPI 注解（`@Schema`）及中文业务描述；所有枚举值必须具备中文属性（如 `desc`/`label`）及对应 getter 方法。
 - Long-running AI work persists job state before execution, runs after commit, exposes item-level outcomes, and retries failed items only.
 - State unavailable database or provider verification honestly; never report unavailable end-to-end checks as passed.
 
