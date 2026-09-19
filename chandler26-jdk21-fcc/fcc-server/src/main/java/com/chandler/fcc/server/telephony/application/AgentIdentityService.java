@@ -1,0 +1,62 @@
+package com.chandler.fcc.server.telephony.application;
+
+import com.fasterxml.jackson.databind.JsonNode;
+import com.fasterxml.jackson.databind.ObjectMapper;
+import org.springframework.beans.factory.annotation.Value;
+import org.springframework.http.HttpStatus;
+import org.springframework.stereotype.Service;
+import org.springframework.web.server.ResponseStatusException;
+import org.springframework.web.context.request.RequestContextHolder;
+import org.springframework.web.context.request.ServletRequestAttributes;
+import java.net.URI;
+import java.net.http.HttpClient;
+import java.net.http.HttpRequest;
+import java.net.http.HttpResponse;
+import java.time.Duration;
+
+/** 通过管理服务验证坐席令牌，控制面不信任调用方声明的工号。 */
+@Service
+public class AgentIdentityService {
+    private final HttpClient client = HttpClient.newBuilder().connectTimeout(Duration.ofSeconds(2)).build();
+    private final ObjectMapper mapper = new ObjectMapper();
+    @Value("${fcc.admin.base-url:http://127.0.0.1:8089}")
+    private String adminBaseUrl;
+
+    /** 验证当前 HTTP 请求的坐席身份及显式工号。
+     * @param requestedWorkNo 请求工号，可为空但不可冒用
+     * @return 认证坐席工号
+     */
+    public String requireAgent(String requestedWorkNo) {
+        var attributes = (ServletRequestAttributes) RequestContextHolder.getRequestAttributes();
+        String token = attributes == null ? null : attributes.getRequest().getHeader("satoken");
+        String workNo = authenticate(token);
+        if (requestedWorkNo != null && !requestedWorkNo.isBlank() && !workNo.equals(requestedWorkNo)) {
+            throw new ResponseStatusException(HttpStatus.FORBIDDEN, "坐席身份不匹配");
+        }
+        return workNo;
+    }
+
+    /** 对令牌进行在线认证，不缓存过期或已注销的身份。
+     * @param token 登录令牌，不得记录到日志
+     * @return 认证坐席工号
+     */
+    public String authenticate(String token) {
+        if (token == null || token.isBlank()) throw new ResponseStatusException(HttpStatus.UNAUTHORIZED, "请先登录");
+        try {
+            var request = HttpRequest.newBuilder(URI.create(adminBaseUrl.replaceAll("/+$", "") + "/api/admin/auth/me"))
+                    .timeout(Duration.ofSeconds(3)).header("satoken", token).GET().build();
+            var response = client.send(request, HttpResponse.BodyHandlers.ofString());
+            JsonNode root = mapper.readTree(response.body());
+            JsonNode user = root.path("data");
+            if (response.statusCode() != 200 || root.path("code").asInt() != 200
+                    || !"AGENT".equals(user.path("accountType").asText()) || user.path("loginId").asText().isBlank()) {
+                throw new ResponseStatusException(HttpStatus.UNAUTHORIZED, "坐席登录已失效");
+            }
+            return user.path("loginId").asText();
+        } catch (ResponseStatusException e) { throw e; }
+        catch (InterruptedException e) {
+            Thread.currentThread().interrupt();
+            throw new ResponseStatusException(HttpStatus.SERVICE_UNAVAILABLE, "身份验证暂不可用");
+        } catch (Exception e) { throw new ResponseStatusException(HttpStatus.SERVICE_UNAVAILABLE, "身份验证暂不可用"); }
+    }
+}
