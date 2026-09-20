@@ -52,6 +52,14 @@ public class CustomerService {
      */
     public String save(CustomerRecord customer, boolean create) {
         var actor = identity.requirePrincipal();
+        return saveFor(actor.tenantId(),actor.workNo(),customer,create);
+    }
+
+    /** 已鉴权的管理用例按真实负责坐席维护客户，复用相同校验与乐观锁。
+     * @param tenant 租户 @param owner 负责坐席 @param customer 资料 @param create 是否新增 @return 客户 ID
+     */
+    public String saveFor(long tenant,String owner,CustomerRecord customer,boolean create) {
+        var actor = new AgentIdentityService.Principal(owner,tenant);
         if (customer.getName() == null || customer.getName().isBlank() || customer.getName().length()>128
                 || (customer.getNotes()!=null && customer.getNotes().length()>4000)
                 || (customer.getCompanyName()!=null && customer.getCompanyName().length()>255)) {

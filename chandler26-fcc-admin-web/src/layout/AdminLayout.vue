@@ -229,24 +229,10 @@ const handleNotify = () => {
         </div>
       </div>
 
-      <!-- 底部中间件节点健康卡片 -->
-      <div class="bg-gradient-to-br from-indigo-50 via-blue-50 to-purple-50 p-3 rounded-2xl border border-indigo-100/70 text-center relative overflow-hidden">
-        <div class="w-7 h-7 rounded-full bg-white shadow-sm flex items-center justify-center text-xs font-bold text-brand-600 mx-auto mb-1.5">
-          ⚡
-        </div>
-        <div class="text-xs font-bold text-slate-800 mb-0.5">通信中间件集群</div>
-        <p class="text-[10px] text-slate-500 mb-2 leading-tight font-medium">FreeSWITCH + Sidecar</p>
-        <button
-          @click="handleProbe"
-          class="w-full py-1.5 bg-white hover:bg-slate-50 text-brand-600 text-[11px] font-extrabold rounded-lg shadow-xs transition-all cursor-pointer"
-        >
-          实时性能探测
-        </button>
-      </div>
     </aside>
 
     <!-- 2. 右侧主工作区 (顶栏 + 模块内容渲染容器) -->
-    <main class="flex-1 flex flex-col overflow-hidden bg-[#F8FAFD] h-full">
+    <main class="flex-1 min-w-0 flex flex-col overflow-hidden bg-[#F8FAFD] h-full">
 
       <!-- 顶栏：欢迎问候 + 字体缩放控制器 + 搜索 + 管理员档案 -->
       <header class="px-8 pt-6 pb-4 flex items-center justify-between shrink-0">
@@ -265,6 +251,16 @@ const handleNotify = () => {
 
         <!-- 顶栏右侧工具区 -->
         <div class="flex items-center gap-4">
+          <button
+            @click="handleProbe"
+            class="w-11 h-11 shrink-0 rounded-full bg-white border border-slate-200 hover:bg-slate-50 flex items-center justify-center text-slate-600"
+            :title="`通信中间件集群：${healthLabel}`"
+            aria-label="查看通信中间件集群"
+            aria-haspopup="dialog"
+            :aria-expanded="showProbeModal"
+          >
+            <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true"><rect x="4" y="3" width="16" height="7" rx="2" stroke-width="1.5"/><rect x="4" y="14" width="16" height="7" rx="2" stroke-width="1.5"/><path d="M8 6h.01M8 17h.01M12 10v4" stroke-width="2" stroke-linecap="round"/></svg>
+          </button>
           
 
           <!-- 提醒铃铛：角标为真实的未接待回拨待办数 -->
@@ -309,7 +305,7 @@ const handleNotify = () => {
     </main>
 
     <!-- 探活弹窗 -->
-    <div v-if="showProbeModal" class="fixed inset-0 bg-slate-900/50 backdrop-blur-xs z-50 flex items-center justify-center p-4">
+    <el-dialog v-model="showProbeModal" title="通信中间件集群" width="min(36rem, calc(100vw - 2rem))" append-to-body :z-index="3000">
       <div class="bg-white rounded-3xl p-6 max-w-xl w-full shadow-popover border border-slate-100 space-y-4">
         <div class="flex justify-between items-center pb-3 border-b border-slate-100">
           <div class="flex items-center gap-2">
@@ -330,9 +326,10 @@ const handleNotify = () => {
           <dt class="text-slate-500">探测时间</dt><dd class="text-slate-900">{{ probeResult.checkedAt }}</dd>
         </dl>
         <div class="flex justify-end">
+          <el-button :loading="probing" @click="handleProbe">重新探测</el-button>
           <button @click="showProbeModal = false" class="px-6 py-2 bg-brand-500 hover:bg-brand-600 text-white rounded-xl text-xs font-bold shadow-xs transition cursor-pointer">关闭</button>
         </div>
       </div>
-    </div>
+    </el-dialog>
   </div>
 </template>

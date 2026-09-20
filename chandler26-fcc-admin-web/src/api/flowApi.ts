@@ -49,6 +49,9 @@ export interface FlowSimulateRespVO {
 }
 
 export const flowApi = {
+  create(flowKey: string, flowName: string): Promise<string> {
+    return apiClient.post('/flow-studio', { flowKey, flowName });
+  },
   list(): Promise<FlowDefinitionVO[]> {
     return apiClient.get('/flows');
   },

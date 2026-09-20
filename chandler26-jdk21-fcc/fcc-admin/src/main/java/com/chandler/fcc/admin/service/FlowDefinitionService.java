@@ -49,8 +49,10 @@ public class FlowDefinitionService {
      * 查询所有流程列表及包含的版本信息
      */
     public List<FlowDefinitionVO> listFlows() {
+        cn.dev33.satoken.stp.StpUtil.checkPermission("flow:view");
         List<FlowDefinitionEntity> entities = flowMapper.selectList(
                 new LambdaQueryWrapper<FlowDefinitionEntity>()
+                        .eq(FlowDefinitionEntity::getTenantId,com.chandler.fcc.admin.flow.FlowStudioService.tenant())
                         .isNull(FlowDefinitionEntity::getDeletedAt)
                         .orderByAsc(FlowDefinitionEntity::getId));
 
@@ -78,9 +80,11 @@ public class FlowDefinitionService {
      * 获取指定流程的所有历史和草稿版本
      */
     public List<FlowVersionVO> getVersions(String flowKey) {
+        cn.dev33.satoken.stp.StpUtil.checkPermission("flow:view");
         FlowDefinitionEntity flow = flowMapper.selectOne(
                 new LambdaQueryWrapper<FlowDefinitionEntity>()
-                        .eq(FlowDefinitionEntity::getFlowKey, flowKey));
+                        .eq(FlowDefinitionEntity::getFlowKey, flowKey)
+                        .eq(FlowDefinitionEntity::getTenantId,com.chandler.fcc.admin.flow.FlowStudioService.tenant()));
         if (flow == null) {
             return List.of();
         }
@@ -114,17 +118,19 @@ public class FlowDefinitionService {
      */
     @Transactional(rollbackFor = Exception.class)
     public String saveDraft(String flowKey, FlowSaveDraftReq req) {
+        if(flowKey.startsWith("SYSTEM_"))throw new IllegalArgumentException("系统固定模板不允许编辑");
         cn.dev33.satoken.stp.StpUtil.checkPermission("flow:write");
         FlowDefinitionEntity flow = flowMapper.selectOne(
                 new LambdaQueryWrapper<FlowDefinitionEntity>()
-                        .eq(FlowDefinitionEntity::getFlowKey, flowKey));
+                        .eq(FlowDefinitionEntity::getFlowKey, flowKey)
+                        .eq(FlowDefinitionEntity::getTenantId,com.chandler.fcc.admin.flow.FlowStudioService.tenant()).last("FOR UPDATE"));
         if (flow == null) {
             throw new IllegalArgumentException("流程定义不存在: " + flowKey);
         }
 
         LocalDateTime now = LocalDateTime.now();
         String json = req.getDefinitionJson() != null ? req.getDefinitionJson() : "{}";
-        com.chandler.fcc.common.protocol.FlowDefinitionValidator.validate(json);
+        json=com.chandler.fcc.common.protocol.FlowDefinitionValidator.validate(json).toString();
         String checksum = calculateSha256(json);
 
         // 查找现有的草稿版本 (DRAFT)
@@ -170,10 +176,12 @@ public class FlowDefinitionService {
      */
     @Transactional(rollbackFor = Exception.class)
     public String publishFlow(String flowKey, FlowPublishReq req) {
+        if(flowKey.startsWith("SYSTEM_"))throw new IllegalArgumentException("系统固定模板不允许发布修改");
         cn.dev33.satoken.stp.StpUtil.checkPermission("flow:write");
         FlowDefinitionEntity flow = flowMapper.selectOne(
                 new LambdaQueryWrapper<FlowDefinitionEntity>()
-                        .eq(FlowDefinitionEntity::getFlowKey, flowKey));
+                        .eq(FlowDefinitionEntity::getFlowKey, flowKey)
+                        .eq(FlowDefinitionEntity::getTenantId,com.chandler.fcc.admin.flow.FlowStudioService.tenant()).last("FOR UPDATE"));
         if (flow == null) {
             throw new IllegalArgumentException("流程定义不存在: " + flowKey);
         }

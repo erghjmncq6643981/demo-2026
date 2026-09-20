@@ -130,6 +130,10 @@ public class FlowConfig {
 
         try {
             JsonNode root = com.chandler.fcc.common.protocol.FlowDefinitionValidator.validate(definitionJson);
+            if("IVR".equals(root.path("routeMode").asText())){
+                // 固定 IVR 在呼入时按 DID 加载并锁定数据库版本，不写入按 modelKey 共享的旧动作链。
+                return;
+            }
             String routeMode = root.path("routeMode").asText();
             String targetModelKey = modelType != null ? modelType : "INBOUND";
             if ("FLOW-INBOUND".equalsIgnoreCase(flowKey) || "INBOUND".equalsIgnoreCase(targetModelKey)) {

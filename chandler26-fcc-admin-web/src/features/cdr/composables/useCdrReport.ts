@@ -2,7 +2,6 @@ import { toCallRecord, type CallRecord } from '../model/callRecord';
 import { ref, computed, watch, onMounted } from 'vue';
 import { cdrApi, type CallCdrVO, type CallCdrQueryReq, type CdrStatsVO } from '../../../api/cdrApi';
 import { callbackApi, type CallbackTaskVO } from '../../../api/callbackApi';
-import { extensionApi } from '../../extensions/api/extensionApi';
 import { toast, toastError, errorText } from '../../../utils/feedback';
 
 /** Owns cdr queries, mutations and view state for one mounted page. */
@@ -282,18 +281,6 @@ export function useCdrReport(props: Readonly<{ initialTab?: 'records' | 'callbac
     return sec + ' 秒';
   };
 
-  const onlineExtensionsCount = ref(0);
-  const loadExtensions = async () => {
-    try {
-      const res = await extensionApi.list();
-      if (res && res.list) {
-        onlineExtensionsCount.value = res.list.filter(e => e.onlineStatus === 'ONLINE' || !!e.registeredIp).length;
-      }
-    } catch (e) {
-      onlineExtensionsCount.value = 0;
-    }
-  };
-
   const currentDateStr = computed(() => {
     const now = new Date();
     const y = now.getFullYear();
@@ -305,7 +292,7 @@ export function useCdrReport(props: Readonly<{ initialTab?: 'records' | 'callbac
   onMounted(() => {
     loadCdrRecords();
     loadCallbackRecords();
-    loadExtensions();
+    loadCdrStats();
   });
 
   // ==================== 3. 录音播放器控制 ====================
@@ -441,7 +428,6 @@ export function useCdrReport(props: Readonly<{ initialTab?: 'records' | 'callbac
     inboundTalkSec,
     outboundTalkSec,
     formatDurationDisplay,
-    onlineExtensionsCount,
     currentDateStr,
     playingAudio,
     currentAudioUrl,

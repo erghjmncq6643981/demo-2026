@@ -28,6 +28,7 @@ public class InboundCallService {
  private final ScreenPopService screenPop;
  private final AgentWebSocketService websocket;
  private final TransactionTemplate transactions;
+ private final InboundMenuService menu;
  private final ObjectMapper json=new ObjectMapper();
 
  /** 接管普通呼入，固定发布版本或 group:组代码，不回落到任意租户。
@@ -45,7 +46,7 @@ public class InboundCallService {
     call.putData("queueDeadline",System.currentTimeMillis()+120000);call.putData("triedAgents",new ArrayList<String>());
     if(key.startsWith("group:")){call.putData("groupCode",key.substring(6));}
     else {
-     try{String owner=json.readTree(String.valueOf(route.get("definition"))).path("didDirectConfig").path("workNo").asText();if(owner.isBlank())throw new IllegalArgumentException();call.putData("directOwner",owner);call.putData("flowVersionId",String.valueOf(route.get("versionId")));}
+     try{menu.configure(call,String.valueOf(route.get("definition")));call.putData("flowVersionId",String.valueOf(route.get("versionId")));}
      catch(Exception invalid){client.hangup(call.getNodeId(),call.getCtrlId(),uuid,"CALL_REJECTED");sessions.removeSession(call.getCtrlId());return true;}
     }
     call.setStageState(CallStageState.CALLING);persistence.saveOrUpdateSession(call);
@@ -60,7 +61,7 @@ public class InboundCallService {
     .direction(uuid.equals(call.getGuestChannelUuid())?"INBOUND":"OUTBOUND").state(state)
     .hangupCause(params.path("cause").asText(null))
     .endedAt("DESTROY".equals(state)?java.time.LocalDateTime.now(java.time.ZoneOffset.UTC):null).build());
-   if("READY".equals(state)&&uuid.equals(call.getGuestChannelUuid())){call.putData("guestReady",true);persistence.saveOrUpdateSession(call);route(call);}
+   if("READY".equals(state)&&uuid.equals(call.getGuestChannelUuid())){call.putData("guestReady",true);if(menu.ready(call))return true;call.putData("flowBranch","menu.enabled=false");persistence.saveOrUpdateSession(call);route(call);}
    else if("READY".equals(state)&&uuid.equals(call.getAgentChannelUuid())){
     if(call.getData().putIfAbsent("bridgeRequested",true)==null){persistence.saveOrUpdateSession(call);CallControlService.requireAccepted(client.channelBridge(call.getNodeId(),call.getCtrlId(),call.getGuestChannelUuid(),uuid));}
    }else if("BRIDGE".equals(state)){
@@ -87,6 +88,10 @@ public class InboundCallService {
  @SuppressWarnings("unchecked")
  private void route(CallInfoBO call){
   if(call.getData().containsKey("terminal")||!call.getData().containsKey("guestReady")||call.getAgentChannelUuid()!=null)return;
+  if(call.getData().containsKey("ivrWaiting")){
+   if(System.currentTimeMillis()>((Number)call.getData().get("ivrDeadline")).longValue()){call.putData("flowBranch","menu.timeout");finish(call,"NO_USER_RESPONSE");}
+   return;
+  }
   if(System.currentTimeMillis()>((Number)call.getData().get("queueDeadline")).longValue()){finish(call,"NO_ANSWER");return;}
   long tenant=((Number)call.getData().get("tenantId")).longValue();
   List<String> tried=(List<String>)call.getData().get("triedAgents");
@@ -123,7 +128,7 @@ public class InboundCallService {
   var previousStage=call.getStageState();
   call.setStageState(CallStageState.NORMAL_END);call.setHangupCause(cause);
   try { transactions.executeWithoutResult(transaction->{persistence.saveOrUpdateSession(call);release(call);
-   if(!answered)agents.callback(IdUtil.nextId(),((Number)call.getData().get("tenantId")).longValue(),call.getCallId(),call.getCallerNumber(),call.getDestinationNumber(),cause);
+   if(!answered&&!"HANGUP".equals(call.getDataStr("ivrTimeoutAction","CALLBACK")))agents.callback(IdUtil.nextId(),((Number)call.getData().get("tenantId")).longValue(),call.getCallId(),call.getCallerNumber(),call.getDestinationNumber(),cause);
   }); } catch(RuntimeException failure){call.getData().remove("terminal");call.setStageState(previousStage);throw failure;}
   client.hangup(call.getNodeId(),call.getCtrlId(),call.getGuestChannelUuid(),"NORMAL_CLEARING");
   if(call.getAgentChannelUuid()!=null){client.hangup(call.getNodeId(),call.getCtrlId(),call.getAgentChannelUuid(),"NORMAL_CLEARING");websocket.pushCallHangup(call.getAgentWorkNo(),call.getCallId(),Map.of("cause",cause));}
@@ -131,4 +136,13 @@ public class InboundCallService {
  }
  /** 仅释放本次占用。 @param call 通话 */
  private void release(CallInfoBO call){if(call.getAgentWorkNo()!=null)agents.release(((Number)call.getData().get("tenantId")).longValue(),call.getAgentWorkNo(),call.getCallId());}
+
+ /** 只处理本呼入固定模板的客户按键，不回落旧路由逻辑。
+  * @param call 通话 @param params 按键事件 @return 是否为本模板
+  */
+ public boolean digits(CallInfoBO call,JsonNode params){
+  if(!"INBOUND".equals(call.getDataStr("runtimeTemplate","")))return false;
+  synchronized(call){if(!call.getData().containsKey("terminal")&&menu.digits(call,params))route(call);}
+  return true;
+ }
 }

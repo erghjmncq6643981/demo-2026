@@ -20,6 +20,7 @@ public final class FlowDefinitionValidator {
     public static JsonNode validate(String json) {
         try {
             JsonNode root = MAPPER.readTree(json);
+            if ("IVR".equals(root.path("routeMode").asText())) return StagedFlowDefinition.validate(root);
             requireFields(root, Set.of("routeMode", "didDirectConfig"));
             if (!"DID_DIRECT".equals(root.path("routeMode").asText()))
                 throw new IllegalArgumentException("当前仅支持 DID_DIRECT；规则引擎和 HTTP 路由尚未实现");

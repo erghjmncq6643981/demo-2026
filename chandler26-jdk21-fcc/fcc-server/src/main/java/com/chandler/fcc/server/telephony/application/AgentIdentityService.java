@@ -78,6 +78,25 @@ public class AgentIdentityService {
      * @return 已验证的身份资料
      */
     private JsonNode authenticateProfile(String token) {
+        return authenticateProfile(token,"AGENT");
+    }
+
+    /** 管理端通过在线身份核验进入运行业务管理入口。
+     * @return 本租户管理员主体
+     */
+    public Principal requireManagement() {
+        var attributes=(ServletRequestAttributes)RequestContextHolder.getRequestAttributes();
+        var user=authenticateProfile(attributes==null?null:attributes.getRequest().getHeader("satoken"),"ADMIN");
+        if(!"ADMIN".equals(user.path("role").asText())&&!"SUPER_ADMIN".equals(user.path("role").asText()))
+            throw new ResponseStatusException(HttpStatus.FORBIDDEN,"仅系统管理员可以管理客户和外呼任务");
+        try { return new Principal(user.path("loginId").asText(),Long.parseLong(user.path("tenantId").asText())); }
+        catch(NumberFormatException e){throw new ResponseStatusException(HttpStatus.FORBIDDEN,"缺少租户身份");}
+    }
+
+    /** 按账户类型在线验证，不允许坐席令牌冒用管理入口。
+     * @param token 登录令牌 @param accountType 必须匹配的账户类型 @return 身份资料
+     */
+    private JsonNode authenticateProfile(String token,String accountType) {
         if (token == null || token.isBlank()) throw new ResponseStatusException(HttpStatus.UNAUTHORIZED, "请先登录");
         try {
             var request = HttpRequest.newBuilder(URI.create(adminBaseUrl.replaceAll("/+$", "") + "/api/admin/auth/me"))
@@ -86,7 +105,7 @@ public class AgentIdentityService {
             JsonNode root = mapper.readTree(response.body());
             JsonNode user = root.path("data");
             if (response.statusCode() != 200 || root.path("code").asInt() != 200
-                    || !"AGENT".equals(user.path("accountType").asText()) || user.path("loginId").asText().isBlank()) {
+                    || !accountType.equals(user.path("accountType").asText()) || user.path("loginId").asText().isBlank()) {
                 throw new ResponseStatusException(HttpStatus.UNAUTHORIZED, "坐席登录已失效");
             }
             return user;

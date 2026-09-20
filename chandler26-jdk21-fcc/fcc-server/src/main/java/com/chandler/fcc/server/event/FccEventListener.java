@@ -243,6 +243,8 @@ public class FccEventListener {
             }
         }
 
+        callInfo.putData("flowEventId",params.path("event_id").asText());
+        callInfo.putData("flowSourceTime",params.path("timestamp").asLong());
         if (phoneBindingService != null && phoneBindingService.channel(callInfo, params)) {
             if ("DESTROY".equals(state)) sessionManager.removeSession(callInfo.getCtrlId());
             return;
@@ -539,6 +541,8 @@ public class FccEventListener {
         }
 
         CallInfoBO bindingCall=sessionManager.getByCtrlUuid(ctrlUuid).or(()->sessionManager.getByChannelUuid(uuid)).orElse(null);
+        if(bindingCall!=null){bindingCall.putData("flowEventId",params.path("event_id").asText());bindingCall.putData("flowSourceTime",params.path("timestamp").asLong());}
+        if(bindingCall!=null && inboundCallService!=null && inboundCallService.digits(bindingCall,params))return;
         if (bindingCall!=null && phoneBindingService!=null && phoneBindingService.digits(bindingCall,digit)) return;
         if (bindingCall!=null && outboundCallService!=null && outboundCallService.digits(bindingCall,digit)) return;
         log.debug("[FCC 收到按键] UUID: {}, CtrlUUID: {}", uuid, ctrlUuid);

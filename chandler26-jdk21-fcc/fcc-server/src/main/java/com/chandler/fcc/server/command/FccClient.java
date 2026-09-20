@@ -117,6 +117,13 @@ public class FccClient {
         return sendRequest(nodeId, "FNode.ReadDTMF", dto);
     }
 
+    /** 使用持久阶段命令标识放音收号，未知结果不换 ID 重发。
+     * @param nodeId 节点 @param dto 动作参数 @param commandId 稳定命令标识 @return 同步受理结果
+     */
+    public FNodeResult readDTMF(String nodeId, FNodeReadDTMFDTO dto, String commandId) {
+        return sendRequest(nodeId, "FNode.ReadDTMF", dto, commandId);
+    }
+
     /**
      * 放音语音播报 (FNode.Play) - 使用默认节点
      *

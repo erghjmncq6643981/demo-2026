@@ -38,6 +38,7 @@ public class CallPersistenceService {
     private final CallRecordingMapper callRecordingMapper;
     private final CallBridgeMapper callBridgeMapper;
     private final CallBridgeMemberMapper callBridgeMemberMapper;
+    private final com.chandler.fcc.server.flow.application.FlowExecutionRecorder flowRecorder;
 
     private final ObjectMapper objectMapper = new ObjectMapper();
 
@@ -92,6 +93,7 @@ public class CallPersistenceService {
             } catch (Exception ignored) {}
 
             callSessionMapper.insert(entity);
+            flowRecorder.record(callInfo);
             log.info("💾 [持久化] 成功新建通话会话记录: id={}, ctrlId={}", entity.getId(), entity.getCtrlId());
             return entity;
         } else {
@@ -157,6 +159,7 @@ public class CallPersistenceService {
 
             existing.setUpdatedAt(now);
             callSessionMapper.updateById(existing);
+            flowRecorder.record(callInfo);
             log.debug("💾 [持久化] 成功更新通话会话记录: id={}, status={}", existing.getId(), existing.getStatus());
             return existing;
         }

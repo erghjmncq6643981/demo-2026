@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { useCdrReport } from '../features/cdr/composables/useCdrReport';
+import CallExecutionPanel from '../features/flows/components/CallExecutionPanel.vue';
 const props = withDefaults(defineProps<{
   initialTab?: 'records' | 'callback';
 }>(), {
@@ -38,7 +39,6 @@ const {
   inboundTalkSec,
   outboundTalkSec,
   formatDurationDisplay,
-  onlineExtensionsCount,
   currentDateStr,
   playingAudio,
   currentAudioUrl,
@@ -59,10 +59,10 @@ const {
     
     <!-- 提示已统一收敛到全局反馈层 (src/utils/feedback.ts) -->
 
-    <!-- 1. 顶部 Bento Grid 4 张话务与回拨指标卡片 -->
-    <div class="grid grid-cols-12 gap-5 shrink-0">
+    <!-- 话务与回拨指标 -->
+    <div class="grid grid-cols-1 lg:grid-cols-3 gap-5 shrink-0">
       <!-- 指标 1 -->
-      <div class="col-span-3 bg-white p-6 rounded-3xl border border-slate-100 shadow-card flex flex-col justify-between hover:shadow-card-hover transition-all">
+      <div class="bg-white p-6 rounded-3xl border border-slate-100 shadow-card flex flex-col justify-between hover:shadow-card-hover transition-all">
         <div class="flex items-center justify-between mb-2">
           <span class="text-sm font-bold text-slate-500">今日呼叫总数</span>
           <div class="w-9 h-9 rounded-2xl bg-blue-50 text-blue-600 flex items-center justify-center text-sm font-black">↗</div>
@@ -77,27 +77,8 @@ const {
         </div>
       </div>
 
-      <!-- 指标 2: 核心中继卡片 -->
-      <div class="col-span-3 bg-gradient-to-tr from-amber-200 via-amber-300 to-yellow-400 p-6 rounded-3xl shadow-card text-amber-950 flex flex-col justify-between relative overflow-hidden">
-        <div class="absolute -right-4 -bottom-6 w-28 h-28 bg-white/20 rounded-full blur-xl pointer-events-none"></div>
-        <div class="flex items-center justify-between">
-          <div>
-            <span class="text-xs font-black tracking-wider uppercase opacity-75">SIP TRUNK POOL</span>
-            <div class="text-sm font-black text-amber-950">移动 / 电信智能中继</div>
-          </div>
-          <span class="text-xs font-extrabold bg-amber-900/15 px-2.5 py-0.5 rounded-full">主节点</span>
-        </div>
-        <div>
-          <div class="font-mono text-base font-black tracking-widest my-1">127.0.0.1 (FreeSWITCH)</div>
-          <div class="flex items-center justify-between text-xs font-bold opacity-85">
-            <span>实时通道: {{ answeredCallsCount > 0 ? '通道活跃' : '就绪待命' }} (在线分机: {{ onlineExtensionsCount }})</span>
-            <span class="bg-white/40 px-2.5 py-0.5 rounded-full">ACTIVE</span>
-          </div>
-        </div>
-      </div>
-
       <!-- 指标 3: 未接待漏话回拨池卡片 -->
-      <div class="col-span-3 bg-white p-6 rounded-3xl border border-slate-100 shadow-card flex flex-col justify-between hover:shadow-card-hover transition-all">
+      <div class="bg-white p-6 rounded-3xl border border-slate-100 shadow-card flex flex-col justify-between hover:shadow-card-hover transition-all">
         <div class="flex items-center justify-between mb-2">
           <span class="text-sm font-bold text-slate-500">未接待漏话总池</span>
           <div class="w-9 h-9 rounded-2xl bg-rose-50 text-rose-600 flex items-center justify-center text-sm font-black">↩</div>
@@ -115,7 +96,7 @@ const {
       </div>
 
       <!-- 指标 4 -->
-      <div class="col-span-3 bg-white p-6 rounded-3xl border border-slate-100 shadow-card flex flex-col justify-between hover:shadow-card-hover transition-all">
+      <div class="bg-white p-6 rounded-3xl border border-slate-100 shadow-card flex flex-col justify-between hover:shadow-card-hover transition-all">
         <div class="flex items-center justify-between mb-2">
           <span class="text-sm font-bold text-slate-500">总通话时长</span>
           <div class="w-9 h-9 rounded-2xl bg-purple-50 text-purple-600 flex items-center justify-center text-sm font-black">⏱</div>
@@ -659,7 +640,7 @@ const {
                 <span class="mx-1.5 text-slate-300">|</span>
                 呼叫方向: <span class="font-bold text-slate-700">{{ selectedCdr.direction === 'OUTBOUND' ? '外呼' : selectedCdr.direction === 'INBOUND' ? '呼入' : '内线' }}</span>
                 <span class="mx-1.5 text-slate-300">|</span>
-                引擎: FreeSWITCH 1.11.3 (SIP/WebRTC)
+                引擎: FreeSWITCH
               </p>
             </div>
           </div>
@@ -701,9 +682,7 @@ const {
           </div>
         </div>
 
-        <div class="flex-1 flex items-center justify-center border border-dashed border-slate-300 bg-slate-50 p-6 text-center text-sm text-slate-500">
-          动作执行轨迹尚未接入持久化查询。当前仅展示话单、录音和通道事实，不推测呼叫过程。
-        </div>
+        <CallExecutionPanel v-if="selectedCdr.rawId" class="flex-1 min-h-0" :call-id="selectedCdr.rawId" />
 
         <!-- 弹窗底部操作栏 -->
         <div class="pt-3 border-t border-slate-100 flex items-center justify-between shrink-0">
