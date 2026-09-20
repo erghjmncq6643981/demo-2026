@@ -68,14 +68,15 @@
           </button>
 
           <button
-            @click="agentStore.setStatus('BUSY')"
+            disabled
+            title="忙碌状态由服务端通话分配维护"
             :class="[
               'flex items-center gap-1.5 px-3 py-1.5 rounded-lg font-extrabold text-sm transition-all cursor-pointer',
               agentStore.status === 'BUSY' ? 'bg-white text-rose-700 shadow-2xs' : 'text-slate-600 hover:text-rose-600'
             ]"
           >
             <span class="w-2.5 h-2.5 rounded-full bg-rose-500"></span>
-            <span>示忙</span>
+            <span>通话忙碌（自动）</span>
           </button>
         </div>
       </div>

@@ -41,6 +41,43 @@ public class AgentIdentityService {
      * @return 认证坐席工号
      */
     public String authenticate(String token) {
+        return authenticateProfile(token).path("loginId").asText();
+    }
+
+    /** 已认证坐席及租户身份，仅由身份服务产生。
+     * @param workNo 坐席工号
+     * @param tenantId 租户标识
+     */
+    public record Principal(String workNo, long tenantId) {}
+
+    /** 验证当前请求并取得租户，旧登录会话缺少租户时要求重新登录。
+     * @return 当前请求的可信业务主体
+     */
+    public Principal requirePrincipal() {
+        var attributes = (ServletRequestAttributes) RequestContextHolder.getRequestAttributes();
+        return authenticatePrincipal(attributes == null ? null : attributes.getRequest().getHeader("satoken"));
+    }
+
+    /** 在线验证长连接身份，同时返回可信租户，禁止仅用工号跨租户寻址。
+     * @param token 登录令牌，不得记录
+     * @return 可信坐席及租户
+     */
+    public Principal authenticatePrincipal(String token) {
+        JsonNode user = authenticateProfile(token);
+        try {
+            long tenantId = Long.parseLong(user.path("tenantId").asText());
+            if (tenantId < 0) throw new NumberFormatException();
+            return new Principal(user.path("loginId").asText(), tenantId);
+        } catch (NumberFormatException e) {
+            throw new ResponseStatusException(HttpStatus.UNAUTHORIZED, "登录会话缺少租户身份，请重新登录");
+        }
+    }
+
+    /** 在线读取身份资料。
+     * @param token 不得记录的登录令牌
+     * @return 已验证的身份资料
+     */
+    private JsonNode authenticateProfile(String token) {
         if (token == null || token.isBlank()) throw new ResponseStatusException(HttpStatus.UNAUTHORIZED, "请先登录");
         try {
             var request = HttpRequest.newBuilder(URI.create(adminBaseUrl.replaceAll("/+$", "") + "/api/admin/auth/me"))
@@ -52,7 +89,7 @@ public class AgentIdentityService {
                     || !"AGENT".equals(user.path("accountType").asText()) || user.path("loginId").asText().isBlank()) {
                 throw new ResponseStatusException(HttpStatus.UNAUTHORIZED, "坐席登录已失效");
             }
-            return user.path("loginId").asText();
+            return user;
         } catch (ResponseStatusException e) { throw e; }
         catch (InterruptedException e) {
             Thread.currentThread().interrupt();

@@ -5,6 +5,7 @@ import { audioService } from '../services/audioService';
 import { toast, toastError } from '../utils/feedback';
 import { sipWebRtcService } from '../services/sipWebRtcService';
 import { triggerHangupCall, triggerHoldCall, triggerDtmfCall } from '../api/telephonyApi';
+import { telephonyApi } from '../api/apiClient';
 import {
   initialCallLifecycle,
   reduceCallLifecycle,
@@ -116,7 +117,9 @@ export const useCallStore = defineStore('call', () => {
     hangupRequestKey = null;
   }
 
-  function closeAcw() {
+  async function closeAcw() {
+    try { await telephonyApi.post('/agent-state', { status: 'READY' }); }
+    catch (error) { toastError(error instanceof Error ? error.message : '整理提交失败'); return; }
     if (!applyLifecycle({ type: 'ACW_COMPLETED' })) return;
     showAcwDrawer.value = false;
     currentCall.value = null;

@@ -15,7 +15,7 @@
 | ORM | MyBatis-Plus 3.5.17 |
 | 数据库 | MySQL 8+ |
 | 运行态缓存 | Redis 7+ |
-| 软交换协议 | NATS Core + JSON-RPC 2.0 + Go Sidecar |
+| 软交换协议 | NATS Core 命令 + JetStream 事件 + JSON-RPC 2.0 + Go Sidecar |
 | 管理鉴权 | Sa-Token |
 | 服务端口 | `fcc-server :8085`、`fcc-admin :8089` |
 
@@ -42,7 +42,7 @@ fcc-server 统一拥有话机绑定运行流程、呼入、呼出、自动外呼
 
 弹屏链路为 FreeSWITCH → Sidecar → fcc-server 关联 Call、坐席与客户 → 业务 WebSocket → Windows 客户端执行本机通知。收件人、内容授权、关闭时机、补发规则由 fcc-server 决定；Windows API 由本机客户端调用，服务端不能直接恢复远程桌面窗口。
 
-先采用固定的绑定、呼入、呼出、自动外呼流程模板，复用状态与命令基础，不先建设通用流程画布。保持模块化单体，按业务需要引入 outbound、customer、notification 上下文，不创建空包或另拆微服务。实施依赖、验收与当前状态见 [分阶段实施清单](../../docs/fcc-delivery-plan.md)。当前 IVR 绑定仍在 fcc-admin，自动外呼 DDL 和浏览器弹屏不代表上述目标已交付。
+采用固定的绑定、呼入、呼出、自动外呼模板，保持模块化单体。2026-09-20 已实现 agent/customer/outbound 运行服务；旧 fcc-admin 工号 IVR 绑定实现、接口及 DTO 已移除，使用登录工作台的两分钟验证码与认证话机身份完成绑定。客户数据按租户与坐席隔离；调度任务先持久化，写 Call 前在同一事务锁定两分钟派发租约。过期且无 Call 的尝试原子失败，已存在 Call 的未知结果不重拨。实施与证据见 [跨电脑部署验收](../../docs/fcc-cross-machine-acceptance.md)。
 
 ## 3. Maven 模块
 
@@ -207,16 +207,16 @@ MySQL 是持久事实来源。Redis 只存可重建的运行态和通知。内�
 
 仍需作为已知缺口处理：
 
-- Sidecar 标准事件当前缺少稳定源 `event_id`，Java 生成新 ID 不能完成跨重投去重；
+- Sidecar 事件现有稳定源 `event_id` 与落盘 outbox；事件按接收顺序写入，Java Inbox 去重。处理中的中断及失败事件仍需业务对账；
 - 录音事件已统一为 `Event.Recording`，分类为 `record`；真实完成态、时长和文件大小仍需 Sidecar/FreeSWITCH 联调验证；
-- NATS 事件使用 Core NATS，服务离线期间不能可靠重放；
-- NATS Dispatcher 回调仍包含数据库和业务工作，缺少有界执行器/耐久消费的背压；
+- NATS 事件使用 FCC_EVENTS JetStream；fcc-control durable 每次处理一条并显式 ACK，部署前必须创建流；
+- 当前只支持一个活跃 fcc-server，不能把共享 durable 等同安全的多实例会话处理；
 - 命令重试尚未形成跨请求稳定的业务幂等键；
-- 活跃会话依赖内存索引，重启恢复链路不完整；
+- 消费前从 MySQL 分页恢复固定模板会话；尚缺与真实 FS 话道快照的自动对账；
 - 流程发布使用 Redis 与 HTTP best-effort 通知，不是事务性发布；
 - Agent WebSocket 已通过令牌在线核验坐席身份；身份服务故障时拒绝收发，尚需真实环境验证及性能评估；
 - 共享 Jackson 标识符模块已加入，但命名外字段、Map 和实际 HTTP 输出仍需完整契约验证；
-- DDL 中的 Outbox/Inbox、Dial Job 和部分流程事实表尚未形成完整运行闭环。
+- Dial Job 已有持久领取、频控、时段、暂停/取消、逐次结果及原子批量回填；真实话务与未知结果恢复尚未完整验收。
 
 挂机/保持/DTMF/转接已校验本人 callId、节点和底层响应；返回 ACCEPTED 而非最终状态，错误/超时不再伪造成功。班长四类干预均明确返回 501，前端禁用。保持媒体完成态和完整转接生命周期仍需联调。
 
@@ -240,4 +240,4 @@ mvn -q test
 
 涉及 Mapper/DDL 时还需解析 XML、检查查询形状和在一次性 MySQL 8 环境验证。涉及 NATS、事件、录音、WebSocket 或媒体时，必须报告外部依赖是否真实可用。
 
-2026-09-19：临时 JDK 21 下 Java 编译及 15 个定向测试通过；全量测试因本地 NATS 不可连接失败。坐席端 10 个测试、管理端 4 个测试及两端构建通过。真实数据库/媒体、录音和认证浏览器回归未验证。部署的新配置、密文格式与顺序见 [契约修复记录](../../docs/fcc-contract-remediation.md)。
+2026-09-20：Java 编译和定向 SQL/边界测试通过，真实 MySQL 验证覆盖租户隔离、乐观锁、绑定占用和任务原子回填。Sidecar 已用本机真实 JetStream 验证 outbox；Java 全量测试有 9 个上下文启动错误（本机 JDK 回环连接创建失败）。真实媒体、录音、认证浏览器与 Windows 交互尚未验收。部署的新配置与顺序见 [跨电脑验收](../../docs/fcc-cross-machine-acceptance.md)。

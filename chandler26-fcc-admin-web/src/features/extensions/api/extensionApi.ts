@@ -29,15 +29,6 @@ export interface ExtensionQueryReq {
   onlineStatus?: string;
 }
 
-export interface IvrBindResultVO {
-  success: boolean;
-  code: number;
-  extension: string;
-  workNo: string;
-  agentName?: string;
-  promptMessage: string;
-}
-
 export const extensionApi = {
   list(params?: ExtensionQueryReq): Promise<PageResult<ExtensionVO>> {
     return apiClient.get('/extensions', { params });
@@ -47,8 +38,5 @@ export const extensionApi = {
   },
   delete(id: string): Promise<void> {
     return apiClient.delete(`/extensions/${id}`);
-  },
-  ivrBind(data: { extension: string; workNo: string }): Promise<IvrBindResultVO> {
-    return apiClient.post('/extensions/ivr-bind', data);
   },
 };

@@ -11,7 +11,7 @@
 | 管理员、运营 / admin-web + fcc-admin | 账户、组、终端、分机、流程版本、资源、话单、录音、回拨 | ESL 和媒体控制 |
 | 坐席、班长 / client-web | 登录、接听、外呼、话中操作、话后整理、工作记录 | 判断未收到的软交换最终结果 |
 | fcc-server | Call/Leg 关联、话机绑定运行流程、呼入/呼出、自动外呼调度、客户资料、弹屏业务编排及业务 WebSocket | 直接连接 ESL、直接调用坐席电脑的 Windows API |
-| Windows 坐席客户端（待实现） | 接收服务端弹屏指令，执行本机通知、窗口恢复、任务栏提示，回报展示及操作结果 | 自行决定客户归属、外呼调度与弹屏业务规则 |
+| Windows 坐席客户端（测试安装包） | 接收服务端事件，执行本机通知、窗口恢复、任务栏提示；服务端展示回执尚未完成 | 自行决定客户归属、外呼调度与弹屏业务规则 |
 | 通信运维 / fswitch-web + Sidecar | 节点、注册、网关、话道、协议翻译、运行数据 | 客户资料、技能路由、业务话单定义 |
 | FreeSWITCH | SIP、Channel、Bridge、媒体及录音写入 | FCC 账户及业务授权 |
 
@@ -110,4 +110,4 @@ MySQL 保存业务事实；PostgreSQL 反映节点运行数据及 Sidecar 管理
 - [前后端契约检查](fcc-contract-alignment.md)
 - [验证记录](testing-architecture-and-test-cases.md)
 
-本轮修复后 Java 编译及 15 个定向测试通过，前端 14 个测试通过；全量 Java 测试因 NATS 不可连接失败，没有真实媒体与数据库链路验证，不能替代上述发布门槛。
+2026-09-20 已增加验证码绑定、固定呼入/坐席先接听呼出、客户资料、通知/渐进式调度及 Electron 测试安装包。MySQL 与 JetStream 已有本机真实服务验证，FreeSWITCH 媒体及 Windows 交互尚未验收。Java 全量测试当前失败于本机 JDK 回环连接创建，不能表述为全部通过。当前实现、部署步骤及剩余阻断以 [跨电脑验收记录](fcc-cross-machine-acceptance.md) 为准。

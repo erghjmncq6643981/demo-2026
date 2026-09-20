@@ -28,6 +28,16 @@ mybatis-plus:
       id-type: input
 
 fcc:
+  outbound:
+    enabled: ${FCC_OUTBOUND_ENABLED:false}
+    max-in-flight: ${FCC_OUTBOUND_MAX_IN_FLIGHT:5}
+    poll-millis: ${FCC_OUTBOUND_POLL_MILLIS:2000}
+    start-hour: ${FCC_OUTBOUND_START_HOUR:9}
+    end-hour: ${FCC_OUTBOUND_END_HOUR:18}
+    timezone: ${FCC_OUTBOUND_TIMEZONE:Asia/Shanghai}
+    notification-file: ${FCC_NOTIFICATION_FILE:}
+  binding:
+    prompt-file: ${FCC_BINDING_PROMPT_FILE:}
   admin:
     base-url: ${FCC_ADMIN_BASE_URL:http://127.0.0.1:8089}
   websocket:

@@ -33,7 +33,9 @@ public class AgentHandshakeInterceptor implements HandshakeInterceptor {
             String encoded = java.util.Arrays.stream(protocols.split(",")).map(String::trim)
                     .filter(value -> value.startsWith("auth.")).findFirst().orElseThrow().substring(5);
             String token = new String(Base64.getUrlDecoder().decode(encoded), StandardCharsets.UTF_8);
-            attributes.put("WORK_NO", identity.authenticate(token));
+            var actor = identity.authenticatePrincipal(token);
+            attributes.put("WORK_NO", actor.workNo());
+            attributes.put("TENANT_ID", actor.tenantId());
             attributes.put("AUTH_TOKEN", token);
             return true;
         } catch (Exception e) {

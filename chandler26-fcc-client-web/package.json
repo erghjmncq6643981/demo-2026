@@ -3,25 +3,51 @@
   "version": "2.0.0",
   "type": "module",
   "private": true,
+  "main": "desktop/main.cjs",
   "description": "FCC Production Agent Console (Vue 3 + Vite + TypeScript + Pinia)",
   "scripts": {
     "dev": "vite --host 0.0.0.0 --port 8888",
     "build": "vue-tsc -b && vite build",
-    "test": "vitest run",
-    "preview": "vite preview --host 0.0.0.0 --port 8888"
+    "test": "vitest run src",
+    "preview": "vite preview --host 0.0.0.0 --port 8888",
+    "desktop:dev": "electron .",
+    "desktop:test": "node --test desktop/*.test.cjs",
+    "desktop:build": "electron-builder --win nsis --x64"
   },
   "dependencies": {
     "axios": "^1.7.9",
     "jssip": "^3.13.8",
     "lucide-vue-next": "^0.475.0",
     "pinia": "^2.3.1",
-    "vue": "^3.5.13"
+    "vue": "^3.5.13",
+    "ws": "^8.21.3"
+  },
+  "build": {
+    "appId": "com.chandler.fcc.agent",
+    "productName": "FCC Agent",
+    "directories": {
+      "output": "release"
+    },
+    "files": [
+      "desktop/**",
+      "package.json"
+    ],
+    "win": {
+      "target": "nsis"
+    },
+    "nsis": {
+      "oneClick": false,
+      "allowToChangeInstallationDirectory": true,
+      "createDesktopShortcut": true
+    }
   },
   "devDependencies": {
     "@types/jssip": "^3.5.3",
     "@types/node": "^26.6.1",
     "@vitejs/plugin-vue": "^5.2.1",
     "autoprefixer": "^10.4.20",
+    "electron": "^44.4.3",
+    "electron-builder": "^26.15.3",
     "postcss": "^8.5.1",
     "tailwindcss": "^3.4.17",
     "typescript": "^5.7.3",

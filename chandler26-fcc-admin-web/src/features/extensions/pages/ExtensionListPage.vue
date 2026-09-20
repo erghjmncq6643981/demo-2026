@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { computed, onMounted, reactive, ref } from 'vue';
-import { Link, Plus, RefreshCw, Search, Trash2, X } from 'lucide-vue-next';
+import { Plus, RefreshCw, Search, Trash2, X } from 'lucide-vue-next';
 import { extensionApi, type ExtensionVO } from '../api/extensionApi';
 import { confirmAction, errorText, toastError, toastSuccess, toastWarning } from '../../../utils/feedback';
 
@@ -15,9 +15,6 @@ const query = reactive({ extension: '', endpointType: '', onlineStatus: '' });
 
 const showCreate = ref(false);
 const createForm = reactive({ extension: '', password: '', endpointType: 'SIP' });
-const showBind = ref(false);
-const bindingTarget = ref<ExtensionVO | null>(null);
-const bindingWorkNo = ref('');
 
 const totalPages = computed(() => Math.max(1, Math.ceil(total.value / pageSize.value)));
 
@@ -102,31 +99,6 @@ async function removeExtension(row: ExtensionVO): Promise<void> {
   }
 }
 
-function openBind(row: ExtensionVO): void {
-  bindingTarget.value = row;
-  bindingWorkNo.value = '';
-  showBind.value = true;
-}
-
-async function bindAgent(): Promise<void> {
-  const workNo = bindingWorkNo.value.trim();
-  if (!bindingTarget.value || !workNo) {
-    toastWarning('请输入坐席工号');
-    return;
-  }
-  mutating.value = true;
-  try {
-    const result = await extensionApi.ivrBind({ extension: bindingTarget.value.extension, workNo });
-    if (!result.success) throw new Error(result.promptMessage || '绑定未成功');
-    showBind.value = false;
-    toastSuccess(result.promptMessage || '分机绑定成功');
-    await loadExtensions();
-  } catch (error) {
-    toastError(`绑定失败：${errorText(error)}`);
-  } finally {
-    mutating.value = false;
-  }
-}
 
 async function changePage(delta: number): Promise<void> {
   const next = Math.min(totalPages.value, Math.max(1, pageNum.value + delta));
@@ -169,7 +141,7 @@ onMounted(loadExtensions);
             <td class="px-4 py-3"><span :class="row.onlineStatus === 'ONLINE' ? 'text-emerald-700' : 'text-slate-500'">{{ row.onlineStatus === 'ONLINE' ? '在线' : '离线' }}</span></td>
             <td class="px-4 py-3">{{ row.boundAgentName || '未绑定' }}<span v-if="row.boundAgentWorkNo" class="ml-1 font-mono text-xs text-slate-400">{{ row.boundAgentWorkNo }}</span></td>
             <td class="max-w-xs truncate px-4 py-3 font-mono text-xs text-slate-500" :title="row.registeredContact || row.registeredIp || ''">{{ row.registeredContact || row.registeredIp || '-' }}</td>
-            <td class="px-4 py-3"><div class="flex justify-end gap-1"><button title="绑定坐席" class="h-8 w-8 inline-flex items-center justify-center text-blue-600 hover:bg-blue-50" @click="openBind(row)"><Link class="h-4 w-4" /></button><button title="删除分机" class="h-8 w-8 inline-flex items-center justify-center text-rose-600 hover:bg-rose-50" @click="removeExtension(row)"><Trash2 class="h-4 w-4" /></button></div></td>
+            <td class="px-4 py-3"><div class="flex justify-end gap-1"><span class="text-xs text-slate-500">绑定请在坐席工作台验证话机</span><button title="删除分机" class="h-8 w-8 inline-flex items-center justify-center text-rose-600 hover:bg-rose-50" @click="removeExtension(row)"><Trash2 class="h-4 w-4" /></button></div></td>
           </tr>
         </tbody>
       </table>
@@ -183,9 +155,5 @@ onMounted(loadExtensions);
       <div class="mt-6 flex justify-end gap-2"><button type="button" class="h-9 px-4 border border-slate-300" @click="showCreate = false">取消</button><button :disabled="mutating" class="h-9 px-4 bg-blue-600 font-semibold text-white disabled:opacity-50">{{ mutating ? '提交中...' : '创建' }}</button></div>
     </form></div>
 
-    <div v-if="showBind && bindingTarget" class="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/50 p-4"><form class="w-full max-w-md bg-white p-5 shadow-xl" @submit.prevent="bindAgent">
-      <div class="mb-4 flex items-center justify-between"><h3 class="font-bold text-slate-900">绑定坐席</h3><button type="button" title="关闭" @click="showBind = false"><X class="h-5 w-5" /></button></div><p class="mb-4 text-sm text-slate-500">目标分机：<span class="font-mono text-slate-900">{{ bindingTarget.extension }}</span></p><label class="block text-sm font-semibold">坐席工号<input v-model="bindingWorkNo" autocomplete="off" class="mt-1 h-10 w-full rounded-md border border-slate-300 px-3"></label>
-      <div class="mt-6 flex justify-end gap-2"><button type="button" class="h-9 px-4 border border-slate-300" @click="showBind = false">取消</button><button :disabled="mutating" class="h-9 px-4 bg-blue-600 font-semibold text-white disabled:opacity-50">{{ mutating ? '绑定中...' : '确认绑定' }}</button></div>
-    </form></div>
   </section>
 </template>

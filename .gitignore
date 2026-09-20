@@ -150,3 +150,4 @@ chandler26-fcc-client-web/vite.config.d.ts
 **/.env
 **/.env.local
 **/.env.*.local
+chandler26-fcc-client-web/release/

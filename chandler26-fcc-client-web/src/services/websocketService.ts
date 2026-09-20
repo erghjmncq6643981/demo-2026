@@ -13,6 +13,7 @@ class WebSocketService {
   private awaitingPongSince: number | null = null;
   private reconnectAttempt = 0;
   private shouldReconnect = false;
+  private desktopCleanup: Array<() => void> = [];
   
   // 使用 Vue 的 ref 保证响应式联动
   public isConnected = ref(false);
@@ -27,6 +28,19 @@ class WebSocketService {
     const url = new URL(getRuntimeConfig().agentWebSocketUrl);
     this.connectionUrl.value = url.toString();
     this.connectionState.value = this.reconnectAttempt > 0 ? 'RECONNECTING' : 'CONNECTING';
+
+    if (window.fccDesktop) {
+      const desktop = window.fccDesktop;
+      this.desktopCleanup.forEach(cleanup => cleanup());
+      this.desktopCleanup = [desktop.onState(state => {
+        this.connectionState.value = state;
+        this.isConnected.value = state === 'CONNECTED';
+      }), desktop.onMessage(message => this.handlers.forEach(handler => handler(message)))];
+      const token = localStorage.getItem('fcc_agent_satoken');
+      if (!token) { this.disconnect(); return; }
+      void desktop.connect({ url: this.connectionUrl.value, token }).catch(() => this.disconnect());
+      return;
+    }
 
     try {
       if (this.ws) {
@@ -135,12 +149,16 @@ class WebSocketService {
   }
 
   public send(msg: Partial<WsMessage>) {
+    if (window.fccDesktop) { void window.fccDesktop.send(msg).catch(() => {}); return; }
     if (this.ws && this.ws.readyState === WebSocket.OPEN) {
       this.ws.send(JSON.stringify(msg));
     }
   }
 
   public disconnect() {
+    this.desktopCleanup.forEach(cleanup => cleanup());
+    this.desktopCleanup = [];
+    if (window.fccDesktop) void window.fccDesktop.disconnect().catch(() => {});
     this.shouldReconnect = false;
     this.stopHeartbeat();
     if (this.reconnectTimer !== null) {

@@ -70,16 +70,45 @@ public class FccEventListener {
 
     private static final String EXTENSION_PRESENCE_PREFIX = "fcc:extension:presence:";
 
+    @Autowired(required=false)
+    private com.chandler.fcc.server.agent.application.PhoneBindingService phoneBindingService;
+    @Autowired(required=false)
+    private com.chandler.fcc.server.telephony.application.OutboundCallService outboundCallService;
+    @Autowired(required=false)
+    private com.chandler.fcc.server.telephony.application.InboundCallService inboundCallService;
+    @Autowired(required=false)
+    private EventInboxMapper inbox;
+    @Autowired(required=false)
+    private com.chandler.fcc.server.call.CallRecoveryService recovery;
+    private final java.util.concurrent.ExecutorService consumer = java.util.concurrent.Executors.newSingleThreadExecutor();
+    private volatile boolean running = true;
+
     /**
      * 服务启动后初始化 NATS 分发器并订阅事件通道
      */
     @PostConstruct
     public void startListening() {
         try {
-            Dispatcher dispatcher = natsConnection.createDispatcher(this::onMessage);
-            String eventSubject = "fs.event.>";
-            dispatcher.subscribe(eventSubject);
-            log.info("👂 [FCC] 已成功注册 NATS 全局事件监听: {}", eventSubject);
+            consumer.submit(() -> {
+                while (running) {
+                    try {
+                        if(recovery!=null)recovery.restore();
+                        var options=io.nats.client.PullSubscribeOptions.builder().stream("FCC_EVENTS").durable("fcc-control")
+                            .configuration(io.nats.client.api.ConsumerConfiguration.builder().ackPolicy(io.nats.client.api.AckPolicy.Explicit)
+                                .ackWait(Duration.ofSeconds(90)).maxAckPending(1).maxDeliver(-1).build()).build();
+                        var subscription=natsConnection.jetStream().subscribe("fs.event.>",options);
+                        while(running){
+                            for(Message message:subscription.fetch(1,Duration.ofSeconds(2))){
+                                try{processDurable(message);message.ack();}
+                                catch(Exception failure){message.nakWithDelay(Duration.ofSeconds(5));log.warn("[事件消费] 等待重试: {}",failure.getClass().getSimpleName());}
+                            }
+                        }
+                    } catch(Exception failure){
+                        log.warn("[事件消费] 等待 FCC_EVENTS 流可用: {}",failure.getClass().getSimpleName());
+                        try{Thread.sleep(5000);}catch(InterruptedException stop){Thread.currentThread().interrupt();return;}
+                    }
+                }
+            });
         } catch (Exception e) {
             log.error("❌ [FCC] 订阅 NATS 事件异常: {}", e.getMessage(), e);
         }
@@ -93,7 +122,7 @@ public class FccEventListener {
     public void onMessage(Message msg) {
         try {
             String jsonStr = new String(msg.getData(), StandardCharsets.UTF_8);
-            log.debug("🔔 [FCC 收到原始事件] Subject: {}\n{}", msg.getSubject(), jsonStr);
+            log.debug("[FCC 收到事件] Subject: {}", msg.getSubject());
 
             JsonNode root = objectMapper.readTree(jsonStr);
             String method = root.hasNonNull("method") ? root.get("method").asText() : "";
@@ -113,8 +142,32 @@ public class FccEventListener {
             }
         } catch (Exception e) {
             log.error("❌ [FCC] 处理 NATS 事件异常: {}", e.getMessage(), e);
+            throw new IllegalStateException("事件处理未完成",e);
         }
     }
+
+    /** 验证消息归属与稳定身份，先持久事实，再驱动业务。
+     * @param message 持久消息
+     * @throws Exception 校验或存储不可用
+     */
+    private void processDurable(Message message) throws Exception {
+        JsonNode params=objectMapper.readTree(message.getData()).path("params");
+        String id=params.path("event_id").asText(),node=params.path("node_id").asText();
+        if(!id.matches("[a-f0-9]{64}")||node.isBlank()||!message.getSubject().startsWith("fs.event."+node+".")) {
+            log.error("[事件消费] 拒绝非法身份消息 subject={}",message.getSubject());message.term();return;
+        }
+        if(inbox==null)throw new IllegalStateException("事件收件箱不可用");
+        if(inbox.receive(id,node,new String(message.getData(),StandardCharsets.UTF_8))==0){
+            if("PROCESSING".equals(inbox.status(id))){inbox.finish(id,"UNKNOWN");log.error("[事件消费] 中断事件需要对账 eventId={}",id);}
+            return;
+        }
+        try{onMessage(message);inbox.finish(id,"PROCESSED");}
+        catch(Exception failure){inbox.finish(id,"FAILED");log.error("[事件消费] 事件失败已留存 eventId={}",id);}
+    }
+
+    /** 停止单线程有界拉取消费。 */
+    @jakarta.annotation.PreDestroy
+    public void stopListening(){running=false;consumer.shutdownNow();}
 
     /**
      * 处理通道状态机流转事件 (Event.Channel)
@@ -143,6 +196,10 @@ public class FccEventListener {
                 .orElse(null);
 
         if (callInfo == null) {
+            if (!"START".equals(state) || !"inbound".equalsIgnoreCase(direction)) {
+                log.warn("[话务事件] 未关联的话道事件待对账 nodeId={} channelUuid={} state={}", nodeId,uuid,state);
+                return;
+            }
             boolean isInbound = "inbound".equalsIgnoreCase(direction);
             String effectiveCtrlUuid = (ctrlUuid != null && !ctrlUuid.isEmpty())
                     ? ctrlUuid
@@ -186,6 +243,12 @@ public class FccEventListener {
             }
         }
 
+        if (phoneBindingService != null && phoneBindingService.channel(callInfo, params)) {
+            if ("DESTROY".equals(state)) sessionManager.removeSession(callInfo.getCtrlId());
+            return;
+        }
+        if (outboundCallService != null && outboundCallService.event(callInfo,params)) return;
+        if (inboundCallService != null && inboundCallService.event(callInfo,params)) return;
         log.info("📞 [FCC 状态机流转] State: {}, UUID: {}, CtrlID: {}, Model: {}, Caller: {}, Dest: {}",
                 state, uuid, callInfo.getCtrlId(), callInfo.getModelKey(), cidNumber, destNumber);
 
@@ -265,7 +328,7 @@ public class FccEventListener {
 
                 // 3. 记录事件流
                 callPersistenceService.recordEvent(com.chandler.fcc.server.infrastructure.persistence.entity.CallEventEntity.builder()
-                        .eventId(IdUtil.getEventId())
+                        .eventId(params.path("event_id").asText(IdUtil.getEventId()))
                         .nodeId(nodeId)
                         .callId(com.chandler.fcc.server.infrastructure.persistence.service.CallPersistenceService.parseNumericId(callInfo.getCallId()))
                         .channelUuid(uuid)
@@ -475,7 +538,10 @@ public class FccEventListener {
             return;
         }
 
-        log.info("🔢 [FCC 收到按键] Digit: {}, UUID: {}, CtrlUUID: {}", digit, uuid, ctrlUuid);
+        CallInfoBO bindingCall=sessionManager.getByCtrlUuid(ctrlUuid).or(()->sessionManager.getByChannelUuid(uuid)).orElse(null);
+        if (bindingCall!=null && phoneBindingService!=null && phoneBindingService.digits(bindingCall,digit)) return;
+        if (bindingCall!=null && outboundCallService!=null && outboundCallService.digits(bindingCall,digit)) return;
+        log.debug("[FCC 收到按键] UUID: {}, CtrlUUID: {}", uuid, ctrlUuid);
         publisher.publishEvent(new DTMFInputEvent(this, ctrlUuid, uuid, digit, durationMs));
 
         sessionManager.getByCtrlUuid(ctrlUuid)

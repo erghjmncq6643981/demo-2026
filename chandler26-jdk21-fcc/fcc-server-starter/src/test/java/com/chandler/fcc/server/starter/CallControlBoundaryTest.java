@@ -22,13 +22,17 @@ class CallControlBoundaryTest {
 
     /** 缺少 Call 或跨坐席时不能回落到最近会话。 */
     @Test void rejectsMissingOrForeignCall() {
-        when(identity.requireAgent("alice")).thenReturn("alice");
+        when(identity.requirePrincipal()).thenReturn(new AgentIdentityService.Principal("alice",42));
         assertThrows(ResponseStatusException.class, () -> service.requireCall("alice", null));
         verifyNoInteractions(sessions, client);
         when(sessions.getByCallId("call-test")).thenReturn(Optional.of(CallInfoBO.builder().agentWorkNo("bob").build()));
         assertThrows(ResponseStatusException.class, () -> service.requireCall("alice", "call-test"));
         verifyNoInteractions(client);
         verify(sessions, never()).getLatestActiveSession();
+        when(sessions.getByCallId("call-test")).thenReturn(Optional.of(CallInfoBO.builder().agentWorkNo("alice")
+                .nodeId("node-test").data(new java.util.HashMap<>(Map.of("tenantId",43L))).build()));
+        assertThrows(ResponseStatusException.class, () -> service.requireCall("alice", "call-test"));
+        verifyNoInteractions(client);
     }
 
     /** 超时、节点业务错误以及封装在成功 RPC 中的 ESL 错误均非成功。 */

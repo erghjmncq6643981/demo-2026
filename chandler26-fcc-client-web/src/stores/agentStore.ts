@@ -3,6 +3,8 @@ import { ref, computed } from 'vue';
 import type { AgentStatus, AnswerEndpointType } from '../types/telephony';
 import { authApi } from '../api/authApi';
 import { fetchAgentEndpoints, switchAgentEndpoint } from '../api/agentApi';
+import { telephonyApi } from '../api/apiClient';
+import { toastError } from '../utils/feedback';
 
 export const useAgentStore = defineStore('agent', () => {
   const token = ref<string | null>(localStorage.getItem('fcc_agent_satoken'));
@@ -10,7 +12,7 @@ export const useAgentStore = defineStore('agent', () => {
   const agentName = ref(localStorage.getItem('fcc_agent_name') || '');
   const role = ref(localStorage.getItem('fcc_agent_role') || '');
   const permissions = ref<string[]>([]);
-  const status = ref<AgentStatus>('READY');
+  const status = ref<AgentStatus>('REST');
   const endpoint = ref<AnswerEndpointType>((localStorage.getItem('fcc_agent_endpoint') as AnswerEndpointType) || 'WEBRTC');
   const extension = ref(localStorage.getItem('fcc_agent_extension') || '');
   const serviceGroup = ref('');
@@ -23,8 +25,11 @@ export const useAgentStore = defineStore('agent', () => {
   const isLoggedIn = computed(() => !!token.value);
   const isSupervisor = computed(() => role.value === 'SUPERVISOR');
 
-  function setStatus(newStatus: AgentStatus) {
-    status.value = newStatus;
+  async function setStatus(newStatus: AgentStatus) {
+    try {
+      const response = await telephonyApi.post<unknown, { data: { status: AgentStatus } }>('/agent-state', { status: newStatus });
+      status.value = response.data.status;
+    } catch (error) { toastError(error instanceof Error ? error.message : '状态变更失败'); }
   }
 
   function setEndpoint(newEndpoint: AnswerEndpointType) {

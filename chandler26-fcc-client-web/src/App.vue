@@ -15,6 +15,7 @@
 
     <!-- 坐席极简资产与接听方式切换栏 (软话机/实体话机/手机直选) -->
     <AgentProfile />
+    <PhoneBindingPanel v-if="callStore.callState === 'IDLE'" />
 
     <!-- 
       核心内容与业务工作台流转:
@@ -51,6 +52,8 @@
           v-else-if="activeTab === 'agents'"
           @view-agent-records="handleViewAgentRecords"
         />
+        <CustomerWorkspace v-else-if="activeTab === 'customers'" />
+        <DialJobsWorkspace v-else-if="activeTab === 'dial-jobs'" />
       </div>
     </main>
 
@@ -86,6 +89,9 @@ import OutboundBar from './components/records/OutboundBar.vue';
 import CallbackQueue from './components/records/CallbackQueue.vue';
 import AgentMonitorView from './components/agents/AgentMonitorView.vue';
 import LoginView from './views/LoginView.vue';
+import CustomerWorkspace from './features/customer/CustomerWorkspace.vue';
+import PhoneBindingPanel from './features/endpoint/PhoneBindingPanel.vue';
+import DialJobsWorkspace from './features/outbound/DialJobsWorkspace.vue';
 import FeedbackHost from './components/layout/FeedbackHost.vue';
 
 import { useAgentStore } from './stores/agentStore';
@@ -99,7 +105,7 @@ import { toastError } from './utils/feedback';
 import type { IncomingScreenPopPayload, WsMessage } from './types/telephony';
 
 // 核心规则：未接待回拨记录的优先级最高，首屏默认展示 callback
-const activeTab = ref<'callback' | 'records' | 'agents'>('callback');
+const activeTab = ref<'callback' | 'records' | 'agents' | 'customers' | 'dial-jobs'>('callback');
 const showWsModal = ref(false);
 const outboundBarRef = ref<InstanceType<typeof OutboundBar> | null>(null);
 const softphoneDialerRef = ref<InstanceType<typeof SoftphoneDialer> | null>(null);

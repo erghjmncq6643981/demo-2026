@@ -28,8 +28,9 @@ class AgentHandshakeBoundaryTest {
         assertFalse(interceptor.beforeHandshake(request, response, handler, attributes));
         headers.set("Sec-WebSocket-Protocol", "fcc-agent, auth." + Base64.getUrlEncoder().withoutPadding()
                 .encodeToString("test-token".getBytes(StandardCharsets.UTF_8)));
-        when(identity.authenticate("test-token")).thenReturn("authenticated-agent");
+        when(identity.authenticatePrincipal("test-token")).thenReturn(new AgentIdentityService.Principal("authenticated-agent",42));
         assertTrue(interceptor.beforeHandshake(request, response, handler, attributes));
         assertEquals("authenticated-agent", attributes.get("WORK_NO"));
+        assertEquals(42L, attributes.get("TENANT_ID"));
     }
 }

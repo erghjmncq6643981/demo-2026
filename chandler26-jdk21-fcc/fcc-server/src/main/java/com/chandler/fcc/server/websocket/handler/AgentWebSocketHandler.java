@@ -32,6 +32,10 @@ public class AgentWebSocketHandler extends TextWebSocketHandler implements org.s
 
     @org.springframework.beans.factory.annotation.Autowired
     private com.chandler.fcc.server.telephony.application.AgentIdentityService identity;
+    @org.springframework.beans.factory.annotation.Autowired
+    private com.chandler.fcc.server.call.CallSessionManager callSessions;
+    @org.springframework.beans.factory.annotation.Autowired
+    private com.chandler.fcc.server.websocket.service.ScreenPopDeliveryStore deliveries;
 
     /** 只回显业务子协议，不将令牌回显给客户端。 */
     @Override
@@ -40,8 +44,9 @@ public class AgentWebSocketHandler extends TextWebSocketHandler implements org.s
     /** 每次收发前验证身份，注销或过期后关闭连接。 */
     private boolean authorized(WebSocketSession session) throws IOException {
         try {
-            return identity.authenticate((String) session.getAttributes().get("AUTH_TOKEN"))
-                    .equals(session.getAttributes().get(ATTR_WORK_NO));
+            var actor = identity.authenticatePrincipal((String) session.getAttributes().get("AUTH_TOKEN"));
+            return actor.workNo().equals(session.getAttributes().get(ATTR_WORK_NO))
+                    && Long.valueOf(actor.tenantId()).equals(session.getAttributes().get("TENANT_ID"));
         } catch (RuntimeException e) {
             session.close(CloseStatus.POLICY_VIOLATION.withReason("登录已失效或认证不可用"));
             return false;
@@ -87,13 +92,19 @@ public class AgentWebSocketHandler extends TextWebSocketHandler implements org.s
                 "WebSocket 通道建立成功，已订阅坐席工号: " + workNo
         );
         session.sendMessage(new TextMessage(objectMapper.writeValueAsString(ack)));
+        if (!authorized(session)) return;
+        try {
+            long tenant = ((Number) session.getAttributes().get("TENANT_ID")).longValue();
+            for (String pending : deliveries.pending(tenant, workNo)) session.sendMessage(new TextMessage(pending));
+        } catch (RuntimeException failure) {
+            log.warn("[弹屏] 重连补发暂不可用 workNo={}", workNo);
+        }
     }
 
     @Override
     protected void handleTextMessage(WebSocketSession session, TextMessage message) throws Exception {
         if (!authorized(session)) return;
         String payload = message.getPayload();
-        log.debug("📨 [Agent WebSocket] 收到坐席消息: sessionId={}, payload={}", session.getId(), payload);
 
         try {
             JsonNode root = objectMapper.readTree(payload);
@@ -109,6 +120,9 @@ public class AgentWebSocketHandler extends TextWebSocketHandler implements org.s
                         "pong"
                 );
                 session.sendMessage(new TextMessage(objectMapper.writeValueAsString(pong)));
+            } else if ("SCREEN_POP_RECEIPT".equals(type)) {
+                deliveries.receipt(((Number)session.getAttributes().get("TENANT_ID")).longValue(), workNo,
+                        root.path("callId").asText(), root.path("state").asText());
             } else if (WsMessageTypeEnum.CALL_CONTROL_ACTION.getCode().equalsIgnoreCase(type)) {
                 log.info("📞 [Agent WebSocket] 收到客户端话务决策: workNo={}, action={}",
                         workNo, root.path("action").asText());
@@ -150,6 +164,11 @@ public class AgentWebSocketHandler extends TextWebSocketHandler implements org.s
      * @return 成功发送的会话数
      */
     public int sendToWorkNo(String workNo, Object message) {
+        // A work number is only unique within a tenant. Resolve tenant from the
+        // authoritative active Call, never from browser-supplied payload fields.
+        if (!(message instanceof WsMessageDTO<?> envelope) || envelope.getCallId() == null) return 0;
+        var call = callSessions.getByCallId(envelope.getCallId()).orElse(null);
+        if (call == null || !(call.getData().get("tenantId") instanceof Number tenant)) return 0;
         CopyOnWriteArraySet<WebSocketSession> sessions = agentSessions.get(workNo);
         if (sessions == null || sessions.isEmpty()) {
             log.warn("⚠️ [Agent WebSocket] 坐席当前未在线，消息无法下发: workNo={}", workNo);
@@ -161,7 +180,7 @@ public class AgentWebSocketHandler extends TextWebSocketHandler implements org.s
             String json = objectMapper.writeValueAsString(message);
             TextMessage textMessage = new TextMessage(json);
             for (WebSocketSession session : sessions) {
-                if (session.isOpen() && authorized(session)) {
+                if (session.isOpen() && Long.valueOf(tenant.longValue()).equals(session.getAttributes().get("TENANT_ID")) && authorized(session)) {
                     session.sendMessage(textMessage);
                     successCount++;
                 }

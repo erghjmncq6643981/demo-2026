@@ -64,32 +64,32 @@ const handleLogin = async () => {
         <!-- 中部标语与要点 -->
         <div class="my-8">
           <h1 class="text-2xl sm:text-3xl font-bold tracking-tight text-white mb-3 leading-snug">
-            高效、稳定的<br />
-            智能话务协作平台
+            坐席日常工作<br />
+            从这里开始
           </h1>
           <p class="text-xs sm:text-sm text-slate-400 mb-6 leading-relaxed">
-            基于 FreeSWITCH 软交换引擎打造，提供清晰流畅的语音通话与敏捷高效的工单业务协同。
+            登录后处理来电、客户资料和外呼任务。请先完成话机绑定，再切换为就绪状态。
           </p>
 
           <div class="space-y-2.5 text-xs sm:text-sm text-slate-300">
             <div class="flex items-center gap-2.5">
               <span class="w-1.5 h-1.5 rounded-full bg-indigo-400"></span>
-              <span>毫秒级来电全景弹屏</span>
+              <span>来电提醒与客户资料</span>
             </div>
             <div class="flex items-center gap-2.5">
               <span class="w-1.5 h-1.5 rounded-full bg-indigo-400"></span>
-              <span>WebRTC 网页软电话与 SIP 话机双模接听</span>
+              <span>实体话机绑定与坐席状态</span>
             </div>
             <div class="flex items-center gap-2.5">
               <span class="w-1.5 h-1.5 rounded-full bg-indigo-400"></span>
-              <span>高清双轨录音与全链路会话追溯</span>
+              <span>外呼任务与逐次处理结果</span>
             </div>
           </div>
         </div>
 
         <!-- 底部版本与内核状态 -->
         <div class="text-xs text-slate-500 flex items-center justify-between font-mono">
-          <span>FreeSWITCH v1.10.12</span>
+          <span>FCC 坐席工作台</span>
           <span>v2.0</span>
         </div>
       </div>

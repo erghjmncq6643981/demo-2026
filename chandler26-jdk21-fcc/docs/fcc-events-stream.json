@@ -1,0 +1,11 @@
+{
+  "name": "FCC_EVENTS",
+  "subjects": ["fs.event.*.*"],
+  "retention": "limits",
+  "storage": "file",
+  "discard": "new",
+  "num_replicas": 1,
+  "max_age": 604800000000000,
+  "max_bytes": 10737418240,
+  "duplicate_window": 120000000000
+}

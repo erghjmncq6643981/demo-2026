@@ -64,6 +64,8 @@ public class TelephonyCallController {
     private String reloadToken;
     @Autowired
     private com.chandler.fcc.server.infrastructure.nats.FccProperties properties;
+    @Autowired
+    private com.chandler.fcc.server.telephony.application.OutboundCallService outboundCalls;
 
     /** 坐席外呼请求。 */
     @io.swagger.v3.oas.annotations.media.Schema(description = "坐席外呼请求")
@@ -165,90 +167,7 @@ public class TelephonyCallController {
     @PostMapping("/outbound")
     @Operation(summary = "发起外呼", description = "坐席工作台发起对外呼叫，建立真实呼叫会话并推送外呼弹屏")
     public Map<String, Object> outbound(@RequestBody CallOutboundReq req) {
-        String workNo = identity.requireAgent(req.getWorkNo());
-        if (fccClient == null) return fail("话务节点不可用");
-        if (!StringUtils.hasText(workNo)) {
-            return fail("缺少坐席工号，无法发起外呼");
-        }
-        String callee = StringUtils.hasText(req.getCalleePhone()) ? req.getCalleePhone().trim() : "";
-        if (!StringUtils.hasText(callee)) {
-            return fail("缺少被叫号码，无法发起外呼");
-        }
-        String caller = StringUtils.hasText(req.getCallerPhone()) ? req.getCallerPhone().trim() : workNo;
-
-        log.info("📞 [呼叫控制] 收到外呼请求: 坐席={}, 主叫={}, 被叫={}", workNo, caller, callee);
-
-        String callId = IdUtil.getCallId();
-        String ctrlId = IdUtil.getCtrlId("fcc-outbound");
-
-        // 1. 初始化并注册会话上下文（客户信息仅记录坐席真实录入的值，不补默认值）
-        Map<String, Object> sessionData = new HashMap<>();
-        sessionData.put("agentExt", caller);
-        sessionData.put("primaryWorkNo", workNo);
-        if (StringUtils.hasText(req.getCustomerName())) {
-            sessionData.put("customerName", req.getCustomerName().trim());
-        }
-        if (StringUtils.hasText(req.getCompanyName())) {
-            sessionData.put("companyName", req.getCompanyName().trim());
-        }
-
-        CallInfoBO callInfo = CallInfoBO.builder()
-                .ctrlId(ctrlId)
-                .nodeId(properties.getDefaultNodeId())
-                .callId(callId)
-                .modelKey(FlowModelType.OUTBOUND_TWO_WAY_CALL.name())
-                .direction(DirectionType.OUTBOUND)
-                .callerNumber(caller)
-                .destinationNumber(callee)
-                .agentWorkNo(workNo)
-                .stageState(CallStageState.CALLING)
-                .data(sessionData)
-                .build();
-
-        sessionManager.registerSession(callInfo);
-
-        // 2. 持久化至 MySQL fcc_call_session
-        if (persistenceService != null) {
-            try {
-                persistenceService.saveOrUpdateSession(callInfo);
-            } catch (Exception e) {
-                log.warn("⚠️ [持久化] 初始记录外呼会话失败: {}", e.getMessage());
-            }
-        }
-
-        // 3. 依据本次会话真实事实推送外呼弹屏
-        int delivered = screenPopService.pushForAgentLeg(callInfo, workNo, caller, null);
-        log.info("📡 [WebSocket] 外呼弹屏下发结果: workNo={}, delivered={}", workNo, delivered);
-
-        // 4. 若 FccClient 可用，下发 Dial 指令至软交换底层
-        if (fccClient != null) {
-            try {
-                FNodeDialDTO dialDto = FNodeDialDTO.builder()
-                        .ctrlUuid(ctrlId)
-                        .destination(FNodeDialDTO.Destination.builder()
-                                .callParams(List.of(FNodeDialDTO.CallParam.builder()
-                                        .dialString(callee.length() <= 5 ? "user/" + callee : "sofia/gateway/external/" + callee)
-                                        .cidNumber(caller)
-                                        .cidName("FCC-Agent-" + workNo)
-                                        .build()))
-                                .build())
-                        .build();
-                var dialResult = fccClient.dial(dialDto);
-                com.chandler.fcc.server.telephony.application.CallControlService.requireAccepted(dialResult);
-                if (dialResult.getUuid() != null) {
-                    callInfo.setGuestChannelUuid(dialResult.getUuid());
-                    sessionManager.bindChannel(dialResult.getUuid(), ctrlId);
-                }
-            } catch (Exception e) {
-                throw e;
-            }
-        }
-
-        Map<String, Object> result = new LinkedHashMap<>();
-        result.put("code", 200);
-        result.put("message", "外呼指令已受理，等待话务事件");
-        result.put("data", Map.of("callId", callId, "ctrlId", ctrlId, "delivered", delivered));
-        return result;
+        return Map.of("code",200,"message","外呼已受理，请先接听坐席话机", "data",outboundCalls.start(req.getWorkNo(),req.getCalleePhone()));
     }
 
     /**

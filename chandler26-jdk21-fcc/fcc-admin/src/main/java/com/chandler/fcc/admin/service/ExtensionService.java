@@ -12,9 +12,7 @@ import com.chandler.fcc.admin.infrastructure.persistence.mapper.ExtensionMapper;
 import com.chandler.fcc.admin.model.PageResult;
 import com.chandler.fcc.admin.model.dto.ExtensionCreateReq;
 import com.chandler.fcc.admin.model.dto.ExtensionQueryReq;
-import com.chandler.fcc.admin.model.dto.IvrBindReq;
 import com.chandler.fcc.admin.model.vo.ExtensionVO;
-import com.chandler.fcc.admin.model.vo.IvrBindResultVO;
 import com.chandler.fcc.common.dto.admin.SidecarResponse;
 import com.chandler.fcc.common.util.IdUtil;
 import lombok.RequiredArgsConstructor;
@@ -176,130 +174,6 @@ public class ExtensionService {
             return null;
         }
         return buildExtensionVO(entity);
-    }
-
-    /**
-     * 实体话机 0000 语音工号自助绑定接口
-     * <p>
-     * 坐席在已注册分机的话机上拨打 0000，IVR 收号录入工号后调用本接口：
-     * 1. 坐席工号存在性校验：若工号不存在，返回 promptMessage = "该工号不存在，请重新输入"，驱动 IVR 重新收号；
-     * 2. 分机号有效性校验：若分机不存在或未注册，返回相应提示；
-     * 3. 互斥清理与双向绑定：更新 fcc_extension (agent_work_no, agent_name) 和 fcc_agent (current_extension)；
-     * 4. 成功返回祝贺提示语。
-     * </p>
-     *
-     * @param req 分机号与坐席工号
-     * @return 绑定结果与 IVR 提示语
-     */
-    @Transactional(rollbackFor = Exception.class)
-    public IvrBindResultVO bindIvr(IvrBindReq req) {
-        String ext = req.getExtension() != null ? req.getExtension().trim() : "";
-        String workNo = req.getWorkNo() != null ? req.getWorkNo().trim() : "";
-
-        // 1. 校验分机是否存在
-        LambdaQueryWrapper<ExtensionEntity> extWrapper = new LambdaQueryWrapper<ExtensionEntity>()
-                .isNull(ExtensionEntity::getDeletedAt)
-                .eq(ExtensionEntity::getExtension, ext);
-        ExtensionEntity extensionEntity = extensionMapper.selectOne(extWrapper);
-        if (extensionEntity == null) {
-            log.warn("[ExtensionService] 话机0000绑定失败，分机不存在: ext={}", ext);
-            return IvrBindResultVO.builder()
-                    .success(false)
-                    .code(400)
-                    .extension(ext)
-                    .workNo(workNo)
-                    .promptMessage("该分机不存在或未注册，请联系管理员")
-                    .build();
-        }
-
-        // 2. 校验坐席工号是否存在于 fcc_agent 且启用 (用户核心强调！)
-        LambdaQueryWrapper<AgentEntity> agentWrapper = new LambdaQueryWrapper<AgentEntity>()
-                .isNull(AgentEntity::getDeletedAt)
-                .eq(AgentEntity::getWorkNo, workNo);
-        AgentEntity agentEntity = agentMapper.selectOne(agentWrapper);
-        if (agentEntity == null || "DISABLED".equalsIgnoreCase(agentEntity.getStatus())) {
-            log.warn("[ExtensionService] 话机0000绑定失败，坐席工号不存在或已停用: workNo={}", workNo);
-            return IvrBindResultVO.builder()
-                    .success(false)
-                    .code(404)
-                    .extension(ext)
-                    .workNo(workNo)
-                    .promptMessage("该工号不存在，请重新输入")
-                    .build();
-        }
-
-        LocalDateTime now = LocalDateTime.now();
-
-        // 3. 互斥解绑：如果该工号原先绑定了其他分机，则将旧分机置空
-        LambdaQueryWrapper<ExtensionEntity> oldExtWrapper = new LambdaQueryWrapper<ExtensionEntity>()
-                .isNull(ExtensionEntity::getDeletedAt)
-                .eq(ExtensionEntity::getAgentWorkNo, workNo)
-                .ne(ExtensionEntity::getExtension, ext);
-        List<ExtensionEntity> oldExtensions = extensionMapper.selectList(oldExtWrapper);
-        for (ExtensionEntity oldExt : oldExtensions) {
-            oldExt.setAgentWorkNo(null);
-            oldExt.setAgentName(null);
-            oldExt.setUpdatedAt(now);
-            extensionMapper.updateById(oldExt);
-            log.info("[ExtensionService] 话机0000解绑坐席旧分机: workNo={}, oldExt={}", workNo, oldExt.getExtension());
-        }
-
-        // 如果该分机原先绑定了其他坐席，则将旧坐席 current_extension 置空
-        LambdaQueryWrapper<AgentEntity> oldAgentWrapper = new LambdaQueryWrapper<AgentEntity>()
-                .isNull(AgentEntity::getDeletedAt)
-                .eq(AgentEntity::getCurrentExtension, ext)
-                .ne(AgentEntity::getWorkNo, workNo);
-        List<AgentEntity> oldAgents = agentMapper.selectList(oldAgentWrapper);
-        for (AgentEntity oldAgent : oldAgents) {
-            oldAgent.setCurrentExtension(null);
-            oldAgent.setUpdatedAt(now);
-            agentMapper.updateById(oldAgent);
-            log.info("[ExtensionService] 话机0000解绑分机旧坐席: ext={}, oldWorkNo={}", ext, oldAgent.getWorkNo());
-        }
-
-        // 4. 双向更新记录 (fcc_extension 互相记录 fcc_agent)
-        extensionEntity.setAgentWorkNo(workNo);
-        extensionEntity.setAgentName(agentEntity.getAgentName());
-        extensionEntity.setUpdatedAt(now);
-        extensionMapper.updateById(extensionEntity);
-
-        agentEntity.setCurrentExtension(ext);
-        agentEntity.setUpdatedAt(now);
-        agentMapper.updateById(agentEntity);
-
-        // 同步更新或新增坐席实体话机 (SIP) 绑定记录
-        AgentEndpointBindingEntity sipBinding = bindingMapper.selectOne(new LambdaQueryWrapper<AgentEndpointBindingEntity>()
-                .eq(AgentEndpointBindingEntity::getAgentId, agentEntity.getId())
-                .eq(AgentEndpointBindingEntity::getEndpointType, "SIP"));
-        if (sipBinding != null) {
-            sipBinding.setEndpointValue(ext);
-            sipBinding.setStatus("ENABLED");
-            bindingMapper.updateById(sipBinding);
-        } else {
-            bindingMapper.insert(AgentEndpointBindingEntity.builder()
-                    .id(IdUtil.nextId())
-                    .tenantId(0L)
-                    .agentId(agentEntity.getId())
-                    .endpointType("SIP")
-                    .endpointValue(ext)
-                    .priority(1)
-                    .status("ENABLED")
-                    .validFrom(now)
-                    .createdAt(now)
-                    .build());
-        }
-
-        log.info("[ExtensionService] 实体话机0000语音自助绑定成功: ext={}, workNo={}, agentName={}",
-                ext, workNo, agentEntity.getAgentName());
-
-        return IvrBindResultVO.builder()
-                .success(true)
-                .code(200)
-                .extension(ext)
-                .workNo(workNo)
-                .agentName(agentEntity.getAgentName())
-                .promptMessage("绑定成功，工号" + workNo + "，祝你工作愉快")
-                .build();
     }
 
     /**
