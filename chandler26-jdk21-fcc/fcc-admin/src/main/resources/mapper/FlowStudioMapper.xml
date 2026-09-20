@@ -1,0 +1,8 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.chandler.fcc.admin.flow.FlowStudioMapper">
+ <insert id="create">INSERT INTO fcc_flow_definition(id,tenant_id,flow_key,flow_name,model_type,status,current_version) VALUES(#{id},#{tenant},#{key},#{name},'INBOUND_CUSTOMER_SERVICE','DRAFT',0)</insert>
+ <select id="callExists" resultType="int">SELECT COUNT(*) FROM fcc_call_session WHERE id=#{call} AND tenant_id=#{tenant}</select>
+ <select id="instance" resultType="map">SELECT CAST(id AS CHAR) AS id,CAST(call_id AS CHAR) AS callId,CAST(flow_version_id AS CHAR) AS versionId,status,current_step_key AS currentStep,context_json AS snapshot,started_at AS startedAt,ended_at AS endedAt FROM fcc_flow_instance WHERE tenant_id=#{tenant} AND call_id=#{call} ORDER BY id DESC LIMIT 1</select>
+ <select id="steps" resultType="map">SELECT CAST(id AS CHAR) AS id,step_key AS stepKey,action_type AS actionType,attempt_no AS attemptNo,status,command_id AS commandId,trigger_event_id AS eventId,input_json AS input,output_json AS output,error_code AS errorCode,started_at AS startedAt,ended_at AS endedAt,duration_ms AS durationMs FROM fcc_flow_step_execution WHERE tenant_id=#{tenant} AND call_id=#{call} AND id&gt;#{after} ORDER BY id LIMIT 100</select>
+</mapper>

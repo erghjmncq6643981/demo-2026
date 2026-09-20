@@ -1,0 +1,8 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.chandler.fcc.server.management.BusinessManagementMapper">
+ <select id="customers" resultType="map">SELECT CAST(id AS CHAR) AS id,name,phone_number AS phoneNumber,company_name AS companyName,owner_work_no AS owner,version FROM fcc_customer WHERE tenant_id=#{tenant}<if test="owner != null and owner != ''"> AND owner_work_no=#{owner}</if><if test="phone != null and phone != ''"> AND phone_number=#{phone}</if> ORDER BY id DESC LIMIT 50 OFFSET #{offset}</select>
+ <select id="jobs" resultType="map">SELECT CAST(id AS CHAR) AS id,owner_work_no AS owner,job_type AS mode,status,max_attempts AS maxAttempts,JSON_UNQUOTE(JSON_EXTRACT(payload,'$.number')) AS number,scheduled_at AS scheduledAt FROM fcc_dial_job WHERE tenant_id=#{tenant}<if test="owner != null and owner != ''"> AND owner_work_no=#{owner}</if> ORDER BY id DESC LIMIT 50 OFFSET #{offset}</select>
+ <select id="customerOwner" resultType="string">SELECT owner_work_no FROM fcc_customer WHERE tenant_id=#{tenant} AND id=#{id}</select>
+ <select id="jobOwner" resultType="string">SELECT owner_work_no FROM fcc_dial_job WHERE tenant_id=#{tenant} AND id=#{id}</select>
+</mapper>
