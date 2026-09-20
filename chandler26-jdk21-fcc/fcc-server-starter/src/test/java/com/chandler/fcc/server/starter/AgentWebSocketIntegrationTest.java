@@ -46,6 +46,7 @@ import static org.junit.jupiter.api.Assertions.*;
  */
 @SpringBootTest(webEnvironment = SpringBootTest.WebEnvironment.RANDOM_PORT)
 @ActiveProfiles("local")
+@org.springframework.test.annotation.DirtiesContext
 public class AgentWebSocketIntegrationTest {
 
     private static final Logger log = LoggerFactory.getLogger(AgentWebSocketIntegrationTest.class);

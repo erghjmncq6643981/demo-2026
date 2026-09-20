@@ -87,24 +87,6 @@ public class CallbackTaskService {
         log.info("[CallbackTaskService] 漏话任务派单成功: id={}, assignee={}", id, req.getAgentName());
     }
 
-    /**
-     * 发起一键优先回拨
-     *
-     * @param id 任务 ID
-     */
-    @Transactional(rollbackFor = Exception.class)
-    public void callTask(Long id) {
-        CallbackTaskEntity entity = callbackTaskMapper.selectById(id);
-        if (entity == null) {
-            throw new IllegalArgumentException("漏话回拨任务不存在: " + id);
-        }
-        entity.setStatus("CALLED");
-        entity.setCallAttempts((entity.getCallAttempts() != null ? entity.getCallAttempts() : 0) + 1);
-        entity.setLastCalledAt(LocalDateTime.now());
-        entity.setUpdatedAt(LocalDateTime.now());
-        callbackTaskMapper.updateById(entity);
-        log.info("[CallbackTaskService] 漏话任务发起回呼: id={}, customer={}", id, entity.getCustomerNumber());
-    }
 
     private CallbackTaskVO buildCallbackVO(CallbackTaskEntity entity) {
         String durationStr = "0秒";

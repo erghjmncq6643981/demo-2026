@@ -27,7 +27,7 @@ class RuntimeSqlIntegrationTest {
   var factory=new SqlSessionFactoryBean();factory.setDataSource(dataSource);
   var config=new org.apache.ibatis.session.Configuration();config.setMapUnderscoreToCamelCase(true);factory.setConfiguration(config);
   var resolver=new PathMatchingResourcePatternResolver();
-  factory.setMapperLocations(resolver.getResource("classpath:mapper/AgentRuntimeMapper.xml"),resolver.getResource("classpath:mapper/PhoneBindingMapper.xml"),resolver.getResource("classpath:mapper/CustomerMapper.xml"),resolver.getResource("classpath:mapper/DialJobMapper.xml"),resolver.getResource("classpath:mapper/EventInboxMapper.xml"),resolver.getResource("classpath:mapper/ScreenPopDeliveryMapper.xml"));
+  factory.setMapperLocations(resolver.getResource("classpath:mapper/AgentRuntimeMapper.xml"),resolver.getResource("classpath:mapper/PhoneBindingMapper.xml"),resolver.getResource("classpath:mapper/CustomerMapper.xml"),resolver.getResource("classpath:mapper/DialJobMapper.xml"),resolver.getResource("classpath:mapper/EventInboxMapper.xml"),resolver.getResource("classpath:mapper/ScreenPopDeliveryMapper.xml"),resolver.getResource("classpath:mapper/AfterCallMapper.xml"),resolver.getResource("classpath:mapper/CallbackRuntimeMapper.xml"));
   var session=new SqlSessionTemplate(factory.getObject());
   var jdbc=new JdbcTemplate(dataSource);var tx=new TransactionTemplate(new DataSourceTransactionManager(dataSource));
   tx.executeWithoutResult(status->{
@@ -50,7 +50,10 @@ class RuntimeSqlIntegrationTest {
    customers.insert(42,"test-agent",customer);assertNull(customers.detail(43,"test-agent","900004"));assertNull(customers.list(42,"test-agent",null,0,50).getFirst().getNotes());
    assertEquals(1,customers.update(42,"test-agent",customer));assertEquals(0,customers.update(42,"test-agent",customer));
    var jobs=session.getMapper(DialJobMapper.class);jobs.create(Map.of("id","900005","tenant",42,"owner","test-agent","key","test-job-1","mode","PROGRESSIVE","maxAttempts",2,"payload","{\"number\":\"1001\"}"));
-   assertEquals(1L,jobs.schedulerLock());assertEquals("900005",jobs.next().get("id"));assertEquals(1,jobs.claim("900005"));assertEquals(0,jobs.claim("900005"));
+   assertEquals(1L,jobs.schedulerLock());
+   assertNull(jobs.next(),"整理态坐席的任务必须等待，不能消耗尝试次数");
+   runtime.setPresence(42,"test-agent","READY");
+   assertEquals("900005",jobs.next().get("id"));assertEquals(1,jobs.claim("900005"));assertEquals(0,jobs.claim("900005"));
    jobs.startAttempt(Map.of("attempt","900006","tenant",42,"id","900005","attemptNo",1,"number","1001"));assertEquals(1,jobs.activeCount());
    jobs.attach("900006","900010");assertEquals("900010",jobs.attempts("900005").getFirst().get("callId"));assertEquals(1,jobs.finishAttempt("900006","FAILED","NO_ANSWER"));jobs.finishJob("900005","PENDING");assertEquals(1,jobs.control(42,"test-agent","900005","PAUSE"));
    assertNull(jobs.detail(43,"test-agent","900005"));assertEquals(1,jobs.frequency(42,"1001"));
@@ -92,6 +95,25 @@ class RuntimeSqlIntegrationTest {
    assertNotNull(jdbc.queryForObject("SELECT activated_at FROM fcc_screen_pop_delivery WHERE call_id=900010",java.sql.Timestamp.class));
    deliveries.close(42,"test-agent","900010");
    assertTrue(deliveries.pending(42,"test-agent").isEmpty());
+   jdbc.update("UPDATE fcc_call_session SET ended_at=UTC_TIMESTAMP(3) WHERE id=900010");
+   var summaries=session.getMapper(com.chandler.fcc.server.call.AfterCallMapper.class);
+   assertNull(summaries.lockEnded(43,"test-agent","900010"));
+   assertEquals("900010",summaries.lockEnded(42,"test-agent","900010"));
+   assertEquals(1,summaries.save(42,"test-agent","900010","{\"notes\":\"saved\"}"));
+   assertEquals(0,summaries.save(42,"test-agent","900010","{\"notes\":\"overwritten\"}"));
+   assertTrue(summaries.detail(42,"test-agent","900010").contains("saved"));
+   runtime.setPresence(42,"test-agent","ACW");
+   assertEquals(1,runtime.completeAcw(42,"test-agent","900010"));
+   assertEquals(0,runtime.completeAcw(42,"test-agent","900010"));
+   runtime.callback(900020,42,"900010","1001","1002","NO_ANSWER");
+   var callbacks=session.getMapper(com.chandler.fcc.server.call.CallbackRuntimeMapper.class);
+   assertEquals(1,callbacks.count(42,"test-agent",null));
+   assertEquals(0,callbacks.count(43,"test-agent",null));
+   assertNotNull(callbacks.lock(42,"test-agent","900020"));
+   assertEquals(1,callbacks.schedule(42,"test-agent","900020","900015"));
+   assertNull(callbacks.lock(42,"another-agent","900020"));
+   assertEquals("FAILED",callbacks.list(42,"test-agent",null,0).getFirst().get("status"));
+   assertEquals(0,callbacks.schedule(42,"another-agent","900020","900005"));
    var inbox=session.getMapper(EventInboxMapper.class);assertEquals(1,inbox.receive("b".repeat(64),"test-node","{}"));assertEquals(0,inbox.receive("b".repeat(64),"test-node","{}"));inbox.finish("b".repeat(64),"PROCESSED");assertEquals("PROCESSED",inbox.status("b".repeat(64)));
   });
  }

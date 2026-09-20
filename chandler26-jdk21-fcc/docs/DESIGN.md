@@ -77,7 +77,7 @@ fcc-server 统一拥有话机绑定运行流程、呼入、呼出、自动外呼
 - 登录、当前用户和密码操作；
 - 管理员与坐席账户；
 - 客服组、组员、终端绑定和代班；
-- 分机与 IVR 绑定；
+- 分机配置；话机验证码运行绑定由 fcc-server 负责；
 - CDR、统计、详情和录音读取；
 - 回拨任务；
 - 流程定义、版本、草稿和发布；仿真接口当前明确返回不可用；
@@ -92,8 +92,8 @@ fcc-server 统一拥有话机绑定运行流程、呼入、呼出、自动外呼
 
 | 字段 | 含义 |
 | --- | --- |
-| `call_id` | FCC 业务通话聚合 ID |
-| `channel_uuid` | 单个 FreeSWITCH Channel/Leg |
+| `call_id` | FCC 业务通话聚合 ID；无前缀正整数雪花 ID，数据库 BIGINT、API 字符串 |
+| `channel_uuid` | 单个 FreeSWITCH Channel/Leg；独立生成的标准 36 位 UUID |
 | `ctrl_id` | 命令与事件关联 ID |
 | `node_id` | Sidecar/FreeSWITCH 节点 |
 | `bridge_uuid` | 一次媒体桥接 |
@@ -102,7 +102,9 @@ fcc-server 统一拥有话机绑定运行流程、呼入、呼出、自动外呼
 | `flow_instance_id` | 一次流程执行 |
 | `biz_id` | 外部业务关联标识 |
 
-这些值不得互换。共享 `FccIdentifierJacksonModule` 已在 admin/server 注册：Bean 中名为 `id` 或以 `Id` 结尾的 Long/long 属性按字符串输出，时长与统计值保持数值。该规则不等于所有 Map 值、集合元素、其他命名或独立 ObjectMapper 都已覆盖；已有单元测试源码，JDK 21 编译和实际 Spring HTTP 序列化尚未验证。前端继续按不透明字符串处理身份。
+标识决策：参考项目 call-center-backend 将业务 callUuid（标准 UUID）和 Long 数据库主键分开。新项目保留“业务通话与话道分别标识”的原则，业务 callId 直接复用聚合主键，不再额外引入 callUuid。所有关联表使用同一数值身份；禁止添加 `call-` 前缀、截前缀兼容或哈希兜底。非法 ID 明确拒绝，不生成替代 ID。
+
+这些值不得互换。共享 `FccIdentifierJacksonModule` 已在 admin/server 注册：Bean 中名为 `id` 或以 `Id` 结尾的 Long/long 属性按字符串输出，时长与统计值保持数值。该规则不等于所有 Map 值、集合元素、其他命名或独立 ObjectMapper 都已覆盖；JDK 21 编译及标识序列化单元测试已通过，实际 Spring HTTP 输出仍需完整验收。前端继续按不透明字符串处理身份。
 
 ## 5. 呼叫控制链路
 
@@ -212,7 +214,7 @@ MySQL 是持久事实来源。Redis 只存可重建的运行态和通知。内�
 - NATS 事件使用 FCC_EVENTS JetStream；fcc-control durable 每次处理一条并显式 ACK，部署前必须创建流；
 - 当前只支持一个活跃 fcc-server，不能把共享 durable 等同安全的多实例会话处理；
 - 命令重试尚未形成跨请求稳定的业务幂等键；
-- 消费前从 MySQL 分页恢复固定模板会话；尚缺与真实 FS 话道快照的自动对账；
+- 消费前从 MySQL 分页恢复固定模板会话；已有 ChannelSnapshot 双方持续缺失对账，失败快照不视为挂机，单边残留和桥接重建仍需补齐；
 - 流程发布使用 Redis 与 HTTP best-effort 通知，不是事务性发布；
 - Agent WebSocket 已通过令牌在线核验坐席身份；身份服务故障时拒绝收发，尚需真实环境验证及性能评估；
 - 共享 Jackson 标识符模块已加入，但命名外字段、Map 和实际 HTTP 输出仍需完整契约验证；
@@ -240,4 +242,11 @@ mvn -q test
 
 涉及 Mapper/DDL 时还需解析 XML、检查查询形状和在一次性 MySQL 8 环境验证。涉及 NATS、事件、录音、WebSocket 或媒体时，必须报告外部依赖是否真实可用。
 
-2026-09-20：Java 编译和定向 SQL/边界测试通过，真实 MySQL 验证覆盖租户隔离、乐观锁、绑定占用和任务原子回填。Sidecar 已用本机真实 JetStream 验证 outbox；Java 全量测试有 9 个上下文启动错误（本机 JDK 回环连接创建失败）。真实媒体、录音、认证浏览器与 Windows 交互尚未验收。部署的新配置与顺序见 [跨电脑验收](../../docs/fcc-cross-machine-acceptance.md)。
+2026-09-20：Java 编译和定向 SQL/边界测试通过，真实 MySQL 验证覆盖租户隔离、乐观锁、绑定占用和任务原子回填。Sidecar 已用本机真实 JetStream 验证 outbox；Java 全量回归 56 项中 54 项通过、2 项真实坐席 WebSocket 用例跳过，无失败或错误。真实媒体、录音、认证浏览器与 Windows 交互尚未验收。部署的新配置与顺序见 [跨电脑验收](../../docs/fcc-cross-machine-acceptance.md)。
+
+### 运行端补充接口
+
+- `GET/POST /api/telephony/agent-state`：本人坐席状态，通话占用由服务端维护。
+- `GET/POST /api/telephony/calls/{callId}/summary`：本人本租户已结束通话的小结；提交幂等，不释放较新通话占用。
+- `GET /api/telephony/callbacks`、`POST /api/telephony/callbacks/{id}/call`：本人或未分配回拨摘要、原子领取并创建调度任务。
+- `/ws/agent` 的 `SCREEN_POP_RECEIPT`：服务端按认证租户、工号与通话保存展示事实，不将展示当作接听。

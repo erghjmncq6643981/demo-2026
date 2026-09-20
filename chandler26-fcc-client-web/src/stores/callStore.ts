@@ -6,6 +6,7 @@ import { toast, toastError } from '../utils/feedback';
 import { sipWebRtcService } from '../services/sipWebRtcService';
 import { triggerHangupCall, triggerHoldCall, triggerDtmfCall } from '../api/telephonyApi';
 import { telephonyApi } from '../api/apiClient';
+import { useAgentStore } from './agentStore';
 import {
   initialCallLifecycle,
   reduceCallLifecycle,
@@ -117,9 +118,14 @@ export const useCallStore = defineStore('call', () => {
     hangupRequestKey = null;
   }
 
-  async function closeAcw() {
-    try { await telephonyApi.post('/agent-state', { status: 'READY' }); }
+  async function closeAcw(summary?: { category: string; intent: string; notes: string }) {
+    const callId = currentCall.value?.callId;
+    if (!callId) return;
+    try {
+      await telephonyApi.post(`/calls/${encodeURIComponent(callId)}/summary`, summary || { category: '未分类', intent: 'UNASSESSED', notes: '' });
+    }
     catch (error) { toastError(error instanceof Error ? error.message : '整理提交失败'); return; }
+    await useAgentStore().refreshStatus();
     if (!applyLifecycle({ type: 'ACW_COMPLETED' })) return;
     showAcwDrawer.value = false;
     currentCall.value = null;

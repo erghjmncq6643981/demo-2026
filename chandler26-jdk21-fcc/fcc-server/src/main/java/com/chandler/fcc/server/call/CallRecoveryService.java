@@ -27,6 +27,7 @@ public class CallRecoveryService {
    var rows=mapper.active(after);if(rows.isEmpty())return;
    for(var row:rows){
     after=((Number)row.get("id")).longValue();
+    if(sessions.getByCtrlUuid(row.get("ctrlId").toString()).isPresent())continue;
     if(row.get("attributes")==null)continue;
     try{
      Map<String,Object> data=json.readValue(row.get("attributes").toString(),new TypeReference<HashMap<String,Object>>(){});

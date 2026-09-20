@@ -6,7 +6,15 @@
  <select id="detail" resultType="map">SELECT CAST(id AS CHAR) AS id,status,job_type AS mode,JSON_UNQUOTE(JSON_EXTRACT(payload,'$.number')) AS number FROM fcc_dial_job WHERE tenant_id=#{tenant} AND owner_work_no=#{owner} AND id=#{id}</select>
  <select id="attempts" resultType="map">SELECT CAST(id AS CHAR) AS id,CAST(call_id AS CHAR) AS callId,attempt_no AS attemptNo,status,result,failure_reason AS failureReason,started_at AS startedAt,ended_at AS endedAt FROM fcc_dial_attempt WHERE dial_job_id=#{id} ORDER BY attempt_no LIMIT 10</select>
  <select id="schedulerLock" resultType="long">SELECT id FROM fcc_dial_scheduler_lock WHERE id=1 FOR UPDATE</select>
- <select id="next" resultType="map">SELECT CAST(id AS CHAR) AS id,tenant_id AS tenant,owner_work_no AS owner,job_type AS mode,max_attempts AS maxAttempts,JSON_UNQUOTE(JSON_EXTRACT(payload,'$.number')) AS number FROM fcc_dial_job WHERE status='PENDING' AND owner_work_no IS NOT NULL AND scheduled_at&lt;=UTC_TIMESTAMP(3) ORDER BY scheduled_at,id LIMIT 1 FOR UPDATE SKIP LOCKED</select>
+ <select id="next" resultType="map">
+  SELECT CAST(j.id AS CHAR) AS id,j.tenant_id AS tenant,j.owner_work_no AS owner,j.job_type AS mode,j.max_attempts AS maxAttempts,JSON_UNQUOTE(JSON_EXTRACT(j.payload,'$.number')) AS number
+  FROM fcc_dial_job j WHERE j.status='PENDING' AND j.owner_work_no IS NOT NULL AND j.scheduled_at&lt;=UTC_TIMESTAMP(3)
+  AND (j.job_type='NOTIFICATION' OR EXISTS (
+   SELECT 1 FROM fcc_agent a JOIN fcc_agent_presence p ON p.agent_id=a.id AND p.tenant_id=a.tenant_id
+   WHERE a.tenant_id=j.tenant_id AND a.work_no=j.owner_work_no AND a.status='ENABLED' AND a.deleted_at IS NULL
+    AND a.current_extension IS NOT NULL AND p.login_status='ONLINE' AND p.work_status='READY' AND p.active_call_id IS NULL))
+  ORDER BY j.scheduled_at,j.id LIMIT 1 FOR UPDATE SKIP LOCKED
+ </select>
  <update id="claim">UPDATE fcc_dial_job SET status='RUNNING' WHERE id=#{id} AND status='PENDING'</update>
  <select id="countAttempts" resultType="int">SELECT COUNT(*) FROM fcc_dial_attempt WHERE dial_job_id=#{id}</select>
  <insert id="startAttempt">INSERT INTO fcc_dial_attempt(id,tenant_id,dial_job_id,attempt_no,destination_number,status,started_at) VALUES(#{attempt},#{tenant},#{id},#{attemptNo},#{number},'RUNNING',UTC_TIMESTAMP(3))</insert>

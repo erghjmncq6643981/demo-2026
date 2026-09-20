@@ -57,10 +57,10 @@ public class CallPersistenceService {
 
         CallSessionEntity existing = callSessionMapper.selectOne(
                 new LambdaQueryWrapper<CallSessionEntity>()
-                        .eq(CallSessionEntity::getCtrlId, callInfo.getCtrlId())
+                        .eq(CallSessionEntity::getCtrlId, callInfo.getCtrlId()).last("FOR UPDATE")
         );
 
-        LocalDateTime now = LocalDateTime.now();
+        LocalDateTime now = LocalDateTime.now(java.time.ZoneOffset.UTC);
 
         if (existing == null) {
             CallSessionEntity entity = CallSessionEntity.builder()
@@ -145,7 +145,13 @@ public class CallPersistenceService {
 
             try {
                 if (callInfo.getData() != null && !callInfo.getData().isEmpty()) {
-                    existing.setAttributes(objectMapper.writeValueAsString(callInfo.getData()));
+                    var attributes = new java.util.HashMap<String,Object>(callInfo.getData());
+                    // 话后小结由独立事务保存，迟到话务事件不能覆盖已提交的业务结果。
+                    if (existing.getAttributes() != null) {
+                        var saved = objectMapper.readTree(existing.getAttributes()).get("afterCall");
+                        if (saved != null) attributes.put("afterCall", saved);
+                    }
+                    existing.setAttributes(objectMapper.writeValueAsString(attributes));
                 }
             } catch (Exception ignored) {}
 
@@ -170,10 +176,10 @@ public class CallPersistenceService {
 
         CallLegEntity existing = callLegMapper.selectOne(
                 new LambdaQueryWrapper<CallLegEntity>()
-                        .eq(CallLegEntity::getChannelUuid, leg.getChannelUuid())
+                        .eq(CallLegEntity::getChannelUuid, leg.getChannelUuid()).last("FOR UPDATE")
         );
 
-        LocalDateTime now = LocalDateTime.now();
+        LocalDateTime now = LocalDateTime.now(java.time.ZoneOffset.UTC);
         if (existing == null) {
             if (leg.getId() == null) {
                 leg.setId(IdUtil.nextId());
@@ -191,10 +197,10 @@ public class CallPersistenceService {
             log.info("💾 [持久化] 成功新建话道 Leg: id={}, uuid={}, role={}", leg.getId(), leg.getChannelUuid(), leg.getRoleType());
             return leg;
         } else {
-            if (leg.getState() != null) existing.setState(leg.getState());
-            if (leg.getAnsweredAt() != null) existing.setAnsweredAt(leg.getAnsweredAt());
-            if (leg.getBridgedAt() != null) existing.setBridgedAt(leg.getBridgedAt());
-            if (leg.getEndedAt() != null) existing.setEndedAt(leg.getEndedAt());
+            if (com.chandler.fcc.server.call.LegStatePolicy.accepts(existing.getState(), leg.getState())) existing.setState(leg.getState());
+            if (leg.getAnsweredAt() != null && existing.getAnsweredAt() == null) existing.setAnsweredAt(leg.getAnsweredAt());
+            if (leg.getBridgedAt() != null && existing.getBridgedAt() == null) existing.setBridgedAt(leg.getBridgedAt());
+            if (leg.getEndedAt() != null && existing.getEndedAt() == null) existing.setEndedAt(leg.getEndedAt());
             if (leg.getHangupCause() != null) existing.setHangupCause(leg.getHangupCause());
             if (leg.getTalkDurationMs() != null) existing.setTalkDurationMs(leg.getTalkDurationMs());
             existing.setUpdatedAt(now);
@@ -434,24 +440,15 @@ public class CallPersistenceService {
     }
 
     /**
-     * 解析业务 call_id 或返回雪花数值 ID
+     * 严格解析纯数字业务 call_id，不生成替代 ID，也不接受旧前缀。
      *
      * @param idStr 业务 ID 字符串
      * @return 64位数值 ID
+     * @throws IllegalArgumentException ID 为空、非规范正整数或超出 BIGINT 范围
      */
     public static Long parseNumericId(String idStr) {
-        if (idStr == null || idStr.trim().isEmpty()) {
-            return IdUtil.nextId();
-        }
-        if (idStr.startsWith("call-") || idStr.startsWith("cmd-") || idStr.startsWith("evt-") || idStr.startsWith("rec-")) {
-            try {
-                return Long.parseLong(idStr.substring(idStr.indexOf('-') + 1));
-            } catch (Exception ignored) {}
-        }
-        try {
-            return Long.parseLong(idStr);
-        } catch (Exception e) {
-            return Math.abs((long) idStr.hashCode());
-        }
+        if (idStr == null || !idStr.matches("[1-9][0-9]{0,18}"))
+            throw new IllegalArgumentException("callId 必须为纯数字正整数");
+        return Long.parseLong(idStr);
     }
 }

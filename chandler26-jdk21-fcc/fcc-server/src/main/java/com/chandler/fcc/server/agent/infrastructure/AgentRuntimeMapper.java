@@ -8,6 +8,10 @@ import java.util.List;
 /** 坐席占用、外呼资源及会话恢复查询。 */
 @Mapper
 public interface AgentRuntimeMapper {
+ /** 仅完成本人最新已结束通话的整理态，不覆盖后续占用。
+  * @param tenant 租户 @param owner 坐席 @param callId 通话 @return 修改数
+  */
+ int completeAcw(@Param("tenant")long tenant,@Param("owner")String owner,@Param("callId")String callId);
  /** 读取启用坐席。 @param tenant 租户 @param owner 坐席 @return 坐席摘要 */
  Map<String,Object> agent(@Param("tenant") long tenant,@Param("owner") String owner);
  /** 创建状态记录。 @param tenant 租户 @param owner 坐席 @return 写入数 */

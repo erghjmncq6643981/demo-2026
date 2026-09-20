@@ -24,16 +24,6 @@
           />
         </div>
 
-        <select
-          v-model="filterStatus"
-          @change="loadTasks"
-          class="bg-slate-50 border border-slate-200 rounded-xl px-3 py-1.5 text-slate-800 text-xs focus:outline-none"
-        >
-          <option value="">全部状态</option>
-          <option value="PENDING">待回拨 (PENDING)</option>
-          <option value="ASSIGNED">已派单 (ASSIGNED)</option>
-          <option value="CALLED">已呼出 (CALLED)</option>
-        </select>
 
         <button
           @click="loadTasks"
@@ -56,7 +46,7 @@
         <thead class="text-slate-400 border-b border-slate-100 pb-2 text-[11px] font-bold">
           <tr>
             <th class="py-3 px-3">序号/单号</th>
-            <th class="py-3 px-3">客户/司机</th>
+            <th class="py-3 px-3">客户号码</th>
             <th class="py-3 px-3">呼入DID</th>
             <th class="py-3 px-3">漏话时间</th>
             <th class="py-3 px-3">等待时长</th>
@@ -79,15 +69,6 @@
 
             <!-- 客户/司机 -->
             <td class="py-3.5 px-3">
-              <div class="flex items-center gap-2">
-                <span class="font-bold text-slate-900">{{ item.customerName || '散客用户' }}</span>
-                <span
-                  class="px-1.5 py-0.2 rounded text-[10px] font-bold"
-                  :class="item.customerType === 'DRIVER' ? 'bg-blue-50 text-blue-700' : 'bg-amber-50 text-amber-700'"
-                >
-                  {{ item.customerType === 'DRIVER' ? '司机' : '企业客户' }}
-                </span>
-              </div>
               <div class="font-mono text-slate-600 text-[11px] mt-0.5">
                 {{ item.phone }}
               </div>
@@ -141,10 +122,11 @@
               <div class="flex items-center justify-end gap-2">
                 <button
                   @click="handleTriggerCall(item)"
+                  :disabled="!!callingId || ['RUNNING', 'PAUSED', 'SUCCEEDED'].includes(item.status)"
                   class="px-3.5 py-1 rounded-full bg-brand-500 hover:bg-brand-600 active:scale-95 text-white font-extrabold text-xs transition shadow-pill flex items-center gap-1 cursor-pointer"
                 >
                   <span>📞</span>
-                  <span>立即回拨</span>
+                  <span>{{ callingId === item.id ? '正在安排…' : '安排回拨' }}</span>
                 </button>
               </div>
             </td>
@@ -193,14 +175,10 @@
 <script setup lang="ts">
 import { ref, computed, onMounted } from 'vue';
 import { callbackApi, type CallbackTaskVO } from '../../api/callbackApi';
-import { useAgentStore } from '../../stores/agentStore';
-
-const emit = defineEmits<{ (e: 'outbound', phone: string): void }>();
-
-const agentStore = useAgentStore();
+import { toast, toastError } from '../../utils/feedback';
+const callingId = ref('');
 
 const searchPhone = ref('');
-const filterStatus = ref('');
 const page = ref(1);
 const total = ref(0);
 const isLoading = ref(false);
@@ -222,7 +200,6 @@ async function loadTasks() {
       pageNum: page.value,
       pageSize: 10,
       customerNumber: searchPhone.value.trim() || undefined,
-      status: filterStatus.value || undefined,
     });
     if (res && res.list) {
       tasks.value = res.list;
@@ -232,7 +209,7 @@ async function loadTasks() {
       total.value = 0;
     }
   } catch (e) {
-    console.warn('loadTasks failed:', e);
+    toastError(e instanceof Error ? e.message : '回拨列表加载失败，请重试');
     tasks.value = [];
     total.value = 0;
   } finally {
@@ -242,24 +219,20 @@ async function loadTasks() {
 
 function resetFilter() {
   searchPhone.value = '';
-  filterStatus.value = '';
   page.value = 1;
   loadTasks();
 }
 
 async function handleTriggerCall(item: CallbackTaskVO) {
-  // 1. 发起外呼
-  emit('outbound', item.phone);
-
-  // 2. 调用后端回呼记录接口
+  if (callingId.value) return;
+  callingId.value = item.id;
   try {
     await callbackApi.call(item.id);
-  } catch {
-    // 本地状态乐观更新
-    item.status = 'CALLED';
-    item.callAttempts = (item.callAttempts || 0) + 1;
-    item.lastCalledAt = new Date().toISOString().replace('T', ' ').substring(0, 19);
-  }
+    toast('已安排回拨，请保持就绪；调度器将在允许时段执行，可在自动外呼查看结果');
+    await loadTasks();
+  } catch (error) {
+    toastError(error instanceof Error ? error.message : '安排回拨失败');
+  } finally { callingId.value = ''; }
 }
 
 function getReasonTagClass(reason?: string): string {
@@ -278,6 +251,6 @@ function getStatusTagClass(status: string): string {
 function getStatusText(status: string): string {
   if (status === 'PENDING') return '待回拨';
   if (status === 'ASSIGNED') return '已派单';
-  return '已呼出';
+  return ({ SCHEDULED: '已安排', RUNNING: '执行中', PAUSED: '已暂停', SUCCEEDED: '已接通', FAILED: '失败', CANCELLED: '已取消' } as Record<string, string>)[status] || status;
 }
 </script>

@@ -14,7 +14,7 @@ beforeEach(() => {
   });
   connections.length = 0;
 });
-afterEach(() => { wsService.disconnect(); vi.unstubAllGlobals(); });
+afterEach(() => { wsService.disconnect(); vi.useRealTimers(); vi.unstubAllGlobals(); });
 
 it('sends identity proof in a non-echoed protocol header, never in the URL', () => {
   wsService.connect('untrusted-work-number');
@@ -29,4 +29,24 @@ it('does not open a socket without a login token', () => {
   vi.stubGlobal('localStorage', { getItem: () => null });
   wsService.connect('untrusted-work-number');
   expect(connections).toHaveLength(0);
+});
+
+it('does not renew an unanswered heartbeat deadline on every tick', () => {
+  vi.useFakeTimers();
+  const close = vi.fn();
+  const send = vi.fn();
+  let current: { onopen?: () => void };
+  vi.stubGlobal('WebSocket', class {
+    static OPEN = 1;
+    readyState = 1;
+    onopen?: () => void;
+    close = close;
+    send = send;
+    constructor() { current = this; }
+  });
+  wsService.connect('alice');
+  current!.onopen?.();
+  vi.advanceTimersByTime(40000);
+  expect(send).toHaveBeenCalledTimes(1);
+  expect(close).toHaveBeenCalledWith(4000, 'heartbeat timeout');
 });

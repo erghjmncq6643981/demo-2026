@@ -95,11 +95,18 @@ public class InboundCallService {
   if(candidate==null||candidate.get("extension")==null)return;
   String owner=candidate.get("workNo").toString(),extension=candidate.get("extension").toString();
   if(tried.contains(owner)||!extension.matches("[0-9]{2,20}"))return;
-  Boolean reserved=transactions.execute(transaction->{
+  var previousData=new HashMap<String,Object>(call.getData());
+  previousData.put("triedAgents",new ArrayList<>(tried));
+  String previousOwner=call.getAgentWorkNo(),previousExtension=call.getAgentExt(),previousChannel=call.getAgentChannelUuid();
+  Boolean reserved;
+  try { reserved=transactions.execute(transaction->{
    if(agents.reserve(tenant,owner,call.getCallId())!=1)return false;
    call.setAgentWorkNo(owner);call.setAgentExt(extension);call.setAgentChannelUuid(IdUtil.getUuid());tried.add(owner);
    call.putData("primaryWorkNo",owner);call.putData("agentExt",extension);call.putData("agentChannelUuid",call.getAgentChannelUuid());persistence.saveOrUpdateSession(call);return true;
-  });
+  }); } catch(RuntimeException failure){
+   call.setAgentWorkNo(previousOwner);call.setAgentExt(previousExtension);call.setAgentChannelUuid(previousChannel);
+   call.setData(previousData);throw failure;
+  }
   if(!Boolean.TRUE.equals(reserved))return;
   sessions.bindChannel(call.getAgentChannelUuid(),call.getCtrlId());
   var dto=FNodeDialDTO.builder().ctrlUuid(call.getCtrlId()).uuid(call.getAgentChannelUuid()).timeout(30)

@@ -31,8 +31,6 @@ const {
   cbPageSize,
   pagedCallbackRecords,
   resetCallbackFilter,
-  handleDispatch,
-  handleCallbackCall,
   totalCallsCount,
   answeredCallsCount,
   answerRate,
@@ -579,34 +577,7 @@ const {
 
                 <!-- 操作栏：回访调度 -->
                 <td class="py-4 px-4 text-right">
-                  <div v-if="item.status === 'PENDING'" class="flex items-center justify-end gap-2">
-                    <button
-                      @click="handleDispatch(item, '舒欣', '901415')"
-                      class="px-3 py-1.5 bg-brand-500 hover:bg-brand-600 text-white rounded-xl font-bold shadow-xs transition cursor-pointer text-xs"
-                    >
-                      派给舒欣
-                    </button>
-                    <button
-                      @click="handleDispatch(item, '陈松', '901473')"
-                      class="px-3 py-1.5 bg-indigo-50 hover:bg-indigo-100 text-brand-600 rounded-xl font-bold transition cursor-pointer text-xs"
-                    >
-                      派给陈松
-                    </button>
-                    <button
-                      @click="handleCallbackCall(item)"
-                      class="px-3 py-1.5 bg-emerald-50 hover:bg-emerald-100 text-emerald-700 rounded-xl font-bold transition cursor-pointer text-xs"
-                    >
-                      一键回呼
-                    </button>
-                  </div>
-                  <div v-else class="flex items-center justify-end gap-2">
-                    <button
-                      @click="handleCallbackCall(item)"
-                      class="px-3 py-1.5 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-xl font-bold transition cursor-pointer text-xs"
-                    >
-                      再次回呼
-                    </button>
-                  </div>
+                  <span class="text-slate-500 text-xs">由坐席工作台领取并安排回拨</span>
                 </td>
               </tr>
             </tbody>

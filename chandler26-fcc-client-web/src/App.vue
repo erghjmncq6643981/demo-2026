@@ -38,7 +38,6 @@
         <!-- Tab 1: 未接待回拨待办 Table (第一优先级，首屏默认) -->
         <CallbackQueue
           v-if="activeTab === 'callback'"
-          @outbound="handleTriggerOutbound"
         />
 
         <!-- Tab 2: 真实 MySQL 通话话单记录 (严格按需求 8 列顺序) -->
@@ -63,6 +62,7 @@
     <!-- ================= 核心呼叫组件与弹屏 ================= -->
     <!-- 话机/手机接听模式下的居中声波放射响铃弹屏 -->
     <IncomingCallCard />
+    <AcwDrawer />
 
     <!-- 高颜值现代软电话拨号盘 (仅当接听方式为软话机 WebRTC 时加载) -->
     <SoftphoneDialer v-if="agentStore.endpoint === 'WEBRTC'" ref="softphoneDialerRef" />
@@ -81,6 +81,7 @@ import HeaderBar from './components/layout/HeaderBar.vue';
 import AgentProfile from './components/layout/AgentProfile.vue';
 import StatusBar from './components/layout/StatusBar.vue';
 import IncomingCallCard from './components/telephony/IncomingCallCard.vue';
+import AcwDrawer from './components/telephony/AcwDrawer.vue';
 import InCallWorkspace from './components/telephony/InCallWorkspace.vue';
 import SoftphoneDialer from './components/telephony/SoftphoneDialer.vue';
 import WsDiagnosticsModal from './components/telephony/WsDiagnosticsModal.vue';
@@ -195,13 +196,16 @@ onMounted(() => {
 
   // 监听后端推送的真实话务事件
   unsubscribeWs = wsService.subscribe((msg: WsMessage) => {
-    console.log('📡 [PC-Client] 接收到 WebSocket 信令:', msg);
     if (msg.type === 'SCREEN_POP' && msg.data) {
+      void agentStore.refreshStatus();
       callStore.triggerIncoming(msg.data as IncomingScreenPopPayload);
     } else if (msg.type === 'CALL_ANSWERED') {
       callStore.observeAnswered(msg.callId);
     } else if (msg.type === 'CALL_HANGUP') {
       callStore.observeEnded(msg.callId);
+      void agentStore.refreshStatus();
+    } else if (msg.type === 'CHANNEL_READY') {
+      void agentStore.refreshStatus();
     }
   });
 });

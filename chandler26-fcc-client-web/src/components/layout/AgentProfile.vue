@@ -28,23 +28,14 @@
         <!-- 显眼接听方式下拉框与紧随其右的状态切换 -->
         <div class="flex items-center gap-2">
           <label class="text-sm font-extrabold text-slate-800 shrink-0">接听方式:</label>
-          <div class="relative">
-            <select
-              :value="agentStore.endpoint"
-              :disabled="endpointSwitchLocked"
-              @change="handleEndpointSelect(($event.target as HTMLSelectElement).value as AnswerEndpointType)"
-              class="bg-white border-2 border-slate-200 hover:border-brand-500 rounded-xl px-3 py-1.5 pr-8 text-sm font-extrabold text-slate-800 shadow-2xs focus:outline-none focus:border-brand-500 appearance-none cursor-pointer transition disabled:cursor-not-allowed disabled:opacity-50"
-            >
-              <option value="WEBRTC">💻 软话机 (WebRTC)</option>
-              <option value="SIP">☎️ 实体话机 (SIP)</option>
-              <option value="MOBILE">📱 随行手机 (Mobile)</option>
-            </select>
-            <span class="pointer-events-none absolute inset-y-0 right-2.5 flex items-center text-slate-400 text-xs">▼</span>
-          </div>
+          <span class="text-sm font-bold text-slate-700">
+            实体话机 · {{ agentStore.boundSipExtension || agentStore.extension || '尚未绑定' }}
+          </span>
         </div>
 
         <!-- 状态切换 (紧随接听方式右侧，保留 示闲 / 小休 / 示忙，彻底删除整理) -->
         <div class="flex items-center bg-slate-100/90 p-1 rounded-xl border border-slate-200 text-sm">
+          <button v-if="callStore.callState === 'ACW'" class="px-3 py-1.5 font-bold text-indigo-700" @click="callStore.showAcwDrawer = true">继续话后整理</button>
           <button
             @click="agentStore.setStatus('READY')"
             :class="[
@@ -88,29 +79,7 @@
 <script setup lang="ts">
 import { useAgentStore } from '../../stores/agentStore';
 import { useCallStore } from '../../stores/callStore';
-import type { AnswerEndpointType } from '../../types/telephony';
-import { computed } from 'vue';
-import { toast } from '../../utils/feedback';
 
 const agentStore = useAgentStore();
 const callStore = useCallStore();
-const endpointSwitchLocked = computed(() => !['IDLE', 'ACW'].includes(callStore.callState));
-
-async function handleEndpointSelect(type: AnswerEndpointType) {
-  if (endpointSwitchLocked.value) {
-    toast('通话进行中，不能切换接听方式');
-    return;
-  }
-  let val = '';
-  if (type === 'WEBRTC') val = agentStore.workNo;
-  else if (type === 'SIP') val = agentStore.boundSipExtension || agentStore.extension;
-  else val = agentStore.boundMobile;
-
-  try {
-    await agentStore.switchEndpoint(type, val);
-  } catch (e) {
-    console.warn('Endpoint switch failed:', e);
-    toast('接听方式切换失败，请检查终端绑定');
-  }
-}
 </script>

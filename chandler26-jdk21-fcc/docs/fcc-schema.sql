@@ -675,6 +675,7 @@ CREATE TABLE IF NOT EXISTS fcc_callback_task (
     id                  BIGINT UNSIGNED NOT NULL,
     tenant_id           BIGINT UNSIGNED NOT NULL DEFAULT 0,
     source_call_id      BIGINT UNSIGNED NOT NULL COMMENT '关联原未接通通话ID',
+    last_dial_job_id    BIGINT UNSIGNED NULL COMMENT '最近一次持久外呼任务',
     customer_number     VARCHAR(32) NOT NULL COMMENT '客户手机号',
     did_number          VARCHAR(32) NULL COMMENT '进线DID号码',
     missed_at           DATETIME(3) NOT NULL COMMENT '漏话时间',
@@ -692,6 +693,7 @@ CREATE TABLE IF NOT EXISTS fcc_callback_task (
     updated_at          DATETIME(3) NOT NULL DEFAULT CURRENT_TIMESTAMP(3) ON UPDATE CURRENT_TIMESTAMP(3),
     PRIMARY KEY (id),
     KEY idx_callback_source_call (tenant_id, source_call_id),
+    KEY idx_callback_job (tenant_id, last_dial_job_id),
     KEY idx_callback_status_time (tenant_id, status, missed_at),
     KEY idx_callback_assignee (tenant_id, assignee_work_no)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci COMMENT='Missed-call callback workflow';

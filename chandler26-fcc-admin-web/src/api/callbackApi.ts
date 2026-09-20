@@ -34,7 +34,4 @@ export const callbackApi = {
   assign(id: string, data: CallbackTaskAssignReq): Promise<void> {
     return apiClient.post(`/callbacks/${id}/assign`, data);
   },
-  call(id: string): Promise<void> {
-    return apiClient.post(`/callbacks/${id}/call`);
-  },
 };

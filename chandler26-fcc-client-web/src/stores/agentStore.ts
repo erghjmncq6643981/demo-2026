@@ -13,7 +13,7 @@ export const useAgentStore = defineStore('agent', () => {
   const role = ref(localStorage.getItem('fcc_agent_role') || '');
   const permissions = ref<string[]>([]);
   const status = ref<AgentStatus>('REST');
-  const endpoint = ref<AnswerEndpointType>((localStorage.getItem('fcc_agent_endpoint') as AnswerEndpointType) || 'WEBRTC');
+  const endpoint = ref<AnswerEndpointType>('SIP');
   const extension = ref(localStorage.getItem('fcc_agent_extension') || '');
   const serviceGroup = ref('');
 
@@ -32,7 +32,16 @@ export const useAgentStore = defineStore('agent', () => {
     } catch (error) { toastError(error instanceof Error ? error.message : '状态变更失败'); }
   }
 
+  async function refreshStatus() {
+    if (!token.value) return;
+    try {
+      const response = await telephonyApi.get<unknown, { data: { status: AgentStatus } }>('/agent-state');
+      status.value = response.data.status;
+    } catch { /* Keep the last confirmed state; do not invent READY on failure. */ }
+  }
+
   function setEndpoint(newEndpoint: AnswerEndpointType) {
+    if (newEndpoint !== 'SIP') throw new Error('当前版本仅支持绑定的实体话机');
     endpoint.value = newEndpoint;
     localStorage.setItem('fcc_agent_endpoint', newEndpoint);
   }
@@ -43,8 +52,8 @@ export const useAgentStore = defineStore('agent', () => {
       const data = await fetchAgentEndpoints(workNo.value);
       if (data) {
         if (data.activeEndpointType) {
-          endpoint.value = data.activeEndpointType as AnswerEndpointType;
-          localStorage.setItem('fcc_agent_endpoint', data.activeEndpointType);
+          endpoint.value = 'SIP';
+          localStorage.setItem('fcc_agent_endpoint', 'SIP');
         }
         if (data.activeEndpointValue) {
           extension.value = data.activeEndpointValue;
@@ -68,11 +77,10 @@ export const useAgentStore = defineStore('agent', () => {
   }
 
   async function switchEndpoint(targetType: AnswerEndpointType, targetValue?: string) {
+    if (targetType !== 'SIP') throw new Error('当前版本仅支持绑定的实体话机');
     let finalValue = targetValue;
     if (!finalValue) {
-      if (targetType === 'WEBRTC') finalValue = workNo.value;
-      else if (targetType === 'SIP') finalValue = boundSipExtension.value || extension.value;
-      else if (targetType === 'MOBILE') finalValue = boundMobile.value;
+      finalValue = boundSipExtension.value || extension.value;
     }
     if (!finalValue) throw new Error('当前接听方式没有可用的已绑定终端');
 
@@ -118,8 +126,8 @@ export const useAgentStore = defineStore('agent', () => {
         localStorage.setItem('fcc_agent_extension', data.extension);
       }
       if (data.endpointType) {
-        endpoint.value = data.endpointType as AnswerEndpointType;
-        localStorage.setItem('fcc_agent_endpoint', data.endpointType);
+        endpoint.value = 'SIP';
+        localStorage.setItem('fcc_agent_endpoint', 'SIP');
       }
 
       localStorage.setItem('fcc_agent_satoken', data.tokenValue);
@@ -173,6 +181,7 @@ export const useAgentStore = defineStore('agent', () => {
     setStatus,
     setEndpoint,
     loadEndpoints,
+    refreshStatus,
     switchEndpoint,
     login,
     logout,

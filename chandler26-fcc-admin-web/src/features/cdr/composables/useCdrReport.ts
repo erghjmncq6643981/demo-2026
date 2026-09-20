@@ -219,28 +219,6 @@ export function useCdrReport(props: Readonly<{ initialTab?: 'records' | 'callbac
   };
 
   // 漏话调度操作与通知 (统一走全局反馈层 toast，不再使用浏览器原生弹窗)
-  const handleDispatch = async (item: CallbackRecord, agent: string, workNo: string) => {
-    try {
-      await callbackApi.assign(item.id, { agentName: agent, agentWorkNo: workNo });
-      item.status = 'ASSIGNED';
-      item.agentName = agent;
-      item.agentWorkNo = workNo;
-      item.assignee = agent;
-      toast(`已将漏话任务 ${item.customerPhone} 指派给坐席【${agent} (工号: ${workNo})】`, 'success');
-    } catch (err: unknown) {
-      toast(`指派失败：${errorText(err)}`, 'error');
-    }
-  };
-
-  const handleCallbackCall = async (item: CallbackRecord) => {
-    try {
-      await callbackApi.call(item.id);
-      item.status = 'CALLED';
-      toast(`正在向客户 ${item.customerPhone} 发起优先回访呼叫`, 'success');
-    } catch (err: unknown) {
-      toast(`呼叫失败：${errorText(err)}`, 'error');
-    }
-  };
 
   const loadCallbackRecords = async () => {
     try {
@@ -456,8 +434,6 @@ export function useCdrReport(props: Readonly<{ initialTab?: 'records' | 'callbac
     cbPageSize,
     pagedCallbackRecords,
     resetCallbackFilter,
-    handleDispatch,
-    handleCallbackCall,
     totalCallsCount,
     answeredCallsCount,
     answerRate,

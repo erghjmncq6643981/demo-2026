@@ -2,6 +2,10 @@
 
 FCC agent desktop built with Vue 3, TypeScript, Pinia, JsSIP, Tailwind CSS, and Vite.
 
+2026-09-20: Windows Electron test shell is available. Build with `npm run desktop:build`; verify with `npm run desktop:test`. The latest locally verified unsigned installer is `release/current/FCC Agent Setup 2.0.0.exe`. First launch asks for the hosted HTTPS workspace URL. The main process owns the authenticated business socket, tray notifications and received/shown/activated receipts; physical SIP phone is the desktop delivery target. Lock-screen notifications omit customer data. Signing, automatic updates and real Windows notification acceptance are not verified.
+
+Customer records, phone binding, automatic outbound, callback scheduling and after-call summaries use fcc-server. Callback actions enqueue a durable progressive job; they do not separately originate in the browser. Summaries persist before completing ACW. See [cross-machine deployment and acceptance](../docs/fcc-cross-machine-acceptance.md).
+
 ## Runtime relationship
 
 ```text

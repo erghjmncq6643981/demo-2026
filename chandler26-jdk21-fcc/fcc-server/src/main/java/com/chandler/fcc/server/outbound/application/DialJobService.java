@@ -35,12 +35,19 @@ public class DialJobService {
  /** 创建本人任务。 @param number 目标 @param mode 模式 @param maxAttempts 次数 @param key 幂等业务键 @return 任务标识 */
  public String create(String number,String mode,int maxAttempts,String key){
   var actor=identity.requirePrincipal();
+  return createFor(actor.tenantId(),actor.workNo(),number,mode,maxAttempts,key);
+ }
+ /** 内部用例在已有身份校验后创建任务，可加入调用方事务，不发起网络请求。
+  * @param tenant 租户 @param owner 坐席 @param number 号码 @param mode 模式 @param maxAttempts 次数 @param key 幂等键
+  * @return 持久任务标识
+  */
+ public String createFor(long tenant,String owner,String number,String mode,int maxAttempts,String key){
   if(!Set.of("PROGRESSIVE","NOTIFICATION").contains(mode)||maxAttempts<1||maxAttempts>3||key==null||!key.matches("[A-Za-z0-9_-]{8,100}"))throw new ResponseStatusException(HttpStatus.BAD_REQUEST,"外呼模式、次数或请求标识不合法");
   String id=String.valueOf(IdUtil.nextId());
-  try{mapper.create(Map.of("id",id,"tenant",actor.tenantId(),"owner",actor.workNo(),"key",key,"mode",mode,"maxAttempts",maxAttempts,"payload",json.writeValueAsString(Map.of("number",PhoneNumber.normalize(number)))));}
+  try{mapper.create(Map.of("id",id,"tenant",tenant,"owner",owner,"key",key,"mode",mode,"maxAttempts",maxAttempts,"payload",json.writeValueAsString(Map.of("number",PhoneNumber.normalize(number)))));}
   catch(org.springframework.dao.DuplicateKeyException e){throw new ResponseStatusException(HttpStatus.CONFLICT,"该请求已创建，请刷新任务列表");}
   catch(com.fasterxml.jackson.core.JsonProcessingException e){throw new IllegalStateException(e);}
-  log.info("[自动外呼] 创建任务 tenantId={} workNo={} jobId={} mode={}",actor.tenantId(),actor.workNo(),id,mode);
+  log.info("[自动外呼] 创建任务 tenantId={} workNo={} jobId={} mode={}",tenant,owner,id,mode);
   return id;
  }
  /** 本人分页查询。 @param page 页码 @return 任务列表 */

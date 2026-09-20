@@ -112,6 +112,7 @@ class WebSocketService {
           this.ws.close(4000, 'heartbeat timeout');
           return;
         }
+        if (this.awaitingPongSince !== null) return;
         this.lastPingTime = Date.now();
         this.awaitingPongSince = this.lastPingTime;
         this.ws.send(JSON.stringify({
