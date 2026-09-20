@@ -14,7 +14,10 @@ import org.springframework.boot.autoconfigure.SpringBootApplication;
  * @author Chandler
  */
 @SpringBootApplication(scanBasePackages = "com.chandler.fcc")
-@MapperScan("com.chandler.fcc.admin.infrastructure.persistence.mapper")
+@MapperScan(
+    basePackages = "com.chandler.fcc.admin",
+    annotationClass = org.apache.ibatis.annotations.Mapper.class
+)
 public class FccAdminApplication {
 
     /**
