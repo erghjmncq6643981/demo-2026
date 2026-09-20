@@ -7,14 +7,13 @@ import com.chandler.fcc.common.util.IdUtil;
 import com.chandler.fcc.server.infrastructure.persistence.entity.*;
 import com.chandler.fcc.server.infrastructure.persistence.mapper.*;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import java.time.LocalDateTime;
+import java.util.List;
+import java.util.Optional;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
-
-import java.time.LocalDateTime;
-import java.util.List;
-import java.util.Optional;
 
 /**
  * 通话领域数据持久化综合服务
@@ -57,34 +56,39 @@ public class CallPersistenceService {
         Long numericCallId = parseNumericId(callInfo.getCallId());
 
         CallSessionEntity existing = callSessionMapper.selectOne(
-                new LambdaQueryWrapper<CallSessionEntity>()
-                        .eq(CallSessionEntity::getCtrlId, callInfo.getCtrlId()).last("FOR UPDATE")
+            new LambdaQueryWrapper<CallSessionEntity>()
+                .eq(CallSessionEntity::getCtrlId, callInfo.getCtrlId())
+                .last("FOR UPDATE")
         );
 
         LocalDateTime now = LocalDateTime.now(java.time.ZoneOffset.UTC);
 
         if (existing == null) {
             CallSessionEntity entity = CallSessionEntity.builder()
-                    .id(numericCallId)
-                    .tenantId(callInfo.getData().get("tenantId") instanceof Number tenant ? tenant.longValue() : 0L)
-                    .bizId(callInfo.getDataStr("dialJobId",callInfo.getCallId()))
-                    .ctrlId(callInfo.getCtrlId())
-                    .modelType(callInfo.getModelKey() != null ? callInfo.getModelKey() : "UNKNOWN")
-                    .direction(callInfo.getDirection() != null ? callInfo.getDirection().name() : "OUTBOUND")
-                    .callerNumber(callInfo.getCallerNumber() != null ? callInfo.getCallerNumber() : "")
-                    .destinationNumber(callInfo.getDestinationNumber() != null ? callInfo.getDestinationNumber() : "")
-                    .status(callInfo.getStageState() != null ? callInfo.getStageState().name() : "START")
-                    .result(callInfo.getHangupCause())
-                    .startedAt(now)
-                    .ringingAt(now)
-                    .primaryWorkNo(callInfo.getAgentWorkNo())
-                    .agentWorkNo(callInfo.getAgentWorkNo())
-                    .agentName(callInfo.getDataStr("agentName", null))
-                    .evaluationScore(callInfo.getEvaluationScore())
-                    .version(0L)
-                    .createdAt(now)
-                    .updatedAt(now)
-                    .build();
+                .id(numericCallId)
+                .tenantId(
+                    callInfo.getData().get("tenantId") instanceof Number tenant ? tenant.longValue() : 0L
+                )
+                .bizId(callInfo.getDataStr("dialJobId", callInfo.getCallId()))
+                .ctrlId(callInfo.getCtrlId())
+                .modelType(callInfo.getModelKey() != null ? callInfo.getModelKey() : "UNKNOWN")
+                .direction(callInfo.getDirection() != null ? callInfo.getDirection().name() : "OUTBOUND")
+                .callerNumber(callInfo.getCallerNumber() != null ? callInfo.getCallerNumber() : "")
+                .destinationNumber(
+                    callInfo.getDestinationNumber() != null ? callInfo.getDestinationNumber() : ""
+                )
+                .status(callInfo.getStageState() != null ? callInfo.getStageState().name() : "START")
+                .result(callInfo.getHangupCause())
+                .startedAt(now)
+                .ringingAt(now)
+                .primaryWorkNo(callInfo.getAgentWorkNo())
+                .agentWorkNo(callInfo.getAgentWorkNo())
+                .agentName(callInfo.getDataStr("agentName", null))
+                .evaluationScore(callInfo.getEvaluationScore())
+                .version(0L)
+                .createdAt(now)
+                .updatedAt(now)
+                .build();
 
             try {
                 if (callInfo.getData() != null && !callInfo.getData().isEmpty()) {
@@ -94,7 +98,11 @@ public class CallPersistenceService {
 
             callSessionMapper.insert(entity);
             flowRecorder.record(callInfo);
-            log.info("💾 [持久化] 成功新建通话会话记录: id={}, ctrlId={}", entity.getId(), entity.getCtrlId());
+            log.info(
+                "💾 [持久化] 成功新建通话会话记录: id={}, ctrlId={}",
+                entity.getId(),
+                entity.getCtrlId()
+            );
             return entity;
         } else {
             if (callInfo.getStageState() != null) {
@@ -125,10 +133,18 @@ public class CallPersistenceService {
             if (callInfo.getBillsec() != null) {
                 existing.setTalkDurationMs(callInfo.getBillsec() * 1000L);
             }
-            if (("CONNECTED".equalsIgnoreCase(existing.getStatus()) || "ANSWERED".equalsIgnoreCase(existing.getStatus())) && existing.getAnsweredAt() == null) {
+            if (
+                ("CONNECTED".equalsIgnoreCase(existing.getStatus()) ||
+                    "ANSWERED".equalsIgnoreCase(existing.getStatus())) &&
+                existing.getAnsweredAt() == null
+            ) {
                 existing.setAnsweredAt(now);
             }
-            if ("NORMAL_END".equalsIgnoreCase(existing.getStatus()) || "ERROR_END".equalsIgnoreCase(existing.getStatus()) || callInfo.getStageState() == CallStageState.NORMAL_END) {
+            if (
+                "NORMAL_END".equalsIgnoreCase(existing.getStatus()) ||
+                "ERROR_END".equalsIgnoreCase(existing.getStatus()) ||
+                callInfo.getStageState() == CallStageState.NORMAL_END
+            ) {
                 if (existing.getEndedAt() == null) {
                     existing.setEndedAt(now);
                 }
@@ -137,17 +153,19 @@ public class CallPersistenceService {
                 // （FreeSWITCH cause，如 NORMAL_CLEARING），两者语义不同、不可互相顶替。
                 // 话单层"已接听 / 未接听"的归一化由查询侧依据 answeredAt 与通话时长推导，
                 // 不应回写事实表，否则事后无法区分正常结束与异常结束。
-                if (!"NORMAL_END".equalsIgnoreCase(existing.getStatus())
-                        && !"ERROR_END".equalsIgnoreCase(existing.getStatus())) {
-                    existing.setStatus(callInfo.getStageState() != null
-                            ? callInfo.getStageState().name()
-                            : "NORMAL_END");
+                if (
+                    !"NORMAL_END".equalsIgnoreCase(existing.getStatus()) &&
+                    !"ERROR_END".equalsIgnoreCase(existing.getStatus())
+                ) {
+                    existing.setStatus(
+                        callInfo.getStageState() != null ? callInfo.getStageState().name() : "NORMAL_END"
+                    );
                 }
             }
 
             try {
                 if (callInfo.getData() != null && !callInfo.getData().isEmpty()) {
-                    var attributes = new java.util.HashMap<String,Object>(callInfo.getData());
+                    var attributes = new java.util.HashMap<String, Object>(callInfo.getData());
                     // 话后小结由独立事务保存，迟到话务事件不能覆盖已提交的业务结果。
                     if (existing.getAttributes() != null) {
                         var saved = objectMapper.readTree(existing.getAttributes()).get("afterCall");
@@ -160,7 +178,11 @@ public class CallPersistenceService {
             existing.setUpdatedAt(now);
             callSessionMapper.updateById(existing);
             flowRecorder.record(callInfo);
-            log.debug("💾 [持久化] 成功更新通话会话记录: id={}, status={}", existing.getId(), existing.getStatus());
+            log.debug(
+                "💾 [持久化] 成功更新通话会话记录: id={}, status={}",
+                existing.getId(),
+                existing.getStatus()
+            );
             return existing;
         }
     }
@@ -178,8 +200,9 @@ public class CallPersistenceService {
         }
 
         CallLegEntity existing = callLegMapper.selectOne(
-                new LambdaQueryWrapper<CallLegEntity>()
-                        .eq(CallLegEntity::getChannelUuid, leg.getChannelUuid()).last("FOR UPDATE")
+            new LambdaQueryWrapper<CallLegEntity>()
+                .eq(CallLegEntity::getChannelUuid, leg.getChannelUuid())
+                .last("FOR UPDATE")
         );
 
         LocalDateTime now = LocalDateTime.now(java.time.ZoneOffset.UTC);
@@ -197,13 +220,26 @@ public class CallPersistenceService {
             leg.setUpdatedAt(now);
             leg.setVersion(0L);
             callLegMapper.insert(leg);
-            log.info("💾 [持久化] 成功新建话道 Leg: id={}, uuid={}, role={}", leg.getId(), leg.getChannelUuid(), leg.getRoleType());
+            log.info(
+                "💾 [持久化] 成功新建话道 Leg: id={}, uuid={}, role={}",
+                leg.getId(),
+                leg.getChannelUuid(),
+                leg.getRoleType()
+            );
             return leg;
         } else {
-            if (com.chandler.fcc.server.call.LegStatePolicy.accepts(existing.getState(), leg.getState())) existing.setState(leg.getState());
-            if (leg.getAnsweredAt() != null && existing.getAnsweredAt() == null) existing.setAnsweredAt(leg.getAnsweredAt());
-            if (leg.getBridgedAt() != null && existing.getBridgedAt() == null) existing.setBridgedAt(leg.getBridgedAt());
-            if (leg.getEndedAt() != null && existing.getEndedAt() == null) existing.setEndedAt(leg.getEndedAt());
+            if (
+                com.chandler.fcc.server.call.LegStatePolicy.accepts(existing.getState(), leg.getState())
+            ) existing.setState(leg.getState());
+            if (leg.getAnsweredAt() != null && existing.getAnsweredAt() == null) existing.setAnsweredAt(
+                leg.getAnsweredAt()
+            );
+            if (leg.getBridgedAt() != null && existing.getBridgedAt() == null) existing.setBridgedAt(
+                leg.getBridgedAt()
+            );
+            if (leg.getEndedAt() != null && existing.getEndedAt() == null) existing.setEndedAt(
+                leg.getEndedAt()
+            );
             if (leg.getHangupCause() != null) existing.setHangupCause(leg.getHangupCause());
             if (leg.getTalkDurationMs() != null) existing.setTalkDurationMs(leg.getTalkDurationMs());
             existing.setUpdatedAt(now);
@@ -326,8 +362,11 @@ public class CallPersistenceService {
 
         LocalDateTime now = LocalDateTime.now();
         CallRecordingEntity existing = callRecordingMapper.selectOne(
-                new LambdaQueryWrapper<CallRecordingEntity>()
-                        .eq(CallRecordingEntity::getRecordingId, incoming.getRecordingId()));
+            new LambdaQueryWrapper<CallRecordingEntity>().eq(
+                CallRecordingEntity::getRecordingId,
+                incoming.getRecordingId()
+            )
+        );
 
         if (existing == null) {
             incoming.setId(incoming.getId() != null ? incoming.getId() : IdUtil.nextId());
@@ -335,8 +374,12 @@ public class CallPersistenceService {
             incoming.setCreatedAt(now);
             incoming.setUpdatedAt(now);
             callRecordingMapper.insert(incoming);
-            log.info("💾 [持久化] 新建录音元数据: recordingId={}, callId={}, path={}",
-                    incoming.getRecordingId(), incoming.getCallId(), incoming.getObjectKey());
+            log.info(
+                "💾 [持久化] 新建录音元数据: recordingId={}, callId={}, path={}",
+                incoming.getRecordingId(),
+                incoming.getCallId(),
+                incoming.getObjectKey()
+            );
             return incoming;
         }
 
@@ -361,8 +404,12 @@ public class CallPersistenceService {
         existing.setUpdatedAt(now);
 
         callRecordingMapper.updateById(existing);
-        log.info("💾 [持久化] 合并录音元数据: recordingId={}, status={}, size={}",
-                existing.getRecordingId(), existing.getStatus(), existing.getSizeBytes());
+        log.info(
+            "💾 [持久化] 合并录音元数据: recordingId={}, status={}, size={}",
+            existing.getRecordingId(),
+            existing.getStatus(),
+            existing.getSizeBytes()
+        );
         return existing;
     }
 
@@ -376,10 +423,12 @@ public class CallPersistenceService {
         if (callId == null) {
             return List.of();
         }
-        return callRecordingMapper.selectList(new LambdaQueryWrapper<CallRecordingEntity>()
+        return callRecordingMapper.selectList(
+            new LambdaQueryWrapper<CallRecordingEntity>()
                 .eq(CallRecordingEntity::getCallId, callId)
                 .orderByDesc(CallRecordingEntity::getStartedAt)
-                .orderByDesc(CallRecordingEntity::getId));
+                .orderByDesc(CallRecordingEntity::getId)
+        );
     }
 
     /**
@@ -408,25 +457,30 @@ public class CallPersistenceService {
         LocalDateTime now = LocalDateTime.now();
         if (legAId != null) {
             CallBridgeMemberEntity memberA = CallBridgeMemberEntity.builder()
-                    .id(IdUtil.nextId())
-                    .bridgeId(bridge.getId())
-                    .legId(legAId)
-                    .joinedAt(bridge.getStartedAt() != null ? bridge.getStartedAt() : now)
-                    .createdAt(now)
-                    .build();
+                .id(IdUtil.nextId())
+                .bridgeId(bridge.getId())
+                .legId(legAId)
+                .joinedAt(bridge.getStartedAt() != null ? bridge.getStartedAt() : now)
+                .createdAt(now)
+                .build();
             callBridgeMemberMapper.insert(memberA);
         }
         if (legBId != null) {
             CallBridgeMemberEntity memberB = CallBridgeMemberEntity.builder()
-                    .id(IdUtil.nextId())
-                    .bridgeId(bridge.getId())
-                    .legId(legBId)
-                    .joinedAt(bridge.getStartedAt() != null ? bridge.getStartedAt() : now)
-                    .createdAt(now)
-                    .build();
+                .id(IdUtil.nextId())
+                .bridgeId(bridge.getId())
+                .legId(legBId)
+                .joinedAt(bridge.getStartedAt() != null ? bridge.getStartedAt() : now)
+                .createdAt(now)
+                .build();
             callBridgeMemberMapper.insert(memberB);
         }
-        log.info("💾 [持久化] 记录桥接: bridgeUuid={}, legA={}, legB={}", bridge.getBridgeUuid(), legAId, legBId);
+        log.info(
+            "💾 [持久化] 记录桥接: bridgeUuid={}, legA={}, legB={}",
+            bridge.getBridgeUuid(),
+            legAId,
+            legBId
+        );
     }
 
     /**
@@ -437,9 +491,11 @@ public class CallPersistenceService {
      */
     public Optional<CallSessionEntity> findSessionByCtrlId(String ctrlId) {
         if (ctrlId == null) return Optional.empty();
-        return Optional.ofNullable(callSessionMapper.selectOne(
+        return Optional.ofNullable(
+            callSessionMapper.selectOne(
                 new LambdaQueryWrapper<CallSessionEntity>().eq(CallSessionEntity::getCtrlId, ctrlId)
-        ));
+            )
+        );
     }
 
     /**
@@ -450,8 +506,9 @@ public class CallPersistenceService {
      * @throws IllegalArgumentException ID 为空、非规范正整数或超出 BIGINT 范围
      */
     public static Long parseNumericId(String idStr) {
-        if (idStr == null || !idStr.matches("[1-9][0-9]{0,18}"))
-            throw new IllegalArgumentException("callId 必须为纯数字正整数");
+        if (idStr == null || !idStr.matches("[1-9][0-9]{0,18}")) throw new IllegalArgumentException(
+            "callId 必须为纯数字正整数"
+        );
         return Long.parseLong(idStr);
     }
 }

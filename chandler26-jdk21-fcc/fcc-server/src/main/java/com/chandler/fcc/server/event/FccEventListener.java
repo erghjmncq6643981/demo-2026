@@ -19,17 +19,16 @@ import io.nats.client.Connection;
 import io.nats.client.Dispatcher;
 import io.nats.client.Message;
 import jakarta.annotation.PostConstruct;
+import java.nio.charset.StandardCharsets;
+import java.time.Duration;
+import java.util.HashMap;
+import java.util.Map;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.data.redis.core.StringRedisTemplate;
 import org.springframework.stereotype.Component;
-
-import java.nio.charset.StandardCharsets;
-import java.time.Duration;
-import java.util.HashMap;
-import java.util.Map;
 
 /**
  * FCC 核心事件监听网关
@@ -70,17 +69,23 @@ public class FccEventListener {
 
     private static final String EXTENSION_PRESENCE_PREFIX = "fcc:extension:presence:";
 
-    @Autowired(required=false)
+    @Autowired(required = false)
     private com.chandler.fcc.server.agent.application.PhoneBindingService phoneBindingService;
-    @Autowired(required=false)
+
+    @Autowired(required = false)
     private com.chandler.fcc.server.telephony.application.OutboundCallService outboundCallService;
-    @Autowired(required=false)
+
+    @Autowired(required = false)
     private com.chandler.fcc.server.telephony.application.InboundCallService inboundCallService;
-    @Autowired(required=false)
+
+    @Autowired(required = false)
     private EventInboxMapper inbox;
-    @Autowired(required=false)
+
+    @Autowired(required = false)
     private com.chandler.fcc.server.call.CallRecoveryService recovery;
-    private final java.util.concurrent.ExecutorService consumer = java.util.concurrent.Executors.newSingleThreadExecutor();
+
+    private final java.util.concurrent.ExecutorService consumer =
+        java.util.concurrent.Executors.newSingleThreadExecutor();
     private volatile boolean running = true;
 
     /**
@@ -92,20 +97,39 @@ public class FccEventListener {
             consumer.submit(() -> {
                 while (running) {
                     try {
-                        if(recovery!=null)recovery.restore();
-                        var options=io.nats.client.PullSubscribeOptions.builder().stream("FCC_EVENTS").durable("fcc-control")
-                            .configuration(io.nats.client.api.ConsumerConfiguration.builder().ackPolicy(io.nats.client.api.AckPolicy.Explicit)
-                                .ackWait(Duration.ofSeconds(90)).maxAckPending(1).maxDeliver(-1).build()).build();
-                        var subscription=natsConnection.jetStream().subscribe("fs.event.>",options);
-                        while(running){
-                            for(Message message:subscription.fetch(1,Duration.ofSeconds(2))){
-                                try{processDurable(message);message.ack();}
-                                catch(Exception failure){message.nakWithDelay(Duration.ofSeconds(5));log.warn("[事件消费] 等待重试: {}",failure.getClass().getSimpleName());}
+                        if (recovery != null) recovery.restore();
+                        var options = io.nats.client.PullSubscribeOptions.builder()
+                            .stream("FCC_EVENTS")
+                            .durable("fcc-control")
+                            .configuration(
+                                io.nats.client.api.ConsumerConfiguration.builder()
+                                    .ackPolicy(io.nats.client.api.AckPolicy.Explicit)
+                                    .ackWait(Duration.ofSeconds(90))
+                                    .maxAckPending(1)
+                                    .maxDeliver(-1)
+                                    .build()
+                            )
+                            .build();
+                        var subscription = natsConnection.jetStream().subscribe("fs.event.>", options);
+                        while (running) {
+                            for (Message message : subscription.fetch(1, Duration.ofSeconds(2))) {
+                                try {
+                                    processDurable(message);
+                                    message.ack();
+                                } catch (Exception failure) {
+                                    message.nakWithDelay(Duration.ofSeconds(5));
+                                    log.warn("[事件消费] 等待重试: {}", failure.getClass().getSimpleName());
+                                }
                             }
                         }
-                    } catch(Exception failure){
-                        log.warn("[事件消费] 等待 FCC_EVENTS 流可用: {}",failure.getClass().getSimpleName());
-                        try{Thread.sleep(5000);}catch(InterruptedException stop){Thread.currentThread().interrupt();return;}
+                    } catch (Exception failure) {
+                        log.warn("[事件消费] 等待 FCC_EVENTS 流可用: {}", failure.getClass().getSimpleName());
+                        try {
+                            Thread.sleep(5000);
+                        } catch (InterruptedException stop) {
+                            Thread.currentThread().interrupt();
+                            return;
+                        }
                     }
                 }
             });
@@ -142,32 +166,54 @@ public class FccEventListener {
             }
         } catch (Exception e) {
             log.error("❌ [FCC] 处理 NATS 事件异常: {}", e.getMessage(), e);
-            throw new IllegalStateException("事件处理未完成",e);
+            throw new IllegalStateException("事件处理未完成", e);
         }
     }
 
-    /** 验证消息归属与稳定身份，先持久事实，再驱动业务。
+    /**
+     * 验证消息归属与稳定身份，先持久事实，再驱动业务。
+     *
      * @param message 持久消息
      * @throws Exception 校验或存储不可用
      */
     private void processDurable(Message message) throws Exception {
-        JsonNode params=objectMapper.readTree(message.getData()).path("params");
-        String id=params.path("event_id").asText(),node=params.path("node_id").asText();
-        if(!id.matches("[a-f0-9]{64}")||node.isBlank()||!message.getSubject().startsWith("fs.event."+node+".")) {
-            log.error("[事件消费] 拒绝非法身份消息 subject={}",message.getSubject());message.term();return;
-        }
-        if(inbox==null)throw new IllegalStateException("事件收件箱不可用");
-        if(inbox.receive(id,node,new String(message.getData(),StandardCharsets.UTF_8))==0){
-            if("PROCESSING".equals(inbox.status(id))){inbox.finish(id,"UNKNOWN");log.error("[事件消费] 中断事件需要对账 eventId={}",id);}
+        JsonNode params = objectMapper.readTree(message.getData()).path("params");
+        String id = params.path("event_id").asText(),
+            node = params.path("node_id").asText();
+        if (
+            !id.matches("[a-f0-9]{64}") ||
+            node.isBlank() ||
+            !message.getSubject().startsWith("fs.event." + node + ".")
+        ) {
+            log.error("[事件消费] 拒绝非法身份消息 subject={}", message.getSubject());
+            message.term();
             return;
         }
-        try{onMessage(message);inbox.finish(id,"PROCESSED");}
-        catch(Exception failure){inbox.finish(id,"FAILED");log.error("[事件消费] 事件失败已留存 eventId={}",id);}
+        if (inbox == null) throw new IllegalStateException("事件收件箱不可用");
+        if (inbox.receive(id, node, new String(message.getData(), StandardCharsets.UTF_8)) == 0) {
+            if ("PROCESSING".equals(inbox.status(id))) {
+                inbox.finish(id, "UNKNOWN");
+                log.error("[事件消费] 中断事件需要对账 eventId={}", id);
+            }
+            return;
+        }
+        try {
+            onMessage(message);
+            inbox.finish(id, "PROCESSED");
+        } catch (Exception failure) {
+            inbox.finish(id, "FAILED");
+            log.error("[事件消费] 事件失败已留存 eventId={}", id);
+        }
     }
 
-    /** 停止单线程有界拉取消费。 */
+    /**
+     * 停止单线程有界拉取消费。
+     */
     @jakarta.annotation.PreDestroy
-    public void stopListening(){running=false;consumer.shutdownNow();}
+    public void stopListening() {
+        running = false;
+        consumer.shutdownNow();
+    }
 
     /**
      * 处理通道状态机流转事件 (Event.Channel)
@@ -191,37 +237,45 @@ public class FccEventListener {
         Integer billsec = params.hasNonNull("billsec") ? params.get("billsec").asInt() : null;
         String cause = getNodeText(params, "cause");
 
-        CallInfoBO callInfo = sessionManager.getByCtrlUuid(ctrlUuid)
-                .or(() -> sessionManager.getByChannelUuid(uuid))
-                .orElse(null);
+        CallInfoBO callInfo = sessionManager
+            .getByCtrlUuid(ctrlUuid)
+            .or(() -> sessionManager.getByChannelUuid(uuid))
+            .orElse(null);
 
         if (callInfo == null) {
             if (!"START".equals(state) || !"inbound".equalsIgnoreCase(direction)) {
-                log.warn("[话务事件] 未关联的话道事件待对账 nodeId={} channelUuid={} state={}", nodeId,uuid,state);
+                log.warn(
+                    "[话务事件] 未关联的话道事件待对账 nodeId={} channelUuid={} state={}",
+                    nodeId,
+                    uuid,
+                    state
+                );
                 return;
             }
             boolean isInbound = "inbound".equalsIgnoreCase(direction);
             String effectiveCtrlUuid = (ctrlUuid != null && !ctrlUuid.isEmpty())
-                    ? ctrlUuid
-                    : IdUtil.getCtrlId("fcc-inbound");
+                ? ctrlUuid
+                : IdUtil.getCtrlId("fcc-inbound");
             String effectiveCallId = IdUtil.getCallId();
-            String modelKey = isInbound ? FlowModelType.INBOUND_CUSTOMER_SERVICE.name() : FlowModelType.OUTBOUND_TWO_WAY_CALL.name();
+            String modelKey = isInbound
+                ? FlowModelType.INBOUND_CUSTOMER_SERVICE.name()
+                : FlowModelType.OUTBOUND_TWO_WAY_CALL.name();
 
             callInfo = CallInfoBO.builder()
-                    .nodeId(nodeId)
-                    .callId(effectiveCallId)
-                    .ctrlId(effectiveCtrlUuid)
-                    .guestChannelUuid(uuid)
-                    .agentChannelUuid(peerUuid)
-                    .modelKey(modelKey)
-                    .direction(isInbound ? DirectionType.INBOUND : DirectionType.OUTBOUND)
-                    .callerNumber(cidNumber)
-                    .destinationNumber(destNumber)
-                    .duration(duration)
-                    .billsec(billsec)
-                    .hangupCause(cause)
-                    .data(new HashMap<>())
-                    .build();
+                .nodeId(nodeId)
+                .callId(effectiveCallId)
+                .ctrlId(effectiveCtrlUuid)
+                .guestChannelUuid(uuid)
+                .agentChannelUuid(peerUuid)
+                .modelKey(modelKey)
+                .direction(isInbound ? DirectionType.INBOUND : DirectionType.OUTBOUND)
+                .callerNumber(cidNumber)
+                .destinationNumber(destNumber)
+                .duration(duration)
+                .billsec(billsec)
+                .hangupCause(cause)
+                .data(new HashMap<>())
+                .build();
             callInfo.putData("ctrlId", effectiveCtrlUuid);
             callInfo.putData("callId", effectiveCallId);
             callInfo.putData("guestChannelUuid", uuid);
@@ -243,35 +297,42 @@ public class FccEventListener {
             }
         }
 
-        callInfo.putData("flowEventId",params.path("event_id").asText());
-        callInfo.putData("flowSourceTime",params.path("timestamp").asLong());
+        callInfo.putData("flowEventId", params.path("event_id").asText());
+        callInfo.putData("flowSourceTime", params.path("timestamp").asLong());
         if (phoneBindingService != null && phoneBindingService.channel(callInfo, params)) {
             if ("DESTROY".equals(state)) sessionManager.removeSession(callInfo.getCtrlId());
             return;
         }
-        if (outboundCallService != null && outboundCallService.event(callInfo,params)) return;
-        if (inboundCallService != null && inboundCallService.event(callInfo,params)) return;
-        log.info("📞 [FCC 状态机流转] State: {}, UUID: {}, CtrlID: {}, Model: {}, Caller: {}, Dest: {}",
-                state, uuid, callInfo.getCtrlId(), callInfo.getModelKey(), cidNumber, destNumber);
+        if (outboundCallService != null && outboundCallService.event(callInfo, params)) return;
+        if (inboundCallService != null && inboundCallService.event(callInfo, params)) return;
+        log.info(
+            "📞 [FCC 状态机流转] State: {}, UUID: {}, CtrlID: {}, Model: {}, Caller: {}, Dest: {}",
+            state,
+            uuid,
+            callInfo.getCtrlId(),
+            callInfo.getModelKey(),
+            cidNumber,
+            destNumber
+        );
 
         switch (state != null ? state.toUpperCase() : "") {
             case "START":
-                if (callInfo.getDirection() == DirectionType.INBOUND && callInfo.getData().putIfAbsent("started", "true") == null) {
+                if (
+                    callInfo.getDirection() == DirectionType.INBOUND &&
+                    callInfo.getData().putIfAbsent("started", "true") == null
+                ) {
                     callInfo.setStageState(CallStageState.START);
                     publisher.publishEvent(new CallStartEvent(callInfo));
                 }
                 break;
-
             case "CALLING":
             case "RINGING":
                 callInfo.setStageState(CallStageState.CALLING);
                 publisher.publishEvent(new CallCallingEvent(callInfo));
                 break;
-
             case "READY":
                 handleChannelReady(callInfo, uuid);
                 break;
-
             case "BRIDGE":
                 if (callInfo.getData().putIfAbsent("connected", "true") == null) {
                     callInfo.setStageState(CallStageState.CONNECTED);
@@ -279,22 +340,36 @@ public class FccEventListener {
                     if (agentWebSocketService != null) {
                         String targetWorkNo = resolveAgentWorkNo(callInfo);
                         if (targetWorkNo != null) {
-                            agentWebSocketService.pushCallAnswered(targetWorkNo, callInfo.getCallId(), java.util.Map.of("callId", callInfo.getCallId()));
+                            agentWebSocketService.pushCallAnswered(
+                                targetWorkNo,
+                                callInfo.getCallId(),
+                                java.util.Map.of("callId", callInfo.getCallId())
+                            );
                         }
                     }
                 }
                 break;
-
             case "DESTROY":
                 handleChannelDestroy(callInfo, uuid, ctrlUuid, params);
-                if (agentWebSocketService != null && callInfo.getData().putIfAbsent("ws_hangup_pushed", "true") == null) {
+                if (
+                    agentWebSocketService != null &&
+                    callInfo.getData().putIfAbsent("ws_hangup_pushed", "true") == null
+                ) {
                     String targetWorkNo = resolveAgentWorkNo(callInfo);
                     if (targetWorkNo != null) {
-                        agentWebSocketService.pushCallHangup(targetWorkNo, callInfo.getCallId(), java.util.Map.of("callId", callInfo.getCallId(), "cause", cause != null ? cause : "NORMAL_CLEARING"));
+                        agentWebSocketService.pushCallHangup(
+                            targetWorkNo,
+                            callInfo.getCallId(),
+                            java.util.Map.of(
+                                "callId",
+                                callInfo.getCallId(),
+                                "cause",
+                                cause != null ? cause : "NORMAL_CLEARING"
+                            )
+                        );
                     }
                 }
                 break;
-
             default:
                 log.debug("ℹ️ [FCC] 状态暂无需特殊处理: {}", state);
                 break;
@@ -308,17 +383,27 @@ public class FccEventListener {
                 // 2. 同步落盘话道 Leg
                 boolean isAgentLeg = uuid.equals(callInfo.getAgentChannelUuid());
                 com.chandler.fcc.server.infrastructure.persistence.entity.CallLegEntity leg =
-                        com.chandler.fcc.server.infrastructure.persistence.entity.CallLegEntity.builder()
-                                .channelUuid(uuid)
-                                .callId(com.chandler.fcc.server.infrastructure.persistence.service.CallPersistenceService.parseNumericId(callInfo.getCallId()))
-                                .nodeId(nodeId)
-                                .roleType(isAgentLeg ? "AGENT" : "CUSTOMER")
-                                .direction(direction != null ? direction.toUpperCase() : (callInfo.getDirection() != null ? callInfo.getDirection().name() : "INBOUND"))
-                                .callerNumber(cidNumber != null ? cidNumber : callInfo.getCallerNumber())
-                                .destinationNumber(destNumber != null ? destNumber : callInfo.getDestinationNumber())
-                                .state(state)
-                                .hangupCause(cause)
-                                .build();
+                    com.chandler.fcc.server.infrastructure.persistence.entity.CallLegEntity.builder()
+                        .channelUuid(uuid)
+                        .callId(
+                            com.chandler.fcc.server.infrastructure.persistence.service.CallPersistenceService.parseNumericId(
+                                callInfo.getCallId()
+                            )
+                        )
+                        .nodeId(nodeId)
+                        .roleType(isAgentLeg ? "AGENT" : "CUSTOMER")
+                        .direction(
+                            direction != null
+                                ? direction.toUpperCase()
+                                : (callInfo.getDirection() != null
+                                        ? callInfo.getDirection().name()
+                                        : "INBOUND")
+                        )
+                        .callerNumber(cidNumber != null ? cidNumber : callInfo.getCallerNumber())
+                        .destinationNumber(destNumber != null ? destNumber : callInfo.getDestinationNumber())
+                        .state(state)
+                        .hangupCause(cause)
+                        .build();
                 if ("ANSWERED".equalsIgnoreCase(state) || "READY".equalsIgnoreCase(state)) {
                     leg.setAnsweredAt(java.time.LocalDateTime.now());
                 } else if ("BRIDGE".equalsIgnoreCase(state)) {
@@ -329,16 +414,22 @@ public class FccEventListener {
                 callPersistenceService.saveOrUpdateLeg(leg);
 
                 // 3. 记录事件流
-                callPersistenceService.recordEvent(com.chandler.fcc.server.infrastructure.persistence.entity.CallEventEntity.builder()
+                callPersistenceService.recordEvent(
+                    com.chandler.fcc.server.infrastructure.persistence.entity.CallEventEntity.builder()
                         .eventId(params.path("event_id").asText(IdUtil.getEventId()))
                         .nodeId(nodeId)
-                        .callId(com.chandler.fcc.server.infrastructure.persistence.service.CallPersistenceService.parseNumericId(callInfo.getCallId()))
+                        .callId(
+                            com.chandler.fcc.server.infrastructure.persistence.service.CallPersistenceService.parseNumericId(
+                                callInfo.getCallId()
+                            )
+                        )
                         .channelUuid(uuid)
                         .eventType("Event.Channel." + state)
                         .rawPayload(params.toString())
                         .eventTime(java.time.LocalDateTime.now())
                         .processStatus("PROCESSED")
-                        .build());
+                        .build()
+                );
             } catch (Exception dbEx) {
                 log.warn("⚠️ 话务持久化审计记录异常: {}", dbEx.getMessage());
             }
@@ -357,53 +448,74 @@ public class FccEventListener {
             callInfo.setAgentChannelUuid(uuid);
             callInfo.putData("agentChannelUuid", uuid);
 
-            log.info("🔗 [呼叫转接协同] 目标坐席 {} 已应答就绪，重新桥接客户话道 {} 与目标坐席！",
-                    uuid, callInfo.getGuestChannelUuid());
+            log.info(
+                "🔗 [呼叫转接协同] 目标坐席 {} 已应答就绪，重新桥接客户话道 {} 与目标坐席！",
+                uuid,
+                callInfo.getGuestChannelUuid()
+            );
 
             FlowNode bridgeNode = FlowNode.builder()
-                    .actionType(ActionType.CHANNEL_BRIDGE)
-                    .actionKey("bridge-transfer-target")
-                    .order(1)
-                    .data(new HashMap<>(Map.of(
-                            "uuidA", callInfo.getGuestChannelUuid(),
-                            "uuidB", uuid,
-                            "ctrlUuid", callInfo.getCtrlId() != null ? callInfo.getCtrlId() : ""
-                    )))
-                    .build();
+                .actionType(ActionType.CHANNEL_BRIDGE)
+                .actionKey("bridge-transfer-target")
+                .order(1)
+                .data(
+                    new HashMap<>(
+                        Map.of(
+                            "uuidA",
+                            callInfo.getGuestChannelUuid(),
+                            "uuidB",
+                            uuid,
+                            "ctrlUuid",
+                            callInfo.getCtrlId() != null ? callInfo.getCtrlId() : ""
+                        )
+                    )
+                )
+                .build();
             handlersManager.publish(callInfo, bridgeNode);
             return;
         }
 
-        String modelKey = callInfo.getModelKey() != null ? callInfo.getModelKey() : FlowModelType.INBOUND_CUSTOMER_SERVICE.name();
+        String modelKey = callInfo.getModelKey() != null
+            ? callInfo.getModelKey()
+            : FlowModelType.INBOUND_CUSTOMER_SERVICE.name();
 
         if (FlowModelType.OUTBOUND_TWO_WAY_CALL.name().equals(modelKey)) {
             // 双向外呼：坐席 Leg 就绪 -> 外呼客户 Leg
             if (uuid.equals(callInfo.getAgentChannelUuid())) {
                 if (callInfo.getData().putIfAbsent("guestDialed", "true") == null) {
                     callInfo.setStageState(CallStageState.ROUTE);
-                    log.info("🎯 [双向外呼协同] 坐席已应答驻留，开始路由外呼客户: {}", callInfo.getDestinationNumber());
+                    log.info(
+                        "🎯 [双向外呼协同] 坐席已应答驻留，开始路由外呼客户: {}",
+                        callInfo.getDestinationNumber()
+                    );
                     publisher.publishEvent(new CallRouteEvent(callInfo));
                 }
             }
             // 客户 Leg 也应答驻留 -> 双方桥接
-            else if (uuid.equals(callInfo.getGuestChannelUuid()) || "true".equals(callInfo.getData().get("guestDialed"))) {
+            else if (
+                uuid.equals(callInfo.getGuestChannelUuid()) ||
+                "true".equals(callInfo.getData().get("guestDialed"))
+            ) {
                 String agentChan = callInfo.getAgentChannelUuid();
                 String guestChan = callInfo.getGuestChannelUuid();
                 if (agentChan != null && guestChan != null) {
                     if (callInfo.getData().putIfAbsent("bridgeDispatched", "true") == null) {
-                        log.info("🔗 [双向外呼协同] 双方均已应答 (READY)，自动触发话道桥接! Agent: {}, Guest: {}",
-                                agentChan, guestChan);
+                        log.info(
+                            "🔗 [双向外呼协同] 双方均已应答 (READY)，自动触发话道桥接! Agent: {}, Guest: {}",
+                            agentChan,
+                            guestChan
+                        );
                         Map<String, Object> bridgeData = new HashMap<>();
                         bridgeData.put("guestChannelUuid", guestChan);
                         bridgeData.put("agentChannelUuid", agentChan);
                         bridgeData.put("ctrlId", callInfo.getCtrlId() != null ? callInfo.getCtrlId() : "");
 
                         FlowNode bridgeNode = FlowNode.builder()
-                                .actionType(ActionType.CHANNEL_BRIDGE)
-                                .actionKey("bridge-agent-guest")
-                                .order(1)
-                                .data(bridgeData)
-                                .build();
+                            .actionType(ActionType.CHANNEL_BRIDGE)
+                            .actionKey("bridge-agent-guest")
+                            .order(1)
+                            .data(bridgeData)
+                            .build();
                         handlersManager.publish(callInfo, bridgeNode);
                     }
                 }
@@ -425,24 +537,30 @@ public class FccEventListener {
                     log.info("🎯 [呼入流程协同] 客户通道已就绪，启动 IVR 导航放音收号: Guest={}", uuid);
                     publisher.publishEvent(new CallStartEvent(callInfo));
                 }
-            } else if (uuid.equals(callInfo.getAgentChannelUuid()) || "true".equals(callInfo.getData().get("agentDialed"))) {
+            } else if (
+                uuid.equals(callInfo.getAgentChannelUuid()) ||
+                "true".equals(callInfo.getData().get("agentDialed"))
+            ) {
                 String agentChan = callInfo.getAgentChannelUuid();
                 String guestChan = callInfo.getGuestChannelUuid();
                 if (agentChan != null && guestChan != null) {
                     if (callInfo.getData().putIfAbsent("bridgeDispatched", "true") == null) {
-                        log.info("🔗 [呼入流程协同] 客户与坐席均已就绪，触发话道桥接! Guest: {}, Agent: {}",
-                                guestChan, agentChan);
+                        log.info(
+                            "🔗 [呼入流程协同] 客户与坐席均已就绪，触发话道桥接! Guest: {}, Agent: {}",
+                            guestChan,
+                            agentChan
+                        );
                         Map<String, Object> bridgeData = new HashMap<>();
                         bridgeData.put("guestChannelUuid", guestChan);
                         bridgeData.put("agentChannelUuid", agentChan);
                         bridgeData.put("ctrlId", callInfo.getCtrlId() != null ? callInfo.getCtrlId() : "");
 
                         FlowNode bridgeNode = FlowNode.builder()
-                                .actionType(ActionType.CHANNEL_BRIDGE)
-                                .actionKey("bridge-inbound-agent")
-                                .order(1)
-                                .data(bridgeData)
-                                .build();
+                            .actionType(ActionType.CHANNEL_BRIDGE)
+                            .actionKey("bridge-inbound-agent")
+                            .order(1)
+                            .data(bridgeData)
+                            .build();
                         handlersManager.publish(callInfo, bridgeNode);
                     }
                 }
@@ -457,7 +575,10 @@ public class FccEventListener {
         String hungupUuid = uuid;
 
         // 呼叫转接保护
-        if ("true".equals(callInfo.getData().get("isTransferring")) && hungupUuid.equals(callInfo.getData().get("originalAgentUuid"))) {
+        if (
+            "true".equals(callInfo.getData().get("isTransferring")) &&
+            hungupUuid.equals(callInfo.getData().get("originalAgentUuid"))
+        ) {
             log.info("🔀 [呼叫转接协同] 原坐席话道 {} 已挂断退出，客户话道驻留等待目标坐席应答", hungupUuid);
             return;
         }
@@ -469,26 +590,51 @@ public class FccEventListener {
         if (params.has("params")) {
             JsonNode extra = params.get("params");
             String dtmfVal = extra.hasNonNull("dtmf_val") ? extra.get("dtmf_val").asText() : null;
-            if (dtmfVal != null && !dtmfVal.isEmpty() && !"_none_".equalsIgnoreCase(dtmfVal) && callInfo.getData().get("surveyScore") == null) {
+            if (
+                dtmfVal != null &&
+                !dtmfVal.isEmpty() &&
+                !"_none_".equalsIgnoreCase(dtmfVal) &&
+                callInfo.getData().get("surveyScore") == null
+            ) {
                 callInfo.putData("surveyScore", dtmfVal);
                 try {
                     callInfo.setEvaluationScore(Integer.parseInt(dtmfVal));
                 } catch (NumberFormatException ignored) {}
-                handlersManager.recordAudit(callInfo, "survey-score-recorded", "READ_DTMF", Map.of(
-                        "score", dtmfVal,
-                        "digit", dtmfVal,
-                        "result", "SUCCESS",
-                        "detail", "用户按键评价成功: " + dtmfVal + "分",
-                        "targetUuid", uuid
-                ));
-                log.info("⭐ [满意度评价完成] 话道结算捕获用户按键评分: {} 分, CallID: {}", dtmfVal, callInfo.getCallId());
+                handlersManager.recordAudit(
+                    callInfo,
+                    "survey-score-recorded",
+                    "READ_DTMF",
+                    Map.of(
+                        "score",
+                        dtmfVal,
+                        "digit",
+                        dtmfVal,
+                        "result",
+                        "SUCCESS",
+                        "detail",
+                        "用户按键评价成功: " + dtmfVal + "分",
+                        "targetUuid",
+                        uuid
+                    )
+                );
+                log.info(
+                    "⭐ [满意度评价完成] 话道结算捕获用户按键评分: {} 分, CallID: {}",
+                    dtmfVal,
+                    callInfo.getCallId()
+                );
             }
         }
 
         String survivingUuid = null;
-        if ("true".equals(callInfo.getData().get("agentEnded")) && !"true".equals(callInfo.getData().get("guestEnded"))) {
+        if (
+            "true".equals(callInfo.getData().get("agentEnded")) &&
+            !"true".equals(callInfo.getData().get("guestEnded"))
+        ) {
             survivingUuid = callInfo.getGuestChannelUuid();
-        } else if ("true".equals(callInfo.getData().get("guestEnded")) && !"true".equals(callInfo.getData().get("agentEnded"))) {
+        } else if (
+            "true".equals(callInfo.getData().get("guestEnded")) &&
+            !"true".equals(callInfo.getData().get("agentEnded"))
+        ) {
             survivingUuid = callInfo.getAgentChannelUuid();
         } else if (hungupUuid.equals(callInfo.getGuestChannelUuid())) {
             survivingUuid = callInfo.getAgentChannelUuid();
@@ -505,19 +651,40 @@ public class FccEventListener {
         // 首次通道销毁触发业务挂断事件
         if (callInfo.getData().putIfAbsent("callEndFired", "true") == null) {
             callInfo.setStageState(CallStageState.NORMAL_END);
-            log.info("🏁 [FCC] 话道挂机触发 CallEndEvent: Hungup={}, Surviving={}", hungupUuid, survivingUuid);
+            log.info(
+                "🏁 [FCC] 话道挂机触发 CallEndEvent: Hungup={}, Surviving={}",
+                hungupUuid,
+                survivingUuid
+            );
             publisher.publishEvent(new CallEndEvent(callInfo));
         }
 
         // 双方均已销毁时释放内存会话
-        if ("true".equals(callInfo.getData().get("agentEnded")) && "true".equals(callInfo.getData().get("guestEnded"))) {
-            if ("true".equalsIgnoreCase(callInfo.getDataStr("enableSurvey", "false")) && callInfo.getData().get("surveyScore") == null) {
-                handlersManager.recordAudit(callInfo, "survey-timeout", "READ_DTMF", Map.of(
-                        "result", "TIMEOUT",
-                        "detail", "用户未按键，引导语重复播放2次后超时自动挂机",
-                        "callUuid", callInfo.getCallId() != null ? callInfo.getCallId() : ""
-                ));
-                log.info("⌛ [满意度评价结果] 用户未按键，引导语重复播放超时挂机: CallID={}", callInfo.getCallId());
+        if (
+            "true".equals(callInfo.getData().get("agentEnded")) &&
+            "true".equals(callInfo.getData().get("guestEnded"))
+        ) {
+            if (
+                "true".equalsIgnoreCase(callInfo.getDataStr("enableSurvey", "false")) &&
+                callInfo.getData().get("surveyScore") == null
+            ) {
+                handlersManager.recordAudit(
+                    callInfo,
+                    "survey-timeout",
+                    "READ_DTMF",
+                    Map.of(
+                        "result",
+                        "TIMEOUT",
+                        "detail",
+                        "用户未按键，引导语重复播放2次后超时自动挂机",
+                        "callUuid",
+                        callInfo.getCallId() != null ? callInfo.getCallId() : ""
+                    )
+                );
+                log.info(
+                    "⌛ [满意度评价结果] 用户未按键，引导语重复播放超时挂机: CallID={}",
+                    callInfo.getCallId()
+                );
             }
             if (ctrlUuid != null) {
                 sessionManager.removeSession(ctrlUuid);
@@ -540,130 +707,217 @@ public class FccEventListener {
             return;
         }
 
-        CallInfoBO bindingCall=sessionManager.getByCtrlUuid(ctrlUuid).or(()->sessionManager.getByChannelUuid(uuid)).orElse(null);
-        if(bindingCall!=null){bindingCall.putData("flowEventId",params.path("event_id").asText());bindingCall.putData("flowSourceTime",params.path("timestamp").asLong());}
-        if(bindingCall!=null && inboundCallService!=null && inboundCallService.digits(bindingCall,params))return;
-        if (bindingCall!=null && phoneBindingService!=null && phoneBindingService.digits(bindingCall,digit)) return;
-        if (bindingCall!=null && outboundCallService!=null && outboundCallService.digits(bindingCall,digit)) return;
+        CallInfoBO bindingCall = sessionManager
+            .getByCtrlUuid(ctrlUuid)
+            .or(() -> sessionManager.getByChannelUuid(uuid))
+            .orElse(null);
+        if (bindingCall != null) {
+            bindingCall.putData("flowEventId", params.path("event_id").asText());
+            bindingCall.putData("flowSourceTime", params.path("timestamp").asLong());
+        }
+        if (
+            bindingCall != null &&
+            inboundCallService != null &&
+            inboundCallService.digits(bindingCall, params)
+        ) return;
+        if (
+            bindingCall != null &&
+            phoneBindingService != null &&
+            phoneBindingService.digits(bindingCall, digit)
+        ) return;
+        if (
+            bindingCall != null &&
+            outboundCallService != null &&
+            outboundCallService.digits(bindingCall, digit)
+        ) return;
         log.debug("[FCC 收到按键] UUID: {}, CtrlUUID: {}", uuid, ctrlUuid);
         publisher.publishEvent(new DTMFInputEvent(this, ctrlUuid, uuid, digit, durationMs));
 
-        sessionManager.getByCtrlUuid(ctrlUuid)
-                .or(() -> sessionManager.getByChannelUuid(uuid))
-                .ifPresent(session -> {
-                    String modelKey = session.getModelKey();
+        sessionManager
+            .getByCtrlUuid(ctrlUuid)
+            .or(() -> sessionManager.getByChannelUuid(uuid))
+            .ifPresent(session -> {
+                String modelKey = session.getModelKey();
 
-                    // 场景 A: 呼入 IVR 导航按键选择
-                    if (FlowModelType.INBOUND_CUSTOMER_SERVICE.name().equals(modelKey) && session.getData().get("agentDialed") == null) {
-                        session.putData("agentDialed", "true");
-                        session.putData("ivrSelectedDigit", digit);
+                // 场景 A: 呼入 IVR 导航按键选择
+                if (
+                    FlowModelType.INBOUND_CUSTOMER_SERVICE.name().equals(modelKey) &&
+                    session.getData().get("agentDialed") == null
+                ) {
+                    session.putData("agentDialed", "true");
+                    session.putData("ivrSelectedDigit", digit);
 
-                        // 动态根据坐席接听方式解析目标分机
-                        String targetExt = null;
-                        String targetWorkNo = null;
-                        String targetAgentName = null;
-                        if (jdbcTemplate != null) {
-                            try {
-                                java.util.List<java.util.Map<String, Object>> agents = jdbcTemplate.queryForList(
-                                        "SELECT a.work_no, a.agent_name, a.current_extension, " +
-                                        "b.endpoint_type, b.endpoint_value " +
-                                        "FROM fcc_agent a " +
-                                        "LEFT JOIN fcc_agent_endpoint_binding b ON a.id = b.agent_id AND b.status = 'ENABLED' " +
-                                        "WHERE a.status = 'ENABLED' AND a.deleted_at IS NULL " +
-                                        "AND (a.current_extension IS NOT NULL OR b.endpoint_value IS NOT NULL) " +
-                                        "ORDER BY b.priority ASC, a.updated_at DESC LIMIT 1");
-                                if (!agents.isEmpty()) {
-                                    java.util.Map<String, Object> a = agents.getFirst();
-                                    targetWorkNo = String.valueOf(a.get("work_no"));
-                                    Object agentNameVal = a.get("agent_name");
-                                    targetAgentName = agentNameVal != null ? String.valueOf(agentNameVal) : null;
-                                    String curExt = (String) a.get("current_extension");
-                                    String epType = (String) a.get("endpoint_type");
-                                    String epVal = (String) a.get("endpoint_value");
-
-                                    if ("SIP".equalsIgnoreCase(epType) && curExt != null && !curExt.isBlank()) {
-                                        targetExt = curExt;
-                                    } else if ("SIP".equalsIgnoreCase(epType) && epVal != null && !epVal.isBlank()) {
-                                        targetExt = epVal;
-                                    } else if ("WEBRTC".equalsIgnoreCase(epType)) {
-                                        targetExt = targetWorkNo;
-                                    } else if (curExt != null && !curExt.isBlank()) {
-                                        targetExt = curExt;
-                                    } else {
-                                        targetExt = targetWorkNo;
-                                    }
-                                }
-                            } catch (Exception e) {
-                                log.warn("⚠️ 动态查询坐席接听分机异常: {}", e.getMessage());
-                            }
-                        }
-
-                        if (targetWorkNo == null || targetExt == null) {
-                            log.warn("⚠️ [呼入导航] 没有可用坐席终端，停止路由: digit={}, ctrlId={}", digit, session.getCtrlId());
-                            handlersManager.recordAudit(session, "ivr-navigation-no-agent", "READ_DTMF", Map.of(
-                                    "digit", digit,
-                                    "result", "FAILED",
-                                    "detail", "没有可用坐席终端",
-                                    "targetUuid", uuid
-                            ));
-                            return;
-                        }
-
-                        session.setAgentExt(targetExt);
-                        session.setAgentWorkNo(targetWorkNo);
-                        session.putData("agentExt", targetExt);
-                        session.putData("primaryWorkNo", targetWorkNo);
-                        if (targetAgentName != null && !targetAgentName.isBlank()) {
-                            session.putData("agentName", targetAgentName);
-                        }
-                        log.info("🎯 [呼入导航] 客户按键选择: {} 业务，路由坐席工号 {} -> 目标分机/终端 {}", digit, targetWorkNo, targetExt);
-                        handlersManager.recordAudit(session, "ivr-navigation-selected", "READ_DTMF", Map.of(
-                                "digit", digit,
-                                "result", "SUCCESS",
-                                "detail", "客户按键选择业务: " + digit + " (路由工号" + targetWorkNo + "至终端" + targetExt + ")",
-                                "targetUuid", uuid
-                        ));
-
-                        session.setStageState(CallStageState.ROUTE);
-                        publisher.publishEvent(new CallRouteEvent(session));
-                        return;
-                    }
-
-                    // 场景 B: 自动外呼通知意向按键确认
-                    if (FlowModelType.AUTO_DIAL_NOTIFICATION.name().equals(modelKey)) {
-                        if (session.getData().putIfAbsent("notifyDigit", digit) == null) {
-                            String intentDesc = "1".equals(digit) ? "确认办理" : ("2".equals(digit) ? "咨询详情" : "其他业务");
-                            handlersManager.recordAudit(session, "notification-confirmed", "READ_DTMF", Map.of(
-                                    "digit", digit,
-                                    "result", "SUCCESS",
-                                    "detail", "客户按键确认意向: " + digit + " (" + intentDesc + ")",
-                                    "durationMs", String.valueOf(durationMs),
-                                    "targetUuid", uuid
-                            ));
-                            log.info("📢 [自动通知按键确认] 客户按键确认意向: {} ({}), Channel={}", digit, intentDesc, uuid);
-                        }
-                        return;
-                    }
-
-                    // 场景 C: 满意度评价按键
-                    boolean canSurvey = "true".equals(session.getData().get("callEndFired"))
-                            || "true".equals(session.getData().get("agentEnded"))
-                            || session.getStageState() == CallStageState.NORMAL_END;
-                    if (canSurvey && session.getData().putIfAbsent("surveyScore", digit) == null) {
+                    // 动态根据坐席接听方式解析目标分机
+                    String targetExt = null;
+                    String targetWorkNo = null;
+                    String targetAgentName = null;
+                    if (jdbcTemplate != null) {
                         try {
-                            session.setEvaluationScore(Integer.parseInt(digit));
-                        } catch (NumberFormatException ignored) {}
-                        handlersManager.recordAudit(session, "survey-score-recorded", "READ_DTMF", Map.of(
-                                "score", digit,
-                                "digit", digit,
-                                "result", "SUCCESS",
-                                "detail", "用户实时按键评价: " + digit + "分",
-                                "durationMs", String.valueOf(durationMs),
-                                "targetUuid", uuid
-                        ));
-                        log.info("⭐ [满意度评价完成] 实时捕获用户按键评分: {} 分, Channel={}", digit, uuid);
+                            java.util.List<java.util.Map<String, Object>> agents = jdbcTemplate.queryForList(
+                                "SELECT a.work_no, a.agent_name, a.current_extension, " +
+                                "b.endpoint_type, b.endpoint_value " +
+                                "FROM fcc_agent a " +
+                                "LEFT JOIN fcc_agent_endpoint_binding b ON a.id = b.agent_id AND b.status = 'ENABLED' " +
+                                "WHERE a.status = 'ENABLED' AND a.deleted_at IS NULL " +
+                                "AND (a.current_extension IS NOT NULL OR b.endpoint_value IS NOT NULL) " +
+                                "ORDER BY b.priority ASC, a.updated_at DESC LIMIT 1"
+                            );
+                            if (!agents.isEmpty()) {
+                                java.util.Map<String, Object> a = agents.getFirst();
+                                targetWorkNo = String.valueOf(a.get("work_no"));
+                                Object agentNameVal = a.get("agent_name");
+                                targetAgentName = agentNameVal != null ? String.valueOf(agentNameVal) : null;
+                                String curExt = (String) a.get("current_extension");
+                                String epType = (String) a.get("endpoint_type");
+                                String epVal = (String) a.get("endpoint_value");
+
+                                if ("SIP".equalsIgnoreCase(epType) && curExt != null && !curExt.isBlank()) {
+                                    targetExt = curExt;
+                                } else if (
+                                    "SIP".equalsIgnoreCase(epType) && epVal != null && !epVal.isBlank()
+                                ) {
+                                    targetExt = epVal;
+                                } else if ("WEBRTC".equalsIgnoreCase(epType)) {
+                                    targetExt = targetWorkNo;
+                                } else if (curExt != null && !curExt.isBlank()) {
+                                    targetExt = curExt;
+                                } else {
+                                    targetExt = targetWorkNo;
+                                }
+                            }
+                        } catch (Exception e) {
+                            log.warn("⚠️ 动态查询坐席接听分机异常: {}", e.getMessage());
+                        }
                     }
-                });
+
+                    if (targetWorkNo == null || targetExt == null) {
+                        log.warn(
+                            "⚠️ [呼入导航] 没有可用坐席终端，停止路由: digit={}, ctrlId={}",
+                            digit,
+                            session.getCtrlId()
+                        );
+                        handlersManager.recordAudit(
+                            session,
+                            "ivr-navigation-no-agent",
+                            "READ_DTMF",
+                            Map.of(
+                                "digit",
+                                digit,
+                                "result",
+                                "FAILED",
+                                "detail",
+                                "没有可用坐席终端",
+                                "targetUuid",
+                                uuid
+                            )
+                        );
+                        return;
+                    }
+
+                    session.setAgentExt(targetExt);
+                    session.setAgentWorkNo(targetWorkNo);
+                    session.putData("agentExt", targetExt);
+                    session.putData("primaryWorkNo", targetWorkNo);
+                    if (targetAgentName != null && !targetAgentName.isBlank()) {
+                        session.putData("agentName", targetAgentName);
+                    }
+                    log.info(
+                        "🎯 [呼入导航] 客户按键选择: {} 业务，路由坐席工号 {} -> 目标分机/终端 {}",
+                        digit,
+                        targetWorkNo,
+                        targetExt
+                    );
+                    handlersManager.recordAudit(
+                        session,
+                        "ivr-navigation-selected",
+                        "READ_DTMF",
+                        Map.of(
+                            "digit",
+                            digit,
+                            "result",
+                            "SUCCESS",
+                            "detail",
+                            "客户按键选择业务: " +
+                            digit +
+                            " (路由工号" +
+                            targetWorkNo +
+                            "至终端" +
+                            targetExt +
+                            ")",
+                            "targetUuid",
+                            uuid
+                        )
+                    );
+
+                    session.setStageState(CallStageState.ROUTE);
+                    publisher.publishEvent(new CallRouteEvent(session));
+                    return;
+                }
+
+                // 场景 B: 自动外呼通知意向按键确认
+                if (FlowModelType.AUTO_DIAL_NOTIFICATION.name().equals(modelKey)) {
+                    if (session.getData().putIfAbsent("notifyDigit", digit) == null) {
+                        String intentDesc = "1".equals(digit)
+                            ? "确认办理"
+                            : ("2".equals(digit) ? "咨询详情" : "其他业务");
+                        handlersManager.recordAudit(
+                            session,
+                            "notification-confirmed",
+                            "READ_DTMF",
+                            Map.of(
+                                "digit",
+                                digit,
+                                "result",
+                                "SUCCESS",
+                                "detail",
+                                "客户按键确认意向: " + digit + " (" + intentDesc + ")",
+                                "durationMs",
+                                String.valueOf(durationMs),
+                                "targetUuid",
+                                uuid
+                            )
+                        );
+                        log.info(
+                            "📢 [自动通知按键确认] 客户按键确认意向: {} ({}), Channel={}",
+                            digit,
+                            intentDesc,
+                            uuid
+                        );
+                    }
+                    return;
+                }
+
+                // 场景 C: 满意度评价按键
+                boolean canSurvey =
+                    "true".equals(session.getData().get("callEndFired")) ||
+                    "true".equals(session.getData().get("agentEnded")) ||
+                    session.getStageState() == CallStageState.NORMAL_END;
+                if (canSurvey && session.getData().putIfAbsent("surveyScore", digit) == null) {
+                    try {
+                        session.setEvaluationScore(Integer.parseInt(digit));
+                    } catch (NumberFormatException ignored) {}
+                    handlersManager.recordAudit(
+                        session,
+                        "survey-score-recorded",
+                        "READ_DTMF",
+                        Map.of(
+                            "score",
+                            digit,
+                            "digit",
+                            digit,
+                            "result",
+                            "SUCCESS",
+                            "detail",
+                            "用户实时按键评价: " + digit + "分",
+                            "durationMs",
+                            String.valueOf(durationMs),
+                            "targetUuid",
+                            uuid
+                        )
+                    );
+                    log.info("⭐ [满意度评价完成] 实时捕获用户按键评分: {} 分, Channel={}", digit, uuid);
+                }
+            });
     }
 
     /**
@@ -680,22 +934,30 @@ public class FccEventListener {
         Integer port = params.hasNonNull("port") ? params.get("port").asInt() : 5060;
         String userAgent = getNodeText(params, "user_agent");
         String contact = getNodeText(params, "contact");
-        long timestamp = params.hasNonNull("timestamp") ? params.get("timestamp").asLong() : System.currentTimeMillis();
+        long timestamp = params.hasNonNull("timestamp")
+            ? params.get("timestamp").asLong()
+            : System.currentTimeMillis();
 
         EventRegistrationDTO regDTO = EventRegistrationDTO.builder()
-                .nodeId(nodeId)
-                .user(user)
-                .domain(domain)
-                .status(status)
-                .networkIp(networkIp)
-                .port(port)
-                .userAgent(userAgent)
-                .contact(contact)
-                .timestamp(timestamp)
-                .build();
+            .nodeId(nodeId)
+            .user(user)
+            .domain(domain)
+            .status(status)
+            .networkIp(networkIp)
+            .port(port)
+            .userAgent(userAgent)
+            .contact(contact)
+            .timestamp(timestamp)
+            .build();
 
-        log.info("📱 [SIP 分机注册态变更] Node: {}, Ext: {}, Status: {}, IP: {}, UA: {}",
-                nodeId, user, status, networkIp, userAgent);
+        log.info(
+            "📱 [SIP 分机注册态变更] Node: {}, Ext: {}, Status: {}, IP: {}, UA: {}",
+            nodeId,
+            user,
+            status,
+            networkIp,
+            userAgent
+        );
 
         // 同步写入 Redis 分机在线态（租约 1 小时）
         if (stringRedisTemplate != null && user != null) {
@@ -734,20 +996,32 @@ public class FccEventListener {
         Integer seconds = getNodeInt(params, "seconds");
         boolean stopping = "stop".equalsIgnoreCase(action);
 
-        log.info("🎙️ [录音事件] Node: {}, Ctrl: {}, Channel: {}, Action: {}, Path: {}, Seconds: {}",
-                nodeId, ctrlUuid, channelUuid, action, declaredPath, seconds);
+        log.info(
+            "🎙️ [录音事件] Node: {}, Ctrl: {}, Channel: {}, Action: {}, Path: {}, Seconds: {}",
+            nodeId,
+            ctrlUuid,
+            channelUuid,
+            action,
+            declaredPath,
+            seconds
+        );
 
         if (callPersistenceService == null) {
             return;
         }
 
         // 1. 先由控制关联标识回推业务通话标识，录音文件名与 recording_id 均以业务通话为基准
-        String businessCallId = sessionManager.getByCtrlUuid(ctrlUuid)
-                .map(CallInfoBO::getCallId)
-                .orElse(null);
+        String businessCallId = sessionManager
+            .getByCtrlUuid(ctrlUuid)
+            .map(CallInfoBO::getCallId)
+            .orElse(null);
         String recordingKey = firstNonBlank(businessCallId, channelUuid);
         if (recordingKey == null) {
-            log.warn("⚠️ [录音事件] 无法定位录音归属，事件已忽略: ctrlUuid={}, channelUuid={}", ctrlUuid, channelUuid);
+            log.warn(
+                "⚠️ [录音事件] 无法定位录音归属，事件已忽略: ctrlUuid={}, channelUuid={}",
+                ctrlUuid,
+                channelUuid
+            );
             return;
         }
 
@@ -755,7 +1029,9 @@ public class FccEventListener {
         String recordPath = declaredPath;
         if ((recordPath == null || recordPath.isBlank()) && recordingPathResolver != null) {
             try {
-                recordPath = recordingPathResolver.resolve(recordingKey, java.time.LocalDateTime.now(), null).absolutePath();
+                recordPath = recordingPathResolver
+                    .resolve(recordingKey, java.time.LocalDateTime.now(), null)
+                    .absolutePath();
             } catch (Exception e) {
                 log.warn("⚠️ [录音事件] 补算录音地址失败: key={}, err={}", recordingKey, e.getMessage());
             }
@@ -763,24 +1039,29 @@ public class FccEventListener {
 
         try {
             Long numericCallId = businessCallId != null
-                    ? com.chandler.fcc.server.infrastructure.persistence.service.CallPersistenceService.parseNumericId(businessCallId)
-                    : IdUtil.nextId();
+                ? com.chandler.fcc.server.infrastructure.persistence.service.CallPersistenceService.parseNumericId(
+                    businessCallId
+                )
+                : IdUtil.nextId();
             java.time.LocalDateTime now = java.time.LocalDateTime.now();
 
             callPersistenceService.upsertRecording(
-                    com.chandler.fcc.server.infrastructure.persistence.entity.CallRecordingEntity.builder()
-                            .recordingId(com.chandler.fcc.common.recording.RecordingPathLayout.recordingIdOf(recordingKey))
-                            .callId(numericCallId)
-                            .nodeId(nodeId)
-                            .status(stopping ? "COMPLETED" : "RECORDING")
-                            .storageType("LOCAL")
-                            .objectKey(recordPath)
-                            .mediaFormat(mediaFormatOf(recordPath))
-                            .durationMs(seconds != null ? seconds * 1000L : null)
-                            .sizeBytes(stopping ? fileSizeOf(recordPath) : null)
-                            .startedAt(now)
-                            .completedAt(stopping ? now : null)
-                            .build());
+                com.chandler.fcc.server.infrastructure.persistence.entity.CallRecordingEntity.builder()
+                    .recordingId(
+                        com.chandler.fcc.common.recording.RecordingPathLayout.recordingIdOf(recordingKey)
+                    )
+                    .callId(numericCallId)
+                    .nodeId(nodeId)
+                    .status(stopping ? "COMPLETED" : "RECORDING")
+                    .storageType("LOCAL")
+                    .objectKey(recordPath)
+                    .mediaFormat(mediaFormatOf(recordPath))
+                    .durationMs(seconds != null ? seconds * 1000L : null)
+                    .sizeBytes(stopping ? fileSizeOf(recordPath) : null)
+                    .startedAt(now)
+                    .completedAt(stopping ? now : null)
+                    .build()
+            );
         } catch (Exception recEx) {
             log.warn("⚠️ 记录录音元数据失败: {}", recEx.getMessage());
         }
@@ -823,7 +1104,9 @@ public class FccEventListener {
             return "wav";
         }
         int dot = recordPath.lastIndexOf('.');
-        return (dot < 0 || dot == recordPath.length() - 1) ? "wav" : recordPath.substring(dot + 1).toLowerCase();
+        return (dot < 0 || dot == recordPath.length() - 1)
+            ? "wav"
+            : recordPath.substring(dot + 1).toLowerCase();
     }
 
     private String getNodeText(JsonNode node, String fieldName) {

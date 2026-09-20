@@ -9,14 +9,13 @@ import com.chandler.fcc.server.infrastructure.nats.FccProperties;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import io.nats.client.Connection;
 import io.nats.client.Message;
-import lombok.RequiredArgsConstructor;
-import lombok.extern.slf4j.Slf4j;
-import org.springframework.stereotype.Component;
-
 import java.nio.charset.StandardCharsets;
 import java.time.Duration;
 import java.util.HashMap;
 import java.util.Map;
+import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
+import org.springframework.stereotype.Component;
 
 /**
  * FCC 核心呼叫控制客户端
@@ -34,8 +33,10 @@ public class FccClient {
 
     private final Connection natsConnection;
     private final FccProperties fccProperties;
-    private final ObjectMapper objectMapper = new ObjectMapper()
-            .configure(com.fasterxml.jackson.databind.DeserializationFeature.FAIL_ON_UNKNOWN_PROPERTIES, false);
+    private final ObjectMapper objectMapper = new ObjectMapper().configure(
+        com.fasterxml.jackson.databind.DeserializationFeature.FAIL_ON_UNKNOWN_PROPERTIES,
+        false
+    );
 
     @org.springframework.beans.factory.annotation.Autowired(required = false)
     private com.chandler.fcc.server.infrastructure.persistence.service.CallPersistenceService callPersistenceService;
@@ -59,10 +60,18 @@ public class FccClient {
      */
     public FNodeResult dial(String nodeId, FNodeDialDTO dto) {
         String uuid = dto.getUuid();
-        if ((uuid == null || uuid.isBlank()) && dto.getDestination()!=null && dto.getDestination().getCallParams()!=null && !dto.getDestination().getCallParams().isEmpty()) {
+        if (
+            (uuid == null || uuid.isBlank()) &&
+            dto.getDestination() != null &&
+            dto.getDestination().getCallParams() != null &&
+            !dto.getDestination().getCallParams().isEmpty()
+        ) {
             uuid = dto.getDestination().getCallParams().getFirst().getUuid();
         }
-        if (uuid == null || uuid.isBlank()) { uuid = IdUtil.getUuid(); dto.setUuid(uuid); }
+        if (uuid == null || uuid.isBlank()) {
+            uuid = IdUtil.getUuid();
+            dto.setUuid(uuid);
+        }
         return sendRequest(nodeId, "FNode.Dial", dto, "dial-" + uuid);
     }
 
@@ -89,10 +98,10 @@ public class FccClient {
      */
     public FNodeResult channelBridge(String nodeId, String ctrlUuid, String uuid, String peerUuid) {
         FNodeBridgeDTO dto = FNodeBridgeDTO.builder()
-                .ctrlUuid(ctrlUuid)
-                .uuid(uuid)
-                .peerUuid(peerUuid)
-                .build();
+            .ctrlUuid(ctrlUuid)
+            .uuid(uuid)
+            .peerUuid(peerUuid)
+            .build();
         return sendRequest(nodeId, "FNode.ChannelBridge", dto);
     }
 
@@ -117,8 +126,13 @@ public class FccClient {
         return sendRequest(nodeId, "FNode.ReadDTMF", dto);
     }
 
-    /** 使用持久阶段命令标识放音收号，未知结果不换 ID 重发。
-     * @param nodeId 节点 @param dto 动作参数 @param commandId 稳定命令标识 @return 同步受理结果
+    /**
+     * 使用持久阶段命令标识放音收号，未知结果不换 ID 重发。
+     *
+     * @param nodeId 节点
+     * @param dto 动作参数
+     * @param commandId 稳定命令标识
+     * @return 同步受理结果
      */
     public FNodeResult readDTMF(String nodeId, FNodeReadDTMFDTO dto, String commandId) {
         return sendRequest(nodeId, "FNode.ReadDTMF", dto, commandId);
@@ -189,10 +203,10 @@ public class FccClient {
      */
     public FNodeResult hangup(String nodeId, String ctrlUuid, String uuid, String cause) {
         FNodeHangupDTO dto = FNodeHangupDTO.builder()
-                .ctrlUuid(ctrlUuid)
-                .uuid(uuid)
-                .cause(cause != null ? cause : "NORMAL_CLEARING")
-                .build();
+            .ctrlUuid(ctrlUuid)
+            .uuid(uuid)
+            .cause(cause != null ? cause : "NORMAL_CLEARING")
+            .build();
         return sendRequest(nodeId, "FNode.Hangup", dto);
     }
 
@@ -253,14 +267,20 @@ public class FccClient {
         return sendRequest(nodeId, method, params, IdUtil.getCommandId());
     }
 
-    /** 查询已持久记录的命令应答，不重放副作用。
-     * @param nodeId 节点 @param commandId 原命令标识 @return 已受理/失败/未知结果
+    /**
+     * 查询已持久记录的命令应答，不重放副作用。
+     *
+     * @param nodeId 节点
+     * @param commandId 原命令标识
+     * @return 已受理/失败/未知结果
      */
     public FNodeResult commandResult(String nodeId, String commandId) {
-        return sendRequest(nodeId,"FNode.CommandResult",Map.of("command_id",commandId));
+        return sendRequest(nodeId, "FNode.CommandResult", Map.of("command_id", commandId));
     }
 
-    /** 查询节点当前完整话道集合，失败必须视为未知而非空节点。
+    /**
+     * 查询节点当前完整话道集合，失败必须视为未知而非空节点。
+     *
      * @param nodeId 话道所属节点
      * @return 含 complete/channel_uuids 的结构化结果
      */
@@ -268,36 +288,54 @@ public class FccClient {
         return sendRequest(nodeId, "FNode.ChannelSnapshot", Map.of());
     }
 
-    /** 使用稳定标识发送命令。
-     * @param nodeId 节点 @param method 方法 @param params 参数 @param reqId 幂等命令标识 @return 节点应答
+    /**
+     * 使用稳定标识发送命令。
+     *
+     * @param nodeId 节点
+     * @param method 方法
+     * @param params 参数
+     * @param reqId 幂等命令标识
+     * @return 节点应答
      */
     private FNodeResult sendRequest(String nodeId, String method, Object params, String reqId) {
         String effectiveNodeId = (nodeId != null && !nodeId.trim().isEmpty())
-                ? nodeId.trim()
-                : fccProperties.getDefaultNodeId();
+            ? nodeId.trim()
+            : fccProperties.getDefaultNodeId();
 
         JsonRpcRequest req = JsonRpcRequest.builder()
-                .jsonrpc("2.0")
-                .id(reqId)
-                .method(method)
-                .params(params)
-                .build();
+            .jsonrpc("2.0")
+            .id(reqId)
+            .method(method)
+            .params(params)
+            .build();
 
         String subject = "fs.cmd." + effectiveNodeId;
         try {
             byte[] payload = objectMapper.writeValueAsBytes(req);
-            log.debug("📤 [FCC -> NATS] 发送指令 Subject: {}, Method: {}\nPayload: {}",
-                    subject, method, new String(payload, StandardCharsets.UTF_8));
+            log.debug(
+                "📤 [FCC -> NATS] 发送指令 Subject: {}, Method: {}\nPayload: {}",
+                subject,
+                method,
+                new String(payload, StandardCharsets.UTF_8)
+            );
 
-            Message reply = natsConnection.request(subject, payload, Duration.ofMillis(fccProperties.getRpcTimeoutMillis()));
+            Message reply = natsConnection.request(
+                subject,
+                payload,
+                Duration.ofMillis(fccProperties.getRpcTimeoutMillis())
+            );
             if (reply == null) {
-                log.error("❌ [FCC] RPC 请求超时 ({} ms), Node: {}, Method: {}",
-                        fccProperties.getRpcTimeoutMillis(), effectiveNodeId, method);
+                log.error(
+                    "❌ [FCC] RPC 请求超时 ({} ms), Node: {}, Method: {}",
+                    fccProperties.getRpcTimeoutMillis(),
+                    effectiveNodeId,
+                    method
+                );
                 return FNodeResult.builder()
-                        .code(-32000)
-                        .message("RPC timeout")
-                        .nodeId(effectiveNodeId)
-                        .build();
+                    .code(-32000)
+                    .message("RPC timeout")
+                    .nodeId(effectiveNodeId)
+                    .build();
             }
 
             String respStr = new String(reply.getData(), StandardCharsets.UTF_8);
@@ -305,14 +343,17 @@ public class FccClient {
 
             JsonRpcResponse resp = objectMapper.readValue(respStr, JsonRpcResponse.class);
             if (resp.getError() != null) {
-                log.warn("⚠️ [FCC] 节点返回业务错误: code={}, msg={}",
-                        resp.getError().getCode(), resp.getError().getMessage());
+                log.warn(
+                    "⚠️ [FCC] 节点返回业务错误: code={}, msg={}",
+                    resp.getError().getCode(),
+                    resp.getError().getMessage()
+                );
                 return FNodeResult.builder()
-                        .code(resp.getError().getCode())
-                        .message(resp.getError().getMessage())
-                        .data(resp.getError().getData())
-                        .nodeId(effectiveNodeId)
-                        .build();
+                    .code(resp.getError().getCode())
+                    .message(resp.getError().getMessage())
+                    .data(resp.getError().getData())
+                    .nodeId(effectiveNodeId)
+                    .build();
             }
 
             FNodeResult result = resp.getResult();
@@ -322,17 +363,23 @@ public class FccClient {
 
             if (callPersistenceService != null) {
                 try {
-                    callPersistenceService.recordCommand(com.chandler.fcc.server.infrastructure.persistence.entity.CallCommandEntity.builder()
+                    callPersistenceService.recordCommand(
+                        com.chandler.fcc.server.infrastructure.persistence.entity.CallCommandEntity.builder()
                             .commandId(reqId)
                             .idempotencyKey(reqId)
                             .targetNodeId(effectiveNodeId)
                             .methodName(method)
                             .requestPayload(new String(payload, StandardCharsets.UTF_8))
                             .responsePayload(respStr)
-                            .status(result != null && (result.getCode() == 0 || result.getCode() == 200) ? "ACCEPTED" : "FAILED")
+                            .status(
+                                result != null && (result.getCode() == 0 || result.getCode() == 200)
+                                    ? "ACCEPTED"
+                                    : "FAILED"
+                            )
                             .sentAt(java.time.LocalDateTime.now())
                             .completedAt(java.time.LocalDateTime.now())
-                            .build());
+                            .build()
+                    );
                 } catch (Exception auditEx) {
                     log.debug("忽略指令审计记录异常: {}", auditEx.getMessage());
                 }

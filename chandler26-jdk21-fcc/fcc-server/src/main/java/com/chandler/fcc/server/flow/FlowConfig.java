@@ -7,13 +7,12 @@ import com.chandler.fcc.common.enums.FlowModelType;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import jakarta.annotation.PostConstruct;
+import java.util.*;
+import java.util.concurrent.ConcurrentHashMap;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.stereotype.Component;
-
-import java.util.*;
-import java.util.concurrent.ConcurrentHashMap;
 
 /**
  * 话务流程编排规则库（基于已发布 DB/JSON 定义动态编译与热加载）
@@ -65,10 +64,11 @@ public class FlowConfig {
         if (jdbcTemplate == null) return;
         try {
             List<Map<String, Object>> rows = jdbcTemplate.queryForList(
-                    "SELECT f.flow_key, f.flow_name, f.model_type, v.version_no, v.definition_json " +
-                    "FROM fcc_flow_definition f " +
-                    "JOIN fcc_flow_definition_version v ON f.id = v.flow_definition_id " +
-                    "WHERE v.publish_status = 'PUBLISHED'");
+                "SELECT f.flow_key, f.flow_name, f.model_type, v.version_no, v.definition_json " +
+                "FROM fcc_flow_definition f " +
+                "JOIN fcc_flow_definition_version v ON f.id = v.flow_definition_id " +
+                "WHERE v.publish_status = 'PUBLISHED'"
+            );
 
             for (Map<String, Object> row : rows) {
                 String flowKey = (String) row.get("flow_key");
@@ -93,11 +93,13 @@ public class FlowConfig {
         if (jdbcTemplate == null || flowKey == null) return false;
         try {
             List<Map<String, Object>> rows = jdbcTemplate.queryForList(
-                    "SELECT f.flow_key, f.flow_name, f.model_type, v.version_no, v.definition_json " +
-                    "FROM fcc_flow_definition f " +
-                    "JOIN fcc_flow_definition_version v ON f.id = v.flow_definition_id " +
-                    "WHERE f.flow_key = ? AND v.publish_status = 'PUBLISHED' " +
-                    "ORDER BY v.version_no DESC LIMIT 1", flowKey);
+                "SELECT f.flow_key, f.flow_name, f.model_type, v.version_no, v.definition_json " +
+                "FROM fcc_flow_definition f " +
+                "JOIN fcc_flow_definition_version v ON f.id = v.flow_definition_id " +
+                "WHERE f.flow_key = ? AND v.publish_status = 'PUBLISHED' " +
+                "ORDER BY v.version_no DESC LIMIT 1",
+                flowKey
+            );
 
             if (!rows.isEmpty()) {
                 Map<String, Object> row = rows.getFirst();
@@ -124,13 +126,20 @@ public class FlowConfig {
      * @param flowName       流程展示名称 (落库事实，供弹屏展示)
      * @param definitionJson 流程定义 JSON
      */
-    private void compileAndApplyFlow(String flowKey, String modelType, String flowName, String definitionJson) {
-        if (definitionJson == null || definitionJson.isBlank()) throw new IllegalArgumentException("流程定义不能为空");
+    private void compileAndApplyFlow(
+        String flowKey,
+        String modelType,
+        String flowName,
+        String definitionJson
+    ) {
+        if (definitionJson == null || definitionJson.isBlank()) throw new IllegalArgumentException(
+            "流程定义不能为空"
+        );
         if (objectMapper == null) objectMapper = new ObjectMapper();
 
         try {
             JsonNode root = com.chandler.fcc.common.protocol.FlowDefinitionValidator.validate(definitionJson);
-            if("IVR".equals(root.path("routeMode").asText())){
+            if ("IVR".equals(root.path("routeMode").asText())) {
                 // 固定 IVR 在呼入时按 DID 加载并锁定数据库版本，不写入按 modelKey 共享的旧动作链。
                 return;
             }
@@ -138,7 +147,9 @@ public class FlowConfig {
             String targetModelKey = modelType != null ? modelType : "INBOUND";
             if ("FLOW-INBOUND".equalsIgnoreCase(flowKey) || "INBOUND".equalsIgnoreCase(targetModelKey)) {
                 targetModelKey = FlowModelType.INBOUND_CUSTOMER_SERVICE.name();
-            } else if ("FLOW-OUTBOUND".equalsIgnoreCase(flowKey) || "OUTBOUND".equalsIgnoreCase(targetModelKey)) {
+            } else if (
+                "FLOW-OUTBOUND".equalsIgnoreCase(flowKey) || "OUTBOUND".equalsIgnoreCase(targetModelKey)
+            ) {
                 targetModelKey = FlowModelType.OUTBOUND_TWO_WAY_CALL.name();
             }
 
@@ -149,7 +160,8 @@ public class FlowConfig {
 
             String workNo = root.path("didDirectConfig").path("workNo").asText();
             routeData.put("workNo", workNo);
-            routeNodes.add(FlowNode.builder()
+            routeNodes.add(
+                FlowNode.builder()
                     .modelKey(targetModelKey)
                     .modelType(FlowModelType.valueOf(targetModelKey))
                     .stageState(CallStageState.ROUTE)
@@ -157,16 +169,20 @@ public class FlowConfig {
                     .actionType(ActionType.DIAL_AGENT)
                     .order(1)
                     .data(new HashMap<>(routeData))
-                    .build());
+                    .build()
+            );
 
             // 覆盖或更新运行时 flowMap
             flowMap.put(targetModelKey + ":" + CallStageState.ROUTE.name(), routeNodes);
             if (flowName != null && !flowName.isBlank()) {
                 flowNameByModel.put(targetModelKey, flowName);
             }
-            log.info("🎯 [FlowConfig 编译完成] 流程 {} 成功编译 ROUTE 阶段节点, 路由模式: {}, 节点数: {}",
-                    flowKey, routeMode, routeNodes.size());
-
+            log.info(
+                "🎯 [FlowConfig 编译完成] 流程 {} 成功编译 ROUTE 阶段节点, 路由模式: {}, 节点数: {}",
+                flowKey,
+                routeMode,
+                routeNodes.size()
+            );
         } catch (Exception e) {
             throw new IllegalArgumentException("流程编译失败: " + e.getMessage(), e);
         }

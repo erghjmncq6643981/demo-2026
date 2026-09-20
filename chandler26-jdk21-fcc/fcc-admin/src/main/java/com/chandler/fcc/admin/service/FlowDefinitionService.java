@@ -12,18 +12,17 @@ import com.chandler.fcc.admin.model.vo.FlowDefinitionVO;
 import com.chandler.fcc.admin.model.vo.FlowSimulateRespVO;
 import com.chandler.fcc.admin.model.vo.FlowVersionVO;
 import com.chandler.fcc.common.util.IdUtil;
-import lombok.RequiredArgsConstructor;
-import lombok.extern.slf4j.Slf4j;
-import org.springframework.stereotype.Service;
-import org.springframework.transaction.annotation.Transactional;
-import org.springframework.beans.factory.annotation.Value;
-
 import java.nio.charset.StandardCharsets;
 import java.security.MessageDigest;
 import java.time.LocalDateTime;
 import java.util.ArrayList;
 import java.util.HexFormat;
 import java.util.List;
+import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
+import org.springframework.beans.factory.annotation.Value;
+import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
 
 /**
  * 业务通话流程定义与版本编排管理服务
@@ -51,10 +50,11 @@ public class FlowDefinitionService {
     public List<FlowDefinitionVO> listFlows() {
         cn.dev33.satoken.stp.StpUtil.checkPermission("flow:view");
         List<FlowDefinitionEntity> entities = flowMapper.selectList(
-                new LambdaQueryWrapper<FlowDefinitionEntity>()
-                        .eq(FlowDefinitionEntity::getTenantId,com.chandler.fcc.admin.flow.FlowStudioService.tenant())
-                        .isNull(FlowDefinitionEntity::getDeletedAt)
-                        .orderByAsc(FlowDefinitionEntity::getId));
+            new LambdaQueryWrapper<FlowDefinitionEntity>()
+                .eq(FlowDefinitionEntity::getTenantId, com.chandler.fcc.admin.flow.FlowStudioService.tenant())
+                .isNull(FlowDefinitionEntity::getDeletedAt)
+                .orderByAsc(FlowDefinitionEntity::getId)
+        );
 
         List<FlowDefinitionVO> vos = new ArrayList<>();
         for (FlowDefinitionEntity e : entities) {
@@ -63,7 +63,8 @@ public class FlowDefinitionService {
             if (e.getCurrentVersion() == 1) {
                 curVerStr = "v1.0.0";
             }
-            vos.add(FlowDefinitionVO.builder()
+            vos.add(
+                FlowDefinitionVO.builder()
                     .id(e.getId())
                     .flowKey(e.getFlowKey())
                     .flowName(e.getFlowName())
@@ -71,7 +72,8 @@ public class FlowDefinitionService {
                     .status(e.getStatus())
                     .currentVersion(curVerStr)
                     .versions(versions)
-                    .build());
+                    .build()
+            );
         }
         return vos;
     }
@@ -82,26 +84,30 @@ public class FlowDefinitionService {
     public List<FlowVersionVO> getVersions(String flowKey) {
         cn.dev33.satoken.stp.StpUtil.checkPermission("flow:view");
         FlowDefinitionEntity flow = flowMapper.selectOne(
-                new LambdaQueryWrapper<FlowDefinitionEntity>()
-                        .eq(FlowDefinitionEntity::getFlowKey, flowKey)
-                        .eq(FlowDefinitionEntity::getTenantId,com.chandler.fcc.admin.flow.FlowStudioService.tenant()));
+            new LambdaQueryWrapper<FlowDefinitionEntity>()
+                .eq(FlowDefinitionEntity::getFlowKey, flowKey)
+                .eq(FlowDefinitionEntity::getTenantId, com.chandler.fcc.admin.flow.FlowStudioService.tenant())
+        );
         if (flow == null) {
             return List.of();
         }
 
         List<FlowDefinitionVersionEntity> versionEntities = versionMapper.selectList(
-                new LambdaQueryWrapper<FlowDefinitionVersionEntity>()
-                        .eq(FlowDefinitionVersionEntity::getFlowDefinitionId, flow.getId())
-                        .orderByDesc(FlowDefinitionVersionEntity::getVersionNo));
+            new LambdaQueryWrapper<FlowDefinitionVersionEntity>()
+                .eq(FlowDefinitionVersionEntity::getFlowDefinitionId, flow.getId())
+                .orderByDesc(FlowDefinitionVersionEntity::getVersionNo)
+        );
 
-        return versionEntities.stream().map(v -> {
-            String verStr = switch (v.getVersionNo()) {
-                case 0 -> "v0.9.0";
-                case 1 -> "v1.0.0";
-                case 2 -> "v1.1.0";
-                default -> "v1." + (v.getVersionNo() - 1) + ".0";
-            };
-            return FlowVersionVO.builder()
+        return versionEntities
+            .stream()
+            .map(v -> {
+                String verStr = switch (v.getVersionNo()) {
+                    case 0 -> "v0.9.0";
+                    case 1 -> "v1.0.0";
+                    case 2 -> "v1.1.0";
+                    default -> "v1." + (v.getVersionNo() - 1) + ".0";
+                };
+                return FlowVersionVO.builder()
                     .version(verStr)
                     .versionNo(v.getVersionNo())
                     .publishStatus(v.getPublishStatus())
@@ -110,7 +116,8 @@ public class FlowDefinitionService {
                     .createdBy(v.getCreatedBy())
                     .createdAt(v.getCreatedAt())
                     .build();
-        }).toList();
+            })
+            .toList();
     }
 
     /**
@@ -118,49 +125,59 @@ public class FlowDefinitionService {
      */
     @Transactional(rollbackFor = Exception.class)
     public String saveDraft(String flowKey, FlowSaveDraftReq req) {
-        if(flowKey.startsWith("SYSTEM_"))throw new IllegalArgumentException("系统固定模板不允许编辑");
+        if (flowKey.startsWith("SYSTEM_")) throw new IllegalArgumentException("系统固定模板不允许编辑");
         cn.dev33.satoken.stp.StpUtil.checkPermission("flow:write");
         FlowDefinitionEntity flow = flowMapper.selectOne(
-                new LambdaQueryWrapper<FlowDefinitionEntity>()
-                        .eq(FlowDefinitionEntity::getFlowKey, flowKey)
-                        .eq(FlowDefinitionEntity::getTenantId,com.chandler.fcc.admin.flow.FlowStudioService.tenant()).last("FOR UPDATE"));
+            new LambdaQueryWrapper<FlowDefinitionEntity>()
+                .eq(FlowDefinitionEntity::getFlowKey, flowKey)
+                .eq(FlowDefinitionEntity::getTenantId, com.chandler.fcc.admin.flow.FlowStudioService.tenant())
+                .last("FOR UPDATE")
+        );
         if (flow == null) {
             throw new IllegalArgumentException("流程定义不存在: " + flowKey);
         }
 
         LocalDateTime now = LocalDateTime.now();
         String json = req.getDefinitionJson() != null ? req.getDefinitionJson() : "{}";
-        json=com.chandler.fcc.common.protocol.FlowDefinitionValidator.validate(json).toString();
+        json = com.chandler.fcc.common.protocol.FlowDefinitionValidator.validate(json).toString();
         String checksum = calculateSha256(json);
 
         // 查找现有的草稿版本 (DRAFT)
         FlowDefinitionVersionEntity draft = versionMapper.selectOne(
-                new LambdaQueryWrapper<FlowDefinitionVersionEntity>()
-                        .eq(FlowDefinitionVersionEntity::getFlowDefinitionId, flow.getId())
-                        .eq(FlowDefinitionVersionEntity::getPublishStatus, "DRAFT"));
+            new LambdaQueryWrapper<FlowDefinitionVersionEntity>()
+                .eq(FlowDefinitionVersionEntity::getFlowDefinitionId, flow.getId())
+                .eq(FlowDefinitionVersionEntity::getPublishStatus, "DRAFT")
+        );
 
         if (draft != null) {
             draft.setDefinitionJson(json);
             draft.setChecksum(checksum);
             versionMapper.updateById(draft);
-            log.info("[FlowDefinitionService] 更新流程草稿: flowKey={}, versionNo={}", flowKey, draft.getVersionNo());
+            log.info(
+                "[FlowDefinitionService] 更新流程草稿: flowKey={}, versionNo={}",
+                flowKey,
+                draft.getVersionNo()
+            );
         } else {
             FlowDefinitionVersionEntity latest = versionMapper.selectOne(
-                    new LambdaQueryWrapper<FlowDefinitionVersionEntity>()
-                            .eq(FlowDefinitionVersionEntity::getFlowDefinitionId, flow.getId())
-                            .orderByDesc(FlowDefinitionVersionEntity::getVersionNo)
-                            .last("LIMIT 1"));
-            int nextVersionNo = latest == null || latest.getVersionNo() == null ? 1 : latest.getVersionNo() + 1;
+                new LambdaQueryWrapper<FlowDefinitionVersionEntity>()
+                    .eq(FlowDefinitionVersionEntity::getFlowDefinitionId, flow.getId())
+                    .orderByDesc(FlowDefinitionVersionEntity::getVersionNo)
+                    .last("LIMIT 1")
+            );
+            int nextVersionNo = latest == null || latest.getVersionNo() == null
+                ? 1
+                : latest.getVersionNo() + 1;
             draft = FlowDefinitionVersionEntity.builder()
-                    .id(IdUtil.nextId())
-                    .flowDefinitionId(flow.getId())
-                    .versionNo(nextVersionNo)
-                    .definitionJson(json)
-                    .checksum(checksum)
-                    .publishStatus("DRAFT")
-                    .createdBy("admin")
-                    .createdAt(now)
-                    .build();
+                .id(IdUtil.nextId())
+                .flowDefinitionId(flow.getId())
+                .versionNo(nextVersionNo)
+                .definitionJson(json)
+                .checksum(checksum)
+                .publishStatus("DRAFT")
+                .createdBy("admin")
+                .createdAt(now)
+                .build();
             versionMapper.insert(draft);
             log.info("[FlowDefinitionService] 创建新流程草稿: flowKey={}", flowKey);
         }
@@ -176,12 +193,14 @@ public class FlowDefinitionService {
      */
     @Transactional(rollbackFor = Exception.class)
     public String publishFlow(String flowKey, FlowPublishReq req) {
-        if(flowKey.startsWith("SYSTEM_"))throw new IllegalArgumentException("系统固定模板不允许发布修改");
+        if (flowKey.startsWith("SYSTEM_")) throw new IllegalArgumentException("系统固定模板不允许发布修改");
         cn.dev33.satoken.stp.StpUtil.checkPermission("flow:write");
         FlowDefinitionEntity flow = flowMapper.selectOne(
-                new LambdaQueryWrapper<FlowDefinitionEntity>()
-                        .eq(FlowDefinitionEntity::getFlowKey, flowKey)
-                        .eq(FlowDefinitionEntity::getTenantId,com.chandler.fcc.admin.flow.FlowStudioService.tenant()).last("FOR UPDATE"));
+            new LambdaQueryWrapper<FlowDefinitionEntity>()
+                .eq(FlowDefinitionEntity::getFlowKey, flowKey)
+                .eq(FlowDefinitionEntity::getTenantId, com.chandler.fcc.admin.flow.FlowStudioService.tenant())
+                .last("FOR UPDATE")
+        );
         if (flow == null) {
             throw new IllegalArgumentException("流程定义不存在: " + flowKey);
         }
@@ -190,9 +209,10 @@ public class FlowDefinitionService {
 
         // 查找待发布的草稿
         FlowDefinitionVersionEntity draft = versionMapper.selectOne(
-                new LambdaQueryWrapper<FlowDefinitionVersionEntity>()
-                        .eq(FlowDefinitionVersionEntity::getFlowDefinitionId, flow.getId())
-                        .eq(FlowDefinitionVersionEntity::getPublishStatus, "DRAFT"));
+            new LambdaQueryWrapper<FlowDefinitionVersionEntity>()
+                .eq(FlowDefinitionVersionEntity::getFlowDefinitionId, flow.getId())
+                .eq(FlowDefinitionVersionEntity::getPublishStatus, "DRAFT")
+        );
 
         if (draft == null) {
             throw new IllegalStateException("没有可发布的草稿版本");
@@ -205,9 +225,10 @@ public class FlowDefinitionService {
 
         // 将之前 PUBLISHED 的版本归档 ARCHIVED
         List<FlowDefinitionVersionEntity> oldPubs = versionMapper.selectList(
-                new LambdaQueryWrapper<FlowDefinitionVersionEntity>()
-                        .eq(FlowDefinitionVersionEntity::getFlowDefinitionId, flow.getId())
-                        .eq(FlowDefinitionVersionEntity::getPublishStatus, "PUBLISHED"));
+            new LambdaQueryWrapper<FlowDefinitionVersionEntity>()
+                .eq(FlowDefinitionVersionEntity::getFlowDefinitionId, flow.getId())
+                .eq(FlowDefinitionVersionEntity::getPublishStatus, "PUBLISHED")
+        );
         for (FlowDefinitionVersionEntity oldPub : oldPubs) {
             oldPub.setPublishStatus("ARCHIVED");
             versionMapper.updateById(oldPub);
@@ -226,14 +247,23 @@ public class FlowDefinitionService {
 
         // 动态通知呼叫引擎 (fcc-server) 热加载生效
         org.springframework.transaction.support.TransactionSynchronizationManager.registerSynchronization(
-                new org.springframework.transaction.support.TransactionSynchronization() {
-                    /** 数据提交后再通知运行端，避免读取旧版本。 */
-                    @Override
-                    public void afterCommit() { notifyEngineReload(flowKey); }
-                });
+            new org.springframework.transaction.support.TransactionSynchronization() {
+                /**
+                 * 数据提交后再通知运行端，避免读取旧版本。
+                 */
+                @Override
+                public void afterCommit() {
+                    notifyEngineReload(flowKey);
+                }
+            }
+        );
 
         String publishedVersion = formatVersion(draft.getVersionNo());
-        log.info("[FlowDefinitionService] 流程版本更新已登记，提交后通知运行端: flowKey={}, version={}", flowKey, publishedVersion);
+        log.info(
+            "[FlowDefinitionService] 流程版本更新已登记，提交后通知运行端: flowKey={}, version={}",
+            flowKey,
+            publishedVersion
+        );
         return publishedVersion;
     }
 
@@ -247,13 +277,19 @@ public class FlowDefinitionService {
         if (stringRedisTemplate != null) {
             try {
                 stringRedisTemplate.convertAndSend("fcc:flow:publish", flowKey);
-                log.info("📢 [FlowDefinitionService] 已广播流程发布事件至 Redis: fcc:flow:publish, flowKey={}", flowKey);
+                log.info(
+                    "📢 [FlowDefinitionService] 已广播流程发布事件至 Redis: fcc:flow:publish, flowKey={}",
+                    flowKey
+                );
             } catch (Exception re) {
                 log.warn("⚠️ [FlowDefinitionService] Redis 广播发布事件略过: {}", re.getMessage());
             }
         }
         if (fccServerBaseUrl == null || fccServerBaseUrl.isBlank() || reloadToken.isBlank()) {
-            log.warn("[FlowDefinitionService] 未配置 fcc.server.base-url，仅完成版本发布与 Redis 通知: flowKey={}", flowKey);
+            log.warn(
+                "[FlowDefinitionService] 未配置 fcc.server.base-url，仅完成版本发布与 Redis 通知: flowKey={}",
+                flowKey
+            );
             return;
         }
 
@@ -263,29 +299,37 @@ public class FlowDefinitionService {
             String baseUrl = fccServerBaseUrl.replaceAll("/+$", "");
             java.net.http.HttpClient client = java.net.http.HttpClient.newHttpClient();
             java.net.http.HttpRequest request = java.net.http.HttpRequest.newBuilder()
-                    .uri(java.net.URI.create(baseUrl + "/api/telephony/call/flow/reload?flowKey=" + encodedFlowKey))
-                    .header("X-FCC-Reload-Token", reloadToken)
-                    .POST(java.net.http.HttpRequest.BodyPublishers.noBody())
-                    .timeout(java.time.Duration.ofMillis(1500))
-                    .build();
-            client.sendAsync(request, java.net.http.HttpResponse.BodyHandlers.ofString())
-                    .whenComplete((response, failure) -> {
-                        if (failure != null) {
-                            log.warn("[流程发布] 运行端重载未确认: flowKey={}", flowKey);
-                            return;
+                .uri(
+                    java.net.URI.create(baseUrl + "/api/telephony/call/flow/reload?flowKey=" + encodedFlowKey)
+                )
+                .header("X-FCC-Reload-Token", reloadToken)
+                .POST(java.net.http.HttpRequest.BodyPublishers.noBody())
+                .timeout(java.time.Duration.ofMillis(1500))
+                .build();
+            client
+                .sendAsync(request, java.net.http.HttpResponse.BodyHandlers.ofString())
+                .whenComplete((response, failure) -> {
+                    if (failure != null) {
+                        log.warn("[流程发布] 运行端重载未确认: flowKey={}", flowKey);
+                        return;
+                    }
+                    try {
+                        var result = new com.fasterxml.jackson.databind.ObjectMapper().readTree(
+                            response.body()
+                        );
+                        if (
+                            response.statusCode() != 200 ||
+                            result.path("code").asInt() != 200 ||
+                            !result.path("data").path("reloaded").asBoolean()
+                        ) {
+                            log.warn("[流程发布] 运行端拒绝激活: flowKey={}", flowKey);
+                        } else {
+                            log.info("[流程发布] 运行端已确认重载: flowKey={}", flowKey);
                         }
-                        try {
-                            var result = new com.fasterxml.jackson.databind.ObjectMapper().readTree(response.body());
-                            if (response.statusCode() != 200 || result.path("code").asInt() != 200
-                                    || !result.path("data").path("reloaded").asBoolean()) {
-                                log.warn("[流程发布] 运行端拒绝激活: flowKey={}", flowKey);
-                            } else {
-                                log.info("[流程发布] 运行端已确认重载: flowKey={}", flowKey);
-                            }
-                        } catch (Exception ignored) {
-                            log.warn("[流程发布] 运行端响应无法确认: flowKey={}", flowKey);
-                        }
-                    });
+                    } catch (Exception ignored) {
+                        log.warn("[流程发布] 运行端响应无法确认: flowKey={}", flowKey);
+                    }
+                });
         } catch (Exception httpEx) {
             log.warn("⚠️ [FlowDefinitionService] HTTP 热重载通知略过: {}", httpEx.getMessage());
         }
@@ -313,13 +357,13 @@ public class FlowDefinitionService {
      */
     public FlowSimulateRespVO simulateFlow(FlowSimulateReq req) {
         return FlowSimulateRespVO.builder()
-                .success(false)
-                .simulationId(null)
-                .decisionResult("流程仿真引擎尚未接入")
-                .targetAgentWorkNo(null)
-                .targetAgentName(null)
-                .traces(List.of())
-                .build();
+            .success(false)
+            .simulationId(null)
+            .decisionResult("流程仿真引擎尚未接入")
+            .targetAgentWorkNo(null)
+            .targetAgentName(null)
+            .traces(List.of())
+            .build();
     }
 
     private String calculateSha256(String data) {

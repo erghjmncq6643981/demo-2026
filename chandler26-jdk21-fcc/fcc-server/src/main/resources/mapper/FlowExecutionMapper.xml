@@ -1,19 +1,42 @@
-<?xml version="1.0" encoding="UTF-8"?>
+<?xml version="1.0" encoding="UTF-8" ?>
 <!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
 <mapper namespace="com.chandler.fcc.server.flow.infrastructure.FlowExecutionMapper">
- <select id="definition" resultType="map">
-  SELECT CAST(f.id AS CHAR) AS definitionId,CAST(v.id AS CHAR) AS versionId,v.definition_json AS definition,f.flow_key AS flowKey,v.version_no AS versionNo
+  <select id="definition" resultType="map">
+    SELECT CAST(f.id AS CHAR) AS definitionId,CAST(v.id AS CHAR) AS versionId,v.definition_json AS
+    definition,f.flow_key AS flowKey,v.version_no AS versionNo
   FROM fcc_flow_definition f JOIN fcc_flow_definition_version v ON v.flow_definition_id=f.id
-  <choose><when test="version != null">WHERE v.id=#{version}</when><otherwise>WHERE f.tenant_id=0 AND f.flow_key=CONCAT('SYSTEM_',#{template}) AND v.publish_status='PUBLISHED'</otherwise></choose>
-  ORDER BY v.version_no DESC LIMIT 1
- </select>
- <insert id="create">INSERT IGNORE INTO fcc_flow_instance(id,tenant_id,call_id,flow_definition_id,flow_version_id,status,started_at,context_json) VALUES(#{call},#{tenant},#{call},#{definitionId},#{versionId},'RUNNING',UTC_TIMESTAMP(3),#{snapshot})</insert>
- <select id="lock" resultType="map" useCache="false" flushCache="true">SELECT current_step_key AS step,status,context_json AS context FROM fcc_flow_instance WHERE id=#{call} FOR UPDATE</select>
- <update id="finish">UPDATE fcc_flow_step_execution SET status=#{previousStatus},ended_at=UTC_TIMESTAMP(3),duration_ms=GREATEST(0,TIMESTAMPDIFF(MICROSECOND,started_at,UTC_TIMESTAMP(3)) DIV 1000),output_json=#{output} WHERE flow_instance_id=#{call} AND ended_at IS NULL</update>
- <insert id="append">
-  INSERT INTO fcc_flow_step_execution(id,tenant_id,flow_instance_id,call_id,stage,step_key,action_type,attempt_no,trigger_event_id,status,input_json,started_at,ended_at,duration_ms)
-  SELECT #{id},#{tenant},#{call},#{call},#{step},#{step},#{step},COALESCE(MAX(attempt_no),0)+1,#{event},#{status},#{input},UTC_TIMESTAMP(3),CASE WHEN #{step}='END' THEN UTC_TIMESTAMP(3) END,CASE WHEN #{step}='END' THEN 0 END
+    <choose>
+      <when test="version != null">WHERE v.id=#{version}</when>
+      <otherwise>
+        WHERE f.tenant_id=0 AND f.flow_key=CONCAT('SYSTEM_',#{template}) AND v.publish_status='PUBLISHED'
+      </otherwise>
+    </choose>
+    ORDER BY v.version_no DESC LIMIT 1
+  </select>
+  <insert id="create">
+    INSERT IGNORE INTO
+    fcc_flow_instance(id,tenant_id,call_id,flow_definition_id,flow_version_id,status,started_at,context_json) VALUES(#{call},#{tenant},#{call},#{definitionId},#{versionId},'RUNNING',UTC_TIMESTAMP(3),#{snapshot})
+  </insert>
+  <select id="lock" resultType="map" useCache="false" flushCache="true">
+    SELECT current_step_key AS step,status,context_json AS context FROM fcc_flow_instance WHERE id=#{call} FOR
+    UPDATE
+  </select>
+  <update id="finish">
+    UPDATE fcc_flow_step_execution SET
+    status=#{previousStatus},ended_at=UTC_TIMESTAMP(3),duration_ms=GREATEST(0,TIMESTAMPDIFF(MICROSECOND,started_at,UTC_TIMESTAMP(3)) DIV
+    1000),output_json=#{output} WHERE flow_instance_id=#{call} AND ended_at IS NULL
+  </update>
+  <insert id="append">
+    INSERT INTO
+    fcc_flow_step_execution(id,tenant_id,flow_instance_id,call_id,stage,step_key,action_type,attempt_no,trigger_event_id,status,input_json,started_at,ended_at,duration_ms)
+  SELECT #{id},#{tenant},#{call},#{call},#{step},#{step},#{step},COALESCE(MAX(attempt_no),0)+1,#{event},#{status},#{input},UTC_TIMESTAMP(3),CASE
+    WHEN #{step}='END' THEN UTC_TIMESTAMP(3) END,CASE WHEN #{step}='END' THEN 0 END
   FROM fcc_flow_step_execution WHERE flow_instance_id=#{call} AND step_key=#{step}
- </insert>
- <update id="advance">UPDATE fcc_flow_instance SET current_step_key=#{step},status=CASE WHEN #{step}='END' THEN 'ENDED' ELSE 'RUNNING' END,ended_at=CASE WHEN #{step}='END' THEN UTC_TIMESTAMP(3) END,context_json=JSON_SET(context_json,'$.executionToken',#{token}),version=version+1 WHERE id=#{call}</update>
+  </insert>
+  <update id="advance">
+    UPDATE fcc_flow_instance SET current_step_key=#{step},status=CASE
+    WHEN #{step}='END' THEN 'ENDED' ELSE 'RUNNING' END,ended_at=CASE WHEN #{step}='END' THEN
+    UTC_TIMESTAMP(3) END,context_json=JSON_SET(context_json,'$.executionToken',#{token}),version=version+1
+    WHERE id=#{call}
+  </update>
 </mapper>

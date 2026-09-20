@@ -9,15 +9,17 @@ export function useCdrReport(props: Readonly<{ initialTab?: 'records' | 'callbac
   // 🌟 核心双 Tab：'records' (通话记录) | 'callback' (未接待回拨)
   const activeSubTab = ref<'records' | 'callback'>(props.initialTab || 'records');
 
-  watch(() => props.initialTab, (val) => {
-    if (val) {
-      activeSubTab.value = val;
-    }
-  });
+  watch(
+    () => props.initialTab,
+    (val) => {
+      if (val) {
+        activeSubTab.value = val;
+      }
+    },
+  );
 
   // ==================== 1. 通话记录 (Call Records) ====================
   // 字段要求：主叫姓名/号码、运营商、坐席姓名、坐席工号、方向、通话开始时间、通话结束时间、响铃时长、录音（显示时长）、状态
-
 
   const callRecords = ref<CallRecord[]>([]);
 
@@ -179,13 +181,13 @@ export function useCdrReport(props: Readonly<{ initialTab?: 'records' | 'callbac
   // 字段要求：客户号码、运营商、坐席姓名、坐席工号、进线时间、排队放弃原因、等待耗时、状态
   interface CallbackRecord {
     id: string;
-    customerPhone: string;   // 客户号码
-    carrier: string;         // 运营商
-    agentName: string;       // 坐席姓名
-    agentWorkNo: string;     // 坐席工号
-    inboundTime: string;     // 进线时间
-    abandonReason: string;   // 排队放弃原因
-    waitDuration: string;    // 等待耗时
+    customerPhone: string; // 客户号码
+    carrier: string; // 运营商
+    agentName: string; // 坐席姓名
+    agentWorkNo: string; // 坐席工号
+    inboundTime: string; // 进线时间
+    abandonReason: string; // 排队放弃原因
+    waitDuration: string; // 等待耗时
     status: 'PENDING' | 'ASSIGNED' | 'CALLED'; // 状态: 待回拨 / 已派单 / 已回呼
     assignee?: string;
   }
@@ -197,8 +199,9 @@ export function useCdrReport(props: Readonly<{ initialTab?: 'records' | 'callbac
   const filterCbAgentWorkNo = ref('');
 
   const filteredCallbackRecords = computed(() => {
-    return callbackRecords.value.filter(item => {
-      if (filterCbCustomerPhone.value && !item.customerPhone.includes(filterCbCustomerPhone.value)) return false;
+    return callbackRecords.value.filter((item) => {
+      if (filterCbCustomerPhone.value && !item.customerPhone.includes(filterCbCustomerPhone.value))
+        return false;
       if (filterCbAgentWorkNo.value && !item.agentWorkNo.includes(filterCbAgentWorkNo.value)) return false;
       return true;
     });
@@ -234,7 +237,7 @@ export function useCdrReport(props: Readonly<{ initialTab?: 'records' | 'callbac
             abandonReason: item.reason || '排队放弃未接听',
             waitDuration: item.duration || '0秒',
             status: item.status,
-            assignee: item.assignee
+            assignee: item.assignee,
           };
         });
         callbackRecords.value = realCallbacks;
@@ -300,7 +303,13 @@ export function useCdrReport(props: Readonly<{ initialTab?: 'records' | 'callbac
   const currentAudioUrl = ref('');
   const currentAudioInfo = ref<{ title: string; duration: string; phone: string; url?: string } | null>(null);
 
-  const playAudio = (title: string, phone: string, duration: string, recordingUrl?: string, rawId?: string) => {
+  const playAudio = (
+    title: string,
+    phone: string,
+    duration: string,
+    recordingUrl?: string,
+    rawId?: string,
+  ) => {
     // 录音地址以话单返回的 recordingUrl 为准（后端由 fcc_call_recording.object_key 推导）；
     // 无地址时不做任何占位兜底，直接提示，避免播放器加载一个必然 404 的假地址。
     const url = recordingUrl || (rawId != null ? `/api/admin/recordings/${rawId}/stream` : '');
@@ -358,7 +367,21 @@ export function useCdrReport(props: Readonly<{ initialTab?: 'records' | 'callbac
         return;
       }
 
-      const header = ['通话ID', '主叫姓名', '主叫号码', '运营商', '坐席姓名', '坐席工号', '方向', '通话开始时间', '通话结束时间', '响铃时长', '录音时长', '状态', '挂机原因'];
+      const header = [
+        '通话ID',
+        '主叫姓名',
+        '主叫号码',
+        '运营商',
+        '坐席姓名',
+        '坐席工号',
+        '方向',
+        '通话开始时间',
+        '通话结束时间',
+        '响铃时长',
+        '录音时长',
+        '状态',
+        '挂机原因',
+      ];
       const body = rows.map((item) => [
         item.ctrlId || String(item.id),
         item.callerName || '',
@@ -439,6 +462,6 @@ export function useCdrReport(props: Readonly<{ initialTab?: 'records' | 'callbac
     openDetail,
     handleSearchCallback,
     exporting,
-    exportCdrCsv
+    exportCdrCsv,
   };
 }
