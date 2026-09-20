@@ -24,7 +24,8 @@
                IFNULL(SUM(CASE WHEN UPPER(IFNULL(direction, '')) = 'OUTBOUND'
                                THEN IFNULL(talk_duration_ms, 0) ELSE 0 END), 0) AS outboundTalkMs
         FROM fcc_call_session
-        WHERE started_at &gt;= #{startTime}
+        WHERE tenant_id = #{tenantId}
+          AND started_at &gt;= #{startTime}
     </select>
 
 </mapper>
