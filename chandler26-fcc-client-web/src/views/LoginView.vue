@@ -68,13 +68,13 @@ const handleLogin = async () => {
             从这里开始
           </h1>
           <p class="text-xs sm:text-sm text-slate-400 mb-6 leading-relaxed">
-            登录后处理来电、客户资料和外呼任务。请先完成话机绑定，再切换为就绪状态。
+            登录后处理来电、人工外呼和回拨待办。请先完成话机绑定，再切换为就绪状态。
           </p>
 
           <div class="space-y-2.5 text-xs sm:text-sm text-slate-300">
             <div class="flex items-center gap-2.5">
               <span class="w-1.5 h-1.5 rounded-full bg-indigo-400"></span>
-              <span>来电提醒与客户资料</span>
+              <span>来电提醒与授权客户摘要</span>
             </div>
             <div class="flex items-center gap-2.5">
               <span class="w-1.5 h-1.5 rounded-full bg-indigo-400"></span>
@@ -82,7 +82,7 @@ const handleLogin = async () => {
             </div>
             <div class="flex items-center gap-2.5">
               <span class="w-1.5 h-1.5 rounded-full bg-indigo-400"></span>
-              <span>外呼任务与逐次处理结果</span>
+              <span>人工外呼、回拨与话后处理</span>
             </div>
           </div>
         </div>

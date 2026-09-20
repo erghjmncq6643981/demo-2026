@@ -57,8 +57,13 @@ const modeLabel: Record<string, string> = {
     >
       <label class="field"
         ><span>执行坐席</span
-        ><select v-model="state.ownerFilter.value">
-          <option value="">全部坐席</option>
+        ><select
+          v-model="state.ownerFilter.value"
+          :disabled="state.agentsLoading.value"
+        >
+          <option value="">
+            {{ state.agentsLoading.value ? "坐席加载中..." : "全部坐席" }}
+          </option>
           <option
             v-for="agent in state.agents.value"
             :key="agent.id"
@@ -72,6 +77,12 @@ const modeLabel: Record<string, string> = {
       <button class="secondary-button" @click="state.search">
         <Search class="h-4 w-4" />查询
       </button>
+      <span v-if="state.agentsError.value" class="text-xs text-rose-600">
+        {{ state.agentsError.value }}
+        <button class="font-semibold underline" @click="state.loadAgents">
+          重试
+        </button>
+      </span>
     </div>
 
     <div
@@ -199,8 +210,13 @@ const modeLabel: Record<string, string> = {
       >
         <label class="field sm:col-span-2"
           ><span>执行坐席</span
-          ><select v-model="state.form.value.owner">
-            <option value="">请选择</option>
+          ><select
+            v-model="state.form.value.owner"
+            :disabled="state.agentsLoading.value"
+          >
+            <option value="">
+              {{ state.agentsLoading.value ? "坐席加载中..." : "请选择" }}
+            </option>
             <option
               v-for="agent in state.agents.value"
               :key="agent.id"
@@ -209,7 +225,13 @@ const modeLabel: Record<string, string> = {
               {{ agent.workNo }} ·
               {{ agent.agentName || agent.realName || "未命名" }}
             </option>
-          </select></label
+          </select>
+          <span v-if="state.agentsError.value" class="text-xs text-rose-600">
+            {{ state.agentsError.value }}
+            <button class="font-semibold underline" @click="state.loadAgents">
+              重试
+            </button>
+          </span></label
         ><label class="field sm:col-span-2"
           ><span>被叫号码</span
           ><input v-model="state.form.value.number" /></label

@@ -26,15 +26,32 @@ export function useFlowEditor() {
   const error = ref("");
   const outcome = ref("");
   const modelNodes = ref<FlowModelNode[]>([]);
+  const workingCopy = ref(false);
   const dirty = computed(() => definition.value !== savedDefinition.value);
   const version = computed(() =>
     versions.value.find((item) => item.version === selectedVersion.value),
   );
 
   function applyDefinition(record?: FlowVersionVO) {
+    workingCopy.value = false;
     selectedVersion.value = record?.version || "";
     definition.value = record?.definitionJson || "";
     savedDefinition.value = definition.value;
+  }
+
+  function beginDraft(initialDefinition: string) {
+    if (!selectedFlow.value || selectedFlow.value.system || pending.value || loading.value)
+      return;
+    if (versions.value.some((item) => item.publishStatus === "DRAFT")) {
+      error.value = "此流程已有草稿版本，请先打开现有草稿。";
+      return;
+    }
+    selectedVersion.value = "";
+    definition.value = initialDefinition;
+    savedDefinition.value = "";
+    workingCopy.value = true;
+    error.value = "";
+    outcome.value = "新草稿尚未保存；保存后由服务端分配版本号。";
   }
 
   async function loadVersion(value: string) {
@@ -179,6 +196,7 @@ export function useFlowEditor() {
         definitionJson: definition.value,
       });
       savedDefinition.value = definition.value;
+      workingCopy.value = false;
       outcome.value = "草稿已保存，尚未发布。";
       versionPage.value = 1;
       await refreshVersions(saved.version);
@@ -241,11 +259,13 @@ export function useFlowEditor() {
     error,
     outcome,
     dirty,
+    workingCopy,
     reload,
     selectFlow,
     selectFlowPage,
     selectVersion,
     selectVersionPage,
+    beginDraft,
     saveDraft,
     publish,
   };

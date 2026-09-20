@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { computed, ref, onMounted } from "vue";
+import { Menu, Server } from "lucide-vue-next";
 import AdminSidebar from "./AdminSidebar.vue";
 import { useAdminAuthStore } from "../stores/adminAuthStore";
 import { callbackApi } from "../api/callbackApi";
@@ -18,6 +19,7 @@ const emit = defineEmits<{
 }>();
 
 const authStore = useAdminAuthStore();
+const mobileNavOpen = ref(false);
 const showProbeModal = ref(false);
 const probeResult = ref<SidecarHealthVO | null>(null);
 const probeError = ref("");
@@ -27,7 +29,10 @@ const userName = computed(
 );
 const userInitial = computed(() => userName.value.slice(0, 1).toUpperCase());
 const roleLabel = computed(() => authStore.user?.role || "ADMIN");
-const canManageBusiness = computed(() => authStore.user?.role === "ADMIN");
+const canManageBusiness = computed(() => {
+  const permissions = authStore.permissions;
+  return permissions.includes("*") || permissions.includes("business:manage");
+});
 const greeting = computed(() => {
   const hour = new Date().getHours();
   if (hour < 6) return "夜间好";
@@ -92,6 +97,11 @@ const probeHealth = async (openModal: boolean) => {
 
 const handleProbe = () => probeHealth(true);
 
+const selectTab = (tab: string) => {
+  emit("update:activeTab", tab);
+  mobileNavOpen.value = false;
+};
+
 /**
  * 提醒铃铛：只汇报数据库里真实存在的待办，不再拼造"全网接通率良好"之类的结论
  */
@@ -110,25 +120,53 @@ const handleNotify = () => {
 <template>
   <!-- 🌟 全屏平铺工作台主容器 (100vw × 100vh 动态铺满整个屏幕，随分辨率自适应) -->
   <div class="w-screen h-screen bg-[#F8FAFD] flex overflow-hidden">
-    <AdminSidebar
-      :active-tab="activeTab"
-      :can-manage-business="canManageBusiness"
-      @select="emit('update:activeTab', $event)"
-    />
+    <div class="hidden lg:block h-full shrink-0">
+      <AdminSidebar
+        :active-tab="activeTab"
+        :can-manage-business="canManageBusiness"
+        @select="selectTab"
+      />
+    </div>
+
+    <el-drawer
+      v-model="mobileNavOpen"
+      class="mobile-nav-drawer"
+      direction="ltr"
+      size="240px"
+      :with-header="false"
+      append-to-body
+    >
+      <AdminSidebar
+        :active-tab="activeTab"
+        :can-manage-business="canManageBusiness"
+        @select="selectTab"
+      />
+    </el-drawer>
 
     <!-- 2. 右侧主工作区 (顶栏 + 模块内容渲染容器) -->
     <main
       class="flex-1 min-w-0 flex flex-col overflow-hidden bg-[#F8FAFD] h-full"
     >
       <!-- 顶栏：欢迎问候 + 字体缩放控制器 + 搜索 + 管理员档案 -->
-      <header class="px-8 pt-6 pb-4 flex items-center justify-between shrink-0">
-        <div>
-          <h1
-            class="text-2xl font-black text-slate-900 tracking-tight flex items-center gap-3"
+      <header
+        class="px-3 sm:px-6 lg:px-8 pt-4 lg:pt-6 pb-4 flex items-center justify-between gap-3 shrink-0"
+      >
+        <div class="flex items-center gap-3 min-w-0">
+          <button
+            type="button"
+            class="lg:hidden w-10 h-10 shrink-0 rounded-lg bg-white border border-slate-200 hover:bg-slate-50 flex items-center justify-center text-slate-600"
+            title="打开导航菜单"
+            aria-label="打开导航菜单"
+            @click="mobileNavOpen = true"
           >
-            <span>{{ greeting }}，{{ userName }}！</span>
+            <Menu class="w-5 h-5" />
+          </button>
+          <h1
+            class="min-w-0 text-xl font-black text-slate-900 tracking-tight flex items-center gap-3"
+          >
+            <span class="truncate">{{ greeting }}，{{ userName }}！</span>
             <span
-              class="text-xs font-bold px-3 py-1 rounded-full flex items-center gap-1.5 shadow-2xs"
+              class="hidden md:flex text-xs font-bold px-3 py-1 rounded-full items-center gap-1.5 shadow-2xs shrink-0"
               :class="
                 probeResult?.status === 'HEALTHY'
                   ? 'bg-emerald-100 text-emerald-800'
@@ -153,7 +191,7 @@ const handleNotify = () => {
         </div>
 
         <!-- 顶栏右侧工具区 -->
-        <div class="flex items-center gap-4">
+        <div class="flex items-center gap-2 sm:gap-4 shrink-0">
           <button
             @click="handleProbe"
             class="w-11 h-11 shrink-0 rounded-full bg-white border border-slate-200 hover:bg-slate-50 flex items-center justify-center text-slate-600"
@@ -162,35 +200,7 @@ const handleNotify = () => {
             aria-haspopup="dialog"
             :aria-expanded="showProbeModal"
           >
-            <svg
-              class="w-5 h-5"
-              fill="none"
-              stroke="currentColor"
-              viewBox="0 0 24 24"
-              aria-hidden="true"
-            >
-              <rect
-                x="4"
-                y="3"
-                width="16"
-                height="7"
-                rx="2"
-                stroke-width="1.5"
-              />
-              <rect
-                x="4"
-                y="14"
-                width="16"
-                height="7"
-                rx="2"
-                stroke-width="1.5"
-              />
-              <path
-                d="M8 6h.01M8 17h.01M12 10v4"
-                stroke-width="2"
-                stroke-linecap="round"
-              />
-            </svg>
+            <Server class="w-5 h-5" aria-hidden="true" />
           </button>
 
           <!-- 提醒铃铛：角标为真实的未接待回拨待办数 -->
@@ -225,9 +235,9 @@ const handleNotify = () => {
           </button>
 
           <!-- 管理员头像与登出 -->
-          <div class="flex items-center gap-3 pl-2">
+          <div class="flex items-center gap-2 sm:gap-3 sm:pl-2">
             <div
-              class="w-11 h-11 rounded-full bg-gradient-to-tr from-amber-400 via-orange-500 to-indigo-600 text-white font-extrabold flex items-center justify-center text-base shadow-sm ring-2 ring-white"
+              class="hidden sm:flex w-11 h-11 rounded-full bg-gradient-to-tr from-amber-400 via-orange-500 to-indigo-600 text-white font-extrabold items-center justify-center text-base shadow-sm ring-2 ring-white"
             >
               {{ userInitial }}
             </div>
@@ -241,7 +251,7 @@ const handleNotify = () => {
             </div>
             <button
               @click="handleLogout"
-              class="ml-2 text-slate-400 hover:text-rose-600 transition cursor-pointer text-sm flex items-center gap-1"
+              class="sm:ml-2 w-10 h-10 text-slate-400 hover:text-rose-600 transition cursor-pointer text-sm flex items-center justify-center"
               title="注销登录"
             >
               <svg
@@ -263,7 +273,9 @@ const handleNotify = () => {
       </header>
 
       <!-- 3. 工作区视图插槽 (铺满剩余视口空间) -->
-      <div class="flex-1 px-8 pb-6 overflow-hidden flex flex-col h-full">
+      <div
+        class="flex-1 px-3 sm:px-6 lg:px-8 pb-3 lg:pb-6 overflow-hidden flex flex-col h-full"
+      >
         <slot />
       </div>
     </main>
@@ -371,3 +383,10 @@ const handleNotify = () => {
     </el-dialog>
   </div>
 </template>
+
+<style scoped>
+:deep(.mobile-nav-drawer .el-drawer__body) {
+  padding: 0;
+  overflow: hidden;
+}
+</style>

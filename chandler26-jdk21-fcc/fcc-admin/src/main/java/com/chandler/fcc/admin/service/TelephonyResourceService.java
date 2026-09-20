@@ -1,11 +1,14 @@
 package com.chandler.fcc.admin.service;
 
+import cn.dev33.satoken.stp.StpUtil;
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
+import com.chandler.fcc.admin.infrastructure.persistence.entity.FlowDefinitionEntity;
 import com.chandler.fcc.admin.infrastructure.persistence.entity.DidNumberEntity;
 import com.chandler.fcc.admin.infrastructure.persistence.entity.OutboundNumberEntity;
 import com.chandler.fcc.admin.infrastructure.persistence.entity.TelephonyNodeEntity;
 import com.chandler.fcc.admin.infrastructure.persistence.entity.TelephonyTrunkEntity;
 import com.chandler.fcc.admin.infrastructure.persistence.mapper.DidNumberMapper;
+import com.chandler.fcc.admin.infrastructure.persistence.mapper.FlowDefinitionMapper;
 import com.chandler.fcc.admin.infrastructure.persistence.mapper.OutboundNumberMapper;
 import com.chandler.fcc.admin.infrastructure.persistence.mapper.TelephonyNodeMapper;
 import com.chandler.fcc.admin.infrastructure.persistence.mapper.TelephonyTrunkMapper;
@@ -40,6 +43,7 @@ public class TelephonyResourceService {
 
     private final TelephonyTrunkMapper trunkMapper;
     private final DidNumberMapper didMapper;
+    private final FlowDefinitionMapper flowMapper;
     private final OutboundNumberMapper outboundMapper;
     private final TelephonyNodeMapper nodeMapper;
 
@@ -174,6 +178,86 @@ public class TelephonyResourceService {
                     .createdAt(d.getCreatedAt())
                     .build();
         }).toList();
+    }
+
+    /**
+     * 将一个有效 DID 被叫号码绑定到呼入流程。
+     *
+     * <p>绑定属于入口路由配置，不进入流程版本 JSON。运行端收到 Channel 事件后按真实被叫号码
+     * 查询该绑定，并固定当时最新的已发布版本。</p>
+     *
+     * @param didId DID 主键 ID
+     * @param flowKey 呼入流程稳定代码
+     * @throws IllegalArgumentException DID 或流程不存在，或目标不是呼入流程
+     */
+    @Transactional(rollbackFor = Exception.class)
+    public void bindDidFlow(Long didId, String flowKey) {
+        StpUtil.checkPermission("resource:write");
+        DidNumberEntity did = requireEnabledDid(didId);
+        String normalizedFlowKey = flowKey == null ? "" : flowKey.trim();
+        FlowDefinitionEntity flow = flowMapper.selectOne(
+            new LambdaQueryWrapper<FlowDefinitionEntity>()
+                .eq(FlowDefinitionEntity::getFlowKey, normalizedFlowKey)
+                .eq(FlowDefinitionEntity::getModelType, "INBOUND")
+                .isNull(FlowDefinitionEntity::getDeletedAt)
+        );
+        if (flow == null) {
+            throw new IllegalArgumentException("呼入流程不存在: " + normalizedFlowKey);
+        }
+        did.setRouteKey(normalizedFlowKey);
+        did.setUpdatedAt(LocalDateTime.now());
+        didMapper.updateById(did);
+        log.info("[通信资源] 已绑定DID呼入流程 didId={}, flowKey={}", didId, normalizedFlowKey);
+    }
+
+    /**
+     * 解除 DID 被叫号码的流程绑定。
+     *
+     * @param didId DID 主键 ID
+     * @throws IllegalArgumentException DID 不存在
+     */
+    @Transactional(rollbackFor = Exception.class)
+    public void unbindDidFlow(Long didId) {
+        StpUtil.checkPermission("resource:write");
+        DidNumberEntity did = requireDid(didId);
+        did.setRouteKey(null);
+        did.setUpdatedAt(LocalDateTime.now());
+        didMapper.updateById(did);
+        log.info("[通信资源] 已解除DID呼入流程绑定 didId={}", didId);
+    }
+
+    /**
+     * 查询一个仍未删除的 DID。
+     *
+     * @param didId DID 主键 ID
+     * @return DID 持久化实体
+     * @throws IllegalArgumentException DID 不存在
+     */
+    private DidNumberEntity requireDid(Long didId) {
+        DidNumberEntity did = didId == null ? null : didMapper.selectOne(
+            new LambdaQueryWrapper<DidNumberEntity>()
+                .eq(DidNumberEntity::getId, didId)
+                .isNull(DidNumberEntity::getDeletedAt)
+        );
+        if (did == null) {
+            throw new IllegalArgumentException("DID号码不存在: id=" + didId);
+        }
+        return did;
+    }
+
+    /**
+     * 查询一个可建立新呼入绑定的启用 DID。
+     *
+     * @param didId DID 主键 ID
+     * @return 启用的 DID 持久化实体
+     * @throws IllegalArgumentException DID 不存在或已停用
+     */
+    private DidNumberEntity requireEnabledDid(Long didId) {
+        DidNumberEntity did = requireDid(didId);
+        if (!"ENABLED".equals(did.getStatus())) {
+            throw new IllegalArgumentException("DID号码已停用: id=" + didId);
+        }
+        return did;
     }
 
     /**

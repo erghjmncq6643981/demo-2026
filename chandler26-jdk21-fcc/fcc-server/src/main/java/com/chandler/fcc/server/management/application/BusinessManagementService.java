@@ -67,16 +67,34 @@ public class BusinessManagementService {
      *
      * @param id 客户标识，新建时为空
      * @param requestedOwner 新建时的负责坐席
-     * @param record 客户资料
+     * @param name 客户姓名
+     * @param phoneNumber 客户联系电话
+     * @param companyName 客户单位
+     * @param notes 客户备注
+     * @param version 修改时的乐观锁版本
      * @return 客户标识
      */
-    public String save(String id, String requestedOwner, CustomerRecord record) {
+    public String save(
+        String id,
+        String requestedOwner,
+        String name,
+        String phoneNumber,
+        String companyName,
+        String notes,
+        Long version
+    ) {
         identity.requireManagement();
         if (id != null) validateId(id, "客户标识无效");
         String owner = id == null
             ? requireAgent(requestedOwner)
             : requireOwner(mapper.customerOwner(id));
+        CustomerRecord record = new CustomerRecord();
         record.setId(id);
+        record.setName(name);
+        record.setPhoneNumber(phoneNumber);
+        record.setCompanyName(companyName);
+        record.setNotes(notes);
+        record.setVersion(version);
         return customerService.saveFor(owner, record, id == null);
     }
 

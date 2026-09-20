@@ -228,7 +228,7 @@ async function handleTriggerCall(item: CallbackTaskVO) {
   callingId.value = item.id;
   try {
     await callbackApi.call(item.id);
-    toast('已安排回拨，请保持就绪；调度器将在允许时段执行，可在自动外呼查看结果');
+    toast('已安排回拨，请保持就绪；调度器将在允许时段执行');
     await loadTasks();
   } catch (error) {
     toastError(error instanceof Error ? error.message : '安排回拨失败');

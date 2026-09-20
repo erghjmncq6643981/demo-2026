@@ -8,6 +8,7 @@ import com.chandler.fcc.admin.infrastructure.persistence.entity.CallSessionEntit
 import com.chandler.fcc.admin.infrastructure.persistence.entity.CallbackTaskEntity;
 import com.chandler.fcc.admin.infrastructure.persistence.entity.ExtensionEntity;
 import com.chandler.fcc.admin.infrastructure.persistence.entity.FlowDefinitionEntity;
+import com.chandler.fcc.admin.infrastructure.persistence.entity.DidNumberEntity;
 import com.chandler.fcc.admin.infrastructure.persistence.mapper.AdminCallSessionMapper;
 import com.chandler.fcc.admin.infrastructure.persistence.mapper.AgentMapper;
 import com.chandler.fcc.admin.infrastructure.persistence.mapper.CallbackTaskMapper;
@@ -17,6 +18,7 @@ import com.chandler.fcc.admin.flow.controller.req.FlowPageReq;
 import com.chandler.fcc.admin.flow.controller.req.PublishFlowReq;
 import com.chandler.fcc.admin.flow.controller.req.SaveFlowDraftReq;
 import com.chandler.fcc.admin.infrastructure.persistence.mapper.FlowDefinitionMapper;
+import com.chandler.fcc.admin.infrastructure.persistence.mapper.DidNumberMapper;
 import com.chandler.fcc.admin.model.PageResult;
 import com.chandler.fcc.admin.model.dto.*;
 import com.chandler.fcc.admin.model.vo.*;
@@ -72,6 +74,9 @@ public class P0P1CoreFeaturesTest {
 
   @Autowired
   private FlowDefinitionMapper flowMapper;
+
+  @Autowired
+  private DidNumberMapper didNumberMapper;
 
   /**
    * 2. 测试未接待回拨待办总池派单与一键回拨
@@ -189,11 +194,22 @@ public class P0P1CoreFeaturesTest {
         .id(IdUtil.nextId())
         .flowKey("TEST-IVR-FLOW")
         .flowName("测试 IVR 流程")
-        .modelType("INBOUND_CUSTOMER_SERVICE")
+        .modelType("INBOUND")
         .status("DRAFT")
         .currentVersion(0)
         .build();
     flowMapper.insert(fixture);
+    LocalDateTime now = LocalDateTime.now();
+    didNumberMapper.insert(
+      DidNumberEntity.builder()
+        .id(IdUtil.nextId())
+        .phoneNumber("01099990001")
+        .routeKey("TEST-IVR-FLOW")
+        .status("ENABLED")
+        .createdAt(now)
+        .updatedAt(now)
+        .build()
+    );
     // 此用例验证版本持久化，权限边界由独立测试覆盖。
     try (
       var auth = Mockito.mockStatic(StpUtil.class);

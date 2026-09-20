@@ -1,11 +1,15 @@
 <script setup lang="ts">
 import { computed, ref } from "vue";
+import { Plus, Unlink } from "lucide-vue-next";
 import { useFlowEditor } from "../features/flows/composables/useFlowEditor";
+import { useFlowDidBindings } from "../features/flows/composables/useFlowDidBindings";
 import FlowCanvas from "../features/flows/components/FlowCanvas.vue";
 import FlowNodeEditor from "../features/flows/components/FlowNodeEditor.vue";
 import {
   readStagedFlow,
   newInboundFlow,
+  canEditFlowVersion,
+  flowVersionStatusLabel,
   type StagedFlow,
 } from "../features/flows/model/stagedFlow";
 import { flowApi } from "../api/flowApi";
@@ -26,15 +30,29 @@ const {
   error,
   outcome,
   dirty,
+  workingCopy,
   modelNodes,
   reload,
   selectFlow,
   selectFlowPage,
   selectVersion,
   selectVersionPage,
+  beginDraft,
   saveDraft,
   publish,
 } = useFlowEditor();
+const {
+  boundDids,
+  availableDids,
+  loadingDids,
+  didPending,
+  didError,
+  bindingDialog,
+  selectedDidId,
+  openBindingDialog,
+  bindDid,
+  unbindDid,
+} = useFlowDidBindings(selectedFlow);
 const selectedStage = ref("");
 const advanced = ref(false);
 const creating = ref(false);
@@ -52,17 +70,47 @@ const graph = computed(() => {
   }
 });
 const editable = computed(
-  () => !selectedFlow.value?.system && !loading.value && !pending.value,
+  () =>
+    !!selectedFlow.value &&
+    canEditFlowVersion(
+      selectedFlow.value.system,
+      version.value?.publishStatus,
+      workingCopy.value,
+    ) &&
+    !loading.value &&
+    !pending.value,
 );
+const draftVersion = computed(() =>
+  versions.value.find((item) => item.publishStatus === "DRAFT"),
+);
+const versionState = computed(() => {
+  if (workingCopy.value) return "新草稿 · 尚未保存";
+  if (!version.value) return "尚未创建版本";
+  return `${version.value.version} · ${flowVersionStatusLabel(version.value.publishStatus)}`;
+});
+function startFirstDraft() {
+  beginDraft(JSON.stringify(newInboundFlow(), null, 2));
+  selectedStage.value = "ENTRY";
+}
+function copyAsDraft() {
+  if (!definition.value) return;
+  beginDraft(definition.value);
+}
+async function openExistingDraft() {
+  if (draftVersion.value) await selectVersion(draftVersion.value.version);
+}
 function updateGraph(value: StagedFlow) {
   definition.value = JSON.stringify(value, null, 2);
 }
 async function createFlow() {
   createPending.value = true;
   try {
-    await flowApi.create(createKey.value, createName.value);
+    const created = await flowApi.create(createKey.value, createName.value);
     creating.value = false;
+    selectedFlow.value = created;
     await reload(1);
+    createKey.value = "";
+    createName.value = "";
   } catch (cause) {
     error.value = errorText(cause);
   } finally {
@@ -81,19 +129,24 @@ async function createFlow() {
         <el-button :loading="loading" :disabled="pending" @click="reload()"
           >刷新</el-button
         >
-        <el-button :disabled="!editable || !definition" @click="saveDraft"
+        <el-button :disabled="!editable || !definition || !dirty" @click="saveDraft"
           >保存草稿</el-button
         >
         <el-button
           type="primary"
-          :disabled="!editable || dirty || version?.publishStatus !== 'DRAFT'"
+          :disabled="
+            !editable ||
+            dirty ||
+            version?.publishStatus !== 'DRAFT' ||
+            !boundDids.length
+          "
           @click="publish"
           >发布版本</el-button
         >
       </div>
     </header>
-    <div v-if="error || graphError" role="alert" class="message error">
-      {{ error || graphError }}
+    <div v-if="error || graphError || didError" role="alert" class="message error">
+      {{ error || graphError || didError }}
     </div>
     <div v-if="outcome" role="status" class="message">{{ outcome }}</div>
     <div class="body">
@@ -136,8 +189,8 @@ async function createFlow() {
         <div class="version-bar">
           <el-select
             :model-value="selectedVersion"
-            :disabled="loading || pending"
-            placeholder="尚无版本"
+            :disabled="loading || pending || workingCopy || !versions.length"
+            placeholder="尚未创建版本"
             style="width: 220px"
             @update:model-value="selectVersion"
           >
@@ -145,7 +198,7 @@ async function createFlow() {
               v-for="item in versions"
               :key="item.version"
               :value="item.version"
-              :label="item.version + ' · ' + item.publishStatus"
+              :label="item.version + ' · ' + flowVersionStatusLabel(item.publishStatus)"
             />
           </el-select>
           <el-pagination
@@ -158,15 +211,71 @@ async function createFlow() {
             :disabled="loading || pending"
             @current-change="selectVersionPage"
           />
+          <span class="version-state">{{ versionState }}</span>
           <span v-if="dirty" class="dirty">有未保存修改</span>
-          <el-button text @click="advanced = !advanced">{{
+          <el-button
+            v-if="
+              version?.publishStatus === 'PUBLISHED' &&
+              !selectedFlow.system &&
+              !draftVersion
+            "
+            text
+            type="primary"
+            @click="copyAsDraft"
+            >基于此版本新建草稿</el-button
+          >
+          <el-button
+            v-else-if="
+              version?.publishStatus !== 'DRAFT' &&
+              !selectedFlow.system &&
+              draftVersion
+            "
+            text
+            type="primary"
+            @click="openExistingDraft"
+            >返回现有草稿</el-button
+          >
+          <el-button v-if="definition" text @click="advanced = !advanced">{{
             advanced ? "返回画布" : "高级定义"
           }}</el-button>
         </div>
+        <section class="entry-bindings" aria-label="呼入被叫号码">
+          <div class="entry-copy">
+            <strong>被叫号码</strong>
+            <span>来电按 DID 选择此流程，并固定当时的已发布版本</span>
+          </div>
+          <div class="did-list" v-loading="loadingDids">
+            <span v-if="!boundDids.length" class="empty-inline">尚未绑定 DID</span>
+            <span v-for="did in boundDids" :key="did.id" class="did-number">
+              {{ did.phoneNumber }}
+              <el-tooltip content="解除绑定" placement="top">
+                <el-button
+                  v-if="!selectedFlow.system"
+                  text
+                  circle
+                  :icon="Unlink"
+                  :disabled="didPending"
+                  aria-label="解除被叫号码绑定"
+                  @click="unbindDid(did)"
+                />
+              </el-tooltip>
+            </span>
+            <el-button
+              v-if="!selectedFlow.system"
+              :icon="Plus"
+              :disabled="didPending"
+              @click="openBindingDialog"
+              >绑定号码</el-button
+            >
+          </div>
+        </section>
         <div v-if="!definition" class="empty">
-          <p>此流程尚无阶段定义。</p>
-          <el-button type="primary" @click="updateGraph(newInboundFlow())"
-            >配置呼入阶段</el-button
+          <p>此流程尚未创建版本。</p>
+          <el-button
+            v-if="!selectedFlow.system"
+            type="primary"
+            @click="startFirstDraft"
+            >创建首个草稿版本</el-button
           >
         </div>
         <textarea
@@ -220,6 +329,46 @@ async function createFlow() {
           >创建</el-button
         ></template
       >
+    </el-dialog>
+    <el-dialog
+      v-model="bindingDialog"
+      title="绑定呼入被叫号码"
+      width="min(460px, 92vw)"
+    >
+      <el-form label-position="top">
+        <el-form-item label="未绑定 DID">
+          <el-select
+            v-model="selectedDidId"
+            filterable
+            placeholder="选择已录入的被叫号码"
+            style="width: 100%"
+          >
+            <el-option
+              v-for="did in availableDids"
+              :key="did.id"
+              :label="
+                did.routeKey
+                  ? `${did.phoneNumber} · 当前 ${did.routeKey}`
+                  : did.phoneNumber
+              "
+              :value="did.id"
+            />
+          </el-select>
+        </el-form-item>
+        <p v-if="!availableDids.length" class="dialog-hint">
+          没有可绑定号码，请先在通信资源中录入 DID。
+        </p>
+      </el-form>
+      <template #footer>
+        <el-button @click="bindingDialog = false">取消</el-button>
+        <el-button
+          type="primary"
+          :loading="didPending"
+          :disabled="!selectedDidId"
+          @click="bindDid"
+          >确认绑定</el-button
+        >
+      </template>
     </el-dialog>
   </section>
 </template>
@@ -309,6 +458,53 @@ async function createFlow() {
   border-bottom: 1px solid #e2e8f0;
   flex-wrap: wrap;
 }
+.version-state {
+  color: #475569;
+  font-size: 12px;
+}
+.entry-bindings {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  padding: 10px 18px;
+  border-bottom: 1px solid #e2e8f0;
+  background: #f8fafc;
+}
+.entry-copy {
+  display: grid;
+  gap: 3px;
+  font-size: 12px;
+}
+.entry-copy span,
+.empty-inline,
+.dialog-hint {
+  color: #718096;
+  font-size: 12px;
+}
+.did-list {
+  display: flex;
+  justify-content: flex-end;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+  min-height: 32px;
+}
+.did-number {
+  display: inline-flex;
+  align-items: center;
+  gap: 2px;
+  padding-left: 9px;
+  border: 1px solid #cbd5e1;
+  border-radius: 6px;
+  background: #fff;
+  color: #334155;
+  font-size: 12px;
+}
+.did-number :deep(.el-button) {
+  width: 28px;
+  height: 28px;
+}
 .canvas-layout {
   display: flex;
   flex: 1;
@@ -378,6 +574,13 @@ footer {
   }
   .workspace {
     min-height: 650px;
+  }
+  .entry-bindings {
+    align-items: flex-start;
+    flex-direction: column;
+  }
+  .did-list {
+    justify-content: flex-start;
   }
 }
 </style>

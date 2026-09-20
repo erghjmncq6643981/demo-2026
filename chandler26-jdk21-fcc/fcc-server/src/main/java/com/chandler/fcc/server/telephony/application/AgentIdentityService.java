@@ -1,13 +1,8 @@
 package com.chandler.fcc.server.telephony.application;
 
-import com.fasterxml.jackson.databind.JsonNode;
-import com.fasterxml.jackson.databind.ObjectMapper;
-import java.net.URI;
-import java.net.http.HttpClient;
-import java.net.http.HttpRequest;
-import java.net.http.HttpResponse;
-import java.time.Duration;
-import org.springframework.beans.factory.annotation.Value;
+import com.chandler.fcc.server.telephony.application.identity.IdentityProfile;
+import com.chandler.fcc.server.telephony.application.port.IdentityProfilePort;
+import lombok.RequiredArgsConstructor;
 import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
 import org.springframework.web.context.request.RequestContextHolder;
@@ -18,12 +13,14 @@ import org.springframework.web.server.ResponseStatusException;
  * 通过管理服务验证坐席令牌，控制面不信任调用方声明的工号。
  */
 @Service
+@RequiredArgsConstructor
 public class AgentIdentityService {
 
-    private final ObjectMapper mapper = new ObjectMapper();
+    private static final String ACCOUNT_AGENT = "AGENT";
+    private static final String ACCOUNT_CONSOLE = "CONSOLE";
+    private static final String BUSINESS_MANAGE = "business:manage";
 
-    @Value("${fcc.admin.base-url:http://127.0.0.1:8089}")
-    private String adminBaseUrl;
+    private final IdentityProfilePort identityProfilePort;
 
     /**
      * 验证当前 HTTP 请求的坐席身份及显式工号。
@@ -48,7 +45,7 @@ public class AgentIdentityService {
      * @return 认证坐席工号
      */
     public String authenticate(String token) {
-        return authenticateProfile(token).path("loginId").asText();
+        return authenticateProfile(token, ACCOUNT_AGENT).getLoginId();
     }
 
     /**
@@ -77,18 +74,8 @@ public class AgentIdentityService {
      * @return 可信坐席主体
      */
     public Principal authenticatePrincipal(String token) {
-        JsonNode user = authenticateProfile(token);
-        return new Principal(user.path("loginId").asText());
-    }
-
-    /**
-     * 在线读取身份资料。
-     *
-     * @param token 不得记录的登录令牌
-     * @return 已验证的身份资料
-     */
-    private JsonNode authenticateProfile(String token) {
-        return authenticateProfile(token, "AGENT");
+        IdentityProfile profile = authenticateProfile(token, ACCOUNT_AGENT);
+        return new Principal(profile.getLoginId());
     }
 
     /**
@@ -98,16 +85,17 @@ public class AgentIdentityService {
      */
     public Principal requireManagement() {
         var attributes = (ServletRequestAttributes) RequestContextHolder.getRequestAttributes();
-        var user = authenticateProfile(
+        IdentityProfile profile = authenticateProfile(
             attributes == null ? null : attributes.getRequest().getHeader("satoken"),
-            "CONSOLE"
+            ACCOUNT_CONSOLE
         );
         if (
-            !"ADMIN".equals(user.path("role").asText()) &&
-            !"OPERATOR".equals(user.path("role").asText()) &&
-            !"SUPER_ADMIN".equals(user.path("role").asText())
-        ) throw new ResponseStatusException(HttpStatus.FORBIDDEN, "仅系统管理员可以管理客户和外呼任务");
-        return new Principal(user.path("loginId").asText());
+            !profile.getPermissions().contains(BUSINESS_MANAGE) &&
+            !profile.getPermissions().contains("*")
+        ) {
+            throw new ResponseStatusException(HttpStatus.FORBIDDEN, "缺少客户和自动外呼管理权限");
+        }
+        return new Principal(profile.getLoginId());
     }
 
     /**
@@ -117,50 +105,18 @@ public class AgentIdentityService {
      * @param accountType 必须匹配的账户类型
      * @return 身份资料
      */
-    private JsonNode authenticateProfile(String token, String accountType) {
-        if (token == null || token.isBlank()) throw new ResponseStatusException(
-            HttpStatus.UNAUTHORIZED,
-            "请先登录"
-        );
-        try {
-            var request = HttpRequest.newBuilder(
-                URI.create(adminBaseUrl.replaceAll("/+$", "") + "/api/admin/auth/me")
-            )
-                .timeout(Duration.ofSeconds(3))
-                .header("satoken", token)
-                .GET()
-                .build();
-            var response = createHttpClient().send(
-                request,
-                HttpResponse.BodyHandlers.ofString()
-            );
-            JsonNode root = mapper.readTree(response.body());
-            JsonNode user = root.path("data");
-            if (
-                response.statusCode() != 200 ||
-                root.path("code").asInt() != 200 ||
-                !accountType.equals(user.path("accountType").asText()) ||
-                user.path("loginId").asText().isBlank()
-            ) {
-                throw new ResponseStatusException(HttpStatus.UNAUTHORIZED, "坐席登录已失效");
-            }
-            return user;
-        } catch (ResponseStatusException e) {
-            throw e;
-        } catch (InterruptedException e) {
-            Thread.currentThread().interrupt();
-            throw new ResponseStatusException(HttpStatus.SERVICE_UNAVAILABLE, "身份验证暂不可用");
-        } catch (Exception e) {
-            throw new ResponseStatusException(HttpStatus.SERVICE_UNAVAILABLE, "身份验证暂不可用");
+    private IdentityProfile authenticateProfile(String token, String accountType) {
+        if (token == null || token.isBlank()) {
+            throw new ResponseStatusException(HttpStatus.UNAUTHORIZED, "请先登录");
         }
-    }
-
-    /**
-     * 在真正发起认证时创建 HTTP 客户端，避免应用装配阶段产生网络资源副作用。
-     *
-     * @return 带连接超时的 JDK HTTP 客户端
-     */
-    private HttpClient createHttpClient() {
-        return HttpClient.newBuilder().connectTimeout(Duration.ofSeconds(2)).build();
+        IdentityProfile profile = identityProfilePort.authenticate(token);
+        if (
+            !accountType.equals(profile.getAccountType()) ||
+            profile.getLoginId() == null ||
+            profile.getLoginId().isBlank()
+        ) {
+            throw new ResponseStatusException(HttpStatus.UNAUTHORIZED, "登录已失效");
+        }
+        return profile;
     }
 }

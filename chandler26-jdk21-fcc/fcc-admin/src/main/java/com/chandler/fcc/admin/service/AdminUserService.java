@@ -46,6 +46,58 @@ public class AdminUserService {
     private final AdminUserMapper adminUserMapper;
 
     /**
+     * 在全新空库中创建首个系统管理员。
+     *
+     * <p>该方法不会覆盖或重置已有账号。相同管理员已成功初始化时返回 {@code false}，
+     * 数据库存在其他账号时拒绝继续，避免部署变量被误用为第二条管理员创建通道。</p>
+     *
+     * @param username 首个管理员登录账号
+     * @param realName 首个管理员显示姓名
+     * @param rawPassword 首个管理员明文口令
+     * @return 本次实际创建账号时返回 {@code true}，目标管理员已存在时返回 {@code false}
+     * @throws IllegalArgumentException 配置字段不符合账号规则
+     * @throws IllegalStateException 数据库已经包含其他控制台账号
+     */
+    @Transactional(rollbackFor = Exception.class)
+    public boolean bootstrapFirstAdmin(String username, String realName, String rawPassword) {
+        String normalizedUsername = requireText(username, "首个管理员账号", 64);
+        String normalizedRealName = requireText(realName, "首个管理员姓名", 128);
+        if (rawPassword == null || rawPassword.length() < 8 || rawPassword.length() > 64) {
+            throw new IllegalArgumentException("首个管理员口令长度需在 8 到 64 之间");
+        }
+
+        List<AdminUserEntity> existingUsers = adminUserMapper.selectList(
+            new LambdaQueryWrapper<AdminUserEntity>().orderByAsc(AdminUserEntity::getCreatedAt)
+        );
+        if (!existingUsers.isEmpty()) {
+            boolean alreadyBootstrapped = existingUsers.size() == 1
+                && existingUsers.getFirst().getDeletedAt() == null
+                && normalizedUsername.equals(existingUsers.getFirst().getUsername())
+                && AuthRoleEnum.ADMIN.getCode().equals(existingUsers.getFirst().getRoleCode());
+            if (alreadyBootstrapped) {
+                return false;
+            }
+            throw new IllegalStateException("控制台账号已存在，禁止执行首个管理员初始化");
+        }
+
+        LocalDateTime now = LocalDateTime.now();
+        AdminUserEntity entity = AdminUserEntity.builder()
+            .id(IdUtil.nextId())
+            .username(normalizedUsername)
+            .realName(normalizedRealName)
+            .passwordHash(PasswordHasher.hash(rawPassword))
+            .passwordUpdatedAt(now)
+            .roleCode(AuthRoleEnum.ADMIN.getCode())
+            .status(STATUS_ENABLED)
+            .createdAt(now)
+            .updatedAt(now)
+            .build();
+        adminUserMapper.insert(entity);
+        log.info("[AdminUserService] 已初始化首个系统管理员: id={}, username={}", entity.getId(), entity.getUsername());
+        return true;
+    }
+
+    /**
      * 创建控制台账号
      *
      * @param req 账号创建入参
@@ -254,6 +306,26 @@ public class AdminUserService {
         String normalized = status.trim().toUpperCase();
         if (!STATUS_ENABLED.equals(normalized) && !STATUS_DISABLED.equals(normalized)) {
             throw new IllegalArgumentException("非法账号状态: " + status + "，仅允许 ENABLED / DISABLED");
+        }
+        return normalized;
+    }
+
+    /**
+     * 校验首个管理员初始化使用的必填文本。
+     *
+     * @param value 原始文本
+     * @param label 字段名称
+     * @param maxLength 最大字符数
+     * @return 去除首尾空白后的文本
+     * @throws IllegalArgumentException 文本为空或超过长度限制
+     */
+    private String requireText(String value, String label, int maxLength) {
+        if (value == null || value.isBlank()) {
+            throw new IllegalArgumentException(label + "不能为空");
+        }
+        String normalized = value.trim();
+        if (normalized.length() > maxLength) {
+            throw new IllegalArgumentException(label + "长度不能超过 " + maxLength);
         }
         return normalized;
     }

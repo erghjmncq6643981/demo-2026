@@ -109,6 +109,9 @@ Sidecar 已有 `event/normalizer_test.go`、`rpc/handler_test.go`、`db/models_t
 - 对大于 JavaScript 安全整数范围的 `Long` ID 做序列化与前端透传测试。
 - 坐席/组/分机变更的后端授权和操作审计。
 - 流程草稿保存、发布失败、运行时 reload 未确认和版本回看。
+- 空库首个管理员 bootstrap：默认关闭、缺少配置失败、仅首次创建、已有账号不覆盖口令。
+- DID 被叫号码与流程绑定：不存在流程拒绝、一个号码单一归属、无启用 DID 的呼入流程拒绝发布。
+- Flow Studio：首个草稿由服务端分配版本号，已发布版本只读，BRANCH 的 else 与 ROUTE 共用同一个 `defaultRoute`。
 - 录音无权限、文件不存在、范围请求和下载审计。
 - 回拨任务重复指派、重复发起和并发状态变化。
 
@@ -159,7 +162,7 @@ git diff --check
 
 ## 6. 结果记录
 
-2026-09-20：使用本机 JDK 21 后 Java compile 和 Flow/Action/Event Inbox 等 20 个定向测试通过；完整 `mvn -q test` 因本地 NATS 不可连接导致集成测试失败。管理端构建及 4 个治理测试通过，坐席端既有 10 个测试通过。定向 Java 命令、部署顺序和新增测试详见 [契约修复记录](fcc-contract-remediation.md)。此前运维端构建通过；Go 工具链限制仍存在。真实数据库、NATS、ESL、SIP、媒体及登录态业务页面回归尚未完成。
+2026-09-20：使用本机 JDK 21 后 Java compile 和 Flow/Action/Event Inbox 等 20 个定向测试通过；管理端构建及 4 个治理测试通过，坐席端既有 10 个测试通过。本机 NATS Server 2.15.0 已在 `127.0.0.1:4222` 运行，监控端口为 `8222`；应用测试日志确认连接成功，JetStream 文件存储流 `FCC_EVENTS` 已创建并订阅 `fs.event.*.*`。完整 `mvn -q test` 中 `fcc-server` 共运行 38 项，0 项断言失败、9 项环境错误、1 项跳过；当前错误来自 MySQL JDBC、Redis 和 Windows loopback 建连，仍不能记为全量通过。定向 Java 命令、部署顺序和新增测试详见 [契约修复记录](fcc-contract-remediation.md)。Go 工具链限制仍存在；Sidecar 真实事件写入/重投、ESL、SIP、媒体及登录态业务页面回归尚未完成。
 
 交付说明必须区分：
 

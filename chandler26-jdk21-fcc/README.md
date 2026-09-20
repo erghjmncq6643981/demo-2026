@@ -9,9 +9,9 @@ The earlier statement that this repository contained only a skeleton is no longe
 | Module | Responsibility |
 | --- | --- |
 | `fcc-common` | shared FCC contracts, command/event DTOs, enums, entities, and utilities |
-| `fcc-server` | executable control service (default port `8085`): call control, flow/actions, NATS commands/events, runtime persistence, recording metadata, and agent WebSocket |
+| `fcc-server` | executable runtime service (default port `8085`): published-flow execution, call control, customer/outbound facts and scheduling, NATS commands/events, recording metadata, and agent WebSocket |
 | `fcc-server-starter` | client SDK boundary for future remote server contracts; currently empty because there is no Feign consumer |
-| `fcc-admin` | executable administration service (default port `8089`): authentication, agents/groups/endpoints, extensions, CDR/recordings, callbacks, flows, resources, configuration, and fleet administration |
+| `fcc-admin` | executable administration service (default port `8089`): authentication plus maintenance/query APIs for agents/groups/endpoints, extensions, CDR/recordings, callbacks, flows, customers, outbound jobs, resources, configuration, and fleet |
 | `fcc-admin-starter` | client SDK boundary for future remote admin contracts; currently empty because there is no Feign consumer |
 
 Runtime bootstrap, configuration, and tests live with their executable service. The starter modules must not depend on service implementations; when an actual remote consumer appears, they may expose only the required client contract.
@@ -30,6 +30,8 @@ fcc-client-web :8888 --> fcc-admin :8089
 ```
 
 Java does not connect to ESL directly.
+
+The control/runtime split is: maintain and inspect through `fcc-admin`; consume and execute through `fcc-server`. Flow definitions are drafted, validated, and published in admin, then pinned and executed by server. Customer and automatic-outbound screens also live in admin, while their facts, scheduler, attempts, and telephony side effects remain in server. The agent client does not expose either management workspace.
 
 ## Implemented contracts
 
@@ -58,6 +60,7 @@ The `/api/admin` surface includes:
 - extensions and IVR binding;
 - paginated CDR, statistics, detail, recordings, and callback tasks;
 - paginated flow summaries and version summaries, on-demand version details, drafts, and publication;
+- customer maintenance plus automatic-outbound task creation, control, and result inspection, delegated to fcc-server after a second online permission check;
 - telephony resources, system configuration, and client fleet data.
 
 ## Storage
@@ -85,6 +88,21 @@ Both executable services use environment-driven configuration. Important variabl
 - `FCC_RECORDING_BASE_DIR`
 - `FCC_ADMIN_BASE_URL`, `FCC_SERVER_BASE_URL`, `FCC_FLOW_RELOAD_TOKEN`, `FCC_WS_ALLOWED_ORIGINS`
 - `FCC_SIP_WS_URL`, `FCC_SIP_DOMAIN`, `FCC_SIP_ENCRYPTION_KEY` (admin only)
+
+`MYSQL_PASSWORD` has no source-code default and must be supplied by the deployment environment.
+
+### First administrator
+
+A fresh database has no default account. Create the first administrator once by starting `fcc-admin` with:
+
+```text
+FCC_BOOTSTRAP_ADMIN_ENABLED=true
+FCC_BOOTSTRAP_ADMIN_USERNAME=<operator-chosen username>
+FCC_BOOTSTRAP_ADMIN_REAL_NAME=<display name>
+FCC_BOOTSTRAP_ADMIN_PASSWORD=<8-64 character secret>
+```
+
+The service stores only a PBKDF2 hash. It never logs or returns the password. Bootstrap does nothing when disabled, is idempotent only for the same already-created administrator, and refuses to create or overwrite an account when any other console account exists. Remove all `FCC_BOOTSTRAP_ADMIN_*` variables and restart immediately after the first successful login.
 
 The Java node ID must exactly match the Sidecar `NODE_ID`. Database, Redis, NATS, Sidecar, SIP, and recording credentials/paths must be supplied by deployment configuration rather than committed defaults.
 

@@ -42,8 +42,6 @@
         <span>坐席监控</span>
         <span class="text-[10px] opacity-70 bg-black/10 px-1 py-0.2 rounded font-mono hidden md:inline">F2</span>
       </button>
-      <button @click="currentTab = 'customers'" class="px-4 py-2 rounded-xl font-bold" :class="currentTab === 'customers' ? 'bg-brand-500 text-white' : 'text-slate-600'">客户资料</button>
-      <button @click="currentTab = 'dial-jobs'" class="px-4 py-2 rounded-xl font-bold" :class="currentTab === 'dial-jobs' ? 'bg-brand-500 text-white' : 'text-slate-600'">自动外呼</button>
     </div>
 
     <!-- 右侧: 智能外呼发起栏 -->
@@ -83,7 +81,7 @@ import { useAgentStore } from '../../stores/agentStore';
 import { triggerOutboundCall } from '../../api/telephonyApi';
 import { toastError } from '../../utils/feedback';
 
-const currentTab = defineModel<'callback' | 'records' | 'agents' | 'customers' | 'dial-jobs'>('currentTab', { default: 'callback' });
+const currentTab = defineModel<'callback' | 'records' | 'agents'>('currentTab', { default: 'callback' });
 
 const outboundPhone = ref('');
 const isCalling = ref(false);

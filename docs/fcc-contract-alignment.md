@@ -15,6 +15,7 @@
 | F01/F04 | 保存、发布和运行加载统一验证固定阶段 IVR；拒绝旧 DID_DIRECT、未实现能力和未知字段 |
 | F02/F03 | 提交后通知、服务间鉴权、编译失败返回失败并保留旧节点；检查异步通知响应 |
 | F05/F06 | 流程/版本列表均为分页摘要，完整定义按需加载；旧仿真接口已移除，通话过程只展示持久执行事实 |
+| B01 | 客户和自动外呼只在 admin-web 维护/查看；fcc-admin 校验 `business:manage` 后转发当前令牌，fcc-server 在线复核数据库当前控制台身份和权限后保存事实、调度并执行；坐席端管理工作台已移除 |
 
 证据入口：[控制用例](../chandler26-jdk21-fcc/fcc-server/src/main/java/com/chandler/fcc/server/telephony/application/CallControlService.java)、[身份验证](../chandler26-jdk21-fcc/fcc-server/src/main/java/com/chandler/fcc/server/telephony/application/AgentIdentityService.java)、[SIP 配置](../chandler26-jdk21-fcc/fcc-admin/src/main/java/com/chandler/fcc/admin/service/AgentSipConfigService.java)、[共享定义校验](../chandler26-jdk21-fcc/fcc-common/src/main/java/com/chandler/fcc/common/protocol/FlowDefinitionValidator.java)、[Flow Studio 服务](../chandler26-jdk21-fcc/fcc-admin/src/main/java/com/chandler/fcc/admin/flow/application/FlowStudioService.java)、[动作执行入口](../chandler26-jdk21-fcc/fcc-server/src/main/java/com/chandler/fcc/server/flow/application/FlowActionExecutionService.java)。
 
@@ -32,4 +33,4 @@
 
 坐席 outbound/hangup/hold/dtmf/supervise/transfer 与 Java 路径对应；流程版本和草稿字段对应。DTMF 已统一从控制面发送，仍需验证目标话道实际收号。录音规范为 Event.Recording、category=record，Sidecar 保留规范 FNode 方法。
 
-JDK 21 编译、Flow/Action/Event Inbox 等 20 个定向测试、坐席端 10 个既有测试及管理端 4 个治理测试通过；全量 Java 测试因本地 NATS 不可连接失败。没有全量接口无差异或端到端通过结论。
+JDK 21 编译、Flow/Action/Event Inbox 等 20 个定向测试、坐席端 10 个既有测试及管理端 4 个治理测试通过。本机 NATS Server 2.15.0 与 `FCC_EVENTS` JetStream 流已启动，应用测试日志确认连接成功；完整 `mvn -q test` 中 `fcc-server` 共运行 38 项，0 项断言失败、9 项环境错误、1 项跳过，仍因 MySQL JDBC、Redis 和 Windows loopback 建连错误未通过。没有全量接口无差异或端到端通过结论。

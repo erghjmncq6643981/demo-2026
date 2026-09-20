@@ -1,6 +1,12 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { parseFlowDefinition } from '../src/features/flows/model/flowDefinition.ts';
+import {
+  canEditFlowVersion,
+  flowVersionStatusLabel,
+  newInboundFlow,
+  updateDefaultRoute,
+} from '../src/features/flows/model/stagedFlow.ts';
 import { buildTree } from '../src/features/groups/model/groupTree.ts';
 import { toCallRecord } from '../src/features/cdr/model/callRecord.ts';
 
@@ -20,6 +26,30 @@ test('flow editor rejects invalid JSON, arrays and null', () => {
     assert.throws(() => parseFlowDefinition(input));
   }
   assert.deepEqual(parseFlowDefinition('{"nodes":[]}'), { nodes: [] });
+});
+
+test('new inbound flow creates an explicit editable else route', () => {
+  const initial = newInboundFlow();
+  const changed = updateDefaultRoute(initial, {
+    targetType: 'GROUP',
+    target: 'VIP_SUPPORT',
+    queueSeconds: 45,
+  });
+  assert.equal(initial.defaultRoute?.target, '');
+  assert.deepEqual(changed.defaultRoute, {
+    targetType: 'GROUP',
+    target: 'VIP_SUPPORT',
+    queueSeconds: 45,
+  });
+});
+
+test('published flow versions remain read-only until a new working copy starts', () => {
+  assert.equal(canEditFlowVersion(false, 'PUBLISHED', false), false);
+  assert.equal(canEditFlowVersion(false, 'PUBLISHED', true), true);
+  assert.equal(canEditFlowVersion(false, 'DRAFT', false), true);
+  assert.equal(canEditFlowVersion(true, 'DRAFT', true), false);
+  assert.equal(flowVersionStatusLabel('DRAFT'), '草稿');
+  assert.equal(flowVersionStatusLabel('PUBLISHED'), '已发布');
 });
 
 test('group tree preserves large string IDs and resolves child-first ordering', () => {

@@ -21,9 +21,9 @@
 - 坐席端 4 个测试文件、10 个测试通过。
 - 管理端 4 个模型测试通过，覆盖流程 JSON、组树与 CDR 缺失/零值映射。
 - 管理端 `CdrReportView.vue` 格式化后为 1049 行，仍超过 1000 行治理阈值；其状态和接口调用已提取到 `useCdrReport`，后续继续按列表、回拨和详情弹窗拆分。坐席端与运维端本轮未新增超阈值文件。
-- 使用本机 JDK 21 后 Java 编译、Flow/Action/Event Inbox 等 20 个定向测试通过；全量测试因本地 NATS 不可连接失败。新增契约修复及部署配置见 [处理记录](../../docs/fcc-contract-remediation.md)。
+- 使用本机 JDK 21 后 Java 编译、Flow/Action/Event Inbox 等 20 个定向测试通过。本机 NATS Server 2.15.0 与 `FCC_EVENTS` JetStream 流已启动，应用测试日志确认连接成功；完整 `mvn -q test` 中 `fcc-server` 共运行 38 项，0 项断言失败、9 项环境错误、1 项跳过，仍因 MySQL JDBC、Redis 和 Windows loopback 建连错误不能记为全量通过。新增契约修复及部署配置见 [处理记录](../../docs/fcc-contract-remediation.md)。
 - Go 构建和测试被工具链阻塞：本机 Go 1.25.4，项目声明 1.27.1，自动下载失败。
-- 未完成真实 PostgreSQL、MySQL、Redis、NATS、ESL、SIP 和媒体端到端验证。构建成功不代表真实通话成功。
+- 未完成真实 PostgreSQL、MySQL、Redis、Sidecar 事件写入/重投、ESL、SIP 和媒体端到端验证。NATS 传输可连接不代表真实通话成功。
 
 ## 剩余工程债务
 

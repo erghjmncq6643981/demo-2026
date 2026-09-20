@@ -10,7 +10,7 @@ spring:
     driver-class-name: com.mysql.cj.jdbc.Driver
     url: jdbc:mysql://${MYSQL_HOST:127.0.0.1}:${MYSQL_PORT:3306}/${MYSQL_DATABASE:chandler26_fcc}?useUnicode=true&characterEncoding=utf-8&serverTimezone=UTC&useSSL=false&allowPublicKeyRetrieval=true
     username: ${MYSQL_USERNAME:fcc}
-    password: ${MYSQL_PASSWORD:123456}
+    password: ${MYSQL_PASSWORD:}
   data:
     redis:
       host: ${REDIS_HOST:127.0.0.1}
@@ -28,6 +28,12 @@ mybatis-plus:
       id-type: input
 
 fcc:
+  bootstrap:
+    admin:
+      enabled: ${FCC_BOOTSTRAP_ADMIN_ENABLED:false}
+      username: ${FCC_BOOTSTRAP_ADMIN_USERNAME:}
+      real-name: ${FCC_BOOTSTRAP_ADMIN_REAL_NAME:系统管理员}
+      password: ${FCC_BOOTSTRAP_ADMIN_PASSWORD:}
   sip:
     encryption-key: ${FCC_SIP_ENCRYPTION_KEY:}
     ws-url: ${FCC_SIP_WS_URL:}

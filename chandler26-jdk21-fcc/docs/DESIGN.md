@@ -36,9 +36,20 @@ fcc-client-web --> fcc-admin :8089
 
 Java 控制面不连接 ESL。FreeSWITCH 命令统一通过 `FNode.*`，节点运维通过显式 Sidecar HTTP Client。
 
-### 2.1 已确认的目标职责（待分阶段实现）
+### 2.1 管理面与运行面职责
 
-fcc-server 统一拥有话机绑定运行流程、呼入、呼出、自动外呼调度、客户资料和 Windows 弹屏业务。自动外呼和客户资料不下沉 Sidecar，也不由客户端维护业务事实。fcc-admin 保留基础配置及管理入口，通过明确 API/消息边界协作，不新增对 fcc-server 实现模块的直接依赖。
+管理面遵循“在 admin 维护/查看，在 server 使用/执行”。这句话描述的是用例入口，不表示把运行事实复制到 admin：fcc-admin 提供统一管理 API、权限校验和审计入口；fcc-server 持有客户、自动外呼和通话运行事实并执行调度与话务动作。两者通过窄 HTTP/消息边界协作，不新增实现模块依赖，也不建立两份可相互覆盖的业务事实。
+
+| 能力 | fcc-admin / admin-web | fcc-server |
+| --- | --- | --- |
+| IVR Flow Model | 创建草稿、维护参数和 if/else、绑定 DID、校验、发布、查看版本 | 加载已发布不可变版本，为新通话固定版本，执行 action 并记录阶段事实 |
+| 客户资料 | 管理员维护与查看入口、`business:manage` 权限校验 | 保存客户事实、号码规范化、坐席归属、来电匹配和弹屏摘要 |
+| 自动外呼 | 创建、暂停、恢复、取消、任务及逐次结果查看入口 | 持久任务、领取租约、时段/频控、发起通话、结果对账和重试 |
+| 通话过程 | 查询 Call、Leg、Bridge、录音和简化执行轨迹 | 写入通话与流程执行事实，处理事件和终态幂等 |
+
+浏览器只访问 `/api/admin/business/**`；fcc-admin 先校验 `business:manage`，再向 `/internal/business/**` 转发当前令牌。fcc-server 不信任转发方声明的角色，而是在线调用 fcc-admin `/api/admin/auth/me`，要求 `accountType=CONSOLE` 且权限含 `business:manage` 或 `*`。`/auth/me` 每次从数据库重新核验控制台账号状态和角色，因此停用、删除或改权不继续沿用登录时的旧权限。内部接口还需要由部署网络边界限制，不能暴露为面向浏览器的公共 API。
+
+fcc-server 统一拥有话机绑定运行流程、呼入、呼出、自动外呼调度、客户资料和 Windows 弹屏业务。自动外呼和客户资料不下沉 Sidecar，也不由坐席客户端维护业务事实。
 
 弹屏链路为 FreeSWITCH → Sidecar → fcc-server 关联 Call、坐席与客户 → 业务 WebSocket → Windows 客户端执行本机通知。收件人、内容授权、关闭时机、补发规则由 fcc-server 决定；Windows API 由本机客户端调用，服务端不能直接恢复远程桌面窗口。
 
@@ -66,6 +77,8 @@ fcc-server 统一拥有话机绑定运行流程、呼入、呼出、自动外呼
 - `event`：订阅 `fs.event.>` 并驱动 Channel、DTMF、注册和录音事件；
 - `call`：内存会话索引；
 - `flow`：阶段处理、动作执行和流程配置；
+- `management`：承接 fcc-admin 的受控客户与自动外呼管理命令/查询，不向坐席客户端开放维护入口；
+- `customer`、`outbound`：客户事实、自动外呼任务、调度、逐次尝试和结果对账；
 - `infrastructure.persistence`：Call、Leg、Bridge、Event、Command 和 Recording 持久化；
 - `recording`：共享录音路径；
 - `websocket`：话务 REST、Agent WebSocket 和来电弹屏。
@@ -75,12 +88,13 @@ fcc-server 统一拥有话机绑定运行流程、呼入、呼出、自动外呼
 当前包含：
 
 - 登录、当前用户和密码操作；
-- 管理员与坐席账户；
+- 管理员与坐席账户；全新空库可通过显式环境变量执行一次性首个管理员初始化，已有账号时不覆盖口令；
 - 客服组、组员、终端绑定和代班；
 - 分机配置；话机拨号输入工号的运行绑定由 fcc-server 负责；
 - CDR、统计、详情和录音读取；
 - 回拨任务；
 - 流程动作目录、固定模型、分页摘要、版本详情、草稿和发布；
+- 客户资料与自动外呼的维护/查看 API；实际事实、调度和执行仍在 fcc-server；
 - Trunk、DID、外呼号码、节点；
 - 系统配置和客户端版本/硬件记录。
 
@@ -188,9 +202,33 @@ MySQL 是持久事实来源。Redis 只存可重建的运行态和通知。内�
 - 发布后 Redis 通知；
 - 对 `fcc-server` 发送 HTTP reload 通知。
 
+呼入入口和流程版本是两个不同层次。`fcc_did_number.phone_number` 保存 XSwitch/运营商实际送达的被叫 DID，`route_key` 绑定稳定 `flow_key`；同一流程可绑定多个 DID，一个 DID 同时只指向一个流程。Sidecar 将真实 `dest_number` 放入规范 Channel 事件，fcc-server 先按 DID 找到绑定，再固定当时最新的已发布版本。号码不写入版本 JSON，号码调整也不会篡改历史流程版本。Flow Studio 可绑定和解绑已录入 DID；没有启用 DID 的呼入流程不能发布。
+
 发布接口成功表示数据库版本切换完成，运行端状态返回 `PENDING`；这不等于所有运行实例或 FreeSWITCH 节点已验证切换。新通话在创建 Flow Instance 时固定版本快照，存量通话不随发布改写。
 
 可编辑流程只支持 `routeMode=IVR` 的呼入固定阶段：`ENTRY -> MENU -> BRANCH -> ROUTE -> BRIDGE -> CONNECTED -> END`。编辑者只能修改菜单媒体、收号超时、单键 if/else 分支、坐席/技能组目标、排队时限和未接通处理。不接受旧 `DID_DIRECT`、任意 Java 类/方法、脚本、表达式或动态 URL。
+
+版本号由服务端分配，前端不允许手填。无版本流程通过“创建首个草稿版本”进入工作区；已发布和历史版本只读，需要基于已发布版本创建新草稿后才能修改。`BRANCH` 中的 `else` 直接维护唯一的 `defaultRoute`，`ROUTE` 阶段展示和编辑同一份兜底路由，不存在两套相互冲突的数据。
+
+### 8.1 业务闭环参考和模型演进
+
+`call-center-backend` 运行多年，其 XSwitch 多 subject 入口、硬编码 Flow 和历史表结构不是新系统架构模板，但其业务细节作为验收清单：号码入口分流、IVR/直达、排队与顺振、无人/超时出口、录音、评价、漏话回拨、盲转/咨询转/三方、自动外呼确认，以及司机热线等第三方业务回调。`chandler26-jdk17-freeswitch-FCC` 已验证 FNode Dial、ReadDTMF、Bridge、Record、Hangup 的协议链路，作为协议回归参考。
+
+参考旧系统时以“业务输入、判断、动作、持久事实、外部通知、失败出口是否闭环”为抽取单位，不以 Controller、Listener、NATS subject、数据库表或隐藏代码分支为复制单位。旧系统中按运营商拆分 subject 的真实业务含义是保留入口号码、线路/运营商归属和路由上下文；新系统由统一标准事件中的 `node_id`、`dest_number`、DID/Trunk 主数据及固定流程版本承载这些信息。
+
+| 旧系统已打磨的业务语义 | 新系统承载方式 | 当前证据与缺口 |
+| --- | --- | --- |
+| 不同运营商/400 入口、被叫号码与直达入口 | 标准 Channel 事件 + DID 主数据 + `flow_key` | DID 精确绑定和无入口禁止发布已实现；真实运营商送号格式、前缀归一化和 Trunk 归属待联调 |
+| IVR 收号、按键分支及无输入兜底 | `MENU`、`BRANCH`、唯一 `defaultRoute` 和 `timeoutAction` | 编辑、校验和运行分支已实现；真实音频、DTMF 超时事件待 FreeSWITCH 验证 |
+| 指定坐席、技能组、同组代答、忙/离线/无人和多次尝试 | 路由尝试事实 + 并发预占 + 可替换路由策略 | 指定坐席/技能组与排队期轮询已实现；代班、营业时间、溢出层级及细分失败原因尚未动作化 |
+| 来电弹屏、接听、桥接、挂机和坐席释放 | Call/Leg/Bridge 事实 + Windows 客户端回执 + 终态幂等 | 核心链路和弹屏回执已实现；真实 SIP/Windows 联调与异常恢复验收未完成 |
+| 未接、超时、客户先挂产生漏话及回拨闭环 | `FINALIZE_INBOUND` + `fcc_callback_task` + 渐进式外呼任务 | 未接回拨创建、领取和任务关联已实现；运营规则、SLA 和人工处置结果仍需补齐 |
+| 录音、满意度评价及文件完成态 | 显式 FNode 动作 + Recording/评价事实 | 录音协议和元数据已有基础；流程接入、评价动作及真实文件完成态未完成 |
+| 盲转、咨询转、三方与转接后话单归属 | 显式转接动作 + 多 Leg/Bridge 成员事实 | 数据模型可承载，完整动作与生命周期尚未实现，不能以普通桥接代替 |
+| 自动外呼放音、按键确认、重试和终态通知 | 通知外呼固定模型 + 持久调度/尝试 + 确认事实 | 调度、租约和确认模型已有基础；真实并发、重试、音频与终态通知待联调 |
+| 司机热线路由、港口映射和结束后同步业务系统 | 命名第三方端点 + 显式请求/响应动作 + 幂等业务回调事实 | 通用 HTTPS 执行边界已存在；具体业务契约、端点配置、补偿与对账尚未实现 |
+
+新系统当前已对象化并运行的呼入动作是 DID 解析、菜单收号、if/else 路由、坐席预占与呼叫、桥接、等待挂机和未接通回拨收尾。录音、评价、复杂转接、营业时间/溢出、第三方业务回调等不能继续隐藏在监听器条件分支中；后续加入时必须先进入 `fcc-common` 动作目录，声明 FNode 指令、内部方法或第三方接口执行边界，再由 admin 校验、server 执行并记录每次动作事实。在这些动作真正接入运行流程并验证前，文档不将其描述为可配置完成。
 
 `FlowActionType` 是 admin/server 共用动作目录，每个动作明确归属 FNode 指令、内部业务方法或第三方接口。FNode 方法和事件方法/字段由 `FNodeMethod`、`FccEventMethod`、`FccEventField` 等公共对象定义。第三方动作只能使用服务端命名白名单中的 HTTPS 端点和稳定幂等键。发布通知在 afterCommit 执行，但尚无持久通知重试与激活看板。
 
@@ -215,7 +253,7 @@ MySQL 是持久事实来源。Redis 只存可重建的运行态和通知。内�
 
 - Sidecar 事件现有稳定源 `event_id` 与落盘 outbox；事件按接收顺序写入，Java Inbox 去重。明确处理失败会 NAK 并最多重新领取 5 次，已完成的重复事件直接 ACK；遗留 `PROCESSING` 或耗尽重试的 `FAILED` 转为 `UNKNOWN`，等待人工或恢复任务对账；
 - 录音事件已统一为 `Event.Recording`，分类为 `record`；真实完成态、时长和文件大小仍需 Sidecar/FreeSWITCH 联调验证；
-- NATS 事件使用 FCC_EVENTS JetStream；fcc-control durable 每次处理一条并显式 ACK，部署前必须创建流。业务副作用与 Inbox 状态仍不是同一事务，本轮也没有真实 JetStream 重投证据；
+- NATS 事件使用 `FCC_EVENTS` JetStream；`fcc-control` durable 每次处理一条并显式 ACK。本机已创建订阅 `fs.event.*.*` 的文件存储流，但业务副作用与 Inbox 状态仍不是同一事务，也没有 Sidecar 真实事件写入和 JetStream 重投证据；
 - 当前只支持一个活跃 fcc-server，不能把共享 durable 等同安全的多实例会话处理；
 - 命令重试尚未形成跨请求稳定的业务幂等键；
 - 消费前从 MySQL 分页恢复固定模板会话；已有 ChannelSnapshot 双方持续缺失对账，失败快照不视为挂机，单边残留和桥接重建仍需补齐；
@@ -246,7 +284,7 @@ mvn -q test
 
 涉及 Mapper/DDL 时还需解析 XML、检查查询形状和在一次性 MySQL 8 环境验证。涉及 NATS、事件、录音、WebSocket 或媒体时，必须报告外部依赖是否真实可用。
 
-2026-09-20 本轮：JDK 21 编译、Flow Studio/Action Executor 定向测试和前端构建按交付时结果记录。全量 Java 测试需连接本地 NATS；若 NATS 不可用，不宣称全量通过。本轮没有连接用户 MySQL，也没有验证真实 FreeSWITCH、双向媒体、录音、认证浏览器或 Windows 交互。
+2026-09-20 本轮：JDK 21 编译、Flow Studio/Action Executor 定向测试和前端构建按交付时结果记录。本机已安装并启动 NATS Server 2.15.0，应用测试日志确认成功连接 `nats://127.0.0.1:4222`；JetStream 已创建文件存储流 `FCC_EVENTS`，订阅 `fs.event.*.*`。完整 Java 测试中 `fcc-server` 共运行 38 项，0 项断言失败、9 项环境错误、1 项跳过；当前错误来自 MySQL JDBC、Redis 和 Windows loopback 建连，不能记为全量通过。本轮没有验证 Sidecar 真实事件写入/重投、FreeSWITCH、双向媒体、录音、认证浏览器或 Windows 交互。
 
 ### 运行端补充接口
 

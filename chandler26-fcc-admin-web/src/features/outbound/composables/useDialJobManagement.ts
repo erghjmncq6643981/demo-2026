@@ -25,6 +25,8 @@ const createRequestKey = () => {
 export function useDialJobManagement() {
   const rows = ref<DialJobSummary[]>([]);
   const agents = ref<AgentVO[]>([]);
+  const agentsLoading = ref(false);
+  const agentsError = ref("");
   const attempts = ref<DialAttempt[]>([]);
   const loading = ref(false);
   const attemptsLoading = ref(false);
@@ -62,6 +64,8 @@ export function useDialJobManagement() {
   }
 
   async function loadAgents() {
+    agentsLoading.value = true;
+    agentsError.value = "";
     try {
       const result = await agentApi.list({
         pageNum: 1,
@@ -69,8 +73,11 @@ export function useDialJobManagement() {
         status: "ENABLED",
       });
       agents.value = result.list || [];
-    } catch {
+    } catch (cause) {
       agents.value = [];
+      agentsError.value = errorText(cause, "可选坐席加载失败");
+    } finally {
+      agentsLoading.value = false;
     }
   }
 
@@ -174,6 +181,8 @@ export function useDialJobManagement() {
   return {
     rows,
     agents,
+    agentsLoading,
+    agentsError,
     attempts,
     loading,
     attemptsLoading,
@@ -188,6 +197,7 @@ export function useDialJobManagement() {
     form,
     hasNext,
     load,
+    loadAgents,
     search,
     openCreate,
     create,

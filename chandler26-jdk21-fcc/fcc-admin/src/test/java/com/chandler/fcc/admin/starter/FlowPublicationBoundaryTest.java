@@ -4,6 +4,7 @@ import cn.dev33.satoken.stp.StpUtil;
 import com.chandler.fcc.admin.flow.application.FlowStudioService;
 import com.chandler.fcc.admin.flow.controller.req.PublishFlowReq;
 import com.chandler.fcc.admin.flow.infrastructure.FlowStudioMapper;
+import com.chandler.fcc.admin.infrastructure.persistence.mapper.DidNumberMapper;
 import com.chandler.fcc.admin.infrastructure.persistence.mapper.FlowDefinitionMapper;
 import com.chandler.fcc.admin.infrastructure.persistence.mapper.FlowDefinitionVersionMapper;
 import com.chandler.fcc.admin.infrastructure.persistence.entity.FlowDefinitionEntity;
@@ -16,6 +17,7 @@ import org.springframework.transaction.support.TransactionSynchronizationManager
 import java.util.List;
 import static org.mockito.Mockito.*;
 import static org.junit.jupiter.api.Assertions.*;
+import org.springframework.web.server.ResponseStatusException;
 
 /** 发布通知只能在本地事务提交后产生。 */
 class FlowPublicationBoundaryTest {
@@ -31,12 +33,15 @@ class FlowPublicationBoundaryTest {
     @Test void notifiesOnlyAfterCommit() {
         var flows = mock(FlowDefinitionMapper.class);
         var versions = mock(FlowDefinitionVersionMapper.class);
+        var didNumbers = mock(DidNumberMapper.class);
         var redis = mock(StringRedisTemplate.class);
         var executions = mock(FlowStudioMapper.class);
-        var service = new FlowStudioService(flows, versions, executions, redis, new ObjectMapper());
+        var service = new FlowStudioService(flows, versions, didNumbers, executions, redis, new ObjectMapper());
         ReflectionTestUtils.setField(service, "fccServerBaseUrl", "");
         ReflectionTestUtils.setField(service, "reloadToken", "");
-        when(flows.selectOne(any())).thenReturn(FlowDefinitionEntity.builder().id(1L).flowKey("test-flow").build());
+        when(flows.selectOne(any())).thenReturn(FlowDefinitionEntity.builder()
+            .id(1L).flowKey("test-flow").modelType("INBOUND").build());
+        when(didNumbers.selectCount(any())).thenReturn(1L);
         var draft = FlowDefinitionVersionEntity.builder().id(2L).flowDefinitionId(1L)
             .versionNo(1).publishStatus("DRAFT")
             .definitionJson(VALID_IVR).build();
@@ -51,5 +56,25 @@ class FlowPublicationBoundaryTest {
             TransactionSynchronizationManager.getSynchronizations().forEach(sync -> sync.afterCommit());
             verify(redis).convertAndSend("fcc:flow:publish", "test-flow");
         } finally { TransactionSynchronizationManager.clearSynchronization(); }
+    }
+
+    /** 没有 DID 入口的呼入流程不能发布不可达版本。 */
+    @Test void rejectsInboundPublicationWithoutDid() {
+        var flows = mock(FlowDefinitionMapper.class);
+        var versions = mock(FlowDefinitionVersionMapper.class);
+        var didNumbers = mock(DidNumberMapper.class);
+        var redis = mock(StringRedisTemplate.class);
+        var executions = mock(FlowStudioMapper.class);
+        var service = new FlowStudioService(flows, versions, didNumbers, executions, redis, new ObjectMapper());
+        when(flows.selectOne(any())).thenReturn(FlowDefinitionEntity.builder()
+            .id(1L).flowKey("test-flow").modelType("INBOUND").build());
+        when(didNumbers.selectCount(any())).thenReturn(0L);
+        var request = new PublishFlowReq();
+        request.setVersion("v1.0.0");
+
+        try (var authentication = mockStatic(StpUtil.class)) {
+            assertThrows(ResponseStatusException.class, () -> service.publish("test-flow", request));
+        }
+        verifyNoInteractions(versions, redis);
     }
 }

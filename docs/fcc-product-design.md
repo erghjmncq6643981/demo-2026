@@ -8,9 +8,9 @@
 
 | 用户/工程 | 责任 | 不负责 |
 | --- | --- | --- |
-| 管理员、运营 / admin-web + fcc-admin | 账户、组、终端、分机、流程版本、资源、话单、录音、回拨 | ESL 和媒体控制 |
-| 坐席、班长 / client-web | 登录、接听、外呼、话中操作、话后整理、工作记录 | 判断未收到的软交换最终结果 |
-| fcc-server | Call/Leg 关联、话机绑定运行流程、呼入/呼出、自动外呼调度、客户资料、弹屏业务编排及业务 WebSocket | 直接连接 ESL、直接调用坐席电脑的 Windows API |
+| 管理员、运营 / admin-web + fcc-admin | 账户、组、终端、分机、Flow Model、客户资料和自动外呼的维护/查看入口；话单、录音、回拨及运行结果查看 | 直接执行 Flow action、调度外呼、连接 ESL 或控制媒体 |
+| 坐席、班长 / client-web | 登录、接听、人工外呼、话中操作、话后整理、回拨工作及授权弹屏摘要 | 维护客户主数据、创建自动外呼调度或判断未收到的软交换最终结果 |
+| fcc-server | 固定已发布 Flow 版本并执行；Call/Leg 关联、话机绑定运行流程、呼入/呼出、自动外呼事实与调度、客户事实、弹屏业务编排及业务 WebSocket | 提供管理端页面、直接连接 ESL、直接调用坐席电脑的 Windows API |
 | Windows 坐席客户端（测试安装包） | 接收服务端事件，执行本机通知、窗口恢复、任务栏提示；回传接收、展示、激活或不支持状态，服务端持久记录 | 自行决定客户归属、外呼调度与弹屏业务规则 |
 | 通信运维 / fswitch-web + Sidecar | 节点、注册、网关、话道、协议翻译、运行数据 | 客户资料、技能路由、业务话单定义 |
 | FreeSWITCH | SIP、Channel、Bridge、媒体及录音写入 | FCC 账户及业务授权 |
@@ -40,6 +40,8 @@ MySQL 保存业务事实；PostgreSQL 反映节点运行数据及 Sidecar 管理
 
 身份边界：callId 是业务通话，channelUuid 是一个话道，ctrlId 是控制关联，nodeId 是节点，bridgeUuid 是媒体关系；命令、事件、流程实例和业务外部标识另有身份。Long 标识符字符串序列化当前仅覆盖共享模块匹配的 Bean 属性，仍需实际 HTTP 契约验证。
 
+管理链路为 `admin-web -> fcc-admin -> fcc-server`。fcc-admin 校验 `business:manage` 后转发当前会话令牌；fcc-server 在线回查 `/api/admin/auth/me`，只接受数据库当前仍启用、主体类型为 `CONSOLE` 且具备 `business:manage` 或 `*` 的账号。客户与自动外呼不在 admin 和 server 各存一份：admin 是维护/查看控制面，server 是事实与执行面。坐席端不包含客户管理和自动外呼任务管理工作台。
+
 ## 3. 业务链路现状
 
 | 链路 | 当前源码具备 | 尚缺的闭环 |
@@ -54,6 +56,8 @@ MySQL 保存业务事实；PostgreSQL 反映节点运行数据及 Sidecar 管理
 | 运维 | 节点/注册/话道查询、排水、部分资源操作、离线提示 | 访问控制、操作审计、节点计数重建、事件重放与告警 |
 
 普通呼叫的验收顺序应为：登录与终端注册 → 发起/接入 Call → 建立双方 Leg → 振铃/接听 → Bridge 与双向音频 → 控制/录音 → 双方挂机 → CDR/录音核对 → 坐席释放与话后整理。当前源码并不证明这条完整序列已经通过。
+
+呼入流程以 DID 被叫号码作为入口：号码主数据绑定稳定 flow key，来电时再固定该流程最新已发布版本。号码不属于版本 JSON。同一流程可承接多个 DID，一个 DID 同时只能进入一个流程；没有启用 DID 的流程不得发布。管理端现已提供 DID 绑定、首个草稿、只读已发布版本和明确 if/else 兜底维护，仍需真实 XSwitch/Sidecar 来电验证 `dest_number` 与运营商送号一致。
 
 ## 4. 高优先级：首个可用版本前必须补齐
 
@@ -78,6 +82,7 @@ MySQL 保存业务事实；PostgreSQL 反映节点运行数据及 Sidecar 管理
 | --- | --- | --- |
 | P1 | ACD 技能组与排队 | 技能/优先级、空闲最长等策略、并发分配、排队超时/溢出/营业时间；记录每次路由依据，两个来电不能占用同一独占坐席 |
 | P1 | 完整 IVR 运行闭环 | 固定阶段模型已覆盖播放、收号、分支、路由、桥接、通话中与结束动作；需验证真实按键/超时/错误出口、转人工和挂机都按固定版本执行，仿真不得触发生产话务 |
+| P1 | 成熟业务细节显式建模 | 以旧系统多年运行闭环作为业务验收清单，补齐直达、营业时间、排队溢出、录音、评价、转接/三方和第三方业务回调；每项先定义公共 Action 和分支结果，再实现、留痕和联调，禁止继续藏在事件监听器条件中 |
 | P1 | 转接与班长能力 | 明确盲转/咨询转语义；咨询失败回到原通话；实现真实监听/耳语/强插/强拆，并检查授权及媒体方向 |
 | P1 | 坐席状态与 ACW | 服务端权威的上线、就绪、休息、忙、整理状态；心跳离线、跨终端切换、整理提交/超时释放可核对 |
 | P1 | 录音生命周期 | 开始/停止/就绪/失败/缺失；权限与 Range 播放；下载审计、保留期限和清理；文件与事实不一致可修复 |
@@ -110,4 +115,4 @@ MySQL 保存业务事实；PostgreSQL 反映节点运行数据及 Sidecar 管理
 - [前后端契约检查](fcc-contract-alignment.md)
 - [验证记录](testing-architecture-and-test-cases.md)
 
-2026-09-20 本轮使用 JDK 21 完成编译，Flow/Action/Event Inbox 等 20 项定向 Java 测试、管理端构建及 4 项治理测试通过；Mapper XML 已静态解析。完整 Java 测试在本机 NATS 连接处失败，未出现断言失败但有 9 项 Spring 上下文错误，不能记为全量通过。本轮没有连接真实 MySQL、NATS/JetStream、Redis、Sidecar、FreeSWITCH、SIP 或 Windows 环境；认证浏览器回归也尚未完成。当前实现、部署步骤及剩余阻断以 [跨电脑验收记录](fcc-cross-machine-acceptance.md) 为准。
+2026-09-20 本轮使用 JDK 21 完成编译，Flow/Action/Event Inbox 等 20 项定向 Java 测试、管理端构建及 4 项治理测试通过；Mapper XML 已静态解析。本机已安装并启动 NATS Server 2.15.0，应用成功连接 `nats://127.0.0.1:4222`；JetStream 已创建文件存储流 `FCC_EVENTS`，订阅 `fs.event.*.*`。完整 `mvn -q test` 中 `fcc-server` 共运行 38 项，0 项断言失败、9 项环境错误、1 项跳过；当前错误来自 MySQL JDBC、Redis 和 Windows loopback 建连，不能记为全量通过。尚未完成 Sidecar 真实事件写入/重投、FreeSWITCH、SIP、媒体、录音、认证浏览器或 Windows 弹屏联调。当前实现、部署步骤及剩余阻断以 [跨电脑验收记录](fcc-cross-machine-acceptance.md) 为准。

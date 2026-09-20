@@ -53,6 +53,42 @@ export interface StageExecution {
   output?: string;
   errorCode?: string;
 }
+
+/** Return whether the selected flow version can be changed on the canvas. */
+export function canEditFlowVersion(
+  system: boolean,
+  publishStatus: string | undefined,
+  workingCopy: boolean,
+): boolean {
+  return !system && (workingCopy || publishStatus === "DRAFT");
+}
+
+/** Return the Chinese status used by the version selector and workspace. */
+export function flowVersionStatusLabel(status: string): string {
+  return (
+    {
+      DRAFT: "草稿",
+      PUBLISHED: "已发布",
+      ARCHIVED: "历史版本",
+    }[status] || status
+  );
+}
+
+/** Clone a flow and update the single default route shared by BRANCH else and ROUTE. */
+export function updateDefaultRoute(
+  source: StagedFlow,
+  patch: Partial<FlowTarget>,
+): StagedFlow {
+  const copy = JSON.parse(JSON.stringify(source)) as StagedFlow;
+  copy.defaultRoute = {
+    targetType: "GROUP",
+    target: "",
+    queueSeconds: 120,
+    ...copy.defaultRoute,
+    ...patch,
+  };
+  return copy;
+}
 /** 新草稿只有结构，无虚构号码、技能组或坐席。 */
 export function newInboundFlow(): StagedFlow {
   return {

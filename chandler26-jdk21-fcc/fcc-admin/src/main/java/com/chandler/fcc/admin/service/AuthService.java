@@ -205,21 +205,10 @@ public class AuthService {
      */
     @SuppressWarnings("unchecked")
     public UserInfoVO getLoginUserInfo() {
-        if (!StpUtil.isLogin()) {
-            throw new IllegalArgumentException("当前未登录或会话已过期");
-        }
+        revalidateCurrentSession();
 
         SaSession session = StpUtil.getSession();
         List<String> roles = (List<String>) session.get("roles");
-        if (SUBJECT_AGENT.equals(session.getString("accountType"))) {
-            AgentEntity active = agentMapper.selectOne(new LambdaQueryWrapper<AgentEntity>()
-                    .eq(AgentEntity::getWorkNo, StpUtil.getLoginIdAsString())
-                    .eq(AgentEntity::getStatus, STATUS_ENABLED).isNull(AgentEntity::getDeletedAt));
-            if (active == null) {
-                StpUtil.logout();
-                throw new IllegalArgumentException("坐席账号已停用或不存在");
-            }
-        }
         List<String> permissions = (List<String>) session.get("permissions");
 
         return UserInfoVO.builder()
@@ -232,6 +221,61 @@ public class AuthService {
                 .extension(session.getString("extension"))
                 .endpointType(session.getString("endpointType"))
                 .build();
+    }
+
+    /**
+     * 按数据库当前账号状态和角色重新校验当前会话。
+     *
+     * <p>管理接口拦截器在每次请求前调用本方法，确保账号停用、删除或改权不会继续沿用
+     * 登录时缓存的权限。</p>
+     */
+    public void revalidateCurrentSession() {
+        if (!StpUtil.isLogin()) {
+            throw new IllegalArgumentException("当前未登录或会话已过期");
+        }
+
+        SaSession session = StpUtil.getSession();
+        String accountType = session.getString("accountType");
+        if (SUBJECT_AGENT.equals(accountType)) {
+            AgentEntity active = agentMapper.selectOne(new LambdaQueryWrapper<AgentEntity>()
+                    .eq(AgentEntity::getWorkNo, StpUtil.getLoginIdAsString())
+                    .eq(AgentEntity::getStatus, STATUS_ENABLED).isNull(AgentEntity::getDeletedAt));
+            if (active == null) {
+                StpUtil.logout();
+                throw new IllegalArgumentException("坐席账号已停用或不存在");
+            }
+        } else if (SUBJECT_CONSOLE.equals(accountType)) {
+            refreshConsoleSession(session);
+        } else {
+            StpUtil.logout();
+            throw new IllegalArgumentException("登录主体类型无效");
+        }
+    }
+
+    /**
+     * 从数据库重新核验控制台账号，并刷新会话中的角色与权限。
+     *
+     * <p>该检查保证停用、删除或改权立即影响 {@code /auth/me} 在线鉴权结果，
+     * fcc-server 不会继续信任登录时缓存的旧权限。</p>
+     *
+     * @param session 当前控制台会话
+     */
+    private void refreshConsoleSession(SaSession session) {
+        AdminUserEntity active = adminUserMapper.selectOne(
+            new LambdaQueryWrapper<AdminUserEntity>()
+                .eq(AdminUserEntity::getUsername, StpUtil.getLoginIdAsString())
+                .eq(AdminUserEntity::getStatus, STATUS_ENABLED)
+                .isNull(AdminUserEntity::getDeletedAt)
+        );
+        if (active == null || !AuthRoleEnum.isConsoleRole(active.getRoleCode())) {
+            StpUtil.logout();
+            throw new IllegalArgumentException("控制台账号已停用、不存在或角色无效");
+        }
+        AuthRoleEnum role = AuthRoleEnum.ofCode(active.getRoleCode());
+        session.set("realName", active.getRealName());
+        session.set("role", role.getCode());
+        session.set("roles", role.getRoles());
+        session.set("permissions", role.getPermissions());
     }
 
     /**

@@ -18,8 +18,10 @@ import com.chandler.fcc.admin.flow.controller.resp.SystemFlowModelResp;
 import com.chandler.fcc.admin.flow.infrastructure.FlowStudioMapper;
 import com.chandler.fcc.admin.flow.infrastructure.data.FlowExecutionInstanceData;
 import com.chandler.fcc.admin.flow.infrastructure.data.FlowExecutionStepData;
+import com.chandler.fcc.admin.infrastructure.persistence.entity.DidNumberEntity;
 import com.chandler.fcc.admin.infrastructure.persistence.entity.FlowDefinitionEntity;
 import com.chandler.fcc.admin.infrastructure.persistence.entity.FlowDefinitionVersionEntity;
+import com.chandler.fcc.admin.infrastructure.persistence.mapper.DidNumberMapper;
 import com.chandler.fcc.admin.infrastructure.persistence.mapper.FlowDefinitionMapper;
 import com.chandler.fcc.admin.infrastructure.persistence.mapper.FlowDefinitionVersionMapper;
 import com.chandler.fcc.admin.model.PageResult;
@@ -66,6 +68,7 @@ public class FlowStudioService {
 
     private final FlowDefinitionMapper flowMapper;
     private final FlowDefinitionVersionMapper versionMapper;
+    private final DidNumberMapper didNumberMapper;
     private final FlowStudioMapper executionMapper;
     private final StringRedisTemplate redisTemplate;
     private final ObjectMapper objectMapper;
@@ -134,6 +137,7 @@ public class FlowStudioService {
         Page<FlowDefinitionEntity> page = flowMapper.selectPage(
             new Page<>(request.getPageNum(), request.getPageSize()),
             new LambdaQueryWrapper<FlowDefinitionEntity>()
+                .eq(FlowDefinitionEntity::getModelType, "INBOUND")
                 .isNull(FlowDefinitionEntity::getDeletedAt)
                 .orderByDesc(FlowDefinitionEntity::getId)
         );
@@ -304,6 +308,7 @@ public class FlowStudioService {
         StpUtil.checkPermission("flow:write");
         FlowDefinitionEntity flow = requireFlow(flowKey, true);
         rejectSystemFlow(flowKey);
+        requireInboundDidBinding(flow);
         List<FlowDefinitionVersionEntity> drafts = versionMapper.selectList(
             new LambdaQueryWrapper<FlowDefinitionVersionEntity>()
                 .eq(FlowDefinitionVersionEntity::getFlowDefinitionId, flow.getId())
@@ -349,6 +354,27 @@ public class FlowStudioService {
             .publishStatus("PUBLISHED")
             .runtimeActivationStatus("PENDING")
             .build();
+    }
+
+    /**
+     * 校验呼入流程至少有一个启用的 DID 入口。
+     *
+     * @param flow 待发布流程主数据
+     * @throws ResponseStatusException 呼入流程没有任何可达入口
+     */
+    private void requireInboundDidBinding(FlowDefinitionEntity flow) {
+        if (!"INBOUND".equals(flow.getModelType())) {
+            return;
+        }
+        Long count = didNumberMapper.selectCount(
+            new LambdaQueryWrapper<DidNumberEntity>()
+                .eq(DidNumberEntity::getRouteKey, flow.getFlowKey())
+                .eq(DidNumberEntity::getStatus, "ENABLED")
+                .isNull(DidNumberEntity::getDeletedAt)
+        );
+        if (count == null || count == 0) {
+            throw new ResponseStatusException(HttpStatus.CONFLICT, "请先绑定至少一个被叫号码再发布流程");
+        }
     }
 
     /**

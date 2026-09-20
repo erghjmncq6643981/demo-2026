@@ -41,7 +41,7 @@
 
 ## 本地证据与剩余阻断
 
-本轮已验证范围以最终交付记录为准：JDK 21 编译、20 项 Flow/Action/Event Inbox 定向测试、管理端构建、4 项治理测试、Mapper XML 解析和静态契约扫描。完整 Java 测试在 NATS 连接处失败。没有连接真实 MySQL、NATS/JetStream、Redis、Sidecar、FreeSWITCH 或 SIP 终端，也没有执行认证后的浏览器与 Windows 通知验收。单元测试和模拟 Sidecar RPC 不代表 ESL、音频或故障恢复通过。
+本轮已验证范围以最终交付记录为准：JDK 21 编译、20 项 Flow/Action/Event Inbox 定向测试、管理端构建、4 项治理测试、Mapper XML 解析和静态契约扫描。本机 NATS Server 2.15.0、监控端口和 `FCC_EVENTS` JetStream 文件存储流已验证，应用测试日志确认连接成功。完整 `mvn -q test` 中 `fcc-server` 共运行 38 项，0 项断言失败、9 项环境错误、1 项跳过，仍有 MySQL JDBC、Redis 和 Windows loopback 建连错误；没有验证 Sidecar 真实事件写入/重投、FreeSWITCH 或 SIP 终端，也没有执行认证后的浏览器与 Windows 通知验收。单元测试、NATS 可连接和模拟 Sidecar RPC 均不代表 ESL、音频或故障恢复通过。
 
 派发租约已实现：领取后两分钟未写 Call 的任务会失败并记录 DISPATCH_EXPIRED；迟到线程必须通过同事务租约校验才可保存 Call。已存在 Call 的尝试不按租约过期重拨。
 

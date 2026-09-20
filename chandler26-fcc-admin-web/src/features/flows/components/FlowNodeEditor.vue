@@ -1,6 +1,11 @@
 <script setup lang="ts">
 import { computed } from 'vue';
-import { stageLabels, type StagedFlow } from '../model/stagedFlow';
+import {
+  stageLabels,
+  updateDefaultRoute,
+  type FlowTarget,
+  type StagedFlow,
+} from '../model/stagedFlow';
 const props = defineProps<{ modelValue: StagedFlow; stage: string; disabled?: boolean }>();
 const emit = defineEmits<{ 'update:modelValue': [value: StagedFlow]; close: [] }>();
 const flow = computed(() => props.modelValue);
@@ -13,6 +18,9 @@ function menu(key: 'enabled' | 'prompt' | 'timeoutSeconds', value: string | numb
   change((f) => {
     Object.assign(f.menu!, { [key]: value });
   });
+}
+function defaultRoute(key: keyof FlowTarget, value: string | number) {
+  emit('update:modelValue', updateDefaultRoute(props.modelValue, { [key]: value }));
 }
 </script>
 <template>
@@ -117,7 +125,32 @@ function menu(key: 'enabled' | 'prompt' | 'timeoutSeconds', value: string | numb
           "
           >添加按键分支</el-button
         >
-        <p class="hint">每个按键只能出现一次；未匹配的按键走默认路由（else）。</p>
+        <section class="else-editor" aria-label="else 默认路由">
+          <strong>else · 未匹配按键</strong>
+          <label
+            >目标类型<select
+              :value="flow.defaultRoute?.targetType"
+              @change="defaultRoute('targetType', ($event.target as HTMLSelectElement).value)"
+            >
+              <option value="AGENT">坐席工号</option>
+              <option value="GROUP">技能组代码</option>
+            </select></label
+          >
+          <label
+            >目标<input
+              :value="flow.defaultRoute?.target"
+              @change="defaultRoute('target', ($event.target as HTMLInputElement).value)"
+          /></label>
+          <label
+            >排队时限（秒）<input
+              type="number"
+              min="5"
+              max="300"
+              :value="flow.defaultRoute?.queueSeconds"
+              @change="defaultRoute('queueSeconds', ($event.target as HTMLInputElement).valueAsNumber)"
+          /></label>
+        </section>
+        <p class="hint">每个按键只能出现一次；else 是所有未匹配按键的明确兜底分支。</p>
       </template>
       <template v-else-if="stage === 'ROUTE'">
         <label
@@ -229,6 +262,15 @@ select {
   border: 1px solid #e2e8f0;
   border-radius: 8px;
   margin-bottom: 12px;
+}
+.else-editor {
+  padding: 12px;
+  border-left: 3px solid #64748b;
+  background: #f8fafc;
+  margin-top: 16px;
+}
+.else-editor > strong {
+  font-size: 12px;
 }
 fieldset:disabled {
   opacity: 0.55;

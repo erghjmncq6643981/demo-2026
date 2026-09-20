@@ -1,5 +1,12 @@
 <script setup lang="ts">
-import { defineAsyncComponent, ref, onMounted, onUnmounted } from "vue";
+import {
+  computed,
+  defineAsyncComponent,
+  onMounted,
+  onUnmounted,
+  ref,
+  watch,
+} from "vue";
 import { useAdminAuthStore } from "./stores/adminAuthStore";
 import LoginView from "./views/LoginView.vue";
 import AdminLayout from "./layout/AdminLayout.vue";
@@ -31,6 +38,16 @@ const DialJobManagementPage = defineAsyncComponent(
 const authStore = useAdminAuthStore();
 // 默认进入首页：通话与回拨记录
 const activeTab = ref("routes");
+const canManageBusiness = computed(() => {
+  const permissions = authStore.permissions;
+  return permissions.includes("*") || permissions.includes("business:manage");
+});
+
+watch(canManageBusiness, (allowed) => {
+  if (!allowed && ["customers", "dial-jobs"].includes(activeTab.value)) {
+    activeTab.value = "routes";
+  }
+});
 
 const handleUnauthorized = () => {
   authStore.logout();
@@ -61,9 +78,13 @@ onUnmounted(() => {
         :initialTab="activeTab === 'callback' ? 'callback' : 'records'"
       />
 
-      <CustomerManagementPage v-else-if="activeTab === 'customers'" />
+      <CustomerManagementPage
+        v-else-if="activeTab === 'customers' && canManageBusiness"
+      />
 
-      <DialJobManagementPage v-else-if="activeTab === 'dial-jobs'" />
+      <DialJobManagementPage
+        v-else-if="activeTab === 'dial-jobs' && canManageBusiness"
+      />
 
       <!-- 菜单 2: 客服组与排队 (module-groups) -->
       <GroupManageView v-else-if="activeTab === 'groups'" />

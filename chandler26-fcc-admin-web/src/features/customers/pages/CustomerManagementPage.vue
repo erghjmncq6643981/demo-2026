@@ -42,8 +42,13 @@ const state = useCustomerManagement();
     >
       <label class="field"
         ><span>负责坐席</span
-        ><select v-model="state.ownerFilter.value">
-          <option value="">全部坐席</option>
+        ><select
+          v-model="state.ownerFilter.value"
+          :disabled="state.agentsLoading.value"
+        >
+          <option value="">
+            {{ state.agentsLoading.value ? "坐席加载中..." : "全部坐席" }}
+          </option>
           <option
             v-for="agent in state.agents.value"
             :key="agent.id"
@@ -65,6 +70,12 @@ const state = useCustomerManagement();
         <Search class="h-4 w-4" />查询
       </button>
       <button class="text-button" @click="state.reset">重置</button>
+      <span v-if="state.agentsError.value" class="text-xs text-rose-600">
+        {{ state.agentsError.value }}
+        <button class="font-semibold underline" @click="state.loadAgents">
+          重试
+        </button>
+      </span>
     </div>
 
     <div
@@ -167,9 +178,11 @@ const state = useCustomerManagement();
           ><span>负责坐席</span
           ><select
             v-model="state.form.value.owner"
-            :disabled="state.editing.value"
+            :disabled="state.editing.value || state.agentsLoading.value"
           >
-            <option value="">请选择</option>
+            <option value="">
+              {{ state.agentsLoading.value ? "坐席加载中..." : "请选择" }}
+            </option>
             <option
               v-for="agent in state.agents.value"
               :key="agent.id"

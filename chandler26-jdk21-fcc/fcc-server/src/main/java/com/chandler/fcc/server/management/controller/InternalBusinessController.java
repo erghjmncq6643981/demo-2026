@@ -1,12 +1,20 @@
 package com.chandler.fcc.server.management.controller;
 
-import com.chandler.fcc.server.customer.api.CustomerRecord;
 import com.chandler.fcc.server.management.application.BusinessManagementService;
 import com.chandler.fcc.server.management.controller.req.CreateDialJobReq;
+import com.chandler.fcc.server.management.controller.req.SaveCustomerReq;
 import com.chandler.fcc.server.management.controller.resp.ManagementResp;
+import jakarta.validation.Valid;
 import java.util.Map;
 import lombok.RequiredArgsConstructor;
-import org.springframework.web.bind.annotation.*;
+import org.springframework.web.bind.annotation.GetMapping;
+import org.springframework.web.bind.annotation.PathVariable;
+import org.springframework.web.bind.annotation.PostMapping;
+import org.springframework.web.bind.annotation.PutMapping;
+import org.springframework.web.bind.annotation.RequestBody;
+import org.springframework.web.bind.annotation.RequestMapping;
+import org.springframework.web.bind.annotation.RequestParam;
+import org.springframework.web.bind.annotation.RestController;
 
 /**
  * fcc-admin 使用的内部运行业务入口，所有用例均在线验证管理身份。
@@ -68,8 +76,21 @@ public class InternalBusinessController {
      * @return ID
      */
     @PostMapping("/customers")
-    public ManagementResp<?> create(@RequestParam String owner, @RequestBody CustomerRecord record) {
-        return ok(service.save(null, owner, record));
+    public ManagementResp<?> create(
+        @RequestParam String owner,
+        @Valid @RequestBody SaveCustomerReq request
+    ) {
+        return ok(
+            service.save(
+                null,
+                owner,
+                request.getName(),
+                request.getPhoneNumber(),
+                request.getCompanyName(),
+                request.getNotes(),
+                request.getVersion()
+            )
+        );
     }
 
     /**
@@ -80,8 +101,21 @@ public class InternalBusinessController {
      * @return ID
      */
     @PutMapping("/customers/{id}")
-    public ManagementResp<?> update(@PathVariable String id, @RequestBody CustomerRecord record) {
-        return ok(service.save(id, null, record));
+    public ManagementResp<?> update(
+        @PathVariable String id,
+        @Valid @RequestBody SaveCustomerReq request
+    ) {
+        return ok(
+            service.save(
+                id,
+                null,
+                request.getName(),
+                request.getPhoneNumber(),
+                request.getCompanyName(),
+                request.getNotes(),
+                request.getVersion()
+            )
+        );
     }
 
     /**
@@ -106,7 +140,7 @@ public class InternalBusinessController {
      * @return ID
      */
     @PostMapping("/dial-jobs")
-    public ManagementResp<?> createJob(@RequestBody CreateDialJobReq request) {
+    public ManagementResp<?> createJob(@Valid @RequestBody CreateDialJobReq request) {
         return ok(
             service.createJob(
                 request.getOwner(),

@@ -1,20 +1,13 @@
 package com.chandler.fcc.admin.infrastructure.persistence.entity;
 
 import com.baomidou.mybatisplus.annotation.TableName;
+import java.time.LocalDateTime;
 import lombok.AllArgsConstructor;
-import lombok.experimental.SuperBuilder;
-import lombok.Builder;
-import lombok.experimental.SuperBuilder;
 import lombok.Getter;
-import lombok.experimental.SuperBuilder;
 import lombok.NoArgsConstructor;
-import lombok.experimental.SuperBuilder;
 import lombok.Setter;
-import lombok.experimental.SuperBuilder;
 import lombok.ToString;
 import lombok.experimental.SuperBuilder;
-
-import java.time.LocalDateTime;
 
 /**
  * 管理控制台账号持久化实体 (fcc_admin_user)

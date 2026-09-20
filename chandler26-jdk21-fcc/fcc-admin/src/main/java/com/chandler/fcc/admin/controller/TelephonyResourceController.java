@@ -1,5 +1,7 @@
 package com.chandler.fcc.admin.controller;
 
+import cn.dev33.satoken.stp.StpUtil;
+import com.chandler.fcc.admin.controller.req.BindDidFlowReq;
 import com.chandler.fcc.admin.model.CommonResult;
 import com.chandler.fcc.admin.model.dto.DidNumberCreateReq;
 import com.chandler.fcc.admin.model.dto.OutboundNumberCreateReq;
@@ -91,6 +93,37 @@ public class TelephonyResourceController {
     public CommonResult<List<DidNumberVO>> listDidNumbers() {
         List<DidNumberVO> list = resourceService.listDidNumbers();
         return CommonResult.success(list);
+    }
+
+    /**
+     * 将 DID 被叫号码绑定到一个呼入流程。
+     *
+     * @param id DID 主键 ID
+     * @param req 流程绑定参数
+     * @return 操作成功响应
+     */
+    @Operation(summary = "绑定DID被叫号码与IVR流程")
+    @PutMapping("/dids/{id}/flow-binding")
+    public CommonResult<Void> bindDidFlow(
+            @PathVariable("id") Long id,
+            @Valid @RequestBody BindDidFlowReq req) {
+        StpUtil.checkPermission("resource:write");
+        resourceService.bindDidFlow(id, req.getFlowKey());
+        return CommonResult.success();
+    }
+
+    /**
+     * 解除 DID 被叫号码与呼入流程的绑定。
+     *
+     * @param id DID 主键 ID
+     * @return 操作成功响应
+     */
+    @Operation(summary = "解除DID被叫号码与IVR流程绑定")
+    @DeleteMapping("/dids/{id}/flow-binding")
+    public CommonResult<Void> unbindDidFlow(@PathVariable("id") Long id) {
+        StpUtil.checkPermission("resource:write");
+        resourceService.unbindDidFlow(id);
+        return CommonResult.success();
     }
 
     /**

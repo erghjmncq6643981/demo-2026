@@ -21,6 +21,8 @@ const emptyForm = (): SaveCustomerReq & { owner: string; id: string } => ({
 export function useCustomerManagement() {
   const rows = ref<CustomerSummary[]>([]);
   const agents = ref<AgentVO[]>([]);
+  const agentsLoading = ref(false);
+  const agentsError = ref("");
   const loading = ref(false);
   const saving = ref(false);
   const error = ref("");
@@ -51,6 +53,8 @@ export function useCustomerManagement() {
   }
 
   async function loadAgents() {
+    agentsLoading.value = true;
+    agentsError.value = "";
     try {
       const result = await agentApi.list({
         pageNum: 1,
@@ -58,8 +62,11 @@ export function useCustomerManagement() {
         status: "ENABLED",
       });
       agents.value = result.list || [];
-    } catch {
+    } catch (cause) {
       agents.value = [];
+      agentsError.value = errorText(cause, "可选坐席加载失败");
+    } finally {
+      agentsLoading.value = false;
     }
   }
 
@@ -153,6 +160,8 @@ export function useCustomerManagement() {
   return {
     rows,
     agents,
+    agentsLoading,
+    agentsError,
     loading,
     saving,
     error,
@@ -165,6 +174,7 @@ export function useCustomerManagement() {
     editing,
     hasNext,
     load,
+    loadAgents,
     search,
     reset,
     create,
