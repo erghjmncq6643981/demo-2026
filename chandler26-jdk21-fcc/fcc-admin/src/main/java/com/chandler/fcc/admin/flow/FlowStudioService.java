@@ -1,6 +1,7 @@
 package com.chandler.fcc.admin.flow;
 
 import cn.dev33.satoken.stp.StpUtil;
+import com.chandler.fcc.admin.flow.controller.resp.FlowExecutionResp;
 import com.chandler.fcc.common.util.IdUtil;
 import java.util.Map;
 import lombok.RequiredArgsConstructor;
@@ -49,7 +50,7 @@ public class FlowStudioService {
      * @param after 游标
      * @return 真实执行记录
      */
-    public Map<String, Object> execution(String call, String after) {
+    public FlowExecutionResp execution(String call, String after) {
         StpUtil.checkPermission("flow:view");
         long tenant = tenant();
         if (
@@ -61,14 +62,11 @@ public class FlowStudioService {
         );
         var instance = mapper.instance(tenant, call);
         var steps = mapper.steps(tenant, call, after);
-        return Map.of(
-            "instance",
-            instance == null ? Map.of() : instance,
-            "steps",
-            steps,
-            "nextCursor",
-            steps.size() == 100 ? steps.getLast().get("id") : ""
-        );
+        var response = new FlowExecutionResp();
+        response.setInstance(instance == null ? Map.of() : instance);
+        response.setSteps(steps);
+        response.setNextCursor(steps.size() == 100 ? steps.getLast().get("id").toString() : "");
+        return response;
     }
 
     /**

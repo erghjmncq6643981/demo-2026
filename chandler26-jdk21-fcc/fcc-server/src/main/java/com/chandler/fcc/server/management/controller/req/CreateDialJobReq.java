@@ -1,4 +1,4 @@
-package com.chandler.fcc.server.management.api.request;
+package com.chandler.fcc.server.management.controller.req;
 
 import io.swagger.v3.oas.annotations.media.Schema;
 import lombok.Data;
@@ -8,7 +8,7 @@ import lombok.Data;
  */
 @Data
 @Schema(description = "管理员创建自动外呼任务请求")
-public class CreateDialJobRequest {
+public class CreateDialJobReq {
 
     /**
      * 负责执行任务的坐席工号。

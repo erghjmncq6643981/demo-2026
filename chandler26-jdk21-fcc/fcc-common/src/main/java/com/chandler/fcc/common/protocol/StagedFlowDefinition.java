@@ -93,7 +93,7 @@ public final class StagedFlowDefinition {
      */
     public static JsonNode template(String template) {
         if (!STAGES.containsKey(template)) throw new IllegalArgumentException("未知固定模板");
-        return JSON.valueToTree(Map.of("template", template, "stages", STAGES.get(template)));
+        return SystemFlowModels.get(template);
     }
 
     /**

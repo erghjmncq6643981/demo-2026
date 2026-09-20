@@ -1,8 +1,9 @@
-package com.chandler.fcc.admin.flow;
+package com.chandler.fcc.admin.flow.controller;
 
-import com.chandler.fcc.admin.flow.api.request.CreateFlowRequest;
+import com.chandler.fcc.admin.flow.FlowStudioService;
+import com.chandler.fcc.admin.flow.controller.req.CreateFlowReq;
+import com.chandler.fcc.admin.flow.controller.resp.FlowExecutionResp;
 import com.chandler.fcc.admin.model.CommonResult;
-import java.util.Map;
 import lombok.RequiredArgsConstructor;
 import org.springframework.web.bind.annotation.*;
 
@@ -23,7 +24,7 @@ public class FlowStudioController {
      * @return 流程代码
      */
     @PostMapping
-    public CommonResult<String> create(@RequestBody CreateFlowRequest request) {
+    public CommonResult<String> create(@RequestBody CreateFlowReq request) {
         return CommonResult.success(service.create(request.getFlowKey(), request.getFlowName()));
     }
 
@@ -35,7 +36,7 @@ public class FlowStudioController {
      * @return 快照与阶段列表
      */
     @GetMapping("/calls/{callId}")
-    public CommonResult<Map<String, Object>> execution(
+    public CommonResult<FlowExecutionResp> execution(
         @PathVariable String callId,
         @RequestParam(defaultValue = "0") String after
     ) {

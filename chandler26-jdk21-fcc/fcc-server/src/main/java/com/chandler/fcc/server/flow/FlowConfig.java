@@ -138,6 +138,15 @@ public class FlowConfig {
         if (objectMapper == null) objectMapper = new ObjectMapper();
 
         try {
+            if (flowKey.startsWith("SYSTEM_")) {
+                // 固定运行器使用数据库版本快照，不把系统模型编译成动态动作链。
+                JsonNode systemModel = objectMapper.readTree(definitionJson);
+                if (!systemModel.path("nodes").isArray() || systemModel.path("nodes").isEmpty()) {
+                    throw new IllegalArgumentException("系统通话模型不完整，请执行完整模型迁移");
+                }
+                flowNameByModel.put(modelType, flowName);
+                return;
+            }
             JsonNode root = com.chandler.fcc.common.protocol.FlowDefinitionValidator.validate(definitionJson);
             if ("IVR".equals(root.path("routeMode").asText())) {
                 // 固定 IVR 在呼入时按 DID 加载并锁定数据库版本，不写入按 modelKey 共享的旧动作链。

@@ -1,32 +1,50 @@
 <script setup lang="ts">
-import { defineAsyncComponent, ref, onMounted, onUnmounted } from 'vue';
-import { useAdminAuthStore } from './stores/adminAuthStore';
-import LoginView from './views/LoginView.vue';
-import AdminLayout from './layout/AdminLayout.vue';
-const OrgReportView = defineAsyncComponent(() => import('./views/OrgReportView.vue'));
-const CdrReportView = defineAsyncComponent(() => import('./views/CdrReportView.vue'));
-const GroupManageView = defineAsyncComponent(() => import('./views/GroupManageView.vue'));
-const IvrFlowView = defineAsyncComponent(() => import('./views/IvrFlowView.vue'));
-const MonitorView = defineAsyncComponent(() => import('./views/MonitorView.vue'));
-const ExtensionManageView = defineAsyncComponent(() => import('./views/ExtensionManageView.vue'));
+import { defineAsyncComponent, ref, onMounted, onUnmounted } from "vue";
+import { useAdminAuthStore } from "./stores/adminAuthStore";
+import LoginView from "./views/LoginView.vue";
+import AdminLayout from "./layout/AdminLayout.vue";
+const OrgReportView = defineAsyncComponent(
+  () => import("./views/OrgReportView.vue"),
+);
+const CdrReportView = defineAsyncComponent(
+  () => import("./views/CdrReportView.vue"),
+);
+const GroupManageView = defineAsyncComponent(
+  () => import("./views/GroupManageView.vue"),
+);
+const IvrFlowView = defineAsyncComponent(
+  () => import("./views/IvrFlowView.vue"),
+);
+const MonitorView = defineAsyncComponent(
+  () => import("./views/MonitorView.vue"),
+);
+const ExtensionManageView = defineAsyncComponent(
+  () => import("./views/ExtensionManageView.vue"),
+);
+const CustomerManagementPage = defineAsyncComponent(
+  () => import("./features/customers/pages/CustomerManagementPage.vue"),
+);
+const DialJobManagementPage = defineAsyncComponent(
+  () => import("./features/outbound/pages/DialJobManagementPage.vue"),
+);
 
 const authStore = useAdminAuthStore();
 // 默认进入首页：通话与回拨记录
-const activeTab = ref('routes');
+const activeTab = ref("routes");
 
 const handleUnauthorized = () => {
   authStore.logout();
 };
 
 onMounted(() => {
-  window.addEventListener('fcc-auth-unauthorized', handleUnauthorized);
+  window.addEventListener("fcc-auth-unauthorized", handleUnauthorized);
   if (authStore.isAuthenticated) {
     authStore.fetchUser();
   }
 });
 
 onUnmounted(() => {
-  window.removeEventListener('fcc-auth-unauthorized', handleUnauthorized);
+  window.removeEventListener("fcc-auth-unauthorized", handleUnauthorized);
 });
 </script>
 
@@ -38,7 +56,14 @@ onUnmounted(() => {
     <!-- 已认证：展示管理主控制台 -->
     <AdminLayout v-else v-model:activeTab="activeTab">
       <!-- 菜单 1: 通话与回拨记录 (整合通话记录与未接待回拨两大 Tab) -->
-      <CdrReportView v-if="activeTab === 'routes' || activeTab === 'callback'" :initialTab="activeTab === 'callback' ? 'callback' : 'records'" />
+      <CdrReportView
+        v-if="activeTab === 'routes' || activeTab === 'callback'"
+        :initialTab="activeTab === 'callback' ? 'callback' : 'records'"
+      />
+
+      <CustomerManagementPage v-else-if="activeTab === 'customers'" />
+
+      <DialJobManagementPage v-else-if="activeTab === 'dial-jobs'" />
 
       <!-- 菜单 2: 客服组与排队 (module-groups) -->
       <GroupManageView v-else-if="activeTab === 'groups'" />
@@ -54,8 +79,18 @@ onUnmounted(() => {
 
       <!-- 菜单 6/7/8: 系统运维 (分机管理 / 系统变量 / 客户端管理) -->
       <ExtensionManageView
-        v-else-if="activeTab === 'extensions' || activeTab === 'sysvars' || activeTab === 'clients'"
-        :initialTab="activeTab === 'sysvars' ? 'sysvars' : (activeTab === 'clients' ? 'clients' : 'extensions')"
+        v-else-if="
+          activeTab === 'extensions' ||
+          activeTab === 'sysvars' ||
+          activeTab === 'clients'
+        "
+        :initialTab="
+          activeTab === 'sysvars'
+            ? 'sysvars'
+            : activeTab === 'clients'
+              ? 'clients'
+              : 'extensions'
+        "
       />
     </AdminLayout>
   </div>

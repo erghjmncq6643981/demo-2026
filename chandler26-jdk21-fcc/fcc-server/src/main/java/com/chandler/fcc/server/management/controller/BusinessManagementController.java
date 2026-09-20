@@ -1,7 +1,9 @@
-package com.chandler.fcc.server.management;
+package com.chandler.fcc.server.management.controller;
 
 import com.chandler.fcc.server.customer.api.CustomerRecord;
-import com.chandler.fcc.server.management.api.request.CreateDialJobRequest;
+import com.chandler.fcc.server.management.BusinessManagementService;
+import com.chandler.fcc.server.management.controller.req.CreateDialJobReq;
+import com.chandler.fcc.server.management.controller.resp.ManagementResp;
 import java.util.Map;
 import lombok.RequiredArgsConstructor;
 import org.springframework.web.bind.annotation.*;
@@ -22,8 +24,10 @@ public class BusinessManagementController {
      * @param value 结果
      * @return 响应
      */
-    private Map<String, Object> ok(Object value) {
-        return Map.of("code", 200, "data", value);
+    private <T> ManagementResp<T> ok(T value) {
+        var response = new ManagementResp<T>();
+        response.setData(value);
+        return response;
     }
 
     /**
@@ -35,7 +39,7 @@ public class BusinessManagementController {
      * @return 列表
      */
     @GetMapping("/customers")
-    public Map<String, Object> customers(
+    public ManagementResp<?> customers(
         @RequestParam(defaultValue = "1") int page,
         @RequestParam(required = false) String owner,
         @RequestParam(required = false) String phone
@@ -50,7 +54,7 @@ public class BusinessManagementController {
      * @return 详情
      */
     @GetMapping("/customers/{id}")
-    public Map<String, Object> customer(@PathVariable String id) {
+    public ManagementResp<?> customer(@PathVariable String id) {
         return ok(service.customer(id));
     }
 
@@ -62,7 +66,7 @@ public class BusinessManagementController {
      * @return ID
      */
     @PostMapping("/customers")
-    public Map<String, Object> create(@RequestParam String owner, @RequestBody CustomerRecord record) {
+    public ManagementResp<?> create(@RequestParam String owner, @RequestBody CustomerRecord record) {
         return ok(service.save(null, owner, record));
     }
 
@@ -74,7 +78,7 @@ public class BusinessManagementController {
      * @return ID
      */
     @PutMapping("/customers/{id}")
-    public Map<String, Object> update(@PathVariable String id, @RequestBody CustomerRecord record) {
+    public ManagementResp<?> update(@PathVariable String id, @RequestBody CustomerRecord record) {
         return ok(service.save(id, null, record));
     }
 
@@ -86,7 +90,7 @@ public class BusinessManagementController {
      * @return 列表
      */
     @GetMapping("/dial-jobs")
-    public Map<String, Object> jobs(
+    public ManagementResp<?> jobs(
         @RequestParam(defaultValue = "1") int page,
         @RequestParam(required = false) String owner
     ) {
@@ -100,7 +104,7 @@ public class BusinessManagementController {
      * @return ID
      */
     @PostMapping("/dial-jobs")
-    public Map<String, Object> createJob(@RequestBody CreateDialJobRequest request) {
+    public ManagementResp<?> createJob(@RequestBody CreateDialJobReq request) {
         return ok(
             service.createJob(
                 request.getOwner(),
@@ -119,7 +123,7 @@ public class BusinessManagementController {
      * @return 逐次结果
      */
     @GetMapping("/dial-jobs/{id}/attempts")
-    public Map<String, Object> attempts(@PathVariable String id) {
+    public ManagementResp<?> attempts(@PathVariable String id) {
         return ok(service.attempts(id));
     }
 
@@ -131,7 +135,7 @@ public class BusinessManagementController {
      * @return 结果
      */
     @PostMapping("/dial-jobs/{id}/{action}")
-    public Map<String, Object> control(@PathVariable String id, @PathVariable String action) {
+    public ManagementResp<?> control(@PathVariable String id, @PathVariable String action) {
         service.control(id, action);
         return ok(Map.of("status", "UPDATED"));
     }

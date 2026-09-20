@@ -43,7 +43,14 @@ public class FlowExecutionRecorder {
                 );
                 row.putAll(definition);
                 var snapshot = json.readTree(definition.get("definition").toString());
-                if (!snapshot.has("stages")) snapshot = StagedFlowDefinition.template(template);
+                if (!snapshot.has("nodes")) {
+                    var fullModel =
+                        (com.fasterxml.jackson.databind.node.ObjectNode) StagedFlowDefinition.template(
+                            template
+                        );
+                    fullModel.setAll((com.fasterxml.jackson.databind.node.ObjectNode) snapshot);
+                    snapshot = fullModel;
+                }
                 row.put(
                     "snapshot",
                     json.writeValueAsString(

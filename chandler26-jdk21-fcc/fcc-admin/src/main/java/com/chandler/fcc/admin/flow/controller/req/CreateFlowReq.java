@@ -1,4 +1,4 @@
-package com.chandler.fcc.admin.flow.api.request;
+package com.chandler.fcc.admin.flow.controller.req;
 
 import io.swagger.v3.oas.annotations.media.Schema;
 import lombok.Data;
@@ -8,7 +8,7 @@ import lombok.Data;
  */
 @Data
 @Schema(description = "创建呼入流程请求")
-public class CreateFlowRequest {
+public class CreateFlowReq {
 
     /**
      * 流程的唯一业务代码。
