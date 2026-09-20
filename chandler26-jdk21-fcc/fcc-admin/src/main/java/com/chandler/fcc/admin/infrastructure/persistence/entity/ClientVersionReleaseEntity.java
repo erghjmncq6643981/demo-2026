@@ -1,10 +1,9 @@
 package com.chandler.fcc.admin.infrastructure.persistence.entity;
 
-import com.baomidou.mybatisplus.annotation.TableId;
 import com.baomidou.mybatisplus.annotation.TableName;
 import lombok.*;
+import lombok.experimental.SuperBuilder;
 
-import java.io.Serializable;
 import java.time.LocalDateTime;
 
 /**
@@ -21,21 +20,8 @@ import java.time.LocalDateTime;
 @Getter
 @Setter
 @ToString
-@Builder
-public class ClientVersionReleaseEntity implements Serializable {
-
-    private static final long serialVersionUID = 1L;
-
-    /**
-     * 版本发布雪花主键 ID
-     */
-    @TableId
-    private Long id;
-
-    /**
-     * 租户 ID
-     */
-    private Long tenantId;
+@SuperBuilder
+public class ClientVersionReleaseEntity extends BaseEntity {
 
     /**
      * 客户端版本号 (如 1.2.0)
@@ -81,14 +67,4 @@ public class ClientVersionReleaseEntity implements Serializable {
      * 发布操作人
      */
     private String createdBy;
-
-    /**
-     * 创建时间
-     */
-    private LocalDateTime createdAt;
-
-    /**
-     * 更新时间
-     */
-    private LocalDateTime updatedAt;
 }

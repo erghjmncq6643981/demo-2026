@@ -84,9 +84,9 @@ fcc-server 统一拥有话机绑定运行流程、呼入、呼出、自动外呼
 - Trunk、DID、外呼号码、节点；
 - 系统配置和客户端版本/硬件记录。
 
-### 3.4 starter
+### 3.4 starter SDK
 
-`fcc-server-starter` 和 `fcc-admin-starter` 只负责启动、配置和运行时依赖装配。
+`fcc-server-starter` 和 `fcc-admin-starter` 是供其他服务依赖的远程调用 SDK 边界，不是服务启动模块，不得依赖对应服务的实现模块。当前没有跨服务 Feign 调用需求，因此两个模块不引入 OpenFeign，也不预置无调用方的接口或 DTO。服务启动类、运行配置和集成测试分别由 `fcc-server`、`fcc-admin` 自己承载。
 
 ## 4. 身份语义
 

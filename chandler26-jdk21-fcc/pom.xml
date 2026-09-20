@@ -20,10 +20,10 @@
 
     <modules>
         <module>fcc-common</module>
-        <module>fcc-server</module>
         <module>fcc-server-starter</module>
-        <module>fcc-admin</module>
         <module>fcc-admin-starter</module>
+        <module>fcc-server</module>
+        <module>fcc-admin</module>
     </modules>
 
     <properties>

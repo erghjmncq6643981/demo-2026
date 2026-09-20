@@ -1,6 +1,6 @@
 import apiClient from "../../../api/apiClient";
 
-const managementBaseUrl = "/api/telephony/management";
+const managementBaseUrl = "/api/admin/business";
 
 export interface CustomerSummary {
   id: string;

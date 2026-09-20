@@ -1,247 +1,186 @@
 package com.chandler.fcc.server.websocket.controller;
 
-import com.chandler.fcc.common.dto.command.FNodeDialDTO;
-import com.chandler.fcc.common.entity.CallInfoBO;
-import com.chandler.fcc.common.enums.CallStageState;
-import com.chandler.fcc.common.enums.DirectionType;
-import com.chandler.fcc.common.enums.FlowModelType;
-import com.chandler.fcc.common.util.IdUtil;
-import com.chandler.fcc.server.call.CallSessionManager;
-import com.chandler.fcc.server.command.FccClient;
-import com.chandler.fcc.server.infrastructure.persistence.service.CallPersistenceService;
-import com.chandler.fcc.server.websocket.service.AgentWebSocketService;
-import com.chandler.fcc.server.websocket.service.ScreenPopService;
+import com.chandler.fcc.server.flow.FlowConfig;
+import com.chandler.fcc.server.telephony.application.AgentIdentityService;
+import com.chandler.fcc.server.telephony.application.CallControlService;
+import com.chandler.fcc.server.telephony.application.OutboundCallService;
+import com.chandler.fcc.server.websocket.controller.req.CallDtmfReq;
+import com.chandler.fcc.server.websocket.controller.req.CallHangupReq;
+import com.chandler.fcc.server.websocket.controller.req.CallHoldReq;
+import com.chandler.fcc.server.websocket.controller.req.CallOutboundReq;
+import com.chandler.fcc.server.websocket.controller.req.CallSuperviseReq;
+import com.chandler.fcc.server.websocket.controller.req.CallTransferReq;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
-import lombok.AllArgsConstructor;
-import lombok.Builder;
-import lombok.Data;
-import lombok.NoArgsConstructor;
+import java.nio.charset.StandardCharsets;
+import java.security.MessageDigest;
+import java.util.LinkedHashMap;
+import java.util.Map;
 import lombok.RequiredArgsConstructor;
-import lombok.extern.slf4j.Slf4j;
-import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.util.StringUtils;
-import org.springframework.web.bind.annotation.*;
-
-import java.util.*;
+import org.springframework.beans.factory.annotation.Value;
+import org.springframework.http.HttpStatus;
+import org.springframework.web.bind.annotation.PostMapping;
+import org.springframework.web.bind.annotation.RequestBody;
+import org.springframework.web.bind.annotation.RequestHeader;
+import org.springframework.web.bind.annotation.RequestMapping;
+import org.springframework.web.bind.annotation.RequestParam;
+import org.springframework.web.bind.annotation.RestController;
+import org.springframework.web.server.ResponseStatusException;
 
 /**
- * 核心话务与呼叫信令控制 REST 控制器
- * <p>
- * 为 PC 坐席工作台 (fcc-client-web) 提供真实外呼控制、挂断拆线、通话保持/恢复、
- * 二次 DTMF 按键透传；班长干预尚未实现，明确拒绝执行。
- * </p>
- *
- * @author Chandler
- * @version 1.0.0
- * @since 2026-09-18
+ * 为坐席工作台提供人工外呼和通话中的实时控制接口。
  */
-@Slf4j
 @RestController
 @RequestMapping("/api/telephony/call")
 @RequiredArgsConstructor
-@Tag(name = "核心呼叫控制接口", description = "提供外呼、挂断、保持、DTMF与班长干预等核心信令下发")
+@Tag(name = "核心呼叫控制接口", description = "提供外呼、挂断、保持、DTMF 与转接等信令控制")
 public class TelephonyCallController {
 
-    private final CallSessionManager sessionManager;
-    private final ScreenPopService screenPopService;
-    private final AgentWebSocketService agentWebSocketService;
+    private final FlowConfig flowConfig;
+    private final CallControlService controls;
+    private final AgentIdentityService identity;
+    private final OutboundCallService outboundCalls;
 
-    @Autowired(required = false)
-    private FccClient fccClient;
-
-    @Autowired(required = false)
-    private CallPersistenceService persistenceService;
-
-    @Autowired(required = false)
-    private com.chandler.fcc.server.flow.FlowConfig flowConfig;
-
-    @Autowired
-    private com.chandler.fcc.server.telephony.application.CallControlService controls;
-    @Autowired
-    private com.chandler.fcc.server.telephony.application.AgentIdentityService identity;
-    @org.springframework.beans.factory.annotation.Value("${fcc.flow.reload-token:}")
+    @Value("${fcc.flow.reload-token:}")
     private String reloadToken;
-    @Autowired
-    private com.chandler.fcc.server.infrastructure.nats.FccProperties properties;
-    @Autowired
-    private com.chandler.fcc.server.telephony.application.OutboundCallService outboundCalls;
-
-    /** 坐席外呼请求。 */
-    @io.swagger.v3.oas.annotations.media.Schema(description = "坐席外呼请求")
-    @Data
-    @NoArgsConstructor
-    @AllArgsConstructor
-    public static class CallOutboundReq {
-        @io.swagger.v3.oas.annotations.media.Schema(description = "坐席工号，必须与登录主体一致")
-        private String workNo;
-        @io.swagger.v3.oas.annotations.media.Schema(description = "申请使用的外呼主叫号码")
-        private String callerPhone;
-        @io.swagger.v3.oas.annotations.media.Schema(description = "外呼被叫号码")
-        private String calleePhone;
-        @io.swagger.v3.oas.annotations.media.Schema(description = "坐席录入的客户姓名")
-        private String customerName;
-        @io.swagger.v3.oas.annotations.media.Schema(description = "坐席录入的客户单位")
-        private String companyName;
-    }
-
-    /** 明确业务通话的挂机请求。 */
-    @io.swagger.v3.oas.annotations.media.Schema(description = "明确业务通话的挂机请求")
-    @Data
-    @NoArgsConstructor
-    @AllArgsConstructor
-    public static class CallHangupReq {
-        @io.swagger.v3.oas.annotations.media.Schema(description = "坐席工号，必须与登录主体一致")
-        private String workNo;
-        @io.swagger.v3.oas.annotations.media.Schema(description = "必填业务通话标识，不是话道 UUID")
-        private String callId;
-        @io.swagger.v3.oas.annotations.media.Schema(description = "请求挂机原因")
-        private String reason;
-    }
-
-    /** 明确业务通话的保持请求。 */
-    @io.swagger.v3.oas.annotations.media.Schema(description = "明确业务通话的保持请求")
-    @Data
-    @NoArgsConstructor
-    @AllArgsConstructor
-    public static class CallHoldReq {
-        @io.swagger.v3.oas.annotations.media.Schema(description = "坐席工号，必须与登录主体一致")
-        private String workNo;
-        @io.swagger.v3.oas.annotations.media.Schema(description = "必填业务通话标识，不是话道 UUID")
-        private String callId;
-        @io.swagger.v3.oas.annotations.media.Schema(description = "是否请求保持，必填")
-        private Boolean hold;
-    }
-
-    /** 明确业务通话的按键请求。 */
-    @io.swagger.v3.oas.annotations.media.Schema(description = "明确业务通话的按键请求")
-    @Data
-    @NoArgsConstructor
-    @AllArgsConstructor
-    public static class CallDtmfReq {
-        @io.swagger.v3.oas.annotations.media.Schema(description = "坐席工号，必须与登录主体一致")
-        private String workNo;
-        @io.swagger.v3.oas.annotations.media.Schema(description = "必填业务通话标识，不是话道 UUID")
-        private String callId;
-        @io.swagger.v3.oas.annotations.media.Schema(description = "单个 DTMF 按键")
-        private String digit;
-    }
-
-    /** 尚未开放的班长干预请求。 */
-    @io.swagger.v3.oas.annotations.media.Schema(description = "尚未开放的班长干预请求")
-    @Data
-    @NoArgsConstructor
-    @AllArgsConstructor
-    public static class CallSuperviseReq {
-        @io.swagger.v3.oas.annotations.media.Schema(description = "请求操作的班长工号")
-        private String supervisorWorkNo;
-        @io.swagger.v3.oas.annotations.media.Schema(description = "目标坐席工号")
-        private String targetWorkNo;
-        @io.swagger.v3.oas.annotations.media.Schema(description = "干预类型，当前均未开放")
-        private String type; // SPY, COACH, BARGE, KILL
-        @io.swagger.v3.oas.annotations.media.Schema(description = "必填业务通话标识，不是话道 UUID")
-        private String callId;
-    }
-
-    /** 明确业务通话的转接请求。 */
-    @io.swagger.v3.oas.annotations.media.Schema(description = "明确业务通话的转接请求")
-    @Data
-    @NoArgsConstructor
-    @AllArgsConstructor
-    public static class CallTransferReq {
-        @io.swagger.v3.oas.annotations.media.Schema(description = "坐席工号，必须与登录主体一致")
-        private String workNo;
-        @io.swagger.v3.oas.annotations.media.Schema(description = "必填业务通话标识，不是话道 UUID")
-        private String callId;
-        @io.swagger.v3.oas.annotations.media.Schema(description = "转接目标号码")
-        private String targetNumber; // 例如 1017 或 90101
-    }
 
     /**
-     * 触发双向/单向智能外呼
-     * <p>
-     * 坐席工作台发起外呼：注册真实通话会话、下发 Dial 至软交换，并由弹屏服务依据本次会话事实
-     * （真实主被叫号码 + 坐席录入的客户信息）推送外呼弹屏。接口不填充任何示例数据。
-     * </p>
+     * 发起坐席先振铃的人工外呼。
+     *
+     * @param request 外呼请求
+     * @return 已持久化的通话受理结果
      */
     @PostMapping("/outbound")
-    @Operation(summary = "发起外呼", description = "坐席工作台发起对外呼叫，建立真实呼叫会话并推送外呼弹屏")
-    public Map<String, Object> outbound(@RequestBody CallOutboundReq req) {
-        return Map.of("code",200,"message","外呼已受理，请先接听坐席话机", "data",outboundCalls.start(req.getWorkNo(),req.getCalleePhone()));
+    @Operation(summary = "发起外呼", description = "坐席工作台发起对外呼叫并等待坐席话机接听")
+    public Map<String, Object> outbound(@RequestBody CallOutboundReq request) {
+        return Map.of(
+            "code",
+            200,
+            "message",
+            "外呼已受理，请先接听坐席话机",
+            "data",
+            outboundCalls.start(request.getWorkNo(), request.getCalleePhone())
+        );
     }
 
     /**
-     * 挂机拆线
+     * 挂断当前坐席有权控制的通话。
+     *
+     * @param request 挂机请求
+     * @return 控制结果
      */
     @PostMapping("/hangup")
-    @Operation(summary = "挂断通话", description = "坐席或客户挂断当前通话，释放信道并进入话后整理")
-    public Map<String, Object> hangup(@RequestBody CallHangupReq req) {
-        return controls.hangup(controls.requireCall(req.getWorkNo(), req.getCallId()));
+    @Operation(summary = "挂断通话", description = "挂断当前通话并进入话后整理")
+    public Map<String, Object> hangup(@RequestBody CallHangupReq request) {
+        return controls.hangup(controls.requireCall(request.getWorkNo(), request.getCallId()));
     }
 
     /**
-     * 通话保持 / 恢复
+     * 保持或恢复当前坐席有权控制的通话。
+     *
+     * @param request 保持请求
+     * @return 控制结果
      */
     @PostMapping("/hold")
-    @Operation(summary = "呼叫保持与恢复", description = "切换当前通话的保持静音态")
-    public Map<String, Object> hold(@RequestBody CallHoldReq req) {
-        if (req.getHold() == null) return fail("hold 必填");
-        return controls.hold(controls.requireCall(req.getWorkNo(), req.getCallId()), req.getHold());
+    @Operation(summary = "呼叫保持与恢复", description = "切换当前通话的保持状态")
+    public Map<String, Object> hold(@RequestBody CallHoldReq request) {
+        if (request.getHold() == null) return failure("hold 必填");
+        return controls.hold(
+            controls.requireCall(request.getWorkNo(), request.getCallId()),
+            request.getHold()
+        );
     }
 
     /**
-     * 二次 DTMF 按键透传
+     * 向当前坐席有权控制的通话发送单个 DTMF 按键。
+     *
+     * @param request 按键请求
+     * @return 控制结果
      */
     @PostMapping("/dtmf")
-    @Operation(summary = "发送二次DTMF", description = "通话中发送按键数字 (如查询分机或IVR导航)")
-    public Map<String, Object> dtmf(@RequestBody CallDtmfReq req) {
-        return controls.dtmf(controls.requireCall(req.getWorkNo(), req.getCallId()), req.getDigit());
+    @Operation(summary = "发送二次 DTMF", description = "通话中发送单个按键")
+    public Map<String, Object> dtmf(@RequestBody CallDtmfReq request) {
+        return controls.dtmf(
+            controls.requireCall(request.getWorkNo(), request.getCallId()),
+            request.getDigit()
+        );
     }
 
     /**
-     * 班长席现场干预调度 (监听/耳语/强插/强拆)
+     * 明确拒绝尚未实现的班长监听、耳语、强插和强拆操作。
+     *
+     * @param request 班长干预请求
+     * @return 当前不会返回结果
+     * @throws ResponseStatusException 功能尚未实现
      */
     @PostMapping("/supervise")
-    @Operation(summary = "班长席干预控制", description = "班长主管对进行中通话进行监听(SPY)、耳语(COACH)、强插(BARGE)或强拆(KILL)")
-    public Map<String, Object> supervise(@RequestBody CallSuperviseReq req) {
-        identity.requireAgent(req.getSupervisorWorkNo());
-        throw new org.springframework.web.server.ResponseStatusException(org.springframework.http.HttpStatus.NOT_IMPLEMENTED, "班长干预尚未实现，操作未执行");
+    @Operation(summary = "班长席干预控制", description = "当前版本尚未开放班长干预")
+    public Map<String, Object> supervise(@RequestBody CallSuperviseReq request) {
+        identity.requireAgent(request.getSupervisorWorkNo());
+        throw new ResponseStatusException(HttpStatus.NOT_IMPLEMENTED, "班长干预尚未实现，操作未执行");
     }
 
     /**
-     * 呼叫盲转 / 坐席转接
+     * 将当前坐席有权控制的通话转接到目标号码。
+     *
+     * @param request 转接请求
+     * @return 控制结果
      */
     @PostMapping("/transfer")
-    @Operation(summary = "呼叫转接", description = "将当前通话的客户话道盲转至指定坐席工号或分机号")
-    public Map<String, Object> transfer(@RequestBody CallTransferReq req) {
-        return controls.transfer(controls.requireCall(req.getWorkNo(), req.getCallId()), req.getTargetNumber());
+    @Operation(summary = "呼叫转接", description = "将当前客户话道转接至指定工号或分机")
+    public Map<String, Object> transfer(@RequestBody CallTransferReq request) {
+        return controls.transfer(
+            controls.requireCall(request.getWorkNo(), request.getCallId()),
+            request.getTargetNumber()
+        );
     }
 
     /**
-     * 热重载指定话务编排流程
+     * 由管理端在流程发布提交后热重载指定流程。
+     *
+     * @param flowKey 流程业务键
+     * @param token 服务间重载令牌
+     * @return 重载结果
      */
     @Operation(summary = "热重载指定话务编排流程")
     @PostMapping("/flow/reload")
-    public Map<String, Object> reloadFlow(@RequestParam("flowKey") String flowKey,
-            @RequestHeader(value = "X-FCC-Reload-Token", required = false) String token) {
-        if (reloadToken.isBlank() || token == null || !java.security.MessageDigest.isEqual(reloadToken.getBytes(java.nio.charset.StandardCharsets.UTF_8), token.getBytes(java.nio.charset.StandardCharsets.UTF_8))) {
-            throw new org.springframework.web.server.ResponseStatusException(org.springframework.http.HttpStatus.FORBIDDEN, "无权重载流程");
+    public Map<String, Object> reloadFlow(
+        @RequestParam("flowKey") String flowKey,
+        @RequestHeader(value = "X-FCC-Reload-Token", required = false) String token
+    ) {
+        if (!validReloadToken(token)) {
+            throw new ResponseStatusException(HttpStatus.FORBIDDEN, "无权重载流程");
         }
-        boolean ok = flowConfig != null && flowConfig.reloadFlow(flowKey);
+        boolean reloaded = flowConfig.reloadFlow(flowKey);
         Map<String, Object> result = new LinkedHashMap<>();
-        result.put("code", ok ? 200 : 500);
-        result.put("message", ok ? "流程热重载成功: " + flowKey : "流程热重载失败");
-        result.put("data", Map.of("flowKey", flowKey, "reloaded", ok));
+        result.put("code", reloaded ? 200 : 500);
+        result.put("message", reloaded ? "流程热重载成功: " + flowKey : "流程热重载失败");
+        result.put("data", Map.of("flowKey", flowKey, "reloaded", reloaded));
         return result;
     }
 
     /**
-     * 构建参数校验失败响应
+     * 使用固定时序比较服务间令牌。
+     *
+     * @param token 请求令牌
+     * @return 令牌有效时返回 {@code true}
+     */
+    private boolean validReloadToken(String token) {
+        return !reloadToken.isBlank() &&
+        token != null &&
+        MessageDigest.isEqual(
+            reloadToken.getBytes(StandardCharsets.UTF_8),
+            token.getBytes(StandardCharsets.UTF_8)
+        );
+    }
+
+    /**
+     * 构造参数校验失败响应。
      *
      * @param message 失败原因
-     * @return 统一响应结构
+     * @return 统一失败响应
      */
-    private Map<String, Object> fail(String message) {
+    private Map<String, Object> failure(String message) {
         Map<String, Object> result = new LinkedHashMap<>();
         result.put("code", 400);
         result.put("message", message);

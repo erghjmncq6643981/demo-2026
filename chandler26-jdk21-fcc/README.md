@@ -9,12 +9,12 @@ The earlier statement that this repository contained only a skeleton is no longe
 | Module | Responsibility |
 | --- | --- |
 | `fcc-common` | shared FCC contracts, command/event DTOs, enums, entities, and utilities |
-| `fcc-server` | call control, flow/actions, NATS commands/events, runtime persistence, recording metadata, and agent WebSocket |
-| `fcc-server-starter` | executable control service, default port `8085` |
-| `fcc-admin` | authentication, agents/groups/endpoints, extensions, CDR/recordings, callbacks, flows, resources, configuration, and fleet administration |
-| `fcc-admin-starter` | executable administration service, default port `8089` |
+| `fcc-server` | executable control service (default port `8085`): call control, flow/actions, NATS commands/events, runtime persistence, recording metadata, and agent WebSocket |
+| `fcc-server-starter` | client SDK boundary for future remote server contracts; currently empty because there is no Feign consumer |
+| `fcc-admin` | executable administration service (default port `8089`): authentication, agents/groups/endpoints, extensions, CDR/recordings, callbacks, flows, resources, configuration, and fleet administration |
+| `fcc-admin-starter` | client SDK boundary for future remote admin contracts; currently empty because there is no Feign consumer |
 
-Starters contain runtime assembly; domain behavior remains in `fcc-server` and `fcc-admin`.
+Runtime bootstrap, configuration, and tests live with their executable service. The starter modules must not depend on service implementations; when an actual remote consumer appears, they may expose only the required client contract.
 
 ## Runtime architecture
 
@@ -74,7 +74,7 @@ The shared `FccIdentifierJacksonModule` is registered in admin/server and serial
 
 ## Configuration
 
-Both starters use environment-driven configuration. Important variables include:
+Both executable services use environment-driven configuration. Important variables include:
 
 - `SERVER_PORT`
 - `MYSQL_HOST`, `MYSQL_PORT`, `MYSQL_DATABASE`, `MYSQL_USERNAME`, `MYSQL_PASSWORD`

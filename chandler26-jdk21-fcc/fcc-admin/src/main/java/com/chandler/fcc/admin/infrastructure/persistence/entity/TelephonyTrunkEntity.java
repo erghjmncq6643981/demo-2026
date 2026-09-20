@@ -1,11 +1,10 @@
 package com.chandler.fcc.admin.infrastructure.persistence.entity;
 
-import com.baomidou.mybatisplus.annotation.TableId;
 import com.baomidou.mybatisplus.annotation.TableLogic;
 import com.baomidou.mybatisplus.annotation.TableName;
 import lombok.*;
+import lombok.experimental.SuperBuilder;
 
-import java.io.Serializable;
 import java.time.LocalDateTime;
 
 /**
@@ -22,21 +21,8 @@ import java.time.LocalDateTime;
 @Getter
 @Setter
 @ToString
-@Builder
-public class TelephonyTrunkEntity implements Serializable {
-
-    private static final long serialVersionUID = 1L;
-
-    /**
-     * 中继雪花主键 ID
-     */
-    @TableId
-    private Long id;
-
-    /**
-     * 租户 ID
-     */
-    private Long tenantId;
+@SuperBuilder
+public class TelephonyTrunkEntity extends BaseEntity {
 
     /**
      * 中继唯一编码
@@ -77,16 +63,6 @@ public class TelephonyTrunkEntity implements Serializable {
      * 网关配置扩展 (JSON)
      */
     private String configJson;
-
-    /**
-     * 创建时间
-     */
-    private LocalDateTime createdAt;
-
-    /**
-     * 更新时间
-     */
-    private LocalDateTime updatedAt;
 
     /**
      * 逻辑删除标记时间

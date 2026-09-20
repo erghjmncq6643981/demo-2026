@@ -1,7 +1,9 @@
 package com.chandler.fcc.server.websocket.config;
 
 import com.chandler.fcc.server.websocket.handler.AgentWebSocketHandler;
+import java.util.Arrays;
 import lombok.RequiredArgsConstructor;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.web.socket.config.annotation.EnableWebSocket;
 import org.springframework.web.socket.config.annotation.WebSocketConfigurer;
@@ -23,15 +25,19 @@ public class WebSocketConfig implements WebSocketConfigurer {
     private final AgentWebSocketHandler agentWebSocketHandler;
     private final AgentHandshakeInterceptor handshake;
 
-    @org.springframework.beans.factory.annotation.Value("${fcc.websocket.allowed-origins:}")
+    @Value("${fcc.websocket.allowed-origins:}")
     private String allowedOrigins;
 
     @Override
     public void registerWebSocketHandlers(WebSocketHandlerRegistry registry) {
         var registration = registry.addHandler(agentWebSocketHandler, "/ws/agent").addInterceptors(handshake);
         if (!allowedOrigins.isBlank()) {
-            String[] origins = java.util.Arrays.stream(allowedOrigins.split(",")).map(String::trim).toArray(String[]::new);
-            if (java.util.Arrays.asList(origins).contains("*")) throw new IllegalArgumentException("WebSocket Origin 不允许通配符");
+            String[] origins = Arrays.stream(allowedOrigins.split(","))
+                .map(String::trim)
+                .toArray(String[]::new);
+            if (Arrays.asList(origins).contains("*")) {
+                throw new IllegalArgumentException("WebSocket Origin 不允许通配符");
+            }
             registration.setAllowedOrigins(origins);
         }
     }

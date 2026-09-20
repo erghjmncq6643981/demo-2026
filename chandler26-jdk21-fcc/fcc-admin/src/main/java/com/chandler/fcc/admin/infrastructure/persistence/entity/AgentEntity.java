@@ -1,11 +1,10 @@
 package com.chandler.fcc.admin.infrastructure.persistence.entity;
 
-import com.baomidou.mybatisplus.annotation.TableId;
 import com.baomidou.mybatisplus.annotation.TableLogic;
 import com.baomidou.mybatisplus.annotation.TableName;
 import lombok.*;
+import lombok.experimental.SuperBuilder;
 
-import java.io.Serializable;
 import java.time.LocalDateTime;
 
 /**
@@ -23,21 +22,8 @@ import java.time.LocalDateTime;
 @Getter
 @Setter
 @ToString(exclude = "passwordHash")
-@Builder
-public class AgentEntity implements Serializable {
-
-    private static final long serialVersionUID = 1L;
-
-    /**
-     * 坐席雪花主键 ID
-     */
-    @TableId
-    private Long id;
-
-    /**
-     * 租户 ID
-     */
-    private Long tenantId;
+@SuperBuilder
+public class AgentEntity extends BaseEntity {
 
     /**
      * 坐席工号 (全局唯一，同时作为登录账号)
@@ -89,16 +75,6 @@ public class AgentEntity implements Serializable {
      * 扩展元数据 (JSON 字符串)
      */
     private String metadata;
-
-    /**
-     * 创建时间
-     */
-    private LocalDateTime createdAt;
-
-    /**
-     * 更新时间
-     */
-    private LocalDateTime updatedAt;
 
     /**
      * 逻辑删除标记时间

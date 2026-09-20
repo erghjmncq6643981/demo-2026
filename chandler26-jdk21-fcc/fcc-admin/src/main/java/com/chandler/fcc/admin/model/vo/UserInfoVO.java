@@ -26,9 +26,6 @@ public class UserInfoVO implements Serializable {
     @Schema(description = "登录标识 ID (控制台账号为 username，坐席为工号)", example = "admin")
     private String loginId;
 
-    @Schema(description = "登录主体所属租户标识")
-    private Long tenantId;
-
     @Schema(description = "账号主体类型 (CONSOLE 控制台账号, AGENT 坐席账号)", example = "CONSOLE")
     private String accountType;
 

@@ -47,7 +47,6 @@ public class ClientFleetService {
 
         ClientVersionReleaseEntity entity = ClientVersionReleaseEntity.builder()
                 .id(id)
-                .tenantId(0L)
                 .version(req.getVersion().trim())
                 .platform(req.getPlatform() == null ? "WINDOWS" : req.getPlatform().trim().toUpperCase())
                 .downloadUrl(req.getDownloadUrl().trim())
@@ -112,7 +111,6 @@ public class ClientFleetService {
 
         ClientHardwareRecordEntity record = ClientHardwareRecordEntity.builder()
                 .id(id)
-                .tenantId(0L)
                 .agentId(agentId)
                 .workNum(workNum)
                 .clientVersion(clientVersion)

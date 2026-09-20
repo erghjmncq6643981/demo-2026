@@ -1,8 +1,6 @@
 -- FCC initial schema
--- Forward-only additive migration. No business data backfill or destructive rollback.
--- Keep receipts if rolling back application code; archive closed/expired payloads under the privacy policy.
+-- Fresh-install schema for one independently deployed call center.
 CREATE TABLE IF NOT EXISTS fcc_screen_pop_delivery (
- tenant_id BIGINT UNSIGNED NOT NULL,
  owner_work_no VARCHAR(64) NOT NULL,
  call_id BIGINT UNSIGNED NOT NULL,
  payload JSON NOT NULL,
@@ -12,8 +10,8 @@ CREATE TABLE IF NOT EXISTS fcc_screen_pop_delivery (
  activated_at DATETIME(3) NULL,
  unsupported_at DATETIME(3) NULL,
  closed_at DATETIME(3) NULL,
- PRIMARY KEY(tenant_id,owner_work_no,call_id),
- KEY idx_pop_owner_expiry(tenant_id,owner_work_no,closed_at,expires_at)
+ PRIMARY KEY(owner_work_no,call_id),
+ KEY idx_pop_owner_expiry(owner_work_no,closed_at,expires_at)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
 
 CREATE TABLE IF NOT EXISTS fcc_event_inbox (
@@ -26,26 +24,9 @@ CREATE TABLE IF NOT EXISTS fcc_event_inbox (
  KEY idx_inbox_status_time(status,updated_at)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
 
-CREATE TABLE IF NOT EXISTS fcc_phone_binding_lock (
- tenant_id BIGINT UNSIGNED NOT NULL PRIMARY KEY
-) ENGINE=InnoDB;
-CREATE TABLE IF NOT EXISTS fcc_phone_binding_challenge (
- tenant_id BIGINT UNSIGNED NOT NULL,
- owner_work_no VARCHAR(64) NOT NULL,
- extension VARCHAR(32) NOT NULL,
- code_hash CHAR(64) CHARACTER SET ascii COLLATE ascii_bin NOT NULL,
- status VARCHAR(16) NOT NULL,
- expires_at DATETIME(3) NOT NULL,
- channel_uuid VARCHAR(64) NULL,
- updated_at DATETIME(3) NOT NULL DEFAULT CURRENT_TIMESTAMP(3) ON UPDATE CURRENT_TIMESTAMP(3),
- PRIMARY KEY(tenant_id,owner_work_no),
- UNIQUE KEY uk_binding_code(code_hash)
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
-
--- Customer schema is mirrored in docs/migrations/20260920_customer.sql for existing databases.
+-- This new project supports fresh installation only; rebuild the database after baseline changes.
 CREATE TABLE IF NOT EXISTS fcc_customer (
  id BIGINT UNSIGNED NOT NULL PRIMARY KEY,
- tenant_id BIGINT UNSIGNED NOT NULL,
  owner_work_no VARCHAR(64) NOT NULL,
  name VARCHAR(128) NOT NULL,
  phone_number VARCHAR(32) NOT NULL,
@@ -54,8 +35,8 @@ CREATE TABLE IF NOT EXISTS fcc_customer (
  version BIGINT UNSIGNED NOT NULL DEFAULT 0,
  created_at DATETIME(3) NOT NULL DEFAULT CURRENT_TIMESTAMP(3),
  updated_at DATETIME(3) NOT NULL DEFAULT CURRENT_TIMESTAMP(3) ON UPDATE CURRENT_TIMESTAMP(3),
- KEY idx_customer_owner_page(tenant_id,owner_work_no,id),
- KEY idx_customer_owner_phone(tenant_id,owner_work_no,phone_number,id)
+ KEY idx_customer_owner_page(owner_work_no,id),
+ KEY idx_customer_owner_phone(owner_work_no,phone_number,id)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
 
 -- Database: MySQL 8.0+
@@ -73,7 +54,6 @@ SET time_zone = '+00:00';
 
 CREATE TABLE IF NOT EXISTS fcc_telephony_node (
     id                  BIGINT UNSIGNED NOT NULL,
-    tenant_id           BIGINT UNSIGNED NOT NULL DEFAULT 0,
     node_id             VARCHAR(128) NOT NULL,
     cluster_id          VARCHAR(64) NOT NULL DEFAULT 'default',
     host                VARCHAR(255) NULL,
@@ -87,13 +67,12 @@ CREATE TABLE IF NOT EXISTS fcc_telephony_node (
     created_at          DATETIME(3) NOT NULL DEFAULT CURRENT_TIMESTAMP(3),
     updated_at          DATETIME(3) NOT NULL DEFAULT CURRENT_TIMESTAMP(3) ON UPDATE CURRENT_TIMESTAMP(3),
     PRIMARY KEY (id),
-    UNIQUE KEY uk_node_tenant_node (tenant_id, node_id),
+    UNIQUE KEY uk_node_node_id (node_id),
     KEY idx_node_status_heartbeat (status, last_heartbeat_at)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci COMMENT='FreeSWITCH/Sidecar node registry';
 
 CREATE TABLE IF NOT EXISTS fcc_telephony_trunk (
     id                  BIGINT UNSIGNED NOT NULL,
-    tenant_id           BIGINT UNSIGNED NOT NULL DEFAULT 0,
     trunk_code          VARCHAR(64) NOT NULL,
     trunk_name          VARCHAR(128) NOT NULL,
     carrier_code        VARCHAR(64) NULL,
@@ -106,13 +85,12 @@ CREATE TABLE IF NOT EXISTS fcc_telephony_trunk (
     updated_at          DATETIME(3) NOT NULL DEFAULT CURRENT_TIMESTAMP(3) ON UPDATE CURRENT_TIMESTAMP(3),
     deleted_at          DATETIME(3) NULL,
     PRIMARY KEY (id),
-    UNIQUE KEY uk_trunk_tenant_code (tenant_id, trunk_code),
-    KEY idx_trunk_gateway (tenant_id, gateway_name)
+    UNIQUE KEY uk_trunk_code (trunk_code),
+    KEY idx_trunk_gateway (gateway_name)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci COMMENT='SIP trunk and carrier gateway';
 
 CREATE TABLE IF NOT EXISTS fcc_did_number (
     id                  BIGINT UNSIGNED NOT NULL,
-    tenant_id           BIGINT UNSIGNED NOT NULL DEFAULT 0,
     trunk_id            BIGINT UNSIGNED NULL,
     phone_number        VARCHAR(32) NOT NULL,
     route_key           VARCHAR(128) NULL,
@@ -121,13 +99,12 @@ CREATE TABLE IF NOT EXISTS fcc_did_number (
     updated_at          DATETIME(3) NOT NULL DEFAULT CURRENT_TIMESTAMP(3) ON UPDATE CURRENT_TIMESTAMP(3),
     deleted_at          DATETIME(3) NULL,
     PRIMARY KEY (id),
-    UNIQUE KEY uk_did_tenant_number (tenant_id, phone_number),
+    UNIQUE KEY uk_did_number (phone_number),
     KEY idx_did_trunk (trunk_id)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci COMMENT='Inbound DID number';
 
 CREATE TABLE IF NOT EXISTS fcc_outbound_number (
     id                  BIGINT UNSIGNED NOT NULL,
-    tenant_id           BIGINT UNSIGNED NOT NULL DEFAULT 0,
     trunk_id            BIGINT UNSIGNED NOT NULL,
     phone_number        VARCHAR(32) NOT NULL,
     pool_code           VARCHAR(64) NOT NULL DEFAULT 'default',
@@ -137,13 +114,12 @@ CREATE TABLE IF NOT EXISTS fcc_outbound_number (
     updated_at          DATETIME(3) NOT NULL DEFAULT CURRENT_TIMESTAMP(3) ON UPDATE CURRENT_TIMESTAMP(3),
     deleted_at          DATETIME(3) NULL,
     PRIMARY KEY (id),
-    UNIQUE KEY uk_outbound_tenant_number (tenant_id, phone_number),
-    KEY idx_outbound_pool_status (tenant_id, pool_code, status)
+    UNIQUE KEY uk_outbound_number (phone_number),
+    KEY idx_outbound_pool_status (pool_code, status)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci COMMENT='Outbound caller number pool';
 
 CREATE TABLE IF NOT EXISTS fcc_extension (
     id                  BIGINT UNSIGNED NOT NULL,
-    tenant_id           BIGINT UNSIGNED NOT NULL DEFAULT 0,
     extension           VARCHAR(32) NOT NULL,
     endpoint_type       VARCHAR(32) NOT NULL DEFAULT 'SIP',
     credential_secret   VARBINARY(512) NULL,
@@ -154,13 +130,12 @@ CREATE TABLE IF NOT EXISTS fcc_extension (
     updated_at          DATETIME(3) NOT NULL DEFAULT CURRENT_TIMESTAMP(3) ON UPDATE CURRENT_TIMESTAMP(3),
     deleted_at          DATETIME(3) NULL,
     PRIMARY KEY (id),
-    UNIQUE KEY uk_extension_tenant_number (tenant_id, extension),
-    KEY idx_ext_agent_work_no (tenant_id, agent_work_no)
+    UNIQUE KEY uk_extension_number (extension),
+    KEY idx_ext_agent_work_no (agent_work_no)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci COMMENT='SIP/WebRTC extension';
 
 CREATE TABLE IF NOT EXISTS fcc_endpoint_registration_event (
     id                  BIGINT UNSIGNED NOT NULL,
-    tenant_id           BIGINT UNSIGNED NOT NULL DEFAULT 0,
     extension_id        BIGINT UNSIGNED NULL,
     extension           VARCHAR(32) NOT NULL,
     protocol            VARCHAR(16) NOT NULL,
@@ -173,7 +148,7 @@ CREATE TABLE IF NOT EXISTS fcc_endpoint_registration_event (
     occurred_at         DATETIME(3) NOT NULL,
     created_at          DATETIME(3) NOT NULL DEFAULT CURRENT_TIMESTAMP(3),
     PRIMARY KEY (id),
-    KEY idx_registration_extension_time (tenant_id, extension, occurred_at),
+    KEY idx_registration_extension_time (extension, occurred_at),
     KEY idx_registration_node_time (node_id, occurred_at)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci COMMENT='Append-only endpoint registration history';
 
@@ -183,7 +158,6 @@ CREATE TABLE IF NOT EXISTS fcc_endpoint_registration_event (
 
 CREATE TABLE IF NOT EXISTS fcc_agent (
     id                    BIGINT UNSIGNED NOT NULL,
-    tenant_id             BIGINT UNSIGNED NOT NULL DEFAULT 0,
     work_no               VARCHAR(64) NOT NULL,
     agent_name            VARCHAR(128) NOT NULL,
     phone_number          VARCHAR(32) NULL,
@@ -198,9 +172,9 @@ CREATE TABLE IF NOT EXISTS fcc_agent (
     updated_at            DATETIME(3) NOT NULL DEFAULT CURRENT_TIMESTAMP(3) ON UPDATE CURRENT_TIMESTAMP(3),
     deleted_at            DATETIME(3) NULL,
     PRIMARY KEY (id),
-    UNIQUE KEY uk_agent_tenant_work_no (tenant_id, work_no),
-    KEY idx_agent_phone (tenant_id, phone_number),
-    KEY idx_agent_cur_ext (tenant_id, current_extension)
+    UNIQUE KEY uk_agent_work_no (work_no),
+    KEY idx_agent_phone (phone_number),
+    KEY idx_agent_cur_ext (current_extension)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci COMMENT='Agent master data';
 
 -- -----------------------------------------------------------------------------
@@ -209,7 +183,6 @@ CREATE TABLE IF NOT EXISTS fcc_agent (
 
 CREATE TABLE IF NOT EXISTS fcc_admin_user (
     id                    BIGINT UNSIGNED NOT NULL,
-    tenant_id             BIGINT UNSIGNED NOT NULL DEFAULT 0,
     username              VARCHAR(64) NOT NULL COMMENT '管理控制台登录账号',
     real_name             VARCHAR(128) NOT NULL COMMENT '账号显示姓名',
     password_hash         VARCHAR(255) NOT NULL COMMENT '口令派生串 pbkdf2-sha256$iterations$salt$hash',
@@ -227,7 +200,6 @@ CREATE TABLE IF NOT EXISTS fcc_admin_user (
 
 CREATE TABLE IF NOT EXISTS fcc_agent_group (
     id                  BIGINT UNSIGNED NOT NULL,
-    tenant_id           BIGINT UNSIGNED NOT NULL DEFAULT 0,
     parent_id           BIGINT UNSIGNED NULL,
     group_code          VARCHAR(64) NOT NULL,
     group_name          VARCHAR(128) NOT NULL,
@@ -238,13 +210,12 @@ CREATE TABLE IF NOT EXISTS fcc_agent_group (
     updated_at          DATETIME(3) NOT NULL DEFAULT CURRENT_TIMESTAMP(3) ON UPDATE CURRENT_TIMESTAMP(3),
     deleted_at          DATETIME(3) NULL,
     PRIMARY KEY (id),
-    UNIQUE KEY uk_group_tenant_code (tenant_id, group_code),
-    KEY idx_group_parent (tenant_id, parent_id)
+    UNIQUE KEY uk_group_code (group_code),
+    KEY idx_group_parent (parent_id)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci COMMENT='Agent skill group';
 
 CREATE TABLE IF NOT EXISTS fcc_agent_group_member (
     id                  BIGINT UNSIGNED NOT NULL,
-    tenant_id           BIGINT UNSIGNED NOT NULL DEFAULT 0,
     group_id            BIGINT UNSIGNED NOT NULL,
     agent_id            BIGINT UNSIGNED NOT NULL,
     member_role         VARCHAR(32) NOT NULL DEFAULT 'MEMBER',
@@ -252,13 +223,12 @@ CREATE TABLE IF NOT EXISTS fcc_agent_group_member (
     created_at          DATETIME(3) NOT NULL DEFAULT CURRENT_TIMESTAMP(3),
     deleted_at          DATETIME(3) NULL,
     PRIMARY KEY (id),
-    UNIQUE KEY uk_group_member (tenant_id, group_id, agent_id),
-    KEY idx_group_member_agent (tenant_id, agent_id)
+    UNIQUE KEY uk_group_member (group_id, agent_id),
+    KEY idx_group_member_agent (agent_id)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci COMMENT='Agent and skill group membership';
 
 CREATE TABLE IF NOT EXISTS fcc_agent_endpoint_binding (
     id                  BIGINT UNSIGNED NOT NULL,
-    tenant_id           BIGINT UNSIGNED NOT NULL DEFAULT 0,
     agent_id            BIGINT UNSIGNED NOT NULL,
     endpoint_type       VARCHAR(32) NOT NULL,
     extension_id        BIGINT UNSIGNED NULL,
@@ -269,13 +239,12 @@ CREATE TABLE IF NOT EXISTS fcc_agent_endpoint_binding (
     valid_to            DATETIME(3) NULL,
     created_at          DATETIME(3) NOT NULL DEFAULT CURRENT_TIMESTAMP(3),
     PRIMARY KEY (id),
-    KEY idx_binding_agent_status (tenant_id, agent_id, status),
+    KEY idx_binding_agent_status (agent_id, status),
     KEY idx_binding_extension (extension_id)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci COMMENT='Agent endpoint binding history';
 
 CREATE TABLE IF NOT EXISTS fcc_agent_presence (
     agent_id            BIGINT UNSIGNED NOT NULL,
-    tenant_id           BIGINT UNSIGNED NOT NULL DEFAULT 0,
     login_status        VARCHAR(32) NOT NULL DEFAULT 'OFFLINE',
     work_status         VARCHAR(32) NOT NULL DEFAULT 'READY',
     answer_type         VARCHAR(32) NULL,
@@ -285,12 +254,11 @@ CREATE TABLE IF NOT EXISTS fcc_agent_presence (
     version             BIGINT UNSIGNED NOT NULL DEFAULT 0,
     updated_at          DATETIME(3) NOT NULL DEFAULT CURRENT_TIMESTAMP(3) ON UPDATE CURRENT_TIMESTAMP(3),
     PRIMARY KEY (agent_id),
-    KEY idx_presence_dispatch (tenant_id, login_status, work_status, last_state_at)
+    KEY idx_presence_dispatch (login_status, work_status, last_state_at)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci COMMENT='Current agent presence snapshot';
 
 CREATE TABLE IF NOT EXISTS fcc_agent_state_interval (
     id                  BIGINT UNSIGNED NOT NULL,
-    tenant_id           BIGINT UNSIGNED NOT NULL DEFAULT 0,
     agent_id            BIGINT UNSIGNED NOT NULL,
     state_type          VARCHAR(32) NOT NULL,
     state_value         VARCHAR(32) NOT NULL,
@@ -300,8 +268,8 @@ CREATE TABLE IF NOT EXISTS fcc_agent_state_interval (
     source              VARCHAR(32) NULL,
     created_at          DATETIME(3) NOT NULL DEFAULT CURRENT_TIMESTAMP(3),
     PRIMARY KEY (id),
-    KEY idx_agent_state_time (tenant_id, agent_id, started_at),
-    KEY idx_agent_state_open (tenant_id, agent_id, ended_at)
+    KEY idx_agent_state_time (agent_id, started_at),
+    KEY idx_agent_state_open (agent_id, ended_at)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci COMMENT='Agent state interval facts';
 
 -- -----------------------------------------------------------------------------
@@ -310,7 +278,6 @@ CREATE TABLE IF NOT EXISTS fcc_agent_state_interval (
 
 CREATE TABLE IF NOT EXISTS fcc_call_session (
     id                  BIGINT UNSIGNED NOT NULL,
-    tenant_id           BIGINT UNSIGNED NOT NULL DEFAULT 0,
     biz_id              VARCHAR(128) NULL,
     ctrl_id             VARCHAR(128) NOT NULL,
     model_type          VARCHAR(64) NOT NULL,
@@ -344,20 +311,19 @@ CREATE TABLE IF NOT EXISTS fcc_call_session (
     created_at          DATETIME(3) NOT NULL DEFAULT CURRENT_TIMESTAMP(3),
     updated_at          DATETIME(3) NOT NULL DEFAULT CURRENT_TIMESTAMP(3) ON UPDATE CURRENT_TIMESTAMP(3),
     PRIMARY KEY (id),
-    UNIQUE KEY uk_call_tenant_ctrl (tenant_id, ctrl_id),
-    KEY idx_call_biz (tenant_id, biz_id),
-    KEY idx_call_status_started (tenant_id, status, started_at),
-    KEY idx_call_caller_started (tenant_id, caller_number, started_at),
-    KEY idx_call_destination_started (tenant_id, destination_number, started_at),
-    KEY idx_call_agent_started (tenant_id, primary_agent_id, started_at),
-    KEY idx_call_eval_started (tenant_id, evaluation_score, started_at),
-    KEY idx_cs_route_mode (tenant_id, route_mode),
-    KEY idx_cs_agent_work_no (tenant_id, agent_work_no)
+    UNIQUE KEY uk_call_ctrl (ctrl_id),
+    KEY idx_call_biz (biz_id),
+    KEY idx_call_status_started (status, started_at),
+    KEY idx_call_caller_started (caller_number, started_at),
+    KEY idx_call_destination_started (destination_number, started_at),
+    KEY idx_call_agent_started (primary_agent_id, started_at),
+    KEY idx_call_eval_started (evaluation_score, started_at),
+    KEY idx_cs_route_mode (route_mode),
+    KEY idx_cs_agent_work_no (agent_work_no)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci COMMENT='Business call aggregate';
 
 CREATE TABLE IF NOT EXISTS fcc_call_leg (
     id                  BIGINT UNSIGNED NOT NULL,
-    tenant_id           BIGINT UNSIGNED NOT NULL DEFAULT 0,
     call_id             BIGINT UNSIGNED NOT NULL,
     channel_uuid        VARCHAR(64) NOT NULL,
     node_id             VARCHAR(128) NOT NULL,
@@ -387,14 +353,13 @@ CREATE TABLE IF NOT EXISTS fcc_call_leg (
     updated_at          DATETIME(3) NOT NULL DEFAULT CURRENT_TIMESTAMP(3) ON UPDATE CURRENT_TIMESTAMP(3),
     PRIMARY KEY (id),
     UNIQUE KEY uk_leg_channel_uuid (channel_uuid),
-    KEY idx_leg_call_role (tenant_id, call_id, role_type),
+    KEY idx_leg_call_role (call_id, role_type),
     KEY idx_leg_node_state (node_id, state),
     KEY idx_leg_parent (parent_leg_id)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci COMMENT='FreeSWITCH channel/leg fact';
 
 CREATE TABLE IF NOT EXISTS fcc_call_bridge (
     id                  BIGINT UNSIGNED NOT NULL,
-    tenant_id           BIGINT UNSIGNED NOT NULL DEFAULT 0,
     call_id             BIGINT UNSIGNED NOT NULL,
     bridge_uuid         VARCHAR(64) NOT NULL,
     bridge_type         VARCHAR(32) NOT NULL DEFAULT 'DIRECT',
@@ -403,7 +368,7 @@ CREATE TABLE IF NOT EXISTS fcc_call_bridge (
     created_at          DATETIME(3) NOT NULL DEFAULT CURRENT_TIMESTAMP(3),
     PRIMARY KEY (id),
     UNIQUE KEY uk_bridge_uuid (bridge_uuid),
-    KEY idx_bridge_call_time (tenant_id, call_id, started_at)
+    KEY idx_bridge_call_time (call_id, started_at)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci COMMENT='Time-scoped media bridge';
 
 CREATE TABLE IF NOT EXISTS fcc_call_bridge_member (
@@ -420,7 +385,6 @@ CREATE TABLE IF NOT EXISTS fcc_call_bridge_member (
 
 CREATE TABLE IF NOT EXISTS fcc_call_event (
     id                  BIGINT UNSIGNED NOT NULL,
-    tenant_id           BIGINT UNSIGNED NOT NULL DEFAULT 0,
     event_id            VARCHAR(128) NOT NULL,
     node_id             VARCHAR(128) NOT NULL,
     call_id             BIGINT UNSIGNED NULL,
@@ -436,7 +400,7 @@ CREATE TABLE IF NOT EXISTS fcc_call_event (
     process_error       VARCHAR(1024) NULL,
     PRIMARY KEY (id),
     UNIQUE KEY uk_event_id (event_id),
-    KEY idx_event_call_time (tenant_id, call_id, event_time),
+    KEY idx_event_call_time (call_id, event_time),
     KEY idx_event_leg_time (leg_id, event_time),
     KEY idx_event_channel_time (channel_uuid, event_time),
     KEY idx_event_process (process_status, received_at)
@@ -444,7 +408,6 @@ CREATE TABLE IF NOT EXISTS fcc_call_event (
 
 CREATE TABLE IF NOT EXISTS fcc_call_command (
     id                  BIGINT UNSIGNED NOT NULL,
-    tenant_id           BIGINT UNSIGNED NOT NULL DEFAULT 0,
     command_id          VARCHAR(128) NOT NULL,
     idempotency_key     VARCHAR(128) NOT NULL,
     call_id             BIGINT UNSIGNED NULL,
@@ -462,14 +425,13 @@ CREATE TABLE IF NOT EXISTS fcc_call_command (
     completed_at        DATETIME(3) NULL,
     PRIMARY KEY (id),
     UNIQUE KEY uk_command_id (command_id),
-    UNIQUE KEY uk_command_idempotency (tenant_id, idempotency_key),
-    KEY idx_command_call_created (tenant_id, call_id, created_at),
+    UNIQUE KEY uk_command_idempotency (idempotency_key),
+    KEY idx_command_call_created (call_id, created_at),
     KEY idx_command_status_created (status, created_at)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci COMMENT='FCC FNode command audit and idempotency';
 
 CREATE TABLE IF NOT EXISTS fcc_call_recording (
     id                  BIGINT UNSIGNED NOT NULL,
-    tenant_id           BIGINT UNSIGNED NOT NULL DEFAULT 0,
     recording_id        VARCHAR(128) NOT NULL,
     call_id             BIGINT UNSIGNED NOT NULL,
     leg_id              BIGINT UNSIGNED NULL,
@@ -490,7 +452,7 @@ CREATE TABLE IF NOT EXISTS fcc_call_recording (
     updated_at          DATETIME(3) NOT NULL DEFAULT CURRENT_TIMESTAMP(3) ON UPDATE CURRENT_TIMESTAMP(3),
     PRIMARY KEY (id),
     UNIQUE KEY uk_recording_id (recording_id),
-    KEY idx_recording_call (tenant_id, call_id),
+    KEY idx_recording_call (call_id),
     KEY idx_recording_retain (retain_until)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci COMMENT='Call recording metadata';
 
@@ -500,7 +462,6 @@ CREATE TABLE IF NOT EXISTS fcc_call_recording (
 
 CREATE TABLE IF NOT EXISTS fcc_flow_definition (
     id                  BIGINT UNSIGNED NOT NULL,
-    tenant_id           BIGINT UNSIGNED NOT NULL DEFAULT 0,
     flow_key            VARCHAR(128) NOT NULL,
     flow_name           VARCHAR(128) NOT NULL,
     model_type          VARCHAR(64) NOT NULL,
@@ -510,7 +471,7 @@ CREATE TABLE IF NOT EXISTS fcc_flow_definition (
     updated_at          DATETIME(3) NOT NULL DEFAULT CURRENT_TIMESTAMP(3) ON UPDATE CURRENT_TIMESTAMP(3),
     deleted_at          DATETIME(3) NULL,
     PRIMARY KEY (id),
-    UNIQUE KEY uk_flow_tenant_key (tenant_id, flow_key)
+    UNIQUE KEY uk_flow_key (flow_key)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci COMMENT='Flow definition identity';
 
 CREATE TABLE IF NOT EXISTS fcc_flow_definition_version (
@@ -530,7 +491,6 @@ CREATE TABLE IF NOT EXISTS fcc_flow_definition_version (
 
 CREATE TABLE IF NOT EXISTS fcc_flow_instance (
     id                  BIGINT UNSIGNED NOT NULL,
-    tenant_id           BIGINT UNSIGNED NOT NULL DEFAULT 0,
     call_id             BIGINT UNSIGNED NOT NULL,
     flow_definition_id  BIGINT UNSIGNED NOT NULL,
     flow_version_id     BIGINT UNSIGNED NOT NULL,
@@ -543,13 +503,12 @@ CREATE TABLE IF NOT EXISTS fcc_flow_instance (
     created_at          DATETIME(3) NOT NULL DEFAULT CURRENT_TIMESTAMP(3),
     updated_at          DATETIME(3) NOT NULL DEFAULT CURRENT_TIMESTAMP(3) ON UPDATE CURRENT_TIMESTAMP(3),
     PRIMARY KEY (id),
-    KEY idx_flow_instance_call (tenant_id, call_id),
+    KEY idx_flow_instance_call (call_id),
     KEY idx_flow_instance_status (status, started_at)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci COMMENT='Runtime flow instance';
 
 CREATE TABLE IF NOT EXISTS fcc_flow_step_execution (
     id                  BIGINT UNSIGNED NOT NULL,
-    tenant_id           BIGINT UNSIGNED NOT NULL DEFAULT 0,
     flow_instance_id    BIGINT UNSIGNED NOT NULL,
     call_id             BIGINT UNSIGNED NOT NULL,
     stage               VARCHAR(32) NULL COMMENT '流水线阶段(TRIGGER, ROUTE, CONNECTED, END)',
@@ -569,14 +528,13 @@ CREATE TABLE IF NOT EXISTS fcc_flow_step_execution (
     created_at          DATETIME(3) NOT NULL DEFAULT CURRENT_TIMESTAMP(3),
     PRIMARY KEY (id),
     UNIQUE KEY uk_flow_step_attempt (flow_instance_id, step_key, attempt_no),
-    KEY idx_flow_step_call (tenant_id, call_id, started_at),
+    KEY idx_flow_step_call (call_id, started_at),
     KEY idx_flow_step_status (status, started_at),
     KEY idx_flow_step_command (command_id)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci COMMENT='Flow action execution audit';
 
 CREATE TABLE IF NOT EXISTS fcc_call_route_attempt (
     id                  BIGINT UNSIGNED NOT NULL,
-    tenant_id           BIGINT UNSIGNED NOT NULL DEFAULT 0,
     call_id             BIGINT UNSIGNED NOT NULL,
     flow_instance_id    BIGINT UNSIGNED NULL,
     sequence_no         INT UNSIGNED NOT NULL,
@@ -594,13 +552,12 @@ CREATE TABLE IF NOT EXISTS fcc_call_route_attempt (
     created_at          DATETIME(3) NOT NULL DEFAULT CURRENT_TIMESTAMP(3),
     PRIMARY KEY (id),
     UNIQUE KEY uk_route_call_sequence (call_id, sequence_no),
-    KEY idx_route_target_time (tenant_id, target_type, target_id, started_at),
+    KEY idx_route_target_time (target_type, target_id, started_at),
     KEY idx_route_agent_time (selected_agent_id, started_at)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci COMMENT='Each routing decision and attempt';
 
 CREATE TABLE IF NOT EXISTS fcc_agent_service_session (
     id                      BIGINT UNSIGNED NOT NULL,
-    tenant_id               BIGINT UNSIGNED NOT NULL DEFAULT 0,
     call_id                 BIGINT UNSIGNED NOT NULL,
     leg_id                  BIGINT UNSIGNED NULL,
     agent_id                BIGINT UNSIGNED NOT NULL,
@@ -623,7 +580,7 @@ CREATE TABLE IF NOT EXISTS fcc_agent_service_session (
     updated_at              DATETIME(3) NOT NULL DEFAULT CURRENT_TIMESTAMP(3) ON UPDATE CURRENT_TIMESTAMP(3),
     PRIMARY KEY (id),
     UNIQUE KEY uk_agent_service_sequence (call_id, sequence_no),
-    KEY idx_agent_service_agent_time (tenant_id, agent_id, created_at),
+    KEY idx_agent_service_agent_time (agent_id, created_at),
     KEY idx_agent_service_leg (leg_id)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci COMMENT='Agent participation in a call';
 
@@ -633,7 +590,6 @@ CREATE TABLE IF NOT EXISTS fcc_agent_service_session (
 
 CREATE TABLE IF NOT EXISTS fcc_dial_job (
     id                  BIGINT UNSIGNED NOT NULL,
-    tenant_id           BIGINT UNSIGNED NOT NULL DEFAULT 0,
     owner_work_no       VARCHAR(64) NULL,
     biz_id              VARCHAR(128) NULL,
     job_type            VARCHAR(32) NOT NULL,
@@ -644,9 +600,9 @@ CREATE TABLE IF NOT EXISTS fcc_dial_job (
     created_at          DATETIME(3) NOT NULL DEFAULT CURRENT_TIMESTAMP(3),
     updated_at          DATETIME(3) NOT NULL DEFAULT CURRENT_TIMESTAMP(3) ON UPDATE CURRENT_TIMESTAMP(3),
     PRIMARY KEY (id),
-    KEY idx_dial_job_schedule (tenant_id, status, scheduled_at),
-    KEY idx_dial_job_biz (tenant_id, biz_id)
-    ,UNIQUE KEY uk_dial_job_request(tenant_id,owner_work_no,biz_id)
+    KEY idx_dial_job_schedule (status, scheduled_at),
+    KEY idx_dial_job_biz (biz_id),
+    UNIQUE KEY uk_dial_job_request(owner_work_no,biz_id)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci COMMENT='Outbound dialing job';
 
 CREATE TABLE IF NOT EXISTS fcc_dial_scheduler_lock(id BIGINT NOT NULL PRIMARY KEY) ENGINE=InnoDB;
@@ -654,7 +610,6 @@ INSERT IGNORE INTO fcc_dial_scheduler_lock(id) VALUES(1);
 
 CREATE TABLE IF NOT EXISTS fcc_dial_attempt (
     id                  BIGINT UNSIGNED NOT NULL,
-    tenant_id           BIGINT UNSIGNED NOT NULL DEFAULT 0,
     dial_job_id         BIGINT UNSIGNED NOT NULL,
     call_id             BIGINT UNSIGNED NULL,
     attempt_no          INT UNSIGNED NOT NULL,
@@ -668,12 +623,11 @@ CREATE TABLE IF NOT EXISTS fcc_dial_attempt (
     PRIMARY KEY (id),
     UNIQUE KEY uk_dial_attempt (dial_job_id, attempt_no),
     KEY idx_dial_attempt_call (call_id),
-    KEY idx_dial_attempt_destination (tenant_id, destination_number, created_at)
+    KEY idx_dial_attempt_destination (destination_number, created_at)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci COMMENT='One outbound dialing attempt';
 
 CREATE TABLE IF NOT EXISTS fcc_callback_task (
     id                  BIGINT UNSIGNED NOT NULL,
-    tenant_id           BIGINT UNSIGNED NOT NULL DEFAULT 0,
     source_call_id      BIGINT UNSIGNED NOT NULL COMMENT '关联原未接通通话ID',
     last_dial_job_id    BIGINT UNSIGNED NULL COMMENT '最近一次持久外呼任务',
     customer_number     VARCHAR(32) NOT NULL COMMENT '客户手机号',
@@ -692,10 +646,10 @@ CREATE TABLE IF NOT EXISTS fcc_callback_task (
     created_at          DATETIME(3) NOT NULL DEFAULT CURRENT_TIMESTAMP(3),
     updated_at          DATETIME(3) NOT NULL DEFAULT CURRENT_TIMESTAMP(3) ON UPDATE CURRENT_TIMESTAMP(3),
     PRIMARY KEY (id),
-    KEY idx_callback_source_call (tenant_id, source_call_id),
-    KEY idx_callback_job (tenant_id, last_dial_job_id),
-    KEY idx_callback_status_time (tenant_id, status, missed_at),
-    KEY idx_callback_assignee (tenant_id, assignee_work_no)
+    KEY idx_callback_source_call (source_call_id),
+    KEY idx_callback_job (last_dial_job_id),
+    KEY idx_callback_status_time (status, missed_at),
+    KEY idx_callback_assignee (assignee_work_no)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci COMMENT='Missed-call callback workflow';
 
 CREATE TABLE IF NOT EXISTS fcc_outbox_event (
@@ -721,7 +675,6 @@ CREATE TABLE IF NOT EXISTS fcc_outbox_event (
 
 CREATE TABLE IF NOT EXISTS fcc_system_config (
     id                  BIGINT UNSIGNED NOT NULL,
-    tenant_id           BIGINT UNSIGNED NOT NULL DEFAULT 0,
     prop_name           VARCHAR(128) NOT NULL,
     prop_value          TEXT NOT NULL,
     prop_type           VARCHAR(32) NOT NULL DEFAULT 'STRING',
@@ -732,13 +685,12 @@ CREATE TABLE IF NOT EXISTS fcc_system_config (
     created_at          DATETIME(3) NOT NULL DEFAULT CURRENT_TIMESTAMP(3),
     updated_at          DATETIME(3) NOT NULL DEFAULT CURRENT_TIMESTAMP(3) ON UPDATE CURRENT_TIMESTAMP(3),
     PRIMARY KEY (id),
-    UNIQUE KEY uk_config_tenant_scope_prop (tenant_id, scope, prop_name),
-    KEY idx_config_scope (tenant_id, scope)
+    UNIQUE KEY uk_config_scope_prop (scope, prop_name),
+    KEY idx_config_scope (scope)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci COMMENT='Dynamic system business configuration';
 
 CREATE TABLE IF NOT EXISTS fcc_client_version_release (
     id                  BIGINT UNSIGNED NOT NULL,
-    tenant_id           BIGINT UNSIGNED NOT NULL DEFAULT 0,
     version             VARCHAR(32) NOT NULL,
     platform            VARCHAR(32) NOT NULL DEFAULT 'WINDOWS' COMMENT 'WINDOWS, MAC, LINUX, WEB',
     download_url        VARCHAR(512) NOT NULL,
@@ -751,13 +703,12 @@ CREATE TABLE IF NOT EXISTS fcc_client_version_release (
     created_at          DATETIME(3) NOT NULL DEFAULT CURRENT_TIMESTAMP(3),
     updated_at          DATETIME(3) NOT NULL DEFAULT CURRENT_TIMESTAMP(3) ON UPDATE CURRENT_TIMESTAMP(3),
     PRIMARY KEY (id),
-    UNIQUE KEY uk_version_tenant_platform (tenant_id, platform, version),
-    KEY idx_version_status (tenant_id, platform, status)
+    UNIQUE KEY uk_version_platform (platform, version),
+    KEY idx_version_status (platform, status)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci COMMENT='PC client version release and auto-update';
 
 CREATE TABLE IF NOT EXISTS fcc_client_hardware_record (
     id                  BIGINT UNSIGNED NOT NULL,
-    tenant_id           BIGINT UNSIGNED NOT NULL DEFAULT 0,
     agent_id            BIGINT UNSIGNED NOT NULL,
     work_num            VARCHAR(32) NOT NULL,
     client_version      VARCHAR(32) NOT NULL,
@@ -770,13 +721,12 @@ CREATE TABLE IF NOT EXISTS fcc_client_hardware_record (
     login_time          DATETIME(3) NOT NULL,
     created_at          DATETIME(3) NOT NULL DEFAULT CURRENT_TIMESTAMP(3),
     PRIMARY KEY (id),
-    KEY idx_hardware_agent_login (tenant_id, agent_id, login_time),
-    KEY idx_hardware_mac (tenant_id, mac_addr)
+    KEY idx_hardware_agent_login (agent_id, login_time),
+    KEY idx_hardware_mac (mac_addr)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci COMMENT='Agent client hardware fingerprint audit';
 
 CREATE TABLE IF NOT EXISTS fcc_agent_substitute_record (
     id                  BIGINT UNSIGNED NOT NULL,
-    tenant_id           BIGINT UNSIGNED NOT NULL DEFAULT 0,
     applicant_agent_id  BIGINT UNSIGNED NOT NULL,
     substitute_agent_id BIGINT UNSIGNED NOT NULL,
     substitute_type     VARCHAR(32) NOT NULL DEFAULT 'PP' COMMENT 'PP: Agent-to-Agent, PG: Agent-to-Group',
@@ -790,70 +740,49 @@ CREATE TABLE IF NOT EXISTS fcc_agent_substitute_record (
     created_at          DATETIME(3) NOT NULL DEFAULT CURRENT_TIMESTAMP(3),
     updated_at          DATETIME(3) NOT NULL DEFAULT CURRENT_TIMESTAMP(3) ON UPDATE CURRENT_TIMESTAMP(3),
     PRIMARY KEY (id),
-    KEY idx_substitute_applicant (tenant_id, applicant_agent_id, start_time, end_time),
-    KEY idx_substitute_agent (tenant_id, substitute_agent_id, start_time, end_time),
-    KEY idx_substitute_status (tenant_id, status)
+    KEY idx_substitute_applicant (applicant_agent_id, start_time, end_time),
+    KEY idx_substitute_agent (substitute_agent_id, start_time, end_time),
+    KEY idx_substitute_status (status)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci COMMENT='Agent shift substitution and night transfer';
-
--- Fixed system templates; no demo accounts, numbers or calls.
--- Apply after 20260920_callback_dispatch.sql, before starting fcc-server.
--- Existing calls are not backfilled: never invent execution history.
--- Rollback: stop traffic and restore prior application; retain execution facts.
-INSERT INTO fcc_flow_definition(id,tenant_id,flow_key,flow_name,model_type,status,current_version)
-VALUES(820000000000000001,0,'SYSTEM_INBOUND','系统呼入','INBOUND','PUBLISHED',1);
-INSERT INTO fcc_flow_definition_version(id,flow_definition_id,version_no,definition_json,checksum,publish_status,published_at,created_by)
-VALUES(820000000000000011,820000000000000001,1,'{"template":"INBOUND","stages":["ENTRY","MENU","BRANCH","ROUTE","BRIDGE","CONNECTED","END"]}','system-template-v1','PUBLISHED',UTC_TIMESTAMP(3),'system');
-INSERT INTO fcc_flow_definition(id,tenant_id,flow_key,flow_name,model_type,status,current_version)
-VALUES(820000000000000002,0,'SYSTEM_AGENT_FIRST','坐席先接听外呼','AGENT_FIRST','PUBLISHED',1);
-INSERT INTO fcc_flow_definition_version(id,flow_definition_id,version_no,definition_json,checksum,publish_status,published_at,created_by)
-VALUES(820000000000000012,820000000000000002,1,'{"template":"AGENT_FIRST","stages":["ENTRY","DIAL_AGENT","DIAL_CUSTOMER","BRIDGE","CONNECTED","END"]}','system-template-v1','PUBLISHED',UTC_TIMESTAMP(3),'system');
-INSERT INTO fcc_flow_definition(id,tenant_id,flow_key,flow_name,model_type,status,current_version)
-VALUES(820000000000000003,0,'SYSTEM_NOTIFICATION','通知外呼','NOTIFICATION','PUBLISHED',1);
-INSERT INTO fcc_flow_definition_version(id,flow_definition_id,version_no,definition_json,checksum,publish_status,published_at,created_by)
-VALUES(820000000000000013,820000000000000003,1,'{"template":"NOTIFICATION","stages":["ENTRY","DIAL_CUSTOMER","NOTIFY","CONFIRM","END"]}','system-template-v1','PUBLISHED',UTC_TIMESTAMP(3),'system');
 
 -- BEGIN GENERATED COMPLETE SYSTEM MODELS
 -- Generated from fcc-common/src/main/resources/flows/system-models.json.
 
--- Execute after 20260921_staged_flows.sql. Preserve old versions and call snapshots.
+-- Fresh-install seed for the single-call-center schema.
 
 START TRANSACTION;
 
-INSERT INTO fcc_flow_definition(id,tenant_id,flow_key,flow_name,model_type,status,current_version)
-SELECT 820000000000000001,0,'SYSTEM_INBOUND',CONVERT(0xe7b3bbe7bb9fe591bce585a5 USING utf8mb4),'INBOUND','PUBLISHED',2
+INSERT INTO fcc_flow_definition(id,flow_key,flow_name,model_type,status,current_version)
+SELECT 820000000000000001,'SYSTEM_INBOUND',CONVERT(0xe7b3bbe7bb9fe591bce585a5 USING utf8mb4),'INBOUND','PUBLISHED',1
 WHERE NOT EXISTS (SELECT 1 FROM fcc_flow_definition WHERE id=820000000000000001);
 INSERT INTO fcc_flow_definition_version(id,flow_definition_id,version_no,definition_json,checksum,publish_status,published_at,created_by)
-SELECT 820000000000000021,820000000000000001,2,CONVERT(0x7b22736368656d6156657273696f6e223a322c2274656d706c617465223a22494e424f554e44222c22657865637574696f6e4d6f6465223a2246495845445f52554e54494d45222c22656e747279223a22454e545259222c22737461676573223a5b22454e545259222c224d454e55222c224252414e4348222c22524f555445222c22425249444745222c22434f4e4e4543544544222c22454e44225d2c22706172616d6574657273223a7b22726f757465536f75726365223a2254454e414e545f4449445f42494e44494e47222c226d656e75536f75726365223a2250494e4e45445f464c4f575f56455253494f4e222c2271756575655365636f6e6473223a3132302c226167656e7452696e675365636f6e6473223a33302c22756e616e737765726564416374696f6e223a2243414c4c4241434b227d2c226e6f646573223a5b7b226b6579223a22454e545259222c226c6162656c223a22e591bce585a5e58f97e79086222c22616374696f6e223a225245534f4c56455f4449445f414e445f5041524b222c22696e70757473223a5b226e6f64654964222c226368616e6e656c55756964222c226469644e756d626572225d2c226f757470757473223a5b2274656e616e744964222c22726f757465546172676574222c22666c6f7756657273696f6e4964225d2c227472616e736974696f6e73223a5b7b227768656e223a2252454144595f414e445f4d454e555f454e41424c4544222c22746f223a224d454e55227d2c7b227768656e223a2252454144595f414e445f4d454e555f44495341424c4544222c22746f223a22524f555445227d2c7b227768656e223a22524f5554455f4e4f545f464f554e445f4f525f44455354524f59222c22746f223a22454e44227d5d7d2c7b226b6579223a224d454e55222c226c6162656c223a22e6aca2e8bf8ee8afade4b88ee68c89e994aee694b6e58fb7222c22616374696f6e223a22524541445f44544d46222c22706172616d6574657273223a7b226d696e446967697473223a312c226d6178446967697473223a312c227472696573223a312c2274696d656f7574536f75726365223a226d656e752e74696d656f75745365636f6e6473222c226d65646961536f75726365223a226d656e752e70726f6d7074222c22616374696f6e4166746572223a225041524b227d2c226f757470757473223a5b226469676974225d2c227472616e736974696f6e73223a5b7b227768656e223a2256414c49445f4449474954222c22746f223a224252414e4348227d2c7b227768656e223a2254494d454f55545f4f525f44455354524f59222c22746f223a22454e44227d5d7d2c7b226b6579223a224252414e4348222c226c6162656c223a22e68c89e994aee69da1e4bbb6e58886e694af222c22616374696f6e223a2253454c4543545f44494749545f524f555445222c22696e70757473223a5b226469676974222c226272616e63686573222c2264656661756c74526f757465225d2c226f757470757473223a5b22666c6f774272616e6368222c22726f757465546172676574225d2c227472616e736974696f6e73223a5b7b227768656e223a2244494749545f4d41544348222c22746f223a22524f555445222c22726573756c74223a224d4154434845445f4252414e4348227d2c7b227768656e223a22454c5345222c22746f223a22524f555445222c22726573756c74223a2244454641554c545f524f555445227d5d7d2c7b226b6579223a22524f555445222c226c6162656c223a22e58886e9858de5b9b6e591bce58fabe59d90e5b8ad222c22616374696f6e223a22524553455256455f414e445f4449414c5f4147454e54222c22706172616d6574657273223a7b227374726174656779223a2252454144595f554e54524945445f4147454e54222c2272696e675365636f6e6473223a33302c22717565756554696d656f7574536f75726365223a22726f7574652e71756575655365636f6e6473227d2c226f757470757473223a5b226167656e74576f726b4e6f222c226167656e744368616e6e656c55756964225d2c227472616e736974696f6e73223a5b7b227768656e223a224147454e545f5245414459222c22746f223a22425249444745227d2c7b227768656e223a224147454e545f4641494c45445f414e445f51554555455f4f50454e222c22746f223a22524f555445222c22726573756c74223a224e4558545f4147454e545f415454454d5054227d2c7b227768656e223a224e4f5f4147454e545f414e445f51554555455f4f50454e222c22746f223a22524f555445222c22726573756c74223a2257414954227d2c7b227768656e223a2251554555455f54494d454f55545f4f525f435553544f4d45525f44455354524f59222c22746f223a22454e44227d5d7d2c7b226b6579223a22425249444745222c226c6162656c223a22e6a1a5e68ea5e58f8ce696b9222c22616374696f6e223a224348414e4e454c5f425249444745222c22696e70757473223a5b226167656e744368616e6e656c55756964222c2267756573744368616e6e656c55756964225d2c227472616e736974696f6e73223a5b7b227768656e223a224252494447455f4556454e54222c22746f223a22434f4e4e4543544544227d2c7b227768656e223a2244455354524f59222c22746f223a22454e44227d5d7d2c7b226b6579223a22434f4e4e4543544544222c226c6162656c223a22e58f8ce696b9e9809ae8af9d222c22616374696f6e223a22574149545f464f525f48414e475550222c227472616e736974696f6e73223a5b7b227768656e223a2244455354524f59222c22746f223a22454e44227d5d7d2c7b226b6579223a22454e44222c226c6162656c223a22e7bb93e69d9fe4b88ee59b9ee68ba8e5a484e79086222c22616374696f6e223a2246494e414c495a455f494e424f554e44222c22706172616d6574657273223a7b2272656c656173654167656e74223a747275652c2268616e67757052656d61696e696e674c6567223a747275652c2263726561746543616c6c6261636b5768656e223a22554e414e5357455245445f414e445f43414c4c4241434b5f454e41424c4544227d2c226f757470757473223a5b2268616e6775704361757365222c226475726174696f6e222c2262696c6c736563225d2c227465726d696e616c223a747275652c227472616e736974696f6e73223a5b5d7d5d7d USING utf8mb4),'a9120e739745bae5aaa7149b20f2a19861e53e4f40b0ebe655aec08e49444e9c','PUBLISHED',UTC_TIMESTAMP(3),'system'
-WHERE NOT EXISTS (SELECT 1 FROM fcc_flow_definition_version WHERE flow_definition_id=820000000000000001 AND version_no=2);
-UPDATE fcc_flow_definition_version SET publish_status='ARCHIVED' WHERE flow_definition_id=820000000000000001 AND version_no<2 AND publish_status='PUBLISHED';
-UPDATE fcc_flow_definition SET current_version=2,status='PUBLISHED' WHERE id=820000000000000001 AND current_version<2;
+SELECT 820000000000000021,820000000000000001,1,CONVERT(0x7b22736368656d6156657273696f6e223a322c2274656d706c617465223a22494e424f554e44222c22657865637574696f6e4d6f6465223a2246495845445f52554e54494d45222c22656e747279223a22454e545259222c22737461676573223a5b22454e545259222c224d454e55222c224252414e4348222c22524f555445222c22425249444745222c22434f4e4e4543544544222c22454e44225d2c22706172616d6574657273223a7b22726f757465536f75726365223a224449445f42494e44494e47222c226d656e75536f75726365223a2250494e4e45445f464c4f575f56455253494f4e222c2271756575655365636f6e6473223a3132302c226167656e7452696e675365636f6e6473223a33302c22756e616e737765726564416374696f6e223a2243414c4c4241434b227d2c226e6f646573223a5b7b226b6579223a22454e545259222c226c6162656c223a22e591bce585a5e58f97e79086222c22616374696f6e223a225245534f4c56455f4449445f414e445f5041524b222c22696e70757473223a5b226e6f64654964222c226368616e6e656c55756964222c226469644e756d626572225d2c226f757470757473223a5b22726f757465546172676574222c22666c6f7756657273696f6e4964225d2c227472616e736974696f6e73223a5b7b227768656e223a2252454144595f414e445f4d454e555f454e41424c4544222c22746f223a224d454e55227d2c7b227768656e223a2252454144595f414e445f4d454e555f44495341424c4544222c22746f223a22524f555445227d2c7b227768656e223a22524f5554455f4e4f545f464f554e445f4f525f44455354524f59222c22746f223a22454e44227d5d7d2c7b226b6579223a224d454e55222c226c6162656c223a22e6aca2e8bf8ee8afade4b88ee68c89e994aee694b6e58fb7222c22616374696f6e223a22524541445f44544d46222c22706172616d6574657273223a7b226d696e446967697473223a312c226d6178446967697473223a312c227472696573223a312c2274696d656f7574536f75726365223a226d656e752e74696d656f75745365636f6e6473222c226d65646961536f75726365223a226d656e752e70726f6d7074222c22616374696f6e4166746572223a225041524b227d2c226f757470757473223a5b226469676974225d2c227472616e736974696f6e73223a5b7b227768656e223a2256414c49445f4449474954222c22746f223a224252414e4348227d2c7b227768656e223a2254494d454f55545f4f525f44455354524f59222c22746f223a22454e44227d5d7d2c7b226b6579223a224252414e4348222c226c6162656c223a22e68c89e994aee69da1e4bbb6e58886e694af222c22616374696f6e223a2253454c4543545f44494749545f524f555445222c22696e70757473223a5b226469676974222c226272616e63686573222c2264656661756c74526f757465225d2c226f757470757473223a5b22666c6f774272616e6368222c22726f757465546172676574225d2c227472616e736974696f6e73223a5b7b227768656e223a2244494749545f4d41544348222c22746f223a22524f555445222c22726573756c74223a224d4154434845445f4252414e4348227d2c7b227768656e223a22454c5345222c22746f223a22524f555445222c22726573756c74223a2244454641554c545f524f555445227d5d7d2c7b226b6579223a22524f555445222c226c6162656c223a22e58886e9858de5b9b6e591bce58fabe59d90e5b8ad222c22616374696f6e223a22524553455256455f414e445f4449414c5f4147454e54222c22706172616d6574657273223a7b227374726174656779223a2252454144595f554e54524945445f4147454e54222c2272696e675365636f6e6473223a33302c22717565756554696d656f7574536f75726365223a22726f7574652e71756575655365636f6e6473227d2c226f757470757473223a5b226167656e74576f726b4e6f222c226167656e744368616e6e656c55756964225d2c227472616e736974696f6e73223a5b7b227768656e223a224147454e545f5245414459222c22746f223a22425249444745227d2c7b227768656e223a224147454e545f4641494c45445f414e445f51554555455f4f50454e222c22746f223a22524f555445222c22726573756c74223a224e4558545f4147454e545f415454454d5054227d2c7b227768656e223a224e4f5f4147454e545f414e445f51554555455f4f50454e222c22746f223a22524f555445222c22726573756c74223a2257414954227d2c7b227768656e223a2251554555455f54494d454f55545f4f525f435553544f4d45525f44455354524f59222c22746f223a22454e44227d5d7d2c7b226b6579223a22425249444745222c226c6162656c223a22e6a1a5e68ea5e58f8ce696b9222c22616374696f6e223a224348414e4e454c5f425249444745222c22696e70757473223a5b226167656e744368616e6e656c55756964222c2267756573744368616e6e656c55756964225d2c227472616e736974696f6e73223a5b7b227768656e223a224252494447455f4556454e54222c22746f223a22434f4e4e4543544544227d2c7b227768656e223a2244455354524f59222c22746f223a22454e44227d5d7d2c7b226b6579223a22434f4e4e4543544544222c226c6162656c223a22e58f8ce696b9e9809ae8af9d222c22616374696f6e223a22574149545f464f525f48414e475550222c227472616e736974696f6e73223a5b7b227768656e223a2244455354524f59222c22746f223a22454e44227d5d7d2c7b226b6579223a22454e44222c226c6162656c223a22e7bb93e69d9fe4b88ee59b9ee68ba8e5a484e79086222c22616374696f6e223a2246494e414c495a455f494e424f554e44222c22706172616d6574657273223a7b2272656c656173654167656e74223a747275652c2268616e67757052656d61696e696e674c6567223a747275652c2263726561746543616c6c6261636b5768656e223a22554e414e5357455245445f414e445f43414c4c4241434b5f454e41424c4544227d2c226f757470757473223a5b2268616e6775704361757365222c226475726174696f6e222c2262696c6c736563225d2c227465726d696e616c223a747275652c227472616e736974696f6e73223a5b5d7d5d7d USING utf8mb4),'03ed555b8704fe769ec20287ab0c0f8c5bd4ee1360e786a7eaa57ea02c14a4f0','PUBLISHED',UTC_TIMESTAMP(3),'system'
+WHERE NOT EXISTS (SELECT 1 FROM fcc_flow_definition_version WHERE flow_definition_id=820000000000000001 AND version_no=1);
+UPDATE fcc_flow_definition SET current_version=1,status='PUBLISHED' WHERE id=820000000000000001;
 
-INSERT INTO fcc_flow_definition(id,tenant_id,flow_key,flow_name,model_type,status,current_version)
-SELECT 820000000000000002,0,'SYSTEM_AGENT_FIRST',CONVERT(0xe59d90e5b8ade58588e68ea5e590ace5a496e591bc USING utf8mb4),'AGENT_FIRST','PUBLISHED',2
+INSERT INTO fcc_flow_definition(id,flow_key,flow_name,model_type,status,current_version)
+SELECT 820000000000000002,'SYSTEM_AGENT_FIRST',CONVERT(0xe59d90e5b8ade58588e68ea5e590ace5a496e591bc USING utf8mb4),'AGENT_FIRST','PUBLISHED',1
 WHERE NOT EXISTS (SELECT 1 FROM fcc_flow_definition WHERE id=820000000000000002);
 INSERT INTO fcc_flow_definition_version(id,flow_definition_id,version_no,definition_json,checksum,publish_status,published_at,created_by)
-SELECT 820000000000000022,820000000000000002,2,CONVERT(0x7b22736368656d6156657273696f6e223a322c2274656d706c617465223a224147454e545f4649525354222c22657865637574696f6e4d6f6465223a2246495845445f52554e54494d45222c22656e747279223a22454e545259222c22737461676573223a5b22454e545259222c224449414c5f4147454e54222c224449414c5f435553544f4d4552222c22425249444745222c22434f4e4e4543544544222c22454e44225d2c22706172616d6574657273223a7b226469616c5365636f6e6473223a33302c22726f757465536f75726365223a2254454e414e545f4f5554424f554e445f524f555445222c2274726967676572536f7572636573223a5b224d414e55414c222c2250524f47524553534956455f4a4f42222c2243414c4c4241434b225d7d2c226e6f646573223a5b7b226b6579223a22454e545259222c226c6162656c223a22e5a496e591bce58f97e79086222c22616374696f6e223a2256414c49444154455f524f5554455f414e445f524553455256455f4147454e54222c22696e70757473223a5b2274656e616e744964222c226f776e6572222c226e756d626572225d2c226f757470757473223a5b2263616c6c4964222c226167656e744368616e6e656c55756964222c2267756573744368616e6e656c55756964225d2c227472616e736974696f6e73223a5b7b227768656e223a224143434550544544222c22746f223a224449414c5f4147454e54227d2c7b227768656e223a2252454a4543544544222c22746f223a22454e44227d5d7d2c7b226b6579223a224449414c5f4147454e54222c226c6162656c223a22e58588e591bce59d90e5b8ad222c22616374696f6e223a224449414c5f4147454e54222c22706172616d6574657273223a7b2274696d656f75745365636f6e6473223a33302c2264657374696e6174696f6e536f75726365223a22424f554e445f455854454e53494f4e227d2c227472616e736974696f6e73223a5b7b227768656e223a224147454e545f5245414459222c22746f223a224449414c5f435553544f4d4552227d2c7b227768656e223a2244455354524f59222c22746f223a22454e44227d5d7d2c7b226b6579223a224449414c5f435553544f4d4552222c226c6162656c223a22e591bce58fabe5aea2e688b7222c22616374696f6e223a224449414c5f435553544f4d4552222c22706172616d6574657273223a7b2274696d656f75745365636f6e6473223a33302c2264657374696e6174696f6e536f75726365223a225245534f4c5645445f4f5554424f554e445f524f555445227d2c227472616e736974696f6e73223a5b7b227768656e223a22435553544f4d45525f5245414459222c22746f223a22425249444745227d2c7b227768656e223a2244455354524f59222c22746f223a22454e44227d5d7d2c7b226b6579223a22425249444745222c226c6162656c223a22e6a1a5e68ea5e58f8ce696b9222c22616374696f6e223a224348414e4e454c5f425249444745222c22696e70757473223a5b226167656e744368616e6e656c55756964222c2267756573744368616e6e656c55756964225d2c227472616e736974696f6e73223a5b7b227768656e223a224252494447455f4556454e54222c22746f223a22434f4e4e4543544544227d2c7b227768656e223a2244455354524f59222c22746f223a22454e44227d5d7d2c7b226b6579223a22434f4e4e4543544544222c226c6162656c223a22e58f8ce696b9e9809ae8af9d222c22616374696f6e223a22574149545f464f525f48414e475550222c227472616e736974696f6e73223a5b7b227768656e223a2244455354524f59222c22746f223a22454e44227d5d7d2c7b226b6579223a22454e44222c226c6162656c223a22e7bb93e69d9fe5a496e591bc222c22616374696f6e223a2246494e414c495a455f4f5554424f554e44222c22706172616d6574657273223a7b2272656c656173654167656e74223a747275652c2268616e67757052656d61696e696e674c6567223a747275657d2c226f757470757473223a5b2268616e6775704361757365222c226475726174696f6e222c2262696c6c736563225d2c227465726d696e616c223a747275652c227472616e736974696f6e73223a5b5d7d5d7d USING utf8mb4),'4d2a2e5c63e76086af604aeaea712022ad635a0e6e30fc824eced0545995ed8b','PUBLISHED',UTC_TIMESTAMP(3),'system'
-WHERE NOT EXISTS (SELECT 1 FROM fcc_flow_definition_version WHERE flow_definition_id=820000000000000002 AND version_no=2);
-UPDATE fcc_flow_definition_version SET publish_status='ARCHIVED' WHERE flow_definition_id=820000000000000002 AND version_no<2 AND publish_status='PUBLISHED';
-UPDATE fcc_flow_definition SET current_version=2,status='PUBLISHED' WHERE id=820000000000000002 AND current_version<2;
+SELECT 820000000000000022,820000000000000002,1,CONVERT(0x7b22736368656d6156657273696f6e223a322c2274656d706c617465223a224147454e545f4649525354222c22657865637574696f6e4d6f6465223a2246495845445f52554e54494d45222c22656e747279223a22454e545259222c22737461676573223a5b22454e545259222c224449414c5f4147454e54222c224449414c5f435553544f4d4552222c22425249444745222c22434f4e4e4543544544222c22454e44225d2c22706172616d6574657273223a7b226469616c5365636f6e6473223a33302c22726f757465536f75726365223a224f5554424f554e445f524f555445222c2274726967676572536f7572636573223a5b224d414e55414c222c2250524f47524553534956455f4a4f42222c2243414c4c4241434b225d7d2c226e6f646573223a5b7b226b6579223a22454e545259222c226c6162656c223a22e5a496e591bce58f97e79086222c22616374696f6e223a2256414c49444154455f524f5554455f414e445f524553455256455f4147454e54222c22696e70757473223a5b226f776e6572222c226e756d626572225d2c226f757470757473223a5b2263616c6c4964222c226167656e744368616e6e656c55756964222c2267756573744368616e6e656c55756964225d2c227472616e736974696f6e73223a5b7b227768656e223a224143434550544544222c22746f223a224449414c5f4147454e54227d2c7b227768656e223a2252454a4543544544222c22746f223a22454e44227d5d7d2c7b226b6579223a224449414c5f4147454e54222c226c6162656c223a22e58588e591bce59d90e5b8ad222c22616374696f6e223a224449414c5f4147454e54222c22706172616d6574657273223a7b2274696d656f75745365636f6e6473223a33302c2264657374696e6174696f6e536f75726365223a22424f554e445f455854454e53494f4e227d2c227472616e736974696f6e73223a5b7b227768656e223a224147454e545f5245414459222c22746f223a224449414c5f435553544f4d4552227d2c7b227768656e223a2244455354524f59222c22746f223a22454e44227d5d7d2c7b226b6579223a224449414c5f435553544f4d4552222c226c6162656c223a22e591bce58fabe5aea2e688b7222c22616374696f6e223a224449414c5f435553544f4d4552222c22706172616d6574657273223a7b2274696d656f75745365636f6e6473223a33302c2264657374696e6174696f6e536f75726365223a225245534f4c5645445f4f5554424f554e445f524f555445227d2c227472616e736974696f6e73223a5b7b227768656e223a22435553544f4d45525f5245414459222c22746f223a22425249444745227d2c7b227768656e223a2244455354524f59222c22746f223a22454e44227d5d7d2c7b226b6579223a22425249444745222c226c6162656c223a22e6a1a5e68ea5e58f8ce696b9222c22616374696f6e223a224348414e4e454c5f425249444745222c22696e70757473223a5b226167656e744368616e6e656c55756964222c2267756573744368616e6e656c55756964225d2c227472616e736974696f6e73223a5b7b227768656e223a224252494447455f4556454e54222c22746f223a22434f4e4e4543544544227d2c7b227768656e223a2244455354524f59222c22746f223a22454e44227d5d7d2c7b226b6579223a22434f4e4e4543544544222c226c6162656c223a22e58f8ce696b9e9809ae8af9d222c22616374696f6e223a22574149545f464f525f48414e475550222c227472616e736974696f6e73223a5b7b227768656e223a2244455354524f59222c22746f223a22454e44227d5d7d2c7b226b6579223a22454e44222c226c6162656c223a22e7bb93e69d9fe5a496e591bc222c22616374696f6e223a2246494e414c495a455f4f5554424f554e44222c22706172616d6574657273223a7b2272656c656173654167656e74223a747275652c2268616e67757052656d61696e696e674c6567223a747275657d2c226f757470757473223a5b2268616e6775704361757365222c226475726174696f6e222c2262696c6c736563225d2c227465726d696e616c223a747275652c227472616e736974696f6e73223a5b5d7d5d7d USING utf8mb4),'4e31748a6099cfdce9b4cd721332cc392e87706fa70adbef872e67938816ede5','PUBLISHED',UTC_TIMESTAMP(3),'system'
+WHERE NOT EXISTS (SELECT 1 FROM fcc_flow_definition_version WHERE flow_definition_id=820000000000000002 AND version_no=1);
+UPDATE fcc_flow_definition SET current_version=1,status='PUBLISHED' WHERE id=820000000000000002;
 
-INSERT INTO fcc_flow_definition(id,tenant_id,flow_key,flow_name,model_type,status,current_version)
-SELECT 820000000000000003,0,'SYSTEM_NOTIFICATION',CONVERT(0xe9809ae79fa5e5a496e591bc USING utf8mb4),'NOTIFICATION','PUBLISHED',2
+INSERT INTO fcc_flow_definition(id,flow_key,flow_name,model_type,status,current_version)
+SELECT 820000000000000003,'SYSTEM_NOTIFICATION',CONVERT(0xe9809ae79fa5e5a496e591bc USING utf8mb4),'NOTIFICATION','PUBLISHED',1
 WHERE NOT EXISTS (SELECT 1 FROM fcc_flow_definition WHERE id=820000000000000003);
 INSERT INTO fcc_flow_definition_version(id,flow_definition_id,version_no,definition_json,checksum,publish_status,published_at,created_by)
-SELECT 820000000000000023,820000000000000003,2,CONVERT(0x7b22736368656d6156657273696f6e223a322c2274656d706c617465223a224e4f54494649434154494f4e222c22657865637574696f6e4d6f6465223a2246495845445f52554e54494d45222c22656e747279223a22454e545259222c22737461676573223a5b22454e545259222c224449414c5f435553544f4d4552222c224e4f54494659222c22434f4e4649524d222c22454e44225d2c22706172616d6574657273223a7b226469616c5365636f6e6473223a33302c226d65646961536f75726365223a226663632e6f7574626f756e642e6e6f74696669636174696f6e2d66696c65222c22636f6e6669726d6174696f6e4469676974223a2231227d2c226e6f646573223a5b7b226b6579223a22454e545259222c226c6162656c223a22e9809ae79fa5e4bbbbe58aa1e58f97e79086222c22616374696f6e223a2256414c49444154455f4e4f54494649434154494f4e5f414e445f524f555445222c22696e70757473223a5b2274656e616e744964222c226f776e6572222c226e756d626572222c22617474656d70744964225d2c227472616e736974696f6e73223a5b7b227768656e223a224143434550544544222c22746f223a224449414c5f435553544f4d4552227d2c7b227768656e223a2252454a4543544544222c22746f223a22454e44227d5d7d2c7b226b6579223a224449414c5f435553544f4d4552222c226c6162656c223a22e591bce58fabe5aea2e688b7222c22616374696f6e223a224449414c5f435553544f4d4552222c22706172616d6574657273223a7b2274696d656f75745365636f6e6473223a33307d2c227472616e736974696f6e73223a5b7b227768656e223a22435553544f4d45525f5245414459222c22746f223a224e4f54494659227d2c7b227768656e223a2244455354524f59222c22746f223a22454e44227d5d7d2c7b226b6579223a224e4f54494659222c226c6162656c223a22e9809ae79fa5e694bee99fb3e4b88ee694b6e58fb7222c22616374696f6e223a22524541445f44544d46222c22706172616d6574657273223a7b226d696e446967697473223a312c226d6178446967697473223a312c227472696573223a312c2274696d656f75745365636f6e6473223a31302c22646967697454696d656f75744d73223a323030302c227465726d696e61746f7273223a2223222c227265676578223a225e5b315d24222c22616374696f6e4166746572223a2248414e475550227d2c227472616e736974696f6e73223a5b7b227768656e223a2244494749545f455155414c535f31222c22746f223a22434f4e4649524d227d2c7b227768656e223a2244455354524f595f574954484f55545f434f4e4649524d4154494f4e222c22746f223a22454e44222c22726573756c74223a22554e434f4e4649524d4544227d5d7d2c7b226b6579223a22434f4e4649524d222c226c6162656c223a22e4bf9de5ad98e5aea2e688b7e7a1aee8aea4222c22616374696f6e223a22504552534953545f434f4e4649524d4154494f4e5f414e445f48414e475550222c226f757470757473223a5b226e6f74696669636174696f6e436f6e6669726d6564225d2c227472616e736974696f6e73223a5b7b227768656e223a2244455354524f59222c22746f223a22454e44227d5d7d2c7b226b6579223a22454e44222c226c6162656c223a22e7bb93e69d9fe9809ae79fa5e9809ae8af9d222c22616374696f6e223a2246494e414c495a455f4e4f54494649434154494f4e222c226f757470757473223a5b2268616e6775704361757365222c226e6f74696669636174696f6e436f6e6669726d6564222c226475726174696f6e222c2262696c6c736563225d2c227465726d696e616c223a747275652c227472616e736974696f6e73223a5b5d7d5d7d USING utf8mb4),'e1f9e4c8c1251e0f362acd84fee460acfce1dac23b0bd5f8897536e0582c07e2','PUBLISHED',UTC_TIMESTAMP(3),'system'
-WHERE NOT EXISTS (SELECT 1 FROM fcc_flow_definition_version WHERE flow_definition_id=820000000000000003 AND version_no=2);
-UPDATE fcc_flow_definition_version SET publish_status='ARCHIVED' WHERE flow_definition_id=820000000000000003 AND version_no<2 AND publish_status='PUBLISHED';
-UPDATE fcc_flow_definition SET current_version=2,status='PUBLISHED' WHERE id=820000000000000003 AND current_version<2;
+SELECT 820000000000000023,820000000000000003,1,CONVERT(0x7b22736368656d6156657273696f6e223a322c2274656d706c617465223a224e4f54494649434154494f4e222c22657865637574696f6e4d6f6465223a2246495845445f52554e54494d45222c22656e747279223a22454e545259222c22737461676573223a5b22454e545259222c224449414c5f435553544f4d4552222c224e4f54494659222c22434f4e4649524d222c22454e44225d2c22706172616d6574657273223a7b226469616c5365636f6e6473223a33302c226d65646961536f75726365223a226663632e6f7574626f756e642e6e6f74696669636174696f6e2d66696c65222c22636f6e6669726d6174696f6e4469676974223a2231227d2c226e6f646573223a5b7b226b6579223a22454e545259222c226c6162656c223a22e9809ae79fa5e4bbbbe58aa1e58f97e79086222c22616374696f6e223a2256414c49444154455f4e4f54494649434154494f4e5f414e445f524f555445222c22696e70757473223a5b226f776e6572222c226e756d626572222c22617474656d70744964225d2c227472616e736974696f6e73223a5b7b227768656e223a224143434550544544222c22746f223a224449414c5f435553544f4d4552227d2c7b227768656e223a2252454a4543544544222c22746f223a22454e44227d5d7d2c7b226b6579223a224449414c5f435553544f4d4552222c226c6162656c223a22e591bce58fabe5aea2e688b7222c22616374696f6e223a224449414c5f435553544f4d4552222c22706172616d6574657273223a7b2274696d656f75745365636f6e6473223a33307d2c227472616e736974696f6e73223a5b7b227768656e223a22435553544f4d45525f5245414459222c22746f223a224e4f54494659227d2c7b227768656e223a2244455354524f59222c22746f223a22454e44227d5d7d2c7b226b6579223a224e4f54494659222c226c6162656c223a22e9809ae79fa5e694bee99fb3e4b88ee694b6e58fb7222c22616374696f6e223a22524541445f44544d46222c22706172616d6574657273223a7b226d696e446967697473223a312c226d6178446967697473223a312c227472696573223a312c2274696d656f75745365636f6e6473223a31302c22646967697454696d656f75744d73223a323030302c227465726d696e61746f7273223a2223222c227265676578223a225e5b315d24222c22616374696f6e4166746572223a2248414e475550227d2c227472616e736974696f6e73223a5b7b227768656e223a2244494749545f455155414c535f31222c22746f223a22434f4e4649524d227d2c7b227768656e223a2244455354524f595f574954484f55545f434f4e4649524d4154494f4e222c22746f223a22454e44222c22726573756c74223a22554e434f4e4649524d4544227d5d7d2c7b226b6579223a22434f4e4649524d222c226c6162656c223a22e4bf9de5ad98e5aea2e688b7e7a1aee8aea4222c22616374696f6e223a22504552534953545f434f4e4649524d4154494f4e5f414e445f48414e475550222c226f757470757473223a5b226e6f74696669636174696f6e436f6e6669726d6564225d2c227472616e736974696f6e73223a5b7b227768656e223a2244455354524f59222c22746f223a22454e44227d5d7d2c7b226b6579223a22454e44222c226c6162656c223a22e7bb93e69d9fe9809ae79fa5e9809ae8af9d222c22616374696f6e223a2246494e414c495a455f4e4f54494649434154494f4e222c226f757470757473223a5b2268616e6775704361757365222c226e6f74696669636174696f6e436f6e6669726d6564222c226475726174696f6e222c2262696c6c736563225d2c227465726d696e616c223a747275652c227472616e736974696f6e73223a5b5d7d5d7d USING utf8mb4),'6b8d2e9ae080d23a69a90810b16fa1334d89394f56cbf31c5e6241f5039480fa','PUBLISHED',UTC_TIMESTAMP(3),'system'
+WHERE NOT EXISTS (SELECT 1 FROM fcc_flow_definition_version WHERE flow_definition_id=820000000000000003 AND version_no=1);
+UPDATE fcc_flow_definition SET current_version=1,status='PUBLISHED' WHERE id=820000000000000003;
 
-INSERT INTO fcc_flow_definition(id,tenant_id,flow_key,flow_name,model_type,status,current_version)
-SELECT 820000000000000004,0,'SYSTEM_PHONE_BINDING',CONVERT(0xe8af9de69cbae7bb91e5ae9a USING utf8mb4),'PHONE_BINDING','PUBLISHED',1
+INSERT INTO fcc_flow_definition(id,flow_key,flow_name,model_type,status,current_version)
+SELECT 820000000000000004,'SYSTEM_PHONE_BINDING',CONVERT(0xe8af9de69cbae7bb91e5ae9a USING utf8mb4),'PHONE_BINDING','PUBLISHED',1
 WHERE NOT EXISTS (SELECT 1 FROM fcc_flow_definition WHERE id=820000000000000004);
 INSERT INTO fcc_flow_definition_version(id,flow_definition_id,version_no,definition_json,checksum,publish_status,published_at,created_by)
-SELECT 820000000000000024,820000000000000004,1,CONVERT(0x7b22736368656d6156657273696f6e223a322c2274656d706c617465223a2250484f4e455f42494e44494e47222c22657865637574696f6e4d6f6465223a2246495845445f52554e54494d45222c22656e747279223a22454e545259222c22737461676573223a5b22454e545259222c22434f4c4c4543545f434f4445222c225645524946595f42494e44494e47222c22454e44225d2c22706172616d6574657273223a7b226368616c6c656e67654578706972795365636f6e6473223a3132302c226d65646961536f75726365223a226663632e62696e64696e672e70726f6d70742d66696c65227d2c226e6f646573223a5b7b226b6579223a22454e545259222c226c6162656c223a22e8af86e588abe7bb91e5ae9ae8af9de69cba222c22616374696f6e223a2256414c49444154455f42494e44494e475f455854454e53494f4e222c22696e70757473223a5b226e6f64654964222c226368616e6e656c55756964222c22657874656e73696f6e225d2c227472616e736974696f6e73223a5b7b227768656e223a225245414459222c22746f223a22434f4c4c4543545f434f4445227d2c7b227768656e223a22494e56414c49445f4f525f44455354524f59222c22746f223a22454e44227d5d7d2c7b226b6579223a22434f4c4c4543545f434f4445222c226c6162656c223a22e694b6e58f96e7bb91e5ae9ae9aa8ce8af81e7a081222c22616374696f6e223a22524541445f44544d46222c22706172616d6574657273223a7b226d696e446967697473223a382c226d6178446967697473223a382c227472696573223a312c2274696d656f75745365636f6e6473223a36302c22646967697454696d656f75744d73223a31303030302c227465726d696e61746f7273223a2223222c227265676578223a225e5b302d395d7b387d24227d2c227472616e736974696f6e73223a5b7b227768656e223a224449474954535f5245434549564544222c22746f223a225645524946595f42494e44494e47227d2c7b227768656e223a2244455354524f59222c22746f223a22454e44227d5d7d2c7b226b6579223a225645524946595f42494e44494e47222c226c6162656c223a22e6a0a1e9aa8ce5b9b6e7bb91e5ae9a222c22616374696f6e223a22434f4e53554d455f4348414c4c454e47455f414e445f42494e44222c22706172616d6574657273223a7b226d61746368457874656e73696f6e223a747275652c22636865636b457870697279223a747275652c22636f6e73756d654f6e6365223a747275652c227065727369737442696e64696e67486973746f7279223a747275657d2c226f757470757473223a5b2262696e64696e674163636570746564225d2c227472616e736974696f6e73223a5b7b227768656e223a2256414c4944222c22746f223a22454e44222c22726573756c74223a22424f554e44227d2c7b227768656e223a22454c5345222c22746f223a22454e44222c22726573756c74223a2252454a4543544544227d5d7d2c7b226b6579223a22454e44222c226c6162656c223a22e7bb93e69d9fe7bb91e5ae9ae9809ae8af9d222c22616374696f6e223a2248414e4755505f42494e44494e475f4348414e4e454c222c227465726d696e616c223a747275652c227472616e736974696f6e73223a5b5d7d5d7d USING utf8mb4),'4122bae8b88b82f2ad0867f35376894dde1914abfafeef14c331e2d04e43042b','PUBLISHED',UTC_TIMESTAMP(3),'system'
+SELECT 820000000000000024,820000000000000004,1,CONVERT(0x7b22736368656d6156657273696f6e223a322c2274656d706c617465223a2250484f4e455f42494e44494e47222c22657865637574696f6e4d6f6465223a2246495845445f52554e54494d45222c22656e747279223a22454e545259222c22737461676573223a5b22454e545259222c22434f4c4c4543545f434f4445222c225645524946595f42494e44494e47222c22454e44225d2c22706172616d6574657273223a7b22776f726b4e6f4d696e446967697473223a322c22776f726b4e6f4d6178446967697473223a32302c226d65646961536f75726365223a226663632e62696e64696e672e70726f6d70742d66696c65227d2c226e6f646573223a5b7b226b6579223a22454e545259222c226c6162656c223a22e8af86e588abe7bb91e5ae9ae8af9de69cba222c22616374696f6e223a2256414c49444154455f42494e44494e475f455854454e53494f4e222c22696e70757473223a5b226e6f64654964222c226368616e6e656c55756964222c22657874656e73696f6e225d2c227472616e736974696f6e73223a5b7b227768656e223a225245414459222c22746f223a22434f4c4c4543545f434f4445227d2c7b227768656e223a22494e56414c49445f4f525f44455354524f59222c22746f223a22454e44227d5d7d2c7b226b6579223a22434f4c4c4543545f434f4445222c226c6162656c223a22e694b6e58f96e59d90e5b8ade5b7a5e58fb7222c22616374696f6e223a22524541445f44544d46222c22706172616d6574657273223a7b226d696e446967697473536f75726365223a226663632e62696e64696e672e776f726b2d6e6f2d6d696e2d646967697473222c226d6178446967697473536f75726365223a226663632e62696e64696e672e776f726b2d6e6f2d6d61782d646967697473222c227472696573223a312c2274696d656f75745365636f6e6473223a36302c22646967697454696d656f75744d73223a31303030302c227465726d696e61746f7273223a2223222c227265676578223a225e5b302d395d2b24227d2c227472616e736974696f6e73223a5b7b227768656e223a224449474954535f5245434549564544222c22746f223a225645524946595f42494e44494e47227d2c7b227768656e223a2244455354524f59222c22746f223a22454e44227d5d7d2c7b226b6579223a225645524946595f42494e44494e47222c226c6162656c223a22e6a0a1e9aa8ce5b9b6e7bb91e5ae9a222c22616374696f6e223a2242494e445f4147454e545f455854454e53494f4e222c22706172616d6574657273223a7b226d6174636841757468656e74696361746564457874656e73696f6e223a747275652c226c6f636b4167656e74416e64457874656e73696f6e223a747275652c227065727369737442696e64696e67486973746f7279223a747275657d2c226f757470757473223a5b2262696e64696e674163636570746564225d2c227472616e736974696f6e73223a5b7b227768656e223a2256414c4944222c22746f223a22454e44222c22726573756c74223a22424f554e44227d2c7b227768656e223a22454c5345222c22746f223a22454e44222c22726573756c74223a2252454a4543544544227d5d7d2c7b226b6579223a22454e44222c226c6162656c223a22e7bb93e69d9fe7bb91e5ae9ae9809ae8af9d222c22616374696f6e223a2248414e4755505f42494e44494e475f4348414e4e454c222c227465726d696e616c223a747275652c227472616e736974696f6e73223a5b5d7d5d7d USING utf8mb4),'26c879278320c0930aaac70e718b3beed40aca807c7a6e5e385a122fc7240d07','PUBLISHED',UTC_TIMESTAMP(3),'system'
 WHERE NOT EXISTS (SELECT 1 FROM fcc_flow_definition_version WHERE flow_definition_id=820000000000000004 AND version_no=1);
-UPDATE fcc_flow_definition_version SET publish_status='ARCHIVED' WHERE flow_definition_id=820000000000000004 AND version_no<1 AND publish_status='PUBLISHED';
-UPDATE fcc_flow_definition SET current_version=1,status='PUBLISHED' WHERE id=820000000000000004 AND current_version<1;
+UPDATE fcc_flow_definition SET current_version=1,status='PUBLISHED' WHERE id=820000000000000004;
 
 COMMIT;
 -- END GENERATED COMPLETE SYSTEM MODELS

@@ -72,7 +72,6 @@ public class AdminUserService {
         LocalDateTime now = LocalDateTime.now();
         AdminUserEntity entity = AdminUserEntity.builder()
                 .id(IdUtil.nextId())
-                .tenantId(0L)
                 .username(username)
                 .realName(req.getRealName().trim())
                 .passwordHash(PasswordHasher.hash(plainPassword))

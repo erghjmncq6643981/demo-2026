@@ -1,10 +1,9 @@
 package com.chandler.fcc.admin.infrastructure.persistence.entity;
 
-import com.baomidou.mybatisplus.annotation.TableId;
 import com.baomidou.mybatisplus.annotation.TableName;
 import lombok.*;
+import lombok.experimental.SuperBuilder;
 
-import java.io.Serializable;
 import java.time.LocalDateTime;
 
 /**
@@ -21,21 +20,8 @@ import java.time.LocalDateTime;
 @Getter
 @Setter
 @ToString
-@Builder
-public class CallbackTaskEntity implements Serializable {
-
-    private static final long serialVersionUID = 1L;
-
-    /**
-     * 雪花主键 ID
-     */
-    @TableId
-    private Long id;
-
-    /**
-     * 租户 ID
-     */
-    private Long tenantId;
+@SuperBuilder
+public class CallbackTaskEntity extends BaseEntity {
 
     /**
      * 关联原未接通通话 ID (fcc_call_session.id)
@@ -106,14 +92,4 @@ public class CallbackTaskEntity implements Serializable {
      * 跟进备注说明
      */
     private String notes;
-
-    /**
-     * 创建时间
-     */
-    private LocalDateTime createdAt;
-
-    /**
-     * 更新时间
-     */
-    private LocalDateTime updatedAt;
 }

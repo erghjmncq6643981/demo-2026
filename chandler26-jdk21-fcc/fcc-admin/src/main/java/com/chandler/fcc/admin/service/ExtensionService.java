@@ -80,7 +80,6 @@ public class ExtensionService {
         LocalDateTime now = LocalDateTime.now();
         ExtensionEntity entity = ExtensionEntity.builder()
                 .id(id)
-                .tenantId(0L)
                 .extension(ext)
                 .endpointType(req.getEndpointType() == null ? "SIP" : req.getEndpointType().trim())
                 .credentialSecret(encryptedSecret)

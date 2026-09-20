@@ -1,10 +1,9 @@
 package com.chandler.fcc.server.infrastructure.persistence.entity;
 
-import com.baomidou.mybatisplus.annotation.TableId;
 import com.baomidou.mybatisplus.annotation.TableName;
 import lombok.*;
+import lombok.experimental.SuperBuilder;
 
-import java.io.Serializable;
 import java.time.LocalDateTime;
 
 /**
@@ -21,21 +20,8 @@ import java.time.LocalDateTime;
 @Getter
 @Setter
 @ToString
-@Builder
-public class CallRecordingEntity implements Serializable {
-
-    private static final long serialVersionUID = 1L;
-
-    /**
-     * 录音雪花主键 ID
-     */
-    @TableId
-    private Long id;
-
-    /**
-     * 租户 ID
-     */
-    private Long tenantId;
+@SuperBuilder
+public class CallRecordingEntity extends BaseEntity {
 
     /**
      * 录音业务唯一标识 (recording_id)
@@ -116,14 +102,4 @@ public class CallRecordingEntity implements Serializable {
      * 归档保留截止时间 (UTC)
      */
     private LocalDateTime retainUntil;
-
-    /**
-     * 记录创建时间 (UTC)
-     */
-    private LocalDateTime createdAt;
-
-    /**
-     * 记录更新时间 (UTC)
-     */
-    private LocalDateTime updatedAt;
 }

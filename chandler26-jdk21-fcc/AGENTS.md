@@ -8,13 +8,14 @@ The parent `AGENTS.md` also applies. When rules conflict, use the narrower rule 
 - Keep the declared Maven modules and their responsibilities stable:
   - `fcc-common`: stable cross-module contracts, value objects, enums, error codes, and dependency-light utilities.
   - `fcc-server`: phone-binding runtime, inbound/outbound call control, automatic outbound scheduling, customer data, Windows screen-pop business orchestration, Call/Leg/Bridge state, routing, FCC commands/events, recording metadata, and runtime persistence. Windows clients execute local OS interactions only; Sidecar does not own these business capabilities.
-  - `fcc-server-starter`: executable bootstrap, environment configuration, observability, and deployment assembly for the control service.
-  - `fcc-admin`: administration commands/queries for agents, groups, flows, numbers, trunks, nodes, calls, and operational audit.
-  - `fcc-admin-starter`: executable bootstrap and deployment assembly for the admin service.
+  - `fcc-server-starter`: SDK boundary reserved for remote `fcc-server` contracts. Add Feign interfaces only when a real consumer requires them; it must not contain the executable application or depend on `fcc-server` implementation.
+  - `fcc-admin`: administration commands/queries for agents, groups, flows, numbers, trunks, nodes, calls, operational audit, and the executable admin-service bootstrap.
+  - `fcc-admin-starter`: SDK boundary reserved for remote `fcc-admin` contracts. Add Feign interfaces only when a real consumer requires them; it must not contain the executable application or depend on `fcc-admin` implementation.
 - `fcc-common` must not depend on another project module and must not become a dumping ground for Spring services, Mappers, infrastructure clients, or feature-specific helpers.
-- `fcc-server` and `fcc-admin` may depend on `fcc-common`; they must not depend on either starter. A starter may depend only on its corresponding implementation module plus runtime/observability dependencies.
+- `fcc-server` and `fcc-admin` are independently executable services and may depend on `fcc-common`; they must not depend on either starter. A starter is a client-facing SDK and must never depend on its corresponding implementation module.
+- No Feign contract is currently required. Do not add OpenFeign dependencies, placeholder clients, or speculative SDK DTOs before a concrete cross-service caller and API contract exist.
 - Do not add a direct `fcc-admin -> fcc-server` dependency. Cross-module collaboration uses a narrow contract in `fcc-common`, an application port, or an explicit message/API boundary.
-- Starter modules contain no domain rules, Controller, Mapper, or use-case implementation. They own `main`, profiles, runtime wiring, and deployment-specific configuration only.
+- Starter SDK modules contain no `main`, runtime profile, Controller, Mapper, persistence, domain rule, or use-case implementation. Runtime configuration and deployment assembly remain in `fcc-server` and `fcc-admin`.
 
 ## Package And Layer Structure
 
@@ -27,6 +28,7 @@ The parent `AGENTS.md` also applies. When rules conflict, use the narrower rule 
 - External protocols belong under explicit adapters such as `infrastructure/nats`, `infrastructure/redis`, and `infrastructure/sidecar`. Do not leak NATS `Message`, Redis types, MyBatis wrappers, or JSON library objects into domain APIs.
 - Enforce inward dependencies: `api -> application -> domain`, while infrastructure implements ports defined by the application/domain boundary. Cross-context access uses a narrow application contract, not another context's Mapper.
 - Java package names must be lowercase and must not use the reserved keyword `do`. Prefer clear names such as `entity`, `command`, and `dataobject`.
+- Java 类型必须通过 `import` 后使用简单类名。字段、构造器、方法签名、泛型、注解和对象创建表达式中不得直接书写全限定类名；确有同名类型冲突时，应通过重新命名或收窄职责消除歧义。
 - At roughly 800-1000 production lines in a class, perform a mandatory design review and split by state policy, command/query path, persistence assembly, protocol mapping, or orchestration responsibility.
 
 ## Telephony Identity Invariants
@@ -77,7 +79,7 @@ The parent `AGENTS.md` also applies. When rules conflict, use the narrower rule 
 
 - Redis stores reconstructable runtime data only: node heartbeat/capacity, agent presence acceleration, active-call routing, short-lived idempotency keys, locks, rate limits, and number allocation leases.
 - MySQL remains the source of truth for call facts, Leg facts, command/event audit, flow execution, agent service sessions, and recording metadata.
-- Every Redis key has a central prefix, tenant scope where applicable, documented value format, TTL policy, and owner. Do not create ad hoc keys in application services.
+- Every Redis key has a central prefix, documented value format, TTL policy, and owner. Do not create ad hoc keys in application services.
 - Distributed locks require a bounded wait time, lease/renewal policy, unique owner token, and safe unlock. A lock must not compensate for a missing database uniqueness constraint.
 - Cache invalidation is explicit after commit. Cache failures must not roll back a committed telephony fact; they must be observable and repairable.
 
@@ -112,9 +114,9 @@ The parent `AGENTS.md` also applies. When rules conflict, use the narrower rule 
 - Secrets, SIP credentials, NATS credentials, database passwords, Redis passwords, tokens, and recording signed URLs come from environment/secret management and must not appear in source, DDL seed data, logs, or API responses.
 - Mask phone numbers according to caller authorization. Raw SIP headers, protocol payloads, and recordings may contain personal data and require access control, retention, and audit.
 - Technical access logs use SLF4J and tracing. User-visible operational actions such as node drain/resume, forced hangup, flow publish, trunk change, and recording access require structured business audit.
-- Logs include useful correlation fields where available: `trace_id`, `tenant_id`, `call_id`, `ctrl_id`, `channel_uuid`, `command_id`, `event_id`, and `node_id`.
+- Logs include useful correlation fields where available: `trace_id`, `call_id`, `ctrl_id`, `channel_uuid`, `command_id`, `event_id`, and `node_id`.
 - Business info logs describe readable actions and outcomes. Stack traces, payload bodies, SQL, and protocol diagnostics are debug-level and masked/truncated. High-frequency heartbeats and channel events must not produce unbounded info logs.
-- Admin operations require explicit authorization and tenant/data-scope checks in both API and application layers. Never rely only on hidden UI actions.
+- Admin operations require explicit authorization and business data-scope checks in both API and application layers. Never rely only on hidden UI actions.
 
 ## Documentation Discipline
 
@@ -139,6 +141,6 @@ The parent `AGENTS.md` also applies. When rules conflict, use the narrower rule 
 
 - For SQL, migrations, indexing, pagination, batching, or high-volume event storage, use the parent `../agents/data-performance.md` playbook.
 - For cross-layer behavior and regression acceptance, use `../agents/end-to-end-quality.md`.
-- For authentication, admin operations, tenant isolation, secrets, recordings, and personal data, use `../agents/security-and-authorization.md`.
+- For authentication, admin operations, business data scopes, secrets, recordings, and personal data, use `../agents/security-and-authorization.md`.
 - For telephony, event, WebSocket, SIP/WebRTC, recording, or recovery work, use `../agents/fcc-realtime-reliability.md` and report the first boundary that lacks evidence.
 - For documentation, generated artifacts, build configuration, or broad repository cleanup, use `../agents/repository-integrity.md`.

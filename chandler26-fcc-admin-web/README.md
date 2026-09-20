@@ -9,7 +9,7 @@ Browser :8000
     |
     | /api/admin
     v
-fcc-admin-starter :8089
+fcc-admin :8089
     |             |
     v             v
  MySQL          Redis
@@ -35,7 +35,7 @@ The source of truth is the `/api/admin` contract implemented by `chandler26-jdk2
 Prerequisites:
 
 - Node.js compatible with Vite 6; model tests require Node.js 22.18+ with native TypeScript stripping.
-- `fcc-admin-starter` running on port `8089`.
+- `fcc-admin` running on port `8089`.
 - MySQL and Redis configured for the backend.
 
 ```bash

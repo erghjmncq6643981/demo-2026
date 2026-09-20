@@ -29,10 +29,6 @@ public class AgentVO implements Serializable {
     @Schema(description = "坐席主键 ID", example = "1001")
     private Long id;
 
-    @JsonSerialize(using = ToStringSerializer.class)
-    @Schema(description = "租户 ID", example = "0")
-    private Long tenantId;
-
     @Schema(description = "坐席工号", example = "901001")
     private String workNo;
 

@@ -5,6 +5,7 @@ import org.junit.jupiter.api.Test;
 
 import java.util.HashSet;
 import java.util.Set;
+import java.util.UUID;
 
 import static org.junit.jupiter.api.Assertions.*;
 
@@ -67,6 +68,6 @@ class IdUtilTest {
         String uuid = IdUtil.getUuid();
         assertNotNull(uuid);
         assertEquals(36, uuid.length(), "UUID 长度必须为 36 位");
-        assertEquals(uuid, java.util.UUID.fromString(uuid).toString());
+        assertEquals(uuid, UUID.fromString(uuid).toString());
     }
 }

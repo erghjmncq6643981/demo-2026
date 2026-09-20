@@ -33,11 +33,6 @@ public class ClientHardwareRecordEntity implements Serializable {
     private Long id;
 
     /**
-     * 租户 ID
-     */
-    private Long tenantId;
-
-    /**
      * 坐席主键 ID
      */
     private Long agentId;

@@ -34,11 +34,6 @@ public class AgentGroupMemberEntity implements Serializable {
     private Long id;
 
     /**
-     * 租户 ID
-     */
-    private Long tenantId;
-
-    /**
      * 技能组 ID
      */
     private Long groupId;

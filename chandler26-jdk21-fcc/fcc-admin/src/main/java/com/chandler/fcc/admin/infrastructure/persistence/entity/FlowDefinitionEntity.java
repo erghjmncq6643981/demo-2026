@@ -1,10 +1,8 @@
 package com.chandler.fcc.admin.infrastructure.persistence.entity;
 
-import com.baomidou.mybatisplus.annotation.TableId;
 import com.baomidou.mybatisplus.annotation.TableName;
 import lombok.*;
-
-import java.io.Serializable;
+import lombok.experimental.SuperBuilder;
 import java.time.LocalDateTime;
 
 /**
@@ -18,15 +16,8 @@ import java.time.LocalDateTime;
 @Getter
 @Setter
 @ToString
-@Builder
-public class FlowDefinitionEntity implements Serializable {
-
-    private static final long serialVersionUID = 1L;
-
-    @TableId
-    private Long id;
-
-    private Long tenantId;
+@SuperBuilder
+public class FlowDefinitionEntity extends BaseEntity {
 
     /**
      * 流程唯一标识 (如 FLOW-INBOUND, FLOW-OUTBOUND, FLOW-PHONE-DIRECT)
@@ -52,10 +43,6 @@ public class FlowDefinitionEntity implements Serializable {
      * 当前线上生效版本号 (如 1 对应 v1.0.0)
      */
     private Integer currentVersion;
-
-    private LocalDateTime createdAt;
-
-    private LocalDateTime updatedAt;
 
     private LocalDateTime deletedAt;
 }

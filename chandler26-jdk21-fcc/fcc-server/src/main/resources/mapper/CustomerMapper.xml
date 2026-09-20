@@ -1,22 +1,32 @@
-<?xml version="1.0" encoding="UTF-8"?>
+<?xml version="1.0" encoding="UTF-8" ?>
 <!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
 <mapper namespace="com.chandler.fcc.server.customer.infrastructure.CustomerMapper">
   <select id="list" resultType="com.chandler.fcc.server.customer.api.CustomerRecord">
-    SELECT id,name,phone_number,company_name,version FROM fcc_customer
-    WHERE tenant_id=#{tenantId} AND owner_work_no=#{owner}
-    <if test="phone != null">AND phone_number=#{phone}</if>
-    ORDER BY id DESC LIMIT #{limit} OFFSET #{offset}
+    SELECT id, name, phone_number, company_name, version
+    FROM fcc_customer
+    WHERE owner_work_no = #{owner}
+    <if test="phone != null">AND phone_number = #{phone}</if>
+    ORDER BY id DESC
+    LIMIT #{limit} OFFSET #{offset}
   </select>
   <select id="detail" resultType="com.chandler.fcc.server.customer.api.CustomerRecord">
-    SELECT id,name,phone_number,company_name,notes,version FROM fcc_customer
-    WHERE tenant_id=#{tenantId} AND owner_work_no=#{owner} AND id=#{id}
+    SELECT id, name, phone_number, company_name, notes, version
+    FROM fcc_customer
+    WHERE owner_work_no = #{owner} AND id = #{id}
   </select>
   <insert id="insert">
-    INSERT INTO fcc_customer(id,tenant_id,owner_work_no,name,phone_number,company_name,notes,version)
-    VALUES(#{customer.id},#{tenantId},#{owner},#{customer.name},#{customer.phoneNumber},#{customer.companyName},#{customer.notes},0)
+    INSERT INTO fcc_customer(id, owner_work_no, name, phone_number, company_name, notes, version)
+    VALUES(
+      #{customer.id}, #{owner}, #{customer.name}, #{customer.phoneNumber},
+      #{customer.companyName}, #{customer.notes}, 0
+    )
   </insert>
   <update id="update">
-    UPDATE fcc_customer SET name=#{customer.name},phone_number=#{customer.phoneNumber},company_name=#{customer.companyName},notes=#{customer.notes},version=version+1
-    WHERE tenant_id=#{tenantId} AND owner_work_no=#{owner} AND id=#{customer.id} AND version=#{customer.version}
+    UPDATE fcc_customer
+    SET name = #{customer.name}, phone_number = #{customer.phoneNumber},
+        company_name = #{customer.companyName}, notes = #{customer.notes}, version = version + 1
+    WHERE owner_work_no = #{owner}
+      AND id = #{customer.id}
+      AND version = #{customer.version}
   </update>
 </mapper>

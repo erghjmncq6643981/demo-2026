@@ -8,14 +8,14 @@
     <choose>
       <when test="version != null">WHERE v.id=#{version}</when>
       <otherwise>
-        WHERE f.tenant_id=0 AND f.flow_key=CONCAT('SYSTEM_',#{template}) AND v.publish_status='PUBLISHED'
+        WHERE f.flow_key=CONCAT('SYSTEM_',#{template}) AND v.publish_status='PUBLISHED'
       </otherwise>
     </choose>
     ORDER BY v.version_no DESC LIMIT 1
   </select>
   <insert id="create">
     INSERT IGNORE INTO
-    fcc_flow_instance(id,tenant_id,call_id,flow_definition_id,flow_version_id,status,started_at,context_json) VALUES(#{call},#{tenant},#{call},#{definitionId},#{versionId},'RUNNING',UTC_TIMESTAMP(3),#{snapshot})
+    fcc_flow_instance(id,call_id,flow_definition_id,flow_version_id,status,started_at,context_json) VALUES(#{call},#{call},#{definitionId},#{versionId},'RUNNING',UTC_TIMESTAMP(3),#{snapshot})
   </insert>
   <select id="lock" resultType="map" useCache="false" flushCache="true">
     SELECT current_step_key AS step,status,context_json AS context FROM fcc_flow_instance WHERE id=#{call} FOR
@@ -28,8 +28,8 @@
   </update>
   <insert id="append">
     INSERT INTO
-    fcc_flow_step_execution(id,tenant_id,flow_instance_id,call_id,stage,step_key,action_type,attempt_no,trigger_event_id,status,input_json,started_at,ended_at,duration_ms)
-  SELECT #{id},#{tenant},#{call},#{call},#{step},#{step},#{step},COALESCE(MAX(attempt_no),0)+1,#{event},#{status},#{input},UTC_TIMESTAMP(3),CASE
+    fcc_flow_step_execution(id,flow_instance_id,call_id,stage,step_key,action_type,attempt_no,trigger_event_id,status,input_json,started_at,ended_at,duration_ms)
+  SELECT #{id},#{call},#{call},#{step},#{step},#{step},COALESCE(MAX(attempt_no),0)+1,#{event},#{status},#{input},UTC_TIMESTAMP(3),CASE
     WHEN #{step}='END' THEN UTC_TIMESTAMP(3) END,CASE WHEN #{step}='END' THEN 0 END
   FROM fcc_flow_step_execution WHERE flow_instance_id=#{call} AND step_key=#{step}
   </insert>

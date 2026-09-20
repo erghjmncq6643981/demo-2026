@@ -33,11 +33,6 @@ public class AgentEndpointBindingEntity implements Serializable {
     private Long id;
 
     /**
-     * 租户 ID
-     */
-    private Long tenantId;
-
-    /**
      * 坐席 ID
      */
     private Long agentId;

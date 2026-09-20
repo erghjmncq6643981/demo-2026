@@ -1,11 +1,10 @@
 package com.chandler.fcc.admin.infrastructure.persistence.entity;
 
-import com.baomidou.mybatisplus.annotation.TableId;
 import com.baomidou.mybatisplus.annotation.TableLogic;
 import com.baomidou.mybatisplus.annotation.TableName;
 import lombok.*;
+import lombok.experimental.SuperBuilder;
 
-import java.io.Serializable;
 import java.time.LocalDateTime;
 
 /**
@@ -22,21 +21,8 @@ import java.time.LocalDateTime;
 @Getter
 @Setter
 @ToString
-@Builder
-public class DidNumberEntity implements Serializable {
-
-    private static final long serialVersionUID = 1L;
-
-    /**
-     * DID 号码雪花主键 ID
-     */
-    @TableId
-    private Long id;
-
-    /**
-     * 租户 ID
-     */
-    private Long tenantId;
+@SuperBuilder
+public class DidNumberEntity extends BaseEntity {
 
     /**
      * 归属中继线路 ID
@@ -57,16 +43,6 @@ public class DidNumberEntity implements Serializable {
      * 状态 (ENABLED, DISABLED)
      */
     private String status;
-
-    /**
-     * 创建时间
-     */
-    private LocalDateTime createdAt;
-
-    /**
-     * 更新时间
-     */
-    private LocalDateTime updatedAt;
 
     /**
      * 逻辑删除标记时间

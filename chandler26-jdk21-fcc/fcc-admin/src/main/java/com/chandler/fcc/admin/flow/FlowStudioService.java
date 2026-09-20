@@ -29,7 +29,6 @@ public class FlowStudioService {
      */
     public String create(String key, String name) {
         StpUtil.checkPermission("flow:write");
-        long tenant = tenant();
         if (
             key == null ||
             !key.matches("[A-Za-z][A-Za-z0-9_-]{0,63}") ||
@@ -38,13 +37,13 @@ public class FlowStudioService {
             name.isBlank() ||
             name.length() > 128
         ) throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "流程代码或名称不合法");
-        mapper.create(Map.of("id", IdUtil.nextId(), "tenant", tenant, "key", key, "name", name.trim()));
-        log.info("[流程管理] 新建流程 tenantId={} flowKey={}", tenant, key);
+        mapper.create(Map.of("id", IdUtil.nextId(), "key", key, "name", name.trim()));
+        log.info("[流程管理] 新建流程 flowKey={}", key);
         return key;
     }
 
     /**
-     * 读取本租户通话的版本快照与分页阶段事实。
+     * 读取通话的版本快照与分页阶段事实。
      *
      * @param call 通话
      * @param after 游标
@@ -52,16 +51,15 @@ public class FlowStudioService {
      */
     public FlowExecutionResp execution(String call, String after) {
         StpUtil.checkPermission("flow:view");
-        long tenant = tenant();
         if (
             !call.matches("[1-9][0-9]{0,18}") || !after.matches("[0-9]{1,19}")
         ) throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "标识不合法");
-        if (mapper.callExists(tenant, call) == 0) throw new ResponseStatusException(
+        if (mapper.callExists(call) == 0) throw new ResponseStatusException(
             HttpStatus.NOT_FOUND,
             "通话不存在"
         );
-        var instance = mapper.instance(tenant, call);
-        var steps = mapper.steps(tenant, call, after);
+        var instance = mapper.instance(call);
+        var steps = mapper.steps(call, after);
         var response = new FlowExecutionResp();
         response.setInstance(instance == null ? Map.of() : instance);
         response.setSteps(steps);
@@ -69,18 +67,4 @@ public class FlowStudioService {
         return response;
     }
 
-    /**
-     * 从服务端登录会话获取租户，不接受浏览器指定。
-     *
-     * @return 租户 ID
-     */
-    public static long tenant() {
-        StpUtil.checkLogin();
-        Object value = StpUtil.getSession().get("tenantId");
-        if (!(value instanceof Number tenant)) throw new ResponseStatusException(
-            HttpStatus.FORBIDDEN,
-            "登录身份缺少租户"
-        );
-        return tenant.longValue();
-    }
 }

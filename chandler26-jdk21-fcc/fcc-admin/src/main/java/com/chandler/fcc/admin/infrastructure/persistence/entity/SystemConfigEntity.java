@@ -1,10 +1,9 @@
 package com.chandler.fcc.admin.infrastructure.persistence.entity;
 
-import com.baomidou.mybatisplus.annotation.TableId;
 import com.baomidou.mybatisplus.annotation.TableName;
 import lombok.*;
+import lombok.experimental.SuperBuilder;
 
-import java.io.Serializable;
 import java.time.LocalDateTime;
 
 /**
@@ -21,21 +20,8 @@ import java.time.LocalDateTime;
 @Getter
 @Setter
 @ToString
-@Builder
-public class SystemConfigEntity implements Serializable {
-
-    private static final long serialVersionUID = 1L;
-
-    /**
-     * 配置雪花主键 ID
-     */
-    @TableId
-    private Long id;
-
-    /**
-     * 租户 ID
-     */
-    private Long tenantId;
+@SuperBuilder
+public class SystemConfigEntity extends BaseEntity {
 
     /**
      * 配置参数名称 (Key)
@@ -71,14 +57,4 @@ public class SystemConfigEntity implements Serializable {
      * 更新人
      */
     private String updatedBy;
-
-    /**
-     * 创建时间
-     */
-    private LocalDateTime createdAt;
-
-    /**
-     * 更新时间
-     */
-    private LocalDateTime updatedAt;
 }

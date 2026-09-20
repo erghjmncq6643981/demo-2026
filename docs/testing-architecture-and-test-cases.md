@@ -15,16 +15,21 @@
   - `TimeUtilTest`
   - `FccIdentifierJacksonModuleTest`
   - `FccEventMethodsTest`
-- `fcc-server-starter`
+- `fcc-server`
   - `AgentWebSocketIntegrationTest`
+  - `AgentWebSocketRoutingBoundaryTest`
+  - `CallControlBoundaryTest`
   - `DatabaseConnectionTest`
   - `FccTelephonyFlowTest`
-  - `FlowActionIdentityTest`
-- `fcc-admin-starter`
+  - `FlowReloadBoundaryTest`
+  - `RuntimeSqlIntegrationTest`
+- `fcc-admin`
   - `AgentAccountServiceTest`
   - `CallCdrAndResourceAdminTest`
   - `ExtensionAdminIntegrationTest`
   - `P0P1CoreFeaturesTest`
+  - `AdminMapperRegistrationTest`
+  - `CallCdrQueryBoundaryTest`
 
 这些测试覆盖部分工具、坐席 WebSocket、数据库连接、话务流程、坐席账户、资源、CDR、回拨、分机和流程定义。环境型测试是否可运行取决于本地依赖与测试配置。
 

@@ -55,7 +55,6 @@ public class SystemConfigService {
         if (entity == null) {
             entity = SystemConfigEntity.builder()
                     .id(IdUtil.nextId())
-                    .tenantId(0L)
                     .propName(propName)
                     .propValue(req.getPropValue())
                     .propType(req.getPropType() == null ? "STRING" : req.getPropType().trim())

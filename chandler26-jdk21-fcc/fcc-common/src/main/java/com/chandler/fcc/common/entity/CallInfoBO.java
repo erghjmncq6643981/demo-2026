@@ -1,6 +1,5 @@
 package com.chandler.fcc.common.entity;
 
-import com.chandler.fcc.common.enums.ActionType;
 import com.chandler.fcc.common.enums.CallStageState;
 import com.chandler.fcc.common.enums.DirectionType;
 import com.chandler.fcc.common.enums.HangupInitiator;
@@ -88,11 +87,6 @@ public class CallInfoBO implements Serializable {
      * 客户侧 FreeSWITCH Channel UUID
      */
     private String guestChannelUuid;
-
-    /**
-     * 当前正在执行的动作类型
-     */
-    private ActionType actionType;
 
     /**
      * 通话总时长（秒）

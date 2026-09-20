@@ -1,6 +1,7 @@
 package com.chandler.fcc.server.infrastructure.nats;
 
 import io.nats.client.Connection;
+import io.nats.client.ErrorListener;
 import io.nats.client.Nats;
 import io.nats.client.Options;
 import lombok.extern.slf4j.Slf4j;
@@ -39,7 +40,7 @@ public class FccNatsConfiguration {
                 .reconnectWait(Duration.ofSeconds(2))
                 .maxReconnects(-1)
                 .connectionListener((conn, type) -> log.info("🔄 [FCC NATS] 连接状态变更: {}", type))
-                .errorListener(new io.nats.client.ErrorListener() {
+                .errorListener(new ErrorListener() {
                     @Override
                     public void errorOccurred(Connection conn, String error) {
                         log.error("❌ [FCC NATS] 发生总线错误: {}", error);

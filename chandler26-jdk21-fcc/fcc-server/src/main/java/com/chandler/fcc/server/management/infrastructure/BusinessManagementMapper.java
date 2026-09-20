@@ -1,0 +1,55 @@
+package com.chandler.fcc.server.management.infrastructure;
+
+import java.util.List;
+import java.util.Map;
+import org.apache.ibatis.annotations.Mapper;
+import org.apache.ibatis.annotations.Param;
+
+/**
+ * 管理端客户和自动外呼摘要的持久化端口。
+ */
+@Mapper
+public interface BusinessManagementMapper {
+
+    /**
+     * 查询客户摘要。
+     *
+     * @param owner 坐席筛选，可为空
+     * @param phone 号码筛选，可为空
+     * @param offset 分页偏移
+     * @return 客户摘要
+     */
+    List<Map<String, Object>> customers(
+        @Param("owner") String owner,
+        @Param("phone") String phone,
+        @Param("offset") int offset
+    );
+
+    /**
+     * 查询外呼任务摘要。
+     *
+     * @param owner 坐席筛选，可为空
+     * @param offset 分页偏移
+     * @return 任务摘要
+     */
+    List<Map<String, Object>> jobs(
+        @Param("owner") String owner,
+        @Param("offset") int offset
+    );
+
+    /**
+     * 查询客户的负责坐席。
+     *
+     * @param id 客户标识
+     * @return 负责工号，不存在时为空
+     */
+    String customerOwner(@Param("id") String id);
+
+    /**
+     * 查询任务的负责坐席。
+     *
+     * @param id 任务标识
+     * @return 负责工号，不存在时为空
+     */
+    String jobOwner(@Param("id") String id);
+}

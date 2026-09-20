@@ -119,7 +119,6 @@ public class AuthService {
         SaSession session = StpUtil.getSession();
         session.set("accountType", SUBJECT_CONSOLE);
         session.set("subjectId", user.getId());
-        session.set("tenantId", user.getTenantId());
         session.set("realName", user.getRealName());
         session.set("role", role.getCode());
         session.set("roles", role.getRoles());
@@ -170,7 +169,6 @@ public class AuthService {
         SaSession session = StpUtil.getSession();
         session.set("accountType", SUBJECT_AGENT);
         session.set("subjectId", agent.getId());
-        session.set("tenantId", agent.getTenantId());
         session.set("realName", resolveAgentDisplayName(agent));
         session.set("role", role.getCode());
         session.set("roles", role.getRoles());
@@ -226,7 +224,6 @@ public class AuthService {
 
         return UserInfoVO.builder()
                 .loginId(StpUtil.getLoginIdAsString())
-                .tenantId(session.get("tenantId") instanceof Number tenant ? tenant.longValue() : null)
                 .realName(session.getString("realName"))
                 .role(session.getString("role"))
                 .roles(roles != null ? roles : Collections.emptyList())

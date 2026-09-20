@@ -33,11 +33,6 @@ public class CallEventEntity implements Serializable {
     private Long id;
 
     /**
-     * 租户 ID
-     */
-    private Long tenantId;
-
-    /**
      * 事件业务唯一标识 (event_id)
      */
     private String eventId;

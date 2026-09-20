@@ -3,15 +3,21 @@ package com.chandler.fcc.server.telephony.application;
 import com.chandler.fcc.common.dto.command.FNodeDialDTO;
 import com.chandler.fcc.common.entity.CallInfoBO;
 import com.chandler.fcc.common.enums.CallStageState;
+import com.chandler.fcc.common.enums.DirectionType;
+import com.chandler.fcc.common.enums.FlowActionType;
 import com.chandler.fcc.common.util.IdUtil;
 import com.chandler.fcc.server.agent.infrastructure.AgentRuntimeMapper;
 import com.chandler.fcc.server.call.CallSessionManager;
 import com.chandler.fcc.server.command.FccClient;
+import com.chandler.fcc.server.flow.application.SystemFlowRuntime;
 import com.chandler.fcc.server.infrastructure.persistence.service.CallPersistenceService;
+import com.chandler.fcc.server.infrastructure.persistence.entity.CallLegEntity;
 import com.chandler.fcc.server.websocket.service.AgentWebSocketService;
 import com.chandler.fcc.server.websocket.service.ScreenPopService;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import java.time.LocalDateTime;
+import java.time.ZoneOffset;
 import java.util.*;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -25,7 +31,18 @@ import org.springframework.transaction.support.TransactionTemplate;
 @Service
 @RequiredArgsConstructor
 @Slf4j
-public class InboundCallService {
+public class InboundCallService implements SystemFlowRuntime {
+
+    private static final String TEMPLATE = "INBOUND";
+    private static final Set<FlowActionType> SUPPORTED_ACTIONS = Set.of(
+        FlowActionType.RESOLVE_DID_AND_PARK,
+        FlowActionType.READ_DTMF,
+        FlowActionType.SELECT_DIGIT_ROUTE,
+        FlowActionType.RESERVE_AND_DIAL_AGENT,
+        FlowActionType.CHANNEL_BRIDGE,
+        FlowActionType.WAIT_FOR_HANGUP,
+        FlowActionType.FINALIZE_INBOUND
+    );
 
     private final AgentRuntimeMapper agents;
     private final CallPersistenceService persistence;
@@ -38,6 +55,27 @@ public class InboundCallService {
     private final ObjectMapper json = new ObjectMapper();
 
     /**
+     * 返回呼入固定模板代码。
+     *
+     * @return 呼入模板集合
+     */
+    @Override
+    public Set<String> templates() {
+        return Set.of(TEMPLATE);
+    }
+
+    /**
+     * 返回呼入服务实际执行的公共动作。
+     *
+     * @param template 固定模板代码
+     * @return 呼入动作集合；其他模板返回空集合
+     */
+    @Override
+    public Set<FlowActionType> supportedActions(String template) {
+        return TEMPLATE.equals(template) ? SUPPORTED_ACTIONS : Set.of();
+    }
+
+    /**
      * 接管普通呼入，固定发布版本或 group:组代码，不回落到任意租户。
      *
      * @param call 通话
@@ -46,7 +84,7 @@ public class InboundCallService {
      */
     public boolean event(CallInfoBO call, JsonNode params) {
         if (
-            call.getDirection() != com.chandler.fcc.common.enums.DirectionType.INBOUND ||
+            call.getDirection() != DirectionType.INBOUND ||
             "0000".equals(call.getDestinationNumber())
         ) return false;
         synchronized (call) {
@@ -60,10 +98,8 @@ public class InboundCallService {
                     return true;
                 }
                 var route = routes.getFirst();
-                long tenant = ((Number) route.get("tenant")).longValue();
                 String key = String.valueOf(route.get("routeKey"));
                 call.putData("runtimeTemplate", "INBOUND");
-                call.putData("tenantId", tenant);
                 call.putData("nodeId", call.getNodeId());
                 call.putData("guestChannelUuid", call.getGuestChannelUuid());
                 call.putData("queueDeadline", System.currentTimeMillis() + 120000);
@@ -90,8 +126,7 @@ public class InboundCallService {
                 !uuid.equals(call.getGuestChannelUuid()) && !uuid.equals(call.getAgentChannelUuid())
             ) return true;
             persistence.saveOrUpdateLeg(
-                com.chandler.fcc.server.infrastructure.persistence.entity.CallLegEntity.builder()
-                    .tenantId(((Number) call.getData().get("tenantId")).longValue())
+                CallLegEntity.builder()
                     .callId(CallPersistenceService.parseNumericId(call.getCallId()))
                     .channelUuid(uuid)
                     .nodeId(call.getNodeId())
@@ -100,7 +135,7 @@ public class InboundCallService {
                     .state(state)
                     .hangupCause(params.path("cause").asText(null))
                     .endedAt(
-                        "DESTROY".equals(state) ? java.time.LocalDateTime.now(java.time.ZoneOffset.UTC) : null
+                        "DESTROY".equals(state) ? LocalDateTime.now(ZoneOffset.UTC) : null
                     )
                     .build()
             );
@@ -195,12 +230,11 @@ public class InboundCallService {
             finish(call, "NO_ANSWER");
             return;
         }
-        long tenant = ((Number) call.getData().get("tenantId")).longValue();
         List<String> tried = (List<String>) call.getData().get("triedAgents");
         String direct = call.getDataStr("directOwner", null);
         Map<String, Object> candidate = direct != null
-            ? agents.agent(tenant, direct)
-            : agents.candidate(tenant, call.getDataStr("groupCode", ""), tried);
+            ? agents.agent(direct)
+            : agents.candidate(call.getDataStr("groupCode", ""), tried);
         if (candidate == null || candidate.get("extension") == null) return;
         String owner = candidate.get("workNo").toString(),
             extension = candidate.get("extension").toString();
@@ -213,7 +247,7 @@ public class InboundCallService {
         Boolean reserved;
         try {
             reserved = transactions.execute(transaction -> {
-                if (agents.reserve(tenant, owner, call.getCallId()) != 1) return false;
+                if (agents.reserve(owner, call.getCallId()) != 1) return false;
                 call.setAgentWorkNo(owner);
                 call.setAgentExt(extension);
                 call.setAgentChannelUuid(IdUtil.getUuid());
@@ -276,7 +310,6 @@ public class InboundCallService {
                     !answered && !"HANGUP".equals(call.getDataStr("ivrTimeoutAction", "CALLBACK"))
                 ) agents.callback(
                     IdUtil.nextId(),
-                    ((Number) call.getData().get("tenantId")).longValue(),
                     call.getCallId(),
                     call.getCallerNumber(),
                     call.getDestinationNumber(),
@@ -302,11 +335,9 @@ public class InboundCallService {
      * @param call 通话
      */
     private void release(CallInfoBO call) {
-        if (call.getAgentWorkNo() != null) agents.release(
-            ((Number) call.getData().get("tenantId")).longValue(),
-            call.getAgentWorkNo(),
-            call.getCallId()
-        );
+        if (call.getAgentWorkNo() != null) {
+            agents.release(call.getAgentWorkNo(), call.getCallId());
+        }
     }
 
     /**

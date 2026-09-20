@@ -1,231 +1,171 @@
 package com.chandler.fcc.server.flow;
 
-import com.chandler.fcc.common.entity.FlowNode;
-import com.chandler.fcc.common.enums.ActionType;
-import com.chandler.fcc.common.enums.CallStageState;
+import com.chandler.fcc.common.enums.FlowActionType;
 import com.chandler.fcc.common.enums.FlowModelType;
+import com.chandler.fcc.common.protocol.FlowDefinitionValidator;
+import com.chandler.fcc.server.flow.infrastructure.FlowConfigMapper;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import jakarta.annotation.PostConstruct;
-import java.util.*;
+import java.util.List;
+import java.util.Map;
+import java.util.Optional;
 import java.util.concurrent.ConcurrentHashMap;
+import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
-import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.stereotype.Component;
 
 /**
- * 话务流程编排规则库（基于已发布 DB/JSON 定义动态编译与热加载）
- * <p>
- * 定义不同业务模型（如客户呼入客服、坐席双向外呼、自动外呼通知）在各个生命周期阶段需要执行的动作链。
- * 支持管理端发布流程后实时热更新生效。
- * </p>
+ * 加载并校验数据库中已发布的流程定义。
  *
- * @author Chandler
+ * <p>固定流程由对应业务应用服务执行，本组件不再编译或调度第二套动态动作链。它只维护
+ * 已发布定义的展示元数据，并为管理端发布后的热加载提供明确成功或失败结果。</p>
  */
 @Slf4j
 @Component
+@RequiredArgsConstructor
 public class FlowConfig {
 
-    private final Map<String, List<FlowNode>> flowMap = new ConcurrentHashMap<>();
-
-    /**
-     * 运行时业务模型 -> 已发布流程名称 (flow_name) 映射
-     * <p>
-     * 由流程编译阶段登记，供弹屏等场景展示<b>真实</b>的流程名称，避免硬编码文案。
-     * </p>
-     */
+    private final FlowConfigMapper mapper;
+    private final ObjectMapper objectMapper;
     private final Map<String, String> flowNameByModel = new ConcurrentHashMap<>();
 
-    @Autowired(required = false)
-    private JdbcTemplate jdbcTemplate;
-
-    @Autowired(required = false)
-    private ObjectMapper objectMapper;
-
     /**
-     * 启动后自动自数据库加载当前所有已发布的最新流程版本配置
+     * 应用启动时加载全部已发布定义。
      */
     @PostConstruct
     public void loadPublishedFlowsOnStartup() {
-        if (jdbcTemplate != null) {
-            try {
-                loadAllPublishedFlows();
-            } catch (Exception e) {
-                log.warn("⚠️ [FlowConfig] 启动加载 DB 线上流程异常: {}", e.getMessage());
-            }
+        try {
+            loadAllPublishedFlows();
+        } catch (RuntimeException failure) {
+            log.warn("[流程配置] 启动加载失败: {}", failure.getMessage());
         }
     }
 
     /**
-     * 加载数据库中所有线上 PUBLISHED 状态的流程
+     * 校验并加载数据库中的全部已发布流程。
      */
     public synchronized void loadAllPublishedFlows() {
-        if (jdbcTemplate == null) return;
-        try {
-            List<Map<String, Object>> rows = jdbcTemplate.queryForList(
-                "SELECT f.flow_key, f.flow_name, f.model_type, v.version_no, v.definition_json " +
-                "FROM fcc_flow_definition f " +
-                "JOIN fcc_flow_definition_version v ON f.id = v.flow_definition_id " +
-                "WHERE v.publish_status = 'PUBLISHED'"
-            );
-
-            for (Map<String, Object> row : rows) {
-                String flowKey = (String) row.get("flow_key");
-                String modelType = (String) row.get("model_type");
-                String flowName = (String) row.get("flow_name");
-                String json = (String) row.get("definition_json");
-                compileAndApplyFlow(flowKey, modelType, flowName, json);
-            }
-            log.info("✅ [FlowConfig] 成功自数据库加载并编译 {} 条已发布话务流程", rows.size());
-        } catch (Exception e) {
-            log.warn("⚠️ [FlowConfig] 加载已发布流程失败: {}", e.getMessage());
+        List<Map<String, Object>> rows = mapper.findAllPublished();
+        for (Map<String, Object> row : rows) {
+            validateAndApply(row);
         }
+        log.info("[流程配置] 已加载 {} 条发布定义", rows.size());
     }
 
     /**
-     * 动态热重载指定流程
+     * 热重载指定流程的最新发布版本。
      *
-     * @param flowKey 流程唯一键 (如 FLOW-INBOUND)
-     * @return 是否重载成功
+     * @param flowKey 流程唯一键
+     * @return 是否成功加载有效发布版本
      */
     public synchronized boolean reloadFlow(String flowKey) {
-        if (jdbcTemplate == null || flowKey == null) return false;
+        if (flowKey == null || flowKey.isBlank()) {
+            return false;
+        }
         try {
-            List<Map<String, Object>> rows = jdbcTemplate.queryForList(
-                "SELECT f.flow_key, f.flow_name, f.model_type, v.version_no, v.definition_json " +
-                "FROM fcc_flow_definition f " +
-                "JOIN fcc_flow_definition_version v ON f.id = v.flow_definition_id " +
-                "WHERE f.flow_key = ? AND v.publish_status = 'PUBLISHED' " +
-                "ORDER BY v.version_no DESC LIMIT 1",
-                flowKey
-            );
-
-            if (!rows.isEmpty()) {
-                Map<String, Object> row = rows.getFirst();
-                String modelType = (String) row.get("model_type");
-                String flowName = (String) row.get("flow_name");
-                String json = (String) row.get("definition_json");
-                compileAndApplyFlow(flowKey, modelType, flowName, json);
-                log.info("🔄 [FlowConfig] 动态重载流程生效: flowKey={}, modelType={}", flowKey, modelType);
-                return true;
-            } else {
-                log.warn("⚠️ [FlowConfig] 未找到对应已发布版本: flowKey={}", flowKey);
+            Map<String, Object> row = mapper.findPublishedByKey(flowKey);
+            if (row == null) {
+                log.warn("[流程配置] 未找到发布版本 flowKey={}", flowKey);
+                return false;
             }
-        } catch (Exception e) {
-            log.error("❌ [FlowConfig] 动态重载流程异常: {}", e.getMessage(), e);
+            validateAndApply(row);
+            log.info("[流程配置] 热加载生效 flowKey={}", flowKey);
+            return true;
+        } catch (RuntimeException failure) {
+            log.warn("[流程配置] 热加载被拒绝 flowKey={} reason={}", flowKey, failure.getMessage());
+            return false;
         }
-        return false;
     }
 
     /**
-     * 将编排配置 JSON 动态编译为运行时 FlowNode 状态机执行链
+     * 获取某业务模型当前生效的流程名称。
      *
-     * @param flowKey        流程唯一键 (如 FLOW-INBOUND)
-     * @param modelType      流程归属业务模型
-     * @param flowName       流程展示名称 (落库事实，供弹屏展示)
-     * @param definitionJson 流程定义 JSON
+     * @param modelKey 运行时业务模型标识
+     * @return 数据库中的真实流程名称；未加载时为空
      */
-    private void compileAndApplyFlow(
-        String flowKey,
-        String modelType,
-        String flowName,
-        String definitionJson
-    ) {
-        if (definitionJson == null || definitionJson.isBlank()) throw new IllegalArgumentException(
-            "流程定义不能为空"
-        );
-        if (objectMapper == null) objectMapper = new ObjectMapper();
+    public Optional<String> getFlowName(String modelKey) {
+        if (modelKey == null) {
+            return Optional.empty();
+        }
+        return Optional.ofNullable(flowNameByModel.get(modelKey));
+    }
 
+    /**
+     * 校验一条发布定义并原子更新展示元数据。
+     *
+     * @param row Mapper 返回的发布定义摘要
+     * @throws IllegalArgumentException 定义字段缺失、JSON 非法或动作不在公共目录
+     */
+    private void validateAndApply(Map<String, Object> row) {
+        String flowKey = string(row, "flowKey");
+        String modelType = string(row, "modelType");
+        String flowName = string(row, "flowName");
+        String definitionJson = string(row, "definitionJson");
+        if (flowKey == null || definitionJson == null || definitionJson.isBlank()) {
+            throw new IllegalArgumentException("发布流程缺少 flowKey 或 definitionJson");
+        }
+
+        if (flowKey.startsWith("SYSTEM_")) {
+            validateSystemModel(definitionJson);
+        } else {
+            FlowDefinitionValidator.validate(definitionJson);
+        }
+        if (flowName != null && !flowName.isBlank()) {
+            flowNameByModel.put(normalizeModelKey(flowKey, modelType), flowName);
+        }
+    }
+
+    /**
+     * 校验固定模型包含节点且每个动作都属于公共动作目录。
+     *
+     * @param definitionJson 固定模型 JSON
+     * @throws IllegalArgumentException 模型结构或动作非法
+     */
+    private void validateSystemModel(String definitionJson) {
         try {
-            if (flowKey.startsWith("SYSTEM_")) {
-                // 固定运行器使用数据库版本快照，不把系统模型编译成动态动作链。
-                JsonNode systemModel = objectMapper.readTree(definitionJson);
-                if (!systemModel.path("nodes").isArray() || systemModel.path("nodes").isEmpty()) {
-                    throw new IllegalArgumentException("系统通话模型不完整，请执行完整模型迁移");
-                }
-                flowNameByModel.put(modelType, flowName);
-                return;
+            JsonNode model = objectMapper.readTree(definitionJson);
+            JsonNode nodes = model.path("nodes");
+            if (!nodes.isArray() || nodes.isEmpty()) {
+                throw new IllegalArgumentException("系统通话模型缺少动作节点");
             }
-            JsonNode root = com.chandler.fcc.common.protocol.FlowDefinitionValidator.validate(definitionJson);
-            if ("IVR".equals(root.path("routeMode").asText())) {
-                // 固定 IVR 在呼入时按 DID 加载并锁定数据库版本，不写入按 modelKey 共享的旧动作链。
-                return;
-            }
-            String routeMode = root.path("routeMode").asText();
-            String targetModelKey = modelType != null ? modelType : "INBOUND";
-            if ("FLOW-INBOUND".equalsIgnoreCase(flowKey) || "INBOUND".equalsIgnoreCase(targetModelKey)) {
-                targetModelKey = FlowModelType.INBOUND_CUSTOMER_SERVICE.name();
-            } else if (
-                "FLOW-OUTBOUND".equalsIgnoreCase(flowKey) || "OUTBOUND".equalsIgnoreCase(targetModelKey)
-            ) {
-                targetModelKey = FlowModelType.OUTBOUND_TWO_WAY_CALL.name();
-            }
-
-            // 动态编译 ROUTE 阶段动作
-            List<FlowNode> routeNodes = new ArrayList<>();
-            Map<String, String> routeData = new HashMap<>();
-            routeData.put("routeMode", routeMode);
-
-            String workNo = root.path("didDirectConfig").path("workNo").asText();
-            routeData.put("workNo", workNo);
-            routeNodes.add(
-                FlowNode.builder()
-                    .modelKey(targetModelKey)
-                    .modelType(FlowModelType.valueOf(targetModelKey))
-                    .stageState(CallStageState.ROUTE)
-                    .actionKey("did-direct-dial-agent")
-                    .actionType(ActionType.DIAL_AGENT)
-                    .order(1)
-                    .data(new HashMap<>(routeData))
-                    .build()
-            );
-
-            // 覆盖或更新运行时 flowMap
-            flowMap.put(targetModelKey + ":" + CallStageState.ROUTE.name(), routeNodes);
-            if (flowName != null && !flowName.isBlank()) {
-                flowNameByModel.put(targetModelKey, flowName);
-            }
-            log.info(
-                "🎯 [FlowConfig 编译完成] 流程 {} 成功编译 ROUTE 阶段节点, 路由模式: {}, 节点数: {}",
-                flowKey,
-                routeMode,
-                routeNodes.size()
-            );
-        } catch (Exception e) {
-            throw new IllegalArgumentException("流程编译失败: " + e.getMessage(), e);
+            nodes.forEach(node -> FlowActionType.fromCode(node.path("action").asText()));
+        } catch (IllegalArgumentException failure) {
+            throw failure;
+        } catch (Exception failure) {
+            throw new IllegalArgumentException("系统通话模型不是有效 JSON", failure);
         }
     }
 
     /**
-     * 根据阶段与业务模型获取流程动作节点链
+     * 将数据库模型类型映射为通话上下文使用的运行时模型标识。
      *
-     * @param stage    呼叫生命周期阶段
-     * @param modelKey 业务流转模式标识
-     * @return 步骤节点列表
+     * @param flowKey 流程键
+     * @param modelType 数据库模型类型
+     * @return 运行时模型标识
      */
-    public List<FlowNode> getFlowNodes(CallStageState stage, String modelKey) {
-        if (modelKey == null) {
-            modelKey = FlowModelType.INBOUND_CUSTOMER_SERVICE.name();
+    private String normalizeModelKey(String flowKey, String modelType) {
+        if (flowKey.endsWith("INBOUND") || "INBOUND".equalsIgnoreCase(modelType)) {
+            return FlowModelType.INBOUND_CUSTOMER_SERVICE.name();
         }
-        String key = modelKey + ":" + stage.name();
-        return flowMap.getOrDefault(key, Collections.emptyList());
+        if (flowKey.endsWith("AGENT_FIRST") || "AGENT_FIRST".equalsIgnoreCase(modelType)) {
+            return FlowModelType.OUTBOUND_TWO_WAY_CALL.name();
+        }
+        if (flowKey.endsWith("NOTIFICATION") || "NOTIFICATION".equalsIgnoreCase(modelType)) {
+            return FlowModelType.AUTO_DIAL_NOTIFICATION.name();
+        }
+        return modelType == null || modelType.isBlank() ? flowKey : modelType;
     }
 
     /**
-     * 获取某业务模型当前生效的流程名称
-     * <p>
-     * 名称来源于 {@code fcc_flow_definition.flow_name} 的事实落库值，
-     * 未加载到已发布流程时返回空，调用方应留空而非填充占位文案。
-     * </p>
+     * 读取 Mapper 结果中的可选文本字段。
      *
-     * @param modelKey 业务模型标识
-     * @return 流程名称；未知时返回空
+     * @param row 查询结果
+     * @param key 字段别名
+     * @return 文本值；缺失时为空
      */
-    public java.util.Optional<String> getFlowName(String modelKey) {
-        if (modelKey == null) {
-            return java.util.Optional.empty();
-        }
-        return java.util.Optional.ofNullable(flowNameByModel.get(modelKey));
+    private String string(Map<String, Object> row, String key) {
+        Object value = row.get(key);
+        return value == null ? null : value.toString();
     }
 }

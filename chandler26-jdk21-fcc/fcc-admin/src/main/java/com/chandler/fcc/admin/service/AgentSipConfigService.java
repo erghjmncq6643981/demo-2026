@@ -12,6 +12,7 @@ import org.springframework.http.HttpStatus;
 import org.springframework.web.server.ResponseStatusException;
 import java.nio.charset.StandardCharsets;
 import java.net.URI;
+import java.util.Set;
 
 /** 提供本人已开通 WebRTC 分机的配置，拒绝任意工号查询。 */
 @Service
@@ -32,7 +33,7 @@ public class AgentSipConfigService {
         var user = auth.getLoginUserInfo();
         if (!AuthService.SUBJECT_AGENT.equals(user.getAccountType()))
             throw new ResponseStatusException(HttpStatus.FORBIDDEN, "仅坐席本人可读取注册配置");
-        if (wsUrl.isBlank() || domain.isBlank() || !java.util.Set.of("ws", "wss").contains(URI.create(wsUrl).getScheme()))
+        if (wsUrl.isBlank() || domain.isBlank() || !Set.of("ws", "wss").contains(URI.create(wsUrl).getScheme()))
             throw new ResponseStatusException(HttpStatus.SERVICE_UNAVAILABLE, "SIP 接入配置未完成");
         var matches = extensions.selectList(new LambdaQueryWrapper<ExtensionEntity>()
                 .eq(ExtensionEntity::getAgentWorkNo, user.getLoginId())

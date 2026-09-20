@@ -24,9 +24,7 @@ import java.util.List;
 import java.util.Map;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
-import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
-import org.springframework.web.server.ResponseStatusException;
 
 /**
  * 历史通话话单 (CDR) 与录音检索业务服务
@@ -53,15 +51,13 @@ public class CallCdrService {
    * @return 话单视图对象分页容器
    */
   public PageResult<CallCdrVO> queryCdrs(CallCdrQueryReq req) {
-    Long tenantId = currentTenant();
+    StpUtil.checkPermission("cdr:view");
     Page<CallSessionEntity> page = new Page<>(
       req.getPageNum(),
       req.getPageSize()
     );
-    LambdaQueryWrapper<CallSessionEntity> wrapper = buildFilterWrapper(
-      req,
-      tenantId
-    ).orderByDesc(CallSessionEntity::getStartedAt);
+    LambdaQueryWrapper<CallSessionEntity> wrapper = buildFilterWrapper(req)
+      .orderByDesc(CallSessionEntity::getStartedAt);
 
     Page<CallSessionEntity> entityPage = sessionMapper.selectPage(
       page,
@@ -91,12 +87,9 @@ public class CallCdrService {
    * @return 话单指标聚合视图
    */
   public CallCdrStatsVO queryTodayStats() {
-    Long tenantId = currentTenant();
+    StpUtil.checkPermission("cdr:view");
     LocalDateTime todayStart = LocalDate.now().atStartOfDay();
-    Map<String, Object> row = sessionMapper.selectStatsSince(
-      tenantId,
-      todayStart
-    );
+    Map<String, Object> row = sessionMapper.selectStatsSince(todayStart);
 
     long totalCalls = toLong(row == null ? null : row.get("totalCalls"));
     long answeredCalls = toLong(row == null ? null : row.get("answeredCalls"));
@@ -126,13 +119,8 @@ public class CallCdrService {
    * @param req 检索请求
    * @return MyBatis-Plus 条件构造器
    */
-  private LambdaQueryWrapper<CallSessionEntity> buildFilterWrapper(
-    CallCdrQueryReq req,
-    Long tenantId
-  ) {
-    LambdaQueryWrapper<CallSessionEntity> wrapper = new LambdaQueryWrapper<
-      CallSessionEntity
-    >().eq(CallSessionEntity::getTenantId, tenantId);
+  private LambdaQueryWrapper<CallSessionEntity> buildFilterWrapper(CallCdrQueryReq req) {
+    LambdaQueryWrapper<CallSessionEntity> wrapper = new LambdaQueryWrapper<>();
 
     // 号码关键字：主叫或被叫任一命中
     String number = trimToNull(req.getNumber());
@@ -168,9 +156,7 @@ public class CallCdrService {
     if (agentName != null) {
       List<String> matchedWorkNos = agentMapper
         .selectList(
-          new LambdaQueryWrapper<AgentEntity>()
-            .eq(AgentEntity::getTenantId, tenantId)
-            .like(AgentEntity::getAgentName, agentName)
+          new LambdaQueryWrapper<AgentEntity>().like(AgentEntity::getAgentName, agentName)
         )
         .stream()
         .map(AgentEntity::getWorkNo)
@@ -240,11 +226,10 @@ public class CallCdrService {
    * @return 话单聚合视图
    */
   public CallCdrVO getCdrDetail(Long id) {
-    Long tenantId = currentTenant();
+    StpUtil.checkPermission("cdr:view");
     CallSessionEntity session = sessionMapper.selectOne(
       new LambdaQueryWrapper<CallSessionEntity>()
         .eq(CallSessionEntity::getId, id)
-        .eq(CallSessionEntity::getTenantId, tenantId)
     );
     if (session == null) {
       return null;
@@ -255,7 +240,6 @@ public class CallCdrService {
     List<CallLegEntity> legs = legMapper.selectList(
       new LambdaQueryWrapper<CallLegEntity>()
         .eq(CallLegEntity::getCallId, id)
-        .eq(CallLegEntity::getTenantId, tenantId)
         .orderByAsc(CallLegEntity::getId)
     );
 
@@ -291,9 +275,7 @@ public class CallCdrService {
     String agentName = session.getAgentName();
     if (agentName == null && agentWorkNo != null) {
       AgentEntity agent = agentMapper.selectOne(
-        new LambdaQueryWrapper<AgentEntity>()
-          .eq(AgentEntity::getTenantId, session.getTenantId())
-          .eq(AgentEntity::getWorkNo, agentWorkNo)
+        new LambdaQueryWrapper<AgentEntity>().eq(AgentEntity::getWorkNo, agentWorkNo)
       );
       if (agent != null) {
         agentName = agent.getAgentName();
@@ -310,7 +292,6 @@ public class CallCdrService {
     List<CallRecordingEntity> recordings = recordingMapper.selectList(
       new LambdaQueryWrapper<CallRecordingEntity>()
         .eq(CallRecordingEntity::getCallId, session.getId())
-        .eq(CallRecordingEntity::getTenantId, session.getTenantId())
         .orderByDesc(CallRecordingEntity::getStartedAt)
         .orderByDesc(CallRecordingEntity::getId)
     );
@@ -399,21 +380,4 @@ public class CallCdrService {
       .build();
   }
 
-  /**
-   * 获取当前已认证且具备话单查看权限的租户。
-   *
-   * @return 当前租户 ID
-   * @throws ResponseStatusException 登录会话没有租户信息
-   */
-  private Long currentTenant() {
-    StpUtil.checkPermission("cdr:view");
-    Object tenantId = StpUtil.getSession().get("tenantId");
-    if (!(tenantId instanceof Number number)) {
-      throw new ResponseStatusException(
-        HttpStatus.FORBIDDEN,
-        "登录身份缺少租户范围"
-      );
-    }
-    return number.longValue();
-  }
 }

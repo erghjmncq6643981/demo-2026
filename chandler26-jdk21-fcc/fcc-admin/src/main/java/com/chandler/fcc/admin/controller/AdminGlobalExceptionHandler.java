@@ -3,11 +3,13 @@ package com.chandler.fcc.admin.controller;
 import com.chandler.fcc.admin.model.CommonResult;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.http.HttpStatus;
+import org.springframework.http.ResponseEntity;
 import org.springframework.validation.FieldError;
 import org.springframework.web.bind.MethodArgumentNotValidException;
 import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.bind.annotation.ResponseStatus;
 import org.springframework.web.bind.annotation.RestControllerAdvice;
+import org.springframework.web.server.ResponseStatusException;
 
 import java.util.stream.Collectors;
 
@@ -50,6 +52,22 @@ public class AdminGlobalExceptionHandler {
                 .collect(Collectors.joining("; "));
         log.warn("⚠️ [Admin] 参数校验失败: {}", msg);
         return CommonResult.error(400, msg);
+    }
+
+    /**
+     * 保留下游业务服务返回的 HTTP 状态与可读提示。
+     *
+     * @param e 带 HTTP 状态的业务异常
+     * @return 对应状态的统一错误响应
+     */
+    @ExceptionHandler(ResponseStatusException.class)
+    public ResponseEntity<CommonResult<Void>> handleResponseStatus(ResponseStatusException e) {
+        int status = e.getStatusCode().value();
+        CommonResult<Void> body = CommonResult.error(
+            status,
+            e.getReason() == null ? "请求处理失败" : e.getReason()
+        );
+        return ResponseEntity.status(e.getStatusCode()).body(body);
     }
 
     /**

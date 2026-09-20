@@ -38,8 +38,8 @@ The client uses `/api/admin` for business data, `/api/telephony` for call comman
 Prerequisites:
 
 - Node.js compatible with Vite 6.
-- `fcc-admin-starter` on `8089`.
-- `fcc-server-starter` on `8085`.
+- `fcc-admin` on `8089`.
+- `fcc-server` on `8085`.
 - A browser-reachable FreeSWITCH SIP WebSocket endpoint and valid extension credentials.
 
 ```bash

@@ -32,9 +32,7 @@ public class CallControlService {
             throw new ResponseStatusException(HttpStatus.FORBIDDEN, "坐席身份不匹配");
         if (callId == null || callId.isBlank()) throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "callId 必填");
         CallInfoBO call = sessions.getByCallId(callId).orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "通话不存在"));
-        if (!actor.workNo().equals(call.getAgentWorkNo())
-                || !(call.getData().get("tenantId") instanceof Number tenant)
-                || tenant.longValue() != actor.tenantId())
+        if (!actor.workNo().equals(call.getAgentWorkNo()))
             throw new ResponseStatusException(HttpStatus.FORBIDDEN, "无权操作此通话");
         if (call.getNodeId() == null || call.getNodeId().isBlank()) throw new ResponseStatusException(HttpStatus.CONFLICT, "通话节点尚未确认");
         return call;

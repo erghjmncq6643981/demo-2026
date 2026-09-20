@@ -1,5 +1,6 @@
 package com.chandler.fcc.admin.service;
 
+import cn.dev33.satoken.stp.StpUtil;
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import com.chandler.fcc.admin.infrastructure.persistence.entity.FlowDefinitionEntity;
 import com.chandler.fcc.admin.infrastructure.persistence.entity.FlowDefinitionVersionEntity;
@@ -12,8 +13,16 @@ import com.chandler.fcc.admin.model.vo.FlowDefinitionVO;
 import com.chandler.fcc.admin.model.vo.FlowSimulateRespVO;
 import com.chandler.fcc.admin.model.vo.FlowVersionVO;
 import com.chandler.fcc.common.util.IdUtil;
+import com.chandler.fcc.common.protocol.FlowDefinitionValidator;
+import com.fasterxml.jackson.databind.ObjectMapper;
+import java.net.URI;
+import java.net.URLEncoder;
+import java.net.http.HttpClient;
+import java.net.http.HttpRequest;
+import java.net.http.HttpResponse;
 import java.nio.charset.StandardCharsets;
 import java.security.MessageDigest;
+import java.time.Duration;
 import java.time.LocalDateTime;
 import java.util.ArrayList;
 import java.util.HexFormat;
@@ -21,8 +30,11 @@ import java.util.List;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Value;
+import org.springframework.data.redis.core.StringRedisTemplate;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import org.springframework.transaction.support.TransactionSynchronization;
+import org.springframework.transaction.support.TransactionSynchronizationManager;
 
 /**
  * 业务通话流程定义与版本编排管理服务
@@ -36,7 +48,7 @@ public class FlowDefinitionService {
 
     private final FlowDefinitionMapper flowMapper;
     private final FlowDefinitionVersionMapper versionMapper;
-    private final org.springframework.data.redis.core.StringRedisTemplate stringRedisTemplate;
+    private final StringRedisTemplate stringRedisTemplate;
 
     @Value("${fcc.server.base-url:}")
     private String fccServerBaseUrl;
@@ -48,10 +60,9 @@ public class FlowDefinitionService {
      * 查询所有流程列表及包含的版本信息
      */
     public List<FlowDefinitionVO> listFlows() {
-        cn.dev33.satoken.stp.StpUtil.checkPermission("flow:view");
+        StpUtil.checkPermission("flow:view");
         List<FlowDefinitionEntity> entities = flowMapper.selectList(
             new LambdaQueryWrapper<FlowDefinitionEntity>()
-                .eq(FlowDefinitionEntity::getTenantId, com.chandler.fcc.admin.flow.FlowStudioService.tenant())
                 .isNull(FlowDefinitionEntity::getDeletedAt)
                 .orderByAsc(FlowDefinitionEntity::getId)
         );
@@ -82,11 +93,10 @@ public class FlowDefinitionService {
      * 获取指定流程的所有历史和草稿版本
      */
     public List<FlowVersionVO> getVersions(String flowKey) {
-        cn.dev33.satoken.stp.StpUtil.checkPermission("flow:view");
+        StpUtil.checkPermission("flow:view");
         FlowDefinitionEntity flow = flowMapper.selectOne(
             new LambdaQueryWrapper<FlowDefinitionEntity>()
                 .eq(FlowDefinitionEntity::getFlowKey, flowKey)
-                .eq(FlowDefinitionEntity::getTenantId, com.chandler.fcc.admin.flow.FlowStudioService.tenant())
         );
         if (flow == null) {
             return List.of();
@@ -126,11 +136,10 @@ public class FlowDefinitionService {
     @Transactional(rollbackFor = Exception.class)
     public String saveDraft(String flowKey, FlowSaveDraftReq req) {
         if (flowKey.startsWith("SYSTEM_")) throw new IllegalArgumentException("系统固定模板不允许编辑");
-        cn.dev33.satoken.stp.StpUtil.checkPermission("flow:write");
+        StpUtil.checkPermission("flow:write");
         FlowDefinitionEntity flow = flowMapper.selectOne(
             new LambdaQueryWrapper<FlowDefinitionEntity>()
                 .eq(FlowDefinitionEntity::getFlowKey, flowKey)
-                .eq(FlowDefinitionEntity::getTenantId, com.chandler.fcc.admin.flow.FlowStudioService.tenant())
                 .last("FOR UPDATE")
         );
         if (flow == null) {
@@ -139,7 +148,7 @@ public class FlowDefinitionService {
 
         LocalDateTime now = LocalDateTime.now();
         String json = req.getDefinitionJson() != null ? req.getDefinitionJson() : "{}";
-        json = com.chandler.fcc.common.protocol.FlowDefinitionValidator.validate(json).toString();
+        json = FlowDefinitionValidator.validate(json).toString();
         String checksum = calculateSha256(json);
 
         // 查找现有的草稿版本 (DRAFT)
@@ -194,11 +203,10 @@ public class FlowDefinitionService {
     @Transactional(rollbackFor = Exception.class)
     public String publishFlow(String flowKey, FlowPublishReq req) {
         if (flowKey.startsWith("SYSTEM_")) throw new IllegalArgumentException("系统固定模板不允许发布修改");
-        cn.dev33.satoken.stp.StpUtil.checkPermission("flow:write");
+        StpUtil.checkPermission("flow:write");
         FlowDefinitionEntity flow = flowMapper.selectOne(
             new LambdaQueryWrapper<FlowDefinitionEntity>()
                 .eq(FlowDefinitionEntity::getFlowKey, flowKey)
-                .eq(FlowDefinitionEntity::getTenantId, com.chandler.fcc.admin.flow.FlowStudioService.tenant())
                 .last("FOR UPDATE")
         );
         if (flow == null) {
@@ -221,7 +229,7 @@ public class FlowDefinitionService {
             throw new IllegalArgumentException("待发布版本已变化，请刷新后重试");
         }
 
-        com.chandler.fcc.common.protocol.FlowDefinitionValidator.validate(draft.getDefinitionJson());
+        FlowDefinitionValidator.validate(draft.getDefinitionJson());
 
         // 将之前 PUBLISHED 的版本归档 ARCHIVED
         List<FlowDefinitionVersionEntity> oldPubs = versionMapper.selectList(
@@ -246,8 +254,8 @@ public class FlowDefinitionService {
         flowMapper.updateById(flow);
 
         // 动态通知呼叫引擎 (fcc-server) 热加载生效
-        org.springframework.transaction.support.TransactionSynchronizationManager.registerSynchronization(
-            new org.springframework.transaction.support.TransactionSynchronization() {
+        TransactionSynchronizationManager.registerSynchronization(
+            new TransactionSynchronization() {
                 /**
                  * 数据提交后再通知运行端，避免读取旧版本。
                  */
@@ -295,28 +303,26 @@ public class FlowDefinitionService {
 
         // 2. HTTP 异步通知 fcc-server
         try {
-            String encodedFlowKey = java.net.URLEncoder.encode(flowKey, StandardCharsets.UTF_8);
+            String encodedFlowKey = URLEncoder.encode(flowKey, StandardCharsets.UTF_8);
             String baseUrl = fccServerBaseUrl.replaceAll("/+$", "");
-            java.net.http.HttpClient client = java.net.http.HttpClient.newHttpClient();
-            java.net.http.HttpRequest request = java.net.http.HttpRequest.newBuilder()
+            HttpClient client = HttpClient.newHttpClient();
+            HttpRequest request = HttpRequest.newBuilder()
                 .uri(
-                    java.net.URI.create(baseUrl + "/api/telephony/call/flow/reload?flowKey=" + encodedFlowKey)
+                    URI.create(baseUrl + "/api/telephony/call/flow/reload?flowKey=" + encodedFlowKey)
                 )
                 .header("X-FCC-Reload-Token", reloadToken)
-                .POST(java.net.http.HttpRequest.BodyPublishers.noBody())
-                .timeout(java.time.Duration.ofMillis(1500))
+                .POST(HttpRequest.BodyPublishers.noBody())
+                .timeout(Duration.ofMillis(1500))
                 .build();
             client
-                .sendAsync(request, java.net.http.HttpResponse.BodyHandlers.ofString())
+                .sendAsync(request, HttpResponse.BodyHandlers.ofString())
                 .whenComplete((response, failure) -> {
                     if (failure != null) {
                         log.warn("[流程发布] 运行端重载未确认: flowKey={}", flowKey);
                         return;
                     }
                     try {
-                        var result = new com.fasterxml.jackson.databind.ObjectMapper().readTree(
-                            response.body()
-                        );
+                        var result = new ObjectMapper().readTree(response.body());
                         if (
                             response.statusCode() != 200 ||
                             result.path("code").asInt() != 200 ||

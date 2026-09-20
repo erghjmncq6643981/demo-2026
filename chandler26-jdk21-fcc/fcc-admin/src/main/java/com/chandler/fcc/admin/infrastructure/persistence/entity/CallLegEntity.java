@@ -1,10 +1,9 @@
 package com.chandler.fcc.admin.infrastructure.persistence.entity;
 
-import com.baomidou.mybatisplus.annotation.TableId;
 import com.baomidou.mybatisplus.annotation.TableName;
 import lombok.*;
+import lombok.experimental.SuperBuilder;
 
-import java.io.Serializable;
 import java.time.LocalDateTime;
 
 /**
@@ -21,21 +20,8 @@ import java.time.LocalDateTime;
 @Getter
 @Setter
 @ToString
-@Builder
-public class CallLegEntity implements Serializable {
-
-    private static final long serialVersionUID = 1L;
-
-    /**
-     * 话道雪花主键 ID
-     */
-    @TableId
-    private Long id;
-
-    /**
-     * 租户 ID
-     */
-    private Long tenantId;
+@SuperBuilder
+public class CallLegEntity extends BaseEntity {
 
     /**
      * 归属业务通话 ID
@@ -161,14 +147,4 @@ public class CallLegEntity implements Serializable {
      * 乐观锁版本号
      */
     private Long version;
-
-    /**
-     * 记录创建时间 (UTC)
-     */
-    private LocalDateTime createdAt;
-
-    /**
-     * 记录更新时间 (UTC)
-     */
-    private LocalDateTime updatedAt;
 }

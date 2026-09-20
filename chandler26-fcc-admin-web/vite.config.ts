@@ -18,10 +18,6 @@ export default defineConfig({
         target: "http://127.0.0.1:8089",
         changeOrigin: true,
       },
-      "/api/telephony": {
-        target: "http://127.0.0.1:8085",
-        changeOrigin: true,
-      },
     },
   },
 });

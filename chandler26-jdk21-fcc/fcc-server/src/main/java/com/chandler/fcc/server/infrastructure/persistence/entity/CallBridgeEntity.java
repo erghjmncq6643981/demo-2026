@@ -33,11 +33,6 @@ public class CallBridgeEntity implements Serializable {
     private Long id;
 
     /**
-     * 租户 ID
-     */
-    private Long tenantId;
-
-    /**
      * 关联业务通话 ID
      */
     private Long callId;

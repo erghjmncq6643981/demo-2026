@@ -1,66 +1,106 @@
 package com.chandler.fcc.server.agent.infrastructure;
 
+import java.util.Map;
 import org.apache.ibatis.annotations.Mapper;
 import org.apache.ibatis.annotations.Param;
-import java.util.Map;
 
-/** 话机绑定事务持久化端口，租户锁串行化少量绑定操作。 */
+/**
+ * 话机拨号绑定持久化端口。
+ */
 @Mapper
 public interface PhoneBindingMapper {
-    /** 检查当前租户的分机是否启用。
-     * @param tenant 租户 @param extension 分机 @return 可用分机数量
+
+    /**
+     * 校验事件节点和 SIP 分机均为启用资源。
+     *
+     * @param nodeId Sidecar/FreeSWITCH 节点标识
+     * @param extension 已认证 SIP 分机
+     * @return 绑定上下文，不匹配时为空
      */
-    int extensionExists(@Param("tenant") long tenant,@Param("extension") String extension);
-    /** 保存短时挑战，替换同一坐席的旧挑战。
-     * @param tenant 租户 @param owner 坐席 @param extension 分机 @param hash 一次码摘要 @return 写入数
+    Map<String, Object> bindingContext(
+        @Param("nodeId") String nodeId,
+        @Param("extension") String extension
+    );
+
+    /**
+     * 锁定目标分机和坐席，串行化换绑。
+     *
+     * @param nodeId Sidecar/FreeSWITCH 节点标识
+     * @param extension 已认证 SIP 分机
+     * @param owner 坐席工号
+     * @return 被锁定的分机和坐席标识，不存在时为空
      */
-    int challenge(@Param("tenant") long tenant,@Param("owner") String owner,@Param("extension") String extension,@Param("hash") String hash);
-    /** 锁定有效挑战。
-     * @param hash 摘要 @param extension 经过 SIP 认证的分机 @return 挑战身份
+    Map<String, Object> lockBindingTarget(
+        @Param("nodeId") String nodeId,
+        @Param("extension") String extension,
+        @Param("owner") String owner
+    );
+
+    /**
+     * 检查待换绑双方是否存在活动通话。
+     *
+     * @param owner 坐席工号
+     * @param extension 分机号
+     * @return 活动通话数量
      */
-    Map<String,Object> lockChallenge(@Param("hash") String hash,@Param("extension") String extension);
-    /** 创建租户锁行。
-     * @param tenant 租户 @return 写入数
+    int busy(@Param("owner") String owner, @Param("extension") String extension);
+
+    /**
+     * 失效坐席或话机的旧 SIP 绑定历史。
+     *
+     * @param owner 坐席工号
+     * @param extension 分机号
+     * @return 更新数量
      */
-    int ensureLock(@Param("tenant") long tenant);
-    /** 取得租户绑定互斥锁。
-     * @param tenant 租户 @return 租户标识
+    int disableBindings(@Param("owner") String owner, @Param("extension") String extension);
+
+    /**
+     * 清理旧分机归属。
+     *
+     * @param owner 坐席工号
+     * @param extension 分机号
+     * @return 更新数量
      */
-    Long lockTenant(@Param("tenant") long tenant);
-    /** 检查当前坐席与被替换坐席是否在通话中。
-     * @param tenant 租户 @param owner 坐席 @param extension 分机 @return 占用数量
+    int clearExtensions(@Param("owner") String owner, @Param("extension") String extension);
+
+    /**
+     * 清理旧坐席当前分机。
+     *
+     * @param owner 坐席工号
+     * @param extension 分机号
+     * @return 更新数量
      */
-    int busy(@Param("tenant") long tenant,@Param("owner") String owner,@Param("extension") String extension);
-    /** 失效双方旧终端记录。
-     * @param tenant 租户 @param owner 坐席 @param extension 分机 @return 变更数量
+    int clearAgents(@Param("owner") String owner, @Param("extension") String extension);
+
+    /**
+     * 将分机绑定到坐席。
+     *
+     * @param owner 坐席工号
+     * @param extension 分机号
+     * @return 更新数量
      */
-    int disableBindings(@Param("tenant") long tenant,@Param("owner") String owner,@Param("extension") String extension);
-    /** 清理双方旧分机映射。
-     * @param tenant 租户 @param owner 坐席 @param extension 分机 @return 变更数量
+    int bindExtension(@Param("owner") String owner, @Param("extension") String extension);
+
+    /**
+     * 更新坐席当前分机。
+     *
+     * @param owner 坐席工号
+     * @param extension 分机号
+     * @return 更新数量
      */
-    int clearExtensions(@Param("tenant") long tenant,@Param("owner") String owner,@Param("extension") String extension);
-    /** 清理旧坐席映射。
-     * @param tenant 租户 @param owner 坐席 @param extension 分机 @return 变更数量
+    int bindAgent(@Param("owner") String owner, @Param("extension") String extension);
+
+    /**
+     * 追加可审计的终端绑定历史。
+     *
+     * @param id 绑定记录标识
+     * @param owner 坐席工号
+     * @param extension 分机号
+     * @return 插入数量
      */
-    int clearAgents(@Param("tenant") long tenant,@Param("owner") String owner,@Param("extension") String extension);
-    /** 绑定分机到启用坐席。
-     * @param tenant 租户 @param owner 坐席 @param extension 分机 @return 变更数量
-     */
-    int bindExtension(@Param("tenant") long tenant,@Param("owner") String owner,@Param("extension") String extension);
-    /** 绑定坐席当前分机。
-     * @param tenant 租户 @param owner 坐席 @param extension 分机 @return 变更数量
-     */
-    int bindAgent(@Param("tenant") long tenant,@Param("owner") String owner,@Param("extension") String extension);
-    /** 追加可审计的终端绑定记录。
-     * @param id 绑定标识 @param tenant 租户 @param owner 坐席 @param extension 分机 @return 写入数量
-     */
-    int appendBinding(@Param("id") long id,@Param("tenant") long tenant,@Param("owner") String owner,@Param("extension") String extension);
-    /** 消耗挑战并记录证明话道。
-     * @param hash 摘要 @param channel 认证话道 @return 变更数量
-     */
-    int consume(@Param("hash") String hash,@Param("channel") String channel);
-    /** 查询本人最新绑定挑战结果。
-     * @param tenant 租户 @param owner 坐席 @return 状态记录
-     */
-    Map<String,Object> status(@Param("tenant") long tenant,@Param("owner") String owner);
+    int appendBinding(
+        @Param("id") long id,
+        @Param("owner") String owner,
+        @Param("extension") String extension
+    );
 }

@@ -1,7 +1,22 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
-<mapper namespace="com.chandler.fcc.server.call.AfterCallMapper">
- <select id="lockEnded" resultType="string" useCache="false" flushCache="true">SELECT CAST(id AS CHAR) FROM fcc_call_session WHERE tenant_id=#{tenant} AND primary_work_no=#{owner} AND id=#{call} AND ended_at IS NOT NULL FOR UPDATE</select>
- <update id="save">UPDATE fcc_call_session SET attributes=JSON_SET(COALESCE(attributes,JSON_OBJECT()),'$.afterCall',CAST(#{payload} AS JSON)) WHERE tenant_id=#{tenant} AND primary_work_no=#{owner} AND id=#{call} AND ended_at IS NOT NULL AND JSON_EXTRACT(attributes,'$.afterCall') IS NULL</update>
- <select id="detail" resultType="string">SELECT CAST(JSON_EXTRACT(attributes,'$.afterCall') AS CHAR) FROM fcc_call_session WHERE tenant_id=#{tenant} AND primary_work_no=#{owner} AND id=#{call} AND ended_at IS NOT NULL</select>
+<mapper namespace="com.chandler.fcc.server.call.infrastructure.AfterCallMapper">
+  <select id="lockEnded" resultType="string" useCache="false" flushCache="true">
+    SELECT CAST(id AS CHAR) FROM fcc_call_session
+    WHERE primary_work_no = #{owner} AND id = #{call} AND ended_at IS NOT NULL
+    FOR UPDATE
+  </select>
+  <update id="save">
+    UPDATE fcc_call_session
+    SET attributes = JSON_SET(COALESCE(attributes, JSON_OBJECT()), '$.afterCall', CAST(#{payload} AS JSON))
+    WHERE primary_work_no = #{owner}
+      AND id = #{call}
+      AND ended_at IS NOT NULL
+      AND JSON_EXTRACT(attributes, '$.afterCall') IS NULL
+  </update>
+  <select id="detail" resultType="string">
+    SELECT CAST(JSON_EXTRACT(attributes, '$.afterCall') AS CHAR)
+    FROM fcc_call_session
+    WHERE primary_work_no = #{owner} AND id = #{call} AND ended_at IS NOT NULL
+  </select>
 </mapper>

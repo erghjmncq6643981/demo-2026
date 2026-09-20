@@ -20,7 +20,6 @@ import org.springframework.web.server.ResponseStatusException;
 @Service
 public class AgentIdentityService {
 
-    private final HttpClient client = HttpClient.newBuilder().connectTimeout(Duration.ofSeconds(2)).build();
     private final ObjectMapper mapper = new ObjectMapper();
 
     @Value("${fcc.admin.base-url:http://127.0.0.1:8089}")
@@ -53,15 +52,14 @@ public class AgentIdentityService {
     }
 
     /**
-     * 已认证坐席及租户身份，仅由身份服务产生。
+     * 已认证业务主体，仅由身份服务产生。
      *
-     * @param workNo 坐席工号
-     * @param tenantId 租户标识
+     * @param workNo 坐席工号或管理账号
      */
-    public record Principal(String workNo, long tenantId) {}
+    public record Principal(String workNo) {}
 
     /**
-     * 验证当前请求并取得租户，旧登录会话缺少租户时要求重新登录。
+     * 验证当前请求并取得业务主体。
      *
      * @return 当前请求的可信业务主体
      */
@@ -73,20 +71,14 @@ public class AgentIdentityService {
     }
 
     /**
-     * 在线验证长连接身份，同时返回可信租户，禁止仅用工号跨租户寻址。
+     * 在线验证长连接身份。
      *
      * @param token 登录令牌，不得记录
-     * @return 可信坐席及租户
+     * @return 可信坐席主体
      */
     public Principal authenticatePrincipal(String token) {
         JsonNode user = authenticateProfile(token);
-        try {
-            long tenantId = Long.parseLong(user.path("tenantId").asText());
-            if (tenantId < 0) throw new NumberFormatException();
-            return new Principal(user.path("loginId").asText(), tenantId);
-        } catch (NumberFormatException e) {
-            throw new ResponseStatusException(HttpStatus.UNAUTHORIZED, "登录会话缺少租户身份，请重新登录");
-        }
+        return new Principal(user.path("loginId").asText());
     }
 
     /**
@@ -102,25 +94,20 @@ public class AgentIdentityService {
     /**
      * 管理端通过在线身份核验进入运行业务管理入口。
      *
-     * @return 本租户管理员主体
+     * @return 已认证管理主体
      */
     public Principal requireManagement() {
         var attributes = (ServletRequestAttributes) RequestContextHolder.getRequestAttributes();
         var user = authenticateProfile(
             attributes == null ? null : attributes.getRequest().getHeader("satoken"),
-            "ADMIN"
+            "CONSOLE"
         );
         if (
-            !"ADMIN".equals(user.path("role").asText()) && !"SUPER_ADMIN".equals(user.path("role").asText())
+            !"ADMIN".equals(user.path("role").asText()) &&
+            !"OPERATOR".equals(user.path("role").asText()) &&
+            !"SUPER_ADMIN".equals(user.path("role").asText())
         ) throw new ResponseStatusException(HttpStatus.FORBIDDEN, "仅系统管理员可以管理客户和外呼任务");
-        try {
-            return new Principal(
-                user.path("loginId").asText(),
-                Long.parseLong(user.path("tenantId").asText())
-            );
-        } catch (NumberFormatException e) {
-            throw new ResponseStatusException(HttpStatus.FORBIDDEN, "缺少租户身份");
-        }
+        return new Principal(user.path("loginId").asText());
     }
 
     /**
@@ -143,7 +130,10 @@ public class AgentIdentityService {
                 .header("satoken", token)
                 .GET()
                 .build();
-            var response = client.send(request, HttpResponse.BodyHandlers.ofString());
+            var response = createHttpClient().send(
+                request,
+                HttpResponse.BodyHandlers.ofString()
+            );
             JsonNode root = mapper.readTree(response.body());
             JsonNode user = root.path("data");
             if (
@@ -163,5 +153,14 @@ public class AgentIdentityService {
         } catch (Exception e) {
             throw new ResponseStatusException(HttpStatus.SERVICE_UNAVAILABLE, "身份验证暂不可用");
         }
+    }
+
+    /**
+     * 在真正发起认证时创建 HTTP 客户端，避免应用装配阶段产生网络资源副作用。
+     *
+     * @return 带连接超时的 JDK HTTP 客户端
+     */
+    private HttpClient createHttpClient() {
+        return HttpClient.newBuilder().connectTimeout(Duration.ofSeconds(2)).build();
     }
 }

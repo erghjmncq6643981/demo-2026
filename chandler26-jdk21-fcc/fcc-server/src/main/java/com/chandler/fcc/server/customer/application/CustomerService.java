@@ -6,6 +6,7 @@ import com.chandler.fcc.server.customer.domain.PhoneNumber;
 import com.chandler.fcc.server.customer.infrastructure.CustomerMapper;
 import com.chandler.fcc.server.telephony.application.AgentIdentityService;
 import java.util.List;
+import java.util.Optional;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.http.HttpStatus;
@@ -26,19 +27,18 @@ public class CustomerService {
     /**
      * 按通话已确认身份匹配唯一客户，同号多客户不擅自选取。
      *
-     * @param tenant 租户
      * @param owner 接待坐席
      * @param phone 通话号码
      * @return 唯一客户或空
      */
-    public java.util.Optional<CustomerRecord> match(long tenant, String owner, String phone) {
+    public Optional<CustomerRecord> match(String owner, String phone) {
         try {
-            var matches = mapper.list(tenant, owner, PhoneNumber.normalize(phone), 0, 2);
+            var matches = mapper.list(owner, PhoneNumber.normalize(phone), 0, 2);
             return matches.size() == 1
-                ? java.util.Optional.of(matches.getFirst())
-                : java.util.Optional.empty();
+                ? Optional.of(matches.getFirst())
+                : Optional.empty();
         } catch (IllegalArgumentException e) {
-            return java.util.Optional.empty();
+            return Optional.empty();
         }
     }
 
@@ -53,7 +53,6 @@ public class CustomerService {
         var actor = identity.requirePrincipal();
         if (page < 1 || page > 10000) throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "页码无效");
         return mapper.list(
-            actor.tenantId(),
             actor.workNo(),
             phone == null || phone.isBlank() ? null : PhoneNumber.normalize(phone),
             (page - 1) * 50,
@@ -69,7 +68,7 @@ public class CustomerService {
      */
     public CustomerRecord detail(String id) {
         var actor = identity.requirePrincipal();
-        var result = mapper.detail(actor.tenantId(), actor.workNo(), id);
+        var result = mapper.detail(actor.workNo(), id);
         if (result == null) throw new ResponseStatusException(HttpStatus.NOT_FOUND, "客户不存在或无权访问");
         return result;
     }
@@ -83,20 +82,18 @@ public class CustomerService {
      */
     public String save(CustomerRecord customer, boolean create) {
         var actor = identity.requirePrincipal();
-        return saveFor(actor.tenantId(), actor.workNo(), customer, create);
+        return saveFor(actor.workNo(), customer, create);
     }
 
     /**
      * 已鉴权的管理用例按真实负责坐席维护客户，复用相同校验与乐观锁。
      *
-     * @param tenant 租户
      * @param owner 负责坐席
      * @param customer 资料
      * @param create 是否新增
      * @return 客户 ID
      */
-    public String saveFor(long tenant, String owner, CustomerRecord customer, boolean create) {
-        var actor = new AgentIdentityService.Principal(owner, tenant);
+    public String saveFor(String owner, CustomerRecord customer, boolean create) {
         if (
             customer.getName() == null ||
             customer.getName().isBlank() ||
@@ -109,16 +106,15 @@ public class CustomerService {
         customer.setPhoneNumber(PhoneNumber.normalize(customer.getPhoneNumber()));
         if (create) {
             customer.setId(String.valueOf(IdUtil.nextId()));
-            mapper.insert(actor.tenantId(), actor.workNo(), customer);
+            mapper.insert(owner, customer);
         } else if (
-            customer.getVersion() == null || mapper.update(actor.tenantId(), actor.workNo(), customer) != 1
+            customer.getVersion() == null || mapper.update(owner, customer) != 1
         ) {
             throw new ResponseStatusException(HttpStatus.CONFLICT, "客户已变更或无权访问，请刷新后重试");
         }
         log.info(
-            "[客户资料] 保存成功 tenantId={} workNo={} customerId={} create={}",
-            actor.tenantId(),
-            actor.workNo(),
+            "[客户资料] 保存成功 workNo={} customerId={} create={}",
+            owner,
             customer.getId(),
             create
         );

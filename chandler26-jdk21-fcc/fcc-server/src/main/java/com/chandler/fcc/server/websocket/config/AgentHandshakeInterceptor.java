@@ -11,6 +11,7 @@ import org.springframework.web.socket.server.HandshakeInterceptor;
 import java.nio.charset.StandardCharsets;
 import java.util.Base64;
 import java.util.Map;
+import java.util.Arrays;
 
 /** 使用子协议头携带的登录令牌认证握手，URL 中不携带令牌或可伪造工号。 */
 @Component
@@ -30,12 +31,11 @@ public class AgentHandshakeInterceptor implements HandshakeInterceptor {
         try {
             String protocols = request.getHeaders().getFirst("Sec-WebSocket-Protocol");
             if (protocols == null) throw new IllegalArgumentException();
-            String encoded = java.util.Arrays.stream(protocols.split(",")).map(String::trim)
+            String encoded = Arrays.stream(protocols.split(",")).map(String::trim)
                     .filter(value -> value.startsWith("auth.")).findFirst().orElseThrow().substring(5);
             String token = new String(Base64.getUrlDecoder().decode(encoded), StandardCharsets.UTF_8);
             var actor = identity.authenticatePrincipal(token);
             attributes.put("WORK_NO", actor.workNo());
-            attributes.put("TENANT_ID", actor.tenantId());
             attributes.put("AUTH_TOKEN", token);
             return true;
         } catch (Exception e) {

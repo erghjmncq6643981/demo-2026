@@ -1,10 +1,9 @@
 package com.chandler.fcc.admin.infrastructure.persistence.entity;
 
-import com.baomidou.mybatisplus.annotation.TableId;
 import com.baomidou.mybatisplus.annotation.TableName;
 import lombok.*;
+import lombok.experimental.SuperBuilder;
 
-import java.io.Serializable;
 import java.time.LocalDateTime;
 
 /**
@@ -21,21 +20,8 @@ import java.time.LocalDateTime;
 @Getter
 @Setter
 @ToString
-@Builder
-public class AgentSubstituteRecordEntity implements Serializable {
-
-    private static final long serialVersionUID = 1L;
-
-    /**
-     * 替班记录雪花主键 ID
-     */
-    @TableId
-    private Long id;
-
-    /**
-     * 租户 ID
-     */
-    private Long tenantId;
+@SuperBuilder
+public class AgentSubstituteRecordEntity extends BaseEntity {
 
     /**
      * 申请人坐席 ID
@@ -86,14 +72,4 @@ public class AgentSubstituteRecordEntity implements Serializable {
      * 确认/生效时间
      */
     private LocalDateTime confirmedAt;
-
-    /**
-     * 创建时间
-     */
-    private LocalDateTime createdAt;
-
-    /**
-     * 更新时间
-     */
-    private LocalDateTime updatedAt;
 }

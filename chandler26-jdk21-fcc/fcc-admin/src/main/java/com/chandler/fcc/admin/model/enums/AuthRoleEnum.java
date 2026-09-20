@@ -31,7 +31,7 @@ public enum AuthRoleEnum {
      */
     OPERATOR("OPERATOR", "运营管理员",
             List.of("OPERATOR"),
-            List.of("agent:view", "agent:write", "flow:view", "flow:write", "resource:view", "resource:write", "cdr:view")),
+            List.of("agent:view", "agent:write", "flow:view", "flow:write", "resource:view", "resource:write", "cdr:view", "business:manage")),
 
     /**
      * 审计员：只读访问话单、录音与操作审计

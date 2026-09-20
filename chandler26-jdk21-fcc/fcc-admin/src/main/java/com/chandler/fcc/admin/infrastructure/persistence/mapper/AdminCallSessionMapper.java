@@ -20,12 +20,8 @@ public interface AdminCallSessionMapper extends BaseMapper<CallSessionEntity> {
    * 与分页列表解耦：KPI 卡片直接由数据库做全量聚合，避免"只统计到当前页"的失真。
    * </p>
    *
-   * @param tenantId 当前登录租户 ID
    * @param startTime 统计区间起点 (含)
    * @return 聚合结果行，键为 totalCalls / answeredCalls / totalTalkMs / inboundTalkMs / outboundTalkMs
    */
-  Map<String, Object> selectStatsSince(
-    @Param("tenantId") Long tenantId,
-    @Param("startTime") LocalDateTime startTime
-  );
+  Map<String, Object> selectStatsSince(@Param("startTime") LocalDateTime startTime);
 }

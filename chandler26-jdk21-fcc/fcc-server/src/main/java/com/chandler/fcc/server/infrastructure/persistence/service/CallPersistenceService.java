@@ -4,10 +4,14 @@ import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import com.chandler.fcc.common.entity.CallInfoBO;
 import com.chandler.fcc.common.enums.CallStageState;
 import com.chandler.fcc.common.util.IdUtil;
+import com.chandler.fcc.server.call.LegStatePolicy;
 import com.chandler.fcc.server.infrastructure.persistence.entity.*;
 import com.chandler.fcc.server.infrastructure.persistence.mapper.*;
+import com.chandler.fcc.server.flow.application.FlowExecutionRecorder;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import java.time.LocalDateTime;
+import java.time.ZoneOffset;
+import java.util.HashMap;
 import java.util.List;
 import java.util.Optional;
 import lombok.RequiredArgsConstructor;
@@ -37,7 +41,7 @@ public class CallPersistenceService {
     private final CallRecordingMapper callRecordingMapper;
     private final CallBridgeMapper callBridgeMapper;
     private final CallBridgeMemberMapper callBridgeMemberMapper;
-    private final com.chandler.fcc.server.flow.application.FlowExecutionRecorder flowRecorder;
+    private final FlowExecutionRecorder flowRecorder;
 
     private final ObjectMapper objectMapper = new ObjectMapper();
 
@@ -61,14 +65,11 @@ public class CallPersistenceService {
                 .last("FOR UPDATE")
         );
 
-        LocalDateTime now = LocalDateTime.now(java.time.ZoneOffset.UTC);
+        LocalDateTime now = LocalDateTime.now(ZoneOffset.UTC);
 
         if (existing == null) {
             CallSessionEntity entity = CallSessionEntity.builder()
                 .id(numericCallId)
-                .tenantId(
-                    callInfo.getData().get("tenantId") instanceof Number tenant ? tenant.longValue() : 0L
-                )
                 .bizId(callInfo.getDataStr("dialJobId", callInfo.getCallId()))
                 .ctrlId(callInfo.getCtrlId())
                 .modelType(callInfo.getModelKey() != null ? callInfo.getModelKey() : "UNKNOWN")
@@ -165,7 +166,7 @@ public class CallPersistenceService {
 
             try {
                 if (callInfo.getData() != null && !callInfo.getData().isEmpty()) {
-                    var attributes = new java.util.HashMap<String, Object>(callInfo.getData());
+                    var attributes = new HashMap<String, Object>(callInfo.getData());
                     // 话后小结由独立事务保存，迟到话务事件不能覆盖已提交的业务结果。
                     if (existing.getAttributes() != null) {
                         var saved = objectMapper.readTree(existing.getAttributes()).get("afterCall");
@@ -205,13 +206,10 @@ public class CallPersistenceService {
                 .last("FOR UPDATE")
         );
 
-        LocalDateTime now = LocalDateTime.now(java.time.ZoneOffset.UTC);
+        LocalDateTime now = LocalDateTime.now(ZoneOffset.UTC);
         if (existing == null) {
             if (leg.getId() == null) {
                 leg.setId(IdUtil.nextId());
-            }
-            if (leg.getTenantId() == null) {
-                leg.setTenantId(0L);
             }
             if (leg.getCreatedTime() == null) {
                 leg.setCreatedTime(now);
@@ -228,9 +226,7 @@ public class CallPersistenceService {
             );
             return leg;
         } else {
-            if (
-                com.chandler.fcc.server.call.LegStatePolicy.accepts(existing.getState(), leg.getState())
-            ) existing.setState(leg.getState());
+            if (LegStatePolicy.accepts(existing.getState(), leg.getState())) existing.setState(leg.getState());
             if (leg.getAnsweredAt() != null && existing.getAnsweredAt() == null) existing.setAnsweredAt(
                 leg.getAnsweredAt()
             );
@@ -261,9 +257,6 @@ public class CallPersistenceService {
         if (event.getId() == null) {
             event.setId(IdUtil.nextId());
         }
-        if (event.getTenantId() == null) {
-            event.setTenantId(0L);
-        }
         if (event.getEventId() == null) {
             event.setEventId(IdUtil.getEventId());
         }
@@ -293,9 +286,6 @@ public class CallPersistenceService {
         if (command.getId() == null) {
             command.setId(IdUtil.nextId());
         }
-        if (command.getTenantId() == null) {
-            command.setTenantId(0L);
-        }
         if (command.getCommandId() == null) {
             command.setCommandId(IdUtil.getCommandId());
         }
@@ -321,9 +311,6 @@ public class CallPersistenceService {
         }
         if (recording.getId() == null) {
             recording.setId(IdUtil.nextId());
-        }
-        if (recording.getTenantId() == null) {
-            recording.setTenantId(0L);
         }
         if (recording.getRecordingId() == null) {
             recording.setRecordingId("rec-" + IdUtil.nextIdStr());
@@ -370,7 +357,6 @@ public class CallPersistenceService {
 
         if (existing == null) {
             incoming.setId(incoming.getId() != null ? incoming.getId() : IdUtil.nextId());
-            incoming.setTenantId(incoming.getTenantId() != null ? incoming.getTenantId() : 0L);
             incoming.setCreatedAt(now);
             incoming.setUpdatedAt(now);
             callRecordingMapper.insert(incoming);
@@ -445,9 +431,6 @@ public class CallPersistenceService {
         }
         if (bridge.getId() == null) {
             bridge.setId(IdUtil.nextId());
-        }
-        if (bridge.getTenantId() == null) {
-            bridge.setTenantId(0L);
         }
         if (bridge.getCreatedAt() == null) {
             bridge.setCreatedAt(LocalDateTime.now());

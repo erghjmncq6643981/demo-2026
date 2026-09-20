@@ -4,6 +4,7 @@ import com.chandler.fcc.common.dto.IncomingScreenPopDTO;
 import com.chandler.fcc.common.entity.CallInfoBO;
 import com.chandler.fcc.common.enums.DirectionType;
 import com.chandler.fcc.server.flow.FlowConfig;
+import com.chandler.fcc.server.customer.application.CustomerService;
 import com.chandler.fcc.server.infrastructure.persistence.service.CallFactsQueryService;
 import com.chandler.fcc.server.infrastructure.persistence.service.CallPersistenceService;
 import lombok.RequiredArgsConstructor;
@@ -39,8 +40,7 @@ public class ScreenPopService {
     private final AgentWebSocketService agentWebSocketService;
     private final CallFactsQueryService callFactsQueryService;
     private final FlowConfig flowConfig;
-    @org.springframework.beans.factory.annotation.Autowired(required=false)
-    private com.chandler.fcc.server.customer.application.CustomerService customers;
+    private final CustomerService customers;
 
     /**
      * 坐席侧通道被真实叫起时推送弹屏
@@ -119,12 +119,13 @@ public class ScreenPopService {
                 .customerName(call.getDataStr("customerName", null))
                 .companyName(call.getDataStr("companyName", null));
 
-        Long tenantId = call.getData().get("tenantId") instanceof Number tenant ? tenant.longValue() : null;
-        applyCallerHistory(builder, customerNumber, inbound, call.getCallId(), tenantId, workNo);
-        if(customers!=null && call.getData().get("tenantId") instanceof Number tenant) {
-            try { customers.match(tenant.longValue(),workNo,customerNumber).ifPresent(customer ->
-                    builder.customerName(customer.getName()).companyName(customer.getCompanyName())); }
-            catch (RuntimeException e) { log.warn("[弹屏] 客户查询暂不可用 callId={}",call.getCallId()); }
+        applyCallerHistory(builder, customerNumber, inbound, call.getCallId(), workNo);
+        try {
+            customers.match(workNo, customerNumber).ifPresent(customer ->
+                builder.customerName(customer.getName()).companyName(customer.getCompanyName())
+            );
+        } catch (RuntimeException failure) {
+            log.warn("[弹屏] 客户查询暂不可用 callId={}", call.getCallId());
         }
         return builder.build();
     }
@@ -136,17 +137,16 @@ public class ScreenPopService {
      * @param customerNumber 客户号码
      * @param inbound        是否为呼入
      * @param callId         当前业务通话标识 (用于排除自身)
-     * @param tenantId       可信通话租户，缺少时不查询历史
      * @param workNo         当前收件坐席，仅允许本人历史
      */
     private void applyCallerHistory(IncomingScreenPopDTO.IncomingScreenPopDTOBuilder builder,
-                                    String customerNumber, boolean inbound, String callId, Long tenantId, String workNo) {
+                                    String customerNumber, boolean inbound, String callId, String workNo) {
         if (!StringUtils.hasText(customerNumber)) {
             return;
         }
         try {
             Long currentId = CallPersistenceService.parseNumericId(callId);
-            callFactsQueryService.findLatestHistory(customerNumber, inbound, currentId, tenantId, workNo).ifPresent(history -> {
+            callFactsQueryService.findLatestHistory(customerNumber, inbound, currentId, workNo).ifPresent(history -> {
                 builder.lastAgentName(history.agentName())
                         .lastAgentWorkNo(history.agentWorkNo())
                         .lastCallTime(formatTime(history.startedAt()))

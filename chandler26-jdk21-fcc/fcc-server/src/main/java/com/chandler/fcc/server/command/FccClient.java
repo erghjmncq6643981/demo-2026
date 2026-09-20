@@ -6,11 +6,15 @@ import com.chandler.fcc.common.dto.rpc.JsonRpcResponse;
 import com.chandler.fcc.common.entity.FNodeResult;
 import com.chandler.fcc.common.util.IdUtil;
 import com.chandler.fcc.server.infrastructure.nats.FccProperties;
+import com.chandler.fcc.server.infrastructure.persistence.entity.CallCommandEntity;
+import com.chandler.fcc.server.infrastructure.persistence.service.CallPersistenceService;
+import com.fasterxml.jackson.databind.DeserializationFeature;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import io.nats.client.Connection;
 import io.nats.client.Message;
 import java.nio.charset.StandardCharsets;
 import java.time.Duration;
+import java.time.LocalDateTime;
 import java.util.HashMap;
 import java.util.Map;
 import lombok.RequiredArgsConstructor;
@@ -34,12 +38,10 @@ public class FccClient {
     private final Connection natsConnection;
     private final FccProperties fccProperties;
     private final ObjectMapper objectMapper = new ObjectMapper().configure(
-        com.fasterxml.jackson.databind.DeserializationFeature.FAIL_ON_UNKNOWN_PROPERTIES,
+        DeserializationFeature.FAIL_ON_UNKNOWN_PROPERTIES,
         false
     );
-
-    @org.springframework.beans.factory.annotation.Autowired(required = false)
-    private com.chandler.fcc.server.infrastructure.persistence.service.CallPersistenceService callPersistenceService;
+    private final CallPersistenceService callPersistenceService;
 
     /**
      * 发起外呼呼叫 (FNode.Dial) - 使用默认节点
@@ -364,7 +366,7 @@ public class FccClient {
             if (callPersistenceService != null) {
                 try {
                     callPersistenceService.recordCommand(
-                        com.chandler.fcc.server.infrastructure.persistence.entity.CallCommandEntity.builder()
+                        CallCommandEntity.builder()
                             .commandId(reqId)
                             .idempotencyKey(reqId)
                             .targetNodeId(effectiveNodeId)
@@ -376,8 +378,8 @@ public class FccClient {
                                     ? "ACCEPTED"
                                     : "FAILED"
                             )
-                            .sentAt(java.time.LocalDateTime.now())
-                            .completedAt(java.time.LocalDateTime.now())
+                            .sentAt(LocalDateTime.now())
+                            .completedAt(LocalDateTime.now())
                             .build()
                     );
                 } catch (Exception auditEx) {

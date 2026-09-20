@@ -102,7 +102,6 @@ public class AgentService {
 
         AgentEntity entity = AgentEntity.builder()
                 .id(agentId)
-                .tenantId(0L)
                 .workNo(workNo)
                 .agentName(req.getAgentName().trim())
                 .phoneNumber(req.getPhoneNumber())
@@ -136,7 +135,6 @@ public class AgentService {
         if (existingExtension == null) {
             extensionMapper.insert(ExtensionEntity.builder()
                     .id(IdUtil.nextId())
-                    .tenantId(0L)
                     .extension(workNo)
                     .endpointType("WEBRTC")
                     .credentialSecret(encryptedSecret)
@@ -158,7 +156,6 @@ public class AgentService {
         // 初始化坐席接听终端绑定 (WebRTC 软话机优先；SIP 工位话机与随行手机按需登记)
         bindingMapper.insert(AgentEndpointBindingEntity.builder()
                 .id(IdUtil.nextId())
-                .tenantId(0L)
                 .agentId(agentId)
                 .endpointType("WEBRTC")
                 .endpointValue(workNo)
@@ -171,7 +168,6 @@ public class AgentService {
         if (req.getSipExtension() != null && !req.getSipExtension().isBlank()) {
             bindingMapper.insert(AgentEndpointBindingEntity.builder()
                     .id(IdUtil.nextId())
-                    .tenantId(0L)
                     .agentId(agentId)
                     .endpointType("SIP")
                     .endpointValue(req.getSipExtension().trim())
@@ -185,7 +181,6 @@ public class AgentService {
         if (req.getPhoneNumber() != null && !req.getPhoneNumber().isBlank()) {
             bindingMapper.insert(AgentEndpointBindingEntity.builder()
                     .id(IdUtil.nextId())
-                    .tenantId(0L)
                     .agentId(agentId)
                     .endpointType("MOBILE")
                     .endpointValue(req.getPhoneNumber().trim())
@@ -350,7 +345,6 @@ public class AgentService {
         if (count == 0) {
             AgentGroupEntity root = AgentGroupEntity.builder()
                     .id(1L)
-                    .tenantId(0L)
                     .parentId(0L)
                     .groupCode("ROOT_ORG")
                     .groupName("箱箱物流科技")
@@ -378,7 +372,6 @@ public class AgentService {
 
         AgentGroupEntity group = AgentGroupEntity.builder()
                 .id(groupId)
-                .tenantId(0L)
                 .parentId(req.getParentId() == null ? 0L : req.getParentId())
                 .groupCode(req.getGroupCode().trim())
                 .groupName(req.getGroupName().trim())
@@ -549,7 +542,6 @@ public class AgentService {
 
         AgentGroupMemberEntity member = AgentGroupMemberEntity.builder()
                 .id(IdUtil.nextId())
-                .tenantId(0L)
                 .groupId(req.getGroupId())
                 .agentId(req.getAgentId())
                 .memberRole(req.getMemberRole() == null || req.getMemberRole().isBlank() ? "MEMBER" : req.getMemberRole())
@@ -645,7 +637,6 @@ public class AgentService {
 
         AgentEndpointBindingEntity binding = AgentEndpointBindingEntity.builder()
                 .id(bindingId)
-                .tenantId(0L)
                 .agentId(req.getAgentId())
                 .endpointType(req.getEndpointType())
                 .extensionId(req.getExtensionId())
@@ -716,7 +707,6 @@ public class AgentService {
 
         AgentSubstituteRecordEntity record = AgentSubstituteRecordEntity.builder()
                 .id(substituteId)
-                .tenantId(0L)
                 .applicantAgentId(req.getApplicantAgentId())
                 .substituteAgentId(req.getSubstituteAgentId())
                 .substituteType(req.getSubstituteType())
@@ -815,7 +805,6 @@ public class AgentService {
 
         return AgentVO.builder()
                 .id(entity.getId())
-                .tenantId(entity.getTenantId())
                 .workNo(entity.getWorkNo())
                 .agentName(entity.getAgentName())
                 .phoneNumber(entity.getPhoneNumber())
@@ -935,7 +924,6 @@ public class AgentService {
             }
             targetBinding = AgentEndpointBindingEntity.builder()
                     .id(IdUtil.nextId())
-                    .tenantId(0L)
                     .agentId(agent.getId())
                     .endpointType(targetType)
                     .endpointValue(targetValue != null ? targetValue.trim() : workNo)

@@ -61,7 +61,6 @@ public class TelephonyResourceService {
         LocalDateTime now = LocalDateTime.now();
         TelephonyTrunkEntity entity = TelephonyTrunkEntity.builder()
                 .id(id)
-                .tenantId(0L)
                 .trunkCode(req.getTrunkCode().trim())
                 .trunkName(req.getTrunkName().trim())
                 .carrierCode(req.getCarrierCode())
@@ -140,7 +139,6 @@ public class TelephonyResourceService {
         LocalDateTime now = LocalDateTime.now();
         DidNumberEntity entity = DidNumberEntity.builder()
                 .id(id)
-                .tenantId(0L)
                 .trunkId(req.getTrunkId())
                 .phoneNumber(phone)
                 .routeKey(req.getRouteKey())
@@ -213,7 +211,6 @@ public class TelephonyResourceService {
         LocalDateTime now = LocalDateTime.now();
         OutboundNumberEntity entity = OutboundNumberEntity.builder()
                 .id(id)
-                .tenantId(0L)
                 .trunkId(req.getTrunkId())
                 .phoneNumber(phone)
                 .poolCode(req.getPoolCode() == null ? "default" : req.getPoolCode().trim())

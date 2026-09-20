@@ -1,15 +1,19 @@
 package com.chandler.fcc.admin.infrastructure.persistence.entity;
 
-import com.baomidou.mybatisplus.annotation.TableId;
 import com.baomidou.mybatisplus.annotation.TableName;
 import lombok.AllArgsConstructor;
+import lombok.experimental.SuperBuilder;
 import lombok.Builder;
+import lombok.experimental.SuperBuilder;
 import lombok.Getter;
+import lombok.experimental.SuperBuilder;
 import lombok.NoArgsConstructor;
+import lombok.experimental.SuperBuilder;
 import lombok.Setter;
+import lombok.experimental.SuperBuilder;
 import lombok.ToString;
+import lombok.experimental.SuperBuilder;
 
-import java.io.Serializable;
 import java.time.LocalDateTime;
 
 /**
@@ -27,21 +31,8 @@ import java.time.LocalDateTime;
 @Getter
 @Setter
 @ToString(exclude = "passwordHash")
-@Builder
-public class AdminUserEntity implements Serializable {
-
-    private static final long serialVersionUID = 1L;
-
-    /**
-     * 账号雪花主键 ID
-     */
-    @TableId
-    private Long id;
-
-    /**
-     * 租户 ID
-     */
-    private Long tenantId;
+@SuperBuilder
+public class AdminUserEntity extends BaseEntity {
 
     /**
      * 登录账号 (全局唯一)
@@ -77,16 +68,6 @@ public class AdminUserEntity implements Serializable {
      * 最近一次成功登录时间
      */
     private LocalDateTime lastLoginAt;
-
-    /**
-     * 创建时间
-     */
-    private LocalDateTime createdAt;
-
-    /**
-     * 更新时间
-     */
-    private LocalDateTime updatedAt;
 
     /**
      * 逻辑删除标记时间

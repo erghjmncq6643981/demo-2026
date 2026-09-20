@@ -8,6 +8,7 @@ import org.springframework.stereotype.Component;
 
 import java.time.Duration;
 import java.util.Map;
+import java.util.List;
 import java.util.Optional;
 import java.util.concurrent.ConcurrentHashMap;
 
@@ -204,5 +205,7 @@ public class CallSessionManager {
     /** 返回活跃上下文快照，供恢复与排队调度使用。
      * @return 当前上下文副本列表
      */
-    public java.util.List<CallInfoBO> snapshot(){return java.util.List.copyOf(ctrlSessions.values());}
+    public List<CallInfoBO> snapshot() {
+        return List.copyOf(ctrlSessions.values());
+    }
 }

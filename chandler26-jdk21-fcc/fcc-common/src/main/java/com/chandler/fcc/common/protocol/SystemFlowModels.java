@@ -1,8 +1,11 @@
 package com.chandler.fcc.common.protocol;
 
+import com.chandler.fcc.common.enums.FlowActionType;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import java.io.IOException;
+import java.util.HashSet;
+import java.util.Set;
 
 /**
  * 完整固定通话模型目录，与数据库初始化脚本共享同一份资源定义。
@@ -32,6 +35,30 @@ public final class SystemFlowModels {
     }
 
     /**
+     * 返回固定模板声明的全部公共业务动作。
+     *
+     * @param template 固定模板代码
+     * @return 不可变动作集合
+     */
+    public static Set<FlowActionType> actions(String template) {
+        JsonNode nodes = get(template).path("nodes");
+        Set<FlowActionType> actions = new HashSet<>();
+        nodes.forEach(node -> actions.add(FlowActionType.fromCode(node.path("action").asText())));
+        return Set.copyOf(actions);
+    }
+
+    /**
+     * 返回随应用发布的全部固定模板代码。
+     *
+     * @return 不可变模板代码集合
+     */
+    public static Set<String> templateNames() {
+        Set<String> names = new HashSet<>();
+        MODELS.fieldNames().forEachRemaining(names::add);
+        return Set.copyOf(names);
+    }
+
+    /**
      * 加载随应用发布的模型资源，缺失时阻止使用不完整模型。
      *
      * @return 模型目录
@@ -42,7 +69,15 @@ public final class SystemFlowModels {
             if (input == null) {
                 throw new IllegalStateException("缺少固定通话模型资源");
             }
-            return new ObjectMapper().readTree(input);
+            JsonNode models = new ObjectMapper().readTree(input);
+            models.forEach(model -> {
+                JsonNode nodes = model.path("nodes");
+                if (!nodes.isArray() || nodes.isEmpty()) {
+                    throw new IllegalStateException("固定通话模型缺少动作节点");
+                }
+                nodes.forEach(node -> FlowActionType.fromCode(node.path("action").asText()));
+            });
+            return models;
         } catch (IOException failure) {
             throw new IllegalStateException("无法读取固定通话模型资源", failure);
         }

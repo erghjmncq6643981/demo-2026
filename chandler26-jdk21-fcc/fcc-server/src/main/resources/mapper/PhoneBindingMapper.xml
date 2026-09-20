@@ -1,18 +1,82 @@
-<?xml version="1.0" encoding="UTF-8"?>
+<?xml version="1.0" encoding="UTF-8" ?>
 <!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
 <mapper namespace="com.chandler.fcc.server.agent.infrastructure.PhoneBindingMapper">
- <select id="extensionExists" resultType="int">SELECT COUNT(*) FROM fcc_extension WHERE tenant_id=#{tenant} AND extension=#{extension} AND status='ENABLED' AND deleted_at IS NULL</select>
- <insert id="challenge">INSERT INTO fcc_phone_binding_challenge(tenant_id,owner_work_no,extension,code_hash,status,expires_at) VALUES(#{tenant},#{owner},#{extension},#{hash},'PENDING',DATE_ADD(UTC_TIMESTAMP(3),INTERVAL 2 MINUTE)) ON DUPLICATE KEY UPDATE extension=#{extension},code_hash=#{hash},status='PENDING',channel_uuid=NULL,expires_at=DATE_ADD(UTC_TIMESTAMP(3),INTERVAL 2 MINUTE)</insert>
- <select id="lockChallenge" resultType="map">SELECT tenant_id AS tenantId,owner_work_no AS owner FROM fcc_phone_binding_challenge WHERE code_hash=#{hash} AND extension=#{extension} AND status='PENDING' AND expires_at&gt;UTC_TIMESTAMP(3) FOR UPDATE</select>
- <insert id="ensureLock">INSERT IGNORE INTO fcc_phone_binding_lock(tenant_id) VALUES(#{tenant})</insert>
- <select id="lockTenant" resultType="long">SELECT tenant_id FROM fcc_phone_binding_lock WHERE tenant_id=#{tenant} FOR UPDATE</select>
- <select id="busy" resultType="int">SELECT COUNT(*) FROM fcc_agent a JOIN fcc_agent_presence p ON p.agent_id=a.id AND p.tenant_id=a.tenant_id WHERE a.tenant_id=#{tenant} AND (a.work_no=#{owner} OR a.current_extension=#{extension}) AND p.active_call_id IS NOT NULL</select>
- <update id="disableBindings">UPDATE fcc_agent_endpoint_binding b JOIN fcc_agent a ON a.id=b.agent_id AND a.tenant_id=b.tenant_id SET b.status='DISABLED',b.valid_to=UTC_TIMESTAMP(3) WHERE b.tenant_id=#{tenant} AND b.endpoint_type='SIP' AND b.status='ENABLED' AND (a.work_no=#{owner} OR b.endpoint_value=#{extension})</update>
- <update id="clearExtensions">UPDATE fcc_extension SET agent_work_no=NULL,agent_name=NULL WHERE tenant_id=#{tenant} AND (agent_work_no=#{owner} OR extension=#{extension})</update>
- <update id="clearAgents">UPDATE fcc_agent SET current_extension=NULL WHERE tenant_id=#{tenant} AND (work_no=#{owner} OR current_extension=#{extension})</update>
- <update id="bindExtension">UPDATE fcc_extension e JOIN fcc_agent a ON a.tenant_id=e.tenant_id AND a.work_no=#{owner} AND a.status='ENABLED' AND a.deleted_at IS NULL SET e.agent_work_no=a.work_no,e.agent_name=a.agent_name WHERE e.tenant_id=#{tenant} AND e.extension=#{extension} AND e.status='ENABLED' AND e.deleted_at IS NULL</update>
- <update id="bindAgent">UPDATE fcc_agent SET current_extension=#{extension} WHERE tenant_id=#{tenant} AND work_no=#{owner} AND status='ENABLED' AND deleted_at IS NULL</update>
- <insert id="appendBinding">INSERT INTO fcc_agent_endpoint_binding(id,tenant_id,agent_id,endpoint_type,extension_id,endpoint_value,priority,status) SELECT #{id},#{tenant},a.id,'SIP',e.id,e.extension,1,'ENABLED' FROM fcc_agent a JOIN fcc_extension e ON e.tenant_id=a.tenant_id WHERE a.tenant_id=#{tenant} AND a.work_no=#{owner} AND e.extension=#{extension} AND a.deleted_at IS NULL AND e.deleted_at IS NULL</insert>
- <update id="consume">UPDATE fcc_phone_binding_challenge SET status='CONSUMED',channel_uuid=#{channel} WHERE code_hash=#{hash} AND status='PENDING'</update>
- <select id="status" resultType="map">SELECT extension,CASE WHEN status='PENDING' AND expires_at&lt;=UTC_TIMESTAMP(3) THEN 'EXPIRED' ELSE status END AS status FROM fcc_phone_binding_challenge WHERE tenant_id=#{tenant} AND owner_work_no=#{owner}</select>
+  <select id="bindingContext" resultType="map">
+    SELECT e.id AS extensionId
+    FROM fcc_telephony_node n
+    JOIN fcc_extension e
+      ON e.extension = #{extension}
+     AND e.status = 'ENABLED'
+     AND e.deleted_at IS NULL
+    WHERE n.node_id = #{nodeId}
+      AND n.status IN ('ONLINE', 'DRAINING')
+    LIMIT 1
+  </select>
+  <select id="lockBindingTarget" resultType="map" useCache="false" flushCache="true">
+    SELECT e.id AS extensionId, a.id AS agentId
+    FROM fcc_telephony_node n
+    JOIN fcc_extension e
+      ON e.extension = #{extension}
+     AND e.status = 'ENABLED'
+     AND e.deleted_at IS NULL
+    JOIN fcc_agent a
+      ON a.work_no = #{owner}
+     AND a.status = 'ENABLED'
+     AND a.deleted_at IS NULL
+    WHERE n.node_id = #{nodeId}
+      AND n.status IN ('ONLINE', 'DRAINING')
+    FOR UPDATE
+  </select>
+  <select id="busy" resultType="int">
+    SELECT COUNT(*)
+    FROM fcc_agent a
+    JOIN fcc_agent_presence p ON p.agent_id = a.id
+    WHERE (a.work_no = #{owner} OR a.current_extension = #{extension})
+      AND p.active_call_id IS NOT NULL
+  </select>
+  <update id="disableBindings">
+    UPDATE fcc_agent_endpoint_binding b
+    JOIN fcc_agent a ON a.id = b.agent_id
+    SET b.status = 'DISABLED', b.valid_to = UTC_TIMESTAMP(3)
+    WHERE b.endpoint_type = 'SIP'
+      AND b.status = 'ENABLED'
+      AND (a.work_no = #{owner} OR b.endpoint_value = #{extension})
+  </update>
+  <update id="clearExtensions">
+    UPDATE fcc_extension
+    SET agent_work_no = NULL, agent_name = NULL
+    WHERE agent_work_no = #{owner} OR extension = #{extension}
+  </update>
+  <update id="clearAgents">
+    UPDATE fcc_agent
+    SET current_extension = NULL
+    WHERE work_no = #{owner} OR current_extension = #{extension}
+  </update>
+  <update id="bindExtension">
+    UPDATE fcc_extension e
+    JOIN fcc_agent a
+      ON a.work_no = #{owner}
+     AND a.status = 'ENABLED'
+     AND a.deleted_at IS NULL
+    SET e.agent_work_no = a.work_no, e.agent_name = a.agent_name
+    WHERE e.extension = #{extension}
+      AND e.status = 'ENABLED'
+      AND e.deleted_at IS NULL
+  </update>
+  <update id="bindAgent">
+    UPDATE fcc_agent
+    SET current_extension = #{extension}
+    WHERE work_no = #{owner} AND status = 'ENABLED' AND deleted_at IS NULL
+  </update>
+  <insert id="appendBinding">
+    INSERT INTO fcc_agent_endpoint_binding(
+      id, agent_id, endpoint_type, extension_id, endpoint_value, priority, status
+    )
+    SELECT #{id}, a.id, 'SIP', e.id, e.extension, 1, 'ENABLED'
+    FROM fcc_agent a
+    JOIN fcc_extension e ON e.extension = #{extension}
+    WHERE a.work_no = #{owner}
+      AND a.deleted_at IS NULL
+      AND e.deleted_at IS NULL
+  </insert>
 </mapper>

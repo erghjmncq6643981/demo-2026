@@ -33,11 +33,6 @@ public class CallCommandEntity implements Serializable {
     private Long id;
 
     /**
-     * 租户 ID
-     */
-    private Long tenantId;
-
-    /**
      * 指令唯一全局标识 (command_id)
      */
     private String commandId;

@@ -10,31 +10,6 @@
     </parent>
     <artifactId>fcc-server-starter</artifactId>
     <name>fcc-server-starter</name>
-
-    <dependencies>
-        <dependency>
-            <groupId>com.chandler</groupId>
-            <artifactId>fcc-server</artifactId>
-            <version>${project.version}</version>
-        </dependency>
-        <dependency>
-            <groupId>org.springframework.boot</groupId>
-            <artifactId>spring-boot-starter-actuator</artifactId>
-        </dependency>
-        <dependency>
-            <groupId>org.springframework.boot</groupId>
-            <artifactId>spring-boot-starter-test</artifactId>
-            <scope>test</scope>
-        </dependency>
-    </dependencies>
-
-    <build>
-        <plugins>
-            <plugin>
-                <groupId>org.springframework.boot</groupId>
-                <artifactId>spring-boot-maven-plugin</artifactId>
-            </plugin>
-        </plugins>
-    </build>
+    <description>FCC server remote-call SDK; no client contract is required yet</description>
 </project>
 

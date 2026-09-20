@@ -64,22 +64,24 @@ public class CallFactsQueryService {
      * </p>
      *
      * @param number         客户号码
-     * @param tenantId       当前通话租户
      * @param workNo         已授权的当前坐席，仅查询本人接待历史
      * @param matchCallerSide true 按 {@code caller_number} 匹配 (呼入场景，客户是主叫)；
      *                        false 按 {@code destination_number} 匹配 (呼出场景，客户是被叫)
      * @param excludeCallId  需排除的当前通话数值主键 (可为 null)
      * @return 前序通话事实；查不到时返回空
      */
-    public Optional<CallerHistory> findLatestHistory(String number, boolean matchCallerSide, Long excludeCallId,
-                                                   Long tenantId, String workNo) {
-        if (number == null || number.isBlank() || tenantId == null || workNo == null || workNo.isBlank()) {
+    public Optional<CallerHistory> findLatestHistory(
+        String number,
+        boolean matchCallerSide,
+        Long excludeCallId,
+        String workNo
+    ) {
+        if (number == null || number.isBlank() || workNo == null || workNo.isBlank()) {
             return Optional.empty();
         }
 
         LambdaQueryWrapper<CallSessionEntity> wrapper = new LambdaQueryWrapper<>();
-        wrapper.eq(CallSessionEntity::getTenantId, tenantId)
-                .eq(CallSessionEntity::getPrimaryWorkNo, workNo);
+        wrapper.eq(CallSessionEntity::getPrimaryWorkNo, workNo);
         if (matchCallerSide) {
             wrapper.eq(CallSessionEntity::getCallerNumber, number);
         } else {
@@ -95,7 +97,7 @@ public class CallFactsQueryService {
         try {
             previous = callSessionMapper.selectOne(wrapper);
         } catch (Exception e) {
-            log.warn("[弹屏事实] 查询本人前序通话失败 tenantId={} workNo={}", tenantId, workNo);
+            log.warn("[弹屏事实] 查询本人前序通话失败 workNo={}", workNo);
             return Optional.empty();
         }
 

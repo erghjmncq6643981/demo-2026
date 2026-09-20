@@ -26,7 +26,6 @@ public class AgentWebSocketService {
 
     private final AgentWebSocketHandler webSocketHandler;
     private final ScreenPopDeliveryStore deliveries;
-    private final com.chandler.fcc.server.call.CallSessionManager calls;
 
     /**
      * 推送话务弹屏事件至指定坐席
@@ -48,9 +47,7 @@ public class AgentWebSocketService {
                 screenPop
         );
 
-        var call = calls.getByCallId(screenPop.getCallId()).orElse(null);
-        if (call == null || !(call.getData().get("tenantId") instanceof Number tenant)) return 0;
-        try { deliveries.save(tenant.longValue(), message); }
+        try { deliveries.save(message); }
         catch (RuntimeException failure) { log.error("[弹屏] 持久投递记录失败 callId={}", screenPop.getCallId()); }
 
         log.info("[WebSocket Service] 推送弹屏 workNo={} callId={} direction={}",
@@ -112,9 +109,7 @@ public class AgentWebSocketService {
      * @param workNo 坐席 @param callId 通话
      */
     private void closeDelivery(String workNo, String callId) {
-        var call = calls.getByCallId(callId).orElse(null);
-        if (call == null || !(call.getData().get("tenantId") instanceof Number tenant)) return;
-        try { deliveries.close(tenant.longValue(), workNo, callId); }
+        try { deliveries.close(workNo, callId); }
         catch (RuntimeException failure) { log.error("[弹屏] 关闭投递记录失败 callId={}", callId); }
     }
 
