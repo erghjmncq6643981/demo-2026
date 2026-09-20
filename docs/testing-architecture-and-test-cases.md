@@ -159,7 +159,7 @@ git diff --check
 
 ## 6. 结果记录
 
-2026-09-19：使用临时 JDK 21 后 Java compile 和 15 个定向测试通过；完整 `mvn -q test` 因本地 NATS 不可连接导致集成测试失败。两端新构建、管理端 4 个模型测试、坐席端 10 个测试通过。定向 Java 命令、部署顺序和新增测试详见 [契约修复记录](fcc-contract-remediation.md)。此前运维端构建通过；Go 工具链限制仍存在。真实数据库、NATS、ESL、SIP、媒体及登录态浏览器回归尚未完成。
+2026-09-20：使用本机 JDK 21 后 Java compile 和 Flow/Action/Event Inbox 等 20 个定向测试通过；完整 `mvn -q test` 因本地 NATS 不可连接导致集成测试失败。管理端构建及 4 个治理测试通过，坐席端既有 10 个测试通过。定向 Java 命令、部署顺序和新增测试详见 [契约修复记录](fcc-contract-remediation.md)。此前运维端构建通过；Go 工具链限制仍存在。真实数据库、NATS、ESL、SIP、媒体及登录态业务页面回归尚未完成。
 
 交付说明必须区分：
 

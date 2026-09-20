@@ -32,11 +32,25 @@ public interface EventInboxMapper {
     String status(@Param("id") String id);
 
     /**
-     * 持久化事件处理结果。
+     * 原子领取一个明确失败且尚未耗尽次数的事件。
+     *
+     * @param id 源事件标识
+     * @param maxAttempts 最大处理次数
+     * @return 成功领取数量
+     */
+    int claimRetry(@Param("id") String id, @Param("maxAttempts") int maxAttempts);
+
+    /**
+     * 持久化事件处理结果和脱敏错误分类。
      *
      * @param id 源事件标识
      * @param status 处理状态
+     * @param error 错误分类，不保存原始载荷或敏感内容
      * @return 更新数量
      */
-    int finish(@Param("id") String id, @Param("status") String status);
+    int finish(
+        @Param("id") String id,
+        @Param("status") String status,
+        @Param("error") String error
+    );
 }

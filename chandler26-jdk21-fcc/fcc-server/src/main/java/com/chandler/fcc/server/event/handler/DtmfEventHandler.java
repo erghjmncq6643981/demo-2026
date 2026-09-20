@@ -1,7 +1,8 @@
 package com.chandler.fcc.server.event.handler;
 
 import com.chandler.fcc.common.entity.CallInfoBO;
-import com.chandler.fcc.common.protocol.FccEventMethods;
+import com.chandler.fcc.common.protocol.FccEventMethod;
+import com.chandler.fcc.common.protocol.FccEventField;
 import com.chandler.fcc.server.agent.application.PhoneBindingService;
 import com.chandler.fcc.server.call.CallSessionManager;
 import com.chandler.fcc.server.telephony.application.InboundCallService;
@@ -31,8 +32,8 @@ public class DtmfEventHandler implements FccEventHandler {
      * @return 是否支持
      */
     @Override
-    public boolean supports(String method) {
-        return FccEventMethods.DTMF.equalsIgnoreCase(method);
+    public boolean supports(FccEventMethod method) {
+        return method == FccEventMethod.DTMF;
     }
 
     /**
@@ -42,9 +43,9 @@ public class DtmfEventHandler implements FccEventHandler {
      */
     @Override
     public void handle(JsonNode params) {
-        String controlId = params.path("ctrl_uuid").asText(null);
-        String channelUuid = params.path("uuid").asText(null);
-        String digit = params.path("digit").asText(null);
+        String controlId = params.path(FccEventField.CONTROL_ID.getWireName()).asText(null);
+        String channelUuid = params.path(FccEventField.CHANNEL_UUID.getWireName()).asText(null);
+        String digit = params.path(FccEventField.DIGIT.getWireName()).asText(null);
         if (digit == null || digit.isBlank() || "_none_".equalsIgnoreCase(digit)) return;
 
         CallInfoBO call = sessions
@@ -55,8 +56,11 @@ public class DtmfEventHandler implements FccEventHandler {
             log.warn("[DTMF 事件] 未找到业务通话 ctrlId={} channelUuid={}", controlId, channelUuid);
             return;
         }
-        call.putData("flowEventId", params.path("event_id").asText());
-        call.putData("flowSourceTime", params.path("timestamp").asLong());
+        call.putData("flowEventId", params.path(FccEventField.EVENT_ID.getWireName()).asText());
+        call.putData(
+            "flowSourceTime",
+            params.path(FccEventField.SOURCE_TIMESTAMP.getWireName()).asLong()
+        );
 
         if (inboundCalls.digits(call, params)) return;
         if (phoneBinding.digits(call, digit)) return;

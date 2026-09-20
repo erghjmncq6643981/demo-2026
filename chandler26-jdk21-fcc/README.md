@@ -57,7 +57,7 @@ The `/api/admin` surface includes:
 - groups, members, endpoint bindings, and substitutions;
 - extensions and IVR binding;
 - paginated CDR, statistics, detail, recordings, and callback tasks;
-- flow definitions, versions, drafts, publication, and simulation;
+- paginated flow summaries and version summaries, on-demand version details, drafts, and publication;
 - telephony resources, system configuration, and client fleet data.
 
 ## Storage

@@ -1,30 +1,44 @@
-# FCC 流程定义与 IVR 管理现状
+# FCC IVR Flow Studio 现状
 
-更新：2026-09-19。本页描述当前实现，不把静态画布、通知受理或 JSON 语法检查当作运行成功。
+更新：2026-09-20。本页只描述已实现的管理面契约，不把发布通知或 FNode 同步应答当作真实通话完成。
 
-## 当前边界
+## 业务模型
 
-管理端通过 `/api/admin/flows` 查询流程，通过 `/{flowKey}/versions` 查询版本，通过 `/{flowKey}/draft` 保存草稿，通过 `/{flowKey}/publish` 发布草稿。定义来自后端 `definitionJson`，界面提供 JSON 编辑器，不再展示固定阶段、假发布差异或“100% 校验通过”。
+`fcc-common/src/main/resources/flows/system-models.json` 是呼入、坐席先接外呼、通知外呼和话机绑定四个固定模型的唯一来源。管理页通过后端模型和动作目录显示 action 中文名、执行器类型与 operation，不在 Vue 中复制 Java 动作枚举。
 
-`IvrFlowView.vue` 负责渲染；`features/flows/composables/useFlowEditor.ts` 拥有加载、选择、草稿、发布及反馈状态；`features/flows/model/flowDefinition.ts` 只验证 JSON 可解析且顶层为对象。API 适配继续由 `src/api/flowApi.ts` 负责。
+可编辑定义只支持 `routeMode=IVR`、`template=INBOUND` 的固定阶段：
 
-## 版本与发布
+```text
+ENTRY -> MENU -> BRANCH -> ROUTE -> BRIDGE -> CONNECTED -> END
+```
 
-后端使用 `fcc_flow_definition` 和 `fcc_flow_definition_version` 保存定义及版本快照。数据库 ID 按字符串处理，业务键 `flowKey` 不替代运行实例 ID。
+动作和顺序不可修改。画布只允许配置菜单媒体、收号超时、单键 if/else 分支、坐席/技能组目标、排队时限和未接通处理。后端拒绝重复按键、非安全媒体路径、未知字段、旧 `DID_DIRECT` 模型及任意脚本/类名/URL。
 
-1. 加载实际流程与版本，选择版本后显示对应定义。
-2. 切换流程、版本或刷新前，对未保存编辑进行放弃确认。
-3. 保存草稿后重新加载版本，显示“尚未发布”。
-4. 只有已保存的 DRAFT 可发布，发布需要应用内确认；后端核对请求版本是否仍为当前草稿。
-5. 数据库发布后刷新版本。Redis 通知和服务器 reload 属于后端通知尝试，页面明确提示运行时激活尚未确认。
+## API 与状态
 
-这不能证明运行中的电话已经切换版本，也不能证明新呼叫已命中新版本。
+统一边界是 `/api/admin/flow-studio`：
 
-## 未实现与验证边界
+| 接口 | 用途 |
+| --- | --- |
+| `GET /actions` | 公共 action 与三类执行器目录 |
+| `GET /models`、`GET /models/{template}` | 固定系统模型 |
+| `GET /flows?pageNum=&pageSize=` | 分页流程摘要，不返回版本 JSON |
+| `POST /flows` | 创建流程主数据 |
+| `GET /flows/{flowKey}` | 单流程摘要 |
+| `GET /flows/{flowKey}/versions?pageNum=&pageSize=` | 分页版本摘要 |
+| `GET /flows/{flowKey}/versions/{versionNo}` | 按需读取完整 `definitionJson` |
+| `PUT /flows/{flowKey}/draft` | 严格校验并保存唯一草稿 |
+| `POST /flows/{flowKey}/publish` | 发布草稿，返回运行端 `PENDING` |
+| `GET /calls/{callId}?after=` | 游标分页读取真实执行轨迹 |
 
-- 仿真入口禁用；`POST /api/admin/flows/simulate` 返回 `success=false`、引擎未接入、空目标和空轨迹。
-- 编辑器只做 JSON 语法检查；服务端保存/发布/编译共用严格校验，目前仅支持 DID_DIRECT 与 didDirectConfig.workNo，拒绝未实现路由和未知字段。完整 IVR 动作与激活看板仍未实现。
-- 定义中不得保存 SIP、NATS、数据库或第三方凭据。
-- 纯模型测试覆盖合法对象、非法 JSON 和非对象边界；构建通过。登录后的草稿/发布浏览器回归及真实 reload/呼叫联调未完成。
+`useFlowEditor.ts` 拥有分页、流程/版本选择、详情按需加载、脏数据确认、草稿和发布状态。`IvrFlowView.vue` 只组合画布、参数编辑器和版本控件。保存与发布失败均保留用户当前编辑内容。
 
-后续扩展遵守 [AGENTS.md](../AGENTS.md)，不得恢复静态流程节点冒充后端定义。
+## 通话执行轨迹
+
+通话详情中的“通话过程”是模型的精简业务流，不是第二个编辑器。它从数据库读取通话启动时固定的模型快照和每次阶段尝试，显示 action、状态、耗时、`commandId`、`eventId`、输入/输出与错误。无持久记录时明确显示“没有流程记录”，不模拟进度。
+
+## 未验证边界
+
+- 发布后 Redis 与 HTTP reload 是 best-effort，尚无持久 Outbox、重试和多实例激活看板。
+- FNode 同步 `ACCEPTED` 只表示 Sidecar 受理；通话完成以持久事件和阶段事实为准。
+- 真实 FreeSWITCH、NATS/JetStream、媒体、数据库、认证浏览器和 Windows 弹屏需要在部署环境验收。

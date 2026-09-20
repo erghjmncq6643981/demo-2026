@@ -3,6 +3,7 @@ package com.chandler.fcc.common.protocol;
 import com.chandler.fcc.common.enums.FlowActionType;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.fasterxml.jackson.databind.node.ObjectNode;
 import java.io.IOException;
 import java.util.HashSet;
 import java.util.Set;
@@ -31,7 +32,16 @@ public final class SystemFlowModels {
         if (model == null) {
             throw new IllegalArgumentException("未知固定通话模型：" + template);
         }
-        return model.deepCopy();
+        ObjectNode copy = model.deepCopy();
+        copy.path("nodes").forEach(node -> {
+            FlowActionType action = FlowActionType.fromCode(node.path("action").asText());
+            ObjectNode object = (ObjectNode) node;
+            object.put("actionLabel", action.getDesc());
+            object.put("executorType", action.getExecutorType().name());
+            object.put("executorTypeLabel", action.getExecutorType().getDesc());
+            object.put("operation", action.getOperation());
+        });
+        return copy;
     }
 
     /**
@@ -45,6 +55,23 @@ public final class SystemFlowModels {
         Set<FlowActionType> actions = new HashSet<>();
         nodes.forEach(node -> actions.add(FlowActionType.fromCode(node.path("action").asText())));
         return Set.copyOf(actions);
+    }
+
+    /**
+     * 查询固定模板中一个阶段对应的真实业务动作。
+     *
+     * @param template 固定模板代码
+     * @param stepKey 阶段键
+     * @return 公共业务动作
+     * @throws IllegalArgumentException 模板或阶段不存在
+     */
+    public static FlowActionType action(String template, String stepKey) {
+        for (JsonNode node : get(template).path("nodes")) {
+            if (stepKey.equals(node.path("key").asText())) {
+                return FlowActionType.fromCode(node.path("action").asText());
+            }
+        }
+        throw new IllegalArgumentException("固定通话模型不存在阶段: " + template + "/" + stepKey);
     }
 
     /**

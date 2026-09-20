@@ -21,7 +21,7 @@ import org.springframework.web.bind.annotation.RestController;
 /**
  * 管理台客户资料与自动外呼 REST 入口。
  */
-@Tag(name = "客户与自动外呼管理", description = "管理当前租户客户资料和自动外呼调度任务")
+@Tag(name = "客户与自动外呼管理", description = "管理客户资料和自动外呼调度任务")
 @RestController
 @RequestMapping("/api/admin/business")
 @RequiredArgsConstructor

@@ -9,7 +9,7 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 /**
  * Sidecar 录音事件契约测试。
  */
-class FccEventMethodsTest {
+class FccEventMethodTest {
 
     private final ObjectMapper objectMapper = new ObjectMapper();
 
@@ -36,7 +36,10 @@ class FccEventMethodsTest {
                 }
                 """);
 
-        assertEquals(FccEventMethods.RECORDING, fixture.path("method").asText());
+        assertEquals(
+            FccEventMethod.RECORDING,
+            FccEventMethod.fromWireName(fixture.path("method").asText())
+        );
         assertEquals("/recordings/call-01.wav", fixture.path("params").path("file_path").asText());
         assertEquals(45, fixture.path("params").path("seconds").asInt());
     }

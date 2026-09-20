@@ -1,7 +1,8 @@
-package com.chandler.fcc.admin.flow;
+package com.chandler.fcc.admin.flow.infrastructure;
 
+import com.chandler.fcc.admin.flow.infrastructure.data.FlowExecutionInstanceData;
+import com.chandler.fcc.admin.flow.infrastructure.data.FlowExecutionStepData;
 import java.util.List;
-import java.util.Map;
 import org.apache.ibatis.annotations.Mapper;
 import org.apache.ibatis.annotations.Param;
 
@@ -10,13 +11,6 @@ import org.apache.ibatis.annotations.Param;
  */
 @Mapper
 public interface FlowStudioMapper {
-    /**
-     * 创建业务流程。
-     *
-     * @param row 流程元数据
-     */
-    void create(Map<String, Object> row);
-
     /**
      * 查询通话存在性。
      *
@@ -31,7 +25,7 @@ public interface FlowStudioMapper {
      * @param call 通话
      * @return 实例摘要
      */
-    Map<String, Object> instance(@Param("call") String call);
+    FlowExecutionInstanceData instance(@Param("call") String call);
 
     /**
      * 按游标分页读取阶段尝试。
@@ -40,7 +34,7 @@ public interface FlowStudioMapper {
      * @param after 游标
      * @return 最多 100 条事实
      */
-    List<Map<String, Object>> steps(
+    List<FlowExecutionStepData> steps(
         @Param("call") String call,
         @Param("after") String after
     );

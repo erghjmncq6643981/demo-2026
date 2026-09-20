@@ -8,7 +8,7 @@
 - 录音事件统一为 Event.Recording，NATS 分类为 record；Java 和 Go 有契约测试源码。
 - Java 流程参数使用 callId、ctrlId、channelUuid，桥接使用 guestChannelUuid / agentChannelUuid。缺少控制标识、目标话道或外呼号码时拒绝执行，不以 callId 兜底。
 - 删除 CDR 中未调用的拼造执行轨迹方法。缺少客户资料、评分、路由依据时留空。
-- 流程仿真引擎尚未接入：接口返回 success=false、空目标和空轨迹。
+- 旧流程仿真接口已删除；通话过程只展示数据库中的模型快照和阶段执行事实，不生成空目标或模拟轨迹。
 - Sidecar 启动只创建空表，不导入演示分机、网关或话单。
 - 分机与网关响应不序列化密码；网关编辑留空密码时保留现有密码；XML 写入和重扫描错误不能返回全部成功。
 - 运维端删除固定终端、网关、版本、运行状态、静态启动日志和假延迟。注册桥接选项取自查询；失败显示陈旧或不可用。
@@ -20,8 +20,8 @@
 - 管理端、坐席端和运维端构建通过；运维端追加 Vue/TypeScript 检查通过。
 - 坐席端 4 个测试文件、10 个测试通过。
 - 管理端 4 个模型测试通过，覆盖流程 JSON、组树与 CDR 缺失/零值映射。
-- 三个前端 src 下已无超过 1000 行的 Vue/TS/JS 文件；当前最大文件分别为管理端 GroupManageView.vue 825 行、坐席端 CallRecordsTable.vue 452 行、运维端 ExtensionsView.vue 613 行（含空行）。
-- 使用临时 JDK 21 后 Java 编译、15 个定向测试通过；全量测试因本地 NATS 不可连接失败。新增契约修复及部署配置见 [处理记录](../../docs/fcc-contract-remediation.md)。
+- 管理端 `CdrReportView.vue` 格式化后为 1049 行，仍超过 1000 行治理阈值；其状态和接口调用已提取到 `useCdrReport`，后续继续按列表、回拨和详情弹窗拆分。坐席端与运维端本轮未新增超阈值文件。
+- 使用本机 JDK 21 后 Java 编译、Flow/Action/Event Inbox 等 20 个定向测试通过；全量测试因本地 NATS 不可连接失败。新增契约修复及部署配置见 [处理记录](../../docs/fcc-contract-remediation.md)。
 - Go 构建和测试被工具链阻塞：本机 Go 1.25.4，项目声明 1.27.1，自动下载失败。
 - 未完成真实 PostgreSQL、MySQL、Redis、NATS、ESL、SIP 和媒体端到端验证。构建成功不代表真实通话成功。
 
@@ -29,7 +29,7 @@
 
 - 管理端流程已改为真实 JSON 定义编辑器；CDR 与组管理已提取状态 composable 和纯模型。CDR/组视图仍超过 600 行，后续应继续按列表/详情拆分；登录态浏览器回归未完成。
 - 运维端 ExtensionsView.vue 仍超过 600 行，查询、分页与密码表单可进一步提取。
-- Sidecar 原生授权和完整审计、事件稳定 ID、持久重放和故障恢复尚不完整。
+- Sidecar 原生授权和完整审计仍不完整；事件已有稳定 ID、outbox、JetStream 与 Java Inbox，但副作用和 Inbox 非同事务，真实重投及故障恢复尚未验收。
 - 原生模块查询与完整 SIP Profile 结构化状态尚未接入，界面明确显示未知。
 - 管理端主包约 1.1 MB（压缩前），构建仍提示超过 500 kB；需继续优化依赖与分包。
 - 真实网关 RTT 尚未实现；ESL 指令耗时不作为 SIP RTT 返回。

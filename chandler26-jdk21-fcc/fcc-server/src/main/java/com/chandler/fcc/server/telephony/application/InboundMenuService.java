@@ -3,8 +3,10 @@ package com.chandler.fcc.server.telephony.application;
 import com.chandler.fcc.common.dto.command.FNodeReadDTMFDTO;
 import com.chandler.fcc.common.dto.command.MediaInfo;
 import com.chandler.fcc.common.entity.CallInfoBO;
+import com.chandler.fcc.common.enums.FlowActionType;
 import com.chandler.fcc.common.protocol.FlowDefinitionValidator;
-import com.chandler.fcc.server.command.FccClient;
+import com.chandler.fcc.common.protocol.FccEventField;
+import com.chandler.fcc.server.flow.application.FlowActionExecutionService;
 import com.chandler.fcc.server.infrastructure.persistence.service.CallPersistenceService;
 import com.fasterxml.jackson.databind.JsonNode;
 import java.util.Map;
@@ -18,7 +20,7 @@ import org.springframework.stereotype.Service;
 @RequiredArgsConstructor
 public class InboundMenuService {
 
-    private final FccClient client;
+    private final FlowActionExecutionService actions;
     private final CallPersistenceService persistence;
 
     /**
@@ -29,12 +31,10 @@ public class InboundMenuService {
      */
     public void configure(CallInfoBO call, String definition) {
         JsonNode root = FlowDefinitionValidator.validate(definition);
-        if ("IVR".equals(root.path("routeMode").asText())) {
-            call.putData("ivrDefinition", root.toString());
-            call.putData("ivrMenuEnabled", root.path("menu").path("enabled").asBoolean());
-            call.putData("ivrTimeoutAction", root.path("timeoutAction").asText());
-            target(call, root.path("defaultRoute"));
-        } else call.putData("directOwner", root.path("didDirectConfig").path("workNo").asText());
+        call.putData("ivrDefinition", root.toString());
+        call.putData("ivrMenuEnabled", root.path("menu").path("enabled").asBoolean());
+        call.putData("ivrTimeoutAction", root.path("timeoutAction").asText());
+        target(call, root.path("defaultRoute"));
     }
 
     /**
@@ -54,10 +54,10 @@ public class InboundMenuService {
         String command = "ivr-menu-" + call.getCallId();
         call.putData("flowCommandId", command);
         persistence.saveOrUpdateSession(call);
-        CallControlService.requireAccepted(
-            client.readDTMF(
-                call.getNodeId(),
-                FNodeReadDTMFDTO.builder()
+        actions.executeFNode(
+            call,
+            FlowActionType.READ_DTMF,
+            FNodeReadDTMFDTO.builder()
                     .ctrlUuid(call.getCtrlId())
                     .uuid(call.getGuestChannelUuid())
                     .minDigits(1)
@@ -70,8 +70,7 @@ public class InboundMenuService {
                     .media(MediaInfo.builder().type("FILE").data(menu.path("prompt").asText()).build())
                     .actionAfter("PARK")
                     .build(),
-                command
-            )
+            command
         );
         return true;
     }
@@ -86,11 +85,29 @@ public class InboundMenuService {
     public boolean digits(CallInfoBO call, JsonNode params) {
         if (
             !call.getData().containsKey("ivrWaiting") ||
-            !call.getGuestChannelUuid().equals(params.path("uuid").asText()) ||
-            !call.getNodeId().equals(params.path("node_id").asText())
+            !call.getGuestChannelUuid().equals(
+                params.path(FccEventField.CHANNEL_UUID.getWireName()).asText()
+            ) ||
+            !call.getNodeId().equals(params.path(FccEventField.NODE_ID.getWireName()).asText())
         ) return false;
-        String digit = params.path("digit").asText();
+        String digit = params.path(FccEventField.DIGIT.getWireName()).asText();
         if (!digit.matches("[0-9]")) return false;
+        actions.executeInternal(
+            call,
+            FlowActionType.SELECT_DIGIT_ROUTE,
+            () -> selectRoute(call, digit)
+        );
+        return true;
+    }
+
+    /**
+     * 选择按键分支或默认路由并保存决策事实。
+     *
+     * @param call 当前呼入通话
+     * @param digit 已校验的单位按键
+     * @return 命中的分支标识
+     */
+    private String selectRoute(CallInfoBO call, String digit) {
         JsonNode root = definition(call),
             selected = root.path("defaultRoute");
         String branch = "else";
@@ -108,7 +125,7 @@ public class InboundMenuService {
         persistence.saveOrUpdateSession(call);
         call.getData().remove("ivrBranchPending");
         persistence.saveOrUpdateSession(call);
-        return true;
+        return branch;
     }
 
     /**

@@ -12,6 +12,10 @@ import com.chandler.fcc.admin.infrastructure.persistence.mapper.AdminCallSession
 import com.chandler.fcc.admin.infrastructure.persistence.mapper.AgentMapper;
 import com.chandler.fcc.admin.infrastructure.persistence.mapper.CallbackTaskMapper;
 import com.chandler.fcc.admin.infrastructure.persistence.mapper.ExtensionMapper;
+import com.chandler.fcc.admin.flow.application.FlowStudioService;
+import com.chandler.fcc.admin.flow.controller.req.FlowPageReq;
+import com.chandler.fcc.admin.flow.controller.req.PublishFlowReq;
+import com.chandler.fcc.admin.flow.controller.req.SaveFlowDraftReq;
 import com.chandler.fcc.admin.infrastructure.persistence.mapper.FlowDefinitionMapper;
 import com.chandler.fcc.admin.model.PageResult;
 import com.chandler.fcc.admin.model.dto.*;
@@ -19,7 +23,6 @@ import com.chandler.fcc.admin.model.vo.*;
 import com.chandler.fcc.admin.service.CallCdrService;
 import com.chandler.fcc.admin.service.CallbackTaskService;
 import com.chandler.fcc.admin.service.ExtensionService;
-import com.chandler.fcc.admin.service.FlowDefinitionService;
 import com.chandler.fcc.admin.FccAdminApplication;
 import com.chandler.fcc.common.util.IdUtil;
 import cn.dev33.satoken.stp.StpUtil;
@@ -65,7 +68,7 @@ public class P0P1CoreFeaturesTest {
   private AdminCallSessionMapper sessionMapper;
 
   @Autowired
-  private FlowDefinitionService flowService;
+  private FlowStudioService flowService;
 
   @Autowired
   private FlowDefinitionMapper flowMapper;
@@ -145,7 +148,6 @@ public class P0P1CoreFeaturesTest {
       .ctrlId("ctrl-p0-test-" + callId)
       .modelType("INBOUND_CUSTOMER_SERVICE")
       .flowCode("FLOW-INBOUND")
-      .routeMode("HTTP_CALLBACK")
       .direction("INBOUND")
       .callerNumber("13483983247")
       .destinationNumber("1002")
@@ -169,7 +171,6 @@ public class P0P1CoreFeaturesTest {
       CallCdrVO detail = cdrService.getCdrDetail(callId);
       assertNotNull(detail);
       assertEquals("FLOW-INBOUND", detail.getFlowCode());
-      assertEquals("HTTP_CALLBACK", detail.getRouteMode());
       assertEquals("01:14", detail.getAudioDuration());
       assertNull(detail.getCallerName());
       assertNull(detail.getCarrier());
@@ -179,15 +180,15 @@ public class P0P1CoreFeaturesTest {
     }
   }
 
-  /** 验证显式创建的 DID 直达定义可发布，未实现仿真不会伪造路由成功。 */
+  /** 验证显式创建的固定阶段 IVR 定义可以保存并发布。 */
   @Test
-  @DisplayName("测试 DID 直达草稿发布与仿真能力边界")
-  void testFlowDefinitionAndSimulation() {
+  @DisplayName("测试固定阶段 IVR 草稿发布边界")
+  void testStagedFlowDraftPublication() {
     var fixture =
       FlowDefinitionEntity.builder()
         .id(IdUtil.nextId())
-        .flowKey("TEST-DID-DIRECT")
-        .flowName("测试直达")
+        .flowKey("TEST-IVR-FLOW")
+        .flowName("测试 IVR 流程")
         .modelType("INBOUND_CUSTOMER_SERVICE")
         .status("DRAFT")
         .currentVersion(0)
@@ -197,45 +198,37 @@ public class P0P1CoreFeaturesTest {
     try (
       var auth = Mockito.mockStatic(StpUtil.class);
     ) {
-      String version = flowService.saveDraft(
-        "TEST-DID-DIRECT",
-        FlowSaveDraftReq.builder()
-          .routeMode("DID_DIRECT")
-          .definitionJson(
-            "{\"routeMode\":\"DID_DIRECT\",\"didDirectConfig\":{\"workNo\":\"test-agent\"}}"
-          )
-          .build()
+      var draftRequest = new SaveFlowDraftReq();
+      draftRequest.setDefinitionJson(
+        """
+        {"routeMode":"IVR","template":"INBOUND",
+         "menu":{"enabled":false,"prompt":"","timeoutSeconds":10},"branches":[],
+         "defaultRoute":{"targetType":"AGENT","target":"901001","queueSeconds":60},
+         "timeoutAction":"CALLBACK"}
+        """
       );
+      String version = flowService.saveDraft("TEST-IVR-FLOW", draftRequest).getVersion();
       assertEquals("v1.0.0", version);
+      var publishRequest = new PublishFlowReq();
+      publishRequest.setVersion(version);
+      publishRequest.setRemark("测试发布");
       assertEquals(
         version,
-        flowService.publishFlow(
-          "TEST-DID-DIRECT",
-          FlowPublishReq.builder().version(version).remark("测试发布").build()
-        )
+        flowService.publish("TEST-IVR-FLOW", publishRequest).getVersion()
       );
       assertEquals(
         "PUBLISHED",
-        flowService.getVersions("TEST-DID-DIRECT").getFirst().getPublishStatus()
+        flowService.versions("TEST-IVR-FLOW", new FlowPageReq()).getList().getFirst().getPublishStatus()
       );
+      var invalidRequest = new SaveFlowDraftReq();
+      invalidRequest.setDefinitionJson("{\"routeMode\":\"HTTP_CALLBACK\"}");
       assertThrows(IllegalArgumentException.class, () ->
-        flowService.saveDraft(
-          "TEST-DID-DIRECT",
-          FlowSaveDraftReq.builder()
-            .definitionJson("{\"routeMode\":\"HTTP_CALLBACK\"}")
-            .build()
-        )
+        flowService.saveDraft("TEST-IVR-FLOW", invalidRequest)
       );
       auth.verify(
         () -> StpUtil.checkPermission("flow:write"),
         Mockito.times(3)
       );
     }
-    var result = flowService.simulateFlow(
-      FlowSimulateReq.builder().flowKey("TEST-DID-DIRECT").build()
-    );
-    assertFalse(result.getSuccess());
-    assertNull(result.getTargetAgentWorkNo());
-    assertTrue(result.getTraces().isEmpty());
   }
 }

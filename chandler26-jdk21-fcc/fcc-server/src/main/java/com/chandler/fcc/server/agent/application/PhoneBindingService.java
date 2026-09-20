@@ -1,13 +1,18 @@
 package com.chandler.fcc.server.agent.application;
 
+import com.chandler.fcc.common.dto.command.FNodeHangupDTO;
 import com.chandler.fcc.common.dto.command.FNodeReadDTMFDTO;
 import com.chandler.fcc.common.dto.command.MediaInfo;
 import com.chandler.fcc.common.entity.CallInfoBO;
 import com.chandler.fcc.common.enums.FlowActionType;
+import com.chandler.fcc.common.protocol.ChannelEventState;
+import com.chandler.fcc.common.protocol.FccEventField;
+import com.chandler.fcc.common.protocol.FccEventParameter;
 import com.chandler.fcc.common.util.IdUtil;
 import com.chandler.fcc.server.agent.infrastructure.PhoneBindingMapper;
-import com.chandler.fcc.server.command.FccClient;
+import com.chandler.fcc.server.flow.application.FlowActionExecutionService;
 import com.chandler.fcc.server.flow.application.SystemFlowRuntime;
+import com.chandler.fcc.server.infrastructure.persistence.service.CallPersistenceService;
 import com.fasterxml.jackson.databind.JsonNode;
 import java.util.Map;
 import java.util.Set;
@@ -30,8 +35,6 @@ public class PhoneBindingService implements SystemFlowRuntime {
 
     private static final String BINDING_NUMBER = "0000";
     private static final String TEMPLATE = "PHONE_BINDING";
-    private static final String STATE_START = "START";
-    private static final String STATE_READY = "READY";
     private static final String DATA_EXTENSION = "bindingExtension";
     private static final String DATA_PROMPT_SENT = "bindingPromptSent";
     private static final String DATA_COMPLETED = "bindingCompleted";
@@ -44,7 +47,8 @@ public class PhoneBindingService implements SystemFlowRuntime {
 
     private final PhoneBindingMapper mapper;
     private final TransactionTemplate transactions;
-    private final FccClient client;
+    private final FlowActionExecutionService flowActions;
+    private final CallPersistenceService persistence;
 
     @Value("${fcc.binding.prompt-file:}")
     private String promptFile;
@@ -87,11 +91,23 @@ public class PhoneBindingService implements SystemFlowRuntime {
         if (!BINDING_NUMBER.equals(call.getDestinationNumber())) {
             return false;
         }
-        String state = params.path("state").asText();
-        if (STATE_START.equals(state)) {
-            initializeBinding(call, params);
-        } else if (STATE_READY.equals(state)) {
+        ChannelEventState state = ChannelEventState.fromWireValue(
+            params.path(FccEventField.STATE.getWireName()).asText()
+        );
+        if (state == ChannelEventState.START) {
+            flowActions.executeInternal(
+                call,
+                FlowActionType.VALIDATE_BINDING_EXTENSION,
+                () -> {
+                    initializeBinding(call, params);
+                    return call.getData().containsKey(DATA_EXTENSION);
+                }
+            );
+        } else if (state == ChannelEventState.READY) {
             requestWorkNo(call);
+        } else if (state == ChannelEventState.DESTROY) {
+            call.putData("terminal", Boolean.TRUE);
+            persistence.saveOrUpdateSession(call);
         }
         return true;
     }
@@ -113,12 +129,24 @@ public class PhoneBindingService implements SystemFlowRuntime {
         boolean validWorkNo = workNo != null && workNo.matches(
             "[0-9]{" + minWorkNoDigits + "," + maxWorkNoDigits + "}"
         );
-        boolean bound = validWorkNo && Boolean.TRUE.equals(bind(call, workNo));
-        client.hangup(
-            call.getNodeId(),
-            call.getCtrlId(),
-            call.getGuestChannelUuid(),
-            bound ? "NORMAL_CLEARING" : "CALL_REJECTED"
+        boolean bound = validWorkNo && Boolean.TRUE.equals(
+            flowActions.executeInternal(
+                call,
+                FlowActionType.BIND_AGENT_EXTENSION,
+                () -> bind(call, workNo)
+            ).getOutput()
+        );
+        call.putData("bindingAccepted", bound);
+        persistence.saveOrUpdateSession(call);
+        flowActions.executeFNode(
+            call,
+            FlowActionType.HANGUP_BINDING_CHANNEL,
+            FNodeHangupDTO.builder()
+                .ctrlUuid(call.getCtrlId())
+                .uuid(call.getGuestChannelUuid())
+                .cause(bound ? "NORMAL_CLEARING" : "CALL_REJECTED")
+                .build(),
+            "binding-hangup-" + call.getCallId()
         );
         if (bound) {
             log.info(
@@ -145,7 +173,10 @@ public class PhoneBindingService implements SystemFlowRuntime {
      * @param params 通道事件
      */
     private void initializeBinding(CallInfoBO call, JsonNode params) {
-        String extension = params.path("params").path("authenticated_extension").asText();
+        String extension = params
+            .path(FccEventField.PARAMETERS.getWireName())
+            .path(FccEventParameter.AUTHENTICATED_EXTENSION.getWireName())
+            .asText();
         Map<String, Object> context = extension.matches("[0-9]{2,20}")
             ? mapper.bindingContext(call.getNodeId(), extension)
             : null;
@@ -155,6 +186,8 @@ public class PhoneBindingService implements SystemFlowRuntime {
         }
         call.putData(DATA_EXTENSION, extension);
         call.setModelKey("PHONE_BINDING");
+        call.putData("runtimeTemplate", TEMPLATE);
+        persistence.saveOrUpdateSession(call);
     }
 
     /**
@@ -170,8 +203,10 @@ public class PhoneBindingService implements SystemFlowRuntime {
         if (call.getData().putIfAbsent(DATA_PROMPT_SENT, Boolean.TRUE) != null) {
             return;
         }
-        client.readDTMF(
-            call.getNodeId(),
+        persistence.saveOrUpdateSession(call);
+        flowActions.executeFNode(
+            call,
+            FlowActionType.READ_DTMF,
             FNodeReadDTMFDTO.builder()
                 .ctrlUuid(call.getCtrlId())
                 .uuid(call.getGuestChannelUuid())
@@ -183,7 +218,8 @@ public class PhoneBindingService implements SystemFlowRuntime {
                 .digitTimeout(10_000)
                 .terminators("#")
                 .regex("^[0-9]+$")
-                .build()
+                .build(),
+            "binding-dtmf-" + call.getCallId()
         );
     }
 
@@ -224,11 +260,19 @@ public class PhoneBindingService implements SystemFlowRuntime {
      * @param call 当前通话
      */
     private void reject(CallInfoBO call) {
-        client.hangup(
-            call.getNodeId(),
-            call.getCtrlId(),
-            call.getGuestChannelUuid(),
-            "CALL_REJECTED"
+        call.putData("bindingCompleted", Boolean.TRUE);
+        call.putData("bindingAccepted", Boolean.FALSE);
+        call.putData("terminal", Boolean.TRUE);
+        persistence.saveOrUpdateSession(call);
+        flowActions.executeFNode(
+            call,
+            FlowActionType.HANGUP_BINDING_CHANNEL,
+            FNodeHangupDTO.builder()
+                .ctrlUuid(call.getCtrlId())
+                .uuid(call.getGuestChannelUuid())
+                .cause("CALL_REJECTED")
+                .build(),
+            "binding-hangup-" + call.getCallId()
         );
     }
 }

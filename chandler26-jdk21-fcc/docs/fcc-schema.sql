@@ -15,13 +15,16 @@ CREATE TABLE IF NOT EXISTS fcc_screen_pop_delivery (
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
 
 CREATE TABLE IF NOT EXISTS fcc_event_inbox (
- event_id CHAR(64) CHARACTER SET ascii COLLATE ascii_bin NOT NULL PRIMARY KEY,
- node_id VARCHAR(128) NOT NULL,
- payload JSON NOT NULL,
- status VARCHAR(16) NOT NULL,
- created_at DATETIME(3) NOT NULL DEFAULT CURRENT_TIMESTAMP(3),
- updated_at DATETIME(3) NOT NULL DEFAULT CURRENT_TIMESTAMP(3) ON UPDATE CURRENT_TIMESTAMP(3),
- KEY idx_inbox_status_time(status,updated_at)
+    event_id       CHAR(64) CHARACTER SET ascii COLLATE ascii_bin NOT NULL,
+    node_id        VARCHAR(128) NOT NULL,
+    payload        JSON NOT NULL,
+    status         VARCHAR(16) NOT NULL,
+    attempt_count  INT UNSIGNED NOT NULL DEFAULT 1,
+    last_error     VARCHAR(128) NULL,
+    created_at     DATETIME(3) NOT NULL DEFAULT CURRENT_TIMESTAMP(3),
+    updated_at     DATETIME(3) NOT NULL DEFAULT CURRENT_TIMESTAMP(3) ON UPDATE CURRENT_TIMESTAMP(3),
+    PRIMARY KEY (event_id),
+    KEY idx_inbox_status_time (status, updated_at)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
 
 -- This new project supports fresh installation only; rebuild the database after baseline changes.
@@ -282,7 +285,6 @@ CREATE TABLE IF NOT EXISTS fcc_call_session (
     ctrl_id             VARCHAR(128) NOT NULL,
     model_type          VARCHAR(64) NOT NULL,
     flow_code           VARCHAR(64) NULL COMMENT '绑定的流程编码(如 FLOW-INBOUND)',
-    route_mode          VARCHAR(32) NULL COMMENT '呼入路由模式(DID_DIRECT, RULE_ENGINE, HTTP_CALLBACK)',
     route_target_type   VARCHAR(32) NULL COMMENT '目标类型(AGENT, GROUP)',
     route_target_id     VARCHAR(64) NULL COMMENT '目标标识(工号/组ID)',
     direction           VARCHAR(16) NOT NULL,
@@ -318,7 +320,6 @@ CREATE TABLE IF NOT EXISTS fcc_call_session (
     KEY idx_call_destination_started (destination_number, started_at),
     KEY idx_call_agent_started (primary_agent_id, started_at),
     KEY idx_call_eval_started (evaluation_score, started_at),
-    KEY idx_cs_route_mode (route_mode),
     KEY idx_cs_agent_work_no (agent_work_no)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci COMMENT='Business call aggregate';
 

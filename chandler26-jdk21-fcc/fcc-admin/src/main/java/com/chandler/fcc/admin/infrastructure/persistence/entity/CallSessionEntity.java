@@ -44,11 +44,6 @@ public class CallSessionEntity extends BaseEntity {
     private String flowCode;
 
     /**
-     * 呼入路由模式 (DID_DIRECT, RULE_ENGINE, HTTP_CALLBACK)
-     */
-    private String routeMode;
-
-    /**
      * 目标类型 (AGENT, GROUP)
      */
     private String routeTargetType;

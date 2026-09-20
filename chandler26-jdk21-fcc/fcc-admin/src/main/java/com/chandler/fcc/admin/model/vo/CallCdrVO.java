@@ -39,9 +39,6 @@ public class CallCdrVO implements Serializable {
     @Schema(description = "关联的通话流程编码", example = "FLOW-INBOUND")
     private String flowCode;
 
-    @Schema(description = "呼入路由模式 (DID_DIRECT, RULE_ENGINE, HTTP_CALLBACK)", example = "HTTP_CALLBACK")
-    private String routeMode;
-
     @Schema(description = "目标类型 (AGENT, GROUP)", example = "AGENT")
     private String routeTargetType;
 

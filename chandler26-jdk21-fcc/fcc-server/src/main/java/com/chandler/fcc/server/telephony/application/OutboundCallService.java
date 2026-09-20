@@ -1,5 +1,6 @@
 package com.chandler.fcc.server.telephony.application;
 
+import com.chandler.fcc.common.dto.command.FNodeBridgeDTO;
 import com.chandler.fcc.common.dto.command.FNodeDialDTO;
 import com.chandler.fcc.common.dto.command.FNodeReadDTMFDTO;
 import com.chandler.fcc.common.dto.command.MediaInfo;
@@ -8,11 +9,14 @@ import com.chandler.fcc.common.enums.CallStageState;
 import com.chandler.fcc.common.enums.DirectionType;
 import com.chandler.fcc.common.enums.FlowActionType;
 import com.chandler.fcc.common.enums.FlowModelType;
+import com.chandler.fcc.common.protocol.ChannelEventState;
+import com.chandler.fcc.common.protocol.FccEventField;
 import com.chandler.fcc.common.util.IdUtil;
 import com.chandler.fcc.server.agent.infrastructure.AgentRuntimeMapper;
 import com.chandler.fcc.server.call.CallSessionManager;
 import com.chandler.fcc.server.command.FccClient;
 import com.chandler.fcc.server.flow.application.SystemFlowRuntime;
+import com.chandler.fcc.server.flow.application.FlowActionExecutionService;
 import com.chandler.fcc.server.infrastructure.nats.FccProperties;
 import com.chandler.fcc.server.infrastructure.persistence.entity.CallLegEntity;
 import com.chandler.fcc.server.infrastructure.persistence.service.CallPersistenceService;
@@ -45,9 +49,6 @@ public class OutboundCallService implements SystemFlowRuntime {
 
     private static final String TEMPLATE_AGENT_FIRST = "AGENT_FIRST";
     private static final String TEMPLATE_NOTIFICATION = "NOTIFICATION";
-    private static final String STATE_READY = "READY";
-    private static final String STATE_BRIDGE = "BRIDGE";
-    private static final String STATE_DESTROY = "DESTROY";
     private static final String DATA_TERMINAL = "terminal";
 
     private static final Set<FlowActionType> AGENT_FIRST_ACTIONS = Set.of(
@@ -72,6 +73,7 @@ public class OutboundCallService implements SystemFlowRuntime {
     private final CallSessionManager sessions;
     private final CallPersistenceService persistence;
     private final FccClient client;
+    private final FlowActionExecutionService flowActions;
     private final FccProperties properties;
     private final ScreenPopService screenPop;
     private final AgentWebSocketService websocket;
@@ -142,11 +144,18 @@ public class OutboundCallService implements SystemFlowRuntime {
         call.putData("guestChannelUuid", call.getGuestChannelUuid());
         call.putData("nodeId", call.getNodeId());
 
-        transactions.executeWithoutResult(status -> {
-            attemptGuard.beforePersist(attemptId);
-            persistence.saveOrUpdateSession(call);
-        });
-        sessions.registerSession(call);
+        flowActions.executeInternal(
+            call,
+            FlowActionType.VALIDATE_NOTIFICATION_AND_ROUTE,
+            () -> {
+                transactions.executeWithoutResult(status -> {
+                    attemptGuard.beforePersist(attemptId);
+                    persistence.saveOrUpdateSession(call);
+                });
+                sessions.registerSession(call);
+                return true;
+            }
+        );
         dial(call, false);
         return Map.of("callId", call.getCallId(), "status", "ACCEPTED");
     }
@@ -163,13 +172,20 @@ public class OutboundCallService implements SystemFlowRuntime {
             return false;
         }
         if ("1".equals(digit)) {
-            call.putData("notificationConfirmed", true);
-            persistence.saveOrUpdateSession(call);
-            client.hangup(
-                call.getNodeId(),
-                call.getCtrlId(),
-                call.getGuestChannelUuid(),
-                "NORMAL_CLEARING"
+            flowActions.executeInternal(
+                call,
+                FlowActionType.PERSIST_CONFIRMATION_AND_HANGUP,
+                () -> {
+                    call.putData("notificationConfirmed", true);
+                    persistence.saveOrUpdateSession(call);
+                    client.hangup(
+                        call.getNodeId(),
+                        call.getCtrlId(),
+                        call.getGuestChannelUuid(),
+                        "NORMAL_CLEARING"
+                    );
+                    return true;
+                }
             );
         }
         return true;
@@ -241,15 +257,25 @@ public class OutboundCallService implements SystemFlowRuntime {
         call.putData("guestChannelUuid", call.getGuestChannelUuid());
         call.putData("nodeId", call.getNodeId());
 
-        transactions.executeWithoutResult(status -> {
-            attemptGuard.beforePersist(taskId);
-            agents.ensurePresence(owner);
-            if (agents.reserve(owner, callId) != 1) {
-                throw new ResponseStatusException(HttpStatus.CONFLICT, "坐席未就绪或已被其他通话占用");
+        flowActions.executeInternal(
+            call,
+            FlowActionType.VALIDATE_ROUTE_AND_RESERVE_AGENT,
+            () -> {
+                transactions.executeWithoutResult(status -> {
+                    attemptGuard.beforePersist(taskId);
+                    agents.ensurePresence(owner);
+                    if (agents.reserve(owner, callId) != 1) {
+                        throw new ResponseStatusException(
+                            HttpStatus.CONFLICT,
+                            "坐席未就绪或已被其他通话占用"
+                        );
+                    }
+                    persistence.saveOrUpdateSession(call);
+                });
+                sessions.registerSession(call);
+                return true;
             }
-            persistence.saveOrUpdateSession(call);
-        });
-        sessions.registerSession(call);
+        );
         dial(call, true);
         screenPop.pushForAgentLeg(call, owner, extension, 30);
         return Map.of(
@@ -276,8 +302,11 @@ public class OutboundCallService implements SystemFlowRuntime {
         }
 
         synchronized (call) {
-            String state = params.path("state").asText();
-            String channelUuid = params.path("uuid").asText();
+            ChannelEventState eventState = ChannelEventState.fromWireValue(
+                params.path(FccEventField.STATE.getWireName()).asText()
+            );
+            String state = eventState.getWireValue();
+            String channelUuid = params.path(FccEventField.CHANNEL_UUID.getWireName()).asText();
             if (call.getData().containsKey(DATA_TERMINAL)) {
                 return true;
             }
@@ -288,22 +317,27 @@ public class OutboundCallService implements SystemFlowRuntime {
                 return true;
             }
 
-            persistLeg(call, channelUuid, state, params.path("cause").asText(null));
-            if (TEMPLATE_NOTIFICATION.equals(template) && STATE_READY.equals(state)) {
+            persistLeg(
+                call,
+                channelUuid,
+                state,
+                params.path(FccEventField.CAUSE.getWireName()).asText(null)
+            );
+            if (TEMPLATE_NOTIFICATION.equals(template) && eventState == ChannelEventState.READY) {
                 startNotificationPrompt(call);
             } else if (
-                STATE_READY.equals(state) &&
+                eventState == ChannelEventState.READY &&
                 channelUuid.equals(call.getAgentChannelUuid())
             ) {
                 startCustomerLeg(call);
             } else if (
-                STATE_READY.equals(state) &&
+                eventState == ChannelEventState.READY &&
                 channelUuid.equals(call.getGuestChannelUuid())
             ) {
                 bridgeAgentAndCustomer(call);
-            } else if (STATE_BRIDGE.equals(state)) {
+            } else if (eventState == ChannelEventState.BRIDGE) {
                 markConnected(call);
-            } else if (STATE_DESTROY.equals(state)) {
+            } else if (eventState == ChannelEventState.DESTROY) {
                 finish(call, template, channelUuid, params);
             }
         }
@@ -330,7 +364,11 @@ public class OutboundCallService implements SystemFlowRuntime {
                 .direction("OUTBOUND")
                 .state(state)
                 .hangupCause(cause)
-                .endedAt(STATE_DESTROY.equals(state) ? LocalDateTime.now(ZoneOffset.UTC) : null)
+                .endedAt(
+                    ChannelEventState.DESTROY.getWireValue().equals(state)
+                        ? LocalDateTime.now(ZoneOffset.UTC)
+                        : null
+                )
                 .build()
         );
     }
@@ -346,10 +384,10 @@ public class OutboundCallService implements SystemFlowRuntime {
         }
         call.setStageState(CallStageState.CONNECTED);
         persistence.saveOrUpdateSession(call);
-        CallControlService.requireAccepted(
-            client.readDTMF(
-                call.getNodeId(),
-                FNodeReadDTMFDTO.builder()
+        flowActions.executeFNode(
+            call,
+            FlowActionType.READ_DTMF,
+            FNodeReadDTMFDTO.builder()
                     .ctrlUuid(call.getCtrlId())
                     .uuid(call.getGuestChannelUuid())
                     .media(MediaInfo.builder().type("FILE").data(notificationFile).build())
@@ -361,8 +399,8 @@ public class OutboundCallService implements SystemFlowRuntime {
                     .terminators("#")
                     .regex("^[1]$")
                     .actionAfter("HANGUP")
-                    .build()
-            )
+                    .build(),
+            "notification-dtmf-" + call.getCallId()
         );
     }
 
@@ -392,13 +430,15 @@ public class OutboundCallService implements SystemFlowRuntime {
             return;
         }
         persistence.saveOrUpdateSession(call);
-        CallControlService.requireAccepted(
-            client.channelBridge(
-                call.getNodeId(),
-                call.getCtrlId(),
-                call.getAgentChannelUuid(),
-                call.getGuestChannelUuid()
-            )
+        flowActions.executeFNode(
+            call,
+            FlowActionType.CHANNEL_BRIDGE,
+            FNodeBridgeDTO.builder()
+                .ctrlUuid(call.getCtrlId())
+                .uuid(call.getAgentChannelUuid())
+                .peerUuid(call.getGuestChannelUuid())
+                .build(),
+            "bridge-" + call.getCallId()
         );
     }
 
@@ -408,15 +448,22 @@ public class OutboundCallService implements SystemFlowRuntime {
      * @param call 当前通话
      */
     private void markConnected(CallInfoBO call) {
-        call.setStageState(CallStageState.CONNECTED);
-        persistence.saveOrUpdateSession(call);
-        if (call.getAgentWorkNo() != null) {
-            websocket.pushCallAnswered(
-                call.getAgentWorkNo(),
-                call.getCallId(),
-                Map.of("callId", call.getCallId())
-            );
-        }
+        flowActions.executeInternal(
+            call,
+            FlowActionType.WAIT_FOR_HANGUP,
+            () -> {
+                call.setStageState(CallStageState.CONNECTED);
+                persistence.saveOrUpdateSession(call);
+                if (call.getAgentWorkNo() != null) {
+                    websocket.pushCallAnswered(
+                        call.getAgentWorkNo(),
+                        call.getCallId(),
+                        Map.of("callId", call.getCallId())
+                    );
+                }
+                return true;
+            }
+        );
     }
 
     /**
@@ -433,12 +480,41 @@ public class OutboundCallService implements SystemFlowRuntime {
         String destroyedChannelUuid,
         JsonNode params
     ) {
+        FlowActionType action = TEMPLATE_AGENT_FIRST.equals(template)
+            ? FlowActionType.FINALIZE_OUTBOUND
+            : FlowActionType.FINALIZE_NOTIFICATION;
+        flowActions.executeInternal(
+            call,
+            action,
+            () -> {
+                finishInternal(call, template, destroyedChannelUuid, params);
+                return call.getHangupCause();
+            }
+        );
+    }
+
+    /**
+     * 保存外呼终态、释放坐席并挂断存量对端话道。
+     *
+     * @param call 当前通话
+     * @param template 固定模板代码
+     * @param destroyedChannelUuid 已结束话道标识
+     * @param params 标准化通道事件
+     */
+    private void finishInternal(
+        CallInfoBO call,
+        String template,
+        String destroyedChannelUuid,
+        JsonNode params
+    ) {
         CallStageState previousStage = call.getStageState();
         call.putData(DATA_TERMINAL, true);
-        call.setHangupCause(params.path("cause").asText("NORMAL_CLEARING"));
+        call.setHangupCause(
+            params.path(FccEventField.CAUSE.getWireName()).asText("NORMAL_CLEARING")
+        );
         call.setStageState(CallStageState.NORMAL_END);
-        call.setDuration(params.path("duration").asInt());
-        call.setBillsec(params.path("billsec").asInt());
+        call.setDuration(params.path(FccEventField.DURATION.getWireName()).asInt());
+        call.setBillsec(params.path(FccEventField.BILL_SECONDS.getWireName()).asInt());
 
         try {
             transactions.executeWithoutResult(status -> {
@@ -501,6 +577,11 @@ public class OutboundCallService implements SystemFlowRuntime {
                     .build()
             )
             .build();
-        CallControlService.requireAccepted(client.dial(call.getNodeId(), command));
+        flowActions.executeFNode(
+            call,
+            agentSide ? FlowActionType.DIAL_AGENT : FlowActionType.DIAL_CUSTOMER,
+            command,
+            "dial-" + channelUuid
+        );
     }
 }

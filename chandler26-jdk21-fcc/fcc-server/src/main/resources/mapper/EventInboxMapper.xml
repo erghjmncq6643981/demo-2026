@@ -1,7 +1,45 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
 <mapper namespace="com.chandler.fcc.server.event.infrastructure.EventInboxMapper">
- <insert id="receive">INSERT IGNORE INTO fcc_event_inbox(event_id,node_id,payload,status) VALUES(#{id},#{node},#{payload},'PROCESSING')</insert>
- <select id="status" resultType="string">SELECT status FROM fcc_event_inbox WHERE event_id=#{id}</select>
- <update id="finish">UPDATE fcc_event_inbox SET status=#{status},updated_at=UTC_TIMESTAMP(3) WHERE event_id=#{id}</update>
+  <insert id="receive">
+    INSERT IGNORE INTO fcc_event_inbox(
+      event_id,
+      node_id,
+      payload,
+      status,
+      attempt_count
+    )
+    VALUES (
+      #{id},
+      #{node},
+      #{payload},
+      'PROCESSING',
+      1
+    )
+  </insert>
+
+  <select id="status" resultType="string">
+    SELECT status
+    FROM fcc_event_inbox
+    WHERE event_id = #{id}
+  </select>
+
+  <update id="claimRetry">
+    UPDATE fcc_event_inbox
+    SET status = 'PROCESSING',
+        attempt_count = attempt_count + 1,
+        last_error = NULL,
+        updated_at = UTC_TIMESTAMP(3)
+    WHERE event_id = #{id}
+      AND status = 'FAILED'
+      AND attempt_count &lt; #{maxAttempts}
+  </update>
+
+  <update id="finish">
+    UPDATE fcc_event_inbox
+    SET status = #{status},
+        last_error = #{error},
+        updated_at = UTC_TIMESTAMP(3)
+    WHERE event_id = #{id}
+  </update>
 </mapper>

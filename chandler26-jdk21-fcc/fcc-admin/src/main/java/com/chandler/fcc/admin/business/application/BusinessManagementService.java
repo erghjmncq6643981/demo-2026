@@ -22,7 +22,7 @@ public class BusinessManagementService {
     private final FccBusinessClient client;
 
     /**
-     * 分页查询当前租户客户摘要。
+     * 分页查询当前管理员有权查看的客户摘要。
      *
      * @param page 页码
      * @param owner 负责坐席筛选

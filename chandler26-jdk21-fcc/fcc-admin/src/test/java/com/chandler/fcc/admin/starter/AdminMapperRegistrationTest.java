@@ -5,7 +5,7 @@ import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
 
 import com.chandler.fcc.admin.FccAdminApplication;
-import com.chandler.fcc.admin.flow.FlowStudioMapper;
+import com.chandler.fcc.admin.flow.infrastructure.FlowStudioMapper;
 import com.chandler.fcc.admin.infrastructure.persistence.mapper.FlowDefinitionMapper;
 import javax.sql.DataSource;
 import org.apache.ibatis.session.Configuration;

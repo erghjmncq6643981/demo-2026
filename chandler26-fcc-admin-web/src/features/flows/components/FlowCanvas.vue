@@ -1,14 +1,29 @@
 <script setup lang="ts">
-import { stageLabels, executionLabels, type StagedFlow, type StageExecution } from '../model/stagedFlow';
+import {
+  stageLabels,
+  executionLabels,
+  type FlowModelNode,
+  type StagedFlow,
+  type StageExecution,
+} from "../model/stagedFlow";
 const props = withDefaults(
-  defineProps<{ flow: StagedFlow; executions?: StageExecution[]; selected?: string; readonly?: boolean }>(),
-  { executions: () => [] },
+  defineProps<{
+    flow: StagedFlow;
+    nodes?: FlowModelNode[];
+    executions?: StageExecution[];
+    selected?: string;
+    readonly?: boolean;
+  }>(),
+  { nodes: () => [], executions: () => [] },
 );
 defineEmits<{ select: [stage: string] }>();
 const latest = (stage: string) => {
   const rows = props.executions.filter((item) => item.stepKey === stage);
   return rows[rows.length - 1];
 };
+const node = (stage: string) =>
+  props.nodes.find((item) => item.key === stage) ||
+  props.flow.nodes?.find((item) => item.key === stage);
 </script>
 
 <template>
@@ -18,7 +33,10 @@ const latest = (stage: string) => {
       <button
         type="button"
         class="stage"
-        :class="[latest(stage)?.status?.toLowerCase(), { selected: selected === stage }]"
+        :class="[
+          latest(stage)?.status?.toLowerCase(),
+          { selected: selected === stage },
+        ]"
         @click="$emit('select', stage)"
       >
         <div class="stage-head">
@@ -28,38 +46,55 @@ const latest = (stage: string) => {
             latest(stage)
               ? executionLabels[latest(stage)!.status] || latest(stage)!.status
               : readonly
-                ? '未经过'
-                : '固定动作'
+                ? "未经过"
+                : "固定动作"
           }}</span>
         </div>
         <p class="stage-key">{{ stage }}</p>
+        <div v-if="node(stage)" class="action-contract">
+          <strong>{{ node(stage)!.actionLabel }}</strong>
+          <span>{{ node(stage)!.action }}</span>
+          <span
+            >{{ node(stage)!.executorTypeLabel }} ·
+            {{ node(stage)!.operation }}</span
+          >
+        </div>
         <p v-if="stage === 'ENTRY'">DID 匹配已发布版本 → 固定本次通话流程</p>
         <p v-if="stage === 'MENU'">
           {{
             flow.menu?.enabled
-              ? `${flow.menu.prompt || '请选择提示音'} · 等待 ${flow.menu.timeoutSeconds} 秒`
-              : '菜单关闭 · false 分支直达路由'
+              ? `${flow.menu.prompt || "请选择提示音"} · 等待 ${flow.menu.timeoutSeconds} 秒`
+              : "菜单关闭 · false 分支直达路由"
           }}
         </p>
         <div v-if="stage === 'BRANCH'" class="branches">
           <span v-for="branch in flow.branches" :key="branch.digit"
-            >if 按 {{ branch.digit }} → {{ branch.targetType === 'AGENT' ? '坐席' : '技能组' }}
-            {{ branch.target || '未配置' }}</span
+            >if 按 {{ branch.digit }} →
+            {{ branch.targetType === "AGENT" ? "坐席" : "技能组" }}
+            {{ branch.target || "未配置" }}</span
           >
-          <span>else → {{ flow.defaultRoute?.target || '未配置默认目标' }}</span>
+          <span
+            >else → {{ flow.defaultRoute?.target || "未配置默认目标" }}</span
+          >
         </div>
         <p v-if="stage === 'ROUTE'">
-          {{ flow.defaultRoute?.targetType === 'GROUP' ? '技能组' : '坐席' }}
-          {{ flow.defaultRoute?.target || '按选中分支分配' }} · 最长
+          {{ flow.defaultRoute?.targetType === "GROUP" ? "技能组" : "坐席" }}
+          {{ flow.defaultRoute?.target || "按选中分支分配" }} · 最长
           {{ flow.defaultRoute?.queueSeconds || 120 }} 秒
         </p>
         <p v-if="stage === 'BRIDGE'">等待真实桥接事件后进入通话阶段</p>
         <p v-if="stage === 'END'">
-          {{ flow.timeoutAction === 'HANGUP' ? '挂机结束' : '未接通时记录漏话回拨待办' }}
+          {{
+            flow.timeoutAction === "HANGUP"
+              ? "挂机结束"
+              : "未接通时记录漏话回拨待办"
+          }}
         </p>
         <p v-if="latest(stage)" class="execution">
           第 {{ latest(stage)!.attemptNo }} 次 · {{ latest(stage)!.startedAt }}
-          <span v-if="latest(stage)!.durationMs != null">· {{ latest(stage)!.durationMs }} ms</span>
+          <span v-if="latest(stage)!.durationMs != null"
+            >· {{ latest(stage)!.durationMs }} ms</span
+          >
         </p>
       </button>
     </template>
@@ -120,6 +155,22 @@ const latest = (stage: string) => {
 .stage-key {
   color: #94a0af;
   font-family: monospace;
+}
+.action-contract {
+  display: grid;
+  gap: 4px;
+  margin-top: 10px;
+  padding: 9px 10px;
+  border-left: 3px solid #5d75a8;
+  background: #f5f7fa;
+  font-size: 11px;
+}
+.action-contract strong {
+  color: #344257;
+}
+.action-contract span {
+  color: #6b7788;
+  overflow-wrap: anywhere;
 }
 .connector {
   color: #9ba9bb;

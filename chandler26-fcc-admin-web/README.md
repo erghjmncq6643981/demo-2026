@@ -25,7 +25,7 @@ This frontend does not call NATS, ESL, or FreeSWITCH directly.
 - Call records, aggregate statistics, call details, recordings, and callback tasks.
 - Agent accounts, endpoint bindings, groups, membership, and organization reporting.
 - Extension management and IVR binding.
-- Flow list, version history, draft save and publish. The simulation endpoint explicitly reports that its engine is unavailable.
+- Paginated flow and version summaries, on-demand definitions, fixed-stage canvas editing, draft save, and publication.
 - Runtime/operations overview and client/resource management surfaces.
 
 The source of truth is the `/api/admin` contract implemented by `chandler26-jdk21-fcc/fcc-admin`. Large call/flow payloads should be loaded from detail APIs rather than copied into list responses.

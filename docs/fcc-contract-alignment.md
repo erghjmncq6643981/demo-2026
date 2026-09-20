@@ -12,15 +12,14 @@
 | A04 | callId 必填、认证主体归属校验、明确节点；不取全局最近会话 |
 | A05 | REST 携带令牌，WS 握手/收发在线核验管理端身份；URL 工号不能用于认证 |
 | A06 | 本人专属 SIP 配置接口、禁止缓存、仅内存使用、AES-GCM 密文，不再使用构建密码 |
-| F01/F04 | 保存/发布/编译统一验证 DID_DIRECT + didDirectConfig.workNo；拒绝未实现能力、agentId 和未知字段 |
+| F01/F04 | 保存、发布和运行加载统一验证固定阶段 IVR；拒绝旧 DID_DIRECT、未实现能力和未知字段 |
 | F02/F03 | 提交后通知、服务间鉴权、编译失败返回失败并保留旧节点；检查异步通知响应 |
-| F06 | 仿真不可用字段按 null 建模，入口保持禁用 |
+| F05/F06 | 流程/版本列表均为分页摘要，完整定义按需加载；旧仿真接口已移除，通话过程只展示持久执行事实 |
 
-证据入口：[控制用例](../chandler26-jdk21-fcc/fcc-server/src/main/java/com/chandler/fcc/server/telephony/application/CallControlService.java)、[身份验证](../chandler26-jdk21-fcc/fcc-server/src/main/java/com/chandler/fcc/server/telephony/application/AgentIdentityService.java)、[SIP 配置](../chandler26-jdk21-fcc/fcc-admin/src/main/java/com/chandler/fcc/admin/service/AgentSipConfigService.java)、[共享定义校验](../chandler26-jdk21-fcc/fcc-common/src/main/java/com/chandler/fcc/common/protocol/FlowDefinitionValidator.java)、[发布服务](../chandler26-jdk21-fcc/fcc-admin/src/main/java/com/chandler/fcc/admin/service/FlowDefinitionService.java)。
+证据入口：[控制用例](../chandler26-jdk21-fcc/fcc-server/src/main/java/com/chandler/fcc/server/telephony/application/CallControlService.java)、[身份验证](../chandler26-jdk21-fcc/fcc-server/src/main/java/com/chandler/fcc/server/telephony/application/AgentIdentityService.java)、[SIP 配置](../chandler26-jdk21-fcc/fcc-admin/src/main/java/com/chandler/fcc/admin/service/AgentSipConfigService.java)、[共享定义校验](../chandler26-jdk21-fcc/fcc-common/src/main/java/com/chandler/fcc/common/protocol/FlowDefinitionValidator.java)、[Flow Studio 服务](../chandler26-jdk21-fcc/fcc-admin/src/main/java/com/chandler/fcc/admin/flow/application/FlowStudioService.java)、[动作执行入口](../chandler26-jdk21-fcc/fcc-server/src/main/java/com/chandler/fcc/server/flow/application/FlowActionExecutionService.java)。
 
 ## 尚未闭环
 
-- F05：流程列表仍逐流程查询全部版本并带 definitionJson；需要列表摘要、版本摘要、单版本详情分离，消除 N+1。
 - 发布通知仍是 best-effort；没有持久 Outbox、重试队列、每实例激活看板或运行通话版本固定证明。
 - 保持媒体完成态、转接后 Leg/Bridge 生命周期以及重启后的恢复需真实联调；ACCEPTED 是请求已受理。
 - CDR 方向/状态仍需进一步统一：坐席类型缺少 INTERNAL，管理端缺失方向默认 INBOUND、未知状态归 MISSED。不能把这些视为已清零。
@@ -33,4 +32,4 @@
 
 坐席 outbound/hangup/hold/dtmf/supervise/transfer 与 Java 路径对应；流程版本和草稿字段对应。DTMF 已统一从控制面发送，仍需验证目标话道实际收号。录音规范为 Event.Recording、category=record，Sidecar 保留规范 FNode 方法。
 
-Java 编译、15 个定向测试、坐席端 10 个测试及管理端 4 个测试通过；全量 Java 测试因本地 NATS 不可连接失败。没有全量接口无差异或端到端通过结论。
+JDK 21 编译、Flow/Action/Event Inbox 等 20 个定向测试、坐席端 10 个既有测试及管理端 4 个治理测试通过；全量 Java 测试因本地 NATS 不可连接失败。没有全量接口无差异或端到端通过结论。

@@ -3,6 +3,7 @@ package com.chandler.fcc.server.flow.application;
 import com.chandler.fcc.common.entity.CallInfoBO;
 import com.chandler.fcc.common.enums.CallStageState;
 import com.chandler.fcc.common.protocol.StagedFlowDefinition;
+import com.chandler.fcc.common.protocol.SystemFlowModels;
 import com.chandler.fcc.common.util.IdUtil;
 import com.chandler.fcc.server.flow.infrastructure.FlowExecutionMapper;
 import com.fasterxml.jackson.core.JsonProcessingException;
@@ -35,7 +36,7 @@ public class FlowExecutionRecorder {
     @Transactional(rollbackFor = Exception.class)
     public void record(CallInfoBO call) {
         String template = call.getDataStr("runtimeTemplate", "");
-        if (!Set.of("INBOUND", "AGENT_FIRST", "NOTIFICATION").contains(template)) return;
+        if (!Set.of("INBOUND", "AGENT_FIRST", "NOTIFICATION", "PHONE_BINDING").contains(template)) return;
         try {
             var existing = mapper.lock(call.getCallId());
             Map<String, Object> row = new HashMap<>();
@@ -79,9 +80,11 @@ public class FlowExecutionRecorder {
             var context = json.readTree(existing.get("context").toString());
             if (token.equals(context.path("executionToken").asText())) return;
             row.put("step", step);
+            row.put("action", SystemFlowModels.action(template, step).name());
             row.put("token", token);
             row.put("id", IdUtil.nextId());
             row.put("event", call.getDataStr("flowEventId", null));
+            row.put("command", call.getDataStr("flowCommandId", null));
             row.put("status", "END".equals(step) ? "SUCCEEDED" : "WAITING");
             String previous = String.valueOf(existing.get("step"));
             row.put(
@@ -120,6 +123,10 @@ public class FlowExecutionRecorder {
      */
     private String stage(CallInfoBO call, String template) {
         if (call.getData().containsKey("terminal")) return "END";
+        if ("PHONE_BINDING".equals(template)) {
+            if (call.getData().containsKey("bindingCompleted")) return "VERIFY_BINDING";
+            return call.getData().containsKey("bindingPromptSent") ? "COLLECT_CODE" : "ENTRY";
+        }
         if ("NOTIFICATION".equals(template)) {
             if (Boolean.TRUE.equals(call.getData().get("notificationConfirmed"))) return "CONFIRM";
             return call.getData().containsKey("notificationStarted") ? "NOTIFY" : "DIAL_CUSTOMER";

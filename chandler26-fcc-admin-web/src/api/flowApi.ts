@@ -1,6 +1,8 @@
-import apiClient from './apiClient';
+import apiClient from "./apiClient";
+import type { PageResult } from "../shared/api/page";
 
 export interface FlowVersionVO {
+  id: string;
   version: string;
   versionNo: number;
   publishStatus: string;
@@ -16,13 +18,11 @@ export interface FlowDefinitionVO {
   flowName: string;
   modelType: string;
   status: string;
-  currentVersion: string;
-  versions: FlowVersionVO[];
+  currentVersion?: string;
+  system: boolean;
 }
 
 export interface FlowSaveDraftReq {
-  version?: string;
-  routeMode?: string;
   definitionJson: string;
 }
 
@@ -31,40 +31,109 @@ export interface FlowPublishReq {
   remark?: string;
 }
 
-export interface FlowSimulateReq {
-  flowKey: string;
-  caller?: string;
-  did?: string;
-  dtmf?: string;
-  routeMode?: string;
+export interface FlowActionVO {
+  code: string;
+  label: string;
+  executorType: string;
+  executorTypeLabel: string;
+  operation: string;
 }
 
-export interface FlowSimulateRespVO {
-  success: boolean;
-  simulationId: string | null;
-  decisionResult: string;
-  targetAgentWorkNo: string | null;
-  targetAgentName: string | null;
-  traces: any[];
+export interface SystemFlowModelVO {
+  template: string;
+  definition: {
+    nodes?: Array<{
+      key: string;
+      label: string;
+      action: string;
+      actionLabel?: string;
+      executorType?: string;
+      executorTypeLabel?: string;
+      operation?: string;
+    }>;
+  };
+}
+
+export interface FlowPublishResp {
+  version: string;
+  publishStatus: string;
+  runtimeActivationStatus: string;
+}
+
+export interface FlowExecutionResp {
+  instance: {
+    id?: string;
+    callId?: string;
+    versionId?: string;
+    status?: string;
+    currentStep?: string;
+    snapshot?: string;
+    startedAt?: string;
+    endedAt?: string;
+  };
+  steps: Array<{
+    id: string;
+    stepKey: string;
+    actionType: string;
+    attemptNo: number;
+    status: string;
+    commandId?: string;
+    eventId?: string;
+    input?: string;
+    output?: string;
+    errorCode?: string;
+    startedAt: string;
+    endedAt?: string;
+    durationMs?: number;
+  }>;
+  nextCursor: string;
 }
 
 export const flowApi = {
-  create(flowKey: string, flowName: string): Promise<string> {
-    return apiClient.post('/flow-studio', { flowKey, flowName });
+  create(flowKey: string, flowName: string): Promise<FlowDefinitionVO> {
+    return apiClient.post("/flow-studio/flows", { flowKey, flowName });
   },
-  list(): Promise<FlowDefinitionVO[]> {
-    return apiClient.get('/flows');
+  list(params: {
+    pageNum: number;
+    pageSize: number;
+  }): Promise<PageResult<FlowDefinitionVO>> {
+    return apiClient.get("/flow-studio/flows", { params });
   },
-  getVersions(flowKey: string): Promise<FlowVersionVO[]> {
-    return apiClient.get(`/flows/${flowKey}/versions`);
+  getVersions(
+    flowKey: string,
+    params: { pageNum: number; pageSize: number },
+  ): Promise<PageResult<FlowVersionVO>> {
+    return apiClient.get(
+      `/flow-studio/flows/${encodeURIComponent(flowKey)}/versions`,
+      { params },
+    );
   },
-  saveDraft(flowKey: string, data: FlowSaveDraftReq): Promise<string> {
-    return apiClient.post(`/flows/${flowKey}/draft`, data);
+  getVersion(flowKey: string, versionNo: number): Promise<FlowVersionVO> {
+    return apiClient.get(
+      `/flow-studio/flows/${encodeURIComponent(flowKey)}/versions/${versionNo}`,
+    );
   },
-  publish(flowKey: string, data: FlowPublishReq): Promise<string> {
-    return apiClient.post(`/flows/${flowKey}/publish`, data);
+  saveDraft(flowKey: string, data: FlowSaveDraftReq): Promise<FlowVersionVO> {
+    return apiClient.put(
+      `/flow-studio/flows/${encodeURIComponent(flowKey)}/draft`,
+      data,
+    );
   },
-  simulate(data: FlowSimulateReq): Promise<FlowSimulateRespVO> {
-    return apiClient.post('/flows/simulate', data);
+  publish(flowKey: string, data: FlowPublishReq): Promise<FlowPublishResp> {
+    return apiClient.post(
+      `/flow-studio/flows/${encodeURIComponent(flowKey)}/publish`,
+      data,
+    );
+  },
+  actions(): Promise<FlowActionVO[]> {
+    return apiClient.get("/flow-studio/actions");
+  },
+  model(template: string): Promise<SystemFlowModelVO> {
+    return apiClient.get(`/flow-studio/models/${encodeURIComponent(template)}`);
+  },
+  execution(callId: string, after: string): Promise<FlowExecutionResp> {
+    return apiClient.get(`/flow-studio/calls/${encodeURIComponent(callId)}`, {
+      params: { after },
+    });
   },
 };

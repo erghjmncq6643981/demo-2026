@@ -1,12 +1,12 @@
 <script setup lang="ts">
-import { useCdrReport } from '../features/cdr/composables/useCdrReport';
-import CallExecutionPanel from '../features/flows/components/CallExecutionPanel.vue';
+import { useCdrReport } from "../features/cdr/composables/useCdrReport";
+import CallExecutionPanel from "../features/flows/components/CallExecutionPanel.vue";
 const props = withDefaults(
   defineProps<{
-    initialTab?: 'records' | 'callback';
+    initialTab?: "records" | "callback";
   }>(),
   {
-    initialTab: 'records',
+    initialTab: "records",
   },
 );
 
@@ -77,10 +77,15 @@ const {
         </div>
         <div>
           <div class="text-3xl font-black text-slate-900 tracking-tight">
-            {{ totalCallsCount }} <span class="text-sm font-medium text-slate-400">通</span>
+            {{ totalCallsCount }}
+            <span class="text-sm font-medium text-slate-400">通</span>
           </div>
-          <div class="text-xs text-slate-500 mt-1 flex items-center gap-2 font-semibold">
-            <span class="text-emerald-600 font-extrabold">{{ answerRate }} 接通率</span>
+          <div
+            class="text-xs text-slate-500 mt-1 flex items-center gap-2 font-semibold"
+          >
+            <span class="text-emerald-600 font-extrabold"
+              >{{ answerRate }} 接通率</span
+            >
             <span class="text-slate-300">•</span>
             <span>成功 {{ answeredCallsCount }}通</span>
           </div>
@@ -101,16 +106,24 @@ const {
         </div>
         <div>
           <div class="text-3xl font-black text-rose-600 tracking-tight">
-            {{ callbackRecords.filter((c) => c.status === 'PENDING').length }}
+            {{ callbackRecords.filter((c) => c.status === "PENDING").length }}
             <span class="text-sm font-medium text-slate-400">单待回访</span>
           </div>
-          <div class="text-xs text-slate-500 mt-1 flex items-center gap-2 font-semibold">
+          <div
+            class="text-xs text-slate-500 mt-1 flex items-center gap-2 font-semibold"
+          >
             <span class="text-indigo-600 font-extrabold"
-              >{{ callbackRecords.filter((c) => c.status === 'ASSIGNED').length }} 单已派单</span
+              >{{
+                callbackRecords.filter((c) => c.status === "ASSIGNED").length
+              }}
+              单已派单</span
             >
             <span class="text-slate-300">•</span>
             <span class="text-emerald-600 font-extrabold"
-              >{{ callbackRecords.filter((c) => c.status === 'CALLED').length }} 单已完成</span
+              >{{
+                callbackRecords.filter((c) => c.status === "CALLED").length
+              }}
+              单已完成</span
             >
           </div>
         </div>
@@ -132,7 +145,9 @@ const {
           <div class="text-3xl font-black text-slate-900 tracking-tight">
             {{ formatDurationDisplay(totalTalkDurationSec) }}
           </div>
-          <div class="text-xs text-slate-500 mt-1 flex items-center gap-2 font-semibold">
+          <div
+            class="text-xs text-slate-500 mt-1 flex items-center gap-2 font-semibold"
+          >
             <span>呼入 {{ formatDurationDisplay(inboundTalkSec) }}</span>
             <span class="text-slate-300">•</span>
             <span>呼出 {{ formatDurationDisplay(outboundTalkSec) }}</span>
@@ -146,7 +161,9 @@ const {
       class="bg-white rounded-3xl border border-slate-100 shadow-card p-6 flex flex-col flex-1 min-h-[560px]"
     >
       <!-- 顶栏：两个核心 Tab 切换器 + 统计日期与导出 -->
-      <div class="flex items-center justify-between pb-4 border-b border-slate-100 mb-4 shrink-0">
+      <div
+        class="flex items-center justify-between pb-4 border-b border-slate-100 mb-4 shrink-0"
+      >
         <!-- 核心 Tab 切换栏 -->
         <div class="flex items-center gap-8">
           <button
@@ -162,7 +179,9 @@ const {
             <span
               class="px-2.5 py-0.5 rounded-full text-xs font-bold font-mono"
               :class="
-                activeSubTab === 'records' ? 'bg-brand-50 text-brand-600' : 'bg-slate-100 text-slate-500'
+                activeSubTab === 'records'
+                  ? 'bg-brand-50 text-brand-600'
+                  : 'bg-slate-100 text-slate-500'
               "
             >
               {{ callRecords.length }}
@@ -179,8 +198,13 @@ const {
             "
           >
             <span>↩️ 未接待回拨</span>
-            <span class="px-2.5 py-0.5 rounded-full bg-rose-50 text-rose-600 font-black text-xs font-mono">
-              {{ callbackRecords.filter((c) => c.status === 'PENDING').length }} 待办
+            <span
+              class="px-2.5 py-0.5 rounded-full bg-rose-50 text-rose-600 font-black text-xs font-mono"
+            >
+              {{
+                callbackRecords.filter((c) => c.status === "PENDING").length
+              }}
+              待办
             </span>
           </button>
         </div>
@@ -199,20 +223,25 @@ const {
             class="px-4 py-1.5 bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold rounded-full transition-all cursor-pointer text-xs disabled:opacity-60 disabled:cursor-not-allowed"
             title="按当前筛选条件导出全部匹配的通话记录 (CSV)"
           >
-            {{ exporting ? '导出中…' : '导出数据' }}
+            {{ exporting ? "导出中…" : "导出数据" }}
           </button>
         </div>
       </div>
 
       <!-- ==================== TAB 1: 通话记录内容区 ==================== -->
-      <div v-if="activeSubTab === 'records'" class="flex-1 flex flex-col overflow-hidden">
+      <div
+        v-if="activeSubTab === 'records'"
+        class="flex-1 flex flex-col overflow-hidden"
+      >
         <!-- 🔍 通话记录过滤条件 (严格按要求：坐席姓名、坐席工号、号码、方向、通话ID、通话时间) -->
         <div
           class="flex flex-wrap items-end gap-3 text-sm mb-4 bg-slate-50/70 p-3.5 rounded-2xl border border-slate-100 shrink-0"
         >
           <!-- 1. 坐席姓名 -->
           <div class="w-32">
-            <label class="block text-xs font-extrabold text-slate-700 mb-1.5">坐席姓名</label>
+            <label class="block text-xs font-extrabold text-slate-700 mb-1.5"
+              >坐席姓名</label
+            >
             <input
               v-model="filterAgentName"
               type="text"
@@ -223,7 +252,9 @@ const {
 
           <!-- 2. 坐席工号 -->
           <div class="w-28">
-            <label class="block text-xs font-extrabold text-slate-700 mb-1.5">坐席工号</label>
+            <label class="block text-xs font-extrabold text-slate-700 mb-1.5"
+              >坐席工号</label
+            >
             <input
               v-model="filterAgentWorkNo"
               type="text"
@@ -234,7 +265,9 @@ const {
 
           <!-- 3. 号码 -->
           <div class="w-36">
-            <label class="block text-xs font-extrabold text-slate-700 mb-1.5">号码 (主叫/被叫)</label>
+            <label class="block text-xs font-extrabold text-slate-700 mb-1.5"
+              >号码 (主叫/被叫)</label
+            >
             <input
               v-model="filterPhone"
               type="text"
@@ -245,7 +278,9 @@ const {
 
           <!-- 4. 方向 -->
           <div class="w-28">
-            <label class="block text-xs font-extrabold text-slate-700 mb-1.5">通话方向</label>
+            <label class="block text-xs font-extrabold text-slate-700 mb-1.5"
+              >通话方向</label
+            >
             <select
               v-model="filterDirection"
               class="w-full bg-white border border-slate-200 rounded-xl px-3 py-2 text-slate-700 text-xs focus:outline-none focus:border-[#1677ff] focus:ring-1 focus:ring-[#1677ff]/20 font-medium cursor-pointer shadow-2xs"
@@ -259,7 +294,9 @@ const {
 
           <!-- 5. 通话ID -->
           <div class="w-36">
-            <label class="block text-xs font-extrabold text-slate-700 mb-1.5">通话 ID</label>
+            <label class="block text-xs font-extrabold text-slate-700 mb-1.5"
+              >通话 ID</label
+            >
             <input
               v-model="filterCallId"
               type="text"
@@ -270,7 +307,9 @@ const {
 
           <!-- 6. 通话时间 (Element Plus 专业级日期时间范围选择器) -->
           <div class="shrink-0">
-            <label class="block text-xs font-extrabold text-slate-700 mb-1.5">通话时间范围</label>
+            <label class="block text-xs font-extrabold text-slate-700 mb-1.5"
+              >通话时间范围</label
+            >
             <div class="custom-datepicker-wrap">
               <el-date-picker
                 v-model="filterDateRange"
@@ -301,7 +340,12 @@ const {
               @click="handleSearchCall"
               class="px-5 py-2 bg-[#1677FF] hover:bg-blue-600 text-white rounded-xl text-xs font-black shadow-md shadow-blue-500/25 flex items-center gap-1.5 transition-all cursor-pointer"
             >
-              <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <svg
+                class="w-3.5 h-3.5"
+                fill="none"
+                stroke="currentColor"
+                viewBox="0 0 24 24"
+              >
                 <path
                   stroke-linecap="round"
                   stroke-linejoin="round"
@@ -348,13 +392,18 @@ const {
                       数据库已进入真实测试模式，暂无通话话单
                     </p>
                     <p class="text-xs text-slate-400 max-w-sm leading-relaxed">
-                      请使用 PC 客户端或话机发起呼入/呼出通话，通话建立并挂断后，系统将实时生成完整 CDR
-                      话单与录音流水
+                      请使用 PC
+                      客户端或话机发起呼入/呼出通话，通话建立并挂断后，系统将实时生成完整
+                      CDR 话单与录音流水
                     </p>
                   </div>
                 </td>
               </tr>
-              <tr v-for="item in callRecords" :key="item.id" class="hover:bg-slate-50/80 transition-colors">
+              <tr
+                v-for="item in callRecords"
+                :key="item.id"
+                class="hover:bg-slate-50/80 transition-colors"
+              >
                 <!-- 1. 主叫姓名/号码 -->
                 <td class="py-3.5 px-3.5">
                   <div class="flex items-center gap-2.5">
@@ -364,8 +413,14 @@ const {
                       {{ item.callerName.charAt(0) }}
                     </div>
                     <div>
-                      <div class="font-bold text-slate-900 text-sm leading-snug">{{ item.callerName }}</div>
-                      <div class="font-mono text-slate-400 text-xs">{{ item.callerPhone }}</div>
+                      <div
+                        class="font-bold text-slate-900 text-sm leading-snug"
+                      >
+                        {{ item.callerName }}
+                      </div>
+                      <div class="font-mono text-slate-400 text-xs">
+                        {{ item.callerPhone }}
+                      </div>
                     </div>
                   </div>
                 </td>
@@ -407,7 +462,10 @@ const {
                   >
                     <span class="text-sm">↙</span><span>呼入</span>
                   </span>
-                  <span v-else class="text-indigo-600 font-black text-xs flex items-center gap-1">
+                  <span
+                    v-else
+                    class="text-indigo-600 font-black text-xs flex items-center gap-1"
+                  >
                     <span class="text-sm">↔</span><span>内部</span>
                   </span>
                 </td>
@@ -423,7 +481,9 @@ const {
                 </td>
 
                 <!-- 8. 响铃时长 -->
-                <td class="py-3.5 px-2.5 font-mono text-amber-600 font-bold text-xs">
+                <td
+                  class="py-3.5 px-2.5 font-mono text-amber-600 font-bold text-xs"
+                >
                   {{ item.ringDuration }}
                 </td>
 
@@ -443,7 +503,10 @@ const {
                     class="px-2.5 py-1 rounded-xl bg-brand-50 hover:bg-brand-500 text-brand-600 hover:text-white flex items-center gap-1.5 transition-all cursor-pointer text-xs font-mono font-bold shadow-2xs group"
                     title="点击在线试听双轨录音"
                   >
-                    <span class="text-[10px] text-brand-500 group-hover:text-white">▶</span>
+                    <span
+                      class="text-[10px] text-brand-500 group-hover:text-white"
+                      >▶</span
+                    >
                     <span>{{ item.audioDuration }}</span>
                   </button>
                   <span
@@ -476,7 +539,10 @@ const {
                   >
                     坐席忙
                   </span>
-                  <span v-else class="px-2.5 py-1 rounded-full bg-slate-100 text-slate-600 font-bold text-xs">
+                  <span
+                    v-else
+                    class="px-2.5 py-1 rounded-full bg-slate-100 text-slate-600 font-bold text-xs"
+                  >
                     拒接
                   </span>
                 </td>
@@ -501,7 +567,9 @@ const {
         >
           <span class="text-xs text-slate-600 font-medium">
             共 {{ cdrTotal }} 条通话记录数据
-            <span v-if="cdrLoading" class="text-slate-400 font-normal">· 正在查询…</span>
+            <span v-if="cdrLoading" class="text-slate-400 font-normal"
+              >· 正在查询…</span
+            >
           </span>
           <div v-if="cdrTotal > 0">
             <el-pagination
@@ -514,19 +582,26 @@ const {
               background
             />
           </div>
-          <span v-else class="text-slate-400 text-xs font-mono">第 0 / 0 页</span>
+          <span v-else class="text-slate-400 text-xs font-mono"
+            >第 0 / 0 页</span
+          >
         </div>
       </div>
 
       <!-- ==================== TAB 2: 未接待回拨内容区 ==================== -->
-      <div v-else-if="activeSubTab === 'callback'" class="flex-1 flex flex-col overflow-hidden">
+      <div
+        v-else-if="activeSubTab === 'callback'"
+        class="flex-1 flex flex-col overflow-hidden"
+      >
         <!-- 🔍 未接待回拨过滤条件 (严格按照用户第5条指令：客户号码、坐席工号) -->
         <div
           class="flex items-end gap-3 text-sm mb-4 bg-slate-50/70 p-3.5 rounded-2xl border border-slate-100 shrink-0"
         >
           <!-- 1. 客户号码 -->
           <div class="w-64">
-            <label class="block text-xs font-extrabold text-slate-700 mb-1.5">客户号码</label>
+            <label class="block text-xs font-extrabold text-slate-700 mb-1.5"
+              >客户号码</label
+            >
             <input
               v-model="filterCbCustomerPhone"
               type="text"
@@ -537,7 +612,9 @@ const {
 
           <!-- 2. 坐席工号 -->
           <div class="w-48">
-            <label class="block text-xs font-extrabold text-slate-700 mb-1.5">坐席工号</label>
+            <label class="block text-xs font-extrabold text-slate-700 mb-1.5"
+              >坐席工号</label
+            >
             <input
               v-model="filterCbAgentWorkNo"
               type="text"
@@ -558,7 +635,12 @@ const {
               @click="handleSearchCallback"
               class="px-5 py-2 bg-[#1677FF] hover:bg-blue-600 text-white rounded-xl text-xs font-black shadow-md shadow-blue-500/25 flex items-center gap-1.5 transition-all cursor-pointer"
             >
-              <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <svg
+                class="w-3.5 h-3.5"
+                fill="none"
+                stroke="currentColor"
+                viewBox="0 0 24 24"
+              >
                 <path
                   stroke-linecap="round"
                   stroke-linejoin="round"
@@ -618,13 +700,17 @@ const {
                 class="hover:bg-slate-50/80 transition-colors"
               >
                 <!-- 1. 客户号码 -->
-                <td class="py-4 px-3.5 font-mono font-bold text-slate-900 text-sm">
+                <td
+                  class="py-4 px-3.5 font-mono font-bold text-slate-900 text-sm"
+                >
                   {{ item.customerPhone }}
                 </td>
 
                 <!-- 2. 运营商 -->
                 <td class="py-4 px-3">
-                  <span class="px-2.5 py-1 rounded-lg bg-slate-100 text-slate-700 text-xs font-bold">
+                  <span
+                    class="px-2.5 py-1 rounded-lg bg-slate-100 text-slate-700 text-xs font-bold"
+                  >
                     {{ item.carrier }}
                   </span>
                 </td>
@@ -654,7 +740,9 @@ const {
                 </td>
 
                 <!-- 7. 等待耗时 -->
-                <td class="py-4 px-3 font-mono text-amber-600 font-black text-sm">
+                <td
+                  class="py-4 px-3 font-mono text-amber-600 font-black text-sm"
+                >
                   {{ item.waitDuration }}
                 </td>
 
@@ -682,7 +770,9 @@ const {
 
                 <!-- 操作栏：回访调度 -->
                 <td class="py-4 px-4 text-right">
-                  <span class="text-slate-500 text-xs">由坐席工作台领取并安排回拨</span>
+                  <span class="text-slate-500 text-xs"
+                    >由坐席工作台领取并安排回拨</span
+                  >
                 </td>
               </tr>
             </tbody>
@@ -707,7 +797,9 @@ const {
               background
             />
           </div>
-          <span v-else class="text-slate-400 text-xs font-mono">第 0 / 0 页</span>
+          <span v-else class="text-slate-400 text-xs font-mono"
+            >第 0 / 0 页</span
+          >
         </div>
       </div>
     </div>
@@ -726,8 +818,11 @@ const {
         <div>
           <div class="text-sm font-bold text-slate-900 flex items-center gap-2">
             <span>{{ currentAudioInfo?.title }}</span>
-            <span class="text-xs text-slate-400 font-mono">({{ currentAudioInfo?.phone }})</span>
-            <span class="text-xs text-indigo-500 font-mono bg-indigo-50 px-2 py-0.5 rounded font-bold"
+            <span class="text-xs text-slate-400 font-mono"
+              >({{ currentAudioInfo?.phone }})</span
+            >
+            <span
+              class="text-xs text-indigo-500 font-mono bg-indigo-50 px-2 py-0.5 rounded font-bold"
               >电信级高清</span
             >
           </div>
@@ -764,7 +859,9 @@ const {
         class="w-full max-w-4xl max-h-[92vh] bg-white rounded-3xl shadow-2xl border border-slate-100 overflow-hidden flex flex-col p-6 space-y-4"
       >
         <!-- 弹窗顶部标题 -->
-        <div class="flex items-center justify-between pb-3 border-b border-slate-100 shrink-0">
+        <div
+          class="flex items-center justify-between pb-3 border-b border-slate-100 shrink-0"
+        >
           <div class="flex items-center gap-3">
             <div
               class="w-9 h-9 rounded-xl bg-indigo-50 border border-indigo-100 text-[#1677ff] font-bold flex items-center justify-center text-base"
@@ -784,19 +881,24 @@ const {
                       : 'bg-rose-50 text-rose-700 border-rose-200'
                   "
                 >
-                  {{ selectedCdr.status === 'ANSWERED' ? '● 通话已接通' : '● 通话未接起/异常' }}
+                  {{
+                    selectedCdr.status === "ANSWERED"
+                      ? "● 通话已接通"
+                      : "● 通话未接起/异常"
+                  }}
                 </span>
               </div>
               <p class="text-xs text-slate-400 mt-0.5 font-mono">
-                流水号: <strong class="text-slate-700">{{ selectedCdr.id }}</strong>
+                流水号:
+                <strong class="text-slate-700">{{ selectedCdr.id }}</strong>
                 <span class="mx-1.5 text-slate-300">|</span>
                 呼叫方向:
                 <span class="font-bold text-slate-700">{{
-                  selectedCdr.direction === 'OUTBOUND'
-                    ? '外呼'
-                    : selectedCdr.direction === 'INBOUND'
-                      ? '呼入'
-                      : '内线'
+                  selectedCdr.direction === "OUTBOUND"
+                    ? "外呼"
+                    : selectedCdr.direction === "INBOUND"
+                      ? "呼入"
+                      : "内线"
                 }}</span>
                 <span class="mx-1.5 text-slate-300">|</span>
                 引擎: FreeSWITCH
@@ -813,57 +915,74 @@ const {
 
         <!-- 通话关键元数据 Bento 汇总卡片 -->
         <div class="grid grid-cols-4 gap-3 text-xs shrink-0">
-          <div class="p-3 bg-slate-50 rounded-2xl border border-slate-100 space-y-1">
+          <div
+            class="p-3 bg-slate-50 rounded-2xl border border-slate-100 space-y-1"
+          >
             <span class="text-slate-400 text-[11px]">主叫客户</span>
-            <div class="font-bold text-slate-900 truncate">{{ selectedCdr.callerName }}</div>
+            <div class="font-bold text-slate-900 truncate">
+              {{ selectedCdr.callerName }}
+            </div>
             <div class="font-mono text-slate-500 text-[11px]">
               {{ selectedCdr.callerPhone }} ({{ selectedCdr.carrier }})
             </div>
           </div>
 
-          <div class="p-3 bg-slate-50 rounded-2xl border border-slate-100 space-y-1">
+          <div
+            class="p-3 bg-slate-50 rounded-2xl border border-slate-100 space-y-1"
+          >
             <span class="text-slate-400 text-[11px]">服务坐席</span>
-            <div class="font-bold text-slate-900 truncate">{{ selectedCdr.agentName }}</div>
-            <div class="font-mono text-slate-500 text-[11px]">工号: {{ selectedCdr.agentWorkNo }}</div>
+            <div class="font-bold text-slate-900 truncate">
+              {{ selectedCdr.agentName }}
+            </div>
+            <div class="font-mono text-slate-500 text-[11px]">
+              工号: {{ selectedCdr.agentWorkNo }}
+            </div>
           </div>
 
-          <div class="p-3 bg-slate-50 rounded-2xl border border-slate-100 space-y-1">
+          <div
+            class="p-3 bg-slate-50 rounded-2xl border border-slate-100 space-y-1"
+          >
             <span class="text-slate-400 text-[11px]">时延与录音</span>
             <div class="flex items-center gap-1.5 font-bold text-slate-900">
               <span>振铃: {{ selectedCdr.ringDuration }}</span>
             </div>
             <div class="font-mono text-brand-600 font-bold text-[11px]">
-              录音: {{ selectedCdr.audioDuration || '无录音' }}
+              录音: {{ selectedCdr.audioDuration || "无录音" }}
             </div>
           </div>
 
-          <div class="p-3 bg-slate-50 rounded-2xl border border-slate-100 space-y-1">
-            <span class="text-slate-400 text-[11px]">路由策略与评价</span>
-            <div class="font-bold text-indigo-700 truncate">
+          <div
+            class="p-3 bg-slate-50 rounded-2xl border border-slate-100 space-y-1"
+          >
+            <span class="text-slate-400 text-[11px]">执行流程与评价</span>
+            <div
+              class="font-bold text-indigo-700 truncate"
+              :title="selectedCdr.flowCode || selectedCdr.modelType"
+            >
               {{
-                selectedCdr.routeMode === 'DID_DIRECT'
-                  ? 'DID 直达专席'
-                  : selectedCdr.routeMode === 'RULE_ENGINE'
-                    ? '多维规则引擎决策'
-                    : selectedCdr.routeMode === 'HTTP_CALLBACK'
-                      ? '业务接口动态回调'
-                      : '标准流程路由'
+                selectedCdr.flowCode || selectedCdr.modelType || "未记录流程"
               }}
             </div>
             <div class="font-mono text-[11px] text-amber-600 font-bold">
               {{
                 selectedCdr.satisfactionScore
                   ? `客户评价: ${selectedCdr.satisfactionScore} 星 ★★★★★`
-                  : '未评价 / 异常挂断'
+                  : "未评价 / 异常挂断"
               }}
             </div>
           </div>
         </div>
 
-        <CallExecutionPanel v-if="selectedCdr.rawId" class="flex-1 min-h-0" :call-id="selectedCdr.rawId" />
+        <CallExecutionPanel
+          v-if="selectedCdr.rawId"
+          class="flex-1 min-h-0"
+          :call-id="selectedCdr.rawId"
+        />
 
         <!-- 弹窗底部操作栏 -->
-        <div class="pt-3 border-t border-slate-100 flex items-center justify-between shrink-0">
+        <div
+          class="pt-3 border-t border-slate-100 flex items-center justify-between shrink-0"
+        >
           <div class="flex items-center gap-2">
             <button
               v-if="selectedCdr.recordingUrl"
@@ -881,7 +1000,10 @@ const {
               <span>▶️</span>
               <span>试听双轨录音 ({{ selectedCdr.audioDuration }})</span>
             </button>
-            <span v-else-if="selectedCdr.audioDuration" class="text-xs text-slate-400">
+            <span
+              v-else-if="selectedCdr.audioDuration"
+              class="text-xs text-slate-400"
+            >
               该通话未产生录音文件（通话 {{ selectedCdr.audioDuration }}）
             </span>
           </div>
@@ -914,7 +1036,8 @@ const {
   box-shadow: 0 0 0 1.5px #1677ff inset !important;
 }
 :deep(.el-range-input) {
-  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace !important;
+  font-family:
+    ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace !important;
   font-size: 12px !important;
   color: #1e293b !important;
 }

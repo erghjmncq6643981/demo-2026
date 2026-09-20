@@ -34,9 +34,11 @@ public class SystemFlowActionCoverageValidator implements SmartInitializingSingl
                 }
             }
 
-            EnumSet<FlowActionType> missing = EnumSet.copyOf(expected);
+            EnumSet<FlowActionType> missing = EnumSet.noneOf(FlowActionType.class);
+            missing.addAll(expected);
             missing.removeAll(actual);
-            EnumSet<FlowActionType> unexpected = EnumSet.copyOf(actual);
+            EnumSet<FlowActionType> unexpected = EnumSet.noneOf(FlowActionType.class);
+            unexpected.addAll(actual);
             unexpected.removeAll(expected);
             if (!missing.isEmpty() || !unexpected.isEmpty()) {
                 throw new IllegalStateException(

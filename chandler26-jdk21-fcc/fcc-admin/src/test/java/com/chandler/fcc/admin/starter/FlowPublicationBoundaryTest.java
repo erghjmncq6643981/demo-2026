@@ -1,12 +1,14 @@
 package com.chandler.fcc.admin.starter;
 
 import cn.dev33.satoken.stp.StpUtil;
+import com.chandler.fcc.admin.flow.application.FlowStudioService;
+import com.chandler.fcc.admin.flow.controller.req.PublishFlowReq;
+import com.chandler.fcc.admin.flow.infrastructure.FlowStudioMapper;
 import com.chandler.fcc.admin.infrastructure.persistence.mapper.FlowDefinitionMapper;
 import com.chandler.fcc.admin.infrastructure.persistence.mapper.FlowDefinitionVersionMapper;
 import com.chandler.fcc.admin.infrastructure.persistence.entity.FlowDefinitionEntity;
 import com.chandler.fcc.admin.infrastructure.persistence.entity.FlowDefinitionVersionEntity;
-import com.chandler.fcc.admin.service.FlowDefinitionService;
-import com.chandler.fcc.admin.model.dto.FlowPublishReq;
+import com.fasterxml.jackson.databind.ObjectMapper;
 import org.junit.jupiter.api.Test;
 import org.springframework.data.redis.core.StringRedisTemplate;
 import org.springframework.test.util.ReflectionTestUtils;
@@ -17,24 +19,33 @@ import static org.junit.jupiter.api.Assertions.*;
 
 /** 发布通知只能在本地事务提交后产生。 */
 class FlowPublicationBoundaryTest {
+
+    private static final String VALID_IVR = """
+        {"routeMode":"IVR","template":"INBOUND",
+         "menu":{"enabled":false,"prompt":"","timeoutSeconds":10},"branches":[],
+         "defaultRoute":{"targetType":"AGENT","target":"901001","queueSeconds":60},
+         "timeoutAction":"CALLBACK"}
+        """;
+
     /** 提交前不发通知，提交后才发送已发布流程标识。 */
     @Test void notifiesOnlyAfterCommit() {
         var flows = mock(FlowDefinitionMapper.class);
         var versions = mock(FlowDefinitionVersionMapper.class);
         var redis = mock(StringRedisTemplate.class);
-        var service = new FlowDefinitionService(flows, versions, redis);
+        var executions = mock(FlowStudioMapper.class);
+        var service = new FlowStudioService(flows, versions, executions, redis, new ObjectMapper());
         ReflectionTestUtils.setField(service, "fccServerBaseUrl", "");
         ReflectionTestUtils.setField(service, "reloadToken", "");
         when(flows.selectOne(any())).thenReturn(FlowDefinitionEntity.builder().id(1L).flowKey("test-flow").build());
-        when(versions.selectOne(any())).thenReturn(FlowDefinitionVersionEntity.builder().id(2L).flowDefinitionId(1L)
-                .versionNo(1).publishStatus("DRAFT")
-                .definitionJson("{\"routeMode\":\"DID_DIRECT\",\"didDirectConfig\":{\"workNo\":\"test-agent\"}}").build());
-        when(versions.selectList(any())).thenReturn(List.of());
-        var request = new FlowPublishReq();
+        var draft = FlowDefinitionVersionEntity.builder().id(2L).flowDefinitionId(1L)
+            .versionNo(1).publishStatus("DRAFT")
+            .definitionJson(VALID_IVR).build();
+        when(versions.selectList(any())).thenReturn(List.of(draft), List.of());
+        var request = new PublishFlowReq();
         request.setVersion("v1.0.0");
         TransactionSynchronizationManager.initSynchronization();
         try (var authentication = mockStatic(StpUtil.class)) {
-            assertEquals("v1.0.0", service.publishFlow("test-flow", request));
+            assertEquals("v1.0.0", service.publish("test-flow", request).getVersion());
             authentication.verify(() -> StpUtil.checkPermission("flow:write"));
             verifyNoInteractions(redis);
             TransactionSynchronizationManager.getSynchronizations().forEach(sync -> sync.afterCommit());

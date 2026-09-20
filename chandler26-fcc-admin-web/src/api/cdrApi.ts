@@ -1,5 +1,5 @@
-import apiClient from './apiClient';
-import type { PageResult } from '../shared/api/page';
+import apiClient from "./apiClient";
+import type { PageResult } from "../shared/api/page";
 
 export interface CallLegVO {
   id: string;
@@ -18,7 +18,6 @@ export interface CallCdrVO {
   bizId?: string;
   modelType: string;
   flowCode?: string;
-  routeMode?: string;
   routeTargetType?: string;
   routeTargetId?: string;
   direction: string;
@@ -74,13 +73,13 @@ export interface CallCdrQueryReq {
 
 export const cdrApi = {
   list(params?: CallCdrQueryReq): Promise<PageResult<CallCdrVO>> {
-    return apiClient.get('/cdrs', { params });
+    return apiClient.get("/cdrs", { params });
   },
   getDetail(id: string): Promise<CallCdrVO> {
     return apiClient.get(`/cdrs/${id}`);
   },
   /** 今日话单 KPI 聚合指标 (由数据库聚合，与列表分页无关) */
   stats(): Promise<CdrStatsVO> {
-    return apiClient.get('/cdrs/stats');
+    return apiClient.get("/cdrs/stats");
   },
 };

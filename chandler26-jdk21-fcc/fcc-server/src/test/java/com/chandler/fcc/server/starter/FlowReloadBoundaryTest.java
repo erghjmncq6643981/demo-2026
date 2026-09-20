@@ -12,6 +12,14 @@ import static org.mockito.ArgumentMatchers.*;
 
 /** 运行端编译失败必须返回失败并保留此前有效定义。 */
 class FlowReloadBoundaryTest {
+
+    private static final String VALID_IVR = """
+        {"routeMode":"IVR","template":"INBOUND",
+         "menu":{"enabled":false,"prompt":"","timeoutSeconds":10},"branches":[],
+         "defaultRoute":{"targetType":"AGENT","target":"901001","queueSeconds":60},
+         "timeoutAction":"CALLBACK"}
+        """;
+
     /** 有效定义生效后，坏定义不能清空或替换运行元数据。 */
     @Test void invalidReloadKeepsPreviousDefinition() {
         var mapper = mock(FlowConfigMapper.class);
@@ -20,7 +28,7 @@ class FlowReloadBoundaryTest {
             "flowKey", "FLOW-INBOUND",
             "modelType", "INBOUND",
             "flowName", "test-flow",
-            "definitionJson", "{\"routeMode\":\"DID_DIRECT\",\"didDirectConfig\":{\"workNo\":\"test-agent\"}}"
+            "definitionJson", VALID_IVR
         );
         Map<String, Object> bad = Map.of(
             "flowKey", "FLOW-INBOUND",

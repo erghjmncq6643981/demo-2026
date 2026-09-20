@@ -27,6 +27,10 @@ class SystemFlowModelsTest {
             for (int pass = 0; pass < keys.size(); pass++) {
                 for (var node : model.path("nodes")) {
                     assertFalse(node.path("action").asText().isBlank());
+                    assertFalse(node.path("actionLabel").asText().isBlank());
+                    assertFalse(node.path("executorType").asText().isBlank());
+                    assertFalse(node.path("executorTypeLabel").asText().isBlank());
+                    assertFalse(node.path("operation").asText().isBlank());
                     assertEquals(node.path("terminal").asBoolean(), node.path("transitions").isEmpty());
                     for (var edge : node.path("transitions")) {
                         assertTrue(keys.contains(edge.path("to").asText()));

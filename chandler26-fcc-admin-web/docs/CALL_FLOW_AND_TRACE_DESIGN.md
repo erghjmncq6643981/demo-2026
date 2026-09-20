@@ -56,15 +56,16 @@
 
 轨迹内容必须来自后端事实。前端静态示例或仿真日志不得混入真实话单详情。
 
-## 5. 路由模式字段
+## 5. 流程与路由事实
 
-当前 VO 支持：
+`fcc_call_session` 不再保存旧系统的 `routeMode`。详情使用以下字段表达彼此独立的事实：
 
-- `DID_DIRECT`
-- `RULE_ENGINE`
-- `HTTP_CALLBACK`
+- `modelType`：呼入、人工外呼、自动外呼等业务通话类型；
+- `flowCode`：通话启动时绑定的流程代码；
+- `routeTargetType` / `routeTargetId`：最终路由目标摘要；
+- `fcc_route_attempt`：每次实际路由决策、候选坐席、结果与失败原因。
 
-并可展示 `routeMode`、`routeTargetType` 和 `routeTargetId`。字段存在或仿真结果出现不代表生产呼叫已经执行完整的 DID、规则引擎或 HTTP 回调链路。真实运行证据至少需要：
+流程定义中的 `routeMode=IVR` 只是固定阶段编辑契约的判别字段，不是每通电话的路由策略枚举。话单详情显示实际 `flowCode` 或 `modelType`，不再把旧模式映射成看似真实的路由文案。完整运行证据至少需要：
 
 1. 持久化的路由决策；
 2. 对应 Call/Leg；

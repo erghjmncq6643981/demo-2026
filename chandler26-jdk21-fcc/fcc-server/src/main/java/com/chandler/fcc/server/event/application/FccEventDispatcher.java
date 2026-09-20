@@ -1,5 +1,6 @@
 package com.chandler.fcc.server.event.application;
 
+import com.chandler.fcc.common.protocol.FccEventMethod;
 import com.chandler.fcc.server.event.handler.FccEventHandler;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
@@ -27,16 +28,19 @@ public class FccEventDispatcher {
      */
     public void dispatch(byte[] payload) throws IOException {
         JsonNode root = objectMapper.readTree(payload);
-        String method = root.path("method").asText();
+        String wireMethod = root.path("method").asText();
         JsonNode params = root.path("params");
-        if (method.isBlank() || params.isMissingNode() || params.isNull()) {
+        if (wireMethod.isBlank() || params.isMissingNode() || params.isNull()) {
             throw new IllegalArgumentException("事件缺少 method 或 params");
         }
-        FccEventHandler handler = handlers
-            .stream()
-            .filter(candidate -> candidate.supports(method))
-            .findFirst()
-            .orElseThrow(() -> new IllegalArgumentException("不支持的事件方法: " + method));
+        FccEventMethod method = FccEventMethod.fromWireName(wireMethod);
+        List<FccEventHandler> matched = handlers.stream().filter(candidate -> candidate.supports(method)).toList();
+        if (matched.size() != 1) {
+            throw new IllegalStateException(
+                "事件方法必须且只能有一个处理器: method=" + wireMethod + ", handlers=" + matched.size()
+            );
+        }
+        FccEventHandler handler = matched.getFirst();
         handler.handle(params);
     }
 }

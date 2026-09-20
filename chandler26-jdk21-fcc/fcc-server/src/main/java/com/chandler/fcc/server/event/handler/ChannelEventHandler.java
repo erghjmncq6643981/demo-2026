@@ -3,7 +3,9 @@ package com.chandler.fcc.server.event.handler;
 import com.chandler.fcc.common.entity.CallInfoBO;
 import com.chandler.fcc.common.enums.DirectionType;
 import com.chandler.fcc.common.enums.FlowModelType;
-import com.chandler.fcc.common.protocol.FccEventMethods;
+import com.chandler.fcc.common.protocol.ChannelEventState;
+import com.chandler.fcc.common.protocol.FccEventField;
+import com.chandler.fcc.common.protocol.FccEventMethod;
 import com.chandler.fcc.common.util.IdUtil;
 import com.chandler.fcc.server.agent.application.PhoneBindingService;
 import com.chandler.fcc.server.call.CallSessionManager;
@@ -23,8 +25,6 @@ import org.springframework.stereotype.Component;
 @Slf4j
 public class ChannelEventHandler implements FccEventHandler {
 
-    private static final String STATE_START = "START";
-    private static final String STATE_DESTROY = "DESTROY";
     private static final String DIRECTION_INBOUND = "inbound";
 
     private final CallSessionManager sessions;
@@ -35,12 +35,12 @@ public class ChannelEventHandler implements FccEventHandler {
     /**
      * 判断是否为通道生命周期事件。
      *
-     * @param method 标准事件方法名
+     * @param method 标准事件方法
      * @return 是否支持
      */
     @Override
-    public boolean supports(String method) {
-        return FccEventMethods.CHANNEL.equalsIgnoreCase(method);
+    public boolean supports(FccEventMethod method) {
+        return method == FccEventMethod.CHANNEL;
     }
 
     /**
@@ -50,10 +50,11 @@ public class ChannelEventHandler implements FccEventHandler {
      */
     @Override
     public void handle(JsonNode params) {
-        String nodeId = text(params, "node_id");
-        String state = text(params, "state");
-        String channelUuid = text(params, "uuid");
-        String controlId = text(params, "ctrl_uuid");
+        String nodeId = text(params, FccEventField.NODE_ID);
+        String stateValue = text(params, FccEventField.STATE);
+        String channelUuid = text(params, FccEventField.CHANNEL_UUID);
+        String controlId = text(params, FccEventField.CONTROL_ID);
+        ChannelEventState state = stateValue == null ? null : ChannelEventState.fromWireValue(stateValue);
         if (nodeId == null || state == null || channelUuid == null) {
             throw new IllegalArgumentException("通道事件缺少 node_id、state 或 uuid");
         }
@@ -69,11 +70,11 @@ public class ChannelEventHandler implements FccEventHandler {
             refreshCallFacts(call, params, nodeId);
         }
 
-        call.putData("flowEventId", params.path("event_id").asText());
-        call.putData("flowSourceTime", params.path("timestamp").asLong());
+        call.putData("flowEventId", params.path(FccEventField.EVENT_ID.getWireName()).asText());
+        call.putData("flowSourceTime", params.path(FccEventField.SOURCE_TIMESTAMP.getWireName()).asLong());
 
         if (phoneBinding.channel(call, params)) {
-            if (STATE_DESTROY.equals(state)) sessions.removeSession(call.getCtrlId());
+            if (state == ChannelEventState.DESTROY) sessions.removeSession(call.getCtrlId());
             return;
         }
         if (outboundCalls.event(call, params)) return;
@@ -83,7 +84,7 @@ public class ChannelEventHandler implements FccEventHandler {
             "[话务事件] 通话没有匹配固定运行模型 callId={} model={} state={}",
             call.getCallId(),
             call.getModelKey(),
-            state
+            state.getWireValue()
         );
     }
 
@@ -100,17 +101,17 @@ public class ChannelEventHandler implements FccEventHandler {
     private CallInfoBO createInboundCall(
         JsonNode params,
         String nodeId,
-        String state,
+        ChannelEventState state,
         String channelUuid,
         String controlId
     ) {
-        String direction = text(params, "direction");
-        if (!STATE_START.equals(state) || !DIRECTION_INBOUND.equalsIgnoreCase(direction)) {
+        String direction = text(params, FccEventField.DIRECTION);
+        if (state != ChannelEventState.START || !DIRECTION_INBOUND.equalsIgnoreCase(direction)) {
             log.warn(
                 "[话务事件] 未关联的话道事件待对账 nodeId={} channelUuid={} state={}",
                 nodeId,
                 channelUuid,
-                state
+                state.getWireValue()
             );
             return null;
         }
@@ -123,14 +124,14 @@ public class ChannelEventHandler implements FccEventHandler {
             .callId(IdUtil.getCallId())
             .ctrlId(effectiveControlId)
             .guestChannelUuid(channelUuid)
-            .agentChannelUuid(text(params, "peer_uuid"))
+            .agentChannelUuid(text(params, FccEventField.PEER_CHANNEL_UUID))
             .modelKey(FlowModelType.INBOUND_CUSTOMER_SERVICE.name())
             .direction(DirectionType.INBOUND)
-            .callerNumber(text(params, "cid_number"))
-            .destinationNumber(text(params, "dest_number"))
-            .duration(integer(params, "duration"))
-            .billsec(integer(params, "billsec"))
-            .hangupCause(text(params, "cause"))
+            .callerNumber(text(params, FccEventField.CALLER_NUMBER))
+            .destinationNumber(text(params, FccEventField.DESTINATION_NUMBER))
+            .duration(integer(params, FccEventField.DURATION))
+            .billsec(integer(params, FccEventField.BILL_SECONDS))
+            .hangupCause(text(params, FccEventField.CAUSE))
             .data(new HashMap<>())
             .build();
         call.putData("ctrlId", effectiveControlId);
@@ -153,13 +154,13 @@ public class ChannelEventHandler implements FccEventHandler {
             throw new IllegalArgumentException("通道节点与通话归属不一致");
         }
         call.setNodeId(nodeId);
-        Integer duration = integer(params, "duration");
-        Integer billsec = integer(params, "billsec");
+        Integer duration = integer(params, FccEventField.DURATION);
+        Integer billsec = integer(params, FccEventField.BILL_SECONDS);
         if (duration != null) call.setDuration(duration);
         if (billsec != null) call.setBillsec(billsec);
-        String cause = text(params, "cause");
+        String cause = text(params, FccEventField.CAUSE);
         if (cause != null) call.setHangupCause(cause);
-        String peerUuid = text(params, "peer_uuid");
+        String peerUuid = text(params, FccEventField.PEER_CHANNEL_UUID);
         if (peerUuid != null && call.getAgentChannelUuid() == null) {
             call.setAgentChannelUuid(peerUuid);
         }
@@ -169,21 +170,21 @@ public class ChannelEventHandler implements FccEventHandler {
      * 读取可选文本字段。
      *
      * @param node JSON 节点
-     * @param field 字段名
+     * @param field 规范字段
      * @return 文本值，缺失时为空
      */
-    private String text(JsonNode node, String field) {
-        return node.hasNonNull(field) ? node.get(field).asText() : null;
+    private String text(JsonNode node, FccEventField field) {
+        return node.hasNonNull(field.getWireName()) ? node.get(field.getWireName()).asText() : null;
     }
 
     /**
      * 读取可选整数字段。
      *
      * @param node JSON 节点
-     * @param field 字段名
+     * @param field 规范字段
      * @return 整数值，缺失时为空
      */
-    private Integer integer(JsonNode node, String field) {
-        return node.hasNonNull(field) ? node.get(field).asInt() : null;
+    private Integer integer(JsonNode node, FccEventField field) {
+        return node.hasNonNull(field.getWireName()) ? node.get(field.getWireName()).asInt() : null;
     }
 }

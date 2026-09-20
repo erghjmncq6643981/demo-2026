@@ -1,7 +1,8 @@
 package com.chandler.fcc.server.event.handler;
 
 import com.chandler.fcc.common.entity.CallInfoBO;
-import com.chandler.fcc.common.protocol.FccEventMethods;
+import com.chandler.fcc.common.protocol.FccEventMethod;
+import com.chandler.fcc.common.protocol.FccEventField;
 import com.chandler.fcc.common.recording.RecordingPathLayout;
 import com.chandler.fcc.server.call.CallSessionManager;
 import com.chandler.fcc.server.infrastructure.persistence.entity.CallRecordingEntity;
@@ -35,8 +36,8 @@ public class RecordingEventHandler implements FccEventHandler {
      * @return 是否支持
      */
     @Override
-    public boolean supports(String method) {
-        return FccEventMethods.RECORDING.equalsIgnoreCase(method);
+    public boolean supports(FccEventMethod method) {
+        return method == FccEventMethod.RECORDING;
     }
 
     /**
@@ -46,8 +47,8 @@ public class RecordingEventHandler implements FccEventHandler {
      */
     @Override
     public void handle(JsonNode params) {
-        String controlId = params.path("ctrl_uuid").asText(null);
-        String channelUuid = params.path("uuid").asText(null);
+        String controlId = params.path(FccEventField.CONTROL_ID.getWireName()).asText(null);
+        String channelUuid = params.path(FccEventField.CHANNEL_UUID.getWireName()).asText(null);
         CallInfoBO call = sessions
             .getByCtrlUuid(controlId)
             .or(() -> sessions.getByChannelUuid(channelUuid))
@@ -70,7 +71,7 @@ public class RecordingEventHandler implements FccEventHandler {
             CallRecordingEntity.builder()
                 .recordingId(RecordingPathLayout.recordingIdOf(call.getCallId()))
                 .callId(CallPersistenceService.parseNumericId(call.getCallId()))
-                .nodeId(params.path("node_id").asText(null))
+                .nodeId(params.path(FccEventField.NODE_ID.getWireName()).asText(null))
                 .status(stopping ? "COMPLETED" : "RECORDING")
                 .storageType("LOCAL")
                 .objectKey(recordPath)

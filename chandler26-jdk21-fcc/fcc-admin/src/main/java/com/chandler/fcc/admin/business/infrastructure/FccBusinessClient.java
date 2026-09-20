@@ -22,7 +22,7 @@ import org.springframework.web.server.ResponseStatusException;
 /**
  * fcc-admin 访问 fcc-server 内部客户与自动外呼管理能力的 HTTP 适配器。
  *
- * <p>适配器只转发当前控制台会话令牌，租户和操作者身份仍由 fcc-server 在线核验，
+ * <p>适配器只转发当前控制台会话令牌，操作者身份与数据权限仍由 fcc-server 在线核验，
  * 前端不会直接访问运行控制面。</p>
  */
 @Component

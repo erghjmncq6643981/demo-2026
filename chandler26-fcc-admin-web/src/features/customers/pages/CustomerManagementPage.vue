@@ -17,9 +17,7 @@ const state = useCustomerManagement();
     <header class="mb-5 flex flex-wrap items-center justify-between gap-3">
       <div>
         <h2 class="text-xl font-bold text-slate-900">客户资料</h2>
-        <p class="mt-1 text-sm text-slate-500">
-          按租户统一管理客户归属和联系资料。
-        </p>
+        <p class="mt-1 text-sm text-slate-500">统一管理客户归属和联系资料。</p>
       </div>
       <div class="flex gap-2">
         <button

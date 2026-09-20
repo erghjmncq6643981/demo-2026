@@ -260,7 +260,7 @@ class RuntimeSqlIntegrationTest {
         String eventId = "b".repeat(64);
         assertEquals(1, inbox.receive(eventId, "test-node", "{}"));
         assertEquals(0, inbox.receive(eventId, "test-node", "{}"));
-        inbox.finish(eventId, "PROCESSED");
+        inbox.finish(eventId, "PROCESSED", null);
         assertEquals("PROCESSED", inbox.status(eventId));
     }
 }

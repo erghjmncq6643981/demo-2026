@@ -1,14 +1,18 @@
 package com.chandler.fcc.server.event;
 
+import com.chandler.fcc.common.protocol.FccEventField;
+import com.chandler.fcc.common.protocol.FccEventMethod;
+import com.chandler.fcc.common.protocol.NatsSubjectFactory;
 import com.chandler.fcc.server.call.CallRecoveryService;
 import com.chandler.fcc.server.event.application.FccEventDispatcher;
+import com.chandler.fcc.server.event.domain.EventInboxStatus;
 import com.chandler.fcc.server.event.infrastructure.EventInboxMapper;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import io.nats.client.Connection;
+import io.nats.client.JetStreamSubscription;
 import io.nats.client.Message;
 import io.nats.client.PullSubscribeOptions;
-import io.nats.client.JetStreamSubscription;
 import io.nats.client.api.AckPolicy;
 import io.nats.client.api.ConsumerConfiguration;
 import jakarta.annotation.PostConstruct;
@@ -33,10 +37,10 @@ public class FccEventListener {
 
     private static final String STREAM_NAME = "FCC_EVENTS";
     private static final String CONSUMER_NAME = "fcc-control";
-    private static final String SUBJECT = "fs.event.>";
     private static final Duration FETCH_TIMEOUT = Duration.ofSeconds(2);
     private static final Duration ACK_WAIT = Duration.ofSeconds(90);
     private static final Duration RETRY_DELAY = Duration.ofSeconds(5);
+    private static final int MAX_PROCESSING_ATTEMPTS = 5;
 
     private final Connection natsConnection;
     private final ObjectMapper objectMapper;
@@ -55,19 +59,6 @@ public class FccEventListener {
     @PostConstruct
     public void startListening() {
         consumer.submit(this::consumeLoop);
-    }
-
-    /**
-     * 直接处理一条已取得的消息，供非 JetStream 入口或测试调用。
-     *
-     * @param message NATS 原始消息
-     */
-    public void onMessage(Message message) {
-        try {
-            dispatcher.dispatch(message.getData());
-        } catch (Exception failure) {
-            throw new IllegalStateException("事件处理未完成", failure);
-        }
     }
 
     /**
@@ -98,7 +89,7 @@ public class FccEventListener {
                             .build()
                     )
                     .build();
-                var subscription = natsConnection.jetStream().subscribe(SUBJECT, options);
+                var subscription = natsConnection.jetStream().subscribe(NatsSubjectFactory.allEvents(), options);
                 consume(subscription);
             } catch (Exception failure) {
                 if (!running) return;
@@ -118,7 +109,11 @@ public class FccEventListener {
         while (running) {
             for (Message message : subscription.fetch(1, FETCH_TIMEOUT)) {
                 try {
-                    if (processDurable(message)) message.ack();
+                    if (processDurable(message.getSubject(), message.getData())) {
+                        message.ack();
+                    } else {
+                        message.term();
+                    }
                 } catch (Exception failure) {
                     message.nakWithDelay(RETRY_DELAY);
                     log.warn("[事件消费] 等待重试 type={}", failure.getClass().getSimpleName());
@@ -130,32 +125,46 @@ public class FccEventListener {
     /**
      * 校验事件来源，将原始信封写入收件箱，再调用类型分发器。
      *
-     * @param message JetStream 消息
-     * @return 应当确认消息时返回 {@code true}，非法来源已终止时返回 {@code false}
+     * @param subject NATS 事件主题
+     * @param payload 原始事件信封
+     * @return 应当确认消息时返回 {@code true}，非法来源应终止时返回 {@code false}
      * @throws Exception JSON 或数据库不可用
      */
-    private boolean processDurable(Message message) throws Exception {
-        JsonNode params = objectMapper.readTree(message.getData()).path("params");
-        String eventId = params.path("event_id").asText();
-        String nodeId = params.path("node_id").asText();
-        if (!validIdentity(message, eventId, nodeId)) {
-            log.error("[事件消费] 拒绝非法身份消息 subject={}", message.getSubject());
-            message.term();
+    boolean processDurable(String subject, byte[] payload) throws Exception {
+        JsonNode root = objectMapper.readTree(payload);
+        JsonNode params = root.path("params");
+        FccEventMethod method = FccEventMethod.fromWireName(root.path("method").asText());
+        String eventId = params.path(FccEventField.EVENT_ID.getWireName()).asText();
+        String nodeId = params.path(FccEventField.NODE_ID.getWireName()).asText();
+        if (!validIdentity(subject, eventId, nodeId, method)) {
+            log.error("[事件消费] 拒绝非法身份消息 subject={}", subject);
             return false;
         }
 
-        String payload = new String(message.getData(), StandardCharsets.UTF_8);
-        if (inbox.receive(eventId, nodeId, payload) == 0) {
-            handleDuplicate(eventId);
+        String envelope = new String(payload, StandardCharsets.UTF_8);
+        if (!claim(eventId, nodeId, envelope)) {
             return true;
         }
 
         try {
-            dispatcher.dispatch(message.getData());
-            inbox.finish(eventId, "PROCESSED");
+            dispatcher.dispatch(payload);
         } catch (Exception failure) {
-            inbox.finish(eventId, "FAILED");
-            log.error("[事件消费] 事件失败已留存 eventId={}", eventId, failure);
+            inbox.finish(
+                eventId,
+                EventInboxStatus.FAILED.getDatabaseValue(),
+                failure.getClass().getSimpleName()
+            );
+            throw failure;
+        }
+        if (
+            inbox.finish(
+                eventId,
+                EventInboxStatus.PROCESSED.getDatabaseValue(),
+                null
+            ) !=
+            1
+        ) {
+            throw new IllegalStateException("事件处理结果无法持久化");
         }
         return true;
     }
@@ -163,27 +172,58 @@ public class FccEventListener {
     /**
      * 校验事件标识、节点标识和 NATS 主题归属一致。
      *
-     * @param message NATS 消息
+     * @param subject NATS 事件主题
      * @param eventId 事件标识
      * @param nodeId 节点标识
+     * @param method 规范事件方法
      * @return 身份有效时返回 {@code true}
      */
-    private boolean validIdentity(Message message, String eventId, String nodeId) {
+    private boolean validIdentity(
+        String subject,
+        String eventId,
+        String nodeId,
+        FccEventMethod method
+    ) {
         return eventId.matches("[a-f0-9]{64}") &&
-        !nodeId.isBlank() &&
-        message.getSubject().startsWith("fs.event." + nodeId + ".");
+            !nodeId.isBlank() &&
+            subject.equals(NatsSubjectFactory.event(nodeId, method));
     }
 
     /**
-     * 对重复事件保持幂等；遗留 PROCESSING 说明上次处理结果未知，转为人工对账状态。
+     * 首次领取事件或原子领取可重试失败；其余状态保持幂等。
      *
      * @param eventId 事件标识
+     * @param nodeId 节点标识
+     * @param payload 原始事件信封
+     * @return 当前消息需要进入业务分发时返回 {@code true}
      */
-    private void handleDuplicate(String eventId) {
-        if ("PROCESSING".equals(inbox.status(eventId))) {
-            inbox.finish(eventId, "UNKNOWN");
-            log.error("[事件消费] 中断事件需要对账 eventId={}", eventId);
+    private boolean claim(String eventId, String nodeId, String payload) {
+        if (inbox.receive(eventId, nodeId, payload) == 1) {
+            return true;
         }
+        EventInboxStatus status = EventInboxStatus.fromDatabaseValue(inbox.status(eventId));
+        if (
+            status == EventInboxStatus.FAILED &&
+            inbox.claimRetry(eventId, MAX_PROCESSING_ATTEMPTS) == 1
+        ) {
+            return true;
+        }
+        if (status == EventInboxStatus.PROCESSING) {
+            inbox.finish(
+                eventId,
+                EventInboxStatus.UNKNOWN.getDatabaseValue(),
+                "PREVIOUS_PROCESS_INTERRUPTED"
+            );
+            log.error("[事件消费] 中断事件需要对账 eventId={}", eventId);
+        } else if (status == EventInboxStatus.FAILED) {
+            inbox.finish(
+                eventId,
+                EventInboxStatus.UNKNOWN.getDatabaseValue(),
+                "MAX_PROCESSING_ATTEMPTS_REACHED"
+            );
+            log.error("[事件消费] 事件重试耗尽需要对账 eventId={}", eventId);
+        }
+        return false;
     }
 
     /**

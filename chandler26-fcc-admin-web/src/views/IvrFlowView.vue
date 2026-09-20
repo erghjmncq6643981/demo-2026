@@ -1,15 +1,23 @@
 <script setup lang="ts">
-import { computed, ref } from 'vue';
-import { useFlowEditor } from '../features/flows/composables/useFlowEditor';
-import FlowCanvas from '../features/flows/components/FlowCanvas.vue';
-import FlowNodeEditor from '../features/flows/components/FlowNodeEditor.vue';
-import { readStagedFlow, newInboundFlow, type StagedFlow } from '../features/flows/model/stagedFlow';
-import { flowApi } from '../api/flowApi';
-import { errorText } from '../utils/feedback';
+import { computed, ref } from "vue";
+import { useFlowEditor } from "../features/flows/composables/useFlowEditor";
+import FlowCanvas from "../features/flows/components/FlowCanvas.vue";
+import FlowNodeEditor from "../features/flows/components/FlowNodeEditor.vue";
+import {
+  readStagedFlow,
+  newInboundFlow,
+  type StagedFlow,
+} from "../features/flows/model/stagedFlow";
+import { flowApi } from "../api/flowApi";
+import { errorText } from "../utils/feedback";
 const {
   flows,
+  flowPage,
+  flowTotal,
   selectedFlow,
   versions,
+  versionPage,
+  versionTotal,
   selectedVersion,
   definition,
   version,
@@ -18,22 +26,25 @@ const {
   error,
   outcome,
   dirty,
+  modelNodes,
   reload,
   selectFlow,
+  selectFlowPage,
   selectVersion,
+  selectVersionPage,
   saveDraft,
   publish,
 } = useFlowEditor();
-const selectedStage = ref('');
+const selectedStage = ref("");
 const advanced = ref(false);
 const creating = ref(false);
 const createPending = ref(false);
-const createKey = ref('');
-const createName = ref('');
-const graphError = ref('');
+const createKey = ref("");
+const createName = ref("");
+const graphError = ref("");
 const graph = computed(() => {
   try {
-    graphError.value = '';
+    graphError.value = "";
     return readStagedFlow(definition.value);
   } catch (cause) {
     graphError.value = errorText(cause);
@@ -41,7 +52,7 @@ const graph = computed(() => {
   }
 });
 const editable = computed(
-  () => !selectedFlow.value?.flowKey.startsWith('SYSTEM_') && !loading.value && !pending.value,
+  () => !selectedFlow.value?.system && !loading.value && !pending.value,
 );
 function updateGraph(value: StagedFlow) {
   definition.value = JSON.stringify(value, null, 2);
@@ -51,7 +62,7 @@ async function createFlow() {
   try {
     await flowApi.create(createKey.value, createName.value);
     creating.value = false;
-    await reload();
+    await reload(1);
   } catch (cause) {
     error.value = errorText(cause);
   } finally {
@@ -67,8 +78,12 @@ async function createFlow() {
         <p>固定阶段 · 条件分支 · 版本发布</p>
       </div>
       <div class="actions">
-        <el-button :loading="loading" :disabled="pending" @click="reload">刷新</el-button>
-        <el-button :disabled="!editable || !definition" @click="saveDraft">保存草稿</el-button>
+        <el-button :loading="loading" :disabled="pending" @click="reload()"
+          >刷新</el-button
+        >
+        <el-button :disabled="!editable || !definition" @click="saveDraft"
+          >保存草稿</el-button
+        >
         <el-button
           type="primary"
           :disabled="!editable || dirty || version?.publishStatus !== 'DRAFT'"
@@ -77,14 +92,21 @@ async function createFlow() {
         >
       </div>
     </header>
-    <div v-if="error || graphError" role="alert" class="message error">{{ error || graphError }}</div>
+    <div v-if="error || graphError" role="alert" class="message error">
+      {{ error || graphError }}
+    </div>
     <div v-if="outcome" role="status" class="message">{{ outcome }}</div>
     <div class="body">
       <aside class="directory">
         <div class="directory-head">
-          <strong>业务流程</strong><el-button text type="primary" @click="creating = true">＋ 新建</el-button>
+          <strong>业务流程</strong
+          ><el-button text type="primary" @click="creating = true"
+            >＋ 新建</el-button
+          >
         </div>
-        <p v-if="!flows.length" class="empty">{{ loading ? '加载中…' : '尚无流程，请先新建' }}</p>
+        <p v-if="!flows.length" class="empty">
+          {{ loading ? "加载中…" : "尚无流程，请先新建" }}
+        </p>
         <button
           v-for="flow in flows"
           :key="flow.id"
@@ -97,8 +119,18 @@ async function createFlow() {
         >
           <strong>{{ flow.flowName }}</strong
           ><small>{{ flow.flowKey }}</small
-          ><span>{{ flow.status === 'PUBLISHED' ? '已发布' : '草稿' }}</span>
+          ><span>{{ flow.status === "PUBLISHED" ? "已发布" : "草稿" }}</span>
         </button>
+        <el-pagination
+          v-if="flowTotal > 20"
+          small
+          layout="prev, next"
+          :current-page="flowPage"
+          :page-size="20"
+          :total="flowTotal"
+          :disabled="loading || pending"
+          @current-change="selectFlowPage"
+        />
       </aside>
       <main v-if="selectedFlow" class="workspace">
         <div class="version-bar">
@@ -116,12 +148,26 @@ async function createFlow() {
               :label="item.version + ' · ' + item.publishStatus"
             />
           </el-select>
+          <el-pagination
+            v-if="versionTotal > 20"
+            small
+            layout="prev, next"
+            :current-page="versionPage"
+            :page-size="20"
+            :total="versionTotal"
+            :disabled="loading || pending"
+            @current-change="selectVersionPage"
+          />
           <span v-if="dirty" class="dirty">有未保存修改</span>
-          <el-button text @click="advanced = !advanced">{{ advanced ? '返回画布' : '高级定义' }}</el-button>
+          <el-button text @click="advanced = !advanced">{{
+            advanced ? "返回画布" : "高级定义"
+          }}</el-button>
         </div>
         <div v-if="!definition" class="empty">
           <p>此流程尚无阶段定义。</p>
-          <el-button type="primary" @click="updateGraph(newInboundFlow())">配置呼入阶段</el-button>
+          <el-button type="primary" @click="updateGraph(newInboundFlow())"
+            >配置呼入阶段</el-button
+          >
         </div>
         <textarea
           v-else-if="advanced"
@@ -135,6 +181,7 @@ async function createFlow() {
           <FlowCanvas
             class="canvas"
             :flow="graph"
+            :nodes="modelNodes"
             :selected="selectedStage"
             @select="selectedStage = $event"
           />
@@ -147,15 +194,21 @@ async function createFlow() {
             @close="selectedStage = ''"
           />
         </div>
-        <footer>点击节点配置参数。每通电话固定启动时的版本；发布不会改写正在执行的通话。</footer>
+        <footer>
+          点击节点配置参数。每通电话固定启动时的版本；发布不会改写正在执行的通话。
+        </footer>
       </main>
       <div v-else class="empty">选择流程，查看阶段和版本。</div>
     </div>
     <el-dialog v-model="creating" title="新建呼入流程" width="min(460px, 92vw)">
       <el-form label-position="top"
         ><el-form-item label="流程代码"
-          ><el-input v-model="createKey" maxlength="64" placeholder="例如 SERVICE_INBOUND" /></el-form-item
-        ><el-form-item label="流程名称"><el-input v-model="createName" maxlength="128" /></el-form-item
+          ><el-input
+            v-model="createKey"
+            maxlength="64"
+            placeholder="例如 SERVICE_INBOUND" /></el-form-item
+        ><el-form-item label="流程名称"
+          ><el-input v-model="createName" maxlength="128" /></el-form-item
       ></el-form>
       <template #footer
         ><el-button @click="creating = false">取消</el-button

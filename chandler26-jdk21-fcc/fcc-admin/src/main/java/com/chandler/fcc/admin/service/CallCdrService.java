@@ -354,7 +354,6 @@ public class CallCdrService {
       .bizId(session.getBizId())
       .modelType(session.getModelType())
       .flowCode(session.getFlowCode())
-      .routeMode(session.getRouteMode())
       .routeTargetType(session.getRouteTargetType())
       .routeTargetId(session.getRouteTargetId())
       .direction(session.getDirection())

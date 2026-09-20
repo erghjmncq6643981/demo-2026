@@ -18,16 +18,35 @@
 
 ## 当前流程定义契约
 
-管理端 JSON 编辑器保留；服务端当前只接受下面的结构（工号仅为示例，不导入数据库）：
+管理端画布维护固定阶段 IVR 的可编辑参数；服务端当前只接受下面的结构（工号仅为示例，不导入数据库）：
 
 ```json
 {
-  "routeMode": "DID_DIRECT",
-  "didDirectConfig": { "workNo": "your-agent-work-number" }
+  "routeMode": "IVR",
+  "template": "INBOUND",
+  "menu": {
+    "enabled": true,
+    "prompt": "/opt/freeswitch/sounds/fcc/welcome.wav",
+    "timeoutSeconds": 10
+  },
+  "branches": [
+    {
+      "digit": "1",
+      "targetType": "GROUP",
+      "target": "sales",
+      "queueSeconds": 60
+    }
+  ],
+  "defaultRoute": {
+    "targetType": "AGENT",
+    "target": "your-agent-work-number",
+    "queueSeconds": 60
+  },
+  "timeoutAction": "CALLBACK"
 }
 ```
 
-`agentId` 旧字段、RULE_ENGINE、HTTP_CALLBACK、未知字段和非法 JSON 均被拒绝。当前实现只编译 ROUTE 阶段拨坐席，不是完整 IVR 引擎。现有不受支持的开发定义需人工重新编辑保存；不自动转换、不伪造激活成功。
+固定阶段为 `ENTRY -> MENU -> BRANCH -> ROUTE -> BRIDGE -> CONNECTED -> END`，动作和顺序不能由管理端改变。服务端校验菜单、媒体绝对路径、单键分支、坐席/技能组目标、排队时限和结束动作；旧路由模型、未知字段、脚本、Java 类名和动态 URL 均被拒绝。呼入、外呼、通知外呼和话机绑定的完整系统模型由 `system-models.json` 生成并随全新数据库基线发布；运行端应用服务执行对应动作并记录阶段事实。发布结果中的 `PENDING` 仍表示运行端激活待确认，不代表真实 FreeSWITCH 链路已完成。
 
 ## 必需部署配置
 
@@ -52,20 +71,19 @@
 5. 检查分机状态：开通失败记录 PROVISIONING_FAILED，不能提供注册凭据。当前重试补偿尚未实现，须先修复 Sidecar 开通问题再处理相关配置。
 6. 核对保存/发布合法流程、真实来去电、保持/转接、双方挂机、DTMF、录音与话单。未知结果先查事实，不盲目重发控制命令。
 
-本轮没有 DDL 变更。credential_secret 原字段继续承载字节；新格式为 FCC1 标识、12 字节随机 nonce、GCM 密文及认证标签。回退旧代码可能把密文误当密码，不能只回滚二进制而不核对配置和凭据格式；需要保留可恢复备份和明确维护窗口。
+本轮全新数据库基线删除了未使用的 `fcc_call_session.route_mode` 及其索引，流程身份使用 `flow_code`，业务类型使用 `model_type`，路由结果使用独立路由事实。项目不提供旧库兼容迁移；已有开发库先备份需要保留的配置，再按 `fcc-schema.sql` 重建。`credential_secret` 原字段继续承载字节；新格式为 FCC1 标识、12 字节随机 nonce、GCM 密文及认证标签。回退旧代码可能把密文误当密码，不能只回滚二进制而不核对配置和凭据格式。
 
 ## 验证结果
 
-- 临时 Oracle JDK 21.0.12.1 下 `mvn -q -DskipTests compile` 通过，未更改系统默认 Java。
-- Java 定向测试 15 个通过：标识符、录音规范、流程校验、动作身份、控制失败、WS 身份、流程重载、提交后通知、本人 SIP 配置与密文。
-- 坐席端 10 个测试通过；管理端 4 个模型测试通过；两端构建通过。管理端仍有大包警告。
-- `mvn -q test` 已执行，集成上下文因 `nats://127.0.0.1:4222` 不可连接失败。实际 DB/NATS/FreeSWITCH、认证浏览器、跨网络媒体和故障恢复未验证。
+- Oracle JDK 21.0.12.1 下 `mvn -q -DskipTests compile` 已通过，未更改系统默认 Java。
+- Flow Studio、动作执行器和事件协议的定向测试结果以本轮最终交付记录为准。
+- 实际 MySQL、NATS/JetStream、FreeSWITCH、认证浏览器、跨网络媒体、Windows 交互和故障恢复仍需在部署环境验收。
 - 本轮没有修改 Go 实现，也不据 Java 单元测试宣称 Sidecar/媒体联调通过。
 
 定向命令（需 JDK 21）：
 
 ```text
-mvn -q -Dtest=FlowDefinitionValidatorTest,FccEventMethodsTest,FccIdentifierJacksonModuleTest,FlowActionIdentityTest,CallControlBoundaryTest,FlowReloadBoundaryTest,AgentHandshakeBoundaryTest,SipCredentialCipherTest,FlowPublicationBoundaryTest,AgentSipConfigBoundaryTest -Dsurefire.failIfNoSpecifiedTests=false test
+mvn -q -Dtest=FlowDefinitionValidatorTest,SystemFlowModelsTest,FccEventMethodTest,FlowActionExecutorTest,FlowReloadBoundaryTest,FlowPublicationBoundaryTest -Dsurefire.failIfNoSpecifiedTests=false test
 ```
 
 WebSocket 真实集成测试需另外注入 FCC_TEST_AGENT_WORK_NO 和该坐席的 FCC_TEST_AGENT_TOKEN；不在测试源码保存真实令牌。

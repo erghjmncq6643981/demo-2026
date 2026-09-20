@@ -1,9 +1,19 @@
 package com.chandler.fcc.server.command;
 
-import com.chandler.fcc.common.dto.command.*;
+import com.chandler.fcc.common.dto.command.FNodeBridgeDTO;
+import com.chandler.fcc.common.dto.command.FNodeCommandResultDTO;
+import com.chandler.fcc.common.dto.command.FNodeDialDTO;
+import com.chandler.fcc.common.dto.command.FNodeHangupDTO;
+import com.chandler.fcc.common.dto.command.FNodeNativeApiDTO;
+import com.chandler.fcc.common.dto.command.FNodePlayDTO;
+import com.chandler.fcc.common.dto.command.FNodeReadDTMFDTO;
+import com.chandler.fcc.common.dto.command.FNodeRecordDTO;
+import com.chandler.fcc.common.dto.command.FNodeTransferDTO;
 import com.chandler.fcc.common.dto.rpc.JsonRpcRequest;
 import com.chandler.fcc.common.dto.rpc.JsonRpcResponse;
 import com.chandler.fcc.common.entity.FNodeResult;
+import com.chandler.fcc.common.protocol.FNodeMethod;
+import com.chandler.fcc.common.protocol.NatsSubjectFactory;
 import com.chandler.fcc.common.util.IdUtil;
 import com.chandler.fcc.server.infrastructure.nats.FccProperties;
 import com.chandler.fcc.server.infrastructure.persistence.entity.CallCommandEntity;
@@ -15,7 +25,6 @@ import io.nats.client.Message;
 import java.nio.charset.StandardCharsets;
 import java.time.Duration;
 import java.time.LocalDateTime;
-import java.util.HashMap;
 import java.util.Map;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -74,7 +83,7 @@ public class FccClient {
             uuid = IdUtil.getUuid();
             dto.setUuid(uuid);
         }
-        return sendRequest(nodeId, "FNode.Dial", dto, "dial-" + uuid);
+        return sendRequest(nodeId, FNodeMethod.DIAL, dto, "dial-" + uuid);
     }
 
     /**
@@ -104,7 +113,7 @@ public class FccClient {
             .uuid(uuid)
             .peerUuid(peerUuid)
             .build();
-        return sendRequest(nodeId, "FNode.ChannelBridge", dto);
+        return sendRequest(nodeId, FNodeMethod.CHANNEL_BRIDGE, dto);
     }
 
     /**
@@ -125,7 +134,7 @@ public class FccClient {
      * @return FNode 执行结果
      */
     public FNodeResult readDTMF(String nodeId, FNodeReadDTMFDTO dto) {
-        return sendRequest(nodeId, "FNode.ReadDTMF", dto);
+        return sendRequest(nodeId, FNodeMethod.READ_DTMF, dto);
     }
 
     /**
@@ -137,7 +146,7 @@ public class FccClient {
      * @return 同步受理结果
      */
     public FNodeResult readDTMF(String nodeId, FNodeReadDTMFDTO dto, String commandId) {
-        return sendRequest(nodeId, "FNode.ReadDTMF", dto, commandId);
+        return sendRequest(nodeId, FNodeMethod.READ_DTMF, dto, commandId);
     }
 
     /**
@@ -158,7 +167,7 @@ public class FccClient {
      * @return FNode 执行结果
      */
     public FNodeResult play(String nodeId, FNodePlayDTO dto) {
-        return sendRequest(nodeId, "FNode.Play", dto);
+        return sendRequest(nodeId, FNodeMethod.PLAY, dto);
     }
 
     /**
@@ -179,7 +188,7 @@ public class FccClient {
      * @return FNode 执行结果
      */
     public FNodeResult record(String nodeId, FNodeRecordDTO dto) {
-        return sendRequest(nodeId, "FNode.Record", dto);
+        return sendRequest(nodeId, FNodeMethod.RECORD, dto);
     }
 
     /**
@@ -209,7 +218,7 @@ public class FccClient {
             .uuid(uuid)
             .cause(cause != null ? cause : "NORMAL_CLEARING")
             .build();
-        return sendRequest(nodeId, "FNode.Hangup", dto);
+        return sendRequest(nodeId, FNodeMethod.HANGUP, dto);
     }
 
     /**
@@ -232,10 +241,8 @@ public class FccClient {
      * @return FNode 执行结果
      */
     public FNodeResult nativeAPI(String nodeId, String cmd, String args) {
-        Map<String, String> params = new HashMap<>();
-        params.put("cmd", cmd);
-        params.put("args", args);
-        return sendRequest(nodeId, "FNode.NativeAPI", params);
+        FNodeNativeApiDTO params = FNodeNativeApiDTO.builder().cmd(cmd).args(args).build();
+        return sendRequest(nodeId, FNodeMethod.NATIVE_API, params);
     }
 
     /**
@@ -254,18 +261,18 @@ public class FccClient {
      * @return FNode 执行结果
      */
     public FNodeResult status(String nodeId) {
-        return sendRequest(nodeId, "FNode.Status", null);
+        return sendRequest(nodeId, FNodeMethod.STATUS, null);
     }
 
     /**
      * 发送同步 JSON-RPC 2.0 请求至指定软交换节点指令主题 (fs.cmd.{nodeId})
      *
      * @param nodeId 软交换节点标识符
-     * @param method 远程调用方法名称 (如 FNode.Dial)
+     * @param method 规范远程调用方法
      * @param params 业务入参载荷
      * @return FNodeResult 标准执行结果
      */
-    private FNodeResult sendRequest(String nodeId, String method, Object params) {
+    private FNodeResult sendRequest(String nodeId, FNodeMethod method, Object params) {
         return sendRequest(nodeId, method, params, IdUtil.getCommandId());
     }
 
@@ -277,7 +284,11 @@ public class FccClient {
      * @return 已受理/失败/未知结果
      */
     public FNodeResult commandResult(String nodeId, String commandId) {
-        return sendRequest(nodeId, "FNode.CommandResult", Map.of("command_id", commandId));
+        return sendRequest(
+            nodeId,
+            FNodeMethod.COMMAND_RESULT,
+            FNodeCommandResultDTO.builder().commandId(commandId).build()
+        );
     }
 
     /**
@@ -287,19 +298,51 @@ public class FccClient {
      * @return 含 complete/channel_uuids 的结构化结果
      */
     public FNodeResult channelSnapshot(String nodeId) {
-        return sendRequest(nodeId, "FNode.ChannelSnapshot", Map.of());
+        return sendRequest(nodeId, FNodeMethod.CHANNEL_SNAPSHOT, null);
+    }
+
+    /**
+     * 使用规范 FNode 方法和稳定命令标识执行受控命令。
+     *
+     * <p>该入口供流程 FNode 执行器使用。调用方必须传入与方法匹配的公共 wire DTO，
+     * 同步返回值只表示 Sidecar 受理或拒绝，最终话务结果仍由事件确认。</p>
+     *
+     * @param nodeId 目标节点标识
+     * @param method 规范 FNode 方法
+     * @param params 与方法匹配的公共指令 DTO
+     * @param commandId 稳定命令标识
+     * @return Sidecar 同步受理结果
+     */
+    public FNodeResult execute(
+        String nodeId,
+        FNodeMethod method,
+        Object params,
+        String commandId
+    ) {
+        return sendRequest(nodeId, method, params, commandId);
+    }
+
+    /**
+     * 使用 Sidecar 的规范转接方法转接话道。
+     *
+     * @param nodeId 目标节点标识
+     * @param params 已校验的转接参数
+     * @return Sidecar 同步受理结果
+     */
+    public FNodeResult transfer(String nodeId, FNodeTransferDTO params) {
+        return sendRequest(nodeId, FNodeMethod.TRANSFER, params);
     }
 
     /**
      * 使用稳定标识发送命令。
      *
      * @param nodeId 节点
-     * @param method 方法
+     * @param method 规范方法
      * @param params 参数
      * @param reqId 幂等命令标识
      * @return 节点应答
      */
-    private FNodeResult sendRequest(String nodeId, String method, Object params, String reqId) {
+    private FNodeResult sendRequest(String nodeId, FNodeMethod method, Object params, String reqId) {
         String effectiveNodeId = (nodeId != null && !nodeId.trim().isEmpty())
             ? nodeId.trim()
             : fccProperties.getDefaultNodeId();
@@ -307,17 +350,17 @@ public class FccClient {
         JsonRpcRequest req = JsonRpcRequest.builder()
             .jsonrpc("2.0")
             .id(reqId)
-            .method(method)
+            .method(method.getWireName())
             .params(params)
             .build();
 
-        String subject = "fs.cmd." + effectiveNodeId;
+        String subject = NatsSubjectFactory.command(effectiveNodeId);
         try {
             byte[] payload = objectMapper.writeValueAsBytes(req);
             log.debug(
                 "📤 [FCC -> NATS] 发送指令 Subject: {}, Method: {}\nPayload: {}",
                 subject,
-                method,
+                method.getWireName(),
                 new String(payload, StandardCharsets.UTF_8)
             );
 
@@ -331,7 +374,7 @@ public class FccClient {
                     "❌ [FCC] RPC 请求超时 ({} ms), Node: {}, Method: {}",
                     fccProperties.getRpcTimeoutMillis(),
                     effectiveNodeId,
-                    method
+                    method.getWireName()
                 );
                 return FNodeResult.builder()
                     .code(-32000)
@@ -370,7 +413,7 @@ public class FccClient {
                             .commandId(reqId)
                             .idempotencyKey(reqId)
                             .targetNodeId(effectiveNodeId)
-                            .methodName(method)
+                            .methodName(method.getWireName())
                             .requestPayload(new String(payload, StandardCharsets.UTF_8))
                             .responsePayload(respStr)
                             .status(
