@@ -420,27 +420,42 @@ export function useGroupManagement() {
   const editingMember = ref<AgentGroupMemberVO | null>(null);
   const editMemberRole = ref('MEMBER');
   const editMemberPriority = ref(0);
+  const editMemberPassword = ref('');
 
   const handleOpenEditMember = (mem: AgentGroupMemberVO) => {
     editingMember.value = mem;
     editMemberRole.value = mem.memberRole || 'MEMBER';
     editMemberPriority.value = mem.priority || 0;
+    editMemberPassword.value = '';
     showEditMemberModal.value = true;
   };
 
   const handleConfirmEditMember = async () => {
     if (!editingMember.value) return;
+
+    const newPwd = editMemberPassword.value.trim();
+    if (newPwd && (newPwd.length < 8 || newPwd.length > 64)) {
+      toast('新密码长度需在 8 到 64 位之间！', 'warning');
+      return;
+    }
+
     try {
+      const targetGroupId = editingMember.value.groupId || selectedNodeId.value;
       await agentApi.updateGroupMember(
-        selectedNodeId.value,
+        targetGroupId,
         editingMember.value.agentId,
         {
           memberRole: editMemberRole.value,
           priority: editMemberPriority.value
         }
       );
+
+      if (newPwd) {
+        await agentApi.resetPassword(editingMember.value.agentId, newPwd);
+      }
+
       showEditMemberModal.value = false;
-      triggerToast(`组员 ${editingMember.value.agentName} 权限已更新！`);
+      triggerToast(`组员 ${editingMember.value.agentName} 配置${newPwd ? '及密码' : ''}已成功更新！`);
       await loadMembers(selectedNodeId.value);
     } catch (err: any) {
       toast('修改失败: ' + (err.message || '网络异常'), 'error');
@@ -454,7 +469,8 @@ export function useGroupManagement() {
       return;
     }
     try {
-      await agentApi.removeMemberFromGroup(selectedNodeId.value, mem.agentId);
+      const targetGroupId = mem.groupId || selectedNodeId.value;
+      await agentApi.removeMemberFromGroup(targetGroupId, mem.agentId);
       toast(`坐席 ${mem.agentName} 已成功从技能组解绑！`, 'success');
       await loadMembers(selectedNodeId.value);
     } catch (err: any) {
@@ -550,6 +566,7 @@ export function useGroupManagement() {
     editingMember,
     editMemberRole,
     editMemberPriority,
+    editMemberPassword,
     handleOpenEditMember,
     handleConfirmEditMember,
     handleUnbindMember,

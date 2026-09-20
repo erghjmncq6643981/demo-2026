@@ -63,17 +63,17 @@
     </div>
 
     <!-- 坐席矩阵与班长干预操作表格 -->
-    <div class="flex-1 overflow-x-auto overflow-y-auto">
+    <div class="flex-1 overflow-x-auto overflow-y-auto rounded-xl border border-slate-200/80 shadow-xs">
       <table class="w-full text-xs text-left">
-        <thead class="text-slate-400 border-b border-slate-100 pb-2 text-[11px] font-bold sticky top-0 bg-white z-10">
+        <thead class="bg-slate-100/95 text-slate-800 border-b border-slate-200 text-xs font-black tracking-wider uppercase sticky top-0 z-10 backdrop-blur-sm shadow-[0_1px_2px_rgba(0,0,0,0.03)]">
           <tr>
-            <th class="py-2.5 px-3">坐席成员</th>
-            <th class="py-2.5 px-2">工号</th>
-            <th class="py-2.5 px-3">当前状态</th>
-            <th class="py-2.5 px-4">正在处理 / 通话通道</th>
-            <th class="py-2.5 px-2">持续时长</th>
-            <th class="py-2.5 px-2">接听终端</th>
-            <th class="py-2.5 px-4 text-right">班长现场干预调度</th>
+            <th class="py-3 px-3.5 text-slate-900 font-black whitespace-nowrap">坐席成员</th>
+            <th class="py-3 px-2.5 text-slate-900 font-black whitespace-nowrap">工号</th>
+            <th class="py-3 px-3.5 text-slate-900 font-black whitespace-nowrap">当前状态</th>
+            <th class="py-3 px-4 text-slate-900 font-black whitespace-nowrap">正在处理 / 通话通道</th>
+            <th class="py-3 px-2.5 text-slate-900 font-black whitespace-nowrap">持续时长</th>
+            <th class="py-3 px-2.5 text-slate-900 font-black whitespace-nowrap">接听终端</th>
+            <th class="py-3 px-4 text-right text-slate-900 font-black whitespace-nowrap">班长现场干预调度</th>
           </tr>
         </thead>
         <tbody class="divide-y divide-slate-50">

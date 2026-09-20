@@ -4,7 +4,7 @@ import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import com.baomidou.mybatisplus.core.toolkit.IdWorker;
 import com.chandler.learning.agent.ai.chat.application.AgentChatRequest;
 import com.chandler.learning.agent.ai.chat.application.AgentChatResponse;
-import com.chandler.learning.agent.ai.chat.application.AiChatService;
+import com.chandler.learning.agent.ai.chat.application.AiStructuredResponseRetryPolicy;
 import com.chandler.learning.agent.ai.chat.domain.enums.AiInvocationScene;
 import com.chandler.learning.agent.exception.LearningAssistantException;
 import com.chandler.learning.agent.learning.domain.entity.LearningPlan;
@@ -55,7 +55,7 @@ public class LearningSceneRelatedVocabularyService {
     private final LearningSceneMaterialMapper materialMapper;
     private final LearningPlanUnitEntryMapper entryMapper;
     private final LearningSceneRelatedWordMapper relatedWordMapper;
-    private final AiChatService aiChatService;
+    private final AiStructuredResponseRetryPolicy structuredRetryPolicy;
     private final TransactionTemplate transactionTemplate;
 
     /** 生成到指定目标数量，已存在结果视为检查点并自动跳过。 */
@@ -122,21 +122,10 @@ public class LearningSceneRelatedVocabularyService {
         variables.put("existing_words", existing.stream().map(LearningSceneRelatedWord::getTerm).toList());
         variables.put("target_word_count", targetCount);
 
-        AgentChatRequest request = new AgentChatRequest();
-        request.setUserId(plan.getUserId());
-        request.setInvocationScene(AiInvocationScene.VOCABULARY_SCENE_RELATED_WORDS);
-        request.setAgentCode(AiScenarioConstants.VOCABULARY_PLAN_AGENT_CODE);
-        request.setTemplateCode(AiScenarioConstants.VOCABULARY_SCENE_RELATED_TEMPLATE_CODE);
-        // 场景相关词是独立动作，保留审计关联但不带入长期会话历史。
-        request.setSessionId(null);
-        request.setTitle(LearningScene.ENGLISH_VOCABULARY_PLAN.getTitle());
-        request.setBusinessType(AiChatConstants.BUSINESS_TYPE_LEARNING);
-        request.setBusinessId(String.valueOf(material.getId()));
-        request.setSceneCode(LearningScene.ENGLISH_VOCABULARY_PLAN.getCode());
-        request.setModelConfigId(modelConfigId);
-        request.setMessage("为场景材料“" + unit.getTitle() + "”补充一批不重复的场景相关词汇。");
-        request.setVariables(variables);
-        AgentChatResponse response = aiChatService.chat(request);
+        String baseMessage = "为场景材料“" + unit.getTitle() + "”补充一批不重复的场景相关词汇。";
+        AgentChatResponse response = structuredRetryPolicy.execute(
+                correction -> buildRequest(plan, material, modelConfigId, variables, baseMessage, correction),
+                this::relatedWordsRetryCorrection);
         JsonNode root = response.requireStructuredRoot(AiInvocationScene.VOCABULARY_SCENE_RELATED_WORDS);
         JsonNode words = extractWordsNode(root);
         if (words == null || !words.isArray()) return List.of();
@@ -210,8 +199,34 @@ public class LearningSceneRelatedVocabularyService {
         return null;
     }
 
-    private LearningSceneMaterial requireCurrentMaterial(Long userId, Long planId, LearningPlanUnit unit) {
-        LearningSceneMaterial material = materialMapper.selectOne(new LambdaQueryWrapper<LearningSceneMaterial>()
+    /** 组装相关词请求；correction 非空时追加在用户提问末尾，作为重试时的纠正要求。 */
+    private AgentChatRequest buildRequest(LearningPlan plan, LearningSceneMaterial material, Long modelConfigId,
+                                         Map<String, Object> variables, String baseMessage, String correction) {
+        AgentChatRequest request = new AgentChatRequest();
+        request.setUserId(plan.getUserId());
+        request.setInvocationScene(AiInvocationScene.VOCABULARY_SCENE_RELATED_WORDS);
+        request.setAgentCode(AiScenarioConstants.VOCABULARY_PLAN_AGENT_CODE);
+        request.setTemplateCode(AiScenarioConstants.VOCABULARY_SCENE_RELATED_TEMPLATE_CODE);
+        // 场景相关词是独立动作，保留审计关联但不带入长期会话历史。
+        request.setSessionId(null);
+        request.setTitle(LearningScene.ENGLISH_VOCABULARY_PLAN.getTitle());
+        request.setBusinessType(AiChatConstants.BUSINESS_TYPE_LEARNING);
+        request.setBusinessId(String.valueOf(material.getId()));
+        request.setSceneCode(LearningScene.ENGLISH_VOCABULARY_PLAN.getCode());
+        request.setModelConfigId(modelConfigId);
+        request.setMessage(correction == null ? baseMessage : baseMessage + "\n\n" + correction);
+        request.setVariables(variables);
+        return request;
+    }
+
+    /** 模型提前收尾或漏字段时追加的纠正要求，只重申结构完整性，不改变业务输入。 */
+    private String relatedWordsRetryCorrection(String failureMessage) {
+        return "注意：上一次输出不符合要求（" + failureMessage + "）。请重新完整输出一个 JSON 对象，"
+                + "不得提前收尾或截断响应；必须包含 related_words 数组，"
+                + "数组每一项都带齐 term、meaning、category_code、category_name 等字段。";
+    }
+
+    private LearningSceneMaterial requireCurrentMaterial(Long userId, Long planId, LearningPlanUnit unit) {        LearningSceneMaterial material = materialMapper.selectOne(new LambdaQueryWrapper<LearningSceneMaterial>()
                 .eq(LearningSceneMaterial::getId, unit.getSceneMaterialId())
                 .eq(LearningSceneMaterial::getUserId, userId)
                 .eq(LearningSceneMaterial::getPlanId, planId)

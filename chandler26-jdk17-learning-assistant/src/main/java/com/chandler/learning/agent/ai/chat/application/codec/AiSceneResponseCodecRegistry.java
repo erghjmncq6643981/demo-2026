@@ -46,9 +46,12 @@ public class AiSceneResponseCodecRegistry {
                 .filter(field -> !hasValue(contractRoot, field))
                 .toList();
         if (!missingFields.isEmpty()) {
-            throw LearningAssistantException.badRequest(
-                    LearningErrorCode.AI_RESPONSE_PARSE_FAILED,
-                    "AI 返回内容缺少必要字段：" + String.join("、", missingFields));
+            // 模型偶尔会返回语法合法但字段缺失的对象，属于上游非确定性输出；
+            // 用专用错误码让调用方可以定点重试，而不是直接把整个任务判死。
+            throw LearningAssistantException.externalService(
+                    LearningErrorCode.AI_RESPONSE_STRUCTURE_INCOMPLETE,
+                    "AI 返回内容缺少必要字段：" + String.join("、", missingFields),
+                    null);
         }
         try {
             return new AiSceneResponse(invocationScene, root, objectMapper.writeValueAsString(root),

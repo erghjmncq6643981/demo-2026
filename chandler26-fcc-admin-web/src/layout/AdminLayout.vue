@@ -94,135 +94,135 @@ const handleNotify = () => {
 
 <template>
   <!-- 🌟 全屏平铺工作台主容器 (100vw × 100vh 动态铺满整个屏幕，随分辨率自适应) -->
-  <div class="w-screen h-screen bg-[#F8FAFD] flex overflow-hidden select-none">
+  <div class="w-screen h-screen bg-[#F8FAFD] flex overflow-hidden">
     
-    <!-- 1. 左侧轻奢极简白底导航栏 (扩大至 w-72，字号图标全面放大清晰) -->
-    <aside class="w-72 bg-white border-r border-slate-100 flex flex-col justify-between p-6 shrink-0 z-20 h-full">
+    <!-- 1. 左侧轻奢极简白底导航栏 (精简为 w-56，更紧凑高效) -->
+    <aside class="w-56 bg-white border-r border-slate-100 flex flex-col justify-between p-4 shrink-0 z-20 h-full select-none">
       <div>
         <!-- 品牌 LOGO -->
-        <div class="flex items-center gap-3.5 mb-8 px-2">
-          <div class="w-12 h-12 rounded-2xl bg-gradient-to-tr from-blue-600 via-indigo-600 to-purple-600 flex items-center justify-center text-white text-2xl shadow-md shadow-indigo-500/20 shrink-0">
+        <div class="flex items-center gap-2.5 mb-5 px-1">
+          <div class="w-9 h-9 rounded-xl bg-gradient-to-tr from-blue-600 via-indigo-600 to-purple-600 flex items-center justify-center text-white text-lg shadow-md shadow-indigo-500/20 shrink-0">
             📦
           </div>
           <div>
-            <div class="font-black text-lg text-slate-900 tracking-tight leading-tight">箱箱通讯</div>
-            <div class="text-xs font-semibold text-slate-400 mt-0.5">FCC Cloud 2.6</div>
+            <div class="font-black text-base text-slate-900 tracking-tight leading-tight">箱箱通讯</div>
+            <div class="text-[11px] font-semibold text-slate-400 mt-0.5">FCC Cloud 2.6</div>
           </div>
         </div>
 
         <!-- 业务导航菜单 -->
-        <div class="space-y-6">
+        <div class="space-y-4">
           <div>
-            <div class="text-xs font-bold text-slate-400 uppercase tracking-wider px-3 mb-2.5">话务与监控</div>
-            <div class="space-y-1.5 font-bold">
+            <div class="text-[11px] font-bold text-slate-400 uppercase tracking-wider px-2 mb-2">话务与监控</div>
+            <div class="space-y-1 font-bold">
               
               <!-- 菜单 1: 通话与回拨记录 (整合通话记录与未接待回拨) -->
               <button
                 @click="emit('update:activeTab', 'routes')"
-                class="w-full flex items-center justify-between px-4 py-3 rounded-2xl transition-all cursor-pointer text-sm"
+                class="w-full flex items-center justify-between px-3 py-2 rounded-xl transition-all cursor-pointer text-xs"
                 :class="(activeTab === 'routes' || activeTab === 'callback') ? 'bg-brand-50 text-brand-600 shadow-xs' : 'text-slate-600 hover:text-slate-900 hover:bg-slate-50'"
               >
-                <div class="flex items-center gap-3">
-                  <svg class="w-5 h-5 shrink-0" :class="(activeTab === 'routes' || activeTab === 'callback') ? 'text-brand-500' : 'text-slate-400'" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 5a2 2 0 012-2h3.28a1 1 0 01.948.684l1.498 4.493a1 1 0 01-.502 1.21l-2.257 1.13a11.042 11.042 0 005.516 5.516l1.13-2.257a1 1 0 011.21-.502l4.493 1.498a1 1 0 01.684.949V19a2 2 0 01-2 2h-1C9.716 21 3 14.284 3 6V5z"/></svg>
+                <div class="flex items-center gap-2.5">
+                  <svg class="w-4 h-4 shrink-0" :class="(activeTab === 'routes' || activeTab === 'callback') ? 'text-brand-500' : 'text-slate-400'" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 5a2 2 0 012-2h3.28a1 1 0 01.948.684l1.498 4.493a1 1 0 01-.502 1.21l-2.257 1.13a11.042 11.042 0 005.516 5.516l1.13-2.257a1 1 0 011.21-.502l4.493 1.498a1 1 0 01.684.949V19a2 2 0 01-2 2h-1C9.716 21 3 14.284 3 6V5z"/></svg>
                   <span>通话与回拨记录</span>
                 </div>
-                <span class="w-2 h-2 rounded-full shrink-0" :class="(activeTab === 'routes' || activeTab === 'callback') ? 'bg-brand-500' : 'bg-transparent'"></span>
+                <span class="w-1.5 h-1.5 rounded-full shrink-0" :class="(activeTab === 'routes' || activeTab === 'callback') ? 'bg-brand-500' : 'bg-transparent'"></span>
               </button>
 
               <!-- 菜单 2: 客服组管理 -->
               <button
                 @click="emit('update:activeTab', 'groups')"
-                class="w-full flex items-center justify-between px-4 py-3 rounded-2xl transition-all cursor-pointer text-sm"
+                class="w-full flex items-center justify-between px-3 py-2 rounded-xl transition-all cursor-pointer text-xs"
                 :class="activeTab === 'groups' ? 'bg-brand-50 text-brand-600 shadow-xs' : 'text-slate-600 hover:text-slate-900 hover:bg-slate-50'"
               >
-                <div class="flex items-center gap-3">
-                  <svg class="w-5 h-5 shrink-0" :class="activeTab === 'groups' ? 'text-brand-500' : 'text-slate-400'" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0zm6 3a2 2 0 11-4 0 2 2 0 014 0zM7 10a2 2 0 11-4 0 2 2 0 014 0z"/></svg>
+                <div class="flex items-center gap-2.5">
+                  <svg class="w-4 h-4 shrink-0" :class="activeTab === 'groups' ? 'text-brand-500' : 'text-slate-400'" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0zm6 3a2 2 0 11-4 0 2 2 0 014 0zM7 10a2 2 0 11-4 0 2 2 0 014 0z"/></svg>
                   <span>客服组管理</span>
                 </div>
-                <span class="w-2 h-2 rounded-full shrink-0" :class="activeTab === 'groups' ? 'bg-brand-500' : 'bg-transparent'"></span>
+                <span class="w-1.5 h-1.5 rounded-full shrink-0" :class="activeTab === 'groups' ? 'bg-brand-500' : 'bg-transparent'"></span>
               </button>
 
               <!-- 菜单 3: 组织效能报表 (紧随客服组管理下方) -->
               <button
                 @click="emit('update:activeTab', 'orgreport')"
-                class="w-full flex items-center justify-between px-4 py-3 rounded-2xl transition-all cursor-pointer text-sm"
+                class="w-full flex items-center justify-between px-3 py-2 rounded-xl transition-all cursor-pointer text-xs"
                 :class="activeTab === 'orgreport' ? 'bg-brand-50 text-brand-600 shadow-xs' : 'text-slate-600 hover:text-slate-900 hover:bg-slate-50'"
               >
-                <div class="flex items-center gap-3">
-                  <svg class="w-5 h-5 shrink-0" :class="activeTab === 'orgreport' ? 'text-brand-500' : 'text-slate-400'" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M16 8v8m-4-5v5m-4-2v2m-2 4h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z"/></svg>
+                <div class="flex items-center gap-2.5">
+                  <svg class="w-4 h-4 shrink-0" :class="activeTab === 'orgreport' ? 'text-brand-500' : 'text-slate-400'" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M16 8v8m-4-5v5m-4-2v2m-2 4h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z"/></svg>
                   <span>组织效能报表</span>
                 </div>
-                <span class="w-2 h-2 rounded-full shrink-0" :class="activeTab === 'orgreport' ? 'bg-brand-500' : 'bg-transparent'"></span>
+                <span class="w-1.5 h-1.5 rounded-full shrink-0" :class="activeTab === 'orgreport' ? 'bg-brand-500' : 'bg-transparent'"></span>
               </button>
 
               <!-- 菜单 4: IVR 流程 (改名: IVR流程) -->
               <button
                 @click="emit('update:activeTab', 'flows')"
-                class="w-full flex items-center justify-between px-4 py-3 rounded-2xl transition-all cursor-pointer text-sm"
+                class="w-full flex items-center justify-between px-3 py-2 rounded-xl transition-all cursor-pointer text-xs"
                 :class="activeTab === 'flows' ? 'bg-brand-50 text-brand-600 shadow-xs' : 'text-slate-600 hover:text-slate-900 hover:bg-slate-50'"
               >
-                <div class="flex items-center gap-3">
-                  <svg class="w-5 h-5 shrink-0" :class="activeTab === 'flows' ? 'text-brand-500' : 'text-slate-400'" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 10V3L4 14h7v7l9-11h-7z"/></svg>
+                <div class="flex items-center gap-2.5">
+                  <svg class="w-4 h-4 shrink-0" :class="activeTab === 'flows' ? 'text-brand-500' : 'text-slate-400'" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 10V3L4 14h7v7l9-11h-7z"/></svg>
                   <span>IVR 流程</span>
                 </div>
-                <span class="w-2 h-2 rounded-full shrink-0" :class="activeTab === 'flows' ? 'bg-brand-500' : 'bg-transparent'"></span>
+                <span class="w-1.5 h-1.5 rounded-full shrink-0" :class="activeTab === 'flows' ? 'bg-brand-500' : 'bg-transparent'"></span>
               </button>
 
               <!-- 菜单 5: 系统监控大盘 -->
               <button
                 @click="emit('update:activeTab', 'running')"
-                class="w-full flex items-center justify-between px-4 py-3 rounded-2xl transition-all cursor-pointer text-sm"
+                class="w-full flex items-center justify-between px-3 py-2 rounded-xl transition-all cursor-pointer text-xs"
                 :class="activeTab === 'running' ? 'bg-brand-50 text-brand-600 shadow-xs' : 'text-slate-600 hover:text-slate-900 hover:bg-slate-50'"
               >
-                <div class="flex items-center gap-3">
-                  <svg class="w-5 h-5 shrink-0" :class="activeTab === 'running' ? 'text-brand-500' : 'text-slate-400'" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z"/></svg>
+                <div class="flex items-center gap-2.5">
+                  <svg class="w-4 h-4 shrink-0" :class="activeTab === 'running' ? 'text-brand-500' : 'text-slate-400'" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z"/></svg>
                   <span>系统监控大盘</span>
                 </div>
-                <span class="w-2 h-2 rounded-full shrink-0" :class="activeTab === 'running' ? 'bg-brand-500' : 'bg-transparent'"></span>
+                <span class="w-1.5 h-1.5 rounded-full shrink-0" :class="activeTab === 'running' ? 'bg-brand-500' : 'bg-transparent'"></span>
               </button>
             </div>
           </div>
 
           <div>
-            <div class="text-xs font-bold text-slate-400 uppercase tracking-wider px-3 mb-2.5">系统运维</div>
-            <div class="space-y-1.5 font-bold">
+            <div class="text-[11px] font-bold text-slate-400 uppercase tracking-wider px-2 mb-2">系统运维</div>
+            <div class="space-y-1 font-bold">
               <!-- 菜单 6: 分机管理 -->
               <button
                 @click="emit('update:activeTab', 'extensions')"
-                class="w-full flex items-center justify-between px-4 py-3 rounded-2xl transition-all cursor-pointer text-sm"
+                class="w-full flex items-center justify-between px-3 py-2 rounded-xl transition-all cursor-pointer text-xs"
                 :class="activeTab === 'extensions' ? 'bg-brand-50 text-brand-600 shadow-xs' : 'text-slate-600 hover:text-slate-900 hover:bg-slate-50'"
               >
-                <div class="flex items-center gap-3">
-                  <svg class="w-5 h-5 shrink-0" :class="activeTab === 'extensions' ? 'text-brand-500' : 'text-slate-400'" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 18h.01M8 21h8a2 2 0 002-2V5a2 2 0 00-2-2H8a2 2 0 00-2 2v14a2 2 0 002 2z"/></svg>
+                <div class="flex items-center gap-2.5">
+                  <svg class="w-4 h-4 shrink-0" :class="activeTab === 'extensions' ? 'text-brand-500' : 'text-slate-400'" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 18h.01M8 21h8a2 2 0 002-2V5a2 2 0 00-2-2H8a2 2 0 00-2 2v14a2 2 0 002 2z"/></svg>
                   <span>分机管理</span>
                 </div>
-                <span class="w-2 h-2 rounded-full shrink-0" :class="activeTab === 'extensions' ? 'bg-brand-500' : 'bg-transparent'"></span>
+                <span class="w-1.5 h-1.5 rounded-full shrink-0" :class="activeTab === 'extensions' ? 'bg-brand-500' : 'bg-transparent'"></span>
               </button>
 
               <!-- 菜单 7: 系统变量 (业务配置) -->
               <button
                 @click="emit('update:activeTab', 'sysvars')"
-                class="w-full flex items-center justify-between px-4 py-3 rounded-2xl transition-all cursor-pointer text-sm"
+                class="w-full flex items-center justify-between px-3 py-2 rounded-xl transition-all cursor-pointer text-xs"
                 :class="activeTab === 'sysvars' ? 'bg-brand-50 text-brand-600 shadow-xs' : 'text-slate-600 hover:text-slate-900 hover:bg-slate-50'"
               >
-                <div class="flex items-center gap-3">
-                  <svg class="w-5 h-5 shrink-0" :class="activeTab === 'sysvars' ? 'text-brand-500' : 'text-slate-400'" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 6V4m0 2a2 2 0 100 4m0-4a2 2 0 110 4m-6 8a2 2 0 100-4m0 4a2 2 0 110-4m0 4v2m0-6V4m6 6v10m6-2a2 2 0 100-4m0 4a2 2 0 110-4m0 4v2m0-6V4"/></svg>
+                <div class="flex items-center gap-2.5">
+                  <svg class="w-4 h-4 shrink-0" :class="activeTab === 'sysvars' ? 'text-brand-500' : 'text-slate-400'" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 6V4m0 2a2 2 0 100 4m0-4a2 2 0 110 4m-6 8a2 2 0 100-4m0 4a2 2 0 110-4m0 4v2m0-6V4m6 6v10m6-2a2 2 0 100-4m0 4a2 2 0 110-4m0 4v2m0-6V4"/></svg>
                   <span>系统变量 (业务配置)</span>
                 </div>
-                <span class="w-2 h-2 rounded-full shrink-0" :class="activeTab === 'sysvars' ? 'bg-brand-500' : 'bg-transparent'"></span>
+                <span class="w-1.5 h-1.5 rounded-full shrink-0" :class="activeTab === 'sysvars' ? 'bg-brand-500' : 'bg-transparent'"></span>
               </button>
 
               <!-- 菜单 8: 客户端管理 -->
               <button
                 @click="emit('update:activeTab', 'clients')"
-                class="w-full flex items-center justify-between px-4 py-3 rounded-2xl transition-all cursor-pointer text-sm"
+                class="w-full flex items-center justify-between px-3 py-2 rounded-xl transition-all cursor-pointer text-xs"
                 :class="activeTab === 'clients' ? 'bg-brand-50 text-brand-600 shadow-xs' : 'text-slate-600 hover:text-slate-900 hover:bg-slate-50'"
               >
-                <div class="flex items-center gap-3">
-                  <svg class="w-5 h-5 shrink-0" :class="activeTab === 'clients' ? 'text-brand-500' : 'text-slate-400'" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9.75 17L9 20l-1 1h8l-1-1-.75-3M3 13h18M5 17h14a2 2 0 002-2V5a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z"/></svg>
+                <div class="flex items-center gap-2.5">
+                  <svg class="w-4 h-4 shrink-0" :class="activeTab === 'clients' ? 'text-brand-500' : 'text-slate-400'" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9.75 17L9 20l-1 1h8l-1-1-.75-3M3 13h18M5 17h14a2 2 0 002-2V5a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z"/></svg>
                   <span>客户端管理</span>
                 </div>
-                <span class="w-2 h-2 rounded-full shrink-0" :class="activeTab === 'clients' ? 'bg-brand-500' : 'bg-transparent'"></span>
+                <span class="w-1.5 h-1.5 rounded-full shrink-0" :class="activeTab === 'clients' ? 'bg-brand-500' : 'bg-transparent'"></span>
               </button>
             </div>
           </div>
@@ -230,15 +230,15 @@ const handleNotify = () => {
       </div>
 
       <!-- 底部中间件节点健康卡片 -->
-      <div class="bg-gradient-to-br from-indigo-50 via-blue-50 to-purple-50 p-4.5 rounded-3xl border border-indigo-100/70 text-center relative overflow-hidden">
-        <div class="w-9 h-9 rounded-full bg-white shadow-sm flex items-center justify-center text-sm font-bold text-brand-600 mx-auto mb-2">
+      <div class="bg-gradient-to-br from-indigo-50 via-blue-50 to-purple-50 p-3 rounded-2xl border border-indigo-100/70 text-center relative overflow-hidden">
+        <div class="w-7 h-7 rounded-full bg-white shadow-sm flex items-center justify-center text-xs font-bold text-brand-600 mx-auto mb-1.5">
           ⚡
         </div>
-        <div class="text-sm font-bold text-slate-800 mb-0.5">通信中间件集群</div>
-        <p class="text-xs text-slate-500 mb-3 leading-relaxed font-medium">FreeSWITCH + Sidecar</p>
+        <div class="text-xs font-bold text-slate-800 mb-0.5">通信中间件集群</div>
+        <p class="text-[10px] text-slate-500 mb-2 leading-tight font-medium">FreeSWITCH + Sidecar</p>
         <button
           @click="handleProbe"
-          class="w-full py-2.5 bg-white hover:bg-slate-50 text-brand-600 text-xs font-extrabold rounded-xl shadow-xs transition-all cursor-pointer"
+          class="w-full py-1.5 bg-white hover:bg-slate-50 text-brand-600 text-[11px] font-extrabold rounded-lg shadow-xs transition-all cursor-pointer"
         >
           实时性能探测
         </button>

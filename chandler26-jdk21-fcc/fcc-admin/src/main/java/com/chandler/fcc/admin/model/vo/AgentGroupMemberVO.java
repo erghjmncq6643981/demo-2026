@@ -1,5 +1,7 @@
 package com.chandler.fcc.admin.model.vo;
 
+import com.fasterxml.jackson.databind.annotation.JsonSerialize;
+import com.fasterxml.jackson.databind.ser.std.ToStringSerializer;
 import io.swagger.v3.oas.annotations.media.Schema;
 import lombok.AllArgsConstructor;
 import lombok.Builder;
@@ -24,13 +26,13 @@ public class AgentGroupMemberVO implements Serializable {
     private static final long serialVersionUID = 1L;
 
     @Schema(description = "成员关联记录 ID")
-    private Long id;
+    private String id;
 
     @Schema(description = "技能组 ID")
-    private Long groupId;
+    private String groupId;
 
     @Schema(description = "坐席 ID")
-    private Long agentId;
+    private String agentId;
 
     @Schema(description = "工号")
     private String workNo;

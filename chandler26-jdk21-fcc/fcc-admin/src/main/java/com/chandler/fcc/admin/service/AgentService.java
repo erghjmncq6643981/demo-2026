@@ -517,9 +517,9 @@ public class AgentService {
                 .map(m -> {
                     AgentEntity agent = agentMap.get(m.getAgentId());
                     return AgentGroupMemberVO.builder()
-                            .id(m.getId())
-                            .groupId(m.getGroupId())
-                            .agentId(m.getAgentId())
+                            .id(m.getId() == null ? null : String.valueOf(m.getId()))
+                            .groupId(m.getGroupId() == null ? null : String.valueOf(m.getGroupId()))
+                            .agentId(m.getAgentId() == null ? null : String.valueOf(m.getAgentId()))
                             .workNo(agent.getWorkNo())
                             .agentName(agent.getAgentName())
                             .phoneNumber(agent.getPhoneNumber())

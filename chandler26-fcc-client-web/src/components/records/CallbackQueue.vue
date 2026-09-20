@@ -41,19 +41,19 @@
     </div>
 
     <!-- 漏话回拨专业数据表格 (Table) -->
-    <div class="flex-1 overflow-x-auto mt-2">
+    <div class="flex-1 overflow-x-auto mt-2 rounded-xl border border-slate-200/80 shadow-xs">
       <table class="w-full text-xs text-left">
-        <thead class="text-slate-400 border-b border-slate-100 pb-2 text-[11px] font-bold">
+        <thead class="bg-slate-100/90 text-slate-800 border-b border-slate-200 text-xs font-black tracking-wider uppercase">
           <tr>
-            <th class="py-3 px-3">序号/单号</th>
-            <th class="py-3 px-3">客户号码</th>
-            <th class="py-3 px-3">呼入DID</th>
-            <th class="py-3 px-3">漏话时间</th>
-            <th class="py-3 px-3">等待时长</th>
-            <th class="py-3 px-3">漏话原因</th>
-            <th class="py-3 px-3">回拨状态</th>
-            <th class="py-3 px-3">跟进坐席</th>
-            <th class="py-3 px-3 text-right">操作</th>
+            <th class="py-3 px-3.5 text-slate-900 font-black whitespace-nowrap">序号/单号</th>
+            <th class="py-3 px-3.5 text-slate-900 font-black whitespace-nowrap">客户号码</th>
+            <th class="py-3 px-3.5 text-slate-900 font-black whitespace-nowrap">呼入DID</th>
+            <th class="py-3 px-3.5 text-slate-900 font-black whitespace-nowrap">漏话时间</th>
+            <th class="py-3 px-3.5 text-slate-900 font-black whitespace-nowrap">等待时长</th>
+            <th class="py-3 px-3.5 text-slate-900 font-black whitespace-nowrap">漏话原因</th>
+            <th class="py-3 px-3.5 text-slate-900 font-black whitespace-nowrap">回拨状态</th>
+            <th class="py-3 px-3.5 text-slate-900 font-black whitespace-nowrap">跟进坐席</th>
+            <th class="py-3 px-3.5 text-right text-slate-900 font-black whitespace-nowrap">操作</th>
           </tr>
         </thead>
         <tbody v-if="!isLoading && tasks.length > 0" class="divide-y divide-slate-50">

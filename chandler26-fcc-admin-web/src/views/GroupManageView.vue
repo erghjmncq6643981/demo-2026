@@ -65,6 +65,7 @@ const {
   editingMember,
   editMemberRole,
   editMemberPriority,
+  editMemberPassword,
   handleOpenEditMember,
   handleConfirmEditMember,
   handleUnbindMember,
@@ -79,35 +80,35 @@ const {
     <!-- 提示已统一收敛到全局反馈层 (src/utils/feedback.ts) -->
 
     <!-- ========================================================================= -->
-    <!-- 1. 左侧企业组织架构树 (真实数据库驱动，单一顶级根节点初始) -->
+    <!-- 1. 左侧企业组织架构树 (真实数据库驱动，单一顶级根节点初始，精简为 w-60) -->
     <!-- ========================================================================= -->
-    <div class="w-80 bg-white rounded-2xl border border-slate-200/80 shadow-xs p-5 flex flex-col shrink-0">
+    <div class="w-60 bg-white rounded-2xl border border-slate-200/80 shadow-xs p-3.5 flex flex-col shrink-0">
       
       <!-- 顶栏：标题与快捷新增 -->
-      <div class="flex items-center justify-between pb-3 border-b border-slate-100">
-        <div class="flex items-center gap-2">
-          <span class="text-lg">🏢</span>
-          <h2 class="text-sm font-black text-slate-900 tracking-tight">组织与技能组</h2>
+      <div class="flex items-center justify-between pb-2.5 border-b border-slate-100">
+        <div class="flex items-center gap-1.5">
+          <span class="text-base">🏢</span>
+          <h2 class="text-xs font-black text-slate-900 tracking-tight">组织与技能组</h2>
         </div>
         <button
           @click="openAddDept"
-          class="px-2.5 py-1 bg-blue-50 hover:bg-blue-100 text-[#1677ff] rounded-lg text-xs font-bold transition flex items-center gap-1 cursor-pointer"
+          class="px-2 py-1 bg-blue-50 hover:bg-blue-100 text-[#1677ff] rounded-lg text-[11px] font-bold transition flex items-center gap-1 cursor-pointer"
           title="在选中部门下创建子部门或技能组"
         >
           <span>➕</span>
-          <span>新建分组</span>
+          <span>新建</span>
         </button>
       </div>
 
       <!-- 搜索栏 -->
-      <div class="relative my-3">
+      <div class="relative my-2.5">
         <input
           v-model="searchOrg"
           type="text"
           placeholder="搜索部门或技能组..."
-          class="w-full bg-[#f8fafc] border border-slate-200 rounded-xl pl-3 pr-8 py-2 text-xs text-slate-700 placeholder-slate-400 focus:outline-none focus:border-[#1677ff] transition"
+          class="w-full bg-[#f8fafc] border border-slate-200 rounded-xl pl-3 pr-7 py-1.5 text-xs text-slate-700 placeholder-slate-400 focus:outline-none focus:border-[#1677ff] transition"
         />
-        <span class="absolute right-2.5 top-2.5 text-slate-400 text-xs">🔍</span>
+        <span class="absolute right-2 top-2 text-slate-400 text-xs">🔍</span>
       </div>
 
       <!-- 组织架构树主体 -->
@@ -127,21 +128,21 @@ const {
       </div>
 
       <!-- 底部右键提示条 -->
-      <div class="pt-3 mt-2 border-t border-slate-100 flex items-center justify-between text-xs text-slate-500">
-        <div class="flex items-center gap-1.5">
+      <div class="pt-2.5 mt-1.5 border-t border-slate-100 flex items-center justify-between text-[11px] text-slate-500">
+        <div class="flex items-center gap-1">
           <span class="text-blue-500 font-bold">💡</span>
-          <span>右键节点增/删/改</span>
+          <span>右键节点增删改</span>
         </div>
-        <span class="font-mono text-slate-600 font-bold truncate max-w-[140px]" :title="selectedDept">
+        <span class="font-mono text-slate-600 font-bold truncate max-w-[90px]" :title="selectedDept">
           {{ selectedDept }}
         </span>
       </div>
     </div>
 
     <!-- ========================================================================= -->
-    <!-- 2. 右侧管理主区域 (卡片化、真实数据库驱动) -->
+    <!-- 2. 右侧管理主区域 (卡片化、真实数据库驱动，支持上下垂直平滑滚动) -->
     <!-- ========================================================================= -->
-    <div class="flex-1 bg-white rounded-2xl border border-slate-200/80 shadow-xs p-6 flex flex-col overflow-y-auto space-y-6">
+    <div class="flex-1 min-h-0 bg-white rounded-2xl border border-slate-200/80 shadow-xs p-6 flex flex-col overflow-y-auto space-y-6">
       
       <!-- 2.1 顶部部门信息与话务路由配置卡片 -->
       <div class="bg-gradient-to-r from-slate-50 via-white to-blue-50/30 rounded-2xl border border-slate-200/90 p-5 shadow-2xs space-y-4">
@@ -186,8 +187,8 @@ const {
 
         <!-- 核心话务属性与规则网格 -->
         <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 pt-1">
-          <!-- 卡片 1: 坐席分配策略 -->
-          <div class="bg-white p-3.5 rounded-xl border border-slate-200 shadow-2xs space-y-1.5">
+          <!-- 卡片 1: 坐席分配策略 (移除冗余解释文案以避免挤压列表) -->
+          <div class="bg-white p-3.5 rounded-xl border border-slate-200 shadow-2xs space-y-2">
             <div class="flex items-center justify-between text-xs text-slate-500 font-bold">
               <div class="flex items-center gap-1.5">
                 <span class="text-blue-500">⚡</span>
@@ -203,9 +204,6 @@ const {
               <option value="LONGEST_IDLE">最长空闲优先 (Longest Idle)</option>
               <option value="PRIORITY">坐席优先级 (Priority)</option>
             </select>
-            <div class="text-[10px] text-slate-400 leading-tight">
-              {{ strategyDesc }}
-            </div>
           </div>
 
           <!-- 卡片 2: 同组代答机制 -->
@@ -339,27 +337,27 @@ const {
           </div>
         </div>
 
-        <!-- 坐席成员表格 (真实数据库字段) -->
-        <div class="border border-slate-200/90 rounded-xl overflow-hidden">
-          <table class="w-full text-xs text-center">
+        <!-- 坐席成员表格 (支持横向滑动，单元格防折行) -->
+        <div class="border border-slate-200/90 rounded-xl overflow-x-auto">
+          <table class="w-full min-w-[850px] text-xs text-center">
             <thead class="bg-[#f8fafc] text-slate-600 border-b border-slate-200 font-bold">
               <tr>
-                <th class="py-3 px-4 text-left">坐席姓名</th>
-                <th class="py-3 px-4">工号</th>
-                <th class="py-3 px-4">联系电话</th>
-                <th class="py-3 px-4">组内身份</th>
-                <th class="py-3 px-4">调度优先级</th>
-                <th class="py-3 px-4">系统角色</th>
-                <th class="py-3 px-4">入组时间</th>
-                <th class="py-3 px-4 text-right">操作</th>
+                <th class="py-3 px-4 text-left whitespace-nowrap">坐席姓名</th>
+                <th class="py-3 px-4 whitespace-nowrap">工号</th>
+                <th class="py-3 px-4 whitespace-nowrap">联系电话</th>
+                <th class="py-3 px-4 whitespace-nowrap">组内身份</th>
+                <th class="py-3 px-4 whitespace-nowrap">调度优先级</th>
+                <th class="py-3 px-4 whitespace-nowrap">系统角色</th>
+                <th class="py-3 px-4 whitespace-nowrap">入组时间</th>
+                <th class="py-3 px-4 text-right whitespace-nowrap">操作</th>
               </tr>
             </thead>
             <tbody class="divide-y divide-slate-100 bg-white">
               <tr v-for="mem in pagedMembers" :key="mem.id" class="hover:bg-blue-50/30 transition-colors">
                 <!-- 姓名 + 头像 -->
-                <td class="py-3 px-4 text-left">
+                <td class="py-3 px-4 text-left whitespace-nowrap">
                   <div class="flex items-center gap-2.5">
-                    <div class="w-7 h-7 rounded-full bg-gradient-to-tr from-blue-500 to-indigo-500 text-white font-bold flex items-center justify-center text-xs shadow-2xs">
+                    <div class="w-7 h-7 rounded-full bg-gradient-to-tr from-blue-500 to-indigo-500 text-white font-bold flex items-center justify-center text-xs shadow-2xs shrink-0">
                       {{ mem.agentName ? mem.agentName.slice(0, 1) : '坐' }}
                     </div>
                     <div>
@@ -369,17 +367,17 @@ const {
                   </div>
                 </td>
                 <!-- 工号 -->
-                <td class="py-3 px-4 font-mono font-bold text-slate-700">
+                <td class="py-3 px-4 font-mono font-bold text-slate-700 whitespace-nowrap">
                   <span class="px-2 py-0.5 rounded bg-slate-100 text-slate-700">
                     {{ mem.workNo }}
                   </span>
                 </td>
                 <!-- 手机号 -->
-                <td class="py-3 px-4 font-mono text-slate-700">
+                <td class="py-3 px-4 font-mono text-slate-700 whitespace-nowrap">
                   {{ mem.phoneNumber || '-' }}
                 </td>
                 <!-- 组内身份 (LEADER / MEMBER) -->
-                <td class="py-3 px-4">
+                <td class="py-3 px-4 whitespace-nowrap">
                   <span
                     class="px-2.5 py-0.5 rounded-full text-[11px] font-bold"
                     :class="mem.memberRole === 'LEADER' ? 'bg-purple-100 text-purple-700 border border-purple-200' : 'bg-blue-50 text-blue-700'"
@@ -388,23 +386,23 @@ const {
                   </span>
                 </td>
                 <!-- 优先级 -->
-                <td class="py-3 px-4 font-mono font-bold text-slate-700">
+                <td class="py-3 px-4 font-mono font-bold text-slate-700 whitespace-nowrap">
                   <span class="px-2 py-0.5 rounded bg-amber-50 text-amber-700 border border-amber-200 text-[11px]">
                     优先级 {{ mem.priority ?? 0 }}
                   </span>
                 </td>
                 <!-- 系统角色 -->
-                <td class="py-3 px-4">
+                <td class="py-3 px-4 whitespace-nowrap">
                   <span class="text-xs text-slate-600 font-medium">
                     {{ mem.roleCode === 'SUPERVISOR' ? '主管' : '坐席' }}
                   </span>
                 </td>
                 <!-- 加入时间 -->
-                <td class="py-3 px-4 font-mono text-slate-400 text-[11px]">
+                <td class="py-3 px-4 font-mono text-slate-400 text-[11px] whitespace-nowrap">
                   {{ mem.createdAt ? mem.createdAt.replace('T', ' ').slice(0, 19) : '-' }}
                 </td>
                 <!-- 操作 -->
-                <td class="py-3 px-4 text-right">
+                <td class="py-3 px-4 text-right whitespace-nowrap">
                   <div class="inline-flex items-center gap-1.5">
                     <button
                       @click="handleOpenEditMember(mem)"
@@ -799,6 +797,15 @@ const {
           <div>
             <label class="block text-slate-700 mb-1 font-bold">调度优先级 (数值越小优先级越高)</label>
             <input v-model.number="editMemberPriority" type="number" min="0" max="100" class="w-full border border-slate-200 rounded-xl px-3 py-2 text-xs font-mono text-slate-800 focus:outline-none focus:border-[#1677ff]" />
+          </div>
+          <div>
+            <label class="block text-slate-700 mb-1 font-bold">登录密码 (留空保持原密码)</label>
+            <input
+              v-model="editMemberPassword"
+              type="password"
+              placeholder="输入新密码 (8-64位，留空则不修改)"
+              class="w-full border border-slate-200 rounded-xl px-3 py-2 text-xs text-slate-800 focus:outline-none focus:border-[#1677ff]"
+            />
           </div>
         </div>
         <div class="flex justify-end gap-2.5 pt-2">

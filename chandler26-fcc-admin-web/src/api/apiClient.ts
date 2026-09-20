@@ -6,6 +6,20 @@ const apiClient = axios.create({
   headers: {
     'Content-Type': 'application/json',
   },
+  transformResponse: [
+    (data) => {
+      if (typeof data === 'string') {
+        // 防止雪花算法等 16 位以上的大整数在 JSON.parse 时丢失低位精度
+        const safeData = data.replace(/([\[:])\s*(\d{16,})\s*([,\}\]])/g, '$1"$2"$3');
+        try {
+          return JSON.parse(safeData);
+        } catch {
+          return data;
+        }
+      }
+      return data;
+    },
+  ],
 });
 
 apiClient.interceptors.request.use(

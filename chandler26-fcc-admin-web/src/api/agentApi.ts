@@ -161,5 +161,8 @@ export const agentApi = {
   removeMemberFromGroup(groupId: string, agentId: string): Promise<void> {
     return apiClient.delete(`/agents/groups/${groupId}/members/${agentId}`);
   },
+  resetPassword(agentId: string, password?: string): Promise<{ loginPassword?: string; sipPassword?: string }> {
+    return apiClient.post(`/agents/${agentId}/reset-password`, { password: password || undefined });
+  },
 };
 

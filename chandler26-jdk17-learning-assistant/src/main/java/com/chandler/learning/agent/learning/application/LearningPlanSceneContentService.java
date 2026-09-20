@@ -3,7 +3,7 @@ package com.chandler.learning.agent.learning.application;
 import cn.hutool.core.util.StrUtil;
 import com.chandler.learning.agent.ai.chat.application.AgentChatRequest;
 import com.chandler.learning.agent.ai.chat.application.AgentChatResponse;
-import com.chandler.learning.agent.ai.chat.application.AiChatService;
+import com.chandler.learning.agent.ai.chat.application.AiStructuredResponseRetryPolicy;
 import com.chandler.learning.agent.ai.chat.domain.enums.AiInvocationScene;
 import com.chandler.learning.agent.learning.domain.entity.LearningPlan;
 import com.chandler.learning.agent.learning.domain.enums.LearningScene;
@@ -41,7 +41,7 @@ import java.util.stream.Collectors;
 @RequiredArgsConstructor
 public class LearningPlanSceneContentService {
 
-    private final AiChatService aiChatService;
+    private final AiStructuredResponseRetryPolicy structuredRetryPolicy;
     private final ObjectMapper objectMapper;
 
     /** 将词表候选词转换为模型输入并发起场景生成请求。 */
@@ -72,6 +72,15 @@ public class LearningPlanSceneContentService {
         variables.put("review_words", review);
         variables.put("target_word_count", targetWordCount);
 
+        String baseMessage = "请为学习计划“" + plan.getName() + "”生成第 " + unitNo + " 个场景单元。";
+        return structuredRetryPolicy.execute(
+                correction -> buildSceneRequest(plan, variables, modelConfigId, baseMessage, correction),
+                this::sceneUnitRetryCorrection);
+    }
+
+    /** 组装场景单元请求；correction 非空时追加在用户提问末尾，作为重试时的纠正要求。 */
+    private AgentChatRequest buildSceneRequest(LearningPlan plan, Map<String, Object> variables, Long modelConfigId,
+                                               String baseMessage, String correction) {
         AgentChatRequest request = new AgentChatRequest();
         request.setUserId(plan.getUserId());
         request.setInvocationScene(AiInvocationScene.VOCABULARY_SCENE_UNIT);
@@ -83,9 +92,21 @@ public class LearningPlanSceneContentService {
         request.setBusinessId(LearningScene.ENGLISH_VOCABULARY_PLAN.getCode());
         request.setSceneCode(LearningScene.ENGLISH_VOCABULARY_PLAN.getCode());
         request.setModelConfigId(modelConfigId);
-        request.setMessage("请为学习计划“" + plan.getName() + "”生成第 " + unitNo + " 个场景单元。");
+        request.setMessage(correction == null ? baseMessage : baseMessage + "\n\n" + correction);
         request.setVariables(variables);
-        return aiChatService.chat(request);
+        return request;
+    }
+
+    /**
+     * 模型提前收尾或漏字段时追加的纠正要求。
+     * <p>只重申必须返回的字段与完整性约束，不引入任何新的业务输入。</p>
+     */
+    private String sceneUnitRetryCorrection(String failureMessage) {
+        return "注意：上一次输出不符合要求（" + failureMessage + "）。请重新完整输出一个 JSON 对象，"
+                + "title、learning_text、translation、vocabulary 四个字段一个都不能省略，不得提前收尾或截断响应；"
+                + "vocabulary 必须是与候选词对应的数组，每个词条都要带齐 term、tier、mastery_requirement、phonetic、"
+                + "meaning、context_meaning、accepted_spellings、meaning_question；"
+                + "learning_text 与 translation 必须是 2-4 个完整自然段。";
     }
 
     /** 校验 AI 返回的核心词、复习词必须来自本次输入集合。 */
