@@ -1,0 +1,22 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.chandler.fcc.server.websocket.persistence.ScreenPopDeliveryMapper">
+ <insert id="save">INSERT IGNORE INTO fcc_screen_pop_delivery(tenant_id,owner_work_no,call_id,payload,expires_at) VALUES(#{tenant},#{owner},#{call},#{payload},TIMESTAMPADD(MICROSECOND,#{expires}*1000,'1970-01-01 00:00:00'))</insert>
+ <select id="pending" resultType="string">
+  SELECT CAST(d.payload AS CHAR) FROM fcc_screen_pop_delivery d
+  JOIN fcc_call_session c ON c.id=d.call_id AND c.tenant_id=d.tenant_id
+  WHERE d.tenant_id=#{tenant} AND d.owner_work_no=#{owner} AND d.closed_at IS NULL
+    AND d.expires_at&gt;UTC_TIMESTAMP(3) AND c.ended_at IS NULL AND c.answered_at IS NULL
+    AND c.primary_work_no=#{owner}
+  ORDER BY d.expires_at LIMIT 20
+ </select>
+ <update id="receipt">
+  UPDATE fcc_screen_pop_delivery SET
+   received_at=CASE WHEN #{state}='RECEIVED' THEN COALESCE(received_at,UTC_TIMESTAMP(3)) ELSE received_at END,
+   shown_at=CASE WHEN #{state}='SHOWN' THEN COALESCE(shown_at,UTC_TIMESTAMP(3)) ELSE shown_at END,
+   activated_at=CASE WHEN #{state}='ACTIVATED' THEN COALESCE(activated_at,UTC_TIMESTAMP(3)) ELSE activated_at END,
+   unsupported_at=CASE WHEN #{state}='UNSUPPORTED' THEN COALESCE(unsupported_at,UTC_TIMESTAMP(3)) ELSE unsupported_at END
+  WHERE tenant_id=#{tenant} AND owner_work_no=#{owner} AND call_id=#{call}
+ </update>
+ <update id="close">UPDATE fcc_screen_pop_delivery SET closed_at=COALESCE(closed_at,UTC_TIMESTAMP(3)) WHERE tenant_id=#{tenant} AND owner_work_no=#{owner} AND call_id=#{call}</update>
+</mapper>

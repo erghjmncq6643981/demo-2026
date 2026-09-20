@@ -1,0 +1,7 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.chandler.fcc.server.event.EventInboxMapper">
+ <insert id="receive">INSERT IGNORE INTO fcc_event_inbox(event_id,node_id,payload,status) VALUES(#{id},#{node},#{payload},'PROCESSING')</insert>
+ <select id="status" resultType="string">SELECT status FROM fcc_event_inbox WHERE event_id=#{id}</select>
+ <update id="finish">UPDATE fcc_event_inbox SET status=#{status},updated_at=UTC_TIMESTAMP(3) WHERE event_id=#{id}</update>
+</mapper>

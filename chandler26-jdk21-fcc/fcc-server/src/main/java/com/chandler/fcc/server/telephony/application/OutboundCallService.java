@@ -132,13 +132,18 @@ public class OutboundCallService {
     call.setStageState(CallStageState.CONNECTED);persistence.saveOrUpdateSession(call);
     websocket.pushCallAnswered(call.getAgentWorkNo(),call.getCallId(),Map.of("callId",call.getCallId()));
    }else if("DESTROY".equals(state)){
+    var previousStage=call.getStageState();
     call.putData("terminal",true);call.setHangupCause(params.path("cause").asText("NORMAL_CLEARING"));call.setStageState(CallStageState.NORMAL_END);
     call.setDuration(params.path("duration").asInt());call.setBillsec(params.path("billsec").asInt());
-    persistence.saveOrUpdateSession(call);
+    try {
+     transactions.executeWithoutResult(status->{
+      persistence.saveOrUpdateSession(call);
+      if("AGENT_FIRST".equals(template))agents.release(((Number)call.getData().get("tenantId")).longValue(),call.getAgentWorkNo(),call.getCallId());
+     });
+    } catch(RuntimeException failure){call.getData().remove("terminal");call.setStageState(previousStage);throw failure;}
     String peer=uuid.equals(call.getAgentChannelUuid())?call.getGuestChannelUuid():call.getAgentChannelUuid();
     if(peer!=null)client.hangup(call.getNodeId(),call.getCtrlId(),peer,"NORMAL_CLEARING");
     if("AGENT_FIRST".equals(template)){
-     agents.release(((Number)call.getData().get("tenantId")).longValue(),call.getAgentWorkNo(),call.getCallId());
      websocket.pushCallHangup(call.getAgentWorkNo(),call.getCallId(),Map.of("cause",call.getHangupCause()));
     }
     sessions.removeSession(call.getCtrlId());

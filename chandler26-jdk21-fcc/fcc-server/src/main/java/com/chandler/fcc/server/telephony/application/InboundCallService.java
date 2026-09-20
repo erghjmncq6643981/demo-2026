@@ -113,10 +113,11 @@ public class InboundCallService {
  private void finish(CallInfoBO call,String cause){
   if(call.getData().putIfAbsent("terminal",true)!=null)return;
   boolean answered=call.getStageState()==CallStageState.CONNECTED;
+  var previousStage=call.getStageState();
   call.setStageState(CallStageState.NORMAL_END);call.setHangupCause(cause);
-  transactions.executeWithoutResult(transaction->{persistence.saveOrUpdateSession(call);release(call);
+  try { transactions.executeWithoutResult(transaction->{persistence.saveOrUpdateSession(call);release(call);
    if(!answered)agents.callback(IdUtil.nextId(),((Number)call.getData().get("tenantId")).longValue(),call.getCallId(),call.getCallerNumber(),call.getDestinationNumber(),cause);
-  });
+  }); } catch(RuntimeException failure){call.getData().remove("terminal");call.setStageState(previousStage);throw failure;}
   client.hangup(call.getNodeId(),call.getCtrlId(),call.getGuestChannelUuid(),"NORMAL_CLEARING");
   if(call.getAgentChannelUuid()!=null){client.hangup(call.getNodeId(),call.getCtrlId(),call.getAgentChannelUuid(),"NORMAL_CLEARING");websocket.pushCallHangup(call.getAgentWorkNo(),call.getCallId(),Map.of("cause",cause));}
   sessions.removeSession(call.getCtrlId());

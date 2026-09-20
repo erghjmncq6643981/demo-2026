@@ -1,0 +1,98 @@
+package com.chandler.fcc.server.starter;
+
+import com.chandler.fcc.server.agent.infrastructure.AgentRuntimeMapper;
+import com.chandler.fcc.server.agent.infrastructure.PhoneBindingMapper;
+import com.chandler.fcc.server.customer.infrastructure.CustomerMapper;
+import com.chandler.fcc.server.customer.api.CustomerRecord;
+import com.chandler.fcc.server.event.EventInboxMapper;
+import com.chandler.fcc.server.outbound.infrastructure.DialJobMapper;
+import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.condition.EnabledIfEnvironmentVariable;
+import org.mybatis.spring.SqlSessionFactoryBean;
+import org.mybatis.spring.SqlSessionTemplate;
+import org.springframework.core.io.support.PathMatchingResourcePatternResolver;
+import org.springframework.jdbc.core.JdbcTemplate;
+import org.springframework.jdbc.datasource.DriverManagerDataSource;
+import org.springframework.jdbc.datasource.DataSourceTransactionManager;
+import org.springframework.transaction.support.TransactionTemplate;
+import java.util.Map;
+import static org.junit.jupiter.api.Assertions.*;
+
+/** 独立一次性 MySQL 验证真实 SQL，不连接 FreeSWITCH 或业务数据库。 */
+@EnabledIfEnvironmentVariable(named="FCC_SQL_TEST_URL",matches="jdbc:mysql://127\\.0\\.0\\.1:13316/fcc_verify.*")
+class RuntimeSqlIntegrationTest {
+ /** 验证租户隔离、绑定互斥、任务领取与持久收件箱，事务末尾回滚测试数据。 */
+ @Test void validatesAllRuntimeMappersOnMySql() throws Exception {
+  var dataSource=new DriverManagerDataSource(System.getenv("FCC_SQL_TEST_URL"),"root","");
+  var factory=new SqlSessionFactoryBean();factory.setDataSource(dataSource);
+  var config=new org.apache.ibatis.session.Configuration();config.setMapUnderscoreToCamelCase(true);factory.setConfiguration(config);
+  var resolver=new PathMatchingResourcePatternResolver();
+  factory.setMapperLocations(resolver.getResource("classpath:mapper/AgentRuntimeMapper.xml"),resolver.getResource("classpath:mapper/PhoneBindingMapper.xml"),resolver.getResource("classpath:mapper/CustomerMapper.xml"),resolver.getResource("classpath:mapper/DialJobMapper.xml"),resolver.getResource("classpath:mapper/EventInboxMapper.xml"),resolver.getResource("classpath:mapper/ScreenPopDeliveryMapper.xml"));
+  var session=new SqlSessionTemplate(factory.getObject());
+  var jdbc=new JdbcTemplate(dataSource);var tx=new TransactionTemplate(new DataSourceTransactionManager(dataSource));
+  tx.executeWithoutResult(status->{
+   status.setRollbackOnly();
+   jdbc.update("INSERT INTO fcc_agent(id,tenant_id,work_no,agent_name,status) VALUES(900001,42,'test-agent','test','ENABLED')");
+   jdbc.update("INSERT INTO fcc_extension(id,tenant_id,extension,status) VALUES(900002,42,'1001','ENABLED')");
+   var bindings=session.getMapper(PhoneBindingMapper.class);
+   bindings.challenge(42,"test-agent","1001","a".repeat(64));
+   assertEquals(42L,((Number)bindings.lockChallenge("a".repeat(64),"1001").get("tenantId")).longValue());
+   bindings.ensureLock(42);assertEquals(42L,bindings.lockTenant(42));assertEquals(0,bindings.busy(42,"test-agent","1001"));
+   bindings.disableBindings(42,"test-agent","1001");bindings.clearExtensions(42,"test-agent","1001");bindings.clearAgents(42,"test-agent","1001");
+   assertEquals(1,bindings.bindExtension(42,"test-agent","1001"));assertEquals(1,bindings.bindAgent(42,"test-agent","1001"));assertEquals(1,bindings.appendBinding(900003,42,"test-agent","1001"));
+   bindings.consume("a".repeat(64),"channel-proof");assertEquals("CONSUMED",bindings.status(42,"test-agent").get("status"));
+   var runtime=session.getMapper(AgentRuntimeMapper.class);
+   runtime.ensurePresence(42,"test-agent");runtime.setPresence(42,"test-agent","READY");
+   assertEquals(1,runtime.reserve(42,"test-agent","900010"));assertEquals(0,runtime.reserve(42,"test-agent","900011"));assertEquals(1,bindings.busy(42,"test-agent","1001"));
+   assertEquals(0,runtime.release(42,"test-agent","900011"));assertEquals(1,runtime.release(42,"test-agent","900010"));
+   assertEquals("ACW",runtime.presence(42,"test-agent").get("status"));
+   var customers=session.getMapper(CustomerMapper.class);var customer=new CustomerRecord();customer.setId("900004");customer.setName("测试客户");customer.setPhoneNumber("1001");customer.setNotes("detail-only");customer.setVersion(0L);
+   customers.insert(42,"test-agent",customer);assertNull(customers.detail(43,"test-agent","900004"));assertNull(customers.list(42,"test-agent",null,0,50).getFirst().getNotes());
+   assertEquals(1,customers.update(42,"test-agent",customer));assertEquals(0,customers.update(42,"test-agent",customer));
+   var jobs=session.getMapper(DialJobMapper.class);jobs.create(Map.of("id","900005","tenant",42,"owner","test-agent","key","test-job-1","mode","PROGRESSIVE","maxAttempts",2,"payload","{\"number\":\"1001\"}"));
+   assertEquals(1L,jobs.schedulerLock());assertEquals("900005",jobs.next().get("id"));assertEquals(1,jobs.claim("900005"));assertEquals(0,jobs.claim("900005"));
+   jobs.startAttempt(Map.of("attempt","900006","tenant",42,"id","900005","attemptNo",1,"number","1001"));assertEquals(1,jobs.activeCount());
+   jobs.attach("900006","900010");assertEquals("900010",jobs.attempts("900005").getFirst().get("callId"));assertEquals(1,jobs.finishAttempt("900006","FAILED","NO_ANSWER"));jobs.finishJob("900005","PENDING");assertEquals(1,jobs.control(42,"test-agent","900005","PAUSE"));
+   assertNull(jobs.detail(43,"test-agent","900005"));assertEquals(1,jobs.frequency(42,"1001"));
+   // Recovery must not let an older unresolved call starve completed attempts.
+   jdbc.update("UPDATE fcc_dial_job SET status='RUNNING' WHERE id=900005");
+   jdbc.update("UPDATE fcc_dial_attempt SET status='RUNNING',ended_at=NULL WHERE id=900006");
+   jdbc.update("INSERT INTO fcc_call_session(id,tenant_id,biz_id,ctrl_id,model_type,direction,status,started_at,ended_at,result) VALUES(900010,42,'900006','test-reconcile','OUTBOUND_TWO_WAY_CALL','OUTBOUND','NORMAL_END',UTC_TIMESTAMP(3),UTC_TIMESTAMP(3),'NO_ANSWER')");
+   assertEquals("900006",jobs.running().getFirst().get("id"));
+   assertTrue(jobs.reconcileBatch(java.util.List.of("900006"))>0);
+   assertEquals("FAILED",jobs.attempts("900005").getFirst().get("status"));
+   assertEquals("PENDING",jobs.detail(42,"test-agent","900005").get("status"));
+   assertEquals(0,jobs.reconcileBatch(java.util.List.of("900006")));
+   jdbc.update("UPDATE fcc_dial_attempt SET status='RUNNING',ended_at=NULL WHERE id=900006");
+   jdbc.update("UPDATE fcc_dial_job SET status='CANCELLED' WHERE id=900005");
+   jdbc.update("UPDATE fcc_call_session SET answered_at=started_at WHERE id=900010");
+   jobs.reconcileBatch(java.util.List.of("900006"));
+   assertEquals("SUCCEEDED",jobs.attempts("900005").getFirst().get("status"));
+   assertEquals("CANCELLED",jobs.detail(42,"test-agent","900005").get("status"));
+   jobs.create(Map.of("id","900015","tenant",42,"owner","test-agent","key","test-job-lease","mode","PROGRESSIVE","maxAttempts",2,"payload","{\"number\":\"1002\"}"));
+   jobs.claim("900015");
+   jobs.startAttempt(Map.of("attempt","900016","tenant",42,"id","900015","attemptNo",1,"number","1002"));
+   assertEquals("900016",jobs.lockDispatch("900016"));
+   jdbc.update("UPDATE fcc_dial_attempt SET started_at=DATE_SUB(UTC_TIMESTAMP(3),INTERVAL 121 SECOND) WHERE id=900016");
+   assertNull(jobs.lockDispatch("900016"));
+   assertEquals(java.util.List.of("900016"),jobs.expiredDispatches());
+   assertTrue(jobs.expireDispatches(java.util.List.of("900016"))>0);
+   assertEquals("FAILED",jobs.detail(42,"test-agent","900015").get("status"));
+   assertEquals("DISPATCH_EXPIRED",jobs.attempts("900015").getFirst().get("result"));
+   assertEquals(0,jobs.expireDispatches(java.util.List.of("900016")));
+   var deliveries=session.getMapper(com.chandler.fcc.server.websocket.persistence.ScreenPopDeliveryMapper.class);
+   jdbc.update("UPDATE fcc_call_session SET ended_at=NULL,answered_at=NULL,primary_work_no='test-agent' WHERE id=900010");
+   assertEquals(1,deliveries.save(42,"test-agent","900010","{\"callId\":\"900010\"}",System.currentTimeMillis()+30000));
+   assertEquals(0,deliveries.save(42,"test-agent","900010","{}",System.currentTimeMillis()+60000));
+   assertEquals(1,deliveries.pending(42,"test-agent").size());
+   assertTrue(deliveries.pending(43,"test-agent").isEmpty());
+   assertEquals(0,deliveries.receipt(43,"test-agent","900010","SHOWN"));
+   deliveries.receipt(42,"test-agent","900010","ACTIVATED");
+   deliveries.receipt(42,"test-agent","900010","RECEIVED");
+   assertNotNull(jdbc.queryForObject("SELECT activated_at FROM fcc_screen_pop_delivery WHERE call_id=900010",java.sql.Timestamp.class));
+   deliveries.close(42,"test-agent","900010");
+   assertTrue(deliveries.pending(42,"test-agent").isEmpty());
+   var inbox=session.getMapper(EventInboxMapper.class);assertEquals(1,inbox.receive("b".repeat(64),"test-node","{}"));assertEquals(0,inbox.receive("b".repeat(64),"test-node","{}"));inbox.finish("b".repeat(64),"PROCESSED");assertEquals("PROCESSED",inbox.status("b".repeat(64)));
+  });
+ }
+}
