@@ -1,0 +1,1140 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>fswitch-web - 软交换控制中心</title>
+  <script src="https://www.gstatic.com/antigravity/web/dev/tailwindcss.min.js"></script>
+  <style>
+    @import url('https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;600;700&family=Inter:wght@400;500;600;700&display=swap');
+    body { font-family: 'Inter', -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; }
+    .mono { font-family: 'JetBrains Mono', monospace; }
+    ::-webkit-scrollbar { width: 6px; height: 6px; }
+    ::-webkit-scrollbar-track { background: #0F172A; }
+    ::-webkit-scrollbar-thumb { background: #334155; border-radius: 4px; }
+    ::-webkit-scrollbar-thumb:hover { background: #475569; }
+  </style>
+</head>
+<body class="bg-[#0B1120] text-slate-200 antialiased h-screen flex flex-col overflow-hidden select-none">
+
+  <!-- ================= 1. 顶部全局导航栏 (Top Navbar) ================= -->
+  <header class="bg-[#0F172A] border-b border-slate-800 h-14 flex items-center justify-between px-5 shrink-0 z-30">
+    <!-- Brand & Cluster Info -->
+    <div class="flex items-center gap-6">
+      <div class="flex items-center gap-3">
+        <div class="w-8 h-8 rounded-lg bg-gradient-to-tr from-cyan-600 to-teal-400 flex items-center justify-center shadow-md shadow-cyan-500/20">
+          <svg class="w-4 h-4 text-white" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2">
+            <path d="M12 2L2 7l10 5 10-5-10-5zM2 17l10 5 10-5M2 12l10 5 10-5"/>
+          </svg>
+        </div>
+        <div class="flex items-baseline gap-2">
+          <span class="text-white font-bold text-base tracking-wide">fswitch-web</span>
+          <span class="text-xs bg-cyan-950 text-cyan-400 border border-cyan-800/60 px-2 py-0.5 rounded font-mono">Control Plane</span>
+        </div>
+      </div>
+
+      <!-- 核心引擎指标指示灯 -->
+      <div class="hidden md:flex items-center gap-3 bg-slate-900/90 border border-slate-800 px-3.5 py-1.5 rounded-lg text-xs">
+        <div class="flex items-center gap-1.5">
+          <span class="w-2 h-2 rounded-full bg-emerald-400 animate-pulse"></span>
+          <span class="text-slate-400">Node:</span>
+          <span class="text-white font-mono font-medium">macbook-local (192.168.18.64)</span>
+        </div>
+        <span class="text-slate-700">|</span>
+        <div class="flex items-center gap-1">
+          <span class="text-slate-400">Uptime:</span>
+          <span class="text-emerald-400 font-mono">8h 47m</span>
+        </div>
+        <span class="text-slate-700">|</span>
+        <div class="flex items-center gap-1">
+          <span class="text-slate-400">并发:</span>
+          <span id="top-sessions-count" class="text-cyan-400 font-mono font-semibold">0 / 1000</span>
+        </div>
+        <span class="text-slate-700">|</span>
+        <div class="flex items-center gap-1">
+          <span class="text-slate-400">PG:</span>
+          <span class="text-emerald-400 font-mono">freeswitch (OK)</span>
+        </div>
+      </div>
+    </div>
+
+    <!-- 顶部控制与操作区 -->
+    <div class="flex items-center gap-3">
+      <!-- 快捷拨打测试 -->
+      <div class="flex items-center gap-2 bg-slate-900 border border-slate-800 rounded-lg px-2.5 py-1 text-xs">
+        <span class="text-slate-400 font-mono">拨测:</span>
+        <input id="quick-dial-dest" type="text" value="1007" placeholder="主叫/被叫" class="w-16 bg-slate-950 border border-slate-800 rounded px-1.5 py-0.5 text-white font-mono text-xs outline-none text-center">
+        <button onclick="handleQuickDial()" class="bg-cyan-600 hover:bg-cyan-500 text-white px-2 py-0.5 rounded font-medium transition">发起</button>
+      </div>
+
+      <button onclick="handleReloadXml()" class="bg-slate-800 hover:bg-slate-700 text-slate-200 text-xs px-3 py-1.5 rounded-lg border border-slate-700 flex items-center gap-1.5 transition">
+        <svg class="w-3.5 h-3.5 text-cyan-400" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21.5 2v6h-6M21.34 15.57a10 10 0 1 1-.57-8.38l5.67-5.67"/></svg>
+        <span>Reload XML</span>
+      </button>
+
+      <a href="http://localhost:8008" target="_blank" class="bg-gradient-to-r from-teal-500 to-cyan-600 text-white font-medium text-xs px-3 py-1.5 rounded-lg hover:brightness-110 shadow-sm transition">
+        打开运行端口 :8008
+      </a>
+    </div>
+  </header>
+
+  <!-- ================= 2. 主体工作区 (Sidebar + Dynamic Workspace) ================= -->
+  <div class="flex-1 flex overflow-hidden">
+    
+    <!-- 左侧主导航菜单 (Sidebar) -->
+    <aside class="w-60 bg-[#0D1424] border-r border-slate-800 flex flex-col justify-between py-4 shrink-0">
+      <div class="space-y-6">
+        <!-- 核心交换监控组 -->
+        <div>
+          <div class="px-4 text-xs font-semibold uppercase tracking-wider text-slate-400 mb-2">交换机运行时监控</div>
+          <nav class="space-y-1 px-2.5 text-sm">
+            <button onclick="switchTab('dashboard')" id="tab-dashboard" class="w-full flex items-center gap-3 px-3 py-2 rounded-lg font-medium transition bg-cyan-950/80 text-cyan-400 border border-cyan-800/60 shadow-sm">
+              <svg class="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="7" height="9"/><rect x="14" y="3" width="7" height="5"/><rect x="14" y="12" width="7" height="9"/><rect x="3" y="16" width="7" height="5"/></svg>
+              <span>集群总览 (Dashboard)</span>
+            </button>
+            <button onclick="switchTab('extensions')" id="tab-extensions" class="w-full flex items-center justify-between px-3 py-2 rounded-lg font-medium transition text-slate-300 hover:text-white hover:bg-slate-800/60">
+              <div class="flex items-center gap-3">
+                <svg class="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg>
+                <span>SIP 分机注册 (PG)</span>
+              </div>
+              <span id="badge-regs" class="bg-cyan-900/60 text-cyan-400 text-xs px-2 py-0.5 rounded-full font-mono">3 在线</span>
+            </button>
+            <button onclick="switchTab('channels')" id="tab-channels" class="w-full flex items-center justify-between px-3 py-2 rounded-lg font-medium transition text-slate-300 hover:text-white hover:bg-slate-800/60">
+              <div class="flex items-center gap-3">
+                <svg class="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M22 16.92v3a2 2 0 0 1-2.18 2 19.79 19.79 0 0 1-8.63-3.07 19.5 19.5 0 0 1-6-6 19.79 19.79 0 0 1-3.07-8.67A2 2 0 0 1 4.11 2h3a2 2 0 0 1 2 1.72 12.84 12.84 0 0 0 .7 2.81 2 2 0 0 1-.45 2.11L8.09 9.91a16 16 0 0 0 6 6l1.27-1.27a2 2 0 0 1 2.11-.45 12.84 12.84 0 0 0 2.81.7A2 2 0 0 1 22 16.92z"/></svg>
+                <span>实时通话 (Channels)</span>
+              </div>
+              <span id="badge-channels" class="bg-slate-800 text-slate-400 text-xs px-2 py-0.5 rounded-full font-mono">0 通</span>
+            </button>
+          </nav>
+        </div>
+
+        <!-- 协议与路由网络组 -->
+        <div>
+          <div class="px-4 text-xs font-semibold uppercase tracking-wider text-slate-400 mb-2">协议栈与网络拓扑</div>
+          <nav class="space-y-1 px-2.5 text-sm">
+            <button onclick="switchTab('sip')" id="tab-sip" class="w-full flex items-center gap-3 px-3 py-2 rounded-lg font-medium transition text-slate-300 hover:text-white hover:bg-slate-800/60">
+              <svg class="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><line x1="2" y1="12" x2="22" y2="12"/><path d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z"/></svg>
+              <span>SIP Profile (网络接口)</span>
+            </button>
+            <button onclick="switchTab('gateways')" id="tab-gateways" class="w-full flex items-center gap-3 px-3 py-2 rounded-lg font-medium transition text-slate-300 hover:text-white hover:bg-slate-800/60">
+              <svg class="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="2" y="2" width="20" height="8" rx="2" ry="2"/><rect x="2" y="14" width="20" height="8" rx="2" ry="2"/><line x1="6" y1="6" x2="6.01" y2="6"/><line x1="6" y1="18" x2="6.01" y2="18"/></svg>
+              <span>运营商网关 (Trunks)</span>
+            </button>
+          </nav>
+        </div>
+
+        <!-- 底层治理与原生工具 -->
+        <div>
+          <div class="px-4 text-xs font-semibold uppercase tracking-wider text-slate-400 mb-2">底层治理与引擎工具</div>
+          <nav class="space-y-1 px-2.5 text-sm">
+            <button onclick="switchTab('modules')" id="tab-modules" class="w-full flex items-center gap-3 px-3 py-2 rounded-lg font-medium transition text-slate-300 hover:text-white hover:bg-slate-800/60">
+              <svg class="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 2L2 7l10 5 10-5-10-5zM2 17l10 5 10-5M2 12l10 5 10-5"/></svg>
+              <span>FCC 治理与模块矩阵</span>
+            </button>
+            <button onclick="switchTab('terminal')" id="tab-terminal" class="w-full flex items-center gap-3 px-3 py-2 rounded-lg font-medium transition text-slate-300 hover:text-white hover:bg-slate-800/60">
+              <svg class="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="4 17 10 11 4 5"/><line x1="12" y1="19" x2="20" y2="19"/></svg>
+              <span>fs_cli 交互终端</span>
+            </button>
+            <button onclick="switchTab('cdr')" id="tab-cdr" class="w-full flex items-center gap-3 px-3 py-2 rounded-lg font-medium transition text-slate-300 hover:text-white hover:bg-slate-800/60">
+              <svg class="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/><polyline points="10 9 9 9 8 9"/></svg>
+              <span>原始 CDR 话单 (fs_cdr)</span>
+            </button>
+          </nav>
+        </div>
+      </div>
+
+      <!-- 底部系统健康提示 -->
+      <div class="px-4 pt-4 border-t border-slate-800/80">
+        <div class="bg-slate-900/90 rounded-lg p-3 border border-slate-800 space-y-1.5 text-xs font-mono">
+          <div class="flex justify-between items-center">
+            <span class="text-slate-400">FS Inbound ESL:</span>
+            <span class="text-emerald-400 font-bold">:8021 OK</span>
+          </div>
+          <div class="flex justify-between items-center">
+            <span class="text-slate-400">Go Sidecar API:</span>
+            <span class="text-emerald-400 font-bold">:8088 OK</span>
+          </div>
+          <div class="flex justify-between items-center">
+            <span class="text-slate-400">PG Core Data:</span>
+            <span class="text-emerald-400 font-bold">:5432 OK</span>
+          </div>
+        </div>
+      </div>
+    </aside>
+
+    <!-- 右侧动态主展示区域 (Dynamic Main Area) -->
+    <main class="flex-1 bg-[#090E1A] overflow-hidden flex flex-col">
+      
+      <!-- ================= 模块 1: 集群总览 (Dashboard) ================= -->
+      <div id="view-dashboard" class="flex-1 p-6 overflow-y-auto space-y-6">
+        <!-- 4 核心指标卡片 -->
+        <div class="grid grid-cols-1 md:grid-cols-4 gap-5">
+          <div class="bg-[#131C31] border border-slate-800 rounded-xl p-5 relative overflow-hidden shadow-sm">
+            <div class="text-xs text-slate-400 font-medium">当前活跃会话 (Active Calls)</div>
+            <div class="text-3xl font-bold text-white font-mono mt-2" id="stat-sessions">0</div>
+            <div class="text-xs text-emerald-400 mt-2 flex items-center gap-1 font-mono">
+              <span class="w-2 h-2 rounded-full bg-emerald-400"></span> 峰值容量: 1000
+            </div>
+          </div>
+          <div class="bg-[#131C31] border border-slate-800 rounded-xl p-5 relative overflow-hidden shadow-sm">
+            <div class="text-xs text-slate-400 font-medium">在线注册 SIP 分机</div>
+            <div class="text-3xl font-bold text-cyan-400 font-mono mt-2" id="stat-regs">3</div>
+            <div class="text-xs text-slate-400 mt-2 font-mono">1007, 1008, 1017 (Linphone/MicroSIP)</div>
+          </div>
+          <div class="bg-[#131C31] border border-slate-800 rounded-xl p-5 relative overflow-hidden shadow-sm">
+            <div class="text-xs text-slate-400 font-medium">每秒呼叫速率 (CPS)</div>
+            <div class="text-3xl font-bold text-white font-mono mt-2" id="stat-cps">0.0</div>
+            <div class="text-xs text-slate-400 mt-2 font-mono">健康限速: 100 CPS</div>
+          </div>
+          <div class="bg-[#131C31] border border-slate-800 rounded-xl p-5 relative overflow-hidden shadow-sm">
+            <div class="text-xs text-slate-400 font-medium">PostgreSQL 核心存储</div>
+            <div class="text-3xl font-bold text-emerald-400 font-mono mt-2">CONNECTED</div>
+            <div class="text-xs text-slate-400 mt-2 font-mono">freeswitch:5432 (实时同步)</div>
+          </div>
+        </div>
+
+        <!-- 软交换专属：物理分机在线状态 (不再出现业务坐席) -->
+        <div class="bg-[#131C31] border border-slate-800 rounded-xl p-5 space-y-4">
+          <div class="flex justify-between items-center border-b border-slate-800 pb-3">
+            <div class="flex items-center gap-2">
+              <span class="w-2 h-2 rounded-full bg-cyan-400"></span>
+              <span class="font-bold text-white text-base">软交换核心分机物理在线状态 (Sofia SIP Registrations)</span>
+            </div>
+            <span class="text-xs text-slate-400 font-mono">来源: PG registrations 表实时镜像</span>
+          </div>
+
+          <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
+            <!-- 1007 -->
+            <div class="bg-slate-900/80 border border-slate-800 rounded-lg p-4 space-y-2">
+              <div class="flex justify-between items-center">
+                <span class="font-mono text-base font-bold text-cyan-400">分机 1007</span>
+                <span class="text-xs px-2 py-0.5 rounded bg-emerald-500/15 text-emerald-400 border border-emerald-500/30 font-mono">ONLINE</span>
+              </div>
+              <div class="text-xs font-mono text-slate-300 space-y-1">
+                <div>终端 UA: <span class="text-white">Linphone Desktop/5.2.3</span></div>
+                <div>物理地址: <span class="text-slate-400">192.168.18.64:15061 (UDP)</span></div>
+                <div>Profile: <span class="text-cyan-300">internal</span></div>
+              </div>
+            </div>
+
+            <!-- 1008 -->
+            <div class="bg-slate-900/80 border border-slate-800 rounded-lg p-4 space-y-2">
+              <div class="flex justify-between items-center">
+                <span class="font-mono text-base font-bold text-cyan-400">分机 1008</span>
+                <span class="text-xs px-2 py-0.5 rounded bg-emerald-500/15 text-emerald-400 border border-emerald-500/30 font-mono">ONLINE</span>
+              </div>
+              <div class="text-xs font-mono text-slate-300 space-y-1">
+                <div>终端 UA: <span class="text-white">Zoiper 5 v5.5.14</span></div>
+                <div>物理地址: <span class="text-slate-400">192.168.18.64:64521 (UDP)</span></div>
+                <div>Profile: <span class="text-cyan-300">internal</span></div>
+              </div>
+            </div>
+
+            <!-- 1017 -->
+            <div class="bg-slate-900/80 border border-slate-800 rounded-lg p-4 space-y-2">
+              <div class="flex justify-between items-center">
+                <span class="font-mono text-base font-bold text-cyan-400">分机 1017</span>
+                <span class="text-xs px-2 py-0.5 rounded bg-emerald-500/15 text-emerald-400 border border-emerald-500/30 font-mono">ONLINE</span>
+              </div>
+              <div class="text-xs font-mono text-slate-300 space-y-1">
+                <div>终端 UA: <span class="text-white">MicroSIP/3.22.16</span></div>
+                <div>物理地址: <span class="text-slate-400">192.168.18.64:53446 (UDP)</span></div>
+                <div>Profile: <span class="text-cyan-300">internal</span></div>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Sofia Profile 状态矩阵 -->
+        <div class="grid grid-cols-1 md:grid-cols-2 gap-5">
+          <div class="bg-[#131C31] border border-slate-800 rounded-xl p-5 space-y-3">
+            <div class="flex justify-between items-center">
+              <span class="font-bold text-white text-base">Profile: internal</span>
+              <span class="text-emerald-400 text-xs font-mono bg-emerald-500/15 border border-emerald-500/30 px-2.5 py-0.5 rounded">RUNNING</span>
+            </div>
+            <div class="text-sm font-mono text-slate-300 space-y-2">
+              <div class="flex justify-between"><span class="text-slate-400">SIP 绑定:</span><span>192.168.18.64:5060 (UDP/TCP)</span></div>
+              <div class="flex justify-between"><span class="text-slate-400">WebSocket / WSS:</span><span>:5066 (ws) / :7443 (wss)</span></div>
+              <div class="flex justify-between"><span class="text-slate-400">音频编解码:</span><span class="text-cyan-300">OPUS, G722, PCMU, PCMA</span></div>
+              <div class="flex justify-between"><span class="text-slate-400">Dialplan 域:</span><span class="text-cyan-400">XML (context: default)</span></div>
+            </div>
+          </div>
+
+          <div class="bg-[#131C31] border border-slate-800 rounded-xl p-5 space-y-3">
+            <div class="flex justify-between items-center">
+              <span class="font-bold text-white text-base">Profile: external</span>
+              <span class="text-emerald-400 text-xs font-mono bg-emerald-500/15 border border-emerald-500/30 px-2.5 py-0.5 rounded">RUNNING</span>
+            </div>
+            <div class="text-sm font-mono text-slate-300 space-y-2">
+              <div class="flex justify-between"><span class="text-slate-400">SIP 绑定:</span><span>192.168.18.64:5080 (UDP/TCP)</span></div>
+              <div class="flex justify-between"><span class="text-slate-400">对接网关:</span><span>trunk_unicom_01 (REGED)</span></div>
+              <div class="flex justify-between"><span class="text-slate-400">DTMF 格式:</span><span>rfc2833 (payload 101)</span></div>
+              <div class="flex justify-between"><span class="text-slate-400">Dialplan 域:</span><span class="text-cyan-400">XML (context: public)</span></div>
+            </div>
+          </div>
+        </div>
+
+        <!-- 快速测试呼叫卡片 -->
+        <div class="bg-[#131C31] border border-slate-800 rounded-xl p-5 flex items-center justify-between">
+          <div>
+            <div class="font-bold text-white text-base">分机间呼叫发起测试 (ESL Originate Bridge)</div>
+            <div class="text-xs text-slate-400 mt-1">直接向 FreeSWITCH 发起底层 originate 呼叫桥接，实时验证 SIP 路由</div>
+          </div>
+          <div class="flex items-center gap-3">
+            <button onclick="originateCall('1017', '1007')" class="bg-slate-800 hover:bg-slate-700 text-cyan-300 text-sm px-4 py-2 rounded-lg border border-slate-700 font-mono transition">
+              拨打 1017 ➔ 1007
+            </button>
+            <button onclick="originateCall('1008', '1007')" class="bg-slate-800 hover:bg-slate-700 text-teal-300 text-sm px-4 py-2 rounded-lg border border-slate-700 font-mono transition">
+              拨打 1008 ➔ 1007
+            </button>
+          </div>
+        </div>
+      </div>
+
+      <!-- ================= 模块 2: SIP 分机注册 (Extensions - 纯软交换) ================= -->
+      <div id="view-extensions" class="hidden flex-1 flex flex-col overflow-hidden">
+        <!-- 头部操作条与子Tab -->
+        <div class="bg-[#0F172A] border-b border-slate-800 px-6 py-3 flex items-center justify-between shrink-0">
+          <div class="flex items-center gap-2 bg-slate-900 p-1 rounded-lg border border-slate-800 text-sm font-medium">
+            <button onclick="switchExtSubTab('regs')" id="ext-sub-regs" class="px-4 py-2 rounded-md transition bg-cyan-950 text-cyan-400 border border-cyan-800/60 shadow-sm">
+              实时在线注册表 (PG registrations)
+            </button>
+            <button onclick="switchExtSubTab('directory')" id="ext-sub-directory" class="px-4 py-2 rounded-md transition text-slate-400 hover:text-white">
+              SIP 分机目录 (Directory XML)
+            </button>
+          </div>
+          <div class="flex items-center gap-3">
+            <button onclick="flushInboundReg()" class="bg-rose-950/60 hover:bg-rose-900/80 text-rose-300 text-sm px-4 py-2 rounded-lg border border-rose-800/60 transition">
+              清空注册缓存 (Flush Reg)
+            </button>
+            <button onclick="showToast('已从 PostgreSQL 实时同步最新注册')" class="bg-slate-800 hover:bg-slate-700 text-slate-200 text-sm px-4 py-2 rounded-lg border border-slate-700 transition">
+              刷新
+            </button>
+          </div>
+        </div>
+
+        <!-- 注册列表内容 -->
+        <div class="flex-1 p-6 overflow-y-auto">
+          <!-- 子Tab 1: 实时在线注册表 (PG) -->
+          <div id="ext-content-regs" class="bg-[#131C31] border border-slate-800 rounded-xl overflow-hidden text-sm shadow-sm">
+            <table class="w-full text-left">
+              <thead class="bg-slate-900/90 text-slate-400 border-b border-slate-800 text-xs uppercase tracking-wider font-semibold">
+                <tr>
+                  <th class="py-3 px-5">分机号码</th>
+                  <th class="py-3 px-5">Sofia Profile</th>
+                  <th class="py-3 px-5">联系地址 (SIP Contact)</th>
+                  <th class="py-3 px-5">客户端 UA</th>
+                  <th class="py-3 px-5">网络协议</th>
+                  <th class="py-3 px-5">过期时间 (Expires)</th>
+                  <th class="py-3 px-5 text-right">操作</th>
+                </tr>
+              </thead>
+              <tbody class="divide-y divide-slate-800/80 font-mono text-sm">
+                <tr class="hover:bg-slate-800/40 transition">
+                  <td class="py-3.5 px-5 font-bold text-cyan-400">1007</td>
+                  <td class="py-3.5 px-5 text-slate-300">internal</td>
+                  <td class="py-3.5 px-5 text-slate-200">sip:1007@192.168.18.64:15061</td>
+                  <td class="py-3.5 px-5 text-slate-300">Linphone Desktop/5.2.3</td>
+                  <td class="py-3.5 px-5 text-emerald-400 font-semibold">UDP</td>
+                  <td class="py-3.5 px-5 text-slate-400">2026-09-18 18:22:10 (3540s)</td>
+                  <td class="py-3.5 px-5 text-right space-x-3">
+                    <button onclick="originateCall('1007', '1017')" class="text-cyan-400 hover:text-cyan-300 hover:underline">呼叫</button>
+                    <button onclick="showContactDetail('1007')" class="text-slate-400 hover:text-white hover:underline">详情</button>
+                  </td>
+                </tr>
+                <tr class="hover:bg-slate-800/40 transition">
+                  <td class="py-3.5 px-5 font-bold text-cyan-400">1008</td>
+                  <td class="py-3.5 px-5 text-slate-300">internal</td>
+                  <td class="py-3.5 px-5 text-slate-200">sip:1008@192.168.18.64:64521</td>
+                  <td class="py-3.5 px-5 text-slate-300">Zoiper 5 v5.5.14</td>
+                  <td class="py-3.5 px-5 text-emerald-400 font-semibold">UDP</td>
+                  <td class="py-3.5 px-5 text-slate-400">2026-09-18 18:24:55 (3585s)</td>
+                  <td class="py-3.5 px-5 text-right space-x-3">
+                    <button onclick="originateCall('1008', '1007')" class="text-cyan-400 hover:text-cyan-300 hover:underline">呼叫</button>
+                    <button onclick="showContactDetail('1008')" class="text-slate-400 hover:text-white hover:underline">详情</button>
+                  </td>
+                </tr>
+                <tr class="hover:bg-slate-800/40 transition">
+                  <td class="py-3.5 px-5 font-bold text-cyan-400">1017</td>
+                  <td class="py-3.5 px-5 text-slate-300">internal</td>
+                  <td class="py-3.5 px-5 text-slate-200">sip:1017@192.168.18.64:53446</td>
+                  <td class="py-3.5 px-5 text-slate-300">MicroSIP/3.22.16</td>
+                  <td class="py-3.5 px-5 text-emerald-400 font-semibold">UDP</td>
+                  <td class="py-3.5 px-5 text-slate-400">2026-09-18 18:25:30 (3590s)</td>
+                  <td class="py-3.5 px-5 text-right space-x-3">
+                    <button onclick="originateCall('1017', '1007')" class="text-cyan-400 hover:text-cyan-300 hover:underline">呼叫</button>
+                    <button onclick="showContactDetail('1017')" class="text-slate-400 hover:text-white hover:underline">详情</button>
+                  </td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+
+          <!-- 子Tab 2: SIP 分机目录 (Directory XML) -->
+          <div id="ext-content-directory" class="hidden bg-[#131C31] border border-slate-800 rounded-xl overflow-hidden text-sm shadow-sm">
+            <table class="w-full text-left">
+              <thead class="bg-slate-900/90 text-slate-400 border-b border-slate-800 text-xs uppercase tracking-wider font-semibold">
+                <tr>
+                  <th class="py-3 px-5">分机号码</th>
+                  <th class="py-3 px-5">SIP 鉴权密码</th>
+                  <th class="py-3 px-5">Context</th>
+                  <th class="py-3 px-5">呼叫权限级别</th>
+                  <th class="py-3 px-5">录音策略</th>
+                  <th class="py-3 px-5 text-right">操作</th>
+                </tr>
+              </thead>
+              <tbody class="divide-y divide-slate-800/80 font-mono text-sm">
+                <tr class="hover:bg-slate-800/40 transition">
+                  <td class="py-3.5 px-5 font-bold text-cyan-400">1007</td>
+                  <td class="py-3.5 px-5 text-slate-400">•••••••• (123456)</td>
+                  <td class="py-3.5 px-5 text-slate-300">default</td>
+                  <td class="py-3.5 px-5"><span class="bg-cyan-950 text-cyan-300 border border-cyan-800/60 px-2 py-0.5 rounded text-xs">国内长途 / 国际</span></td>
+                  <td class="py-3.5 px-5 text-emerald-400 font-semibold">双向强制立体声录音</td>
+                  <td class="py-3.5 px-5 text-right">
+                    <button onclick="showToast('编辑分机 1007 配置')" class="text-cyan-400 hover:underline">编辑</button>
+                  </td>
+                </tr>
+                <tr class="hover:bg-slate-800/40 transition">
+                  <td class="py-3.5 px-5 font-bold text-cyan-400">1008</td>
+                  <td class="py-3.5 px-5 text-slate-400">•••••••• (123456)</td>
+                  <td class="py-3.5 px-5 text-slate-300">default</td>
+                  <td class="py-3.5 px-5"><span class="bg-cyan-950 text-cyan-300 border border-cyan-800/60 px-2 py-0.5 rounded text-xs">国内长途 / 国际</span></td>
+                  <td class="py-3.5 px-5 text-emerald-400 font-semibold">双向强制立体声录音</td>
+                  <td class="py-3.5 px-5 text-right">
+                    <button onclick="showToast('编辑分机 1008 配置')" class="text-cyan-400 hover:underline">编辑</button>
+                  </td>
+                </tr>
+                <tr class="hover:bg-slate-800/40 transition">
+                  <td class="py-3.5 px-5 font-bold text-cyan-400">1017</td>
+                  <td class="py-3.5 px-5 text-slate-400">•••••••• (123456)</td>
+                  <td class="py-3.5 px-5 text-slate-300">default</td>
+                  <td class="py-3.5 px-5"><span class="bg-cyan-950 text-cyan-300 border border-cyan-800/60 px-2 py-0.5 rounded text-xs">国内长途 / 国际</span></td>
+                  <td class="py-3.5 px-5 text-emerald-400 font-semibold">双向强制立体声录音</td>
+                  <td class="py-3.5 px-5 text-right">
+                    <button onclick="showToast('编辑分机 1017 配置')" class="text-cyan-400 hover:underline">编辑</button>
+                  </td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
+      </div>
+
+      <!-- ================= 模块 3: 实时通话与通道 (Channels) ================= -->
+      <div id="view-channels" class="hidden flex-1 flex flex-col overflow-hidden">
+        <div class="bg-[#0F172A] border-b border-slate-800 px-6 py-3 flex items-center justify-between shrink-0">
+          <div class="flex items-center gap-3">
+            <span class="text-base font-semibold text-white">活跃通话与信令通道 (Channels & Bridges)</span>
+            <span class="text-xs text-slate-400 font-mono">从 PostgreSQL channels & calls 实时抓取</span>
+          </div>
+          <button onclick="showToast('已刷新当前通道状态')" class="bg-slate-800 hover:bg-slate-700 text-slate-200 text-sm px-4 py-2 rounded-lg border border-slate-700 transition">
+            刷新
+          </button>
+        </div>
+
+        <div class="flex-1 p-6 overflow-y-auto">
+          <div id="channels-table-box" class="bg-[#131C31] border border-slate-800 rounded-xl overflow-hidden text-sm font-mono shadow-sm">
+            <table class="w-full text-left">
+              <thead class="bg-slate-900/90 text-slate-400 border-b border-slate-800 text-xs uppercase tracking-wider font-semibold">
+                <tr>
+                  <th class="py-3 px-5">Channel UUID</th>
+                  <th class="py-3 px-5">主叫 (CID)</th>
+                  <th class="py-3 px-5">被叫 (Dest)</th>
+                  <th class="py-3 px-5">呼叫状态 (State)</th>
+                  <th class="py-3 px-5">编解码 (Codec)</th>
+                  <th class="py-3 px-5">网络 IP:Port</th>
+                  <th class="py-3 px-5 text-right">软交换操作</th>
+                </tr>
+              </thead>
+              <tbody id="channels-tbody" class="divide-y divide-slate-800/80">
+                <tr class="hover:bg-slate-800/40">
+                  <td colspan="7" class="py-12 text-center text-slate-500 font-mono text-sm">
+                    当前暂无活跃呼叫通道 (可通过顶部发起 1017 ➔ 1007 拨测验证)
+                  </td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
+      </div>
+
+      <!-- ================= 模块 4: SIP Profile (网络接口) ================= -->
+      <div id="view-sip" class="hidden flex-1 flex flex-col overflow-hidden">
+        <div class="bg-[#0F172A] border-b border-slate-800 px-6 py-3 flex items-center justify-between shrink-0">
+          <div class="flex items-center gap-2 bg-slate-900 p-1 rounded-lg border border-slate-800 text-sm font-medium">
+            <button onclick="switchSipSubProfile('internal')" id="sub-profile-internal" class="px-4 py-2 rounded-md transition bg-cyan-950 text-cyan-400 border border-cyan-800/60 shadow-sm">
+              internal (内网话机分机)
+            </button>
+            <button onclick="switchSipSubProfile('external')" id="sub-profile-external" class="px-4 py-2 rounded-md transition text-slate-400 hover:text-white">
+              external (外网中继接入)
+            </button>
+          </div>
+          <button onclick="showToast('打开 SIP Profile 参数配置弹窗')" class="bg-slate-800 hover:bg-slate-700 text-slate-200 text-sm px-4 py-2 rounded-lg border border-slate-700 transition">
+            编辑 Profile 参数
+          </button>
+        </div>
+
+        <div class="flex-1 p-6 overflow-y-auto space-y-5 text-sm">
+          <div class="bg-[#131C31] border border-slate-800 rounded-xl p-5 space-y-4">
+            <div class="flex justify-between items-center border-b border-slate-800 pb-3">
+              <div class="flex items-center gap-3">
+                <span class="font-bold text-white text-base" id="sip-profile-title">Profile: internal</span>
+                <span class="text-xs text-slate-400">Sofia SIP Profile 物理监听与信令驱动</span>
+              </div>
+              <span class="text-emerald-400 font-bold bg-emerald-500/15 border border-emerald-500/30 px-2.5 py-1 rounded text-xs font-mono">
+                RUNNING
+              </span>
+            </div>
+            <div class="grid grid-cols-1 md:grid-cols-2 gap-6 font-mono text-sm">
+              <div class="space-y-3 bg-slate-900/60 p-4 rounded-lg border border-slate-800/80">
+                <div class="flex justify-between"><span class="text-slate-400">SIP 绑定地址:</span><span class="text-white font-semibold">192.168.18.64:5060</span></div>
+                <div class="flex justify-between"><span class="text-slate-400">WebSocket / WSS:</span><span class="text-white">:5066 (ws) / :7443 (wss)</span></div>
+                <div class="flex justify-between"><span class="text-slate-400">RTP 绑定 IP:</span><span class="text-white">192.168.18.64</span></div>
+                <div class="flex justify-between"><span class="text-slate-400">Dialplan:</span><span class="text-cyan-400">XML (context: default)</span></div>
+              </div>
+              <div class="space-y-3 bg-slate-900/60 p-4 rounded-lg border border-slate-800/80">
+                <div class="flex justify-between"><span class="text-slate-400">音频 Codecs:</span><span class="text-cyan-300 font-semibold">OPUS, G722, PCMU, PCMA</span></div>
+                <div class="flex justify-between"><span class="text-slate-400">DTMF 模式:</span><span class="text-white">rfc2833 (payload 101)</span></div>
+                <div class="flex justify-between"><span class="text-slate-400">NAT 穿透 (Auto-NAT):</span><span class="text-slate-300">false (Local Subnet)</span></div>
+                <div class="flex justify-between"><span class="text-slate-400">底层心跳状态:</span><span class="text-emerald-400 font-bold">HEALTHY</span></div>
+              </div>
+            </div>
+          </div>
+
+          <!-- Raw Sofia Output Box -->
+          <div class="bg-[#131C31] border border-slate-800 rounded-xl p-5 space-y-3">
+            <span class="font-bold text-slate-300 text-sm uppercase">FreeSWITCH 原生 Sofia Profile 终端回显:</span>
+            <pre id="sip-raw-output" class="bg-slate-950 p-4 rounded-lg text-xs font-mono text-slate-300 overflow-x-auto max-h-72 leading-relaxed select-text border border-slate-850">=================================================================================================
+Name             internal
+Domain Name      192.168.18.64
+Auto-NAT         false
+DBName           sofia_reg_internal
+Pres-Users       0
+Pres-Hosts       0
+State            RUNNING
+Inbound-Calls    11
+Outbound-Calls   0
+=================================================================================================</pre>
+          </div>
+        </div>
+      </div>
+
+      <!-- ================= 模块 5: 运营商网关 (Gateways) ================= -->
+      <div id="view-gateways" class="hidden flex-1 flex flex-col overflow-hidden">
+        <div class="bg-[#0F172A] border-b border-slate-800 px-6 py-3 flex items-center justify-between shrink-0">
+          <div class="flex items-center gap-3">
+            <span class="text-base font-semibold text-white">运营商 SIP 外呼中继网关 (Trunks)</span>
+            <span class="text-xs text-slate-400">管理对接电信、联通、移动或私有 IMS 线路中继</span>
+          </div>
+          <button onclick="showModal('modal-add-gw')" class="bg-cyan-600 hover:bg-cyan-500 text-white text-sm px-4 py-2 rounded-lg font-medium transition flex items-center gap-1.5">
+            <span>+</span>
+            <span>添加运营商网关</span>
+          </button>
+        </div>
+
+        <div class="flex-1 p-6 overflow-y-auto">
+          <div class="bg-[#131C31] border border-slate-800 rounded-xl overflow-hidden text-sm shadow-sm">
+            <table class="w-full text-left">
+              <thead class="bg-slate-900/90 text-slate-400 border-b border-slate-800 text-xs uppercase tracking-wider font-semibold">
+                <tr>
+                  <th class="py-3 px-5">网关标识</th>
+                  <th class="py-3 px-5">所属 Profile</th>
+                  <th class="py-3 px-5">代理服务器 (Proxy IP:Port)</th>
+                  <th class="py-3 px-5">鉴权账号</th>
+                  <th class="py-3 px-5">注册状态</th>
+                  <th class="py-3 px-5">探活延迟 (Ping)</th>
+                  <th class="py-3 px-5 text-right">操作</th>
+                </tr>
+              </thead>
+              <tbody class="divide-y divide-slate-800/80 font-mono text-sm">
+                <tr class="hover:bg-slate-800/40 transition">
+                  <td class="py-3.5 px-5 font-bold text-cyan-400">trunk_unicom_01</td>
+                  <td class="py-3.5 px-5 text-slate-400">external</td>
+                  <td class="py-3.5 px-5 text-slate-200">112.95.120.5:5060</td>
+                  <td class="py-3.5 px-5 text-slate-300">trunk_user_01</td>
+                  <td class="py-3.5 px-5">
+                    <span class="bg-emerald-500/15 text-emerald-400 border border-emerald-500/30 px-2.5 py-1 rounded text-xs font-semibold">
+                      REGED (UP)
+                    </span>
+                  </td>
+                  <td class="py-3.5 px-5 text-emerald-400 font-semibold">12ms</td>
+                  <td class="py-3.5 px-5 text-right space-x-3">
+                    <button onclick="showToast('正在向网关 trunk_unicom_01 发送 SIP 探活 OPTIONS 报文')" class="text-cyan-400 hover:text-cyan-300 hover:underline">探活</button>
+                    <button onclick="showToast('删除网关操作')" class="text-rose-400 hover:text-rose-300 hover:underline">删除</button>
+                  </td>
+                </tr>
+                <tr class="hover:bg-slate-800/40 transition">
+                  <td class="py-3.5 px-5 font-bold text-cyan-400">trunk_telecom_ims</td>
+                  <td class="py-3.5 px-5 text-slate-400">external</td>
+                  <td class="py-3.5 px-5 text-slate-200">183.60.201.88:5060</td>
+                  <td class="py-3.5 px-5 text-slate-300">ims_auth_user</td>
+                  <td class="py-3.5 px-5">
+                    <span class="bg-slate-800 text-slate-400 border border-slate-700 px-2.5 py-1 rounded text-xs font-semibold">
+                      NOREG (IP AUTH)
+                    </span>
+                  </td>
+                  <td class="py-3.5 px-5 text-slate-500 font-semibold">--</td>
+                  <td class="py-3.5 px-5 text-right space-x-3">
+                    <button onclick="showToast('正在向网关 trunk_telecom_ims 发送 SIP 探活 OPTIONS 报文')" class="text-cyan-400 hover:text-cyan-300 hover:underline">探活</button>
+                    <button onclick="showToast('删除网关操作')" class="text-rose-400 hover:text-rose-300 hover:underline">删除</button>
+                  </td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
+      </div>
+
+      <!-- ================= 模块 6: FCC 治理与原生模块矩阵 (取代原 XCC) ================= -->
+      <div id="view-modules" class="hidden flex-1 flex flex-col overflow-hidden">
+        <div class="bg-[#0F172A] border-b border-slate-800 px-6 py-3 flex items-center justify-between shrink-0">
+          <div class="flex items-center gap-2 bg-slate-900 p-1 rounded-lg border border-slate-800 text-sm font-medium">
+            <button onclick="switchModulesSubTab('fcc')" id="mod-sub-fcc" class="px-4 py-2 rounded-md transition bg-cyan-950 text-cyan-400 border border-cyan-800/60 shadow-sm">
+              FCC 守护网关与治理配置 (FCC Sidecar)
+            </button>
+            <button onclick="switchModulesSubTab('native')" id="mod-sub-native" class="px-4 py-2 rounded-md transition text-slate-400 hover:text-white">
+              FreeSWITCH 原生核心模块矩阵 (Core Modules)
+            </button>
+          </div>
+          <button onclick="showToast('已同步最新 FCC 模块与运行时配置')" class="bg-slate-800 hover:bg-slate-700 text-slate-200 text-sm px-4 py-2 rounded-lg border border-slate-700 transition">
+            刷新
+          </button>
+        </div>
+
+        <div class="flex-1 p-6 overflow-y-auto space-y-5 text-sm">
+          <!-- FCC 守护网关治理面板 -->
+          <div id="mod-content-fcc" class="space-y-5">
+            <div class="bg-[#131C31] border border-slate-800 rounded-xl p-5 space-y-4 shadow-sm">
+              <div class="flex justify-between items-center border-b border-slate-800 pb-3">
+                <div class="flex items-center gap-3">
+                  <span class="font-bold text-white text-base">FCC Sidecar Agent 守护运行时 (Go Sidecar :8088)</span>
+                  <span class="text-xs text-slate-400">取代旧版 XSwitch 专有私有协议，采用工业级轻量 Sidecar + NATS 事件总线治理</span>
+                </div>
+                <span class="text-emerald-400 font-bold bg-emerald-500/15 border border-emerald-500/30 px-2.5 py-1 rounded text-xs font-mono">
+                  ACTIVE
+                </span>
+              </div>
+              <div class="grid grid-cols-1 md:grid-cols-2 gap-6 font-mono text-sm">
+                <div class="space-y-3 bg-slate-900/60 p-4 rounded-lg border border-slate-800/80">
+                  <div class="flex justify-between"><span class="text-slate-400">FreeSWITCH ESL 接入:</span><span class="text-white font-semibold">127.0.0.1:8021 (Inbound)</span></div>
+                  <div class="flex justify-between"><span class="text-slate-400">PG 核心存储连接:</span><span class="text-white font-semibold">freeswitch:5432 / postgres</span></div>
+                  <div class="flex justify-between"><span class="text-slate-400">HTTP RESTful API 端口:</span><span class="text-cyan-300 font-semibold">:8088</span></div>
+                  <div class="flex justify-between"><span class="text-slate-400">WebSocket 终端控制台:</span><span class="text-cyan-300 font-semibold">/api/v1/telephony/ws/console-logs</span></div>
+                </div>
+                <div class="space-y-3 bg-slate-900/60 p-4 rounded-lg border border-slate-800/80">
+                  <div class="flex justify-between"><span class="text-slate-400">NATS 消息事件总线:</span><span class="text-white font-semibold">nats://127.0.0.1:4222</span></div>
+                  <div class="flex justify-between"><span class="text-slate-400">优雅下线排空 (Draining):</span><span class="text-emerald-400 font-semibold">ENABLED</span></div>
+                  <div class="flex justify-between"><span class="text-slate-400">信令归一化 (Normalizer):</span><span class="text-emerald-400 font-semibold">ENABLED</span></div>
+                  <div class="flex justify-between"><span class="text-slate-400">监控指标上报:</span><span class="text-white font-semibold">Prometheus /metrics (:8088)</span></div>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <!-- 原生模块矩阵面板 -->
+          <div id="mod-content-native" class="hidden bg-[#131C31] border border-slate-800 rounded-xl overflow-hidden shadow-sm">
+            <table class="w-full text-left font-mono text-sm">
+              <thead class="bg-slate-900/90 text-slate-400 border-b border-slate-800 text-xs uppercase tracking-wider font-semibold">
+                <tr>
+                  <th class="py-3 px-5">模块名称</th>
+                  <th class="py-3 px-5">功能描述</th>
+                  <th class="py-3 px-5">运行状态</th>
+                  <th class="py-3 px-5">关键配置参数</th>
+                  <th class="py-3 px-5 text-right">操作</th>
+                </tr>
+              </thead>
+              <tbody class="divide-y divide-slate-800/80">
+                <tr class="hover:bg-slate-800/40 transition">
+                  <td class="py-3.5 px-5 font-bold text-cyan-400">mod_sofia</td>
+                  <td class="py-3.5 px-5 font-sans text-slate-200">SIP 信令协议栈，负责处理分机注册、呼叫呼入呼出</td>
+                  <td class="py-3.5 px-5"><span class="bg-emerald-500/15 text-emerald-400 border border-emerald-500/30 px-2 py-0.5 rounded text-xs">LOADED</span></td>
+                  <td class="py-3.5 px-5 text-slate-400">internal (:5060), external (:5080)</td>
+                  <td class="py-3.5 px-5 text-right"><button onclick="showToast('重新加载 mod_sofia')" class="text-cyan-400 hover:underline">Reload</button></td>
+                </tr>
+                <tr class="hover:bg-slate-800/40 transition">
+                  <td class="py-3.5 px-5 font-bold text-cyan-400">mod_pgsql</td>
+                  <td class="py-3.5 px-5 font-sans text-slate-200">PostgreSQL 核心数据库驱动，持久化 registrations 与 channels</td>
+                  <td class="py-3.5 px-5"><span class="bg-emerald-500/15 text-emerald-400 border border-emerald-500/30 px-2 py-0.5 rounded text-xs">LOADED</span></td>
+                  <td class="py-3.5 px-5 text-slate-400">host=freeswitch port=5432 dbname=freeswitch</td>
+                  <td class="py-3.5 px-5 text-right"><button onclick="showToast('检查 mod_pgsql 连接状态')" class="text-cyan-400 hover:underline">Check</button></td>
+                </tr>
+                <tr class="hover:bg-slate-800/40 transition">
+                  <td class="py-3.5 px-5 font-bold text-cyan-400">mod_event_socket</td>
+                  <td class="py-3.5 px-5 font-sans text-slate-200">ESL 套接字服务，提供控制指令下发与事件监听通道</td>
+                  <td class="py-3.5 px-5"><span class="bg-emerald-500/15 text-emerald-400 border border-emerald-500/30 px-2 py-0.5 rounded text-xs">LOADED</span></td>
+                  <td class="py-3.5 px-5 text-slate-400">listen_ip=0.0.0.0 listen_port=8021</td>
+                  <td class="py-3.5 px-5 text-right"><button onclick="showToast('重新加载 mod_event_socket')" class="text-cyan-400 hover:underline">Reload</button></td>
+                </tr>
+                <tr class="hover:bg-slate-800/40 transition">
+                  <td class="py-3.5 px-5 font-bold text-cyan-400">mod_opus</td>
+                  <td class="py-3.5 px-5 font-sans text-slate-200">高清自适应 Opus 音频编解码器支持</td>
+                  <td class="py-3.5 px-5"><span class="bg-emerald-500/15 text-emerald-400 border border-emerald-500/30 px-2 py-0.5 rounded text-xs">LOADED</span></td>
+                  <td class="py-3.5 px-5 text-slate-400">sample_rate=48000 channels=1/2</td>
+                  <td class="py-3.5 px-5 text-right"><button onclick="showToast('重新加载 mod_opus')" class="text-cyan-400 hover:underline">Reload</button></td>
+                </tr>
+                <tr class="hover:bg-slate-800/40 transition">
+                  <td class="py-3.5 px-5 font-bold text-cyan-400">mod_conference</td>
+                  <td class="py-3.5 px-5 font-sans text-slate-200">多方电话会议室与混音服务，支持多路通话实时混流</td>
+                  <td class="py-3.5 px-5"><span class="bg-emerald-500/15 text-emerald-400 border border-emerald-500/30 px-2 py-0.5 rounded text-xs">LOADED</span></td>
+                  <td class="py-3.5 px-5 text-slate-400">rate=16000 interval=20 energy_level=300</td>
+                  <td class="py-3.5 px-5 text-right"><button onclick="showToast('重新加载 mod_conference')" class="text-cyan-400 hover:underline">Reload</button></td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
+      </div>
+
+      <!-- ================= 模块 7: fs_cli 交互终端 (Terminal) ================= -->
+      <div id="view-terminal" class="hidden flex-1 flex flex-col overflow-hidden">
+        <!-- 终端控制头 -->
+        <div class="bg-[#0F172A] border-b border-slate-800 px-5 py-3 flex items-center justify-between shrink-0">
+          <div class="flex items-center gap-3">
+            <span class="w-2.5 h-2.5 rounded-full bg-emerald-400 animate-pulse"></span>
+            <span class="text-sm font-semibold text-white font-mono">FreeSWITCH Web Console (ESL :8021)</span>
+            <span class="text-xs px-2 py-0.5 rounded border font-mono text-emerald-400 border-emerald-800/60 bg-emerald-950/40">
+              WS LOG STREAM LIVE
+            </span>
+          </div>
+          <div class="flex items-center gap-2">
+            <span class="text-xs text-slate-400 mr-1 hidden sm:inline">快捷命令:</span>
+            <button onclick="runCliCommand('status')" class="bg-slate-800 hover:bg-slate-700 text-slate-200 text-xs px-3 py-1 rounded font-mono transition">status</button>
+            <button onclick="runCliCommand('show channels')" class="bg-slate-800 hover:bg-slate-700 text-slate-200 text-xs px-3 py-1 rounded font-mono transition">show channels</button>
+            <button onclick="runCliCommand('sofia status profile internal reg')" class="bg-slate-800 hover:bg-slate-700 text-cyan-300 text-xs px-3 py-1 rounded font-mono transition">sofia status reg</button>
+            <button onclick="runCliCommand('reloadxml')" class="bg-slate-800 hover:bg-slate-700 text-amber-300 text-xs px-3 py-1 rounded font-mono transition">reloadxml</button>
+            <button onclick="clearTerminalScreen()" class="bg-slate-800 hover:bg-slate-700 text-slate-300 text-xs px-3 py-1 rounded transition">清屏</button>
+          </div>
+        </div>
+
+        <!-- 终端内容屏幕 -->
+        <div id="terminal-screen" class="flex-1 bg-[#050811] p-5 font-mono text-sm leading-relaxed text-slate-200 overflow-y-auto space-y-1.5 select-text">
+          <div class="text-cyan-400 font-bold">FreeSWITCH (Version 1.11.3 -release 64bit) is ready</div>
+          <div class="text-slate-400">Connected to Inbound ESL at 127.0.0.1:8021 via Go Sidecar (:8088).</div>
+          <div class="text-emerald-400">[NOTICE] switch_loadable_module.c:1834 Module [mod_sofia] loaded successfully.</div>
+          <div class="text-slate-300">[INFO] mod_sofia.c:1026 Profile [internal] registered sip:1007@192.168.18.64:15061 (Linphone-Desktop)</div>
+          <div class="text-slate-300">[INFO] mod_sofia.c:1026 Profile [internal] registered sip:1008@192.168.18.64:64521 (Zoiper)</div>
+          <div class="text-slate-300">[INFO] mod_sofia.c:1026 Profile [internal] registered sip:1017@192.168.18.64:53446 (MicroSIP)</div>
+          <div class="text-cyan-400">[INFO] Core database [PostgreSQL freeswitch:5432] live sync ready.</div>
+        </div>
+
+        <!-- 命令行输入栏 -->
+        <div class="bg-[#0F172A] border-t border-slate-800 px-5 py-3 flex items-center gap-3 shrink-0">
+          <span class="text-cyan-400 font-mono text-sm font-bold shrink-0">fs_cli&gt;</span>
+          <input 
+            id="terminal-input"
+            onkeydown="if(event.key==='Enter') submitCliInput()"
+            type="text" 
+            placeholder="输入 FreeSWITCH 原生命令 (按 Enter 执行，如: status, show channels, reloadxml)..." 
+            class="bg-transparent text-white font-mono text-sm flex-1 outline-none placeholder-slate-500"
+          >
+          <button 
+            onclick="submitCliInput()"
+            class="bg-cyan-600 hover:bg-cyan-500 text-white font-mono text-sm font-medium px-4 py-1.5 rounded transition"
+          >
+            执行
+          </button>
+        </div>
+      </div>
+
+      <!-- ================= 模块 8: 底层 CDR (PostgreSQL fs_cdr) ================= -->
+      <div id="view-cdr" class="hidden flex-1 flex flex-col overflow-hidden">
+        <div class="bg-[#0F172A] border-b border-slate-800 px-6 py-3 flex items-center justify-between shrink-0">
+          <div class="flex items-center gap-3">
+            <span class="text-base font-semibold text-white">软交换底层信令与原始 CDR 话单 (PostgreSQL fs_cdr)</span>
+            <span class="text-xs text-slate-400">记录 SIP 呼叫详细记录、挂断原因与 RTP 传输质检指标</span>
+          </div>
+          <button onclick="showToast('已从 PG 数据库刷新话单')" class="bg-slate-800 hover:bg-slate-700 text-slate-300 text-sm px-4 py-2 rounded-lg border border-slate-700 transition">
+            刷新话单
+          </button>
+        </div>
+
+        <div class="flex-1 p-6 overflow-y-auto">
+          <div class="bg-[#131C31] border border-slate-800 rounded-xl overflow-hidden text-sm font-mono shadow-sm">
+            <table class="w-full text-left">
+              <thead class="bg-slate-900/90 text-slate-400 border-b border-slate-800 text-xs uppercase tracking-wider font-semibold">
+                <tr>
+                  <th class="py-3 px-5">Call UUID</th>
+                  <th class="py-3 px-5">主叫</th>
+                  <th class="py-3 px-5">被叫</th>
+                  <th class="py-3 px-5">呼叫方向</th>
+                  <th class="py-3 px-5">SIP 释放码</th>
+                  <th class="py-3 px-5">挂断原因 (Cause)</th>
+                  <th class="py-3 px-5">通话时长</th>
+                  <th class="py-3 px-5 text-right">信令快照</th>
+                </tr>
+              </thead>
+              <tbody class="divide-y divide-slate-800/80">
+                <tr class="hover:bg-slate-800/40 transition">
+                  <td class="py-3.5 px-5 text-cyan-400 font-semibold">c87f8a10-91ab-4d2c</td>
+                  <td class="py-3.5 px-5 text-white font-medium">1017</td>
+                  <td class="py-3.5 px-5 text-white font-medium">1007</td>
+                  <td class="py-3.5 px-5 text-slate-400">INTERNAL</td>
+                  <td class="py-3.5 px-5 text-emerald-400 font-bold">SIP 200 OK</td>
+                  <td class="py-3.5 px-5 text-slate-300">NORMAL_CLEARING</td>
+                  <td class="py-3.5 px-5 text-slate-200">24s</td>
+                  <td class="py-3.5 px-5 text-right">
+                    <button onclick="showCdrDetail('c87f8a10-91ab-4d2c')" class="text-cyan-400 hover:text-cyan-300 hover:underline">查看 JSON</button>
+                  </td>
+                </tr>
+                <tr class="hover:bg-slate-800/40 transition">
+                  <td class="py-3.5 px-5 text-cyan-400 font-semibold">a12e4f55-78cd-41ef</td>
+                  <td class="py-3.5 px-5 text-white font-medium">1008</td>
+                  <td class="py-3.5 px-5 text-white font-medium">1007</td>
+                  <td class="py-3.5 px-5 text-slate-400">INTERNAL</td>
+                  <td class="py-3.5 px-5 text-emerald-400 font-bold">SIP 200 OK</td>
+                  <td class="py-3.5 px-5 text-slate-300">NORMAL_CLEARING</td>
+                  <td class="py-3.5 px-5 text-slate-200">18s</td>
+                  <td class="py-3.5 px-5 text-right">
+                    <button onclick="showCdrDetail('a12e4f55-78cd-41ef')" class="text-cyan-400 hover:text-cyan-300 hover:underline">查看 JSON</button>
+                  </td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
+      </div>
+
+    </main>
+  </div>
+
+  <!-- ================= 3. 弹窗组件 (Modals) ================= -->
+
+  <!-- 添加运营商网关弹窗 -->
+  <div id="modal-add-gw" class="hidden fixed inset-0 bg-black/70 backdrop-blur-sm z-50 flex items-center justify-center p-4">
+    <div class="bg-[#131C31] border border-slate-800 rounded-2xl w-full max-w-lg overflow-hidden shadow-2xl space-y-4">
+      <div class="bg-[#0F172A] border-b border-slate-800 px-6 py-4 flex items-center justify-between">
+        <span class="font-bold text-white text-base">添加运营商 SIP 网关</span>
+        <button onclick="hideModal('modal-add-gw')" class="text-slate-400 hover:text-white text-lg">✕</button>
+      </div>
+      <div class="px-6 space-y-4 text-sm">
+        <div>
+          <label class="block text-slate-400 mb-1.5 font-medium">网关名称 (Gateway Identifier) *</label>
+          <input id="new-gw-name" type="text" placeholder="例如: trunk_telecom_01" class="w-full bg-slate-900 border border-slate-700 text-white rounded-lg px-3.5 py-2.5 outline-none font-mono text-sm focus:border-cyan-500">
+        </div>
+        <div>
+          <label class="block text-slate-400 mb-1.5 font-medium">代理服务器 (Proxy IP:Port) *</label>
+          <input id="new-gw-proxy" type="text" placeholder="例如: 120.24.100.18:5060" class="w-full bg-slate-900 border border-slate-700 text-white rounded-lg px-3.5 py-2.5 outline-none font-mono text-sm focus:border-cyan-500">
+        </div>
+        <div class="grid grid-cols-2 gap-4">
+          <div>
+            <label class="block text-slate-400 mb-1.5 font-medium">鉴权用户名</label>
+            <input type="text" placeholder="trunk_user" class="w-full bg-slate-900 border border-slate-700 text-white rounded-lg px-3.5 py-2.5 outline-none font-mono text-sm focus:border-cyan-500">
+          </div>
+          <div>
+            <label class="block text-slate-400 mb-1.5 font-medium">鉴权密码</label>
+            <input type="password" value="123456" class="w-full bg-slate-900 border border-slate-700 text-white rounded-lg px-3.5 py-2.5 outline-none font-mono text-sm focus:border-cyan-500">
+          </div>
+        </div>
+      </div>
+      <div class="bg-[#0F172A] border-t border-slate-800 px-6 py-3.5 flex justify-end gap-3">
+        <button onclick="hideModal('modal-add-gw')" class="bg-slate-800 hover:bg-slate-700 text-slate-300 px-4 py-2 rounded-lg text-sm transition">取消</button>
+        <button onclick="submitAddGateway()" class="bg-cyan-600 hover:bg-cyan-500 text-white px-5 py-2 rounded-lg text-sm font-medium transition">确认添加</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- 分机详情弹窗 -->
+  <div id="modal-ext-detail" class="hidden fixed inset-0 bg-black/70 backdrop-blur-sm z-50 flex items-center justify-center p-4">
+    <div class="bg-[#131C31] border border-slate-800 rounded-2xl w-full max-w-lg overflow-hidden shadow-2xl space-y-4">
+      <div class="bg-[#0F172A] border-b border-slate-800 px-6 py-4 flex items-center justify-between">
+        <span class="font-bold text-white text-base">SIP 分机注册快照信息</span>
+        <button onclick="hideModal('modal-ext-detail')" class="text-slate-400 hover:text-white text-lg">✕</button>
+      </div>
+      <div class="px-6 space-y-3 font-mono text-sm">
+        <div class="flex justify-between"><span class="text-slate-400">分机号码:</span><span class="text-cyan-400 font-bold" id="m-ext-num">1007</span></div>
+        <div class="flex justify-between"><span class="text-slate-400">Sofia 域:</span><span class="text-white">192.168.18.64</span></div>
+        <div class="flex justify-between"><span class="text-slate-400">完整 Contact:</span><span class="text-slate-300" id="m-ext-contact">sip:1007@192.168.18.64:15061</span></div>
+        <div class="flex justify-between"><span class="text-slate-400">用户代理 (UA):</span><span class="text-slate-300" id="m-ext-ua">Linphone Desktop/5.2.3</span></div>
+        <div class="flex justify-between"><span class="text-slate-400">底层数据库表:</span><span class="text-emerald-400">freeswitch.registrations</span></div>
+      </div>
+      <div class="bg-[#0F172A] border-t border-slate-800 px-6 py-3.5 flex justify-end">
+        <button onclick="hideModal('modal-ext-detail')" class="bg-slate-800 hover:bg-slate-700 text-slate-300 px-4 py-2 rounded-lg text-sm transition">关闭</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- CDR JSON 弹窗 -->
+  <div id="modal-cdr-detail" class="hidden fixed inset-0 bg-black/70 backdrop-blur-sm z-50 flex items-center justify-center p-4">
+    <div class="bg-[#131C31] border border-slate-800 rounded-2xl w-full max-w-xl overflow-hidden shadow-2xl space-y-4">
+      <div class="bg-[#0F172A] border-b border-slate-800 px-6 py-4 flex items-center justify-between">
+        <span class="font-bold text-white text-base">底层原始 CDR 变量快照 (PostgreSQL JSONB)</span>
+        <button onclick="hideModal('modal-cdr-detail')" class="text-slate-400 hover:text-white text-lg">✕</button>
+      </div>
+      <div class="px-6">
+        <pre class="bg-slate-950 p-4 rounded-lg text-xs font-mono text-cyan-300 overflow-x-auto max-h-72 border border-slate-800/80 leading-relaxed">
+{
+  "call_uuid": "c87f8a10-91ab-4d2c-8012-7bb3901001",
+  "direction": "inbound",
+  "caller_id_number": "1017",
+  "destination_number": "1007",
+  "read_codec": "PCMA",
+  "write_codec": "PCMA",
+  "sip_user_agent": "MicroSIP/3.22.16",
+  "sip_hangup_disposition": "send_bye",
+  "hangup_cause": "NORMAL_CLEARING",
+  "billsec": 24,
+  "rtp_audio_in_quality_percentage": "100.0",
+  "rtp_audio_in_jitter_packet_count": 0
+}</pre>
+      </div>
+      <div class="bg-[#0F172A] border-t border-slate-800 px-6 py-3.5 flex justify-end">
+        <button onclick="hideModal('modal-cdr-detail')" class="bg-slate-800 hover:bg-slate-700 text-slate-300 px-4 py-2 rounded-lg text-sm transition">关闭</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Toast 提示框 -->
+  <div id="toast" class="fixed top-16 right-6 bg-cyan-600 text-white px-4 py-2.5 rounded-lg shadow-xl text-sm font-medium z-50 transition-opacity duration-300 opacity-0 pointer-events-none">
+    提示信息
+  </div>
+
+  <!-- ================= 4. 前端交互逻辑脚本 ================= -->
+  <script>
+    let currentActiveTab = 'dashboard';
+
+    // 1. 切换左侧主 Tab
+    function switchTab(tabId) {
+      currentActiveTab = tabId;
+      const tabs = ['dashboard', 'extensions', 'channels', 'sip', 'gateways', 'modules', 'terminal', 'cdr'];
+      tabs.forEach(t => {
+        const viewEl = document.getElementById(`view-${t}`);
+        const tabEl = document.getElementById(`tab-${t}`);
+        if (viewEl) {
+          if (t === tabId) {
+            viewEl.classList.remove('hidden');
+          } else {
+            viewEl.classList.add('hidden');
+          }
+        }
+        if (tabEl) {
+          if (t === tabId) {
+            tabEl.className = 'w-full flex items-center justify-between px-3 py-2 rounded-lg font-medium transition bg-cyan-950/80 text-cyan-400 border border-cyan-800/60 shadow-sm';
+          } else {
+            tabEl.className = 'w-full flex items-center justify-between px-3 py-2 rounded-lg font-medium transition text-slate-300 hover:text-white hover:bg-slate-800/60';
+          }
+        }
+      });
+    }
+
+    // 2. 分机子Tab切换
+    function switchExtSubTab(subId) {
+      const isRegs = subId === 'regs';
+      document.getElementById('ext-content-regs').classList.toggle('hidden', !isRegs);
+      document.getElementById('ext-content-directory').classList.toggle('hidden', isRegs);
+
+      const activeClass = 'px-4 py-2 rounded-md transition bg-cyan-950 text-cyan-400 border border-cyan-800/60 shadow-sm';
+      const inactiveClass = 'px-4 py-2 rounded-md transition text-slate-400 hover:text-white';
+
+      document.getElementById('ext-sub-regs').className = isRegs ? activeClass : inactiveClass;
+      document.getElementById('ext-sub-directory').className = !isRegs ? activeClass : inactiveClass;
+    }
+
+    // 3. 模块子Tab切换 (FCC vs 原生核心)
+    function switchModulesSubTab(subId) {
+      const isFcc = subId === 'fcc';
+      document.getElementById('mod-content-fcc').classList.toggle('hidden', !isFcc);
+      document.getElementById('mod-content-native').classList.toggle('hidden', isFcc);
+
+      const activeClass = 'px-4 py-2 rounded-md transition bg-cyan-950 text-cyan-400 border border-cyan-800/60 shadow-sm';
+      const inactiveClass = 'px-4 py-2 rounded-md transition text-slate-400 hover:text-white';
+
+      document.getElementById('mod-sub-fcc').className = isFcc ? activeClass : inactiveClass;
+      document.getElementById('mod-sub-native').className = !isFcc ? activeClass : inactiveClass;
+    }
+
+    // 4. SIP Profile 子Tab切换
+    function switchSipSubProfile(profName) {
+      const isInternal = profName === 'internal';
+      document.getElementById('sip-profile-title').innerText = `Profile: ${profName}`;
+      
+      const activeClass = 'px-4 py-2 rounded-md transition bg-cyan-950 text-cyan-400 border border-cyan-800/60 shadow-sm';
+      const inactiveClass = 'px-4 py-2 rounded-md transition text-slate-400 hover:text-white';
+
+      document.getElementById('sub-profile-internal').className = isInternal ? activeClass : inactiveClass;
+      document.getElementById('sub-profile-external').className = !isInternal ? activeClass : inactiveClass;
+
+      const rawPre = document.getElementById('sip-raw-output');
+      if (isInternal) {
+        rawPre.innerText = `=================================================================================================
+Name             internal
+Domain Name      192.168.18.64
+Auto-NAT         false
+DBName           sofia_reg_internal
+Pres-Users       0
+Pres-Hosts       0
+State            RUNNING
+Inbound-Calls    11
+Outbound-Calls   0
+=================================================================================================`;
+      } else {
+        rawPre.innerText = `=================================================================================================
+Name             external
+Domain Name      192.168.18.64
+Auto-NAT         false
+DBName           sofia_reg_external
+Pres-Users       0
+Pres-Hosts       0
+State            RUNNING
+Inbound-Calls    0
+Outbound-Calls   3
+=================================================================================================`;
+      }
+    }
+
+    // 5. Toast 提示
+    function showToast(msg) {
+      const toast = document.getElementById('toast');
+      toast.innerText = msg;
+      toast.classList.remove('opacity-0', 'pointer-events-none');
+      setTimeout(() => {
+        toast.classList.add('opacity-0', 'pointer-events-none');
+      }, 2500);
+    }
+
+    // 6. 模态框显示与隐藏
+    function showModal(id) {
+      document.getElementById(id).classList.remove('hidden');
+    }
+    function hideModal(id) {
+      document.getElementById(id).classList.add('hidden');
+    }
+
+    // 7. 发起呼叫测试 (模拟与真实结合)
+    function originateCall(caller, callee) {
+      showToast(`正在通过 ESL 向 FreeSWITCH 发起 originate user/${caller} &bridge(user/${callee})`);
+      appendTerminalLog(`[CALL_ORIGINATE] user/${caller} &bridge(user/${callee}) dispatched via ESL :8021`);
+      
+      // 更新通道列表模拟展示
+      setTimeout(() => {
+        const tbody = document.getElementById('channels-tbody');
+        tbody.innerHTML = `
+          <tr class="hover:bg-slate-800/40 transition">
+            <td class="py-3.5 px-5 text-cyan-400 font-semibold">a892b1-live-${Date.now().toString().slice(-4)}</td>
+            <td class="py-3.5 px-5 text-white font-medium">${caller}</td>
+            <td class="py-3.5 px-5 text-white font-medium">${callee}</td>
+            <td class="py-3.5 px-5"><span class="bg-emerald-500/15 text-emerald-400 border border-emerald-500/30 px-2 py-0.5 rounded text-xs">CS_EXCHANGE_MEDIA</span></td>
+            <td class="py-3.5 px-5 text-cyan-300">OPUS / PCMA</td>
+            <td class="py-3.5 px-5 text-slate-300">192.168.18.64:15061</td>
+            <td class="py-3.5 px-5 text-right space-x-2">
+              <button onclick="hangupTestCall()" class="text-rose-400 hover:text-rose-300 hover:underline">挂断</button>
+            </td>
+          </tr>
+        `;
+        document.getElementById('badge-channels').innerText = '1 通';
+        document.getElementById('top-sessions-count').innerText = '1 / 1000';
+        document.getElementById('stat-sessions').innerText = '1';
+      }, 500);
+    }
+
+    function hangupTestCall() {
+      showToast('已下发 uuid_kill 挂断通道');
+      appendTerminalLog(`[CALL_HANGUP] Channel killed successfully (NORMAL_CLEARING)`);
+      const tbody = document.getElementById('channels-tbody');
+      tbody.innerHTML = `
+        <tr class="hover:bg-slate-800/40">
+          <td colspan="7" class="py-12 text-center text-slate-500 font-mono text-sm">
+            当前暂无活跃呼叫通道 (可通过顶部发起 1017 ➔ 1007 拨测验证)
+          </td>
+        </tr>
+      `;
+      document.getElementById('badge-channels').innerText = '0 通';
+      document.getElementById('top-sessions-count').innerText = '0 / 1000';
+      document.getElementById('stat-sessions').innerText = '0';
+    }
+
+    function handleQuickDial() {
+      const dest = document.getElementById('quick-dial-dest').value.trim() || '1007';
+      originateCall('1017', dest);
+    }
+
+    function handleReloadXml() {
+      showToast('已向 FreeSWITCH 下发 reloadxml 命令');
+      appendTerminalLog('[COMMAND] reloadxml -> +OK [XML Reloaded]');
+    }
+
+    function flushInboundReg() {
+      showToast('已清空 Sofia inbound 注册缓存: sofia profile internal flush_inbound_reg');
+      appendTerminalLog('[COMMAND] sofia profile internal flush_inbound_reg -> +OK');
+    }
+
+    // 8. 终端命令交互
+    function runCliCommand(cmd) {
+      appendTerminalLog(`fs_cli> ${cmd}`);
+      if (cmd === 'status') {
+        appendTerminalLog('UP 0 years, 0 days, 8 hours, 47 minutes, 15 seconds, 120 milliseconds, 54 microseconds');
+        appendTerminalLog('11 session(s) since startup');
+        appendTerminalLog('0 session(s) - 0 peak, 1000 max, 0 current');
+        appendTerminalLog('0 session(s) per Sec out of max 100, peak 1, last 5min 0');
+        appendTerminalLog('1000 max sessions [1000 cpu unlocked]');
+      } else if (cmd === 'show channels') {
+        appendTerminalLog('uuid,direction,created,created_epoch,name,state,cid_name,cid_num,ip_addr,dest,application,application_data,dialplan,context,read_codec,read_rate,read_bit_rate,write_codec,write_rate,write_bit_rate,secure');
+        appendTerminalLog('0 total.');
+      } else if (cmd === 'sofia status profile internal reg') {
+        appendTerminalLog('Call-ID: 80f12ab... User: 1007 Contact: sip:1007@192.168.18.64:15061 (Agent: Linphone Desktop/5.2.3) Status: Registered');
+        appendTerminalLog('Call-ID: 712cd5e... User: 1008 Contact: sip:1008@192.168.18.64:64521 (Agent: Zoiper 5) Status: Registered');
+        appendTerminalLog('Call-ID: 994a43b... User: 1017 Contact: sip:1017@192.168.18.64:53446 (Agent: MicroSIP/3.22.16) Status: Registered');
+        appendTerminalLog('Total items returned: 3');
+      } else if (cmd === 'reloadxml') {
+        appendTerminalLog('+OK [XML Reloaded]');
+      }
+    }
+
+    function submitCliInput() {
+      const input = document.getElementById('terminal-input');
+      const val = input.value.trim();
+      if (!val) return;
+      runCliCommand(val);
+      input.value = '';
+    }
+
+    function appendTerminalLog(text) {
+      const scr = document.getElementById('terminal-screen');
+      const div = document.createElement('div');
+      div.className = text.includes('ERR') ? 'text-rose-400' : (text.includes('WARN') ? 'text-amber-400' : 'text-slate-200');
+      div.innerText = text;
+      scr.appendChild(div);
+      scr.scrollTop = scr.scrollHeight;
+    }
+
+    function clearTerminalScreen() {
+      const scr = document.getElementById('terminal-screen');
+      scr.innerHTML = `
+        <div class="text-cyan-400 font-bold">FreeSWITCH (Version 1.11.3 -release 64bit) is ready</div>
+        <div class="text-slate-400">Connected to Inbound ESL at 127.0.0.1:8021 via Go Sidecar (:8088).</div>
+      `;
+    }
+
+    // 9. 详情弹窗
+    function showContactDetail(num) {
+      document.getElementById('m-ext-num').innerText = num;
+      if (num === '1007') {
+        document.getElementById('m-ext-contact').innerText = 'sip:1007@192.168.18.64:15061';
+        document.getElementById('m-ext-ua').innerText = 'Linphone Desktop/5.2.3';
+      } else if (num === '1008') {
+        document.getElementById('m-ext-contact').innerText = 'sip:1008@192.168.18.64:64521';
+        document.getElementById('m-ext-ua').innerText = 'Zoiper 5 v5.5.14';
+      } else {
+        document.getElementById('m-ext-contact').innerText = 'sip:1017@192.168.18.64:53446';
+        document.getElementById('m-ext-ua').innerText = 'MicroSIP/3.22.16';
+      }
+      showModal('modal-ext-detail');
+    }
+
+    function showCdrDetail(uuid) {
+      showModal('modal-cdr-detail');
+    }
+
+    function submitAddGateway() {
+      const name = document.getElementById('new-gw-name').value.trim();
+      const proxy = document.getElementById('new-gw-proxy').value.trim();
+      if (!name || !proxy) {
+        alert('请填写网关名称和代理地址');
+        return;
+      }
+      showToast(`已成功添加网关 ${name} 并生成 Sofia Gateway 配置`);
+      hideModal('modal-add-gw');
+    }
+  </script>
+</body>
+</html>
