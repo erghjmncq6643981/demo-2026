@@ -167,6 +167,7 @@ public class CallCdrAndResourceAdminTest {
                 .status("COMPLETED")
                 .hangupCause("NORMAL_CLEARING")
                 .primaryWorkNo("901001")
+                .agentWorkNo("901001")
                 .ringDurationMs(3200L)
                 .talkDurationMs(48000L)
                 .totalDurationMs(51200L)

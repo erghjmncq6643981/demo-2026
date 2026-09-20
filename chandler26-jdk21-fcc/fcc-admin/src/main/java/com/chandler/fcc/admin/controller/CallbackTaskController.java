@@ -46,13 +46,4 @@ public class CallbackTaskController {
         return CommonResult.success();
     }
 
-    /**
-     * 发起一键优先回拨
-     */
-    @Operation(summary = "发起一键优先回拨")
-    @PostMapping("/{id}/call")
-    public CommonResult<Void> callTask(@PathVariable("id") Long id) {
-        callbackTaskService.callTask(id);
-        return CommonResult.success();
-    }
 }

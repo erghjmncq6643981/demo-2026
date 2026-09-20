@@ -26,7 +26,7 @@ import static org.junit.jupiter.api.Assertions.*;
  */
 @SpringBootTest(classes = FccAdminApplication.class)
 @ActiveProfiles("local")
-public class ExtensionAdminIntegrationTest {
+public class ExtensionAdminIntegrationTest extends EphemeralSipKeyTest {
 
     @Autowired
     private ExtensionService extensionService;

@@ -1,0 +1,16 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.chandler.fcc.server.call.CallbackRuntimeMapper">
+ <sql id="scope">c.tenant_id=#{tenant} AND (c.assignee_work_no IS NULL OR c.assignee_work_no=#{owner}) <if test="number != null and number != ''">AND c.customer_number=#{number}</if></sql>
+ <select id="list" resultType="map">
+  SELECT CAST(c.id AS CHAR) AS id,c.customer_number AS phone,c.did_number AS didNumber,c.missed_at AS time,
+   c.missed_reason AS reason,CONCAT(FLOOR(COALESCE(c.wait_duration_ms,0)/1000),'秒') AS duration,
+   COALESCE(j.status,c.status) AS status,c.assignee_work_no AS assigneeWorkNo,c.assignee_work_no AS assignee,
+   c.call_attempts AS callAttempts,CAST(c.last_dial_job_id AS CHAR) AS dialJobId
+  FROM fcc_callback_task c LEFT JOIN fcc_dial_job j ON j.id=c.last_dial_job_id AND j.tenant_id=c.tenant_id
+  WHERE <include refid="scope"/> ORDER BY c.priority DESC,c.missed_at DESC,c.id DESC LIMIT 10 OFFSET #{offset}
+ </select>
+ <select id="count" resultType="long">SELECT COUNT(*) FROM fcc_callback_task c WHERE <include refid="scope"/></select>
+ <select id="lock" resultType="map" useCache="false" flushCache="true">SELECT c.customer_number AS number,c.call_attempts AS attempts,CAST(c.last_dial_job_id AS CHAR) AS jobId,j.status AS jobStatus,c.status FROM fcc_callback_task c LEFT JOIN fcc_dial_job j ON j.id=c.last_dial_job_id AND j.tenant_id=c.tenant_id WHERE c.tenant_id=#{tenant} AND c.id=#{id} AND (c.assignee_work_no IS NULL OR c.assignee_work_no=#{owner}) FOR UPDATE</select>
+ <update id="schedule">UPDATE fcc_callback_task SET status='SCHEDULED',assignee_work_no=#{owner},last_dial_job_id=#{job},call_attempts=call_attempts+1 WHERE tenant_id=#{tenant} AND id=#{id} AND (assignee_work_no IS NULL OR assignee_work_no=#{owner})</update>
+</mapper>

@@ -39,7 +39,7 @@ class IdUtilTest {
         String callId2 = IdUtil.getCallId();
 
         assertNotNull(callId1);
-        assertTrue(callId1.startsWith("call-"), "call_id 必须以 call- 前缀开头");
+        assertTrue(Long.parseLong(callId1) > 0, "call_id 必须可无损写入 BIGINT 关联字段");
         assertNotEquals(callId1, callId2, "连续生成的 call_id 不得重复");
     }
 
@@ -62,11 +62,11 @@ class IdUtilTest {
     }
 
     @Test
-    @DisplayName("测试 32 位 UUID 生成无连字符")
+    @DisplayName("测试标准 FreeSWITCH 话道 UUID")
     void testGetUuid() {
         String uuid = IdUtil.getUuid();
         assertNotNull(uuid);
-        assertEquals(32, uuid.length(), "UUID 长度必须为 32 位");
-        assertFalse(uuid.contains("-"), "UUID 不得包含连字符");
+        assertEquals(36, uuid.length(), "UUID 长度必须为 36 位");
+        assertEquals(uuid, java.util.UUID.fromString(uuid).toString());
     }
 }

@@ -30,7 +30,7 @@ public class WsMessageDTO<T> implements Serializable {
     @Schema(description = "目标坐席工号", example = "901001")
     private String workNo;
 
-    @Schema(description = "呼叫会话标识", example = "call-94296998894768128")
+    @Schema(description = "呼叫会话标识", example = "94296998894768128")
     private String callId;
 
     @Schema(description = "业务载荷数据")

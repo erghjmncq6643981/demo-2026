@@ -38,7 +38,7 @@ public class IncomingScreenPopDTO implements Serializable {
 
     // ================= 1. 呼叫信令事实 =================
 
-    @Schema(description = "业务通话唯一标识 (FCC call_id，全生命周期稳定)", example = "call-94296998894768128")
+    @Schema(description = "业务通话唯一标识 (FCC call_id，全生命周期稳定)", example = "94296998894768128")
     private String callId;
 
     @Schema(description = "呼叫方向 (INBOUND 呼入 / OUTBOUND 呼出)", example = "INBOUND")

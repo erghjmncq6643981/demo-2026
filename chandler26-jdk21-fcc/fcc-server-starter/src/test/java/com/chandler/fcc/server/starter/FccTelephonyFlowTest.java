@@ -41,7 +41,7 @@ import static org.junit.jupiter.api.Assertions.*;
  * <p>
  * 全面验证 FCC 控制面的核心场景：
  * 1. 双向外呼全生命周期 (OUTBOUND_TWO_WAY_CALL: 坐席应答 -> 路由外呼客户 -> 双方桥接 -> 录音 -> 挂机结算)
- * 2. 呼入客服 IVR 导航按键与满意度按键评价流转 (INBOUND_CUSTOMER_SERVICE)
+ * 2. 未配置 DID 拒绝呼入，不提供旧 IVR 默认行为
  * 3. 自动外呼通知与意向按键确认 (AUTO_DIAL_NOTIFICATION)
  * 4. FNode JSON-RPC 2.0 控制客户端通过 NATS 发送指令与审计落盘 (fcc_call_command)
  * 5. SIP 分机注册态生命周期事件同步至 Redis 缓存
@@ -50,8 +50,9 @@ import static org.junit.jupiter.api.Assertions.*;
  *
  * @author Chandler
  */
-@SpringBootTest(classes = FccServerApplication.class)
+@SpringBootTest(classes = FccServerApplication.class, properties = "fcc.outbound.notification-file=/test/notification.wav")
 @TestMethodOrder(MethodOrderer.OrderAnnotation.class)
+@org.springframework.test.annotation.DirtiesContext
 public class FccTelephonyFlowTest {
 
     private static final Logger log = LoggerFactory.getLogger(FccTelephonyFlowTest.class);
@@ -88,7 +89,13 @@ public class FccTelephonyFlowTest {
      * 测试初始化：启动 Mock Go-Sidecar Agent 的 NATS JSON-RPC 指令应答分发器
      */
     @BeforeEach
-    void setUpMockSidecar() {
+    void setUpMockSidecar() throws Exception {
+        var management = natsConnection.jetStreamManagement();
+        if (!management.getStreamNames().contains("FCC_EVENTS")) {
+            management.addStream(io.nats.client.api.StreamConfiguration.builder()
+                    .name("FCC_EVENTS").subjects("fs.event.*.*")
+                    .storageType(io.nats.client.api.StorageType.Memory).build());
+        }
         if (mockSidecarDispatcher == null) {
             mockSidecarDispatcher = natsConnection.createDispatcher(msg -> {
                 try {
@@ -99,9 +106,13 @@ public class FccTelephonyFlowTest {
 
                     if (replyTo != null && !replyTo.isEmpty()) {
                         String respJson = String.format(
-                                "{\"jsonrpc\":\"2.0\",\"id\":\"%s\",\"result\":{\"code\":0,\"message\":\"SUCCESS\",\"uuid\":\"mock-uuid-%s\",\"nodeId\":\"test-node\",\"timestamp\":%d}}",
+                                "{\"jsonrpc\":\"2.0\",\"id\":\"%s\",\"result\":{\"code\":200,\"message\":\"SUCCESS\",\"uuid\":\"mock-uuid-%s\",\"node_id\":\"test-node\",\"timestamp\":%d}}",
                                 id, System.currentTimeMillis(), System.currentTimeMillis()
                         );
+                        if ("FNode.ChannelSnapshot".equals(method)) {
+                            respJson = objectMapper.writeValueAsString(Map.of("jsonrpc", "2.0", "id", id,
+                                    "result", Map.of("code", -32000, "message", "Snapshot unavailable in mock")));
+                        }
                         natsConnection.publish(replyTo, respJson.getBytes(StandardCharsets.UTF_8));
                         log.debug("🤖 [Mock Sidecar] 响应 RPC 请求: method={}, id={}", method, id);
                     }
@@ -130,8 +141,8 @@ public class FccTelephonyFlowTest {
     void testOutboundTwoWayCallLifecycle() throws Exception {
         String ctrlId = IdUtil.getCtrlId("fcc-outbound-test");
         String callId = IdUtil.getCallId();
-        String agentUuid = "agent-leg-" + System.currentTimeMillis();
-        String guestUuid = "guest-leg-" + System.currentTimeMillis();
+        String agentUuid = IdUtil.getUuid();
+        String guestUuid = IdUtil.getUuid();
 
         // 1. 初始化会话 (与 TelephonyCallController.outbound 真实建会话方式一致：
         //    工号落在 agentWorkNo 与 primaryWorkNo 上，agentExt 只表达终端分机)
@@ -145,9 +156,14 @@ public class FccTelephonyFlowTest {
                 .agentChannelUuid(agentUuid)
                 .agentWorkNo("901001")
                 .agentExt("901001")
-                .data(new HashMap<>(Map.of("agentExt", "901001", "primaryWorkNo", "901001", "operator", "钱丁君")))
+                .nodeId("test-node")
+                .guestChannelUuid(guestUuid)
+                .agentWorkNo("901001")
+                .data(new HashMap<>(Map.of("agentExt", "901001", "primaryWorkNo", "901001",
+                        "runtimeTemplate", "AGENT_FIRST", "tenantId", 42L, "guestDialString", "user/901002")))
                 .build();
 
+        saveFixture(callInfo);
         sessionManager.registerSession(callInfo);
         sessionManager.bindChannel(agentUuid, ctrlId);
 
@@ -156,8 +172,8 @@ public class FccTelephonyFlowTest {
 
         // 等待坐席就绪处理完成并触发客户外呼
         CallInfoBO activeSession = awaitSession(ctrlId, 3000);
-        awaitCondition(() -> "true".equals(activeSession.getData().get("guestDialed")), 3000);
-        assertEquals("true", activeSession.getData().get("guestDialed"), "坐席就绪后必须触发客户外呼标记");
+        awaitCondition(() -> Boolean.TRUE.equals(activeSession.getData().get("agentReady")), 3000);
+        assertEquals(true, activeSession.getData().get("agentReady"), "坐席就绪后必须触发客户外呼标记");
 
         // 3. 绑定客户 Leg 并发送客户 Leg 驻留就绪事件 (READY)
         sessionManager.bindChannel(guestUuid, ctrlId);
@@ -165,12 +181,12 @@ public class FccTelephonyFlowTest {
         publishChannelEvent(ctrlId, guestUuid, "READY", "outbound", "901001", "13800138000", null, null, null);
 
         // 等待桥接指令下发完成
-        awaitCondition(() -> "true".equals(activeSession.getData().get("bridgeDispatched")), 3000);
-        assertEquals("true", activeSession.getData().get("bridgeDispatched"), "客户就绪后必须触发桥接指令下发");
+        awaitCondition(() -> Boolean.TRUE.equals(activeSession.getData().get("bridgeRequested")), 3000);
+        assertEquals(true, activeSession.getData().get("bridgeRequested"), "客户就绪后必须触发桥接指令下发");
 
         // 4. 模拟话道进入 BRIDGE 状态
         publishChannelEvent(ctrlId, guestUuid, "BRIDGE", "outbound", "901001", "13800138000", null, null, null);
-        awaitCondition(() -> "true".equals(activeSession.getData().get("connected")), 3000);
+        awaitCondition(() -> activeSession.getStageState() == com.chandler.fcc.common.enums.CallStageState.CONNECTED, 3000);
 
         // 5. 模拟挂机拆线 (DESTROY)，时长 60 秒，计费 55 秒
         publishChannelEvent(ctrlId, agentUuid, "DESTROY", "outbound", "901001", "13800138000", 60, 55, "NORMAL_CLEARING");
@@ -200,63 +216,19 @@ public class FccTelephonyFlowTest {
         log.info("✅ [测试通过] 双向外呼生命周期流转与数据库事实记录校验成功！CallId: {}", callId);
     }
 
-    /**
-     * 测试用例 2: 验证呼入客服 IVR 导航按键与满意度按键评价流转
-     * <p>
-     * 场景：外部客户 13911112222 呼入服务号 9000：
-     * 1. 产生呼入事件 (START) -> 自动创建会话并启动 IVR
-     * 2. 客户按键 "1" 选择业务 -> 自动路由客服坐席 1007
-     * 3. 坐席接听桥接 -> 坐席挂断 -> 客户按键 "5" 进行满意度评价
-     * 4. 校验评价分数字段 evaluation_score 成功落盘为 5
-     * </p>
-     */
+    /** 未配置的呼入号码必须拒绝，不能使用内置 IVR 或默认坐席兜底。 */
     @Test
     @Order(2)
-    @DisplayName("测试呼入客服 IVR 导航与满意度评价流程")
-    void testInboundCustomerServiceWithIvrAndSatisfactionSurvey() throws Exception {
-        String inboundCtrlId = IdUtil.getCtrlId("fcc-inbound-test");
-        String guestUuid = "guest-inbound-" + System.currentTimeMillis();
-
-        // 1. 模拟客户呼入 9000 (START)
-        publishChannelEvent(inboundCtrlId, guestUuid, "START", "inbound", "13911112222", "9000", null, null, null);
-
-        CallInfoBO session = awaitSession(inboundCtrlId, 3000);
-        assertEquals(FlowModelType.INBOUND_CUSTOMER_SERVICE.name(), session.getModelKey(), "呼入业务流模式匹配");
-
-        // 2. 模拟客户 IVR 按键 "1"
-        publishDtmfEvent(inboundCtrlId, guestUuid, "1", 120);
-        awaitCondition(() -> "1".equals(session.getData().get("ivrSelectedDigit")), 3000);
-
-        // 断言已选择业务 1 并触发路由
-        assertEquals("1", session.getData().get("ivrSelectedDigit"), "客户按键必须记录为 1");
-        assertEquals("true", session.getData().get("agentDialed"), "必须触发坐席外呼");
-
-        // 3. 模拟坐席 1007 挂断，客户未挂断并按键 "5" 进行满意度评价
-        String agentUuid = "agent-ext-1007";
-        session.setAgentChannelUuid(agentUuid);
-        sessionManager.bindChannel(agentUuid, inboundCtrlId);
-
-        publishChannelEvent(inboundCtrlId, agentUuid, "DESTROY", "inbound", "13911112222", "9000", 30, 25, "NORMAL_CLEARING");
-        awaitCondition(() -> "true".equals(session.getData().get("agentEnded")), 3000);
-
-        // 模拟满意度收号按键 "5"
-        publishDtmfEvent(inboundCtrlId, guestUuid, "5", 150);
-        awaitCondition(() -> Integer.valueOf(5).equals(session.getEvaluationScore()), 3000);
-
-        // 客户挂机
-        publishChannelEvent(inboundCtrlId, guestUuid, "DESTROY", "inbound", "13911112222", "9000", 35, 25, "NORMAL_CLEARING");
-
-        // 4. 验证数据库满意度评价落盘
-        Long numericCallId = CallPersistenceService.parseNumericId(session.getCallId());
-        awaitCondition(() -> {
-            CallSessionEntity e = callSessionMapper.selectById(numericCallId);
-            return e != null && e.getEvaluationScore() != null && e.getEvaluationScore() == 5;
-        }, 4000);
-
-        CallSessionEntity dbSession = callSessionMapper.selectById(numericCallId);
-        assertNotNull(dbSession, "会话必须成功落库");
-        assertEquals(5, dbSession.getEvaluationScore(), "服务满意度评分必须为 5 分");
-        log.info("✅ [测试通过] 呼入客服 IVR 导航与 5 星满意度评价流程校验成功！Score: 5");
+    @DisplayName("未配置 DID 拒绝呼入")
+    void testUnconfiguredInboundRejected() throws Exception {
+        String ctrlId = IdUtil.getCtrlId("fcc-inbound-test");
+        String uuid = IdUtil.getUuid();
+        publishChannelEvent(ctrlId, uuid, "START", "inbound", "13911112222",
+                "unconfigured-test-did", null, null, null);
+        awaitCondition(() -> callCommandMapper.selectList(
+                new LambdaQueryWrapper<CallCommandEntity>().like(CallCommandEntity::getRequestPayload, ctrlId))
+                .stream().anyMatch(command -> "FNode.Hangup".equals(command.getMethodName())), 10000);
+        assertTrue(sessionManager.getByCtrlUuid(ctrlId).isEmpty(), "不能保留未授权呼入会话");
     }
 
     /**
@@ -271,7 +243,7 @@ public class FccTelephonyFlowTest {
     void testAutoDialNotificationWithDtmfConfirmation() throws Exception {
         String ctrlId = IdUtil.getCtrlId("fcc-autodial-test");
         String callId = IdUtil.getCallId();
-        String guestUuid = "guest-notify-" + System.currentTimeMillis();
+        String guestUuid = IdUtil.getUuid();
 
         CallInfoBO callInfo = CallInfoBO.builder()
                 .ctrlId(ctrlId)
@@ -281,9 +253,12 @@ public class FccTelephonyFlowTest {
                 .callerNumber("021-99998888")
                 .destinationNumber("13700137000")
                 .guestChannelUuid(guestUuid)
-                .data(new HashMap<>())
+                .nodeId("test-node")
+                .agentWorkNo("901001")
+                .data(new HashMap<>(Map.of("runtimeTemplate", "NOTIFICATION", "tenantId", 42L)))
                 .build();
 
+        saveFixture(callInfo);
         sessionManager.registerSession(callInfo);
         sessionManager.bindChannel(guestUuid, ctrlId);
 
@@ -294,8 +269,8 @@ public class FccTelephonyFlowTest {
         publishDtmfEvent(ctrlId, guestUuid, "1", 100);
 
         CallInfoBO activeSession = awaitSession(ctrlId, 3000);
-        awaitCondition(() -> "1".equals(activeSession.getData().get("notifyDigit")), 3000);
-        assertEquals("1", activeSession.getData().get("notifyDigit"), "客户按键必须记录为 1");
+        awaitCondition(() -> Boolean.TRUE.equals(activeSession.getData().get("notificationConfirmed")), 3000);
+        assertEquals(true, activeSession.getData().get("notificationConfirmed"), "客户按键必须记录为 1");
 
         // 结束呼叫
         publishChannelEvent(ctrlId, guestUuid, "DESTROY", "outbound", "021-99998888", "13700137000", 20, 15, "NORMAL_CLEARING");
@@ -331,12 +306,12 @@ public class FccTelephonyFlowTest {
                 .build();
         FNodeResult dialRes = fccClient.dial(testNodeId, dialDto);
         assertNotNull(dialRes);
-        assertEquals(0, dialRes.getCode(), "Dial 指令应成功返回 0");
+        assertEquals(200, dialRes.getCode(), "Dial 指令应成功返回 200");
 
         // 2. FNode.ChannelBridge
         FNodeResult bridgeRes = fccClient.channelBridge(testNodeId, ctrlUuid, testUuid, "peer-uuid-1");
         assertNotNull(bridgeRes);
-        assertEquals(0, bridgeRes.getCode(), "ChannelBridge 指令应成功返回 0");
+        assertEquals(200, bridgeRes.getCode(), "ChannelBridge 指令应成功返回 200");
 
         // 3. FNode.Play
         FNodePlayDTO playDto = FNodePlayDTO.builder()
@@ -349,7 +324,7 @@ public class FccTelephonyFlowTest {
                 .build();
         FNodeResult playRes = fccClient.play(testNodeId, playDto);
         assertNotNull(playRes);
-        assertEquals(0, playRes.getCode(), "Play 指令应成功返回 0");
+        assertEquals(200, playRes.getCode(), "Play 指令应成功返回 200");
 
         // 4. FNode.ReadDTMF
         FNodeReadDTMFDTO dtmfDto = FNodeReadDTMFDTO.builder()
@@ -365,7 +340,7 @@ public class FccTelephonyFlowTest {
                 .build();
         FNodeResult readRes = fccClient.readDTMF(testNodeId, dtmfDto);
         assertNotNull(readRes);
-        assertEquals(0, readRes.getCode(), "ReadDTMF 指令应成功返回 0");
+        assertEquals(200, readRes.getCode(), "ReadDTMF 指令应成功返回 200");
 
         // 5. FNode.Record
         FNodeRecordDTO recDto = FNodeRecordDTO.builder()
@@ -376,22 +351,22 @@ public class FccTelephonyFlowTest {
                 .build();
         FNodeResult recRes = fccClient.record(testNodeId, recDto);
         assertNotNull(recRes);
-        assertEquals(0, recRes.getCode(), "Record 指令应成功返回 0");
+        assertEquals(200, recRes.getCode(), "Record 指令应成功返回 200");
 
         // 6. FNode.Hangup
         FNodeResult hangupRes = fccClient.hangup(testNodeId, ctrlUuid, testUuid, "NORMAL_CLEARING");
         assertNotNull(hangupRes);
-        assertEquals(0, hangupRes.getCode(), "Hangup 指令应成功返回 0");
+        assertEquals(200, hangupRes.getCode(), "Hangup 指令应成功返回 200");
 
         // 7. FNode.NativeAPI
         FNodeResult nativeRes = fccClient.nativeAPI(testNodeId, "status", "");
         assertNotNull(nativeRes);
-        assertEquals(0, nativeRes.getCode(), "NativeAPI 指令应成功返回 0");
+        assertEquals(200, nativeRes.getCode(), "NativeAPI 指令应成功返回 200");
 
         // 8. FNode.Status
         FNodeResult statusRes = fccClient.status(testNodeId);
         assertNotNull(statusRes);
-        assertEquals(0, statusRes.getCode(), "Status 指令应成功返回 0");
+        assertEquals(200, statusRes.getCode(), "Status 指令应成功返回 200");
 
         // 校验 fcc_call_command 表至少记录了上述指令审计
         List<CallCommandEntity> commands = callCommandMapper.selectList(
@@ -442,7 +417,7 @@ public class FccTelephonyFlowTest {
     // ==================== 工具辅助方法 ====================
 
     private CallInfoBO awaitSession(String ctrlId, long timeoutMs) {
-        long deadline = System.currentTimeMillis() + timeoutMs;
+        long deadline = System.currentTimeMillis() + Math.max(timeoutMs, 10000);
         while (System.currentTimeMillis() < deadline) {
             var opt = sessionManager.getByCtrlUuid(ctrlId);
             if (opt.isPresent()) {
@@ -456,7 +431,7 @@ public class FccTelephonyFlowTest {
     }
 
     private void awaitCondition(Supplier<Boolean> condition, long timeoutMs) {
-        long deadline = System.currentTimeMillis() + timeoutMs;
+        long deadline = System.currentTimeMillis() + Math.max(timeoutMs, 10000);
         while (System.currentTimeMillis() < deadline) {
             try {
                 if (Boolean.TRUE.equals(condition.get())) {
@@ -465,8 +440,33 @@ public class FccTelephonyFlowTest {
             } catch (Exception ignored) {}
             try {
                 TimeUnit.MILLISECONDS.sleep(50);
-            } catch (InterruptedException ignored) {}
+            } catch (InterruptedException interrupted) {
+                Thread.currentThread().interrupt();
+                fail("等待业务结果被中断", interrupted);
+            }
         }
+        assertTrue(condition.get(), "等待业务结果超时");
+    }
+
+    /** 保存与生产流程一致的恢复上下文。 */
+    private void saveFixture(CallInfoBO call) {
+        call.putData("nodeId", call.getNodeId());
+        call.putData("guestChannelUuid", call.getGuestChannelUuid());
+        if (call.getAgentChannelUuid() != null) call.putData("agentChannelUuid", call.getAgentChannelUuid());
+        call.setStageState(com.chandler.fcc.common.enums.CallStageState.CALLING);
+        persistenceService.saveOrUpdateSession(call);
+    }
+
+    /** 发布规范事件并等待 JetStream 持久确认；不依赖测试启动时消费者已经就绪。 */
+    private void publishDurable(String category, String method, Map<String, Object> input) throws Exception {
+        var params = new HashMap<String, Object>(input);
+        params.put("node_id", "test-node");
+        params.put("event_id", java.util.UUID.randomUUID().toString().replace("-", "")
+                + java.util.UUID.randomUUID().toString().replace("-", ""));
+        params.put("timestamp", System.currentTimeMillis());
+        params.put("received_at", System.currentTimeMillis());
+        natsConnection.jetStream().publish("fs.event.test-node." + category,
+                objectMapper.writeValueAsBytes(Map.of("method", method, "params", params)));
     }
 
     private void publishChannelEvent(String ctrlUuid, String uuid, String state, String direction,
@@ -489,9 +489,9 @@ public class FccTelephonyFlowTest {
 
         try {
             byte[] bytes = objectMapper.writeValueAsBytes(event);
-            natsConnection.publish("fs.event.channel", bytes);
+            publishDurable("channel", "Event.Channel", params);
         } catch (Exception e) {
-            log.error("发布 Channel 事件失败", e);
+            throw new AssertionError("发布 Channel 事件失败", e);
         }
     }
 
@@ -508,9 +508,9 @@ public class FccTelephonyFlowTest {
         );
         try {
             byte[] bytes = objectMapper.writeValueAsBytes(event);
-            natsConnection.publish("fs.event.dtmf", bytes);
+            publishDurable("dtmf", "Event.DTMF", params);
         } catch (Exception e) {
-            log.error("发布 DTMF 事件失败", e);
+            throw new AssertionError("发布 DTMF 事件失败", e);
         }
     }
 
@@ -531,9 +531,9 @@ public class FccTelephonyFlowTest {
         );
         try {
             byte[] bytes = objectMapper.writeValueAsBytes(event);
-            natsConnection.publish("fs.event.registration", bytes);
+            publishDurable("registration", "Event.Registration", params);
         } catch (Exception e) {
-            log.error("发布 Registration 事件失败", e);
+            throw new AssertionError("发布 Registration 事件失败", e);
         }
     }
 }

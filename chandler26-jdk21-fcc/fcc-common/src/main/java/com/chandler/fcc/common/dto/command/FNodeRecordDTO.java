@@ -47,6 +47,6 @@ public class FNodeRecordDTO implements Serializable {
     /**
      * 录音文件落盘完整路径
      */
-    @Schema(description = "录音存储绝对路径（WAV 或 MP3 格式），由控制面按共享目录布局声明", example = "/Users/chandler/fcc-records/2026/09/19/call-1789693905.wav")
+    @Schema(description = "录音存储绝对路径（WAV 或 MP3 格式），由控制面按共享目录布局声明", example = "/Users/chandler/fcc-records/2026/09/19/1789693905.wav")
     private String path;
 }

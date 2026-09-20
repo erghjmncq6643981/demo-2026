@@ -14,7 +14,7 @@ import java.util.Locale;
  * </p>
  * <pre>
  * {baseDir}/{yyyy}/{MM}/{dd}/{callId}.{format}
- * 例: /Users/chandler/fcc-records/2026/09/19/call-18...81.wav
+ * 例: /Users/chandler/fcc-records/2026/09/19/18...81.wav
  * </pre>
  *
  * <p>文件名直接使用业务 {@code call_id}：它由 FCC 生成并在转移、重试、多信道场景下保持稳定，
@@ -35,7 +35,7 @@ public final class RecordingPathLayout {
     /**
      * 由业务通话标识推导录音业务唯一标识 (recording_id)
      *
-     * @param callId 业务通话标识，如 call-1234567890
+     * @param callId 业务通话标识，如 1234567890
      * @return 录音业务唯一标识；入参为空时返回 null
      */
     public static String recordingIdOf(String callId) {

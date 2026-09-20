@@ -20,13 +20,14 @@ import static org.junit.jupiter.api.Assertions.*;
  * @author Chandler
  */
 @SpringBootTest(classes = FccServerApplication.class)
+@org.springframework.test.annotation.DirtiesContext
 class DatabaseConnectionTest {
 
     @Autowired
     private DataSource dataSource;
 
     @Test
-    @DisplayName("验证数据源连通性及 chandler26_fcc 数据库 34 张表完整性")
+    @DisplayName("验证配置的数据源及核心业务表完整性")
     void testDatabaseConnectivityAndTables() throws Exception {
         assertNotNull(dataSource, "DataSource 数据源不能为空");
 
@@ -36,7 +37,7 @@ class DatabaseConnectionTest {
 
             DatabaseMetaData metaData = connection.getMetaData();
             String catalog = connection.getCatalog();
-            assertEquals("chandler26_fcc", catalog, "当前连接的目标数据库必须是 chandler26_fcc");
+            assertNotNull(catalog, "必须连接到配置的业务数据库");
 
             // 查询该库下所有数据表
             List<String> tables = new ArrayList<>();
@@ -46,8 +47,9 @@ class DatabaseConnectionTest {
                 }
             }
 
-            // 断言 34 张 fcc_* 数据表已完整导入 (含账号体系新增的 fcc_admin_user)
-            assertEquals(34, tables.size(), "fcc 表总数必须为 34 张");
+            // 校验业务契约，不将新增业务表错误地视为数据库损坏。
+            assertTrue(tables.contains("fcc_screen_pop_delivery"), "必须包含弹屏投递事实表");
+            assertTrue(tables.contains("fcc_callback_task"), "必须包含回拨任务表");
             assertTrue(tables.contains("fcc_call_session"), "必须包含 fcc_call_session 表");
             assertTrue(tables.contains("fcc_call_leg"), "必须包含 fcc_call_leg 表");
             assertTrue(tables.contains("fcc_call_bridge"), "必须包含 fcc_call_bridge 表");

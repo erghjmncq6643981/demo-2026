@@ -43,33 +43,6 @@ onMounted(() => {
   loadCallbacks();
 });
 
-const handleDispatch = async (item: CallbackItem, agent: string, workNo?: string) => {
-  try {
-    await callbackApi.assign(item.id, {
-      agentName: agent,
-      agentWorkNo: workNo || (agent === '舒欣' ? '901415' : '901473'),
-    });
-    item.status = 'ASSIGNED';
-    item.assignee = agent;
-    triggerToast(`漏话任务 ${item.phone} 已成功指派给坐席【${agent}】发起回访！`);
-  } catch (e: any) {
-    // 降级更新
-    item.status = 'ASSIGNED';
-    item.assignee = agent;
-    triggerToast(`已指派给坐席【${agent}】发起回访！`);
-  }
-};
-
-const handleCall = async (item: CallbackItem) => {
-  try {
-    await callbackApi.call(item.id);
-    item.status = 'CALLED';
-    triggerToast(`正在通过 FreeSWITCH 外呼网关向 ${item.phone} 发起优先回访...`);
-  } catch (e: any) {
-    item.status = 'CALLED';
-    triggerToast(`正在通过 FreeSWITCH 外呼网关向 ${item.phone} 发起优先回访...`);
-  }
-};
 </script>
 
 <template>
@@ -123,18 +96,7 @@ const handleCall = async (item: CallbackItem) => {
               <span v-else class="px-2.5 py-1 rounded-full bg-emerald-50 text-emerald-700 font-bold text-xs">已呼出</span>
             </td>
             <td class="py-4 px-3.5 text-right">
-              <div v-if="item.status === 'PENDING'" class="flex items-center justify-end gap-2">
-                <button @click="handleDispatch(item, '舒欣', '901415')" class="px-3.5 py-1.5 bg-brand-500 hover:bg-brand-600 text-white rounded-xl font-bold shadow-xs transition cursor-pointer text-xs">
-                  派给舒欣
-                </button>
-                <button @click="handleDispatch(item, '陈松', '901473')" class="px-3.5 py-1.5 bg-indigo-50 hover:bg-indigo-100 text-brand-600 rounded-xl font-bold transition cursor-pointer text-xs">
-                  派给陈松
-                </button>
-                <button @click="handleCall(item)" class="px-3.5 py-1.5 bg-emerald-50 hover:bg-emerald-100 text-emerald-700 rounded-xl font-bold transition cursor-pointer text-xs">
-                  一键回呼
-                </button>
-              </div>
-              <span v-else class="text-slate-400 text-xs font-mono">处理中...</span>
+              <span class="text-slate-500 text-xs">由坐席工作台领取并安排回拨</span>
             </td>
           </tr>
         </tbody>

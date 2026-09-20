@@ -37,7 +37,7 @@ import static org.junit.jupiter.api.Assertions.*;
 @SpringBootTest(classes = FccAdminApplication.class)
 @ActiveProfiles("local")
 @Transactional
-public class AgentAccountServiceTest {
+public class AgentAccountServiceTest extends EphemeralSipKeyTest {
 
     private static final String TEST_WORK_NO = "T90001";
     private static final String TEST_WORK_NO_MEMBER = "T90002";
@@ -73,7 +73,7 @@ public class AgentAccountServiceTest {
                 .build());
         assertNotNull(supervisorCredential.getId());
         assertNotNull(supervisorCredential.getInitialPassword(), "未指定口令时必须生成一次性初始口令");
-        assertNotNull(supervisorCredential.getExtensionSecret(), "必须下发分机注册口令");
+        assertNull(supervisorCredential.getExtensionSecret(), "管理开通响应不能暴露 SIP 注册口令");
 
         AgentVO supervisor = agentService.getAgentById(supervisorCredential.getId());
         assertNotNull(supervisor);

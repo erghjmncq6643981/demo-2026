@@ -66,24 +66,24 @@ public final class IdUtil {
     }
 
     /**
-     * 生成标准 32 位无连字符 UUID
+     * 生成 FreeSWITCH 使用的标准带连字符 UUID
      *
-     * @return 32 位十六进制字符串
+     * @return 36 位标准 UUID 字符串
      */
     public static String getUuid() {
-        return UUID.randomUUID().toString().replace("-", "");
+        return UUID.randomUUID().toString();
     }
 
     /**
      * 生成全局通话业务唯一标识 (call_id)
      * <p>
-     * 格式: call-{snowflakeId}，全通话周期保持稳定不变。
+     * 格式: 雪花数值的十进制字符串，与数据库 BIGINT 主键一致，全周期保持稳定。
      * </p>
      *
      * @return 业务通话唯一标识
      */
     public static String getCallId() {
-        return "call-" + nextIdStr();
+        return nextIdStr();
     }
 
     /**
