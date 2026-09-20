@@ -200,4 +200,9 @@ public class CallSessionManager {
     public int getActiveSessionCount() {
         return ctrlSessions.size();
     }
+
+    /** 返回活跃上下文快照，供恢复与排队调度使用。
+     * @return 当前上下文副本列表
+     */
+    public java.util.List<CallInfoBO> snapshot(){return java.util.List.copyOf(ctrlSessions.values());}
 }

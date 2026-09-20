@@ -58,7 +58,12 @@ public class FccClient {
      * @return FNode 执行结果
      */
     public FNodeResult dial(String nodeId, FNodeDialDTO dto) {
-        return sendRequest(nodeId, "FNode.Dial", dto);
+        String uuid = dto.getUuid();
+        if ((uuid == null || uuid.isBlank()) && dto.getDestination()!=null && dto.getDestination().getCallParams()!=null && !dto.getDestination().getCallParams().isEmpty()) {
+            uuid = dto.getDestination().getCallParams().getFirst().getUuid();
+        }
+        if (uuid == null || uuid.isBlank()) { uuid = IdUtil.getUuid(); dto.setUuid(uuid); }
+        return sendRequest(nodeId, "FNode.Dial", dto, "dial-" + uuid);
     }
 
     /**
@@ -238,11 +243,32 @@ public class FccClient {
      * @return FNodeResult 标准执行结果
      */
     private FNodeResult sendRequest(String nodeId, String method, Object params) {
+        return sendRequest(nodeId, method, params, IdUtil.getCommandId());
+    }
+
+    /** 查询已持久记录的命令应答，不重放副作用。
+     * @param nodeId 节点 @param commandId 原命令标识 @return 已受理/失败/未知结果
+     */
+    public FNodeResult commandResult(String nodeId, String commandId) {
+        return sendRequest(nodeId,"FNode.CommandResult",Map.of("command_id",commandId));
+    }
+
+    /** 查询节点当前完整话道集合，失败必须视为未知而非空节点。
+     * @param nodeId 话道所属节点
+     * @return 含 complete/channel_uuids 的结构化结果
+     */
+    public FNodeResult channelSnapshot(String nodeId) {
+        return sendRequest(nodeId, "FNode.ChannelSnapshot", Map.of());
+    }
+
+    /** 使用稳定标识发送命令。
+     * @param nodeId 节点 @param method 方法 @param params 参数 @param reqId 幂等命令标识 @return 节点应答
+     */
+    private FNodeResult sendRequest(String nodeId, String method, Object params, String reqId) {
         String effectiveNodeId = (nodeId != null && !nodeId.trim().isEmpty())
                 ? nodeId.trim()
                 : fccProperties.getDefaultNodeId();
 
-        String reqId = IdUtil.getCommandId();
         JsonRpcRequest req = JsonRpcRequest.builder()
                 .jsonrpc("2.0")
                 .id(reqId)
@@ -296,7 +322,7 @@ public class FccClient {
                             .methodName(method)
                             .requestPayload(new String(payload, StandardCharsets.UTF_8))
                             .responsePayload(respStr)
-                            .status(result != null && result.getCode() == 0 ? "SUCCESS" : "FAILED")
+                            .status(result != null && (result.getCode() == 0 || result.getCode() == 200) ? "ACCEPTED" : "FAILED")
                             .sentAt(java.time.LocalDateTime.now())
                             .completedAt(java.time.LocalDateTime.now())
                             .build());

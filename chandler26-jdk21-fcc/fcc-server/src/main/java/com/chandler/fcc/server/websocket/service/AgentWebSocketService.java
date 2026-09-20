@@ -25,6 +25,8 @@ import java.util.Set;
 public class AgentWebSocketService {
 
     private final AgentWebSocketHandler webSocketHandler;
+    private final ScreenPopDeliveryStore deliveries;
+    private final com.chandler.fcc.server.call.CallSessionManager calls;
 
     /**
      * 推送话务弹屏事件至指定坐席
@@ -46,9 +48,13 @@ public class AgentWebSocketService {
                 screenPop
         );
 
-        log.info("🚀 [WebSocket Service] 推送弹屏: workNo={}, direction={}, caller={}, did={}, flow={}",
-                workNo, screenPop.getDirection(), screenPop.getCallerNumber(),
-                screenPop.getDidNumber(), screenPop.getFlowName());
+        var call = calls.getByCallId(screenPop.getCallId()).orElse(null);
+        if (call == null || !(call.getData().get("tenantId") instanceof Number tenant)) return 0;
+        try { deliveries.save(tenant.longValue(), message); }
+        catch (RuntimeException failure) { log.error("[弹屏] 持久投递记录失败 callId={}", screenPop.getCallId()); }
+
+        log.info("[WebSocket Service] 推送弹屏 workNo={} callId={} direction={}",
+                workNo, screenPop.getCallId(), screenPop.getDirection());
 
         return webSocketHandler.sendToWorkNo(workNo, message);
     }
@@ -62,6 +68,7 @@ public class AgentWebSocketService {
      * @return 成功会话数
      */
     public int pushCallAnswered(String workNo, String callId, Object data) {
+        closeDelivery(workNo, callId);
         WsMessageDTO<Object> message = WsMessageDTO.of(
                 WsMessageTypeEnum.CALL_ANSWERED.getCode(),
                 workNo,
@@ -80,6 +87,7 @@ public class AgentWebSocketService {
      * @return 成功会话数
      */
     public int pushCallHangup(String workNo, String callId, Object data) {
+        closeDelivery(workNo, callId);
         WsMessageDTO<Object> message = WsMessageDTO.of(
                 WsMessageTypeEnum.CALL_HANGUP.getCode(),
                 workNo,
@@ -98,6 +106,16 @@ public class AgentWebSocketService {
      */
     public int sendToWorkNo(String workNo, WsMessageDTO<?> message) {
         return webSocketHandler.sendToWorkNo(workNo, message);
+    }
+
+    /** 关闭提醒记录；记录故障不能阻断通话事件送达。
+     * @param workNo 坐席 @param callId 通话
+     */
+    private void closeDelivery(String workNo, String callId) {
+        var call = calls.getByCallId(callId).orElse(null);
+        if (call == null || !(call.getData().get("tenantId") instanceof Number tenant)) return;
+        try { deliveries.close(tenant.longValue(), workNo, callId); }
+        catch (RuntimeException failure) { log.error("[弹屏] 关闭投递记录失败 callId={}", callId); }
     }
 
     /**

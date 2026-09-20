@@ -65,8 +65,8 @@ public class CallPersistenceService {
         if (existing == null) {
             CallSessionEntity entity = CallSessionEntity.builder()
                     .id(numericCallId)
-                    .tenantId(0L)
-                    .bizId(callInfo.getCallId())
+                    .tenantId(callInfo.getData().get("tenantId") instanceof Number tenant ? tenant.longValue() : 0L)
+                    .bizId(callInfo.getDataStr("dialJobId",callInfo.getCallId()))
                     .ctrlId(callInfo.getCtrlId())
                     .modelType(callInfo.getModelKey() != null ? callInfo.getModelKey() : "UNKNOWN")
                     .direction(callInfo.getDirection() != null ? callInfo.getDirection().name() : "OUTBOUND")

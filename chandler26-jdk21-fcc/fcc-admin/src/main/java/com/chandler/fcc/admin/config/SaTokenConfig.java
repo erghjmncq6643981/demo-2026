@@ -20,8 +20,6 @@ public class SaTokenConfig implements WebMvcConfigurer {
                 .addPathPatterns("/api/admin/**")
                 .excludePathPatterns(
                         "/api/admin/auth/login",
-                        // 实体话机语音自助绑定 (拨打 0000) 由话机侧发起，无控制台令牌
-                        "/api/admin/extensions/ivr-bind",
                         // 录音复播与下载由浏览器 <audio>/<a download> 直接发起，无法携带自定义请求头，
                         // 因此按录制事实 ID 开放只读访问；路径合法性由录音服务在共享目录内校验。
                         "/api/admin/recordings/**",

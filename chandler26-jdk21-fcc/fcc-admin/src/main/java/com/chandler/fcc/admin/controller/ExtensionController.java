@@ -65,20 +65,6 @@ public class ExtensionController {
     }
 
     /**
-     * 实体话机 0000 语音工号自助绑定
-     *
-     * @param req 分机号与坐席工号
-     * @return 绑定结果与 IVR 语音播报文案
-     */
-    @Operation(summary = "实体话机0000语音工号自助绑定")
-    @PostMapping("/ivr-bind")
-    public CommonResult<com.chandler.fcc.admin.model.vo.IvrBindResultVO> ivrBind(
-            @Valid @RequestBody com.chandler.fcc.admin.model.dto.IvrBindReq req) {
-        com.chandler.fcc.admin.model.vo.IvrBindResultVO vo = extensionService.bindIvr(req);
-        return CommonResult.success(vo);
-    }
-
-    /**
      * 删除分机并从 FreeSWITCH 移除
      *
      * @param id 分机主键 ID
