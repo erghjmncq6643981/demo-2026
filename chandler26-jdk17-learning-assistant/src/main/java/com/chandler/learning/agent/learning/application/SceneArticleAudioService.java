@@ -39,6 +39,9 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.TimeoutException;
+import java.util.concurrent.atomic.AtomicBoolean;
+import java.util.concurrent.atomic.AtomicReference;
 
 /**
  * 场景文章阿里云 TTS 语音分段合成、拼接与持久化服务。
@@ -440,6 +443,8 @@ public class SceneArticleAudioService {
     private byte[] synthesizeChunk(NlsClient client, String text, String appKey, String voice, Integer speechRate) throws Exception {
         ByteArrayOutputStream baos = new ByteArrayOutputStream();
         SpeechSynthesizer synthesizer = null;
+        AtomicBoolean completed = new AtomicBoolean(false);
+        AtomicReference<String> failReason = new AtomicReference<>(null);
         try {
             SpeechSynthesizerListener listener = new SpeechSynthesizerListener() {
                 /** 接收并写入语音流二进制数据。 */
@@ -453,12 +458,14 @@ public class SceneArticleAudioService {
                 /** 语音合成完成通知。 */
                 @Override
                 public void onComplete(SpeechSynthesizerResponse response) {
+                    completed.set(true);
                     log.debug("分段 TTS 完成: status={}", response.getStatus());
                 }
 
                 /** 语音合成失败通知。 */
                 @Override
                 public void onFail(SpeechSynthesizerResponse response) {
+                    failReason.set("status=" + response.getStatus() + " " + response.getStatusText());
                     log.warn("分段 TTS 失败: status={} statusText={}", response.getStatus(), response.getStatusText());
                 }
             };
@@ -473,11 +480,23 @@ public class SceneArticleAudioService {
             synthesizer.setText(text);
 
             synthesizer.start();
-            synthesizer.waitForComplete();
+            long timeout = nlsProperties.getTimeoutMs() != null && nlsProperties.getTimeoutMs() > 0
+                    ? nlsProperties.getTimeoutMs() : 15000L;
+            synthesizer.waitForComplete(timeout);
+
+            if (failReason.get() != null) {
+                throw new IllegalStateException("阿里云 TTS 合成失败: " + failReason.get());
+            }
+            if (!completed.get()) {
+                throw new TimeoutException("阿里云 TTS 合成超时（超过 " + timeout + "ms 无响应）");
+            }
             return baos.toByteArray();
         } finally {
             if (synthesizer != null) {
-                synthesizer.close();
+                try {
+                    synthesizer.close();
+                } catch (Exception ignored) {
+                }
             }
         }
     }

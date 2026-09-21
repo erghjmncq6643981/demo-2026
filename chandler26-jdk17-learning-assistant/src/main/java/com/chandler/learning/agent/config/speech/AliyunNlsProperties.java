@@ -35,4 +35,7 @@ public class AliyunNlsProperties {
 
     /** 单次 TTS 转换的最大字符限制（默认 200 字以内，避免超限）。 */
     private Integer maxChunkLength = 200;
+
+    /** 单次分片语音合成等待超时毫秒数（默认 15000 毫秒，避免网络或网关异常时永久阻塞）。 */
+    private Integer timeoutMs = 15000;
 }
