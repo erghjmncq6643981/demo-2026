@@ -43,10 +43,10 @@ class CallControlBoundaryTest {
     @Test void transferAcknowledgementDoesNotEndCall() {
         var call = CallInfoBO.builder().callId("call-test").nodeId("node-test").ctrlId("ctrl-test")
                 .guestChannelUuid("00000000-0000-0000-0000-000000000001").build();
-        when(client.nativeAPI(eq("node-test"), eq("uuid_transfer"), anyString()))
+        when(client.nativeAPI(eq("uuid_transfer"), anyString()))
                 .thenReturn(FNodeResult.builder().code(200).data(Map.of("response", "+OK")).build());
         assertEquals("ACCEPTED", ((Map<?, ?>) service.transfer(call, "1001").get("data")).get("status"));
         verifyNoInteractions(sessions);
-        verify(client, never()).hangup(anyString(), anyString(), anyString(), anyString());
+        verify(client, never()).hangup(anyString(), anyString(), anyString());
     }
 }

@@ -8,7 +8,8 @@ import java.io.Serializable;
 /**
  * JSON-RPC 2.0 标准请求传输报文
  * <p>
- * 用于 Java 控制面与 Go Sidecar 之间通过 NATS 总线（主题: fs.cmd.{nodeId}）进行异步请求与应答交互。
+ * 用于 Java 控制面与 Go Sidecar Coordinator 之间通过 NATS 总线（主题: fs.cmd.dispatch）
+ * 进行请求与应答交互。节点归属由底层路由器根据话道或资源策略解析。
  * </p>
  *
  * @author Chandler

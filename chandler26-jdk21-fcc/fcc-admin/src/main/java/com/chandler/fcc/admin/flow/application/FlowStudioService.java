@@ -95,6 +95,7 @@ public class FlowStudioService {
                 .executorType(action.getExecutorType().name())
                 .executorTypeLabel(action.getExecutorType().getDesc())
                 .operation(action.getOperation())
+                .fNodeMethod(action.getFNodeMethod() == null ? null : action.getFNodeMethod().getWireName())
                 .build())
             .toList();
     }

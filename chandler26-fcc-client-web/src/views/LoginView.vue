@@ -68,7 +68,7 @@ const handleLogin = async () => {
             从这里开始
           </h1>
           <p class="text-xs sm:text-sm text-slate-400 mb-6 leading-relaxed">
-            登录后处理来电、人工外呼和回拨待办。请先完成话机绑定，再切换为就绪状态。
+            登录后处理来电、人工外呼和回拨待办。请先使用实体话机拨打 0000 完成 DTMF 绑定，再切换为就绪状态。
           </p>
 
           <div class="space-y-2.5 text-xs sm:text-sm text-slate-300">
@@ -78,7 +78,7 @@ const handleLogin = async () => {
             </div>
             <div class="flex items-center gap-2.5">
               <span class="w-1.5 h-1.5 rounded-full bg-indigo-400"></span>
-              <span>实体话机绑定与坐席状态</span>
+              <span>实体话机 DTMF 绑定与坐席状态</span>
             </div>
             <div class="flex items-center gap-2.5">
               <span class="w-1.5 h-1.5 rounded-full bg-indigo-400"></span>

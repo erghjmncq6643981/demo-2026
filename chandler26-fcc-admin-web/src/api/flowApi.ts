@@ -37,6 +37,7 @@ export interface FlowActionVO {
   executorType: string;
   executorTypeLabel: string;
   operation: string;
+  fNodeMethod?: string;
 }
 
 export interface SystemFlowModelVO {
@@ -50,6 +51,7 @@ export interface SystemFlowModelVO {
       executorType?: string;
       executorTypeLabel?: string;
       operation?: string;
+      fNodeMethod?: string;
     }>;
   };
 }

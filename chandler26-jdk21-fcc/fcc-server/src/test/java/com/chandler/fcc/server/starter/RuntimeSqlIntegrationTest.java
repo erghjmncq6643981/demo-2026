@@ -116,8 +116,8 @@ class RuntimeSqlIntegrationTest {
      */
     private void verifyBindingAndPresence(SqlSessionTemplate session) {
         PhoneBindingMapper bindings = session.getMapper(PhoneBindingMapper.class);
-        assertNotNull(bindings.bindingContext("test-node", "1001"));
-        assertNotNull(bindings.lockBindingTarget("test-node", "1001", "test-agent"));
+        assertNotNull(bindings.bindingContext("1001"));
+        assertNotNull(bindings.lockBindingTarget("1001", "test-agent"));
         assertEquals(0, bindings.busy("test-agent", "1001"));
         bindings.disableBindings("test-agent", "1001");
         bindings.clearExtensions("test-agent", "1001");

@@ -126,8 +126,8 @@ public class FccTelephonyFlowTest {
                     log.error("❌ [Mock Sidecar] 处理异常", e);
                 }
             });
-            mockSidecarDispatcher.subscribe("fs.cmd.test-node");
-            log.info("🤖 [Mock Sidecar] 已启动 NATS 指令应答监听: fs.cmd.test-node");
+            mockSidecarDispatcher.subscribe("fs.cmd.dispatch");
+            log.info("🤖 [Mock Sidecar] 已启动逻辑命令应答监听: fs.cmd.dispatch");
         }
     }
 
@@ -295,7 +295,6 @@ public class FccTelephonyFlowTest {
     @Order(4)
     @DisplayName("测试 FNode JSON-RPC 2.0 控制客户端指令发送与审计记录")
     void testFccClientRpcCommandsAndAudit() {
-        String testNodeId = "test-node";
         String ctrlUuid = IdUtil.getCtrlId("fcc-rpc-test");
         String testUuid = "test-chan-uuid";
 
@@ -310,12 +309,12 @@ public class FccTelephonyFlowTest {
                                 .build()))
                         .build())
                 .build();
-        FNodeResult dialRes = fccClient.dial(testNodeId, dialDto);
+        FNodeResult dialRes = fccClient.dial(dialDto);
         assertNotNull(dialRes);
         assertEquals(200, dialRes.getCode(), "Dial 指令应成功返回 200");
 
         // 2. FNode.ChannelBridge
-        FNodeResult bridgeRes = fccClient.channelBridge(testNodeId, ctrlUuid, testUuid, "peer-uuid-1");
+        FNodeResult bridgeRes = fccClient.channelBridge(ctrlUuid, testUuid, "peer-uuid-1");
         assertNotNull(bridgeRes);
         assertEquals(200, bridgeRes.getCode(), "ChannelBridge 指令应成功返回 200");
 
@@ -328,7 +327,7 @@ public class FccTelephonyFlowTest {
                         .data("/var/sounds/ivr-welcome.wav")
                         .build())
                 .build();
-        FNodeResult playRes = fccClient.play(testNodeId, playDto);
+        FNodeResult playRes = fccClient.play(playDto);
         assertNotNull(playRes);
         assertEquals(200, playRes.getCode(), "Play 指令应成功返回 200");
 
@@ -344,7 +343,7 @@ public class FccTelephonyFlowTest {
                         .build())
                 .timeout(5)
                 .build();
-        FNodeResult readRes = fccClient.readDTMF(testNodeId, dtmfDto);
+        FNodeResult readRes = fccClient.readDTMF(dtmfDto);
         assertNotNull(readRes);
         assertEquals(200, readRes.getCode(), "ReadDTMF 指令应成功返回 200");
 
@@ -355,22 +354,22 @@ public class FccTelephonyFlowTest {
                 .action("START")
                 .path("/var/recordings/test.wav")
                 .build();
-        FNodeResult recRes = fccClient.record(testNodeId, recDto);
+        FNodeResult recRes = fccClient.record(recDto);
         assertNotNull(recRes);
         assertEquals(200, recRes.getCode(), "Record 指令应成功返回 200");
 
         // 6. FNode.Hangup
-        FNodeResult hangupRes = fccClient.hangup(testNodeId, ctrlUuid, testUuid, "NORMAL_CLEARING");
+        FNodeResult hangupRes = fccClient.hangup(ctrlUuid, testUuid, "NORMAL_CLEARING");
         assertNotNull(hangupRes);
         assertEquals(200, hangupRes.getCode(), "Hangup 指令应成功返回 200");
 
         // 7. FNode.NativeAPI
-        FNodeResult nativeRes = fccClient.nativeAPI(testNodeId, "status", "");
+        FNodeResult nativeRes = fccClient.nativeAPI("status", "");
         assertNotNull(nativeRes);
         assertEquals(200, nativeRes.getCode(), "NativeAPI 指令应成功返回 200");
 
         // 8. FNode.Status
-        FNodeResult statusRes = fccClient.status(testNodeId);
+        FNodeResult statusRes = fccClient.status();
         assertNotNull(statusRes);
         assertEquals(200, statusRes.getCode(), "Status 指令应成功返回 200");
 

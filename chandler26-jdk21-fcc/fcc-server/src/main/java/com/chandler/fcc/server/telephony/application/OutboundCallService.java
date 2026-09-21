@@ -17,7 +17,6 @@ import com.chandler.fcc.server.call.CallSessionManager;
 import com.chandler.fcc.server.command.FccClient;
 import com.chandler.fcc.server.flow.application.SystemFlowRuntime;
 import com.chandler.fcc.server.flow.application.FlowActionExecutionService;
-import com.chandler.fcc.server.infrastructure.nats.FccProperties;
 import com.chandler.fcc.server.infrastructure.persistence.entity.CallLegEntity;
 import com.chandler.fcc.server.infrastructure.persistence.service.CallPersistenceService;
 import com.chandler.fcc.server.outbound.application.DialAttemptGuard;
@@ -74,7 +73,6 @@ public class OutboundCallService implements SystemFlowRuntime {
     private final CallPersistenceService persistence;
     private final FccClient client;
     private final FlowActionExecutionService flowActions;
-    private final FccProperties properties;
     private final ScreenPopService screenPop;
     private final AgentWebSocketService websocket;
     private final TransactionTemplate transactions;
@@ -131,7 +129,6 @@ public class OutboundCallService implements SystemFlowRuntime {
         CallInfoBO call = CallInfoBO.builder()
             .callId(IdUtil.getCallId())
             .ctrlId(IdUtil.getCtrlId("notification"))
-            .nodeId(properties.getDefaultNodeId())
             .modelKey(FlowModelType.AUTO_DIAL_NOTIFICATION.name())
             .direction(DirectionType.OUTBOUND)
             .stageState(CallStageState.CALLING)
@@ -142,7 +139,6 @@ public class OutboundCallService implements SystemFlowRuntime {
             .data(data)
             .build();
         call.putData("guestChannelUuid", call.getGuestChannelUuid());
-        call.putData("nodeId", call.getNodeId());
 
         flowActions.executeInternal(
             call,
@@ -179,7 +175,6 @@ public class OutboundCallService implements SystemFlowRuntime {
                     call.putData("notificationConfirmed", true);
                     persistence.saveOrUpdateSession(call);
                     client.hangup(
-                        call.getNodeId(),
                         call.getCtrlId(),
                         call.getGuestChannelUuid(),
                         "NORMAL_CLEARING"
@@ -241,7 +236,6 @@ public class OutboundCallService implements SystemFlowRuntime {
         CallInfoBO call = CallInfoBO.builder()
             .callId(callId)
             .ctrlId(IdUtil.getCtrlId("outbound"))
-            .nodeId(properties.getDefaultNodeId())
             .modelKey(FlowModelType.OUTBOUND_TWO_WAY_CALL.name())
             .direction(DirectionType.OUTBOUND)
             .stageState(CallStageState.CALLING)
@@ -255,7 +249,6 @@ public class OutboundCallService implements SystemFlowRuntime {
             .build();
         call.putData("agentChannelUuid", call.getAgentChannelUuid());
         call.putData("guestChannelUuid", call.getGuestChannelUuid());
-        call.putData("nodeId", call.getNodeId());
 
         flowActions.executeInternal(
             call,
@@ -533,7 +526,7 @@ public class OutboundCallService implements SystemFlowRuntime {
             ? call.getGuestChannelUuid()
             : call.getAgentChannelUuid();
         if (peerUuid != null) {
-            client.hangup(call.getNodeId(), call.getCtrlId(), peerUuid, "NORMAL_CLEARING");
+            client.hangup(call.getCtrlId(), peerUuid, "NORMAL_CLEARING");
         }
         if (TEMPLATE_AGENT_FIRST.equals(template)) {
             websocket.pushCallHangup(

@@ -46,9 +46,11 @@ The control/runtime split is: maintain and inspect through `fcc-admin`; consume 
 - `POST /api/telephony/call/flow/reload`
 - `WS /ws/agent` with authenticated subprotocol headers; query parameters do not establish identity.
 
-The server sends `FNode.*` commands to `fs.cmd.{nodeId}`, subscribes to `fs.event.>`, drives flow actions, persists call/session facts, and pushes screen-pop/call events to connected agents.
+The server sends logical `FNode.*` commands to `fs.cmd.dispatch`, subscribes to `fs.event.>`, drives flow actions, persists call/session facts, and pushes screen-pop/call events to connected agents. Node ownership is resolved below the FCC business boundary.
 
 Recording commands persist the declared file path. Sidecar and Java now use only `Event.Recording` on `fs.event.{nodeId}.record`. Contract tests exist on both sides; live recording completion still requires FreeSWITCH/NATS verification.
+
+`FlowActionType` is the shared action catalog for admin validation and server execution. Every `FNodeMethod` has an object-backed action entry; internal actions are reserved for cohesive FCC business closures, while configured third-party actions use the versioned `ThirdPartyFlowRequest`/`ThirdPartyFlowResponse` contract and never accept a URL from the flow model.
 
 ### fcc-admin
 
@@ -83,7 +85,6 @@ Both executable services use environment-driven configuration. Important variabl
 - `MYSQL_HOST`, `MYSQL_PORT`, `MYSQL_DATABASE`, `MYSQL_USERNAME`, `MYSQL_PASSWORD`
 - `REDIS_HOST`, `REDIS_PORT`
 - `NATS_URL`
-- `FCC_DEFAULT_NODE_ID`
 - `SIDECAR_ADMIN_URL`
 - `FCC_RECORDING_BASE_DIR`
 - `FCC_ADMIN_BASE_URL`, `FCC_SERVER_BASE_URL`, `FCC_FLOW_RELOAD_TOKEN`, `FCC_WS_ALLOWED_ORIGINS`

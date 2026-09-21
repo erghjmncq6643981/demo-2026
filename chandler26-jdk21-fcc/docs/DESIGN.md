@@ -125,13 +125,21 @@ fcc-server 统一拥有话机绑定运行流程、呼入、呼出、自动外呼
 1. 坐席端调用 `/api/telephony/call/*`。
 2. Controller 建立或查找 `CallInfoBO` 和内存会话索引。
 3. Flow/Action 生成 FNode DTO。
-4. `FccClient` 请求 `fs.cmd.{nodeId}` 并等待 Sidecar 同步应答。
+4. `FccClient` 请求逻辑主题 `fs.cmd.dispatch` 并等待 Sidecar 同步应答；业务服务不提供节点参数。
 5. Sidecar 调用 FreeSWITCH。
 6. Sidecar 发布 `Event.Channel`、`Event.DTMF`、`Event.Recording` 或 `Event.Registration`。
 7. `FccEventListener` 更新会话、持久化事实、触发后续动作并推送 Agent WebSocket。
 8. 坐席端以业务 WebSocket和 SIP Session 对账最终状态。
 
 同步 RPC 成功不是振铃、接通、桥接或录音成功的最终证据。
+
+### 5.1 命令路由边界
+
+呼叫中心业务只表达 `Dial`、`Play`、`ReadDTMF`、`Bridge`、`Record`、`Hangup`、`Transfer` 等逻辑命令。`FccClient` 统一发布到 `fs.cmd.dispatch`，命令参数只携带控制标识、话道 UUID、被叫和媒体等业务信息，不携带 `node_id`。
+
+Sidecar 的 dispatch ingress 在单节点部署中可直接调用本地 Dispatcher；多节点部署由独立 Coordinator 根据新建 Dial 的健康、容量、中继策略，以及既有 `channel_uuid` 的 ownership 选择节点，再转发到内部 `fs.cmd.{nodeId}`。所有 Sidecar 仍以 `fs.event.{nodeId}.{category}` 发布事件，事件中的 `node_id`、CallLeg 的 `node_id` 和命令应答的 `node_id` 是基础设施事实，用于归属、审计、去重和恢复，不是业务路由参数。
+
+`FNode.ChannelSnapshot` 通过逻辑入口返回 Coordinator 聚合的完整话道集合。当前代码已实现逻辑入口和单节点直执行；跨节点 ownership registry、跨节点 Bridge 和快照聚合需要多 Sidecar 环境联调，不能以单节点测试宣称完成。
 
 ## 6. 当前 API
 
@@ -223,14 +231,16 @@ MySQL 是持久事实来源。Redis 只存可重建的运行态和通知。内�
 | 指定坐席、技能组、同组代答、忙/离线/无人和多次尝试 | 路由尝试事实 + 并发预占 + 可替换路由策略 | 指定坐席/技能组与排队期轮询已实现；代班、营业时间、溢出层级及细分失败原因尚未动作化 |
 | 来电弹屏、接听、桥接、挂机和坐席释放 | Call/Leg/Bridge 事实 + Windows 客户端回执 + 终态幂等 | 核心链路和弹屏回执已实现；真实 SIP/Windows 联调与异常恢复验收未完成 |
 | 未接、超时、客户先挂产生漏话及回拨闭环 | `FINALIZE_INBOUND` + `fcc_callback_task` + 渐进式外呼任务 | 未接回拨创建、领取和任务关联已实现；运营规则、SLA 和人工处置结果仍需补齐 |
-| 录音、满意度评价及文件完成态 | 显式 FNode 动作 + Recording/评价事实 | 录音协议和元数据已有基础；流程接入、评价动作及真实文件完成态未完成 |
+| 录音、满意度评价及文件完成态 | `START_RECORDING`/`STOP_RECORDING`、`PLAY_NAVIGATION_VOICE`、`COLLECT_SERVICE_RATING`、`PLAY_CLOSING_VOICE`、`PERSIST_SERVICE_RATING` + Recording/评价事实 | 动作目录和协议边界已声明；评价持久化、流程接入及真实文件完成态未完成 |
 | 盲转、咨询转、三方与转接后话单归属 | 显式转接动作 + 多 Leg/Bridge 成员事实 | 数据模型可承载，完整动作与生命周期尚未实现，不能以普通桥接代替 |
 | 自动外呼放音、按键确认、重试和终态通知 | 通知外呼固定模型 + 持久调度/尝试 + 确认事实 | 调度、租约和确认模型已有基础；真实并发、重试、音频与终态通知待联调 |
 | 司机热线路由、港口映射和结束后同步业务系统 | 命名第三方端点 + 显式请求/响应动作 + 幂等业务回调事实 | 通用 HTTPS 执行边界已存在；具体业务契约、端点配置、补偿与对账尚未实现 |
 
 新系统当前已对象化并运行的呼入动作是 DID 解析、菜单收号、if/else 路由、坐席预占与呼叫、桥接、等待挂机和未接通回拨收尾。录音、评价、复杂转接、营业时间/溢出、第三方业务回调等不能继续隐藏在监听器条件分支中；后续加入时必须先进入 `fcc-common` 动作目录，声明 FNode 指令、内部方法或第三方接口执行边界，再由 admin 校验、server 执行并记录每次动作事实。在这些动作真正接入运行流程并验证前，文档不将其描述为可配置完成。
 
-`FlowActionType` 是 admin/server 共用动作目录，每个动作明确归属 FNode 指令、内部业务方法或第三方接口。FNode 方法和事件方法/字段由 `FNodeMethod`、`FccEventMethod`、`FccEventField` 等公共对象定义。第三方动作只能使用服务端命名白名单中的 HTTPS 端点和稳定幂等键。发布通知在 afterCommit 执行，但尚无持久通知重试与激活看板。
+`FlowActionType` 是 admin/server 共用动作目录，每个动作明确归属 FNode 指令、内部业务方法或第三方接口。每个 `FNodeMethod` 都必须至少有一个对应动作；一个底层方法允许有多个业务语义，例如坐席外呼和客户外呼都使用 `FNode.Dial`。FNode 方法和事件方法/字段由 `FNodeMethod`、`FccEventMethod`、`FccEventField` 等公共对象定义，不在执行器中解析裸 wire 字符串。
+
+内部动作只保留高内聚的业务闭环，例如 DID 解析、路由分支选择、坐席预占与收尾；播放、录音、转接、挂机等 FreeSWITCH 能力必须建模为 FNode 动作，不得复制成内部动作。第三方动作使用固定 `ThirdPartyFlowRequest/ThirdPartyFlowResponse` 协议：请求由 FCC 补齐协议版本、`commandId`、`callId`、流程实例和动作编码，端点只能来自服务端 HTTPS 白名单；响应必须原样回传协议版本和 `commandId`，并提供 `accepted`、业务码、消息和结构化 `data`。发布通知在 afterCommit 执行，但尚无持久通知重试与激活看板。
 
 ## 9. 录音
 
@@ -246,7 +256,7 @@ MySQL 是持久事实来源。Redis 只存可重建的运行态和通知。内�
 - Call/Leg/Command/Event/Recording 持久化；
 - 部分重复写入保护；
 - WebSocket 心跳响应和多 Session 推送；
-- Sidecar 节点目标参数；
+- 单节点 `fs.cmd.dispatch` 直执行；多节点 Coordinator 的 ownership、容量选择和跨节点 Bridge 仍未完成；
 - 共享录音路径范围校验。
 
 仍需作为已知缺口处理：
@@ -262,7 +272,7 @@ MySQL 是持久事实来源。Redis 只存可重建的运行态和通知。内�
 - 共享 Jackson 标识符模块已加入，但命名外字段、Map 和实际 HTTP 输出仍需完整契约验证；
 - Dial Job 已有持久领取、频控、时段、暂停/取消、逐次结果及原子批量回填；真实话务与未知结果恢复尚未完整验收。
 
-挂机/保持/DTMF/转接已校验本人 callId、节点和底层响应；返回 ACCEPTED 而非最终状态，错误/超时不再伪造成功。班长四类干预均明确返回 501，前端禁用。保持媒体完成态和完整转接生命周期仍需联调。
+挂机/保持/DTMF/转接已校验本人 callId、话道 UUID 和底层响应；返回 ACCEPTED 而非最终状态，错误/超时不再伪造成功。班长四类干预均明确返回 501，前端禁用。保持媒体完成态和完整转接生命周期仍需联调。
 
 ## 11. 安全与运维
 

@@ -40,6 +40,10 @@ public final class SystemFlowModels {
             object.put("executorType", action.getExecutorType().name());
             object.put("executorTypeLabel", action.getExecutorType().getDesc());
             object.put("operation", action.getOperation());
+            object.put(
+                "fNodeMethod",
+                action.getFNodeMethod() == null ? "" : action.getFNodeMethod().getWireName()
+            );
         });
         return copy;
     }

@@ -46,7 +46,6 @@ public class FlowActionExecutionService {
             FlowActionContext.builder()
                 .action(action)
                 .callId(call.getCallId())
-                .nodeId(call.getNodeId())
                 .commandId(commandId)
                 .payload(payload)
                 .build()

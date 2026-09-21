@@ -37,6 +37,7 @@ export interface FlowModelNode {
   executorType: string;
   executorTypeLabel: string;
   operation: string;
+  fNodeMethod?: string;
 }
 export interface StageExecution {
   id: string;

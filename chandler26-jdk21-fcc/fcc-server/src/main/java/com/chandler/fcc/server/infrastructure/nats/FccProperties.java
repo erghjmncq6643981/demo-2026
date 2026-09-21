@@ -8,7 +8,7 @@ import org.springframework.stereotype.Component;
 /**
  * FCC 核心配置属性类
  * <p>
- * 读取并管理 NATS 消息总线连接地址、默认软交换节点、指令超时及 Sidecar 管理面地址等参数。
+ * 读取并管理 NATS 消息总线连接地址、指令超时及 Sidecar 管理面地址等参数。
  * </p>
  *
  * @author Chandler
@@ -23,11 +23,6 @@ public class FccProperties {
      * NATS 消息集群连接 URL 地址
      */
     private String natsUrl = "nats://127.0.0.1:4222";
-
-    /**
-     * 默认软交换与 Sidecar 节点标识符 (node_id)
-     */
-    private String defaultNodeId;
 
     /**
      * 控制流程标识符默认前缀

@@ -99,7 +99,7 @@ MySQL 保存业务事实；PostgreSQL 反映节点运行数据及 Sidecar 管理
 ## 7. 部署与验证约束
 
 - 编译需要 JDK 21，本轮使用本机 JDK 21 已通过 Java 编译；Go 以 go.mod 声明为准。仍需在 CI 和完整环境验证核心业务。
-- Java 的 FCC_DEFAULT_NODE_ID 必须等于 Sidecar NODE_ID；NATS、ESL、MySQL、PostgreSQL、Redis 均使用独立部署配置。
+- Java 不再配置或读取 `FCC_DEFAULT_NODE_ID`；业务命令统一进入 `fs.cmd.dispatch`，由 Sidecar Coordinator 选择节点。Sidecar 仍配置自己的 `NODE_ID` 并发布节点事件/心跳；NATS、ESL、MySQL、PostgreSQL、Redis 均使用独立部署配置。当前只验证单节点 dispatch，跨节点 ownership 和聚合快照仍需联调。
 - 开发 Vite 代理不代表生产代理。生产需分别路由管理 REST、话务 REST、业务 WS，并验证 HTTPS/WSS、证书、SIP 域、ICE/TURN 与双向音频。
 - 录音目录需在 FreeSWITCH 写入端和 Java 读取端一致可见，验证路径边界、权限、容量和文件完成态。
 - 新环境采用空库基线；仓库当前没有增量迁移脚本，也不支持旧库兼容升级。结构不一致的开发库应先备份再重建，不在运行库临时删列，也不导入演示坐席/话单。进入生产变更管理后再从当前基线建立不可变迁移链。

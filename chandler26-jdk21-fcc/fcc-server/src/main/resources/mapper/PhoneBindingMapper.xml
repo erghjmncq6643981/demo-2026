@@ -3,28 +3,22 @@
 <mapper namespace="com.chandler.fcc.server.agent.infrastructure.PhoneBindingMapper">
   <select id="bindingContext" resultType="map">
     SELECT e.id AS extensionId
-    FROM fcc_telephony_node n
-    JOIN fcc_extension e
-      ON e.extension = #{extension}
-     AND e.status = 'ENABLED'
-     AND e.deleted_at IS NULL
-    WHERE n.node_id = #{nodeId}
-      AND n.status IN ('ONLINE', 'DRAINING')
+    FROM fcc_extension e
+    WHERE e.extension = #{extension}
+      AND e.status = 'ENABLED'
+      AND e.deleted_at IS NULL
     LIMIT 1
   </select>
   <select id="lockBindingTarget" resultType="map" useCache="false" flushCache="true">
     SELECT e.id AS extensionId, a.id AS agentId
-    FROM fcc_telephony_node n
-    JOIN fcc_extension e
-      ON e.extension = #{extension}
-     AND e.status = 'ENABLED'
-     AND e.deleted_at IS NULL
+    FROM fcc_extension e
     JOIN fcc_agent a
       ON a.work_no = #{owner}
      AND a.status = 'ENABLED'
      AND a.deleted_at IS NULL
-    WHERE n.node_id = #{nodeId}
-      AND n.status IN ('ONLINE', 'DRAINING')
+    WHERE e.extension = #{extension}
+      AND e.status = 'ENABLED'
+      AND e.deleted_at IS NULL
     FOR UPDATE
   </select>
   <select id="busy" resultType="int">

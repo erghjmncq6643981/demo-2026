@@ -14,7 +14,6 @@ public class FlowActionContext {
     private final FlowActionType action;
     private final String callId;
     private final String flowInstanceId;
-    private final String nodeId;
     private final String commandId;
     private final Object payload;
     private final String endpointKey;

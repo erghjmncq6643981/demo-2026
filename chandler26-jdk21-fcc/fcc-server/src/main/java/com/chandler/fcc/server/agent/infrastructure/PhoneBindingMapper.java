@@ -11,27 +11,21 @@ import org.apache.ibatis.annotations.Param;
 public interface PhoneBindingMapper {
 
     /**
-     * 校验事件节点和 SIP 分机均为启用资源。
+     * 校验 SIP 分机为启用资源。
      *
-     * @param nodeId Sidecar/FreeSWITCH 节点标识
      * @param extension 已认证 SIP 分机
      * @return 绑定上下文，不匹配时为空
      */
-    Map<String, Object> bindingContext(
-        @Param("nodeId") String nodeId,
-        @Param("extension") String extension
-    );
+    Map<String, Object> bindingContext(@Param("extension") String extension);
 
     /**
      * 锁定目标分机和坐席，串行化换绑。
      *
-     * @param nodeId Sidecar/FreeSWITCH 节点标识
      * @param extension 已认证 SIP 分机
      * @param owner 坐席工号
      * @return 被锁定的分机和坐席标识，不存在时为空
      */
     Map<String, Object> lockBindingTarget(
-        @Param("nodeId") String nodeId,
         @Param("extension") String extension,
         @Param("owner") String owner
     );

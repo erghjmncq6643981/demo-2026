@@ -68,7 +68,6 @@ class FlowActionExecutorTest {
         FNodeFlowActionExecutor executor = new FNodeFlowActionExecutor(mock(FccClient.class));
         FlowActionContext context = FlowActionContext.builder()
             .action(FlowActionType.DIAL_CUSTOMER)
-            .nodeId("node-a")
             .commandId("command-a")
             .payload(FNodeHangupDTO.builder().uuid("channel-a").build())
             .build();
@@ -84,7 +83,6 @@ class FlowActionExecutorTest {
         FccClient client = mock(FccClient.class);
         when(
             client.execute(
-                eq("node-a"),
                 eq(FNodeMethod.DIAL),
                 any(FNodeDialDTO.class),
                 eq("command-a")
@@ -93,7 +91,6 @@ class FlowActionExecutorTest {
         FNodeFlowActionExecutor executor = new FNodeFlowActionExecutor(client);
         FlowActionContext context = FlowActionContext.builder()
             .action(FlowActionType.DIAL_CUSTOMER)
-            .nodeId("node-a")
             .commandId("command-a")
             .payload(FNodeDialDTO.builder().uuid("channel-a").build())
             .build();

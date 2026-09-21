@@ -13,7 +13,7 @@
 - 分机与网关响应不序列化密码；网关编辑留空密码时保留现有密码；XML 写入和重扫描错误不能返回全部成功。
 - 运维端删除固定终端、网关、版本、运行状态、静态启动日志和假延迟。注册桥接选项取自查询；失败显示陈旧或不可用。
 - 管理端分机视图已拆成 extensions、settings、fleet 功能模块，系统配置与客户端治理接真实 API。
-- Java 节点 ID 由 FCC_DEFAULT_NODE_ID 提供，必须与 Sidecar NODE_ID 一致。
+- Java 业务不再读取节点 ID，逻辑命令统一发送到 `fs.cmd.dispatch`；Sidecar 自己维护 `NODE_ID`，并在事件、心跳和应答中返回节点事实。多节点 ownership 路由仍由 Coordinator 负责。
 
 ## 已验证与未验证
 

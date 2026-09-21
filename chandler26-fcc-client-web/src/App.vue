@@ -13,9 +13,8 @@
       @toggle-softphone="handleToggleSoftphone"
     />
 
-    <!-- 坐席极简资产与接听方式切换栏 (软话机/实体话机/手机直选) -->
+    <!-- 坐席接听方式与终端状态 -->
     <AgentProfile />
-    <PhoneBindingPanel v-if="callStore.callState === 'IDLE'" />
 
     <!-- 
       核心内容与业务工作台流转:
@@ -88,7 +87,6 @@ import OutboundBar from './components/records/OutboundBar.vue';
 import CallbackQueue from './components/records/CallbackQueue.vue';
 import AgentMonitorView from './components/agents/AgentMonitorView.vue';
 import LoginView from './views/LoginView.vue';
-import PhoneBindingPanel from './features/endpoint/PhoneBindingPanel.vue';
 import FeedbackHost from './components/layout/FeedbackHost.vue';
 
 import { useAgentStore } from './stores/agentStore';

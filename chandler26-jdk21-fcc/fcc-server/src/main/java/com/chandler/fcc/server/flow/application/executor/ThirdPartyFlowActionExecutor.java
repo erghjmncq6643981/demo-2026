@@ -1,6 +1,9 @@
 package com.chandler.fcc.server.flow.application.executor;
 
+import com.chandler.fcc.common.dto.flow.ThirdPartyFlowRequest;
+import com.chandler.fcc.common.dto.flow.ThirdPartyFlowResponse;
 import com.chandler.fcc.common.enums.FlowActionExecutorType;
+import com.chandler.fcc.common.protocol.ThirdPartyFlowProtocol;
 import com.chandler.fcc.server.flow.infrastructure.http.ThirdPartyFlowProperties;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import java.net.URI;
@@ -58,6 +61,9 @@ public class ThirdPartyFlowActionExecutor implements FlowActionExecutor {
         if (context.getCommandId() == null || context.getCommandId().isBlank()) {
             throw new IllegalArgumentException("第三方动作缺少稳定命令标识");
         }
+        if (context.getCallId() == null || context.getCallId().isBlank()) {
+            throw new IllegalArgumentException("第三方动作缺少 FCC 业务通话标识");
+        }
         ThirdPartyFlowProperties.Endpoint endpoint = properties
             .getEndpoints()
             .get(context.getEndpointKey());
@@ -78,6 +84,13 @@ public class ThirdPartyFlowActionExecutor implements FlowActionExecutor {
             throw new IllegalArgumentException("第三方流程端点超时必须在 1 毫秒至 30 秒之间");
         }
         try {
+            ThirdPartyFlowRequest requestPayload = ThirdPartyFlowRequest.builder()
+                .commandId(context.getCommandId())
+                .callId(context.getCallId())
+                .flowInstanceId(context.getFlowInstanceId())
+                .action(context.getAction().name())
+                .input(context.getPayload())
+                .build();
             HttpClient client = httpClient();
             HttpRequest request = HttpRequest.newBuilder(uri)
                 .timeout(timeout)
@@ -85,7 +98,7 @@ public class ThirdPartyFlowActionExecutor implements FlowActionExecutor {
                 .header("Idempotency-Key", context.getCommandId())
                 .POST(
                     HttpRequest.BodyPublishers.ofByteArray(
-                        objectMapper.writeValueAsBytes(context.getPayload())
+                        objectMapper.writeValueAsBytes(requestPayload)
                     )
                 )
                 .build();
@@ -93,18 +106,57 @@ public class ThirdPartyFlowActionExecutor implements FlowActionExecutor {
                 request,
                 HttpResponse.BodyHandlers.ofString()
             );
-            boolean accepted = response.statusCode() >= 200 && response.statusCode() < 300;
+            if (response.statusCode() < 200 || response.statusCode() >= 300) {
+                return FlowActionResult.builder()
+                    .status(FlowActionStatus.FAILED)
+                    .commandId(context.getCommandId())
+                    .code(Integer.toString(response.statusCode()))
+                    .message("第三方接口拒绝请求")
+                    .build();
+            }
+            ThirdPartyFlowResponse responsePayload = objectMapper.readValue(
+                response.body(),
+                ThirdPartyFlowResponse.class
+            );
+            validateResponse(context, responsePayload);
+            boolean accepted = Boolean.TRUE.equals(responsePayload.getAccepted());
             return FlowActionResult.builder()
                 .status(accepted ? FlowActionStatus.ACCEPTED : FlowActionStatus.FAILED)
                 .commandId(context.getCommandId())
-                .code(Integer.toString(response.statusCode()))
-                .message(accepted ? "第三方接口已受理" : "第三方接口拒绝请求")
+                .code(responsePayload.getCode())
+                .message(responsePayload.getMessage())
+                .output(responsePayload.getData())
                 .build();
         } catch (InterruptedException interrupted) {
             Thread.currentThread().interrupt();
             return unknown(context, "第三方接口调用被中断");
         } catch (Exception failure) {
             return unknown(context, "第三方接口结果未知");
+        }
+    }
+
+    /**
+     * 校验第三方响应是否属于本次协议调用。
+     *
+     * @param context 当前动作上下文
+     * @param response 第三方协议响应
+     * @throws IllegalArgumentException 响应不符合 FCC 第三方协议
+     */
+    private void validateResponse(FlowActionContext context, ThirdPartyFlowResponse response) {
+        if (response == null) {
+            throw new IllegalArgumentException("第三方响应不能为空");
+        }
+        if (!ThirdPartyFlowProtocol.VERSION.equals(response.getProtocolVersion())) {
+            throw new IllegalArgumentException("第三方响应协议版本不支持");
+        }
+        if (!context.getCommandId().equals(response.getCommandId())) {
+            throw new IllegalArgumentException("第三方响应 commandId 与请求不一致");
+        }
+        if (response.getAccepted() == null) {
+            throw new IllegalArgumentException("第三方响应缺少 accepted");
+        }
+        if (response.getData() != null && !response.getData().isContainerNode()) {
+            throw new IllegalArgumentException("第三方响应 data 必须是 JSON 对象或数组");
         }
     }
 

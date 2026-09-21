@@ -56,10 +56,12 @@ public class FNodeFlowActionExecutor implements FlowActionExecutor {
      */
     @Override
     public FlowActionResult execute(FlowActionContext context) {
-        FNodeMethod method = FNodeMethod.fromWireName(context.getAction().getOperation());
+        FNodeMethod method = context.getAction().getFNodeMethod();
+        if (method == null) {
+            throw new IllegalArgumentException("FNode 动作未声明对应的方法: " + context.getAction());
+        }
         validate(context, method);
         FNodeResult result = client.execute(
-            context.getNodeId(),
             method,
             context.getPayload(),
             context.getCommandId()
@@ -83,9 +85,6 @@ public class FNodeFlowActionExecutor implements FlowActionExecutor {
      * @param method 规范 FNode 方法
      */
     private void validate(FlowActionContext context, FNodeMethod method) {
-        if (context.getNodeId() == null || context.getNodeId().isBlank()) {
-            throw new IllegalArgumentException("FNode 动作缺少目标节点");
-        }
         if (context.getCommandId() == null || context.getCommandId().isBlank()) {
             throw new IllegalArgumentException("FNode 动作缺少稳定命令标识");
         }

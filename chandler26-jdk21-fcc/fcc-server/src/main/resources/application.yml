@@ -45,7 +45,6 @@ fcc:
   flow:
     reload-token: ${FCC_FLOW_RELOAD_TOKEN:}
   nats-url: ${NATS_URL:nats://127.0.0.1:4222}
-  default-node-id: ${FCC_DEFAULT_NODE_ID}
   ctrl-id-prefix: fcc-ctrl
   rpc-timeout-millis: 5000
   sidecar-admin-url: ${SIDECAR_ADMIN_URL:http://127.0.0.1:8088}

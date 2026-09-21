@@ -26,4 +26,7 @@ public class FlowActionResp {
 
     @Schema(description = "稳定操作代码或规范 FNode 方法", example = "FNode.ReadDTMF")
     private String operation;
+
+    @Schema(description = "对象化 FNode 方法；内部动作和第三方动作为空", example = "FNode.ReadDTMF")
+    private String fNodeMethod;
 }

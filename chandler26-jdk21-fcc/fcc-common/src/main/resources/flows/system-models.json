@@ -13,7 +13,7 @@
       "unansweredAction": "CALLBACK"
     },
     "nodes": [
-      {"key":"ENTRY","label":"呼入受理","action":"RESOLVE_DID_AND_PARK","inputs":["nodeId","channelUuid","didNumber"],"outputs":["routeTarget","flowVersionId"],"transitions":[{"when":"READY_AND_MENU_ENABLED","to":"MENU"},{"when":"READY_AND_MENU_DISABLED","to":"ROUTE"},{"when":"ROUTE_NOT_FOUND_OR_DESTROY","to":"END"}]},
+      {"key":"ENTRY","label":"呼入受理","action":"RESOLVE_DID_AND_PARK","inputs":["channelUuid","didNumber"],"outputs":["routeTarget","flowVersionId"],"transitions":[{"when":"READY_AND_MENU_ENABLED","to":"MENU"},{"when":"READY_AND_MENU_DISABLED","to":"ROUTE"},{"when":"ROUTE_NOT_FOUND_OR_DESTROY","to":"END"}]},
       {"key":"MENU","label":"欢迎语与按键收号","action":"READ_DTMF","parameters":{"minDigits":1,"maxDigits":1,"tries":1,"timeoutSource":"menu.timeoutSeconds","mediaSource":"menu.prompt","actionAfter":"PARK"},"outputs":["digit"],"transitions":[{"when":"VALID_DIGIT","to":"BRANCH"},{"when":"TIMEOUT_OR_DESTROY","to":"END"}]},
       {"key":"BRANCH","label":"按键条件分支","action":"SELECT_DIGIT_ROUTE","inputs":["digit","branches","defaultRoute"],"outputs":["flowBranch","routeTarget"],"transitions":[{"when":"DIGIT_MATCH","to":"ROUTE","result":"MATCHED_BRANCH"},{"when":"ELSE","to":"ROUTE","result":"DEFAULT_ROUTE"}]},
       {"key":"ROUTE","label":"分配并呼叫坐席","action":"RESERVE_AND_DIAL_AGENT","parameters":{"strategy":"READY_UNTRIED_AGENT","ringSeconds":30,"queueTimeoutSource":"route.queueSeconds"},"outputs":["agentWorkNo","agentChannelUuid"],"transitions":[{"when":"AGENT_READY","to":"BRIDGE"},{"when":"AGENT_FAILED_AND_QUEUE_OPEN","to":"ROUTE","result":"NEXT_AGENT_ATTEMPT"},{"when":"NO_AGENT_AND_QUEUE_OPEN","to":"ROUTE","result":"WAIT"},{"when":"QUEUE_TIMEOUT_OR_CUSTOMER_DESTROY","to":"END"}]},
@@ -52,7 +52,7 @@
     "stages":["ENTRY","COLLECT_CODE","VERIFY_BINDING","END"],
     "parameters":{"workNoMinDigits":2,"workNoMaxDigits":20,"mediaSource":"fcc.binding.prompt-file"},
     "nodes":[
-      {"key":"ENTRY","label":"识别绑定话机","action":"VALIDATE_BINDING_EXTENSION","inputs":["nodeId","channelUuid","extension"],"transitions":[{"when":"READY","to":"COLLECT_CODE"},{"when":"INVALID_OR_DESTROY","to":"END"}]},
+      {"key":"ENTRY","label":"识别绑定话机","action":"VALIDATE_BINDING_EXTENSION","inputs":["channelUuid","extension"],"transitions":[{"when":"READY","to":"COLLECT_CODE"},{"when":"INVALID_OR_DESTROY","to":"END"}]},
       {"key":"COLLECT_CODE","label":"收取坐席工号","action":"READ_DTMF","parameters":{"minDigitsSource":"fcc.binding.work-no-min-digits","maxDigitsSource":"fcc.binding.work-no-max-digits","tries":1,"timeoutSeconds":60,"digitTimeoutMs":10000,"terminators":"#","regex":"^[0-9]+$"},"transitions":[{"when":"DIGITS_RECEIVED","to":"VERIFY_BINDING"},{"when":"DESTROY","to":"END"}]},
       {"key":"VERIFY_BINDING","label":"校验并绑定","action":"BIND_AGENT_EXTENSION","parameters":{"matchAuthenticatedExtension":true,"lockAgentAndExtension":true,"persistBindingHistory":true},"outputs":["bindingAccepted"],"transitions":[{"when":"VALID","to":"END","result":"BOUND"},{"when":"ELSE","to":"END","result":"REJECTED"}]},
       {"key":"END","label":"结束绑定通话","action":"HANGUP_BINDING_CHANNEL","terminal":true,"transitions":[]}

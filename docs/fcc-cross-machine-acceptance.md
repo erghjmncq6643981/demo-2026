@@ -7,7 +7,7 @@
 1. 这是全新项目，只支持空库初始化。备份已有开发数据后创建空 MySQL 8 数据库，执行 `chandler26-jdk21-fcc/docs/fcc-schema.sql`；不要导入旧呼叫中心表、话单或流程 JSON。仓库当前没有可执行增量迁移目录，不得按不存在的迁移文件升级旧库。
 2. 启动 MySQL 8、Redis、Sidecar 所需 PostgreSQL 与启用 JetStream 的 NATS。NATS 使用持久存储。以受控管理员身份执行 `nats stream add --config chandler26-jdk21-fcc/docs/fcc-events-stream.json`，已有流先用 `nats stream info FCC_EVENTS` 检查，不自动覆盖配置。该文件是单节点测试配置，生产集群需按部署拓扑调整副本数。
 3. Sidecar 每节点配置独占持久目录 `COMMAND_JOURNAL_DIR`、`EVENT_OUTBOX_DIR`，不能放临时盘、共享给另一进程或发布时清空。配置真实 `NODE_ID`、ESL、NATS 和 PostgreSQL；先验证节点健康，再启动 Java。
-4. 配置 Java 的 `FCC_DEFAULT_NODE_ID` 与 Sidecar 完全一致。通过环境注入数据库凭据、Redis、`NATS_URL`、`FCC_ADMIN_BASE_URL`、`FCC_WS_ALLOWED_ORIGINS`、录音共享路径。当前运行模板只部署一个活跃 fcc-server；共享 durable consumer 尚不支持安全的多实例内存会话分配。
+4. Java 不配置 `FCC_DEFAULT_NODE_ID`，只配置 `NATS_URL`、数据库、Redis、`FCC_ADMIN_BASE_URL`、`FCC_WS_ALLOWED_ORIGINS` 和录音共享路径。业务命令发送到 `fs.cmd.dispatch`；单节点测试由本地 Sidecar 直接执行，多节点必须先部署能够维护 Channel ownership 的 Coordinator。当前运行模板只部署一个活跃 fcc-server；共享 durable consumer 尚不支持安全的多实例内存会话分配。
 5. 配置 HTTPS 反向代理：`/api/admin` 到管理服务 8089，`/api/telephony` 和 `/ws/agent` 到控制服务 8085；WS 转发必须支持 Upgrade。管理、业务和节点运维入口保持分离。
 6. 部署坐席 Vue 页面，安装客户端测试包。首次启动填写该页面的 HTTPS 地址。仅本机开发允许 HTTP 回环地址；测试包未签名，不能宣称已完成可信发布。客户端以实体话机通话，不开放麦克风权限。
 

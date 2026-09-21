@@ -25,19 +25,16 @@ import io.nats.client.Message;
 import java.nio.charset.StandardCharsets;
 import java.time.Duration;
 import java.time.LocalDateTime;
-import java.util.Map;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Component;
 
 /**
- * FCC 核心呼叫控制客户端
- * <p>
- * 负责组装标准 JSON-RPC 2.0 请求报文，并通过 NATS 消息总线向部署在 FreeSWITCH 节点侧的 Go Sidecar Agent
- * 投递控制指令（主题格式: fs.cmd.{nodeId}），同步阻塞等待处理结果。
- * </p>
+ * FCC 逻辑话务命令客户端。
  *
- * @author Chandler
+ * <p>本客户端不接收或计算 FreeSWITCH 节点标识。所有命令发送到逻辑分发主题，
+ * Sidecar Coordinator 负责根据新建呼叫的调度策略或已有话道的归属选择节点。
+ * 应答中的 {@code node_id} 是基础设施事实，只用于审计、诊断和运行时归属。</p>
  */
 @Slf4j
 @Component
@@ -53,23 +50,12 @@ public class FccClient {
     private final CallPersistenceService callPersistenceService;
 
     /**
-     * 发起外呼呼叫 (FNode.Dial) - 使用默认节点
+     * 发起逻辑外呼命令。
      *
      * @param dto 外呼指令参数
-     * @return FNode 执行结果
+     * @return Sidecar 受理结果
      */
     public FNodeResult dial(FNodeDialDTO dto) {
-        return dial(fccProperties.getDefaultNodeId(), dto);
-    }
-
-    /**
-     * 发起外呼呼叫 (FNode.Dial) - 指定节点
-     *
-     * @param nodeId 软交换节点标识符
-     * @param dto    外呼指令参数
-     * @return FNode 执行结果
-     */
-    public FNodeResult dial(String nodeId, FNodeDialDTO dto) {
         String uuid = dto.getUuid();
         if (
             (uuid == null || uuid.isBlank()) &&
@@ -83,361 +69,264 @@ public class FccClient {
             uuid = IdUtil.getUuid();
             dto.setUuid(uuid);
         }
-        return sendRequest(nodeId, FNodeMethod.DIAL, dto, "dial-" + uuid);
+        return sendRequest(FNodeMethod.DIAL, dto, "dial-" + uuid);
     }
 
     /**
-     * 双向话道桥接 (FNode.ChannelBridge) - 使用默认节点
+     * 请求逻辑桥接两个话道。
      *
      * @param ctrlUuid 控制流程标识
-     * @param uuid     主话道 UUID
+     * @param uuid 主话道 UUID
      * @param peerUuid 对端话道 UUID
-     * @return FNode 执行结果
+     * @return Sidecar 受理结果
      */
     public FNodeResult channelBridge(String ctrlUuid, String uuid, String peerUuid) {
-        return channelBridge(fccProperties.getDefaultNodeId(), ctrlUuid, uuid, peerUuid);
-    }
-
-    /**
-     * 双向话道桥接 (FNode.ChannelBridge) - 指定节点
-     *
-     * @param nodeId   软交换节点标识符
-     * @param ctrlUuid 控制流程标识
-     * @param uuid     主话道 UUID
-     * @param peerUuid 对端话道 UUID
-     * @return FNode 执行结果
-     */
-    public FNodeResult channelBridge(String nodeId, String ctrlUuid, String uuid, String peerUuid) {
-        FNodeBridgeDTO dto = FNodeBridgeDTO.builder()
-            .ctrlUuid(ctrlUuid)
-            .uuid(uuid)
-            .peerUuid(peerUuid)
-            .build();
-        return sendRequest(nodeId, FNodeMethod.CHANNEL_BRIDGE, dto);
-    }
-
-    /**
-     * DTMF 按键收号 (FNode.ReadDTMF) - 使用默认节点
-     *
-     * @param dto 按键收号指令参数
-     * @return FNode 执行结果
-     */
-    public FNodeResult readDTMF(FNodeReadDTMFDTO dto) {
-        return readDTMF(fccProperties.getDefaultNodeId(), dto);
-    }
-
-    /**
-     * DTMF 按键收号 (FNode.ReadDTMF) - 指定节点
-     *
-     * @param nodeId 软交换节点标识符
-     * @param dto    按键收号指令参数
-     * @return FNode 执行结果
-     */
-    public FNodeResult readDTMF(String nodeId, FNodeReadDTMFDTO dto) {
-        return sendRequest(nodeId, FNodeMethod.READ_DTMF, dto);
-    }
-
-    /**
-     * 使用持久阶段命令标识放音收号，未知结果不换 ID 重发。
-     *
-     * @param nodeId 节点
-     * @param dto 动作参数
-     * @param commandId 稳定命令标识
-     * @return 同步受理结果
-     */
-    public FNodeResult readDTMF(String nodeId, FNodeReadDTMFDTO dto, String commandId) {
-        return sendRequest(nodeId, FNodeMethod.READ_DTMF, dto, commandId);
-    }
-
-    /**
-     * 放音语音播报 (FNode.Play) - 使用默认节点
-     *
-     * @param dto 放音指令参数
-     * @return FNode 执行结果
-     */
-    public FNodeResult play(FNodePlayDTO dto) {
-        return play(fccProperties.getDefaultNodeId(), dto);
-    }
-
-    /**
-     * 放音语音播报 (FNode.Play) - 指定节点
-     *
-     * @param nodeId 软交换节点标识符
-     * @param dto    放音指令参数
-     * @return FNode 执行结果
-     */
-    public FNodeResult play(String nodeId, FNodePlayDTO dto) {
-        return sendRequest(nodeId, FNodeMethod.PLAY, dto);
-    }
-
-    /**
-     * 通道录音控制 (FNode.Record) - 使用默认节点
-     *
-     * @param dto 录音指令参数
-     * @return FNode 执行结果
-     */
-    public FNodeResult record(FNodeRecordDTO dto) {
-        return record(fccProperties.getDefaultNodeId(), dto);
-    }
-
-    /**
-     * 通道录音控制 (FNode.Record) - 指定节点
-     *
-     * @param nodeId 软交换节点标识符
-     * @param dto    录音指令参数
-     * @return FNode 执行结果
-     */
-    public FNodeResult record(String nodeId, FNodeRecordDTO dto) {
-        return sendRequest(nodeId, FNodeMethod.RECORD, dto);
-    }
-
-    /**
-     * 挂机拆线 (FNode.Hangup) - 使用默认节点
-     *
-     * @param ctrlUuid 控制流程标识
-     * @param uuid     目标通道 UUID
-     * @param cause    挂机原因码
-     * @return FNode 执行结果
-     */
-    public FNodeResult hangup(String ctrlUuid, String uuid, String cause) {
-        return hangup(fccProperties.getDefaultNodeId(), ctrlUuid, uuid, cause);
-    }
-
-    /**
-     * 挂机拆线 (FNode.Hangup) - 指定节点
-     *
-     * @param nodeId   软交换节点标识符
-     * @param ctrlUuid 控制流程标识
-     * @param uuid     目标通道 UUID
-     * @param cause    挂机原因码
-     * @return FNode 执行结果
-     */
-    public FNodeResult hangup(String nodeId, String ctrlUuid, String uuid, String cause) {
-        FNodeHangupDTO dto = FNodeHangupDTO.builder()
-            .ctrlUuid(ctrlUuid)
-            .uuid(uuid)
-            .cause(cause != null ? cause : "NORMAL_CLEARING")
-            .build();
-        return sendRequest(nodeId, FNodeMethod.HANGUP, dto);
-    }
-
-    /**
-     * 透传执行 FreeSWITCH 原生 Native API (FNode.NativeAPI) - 使用默认节点
-     *
-     * @param cmd  原生指令命令名（如 status, reloadxml, originate）
-     * @param args 指令参数字符串
-     * @return FNode 执行结果
-     */
-    public FNodeResult nativeAPI(String cmd, String args) {
-        return nativeAPI(fccProperties.getDefaultNodeId(), cmd, args);
-    }
-
-    /**
-     * 透传执行 FreeSWITCH 原生 Native API (FNode.NativeAPI) - 指定节点
-     *
-     * @param nodeId 软交换节点标识符
-     * @param cmd    原生指令命令名
-     * @param args   指令参数字符串
-     * @return FNode 执行结果
-     */
-    public FNodeResult nativeAPI(String nodeId, String cmd, String args) {
-        FNodeNativeApiDTO params = FNodeNativeApiDTO.builder().cmd(cmd).args(args).build();
-        return sendRequest(nodeId, FNodeMethod.NATIVE_API, params);
-    }
-
-    /**
-     * 查询节点运行状态与健康探活 (FNode.Status) - 使用默认节点
-     *
-     * @return FNode 执行结果
-     */
-    public FNodeResult status() {
-        return status(fccProperties.getDefaultNodeId());
-    }
-
-    /**
-     * 查询节点运行状态与健康探活 (FNode.Status) - 指定节点
-     *
-     * @param nodeId 软交换节点标识符
-     * @return FNode 执行结果
-     */
-    public FNodeResult status(String nodeId) {
-        return sendRequest(nodeId, FNodeMethod.STATUS, null);
-    }
-
-    /**
-     * 发送同步 JSON-RPC 2.0 请求至指定软交换节点指令主题 (fs.cmd.{nodeId})
-     *
-     * @param nodeId 软交换节点标识符
-     * @param method 规范远程调用方法
-     * @param params 业务入参载荷
-     * @return FNodeResult 标准执行结果
-     */
-    private FNodeResult sendRequest(String nodeId, FNodeMethod method, Object params) {
-        return sendRequest(nodeId, method, params, IdUtil.getCommandId());
-    }
-
-    /**
-     * 查询已持久记录的命令应答，不重放副作用。
-     *
-     * @param nodeId 节点
-     * @param commandId 原命令标识
-     * @return 已受理/失败/未知结果
-     */
-    public FNodeResult commandResult(String nodeId, String commandId) {
         return sendRequest(
-            nodeId,
-            FNodeMethod.COMMAND_RESULT,
-            FNodeCommandResultDTO.builder().commandId(commandId).build()
+            FNodeMethod.CHANNEL_BRIDGE,
+            FNodeBridgeDTO.builder().ctrlUuid(ctrlUuid).uuid(uuid).peerUuid(peerUuid).build(),
+            IdUtil.getCommandId()
         );
     }
 
     /**
-     * 查询节点当前完整话道集合，失败必须视为未知而非空节点。
+     * 收取逻辑话道上的 DTMF。
      *
-     * @param nodeId 话道所属节点
-     * @return 含 complete/channel_uuids 的结构化结果
+     * @param dto 收号指令参数
+     * @return Sidecar 受理结果
      */
-    public FNodeResult channelSnapshot(String nodeId) {
-        return sendRequest(nodeId, FNodeMethod.CHANNEL_SNAPSHOT, null);
+    public FNodeResult readDTMF(FNodeReadDTMFDTO dto) {
+        return sendRequest(FNodeMethod.READ_DTMF, dto, IdUtil.getCommandId());
     }
 
     /**
-     * 使用规范 FNode 方法和稳定命令标识执行受控命令。
+     * 使用稳定命令标识收取 DTMF，供流程重试复用原命令。
      *
-     * <p>该入口供流程 FNode 执行器使用。调用方必须传入与方法匹配的公共 wire DTO，
-     * 同步返回值只表示 Sidecar 受理或拒绝，最终话务结果仍由事件确认。</p>
-     *
-     * @param nodeId 目标节点标识
-     * @param method 规范 FNode 方法
-     * @param params 与方法匹配的公共指令 DTO
+     * @param dto 收号指令参数
      * @param commandId 稳定命令标识
-     * @return Sidecar 同步受理结果
+     * @return Sidecar 受理结果
      */
-    public FNodeResult execute(
-        String nodeId,
-        FNodeMethod method,
-        Object params,
-        String commandId
-    ) {
-        return sendRequest(nodeId, method, params, commandId);
+    public FNodeResult readDTMF(FNodeReadDTMFDTO dto, String commandId) {
+        return sendRequest(FNodeMethod.READ_DTMF, dto, commandId);
+    }
+
+    /**
+     * 播放媒体或文本提示。
+     *
+     * @param dto 放音指令参数
+     * @return Sidecar 受理结果
+     */
+    public FNodeResult play(FNodePlayDTO dto) {
+        return sendRequest(FNodeMethod.PLAY, dto, IdUtil.getCommandId());
+    }
+
+    /**
+     * 控制逻辑话道录音。
+     *
+     * @param dto 录音指令参数
+     * @return Sidecar 受理结果
+     */
+    public FNodeResult record(FNodeRecordDTO dto) {
+        return sendRequest(FNodeMethod.RECORD, dto, IdUtil.getCommandId());
+    }
+
+    /**
+     * 请求逻辑话道挂机。
+     *
+     * @param ctrlUuid 控制流程标识
+     * @param uuid 目标话道 UUID
+     * @param cause 挂机原因
+     * @return Sidecar 受理结果
+     */
+    public FNodeResult hangup(String ctrlUuid, String uuid, String cause) {
+        FNodeHangupDTO dto = FNodeHangupDTO.builder()
+            .ctrlUuid(ctrlUuid)
+            .uuid(uuid)
+            .cause(cause == null ? "NORMAL_CLEARING" : cause)
+            .build();
+        return sendRequest(FNodeMethod.HANGUP, dto, IdUtil.getCommandId());
+    }
+
+    /**
+     * 执行受控的 FreeSWITCH 原生 API 逃生通道。
+     *
+     * @param cmd 原生指令名称
+     * @param args 原生指令参数
+     * @return Sidecar 受理结果
+     */
+    public FNodeResult nativeAPI(String cmd, String args) {
+        return sendRequest(
+            FNodeMethod.NATIVE_API,
+            FNodeNativeApiDTO.builder().cmd(cmd).args(args).build(),
+            IdUtil.getCommandId()
+        );
+    }
+
+    /**
+     * 查询底层节点状态，供运维查询使用。
+     *
+     * @return Sidecar 状态结果
+     */
+    public FNodeResult status() {
+        return sendRequest(FNodeMethod.STATUS, null, IdUtil.getCommandId());
+    }
+
+    /**
+     * 查询已持久化的原命令结果，不重放副作用。
+     *
+     * @param commandId 原命令标识
+     * @return 原命令结果
+     */
+    public FNodeResult commandResult(String commandId) {
+        return sendRequest(
+            FNodeMethod.COMMAND_RESULT,
+            FNodeCommandResultDTO.builder().commandId(commandId).build(),
+            IdUtil.getCommandId()
+        );
+    }
+
+    /**
+     * 查询所有 Sidecar 聚合后的完整话道快照。
+     *
+     * @return 完整话道快照结果
+     */
+    public FNodeResult channelSnapshot() {
+        return sendRequest(FNodeMethod.CHANNEL_SNAPSHOT, null, IdUtil.getCommandId());
+    }
+
+    /**
+     * 使用公共 FNode 方法和稳定命令标识执行动作。
+     *
+     * @param method 规范 FNode 方法
+     * @param params 与方法匹配的公共 DTO
+     * @param commandId 稳定命令标识
+     * @return Sidecar 受理结果
+     */
+    public FNodeResult execute(FNodeMethod method, Object params, String commandId) {
+        return sendRequest(method, params, commandId);
     }
 
     /**
      * 使用 Sidecar 的规范转接方法转接话道。
      *
-     * @param nodeId 目标节点标识
      * @param params 已校验的转接参数
-     * @return Sidecar 同步受理结果
+     * @return Sidecar 受理结果
      */
-    public FNodeResult transfer(String nodeId, FNodeTransferDTO params) {
-        return sendRequest(nodeId, FNodeMethod.TRANSFER, params);
+    public FNodeResult transfer(FNodeTransferDTO params) {
+        return sendRequest(FNodeMethod.TRANSFER, params, IdUtil.getCommandId());
     }
 
     /**
-     * 使用稳定标识发送命令。
+     * 发送逻辑命令并记录同步应答审计。
      *
-     * @param nodeId 节点
-     * @param method 规范方法
-     * @param params 参数
-     * @param reqId 幂等命令标识
-     * @return 节点应答
+     * @param method 规范 FNode 方法
+     * @param params 方法参数
+     * @param commandId 幂等命令标识
+     * @return Sidecar 结果；通信未知时返回 -32000
      */
-    private FNodeResult sendRequest(String nodeId, FNodeMethod method, Object params, String reqId) {
-        String effectiveNodeId = (nodeId != null && !nodeId.trim().isEmpty())
-            ? nodeId.trim()
-            : fccProperties.getDefaultNodeId();
-
-        JsonRpcRequest req = JsonRpcRequest.builder()
+    private FNodeResult sendRequest(FNodeMethod method, Object params, String commandId) {
+        if (method == null || commandId == null || commandId.isBlank()) {
+            throw new IllegalArgumentException("FNode 方法和稳定命令标识不能为空");
+        }
+        JsonRpcRequest request = JsonRpcRequest.builder()
             .jsonrpc("2.0")
-            .id(reqId)
+            .id(commandId)
             .method(method.getWireName())
             .params(params)
             .build();
-
-        String subject = NatsSubjectFactory.command(effectiveNodeId);
+        String subject = NatsSubjectFactory.commandDispatch();
+        byte[] payload;
         try {
-            byte[] payload = objectMapper.writeValueAsBytes(req);
-            log.debug(
-                "📤 [FCC -> NATS] 发送指令 Subject: {}, Method: {}\nPayload: {}",
-                subject,
-                method.getWireName(),
-                new String(payload, StandardCharsets.UTF_8)
-            );
-
+            payload = objectMapper.writeValueAsBytes(request);
+            log.debug("[FCC -> NATS] subject={}, method={}, commandId={}", subject, method.getWireName(), commandId);
             Message reply = natsConnection.request(
                 subject,
                 payload,
                 Duration.ofMillis(fccProperties.getRpcTimeoutMillis())
             );
             if (reply == null) {
-                log.error(
-                    "❌ [FCC] RPC 请求超时 ({} ms), Node: {}, Method: {}",
-                    fccProperties.getRpcTimeoutMillis(),
-                    effectiveNodeId,
-                    method.getWireName()
-                );
-                return FNodeResult.builder()
-                    .code(-32000)
-                    .message("RPC timeout")
-                    .nodeId(effectiveNodeId)
-                    .build();
+                log.warn("[FCC] RPC 超时 method={}, commandId={}", method.getWireName(), commandId);
+                return unknownResult("RPC timeout");
             }
-
-            String respStr = new String(reply.getData(), StandardCharsets.UTF_8);
-            log.debug("📥 [NATS -> FCC] 收到应答: {}", respStr);
-
-            JsonRpcResponse resp = objectMapper.readValue(respStr, JsonRpcResponse.class);
-            if (resp.getError() != null) {
-                log.warn(
-                    "⚠️ [FCC] 节点返回业务错误: code={}, msg={}",
-                    resp.getError().getCode(),
-                    resp.getError().getMessage()
-                );
-                return FNodeResult.builder()
-                    .code(resp.getError().getCode())
-                    .message(resp.getError().getMessage())
-                    .data(resp.getError().getData())
-                    .nodeId(effectiveNodeId)
-                    .build();
-            }
-
-            FNodeResult result = resp.getResult();
-            if (result != null && result.getNodeId() == null) {
-                result.setNodeId(effectiveNodeId);
-            }
-
-            if (callPersistenceService != null) {
-                try {
-                    callPersistenceService.recordCommand(
-                        CallCommandEntity.builder()
-                            .commandId(reqId)
-                            .idempotencyKey(reqId)
-                            .targetNodeId(effectiveNodeId)
-                            .methodName(method.getWireName())
-                            .requestPayload(new String(payload, StandardCharsets.UTF_8))
-                            .responsePayload(respStr)
-                            .status(
-                                result != null && (result.getCode() == 0 || result.getCode() == 200)
-                                    ? "ACCEPTED"
-                                    : "FAILED"
-                            )
-                            .sentAt(LocalDateTime.now())
-                            .completedAt(LocalDateTime.now())
-                            .build()
-                    );
-                } catch (Exception auditEx) {
-                    log.debug("忽略指令审计记录异常: {}", auditEx.getMessage());
-                }
-            }
-
+            String responsePayload = new String(reply.getData(), StandardCharsets.UTF_8);
+            JsonRpcResponse response = objectMapper.readValue(responsePayload, JsonRpcResponse.class);
+            FNodeResult result = toResult(response);
+            recordAudit(commandId, method, payload, responsePayload, result);
             return result;
-        } catch (InterruptedException e) {
+        } catch (InterruptedException interrupted) {
             Thread.currentThread().interrupt();
-            log.error("❌ [FCC] 请求被中断: {}", e.getMessage());
-            return FNodeResult.builder().code(-32000).message("Interrupted").nodeId(effectiveNodeId).build();
-        } catch (Exception e) {
-            log.error("❌ [FCC] 请求通信异常: {}", e.getMessage(), e);
-            return FNodeResult.builder().code(-32000).message(e.getMessage()).nodeId(effectiveNodeId).build();
+            return unknownResult("Interrupted");
+        } catch (Exception failure) {
+            log.error("[FCC] RPC 通信异常 method={}, commandId={}: {}", method.getWireName(), commandId, failure.getMessage());
+            return unknownResult(failure.getMessage());
         }
+    }
+
+    /**
+     * 将 JSON-RPC 应答转换为统一 FNode 结果。
+     *
+     * @param response JSON-RPC 应答
+     * @return FNode 结果
+     */
+    private FNodeResult toResult(JsonRpcResponse response) {
+        if (response == null) {
+            return unknownResult("Empty RPC response");
+        }
+        if (response.getError() != null) {
+            return FNodeResult.builder()
+                .code(response.getError().getCode())
+                .message(response.getError().getMessage())
+                .data(response.getError().getData())
+                .build();
+        }
+        return response.getResult();
+    }
+
+    /**
+     * 记录命令审计，节点标识只能使用 Sidecar 应答事实。
+     *
+     * @param commandId 命令标识
+     * @param method FNode 方法
+     * @param requestPayload 请求报文
+     * @param responsePayload 应答报文
+     * @param result 解析结果
+     */
+    private void recordAudit(
+        String commandId,
+        FNodeMethod method,
+        byte[] requestPayload,
+        String responsePayload,
+        FNodeResult result
+    ) {
+        if (callPersistenceService == null) {
+            return;
+        }
+        try {
+            LocalDateTime now = LocalDateTime.now();
+            callPersistenceService.recordCommand(
+                CallCommandEntity.builder()
+                    .commandId(commandId)
+                    .idempotencyKey(commandId)
+                    .targetNodeId(result == null ? null : result.getNodeId())
+                    .methodName(method.getWireName())
+                    .requestPayload(new String(requestPayload, StandardCharsets.UTF_8))
+                    .responsePayload(responsePayload)
+                    .status(result != null && result.isSuccess() ? "ACCEPTED" : "FAILED")
+                    .sentAt(now)
+                    .completedAt(now)
+                    .build()
+            );
+        } catch (Exception auditFailure) {
+            log.debug("[FCC] 命令审计写入失败: {}", auditFailure.getMessage());
+        }
+    }
+
+    /**
+     * 创建通信未知结果。
+     *
+     * @param message 未知原因
+     * @return -32000 结果
+     */
+    private FNodeResult unknownResult(String message) {
+        return FNodeResult.builder().code(-32000).message(message).build();
     }
 }

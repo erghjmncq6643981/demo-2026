@@ -9,13 +9,25 @@ public final class NatsSubjectFactory {
     }
 
     /**
-     * 构造节点指令主题。
+     * 构造 Sidecar 内部节点指令主题。
      *
      * @param nodeId Sidecar 节点标识
-     * @return {@code fs.cmd.{nodeId}}
+     * @return {@code fs.cmd.{nodeId}}，仅供 Coordinator/Sidecar 内部使用
      */
     public static String command(String nodeId) {
         return "fs.cmd." + segment(nodeId, "节点标识");
+    }
+
+    /**
+     * 构造逻辑命令入口主题。
+     *
+     * <p>业务控制面只发布到该主题，Sidecar Coordinator 根据命令中的话道或调度策略
+     * 选择实际节点，再转发到内部节点主题。</p>
+     *
+     * @return {@code fs.cmd.dispatch}
+     */
+    public static String commandDispatch() {
+        return "fs.cmd.dispatch";
     }
 
     /**

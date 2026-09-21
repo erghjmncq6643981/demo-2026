@@ -220,19 +220,13 @@ public class InboundCallService implements SystemFlowRuntime {
     private Boolean initialize(CallInfoBO call, String channelUuid) {
         var routes = agents.inbound(call.getDestinationNumber());
         if (routes.size() != 1) {
-            client.hangup(
-                call.getNodeId(),
-                call.getCtrlId(),
-                channelUuid,
-                "UNALLOCATED_NUMBER"
-            );
+            client.hangup(call.getCtrlId(), channelUuid, "UNALLOCATED_NUMBER");
             sessions.removeSession(call.getCtrlId());
             return false;
         }
         var route = routes.getFirst();
         String key = String.valueOf(route.get("routeKey"));
         call.putData("runtimeTemplate", "INBOUND");
-        call.putData("nodeId", call.getNodeId());
         call.putData("guestChannelUuid", call.getGuestChannelUuid());
         call.putData("queueDeadline", System.currentTimeMillis() + 120000);
         call.putData("triedAgents", new ArrayList<String>());
@@ -244,7 +238,7 @@ public class InboundCallService implements SystemFlowRuntime {
                 call.putData("flowVersionId", String.valueOf(route.get("versionId")));
             } catch (Exception invalid) {
                 call.getData().remove("runtimeTemplate");
-                client.hangup(call.getNodeId(), call.getCtrlId(), channelUuid, "CALL_REJECTED");
+                client.hangup(call.getCtrlId(), channelUuid, "CALL_REJECTED");
                 sessions.removeSession(call.getCtrlId());
                 return false;
             }
@@ -350,7 +344,7 @@ public class InboundCallService implements SystemFlowRuntime {
                     .build()
             )
             .build();
-        CallControlService.requireAccepted(client.dial(call.getNodeId(), dto));
+        CallControlService.requireAccepted(client.dial(dto));
         screenPop.pushForAgentLeg(call, owner, extension, 30);
     }
 
@@ -402,9 +396,9 @@ public class InboundCallService implements SystemFlowRuntime {
             call.setStageState(previousStage);
             throw failure;
         }
-        client.hangup(call.getNodeId(), call.getCtrlId(), call.getGuestChannelUuid(), "NORMAL_CLEARING");
+        client.hangup(call.getCtrlId(), call.getGuestChannelUuid(), "NORMAL_CLEARING");
         if (call.getAgentChannelUuid() != null) {
-            client.hangup(call.getNodeId(), call.getCtrlId(), call.getAgentChannelUuid(), "NORMAL_CLEARING");
+            client.hangup(call.getCtrlId(), call.getAgentChannelUuid(), "NORMAL_CLEARING");
             websocket.pushCallHangup(call.getAgentWorkNo(), call.getCallId(), Map.of("cause", cause));
         }
         sessions.removeSession(call.getCtrlId());

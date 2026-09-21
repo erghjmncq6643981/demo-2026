@@ -58,7 +58,7 @@
 | FCC_WS_ALLOWED_ORIGINS | fcc-server | 可选逗号分隔的明确页面 Origin，不允许 `*`；为空使用同源规则 |
 | FCC_SIP_WS_URL / FCC_SIP_DOMAIN | fcc-admin | 浏览器可访问的 SIP WS/WSS 地址和注册域；HTTPS 页面需 WSS |
 | FCC_SIP_ENCRYPTION_KEY | fcc-admin | 由秘密管理注入的 32 字节随机密钥，Base64 编码；缺失/错误则拒绝凭据操作 |
-| FCC_DEFAULT_NODE_ID / Sidecar NODE_ID | 各自服务 | 与命令、事件实际所属节点一致 |
+| 逻辑命令 / Sidecar NODE_ID | FCC 发送 `fs.cmd.dispatch`，Sidecar 维护自身 `NODE_ID` | 业务不提供节点参数；Coordinator 根据话道 ownership 或新建 Dial 策略选节点 |
 
 不得将上述秘密写入前端 VITE 环境变量。`VITE_FCC_SIP_PASSWORD` 已移除。反向代理必须透传 WebSocket 的 `Sec-WebSocket-Protocol`，服务端只回显 `fcc-agent`，不回显携带认证信息的 `auth.*`。认证头、子协议头、SIP 配置响应不得进入访问日志；生产使用 TLS/WSS。
 

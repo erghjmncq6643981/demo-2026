@@ -76,7 +76,7 @@ public class InboundMenuService {
     }
 
     /**
-     * 解析按键分支，只允许当前客户话道和同节点驱动；重复完成事件被忽略。
+     * 解析按键分支，只允许当前客户话道和已确认的事件归属驱动；重复完成事件被忽略。
      *
      * @param call 通话
      * @param params 规范事件
@@ -88,7 +88,9 @@ public class InboundMenuService {
             !call.getGuestChannelUuid().equals(
                 params.path(FccEventField.CHANNEL_UUID.getWireName()).asText()
             ) ||
-            !call.getNodeId().equals(params.path(FccEventField.NODE_ID.getWireName()).asText())
+            (call.getNodeId() != null && !call.getNodeId().equals(
+                params.path(FccEventField.NODE_ID.getWireName()).asText()
+            ))
         ) return false;
         String digit = params.path(FccEventField.DIGIT.getWireName()).asText();
         if (!digit.matches("[0-9]")) return false;

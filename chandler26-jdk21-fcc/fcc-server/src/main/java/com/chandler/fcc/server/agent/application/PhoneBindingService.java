@@ -25,8 +25,8 @@ import org.springframework.transaction.support.TransactionTemplate;
 /**
  * 处理实体话机拨打绑定号码后输入坐席工号的自助绑定流程。
  *
- * <p>绑定身份来自 Sidecar 上报的节点和 SIP 已认证分机，坐席无需先在 PC 端创建挑战码。
- * 节点、分机和坐席必须都是启用资源，换绑过程在数据库事务中锁定目标行。</p>
+ * <p>绑定身份来自 Sidecar 上报的 SIP 已认证分机，坐席无需先在 PC 端创建挑战码。
+ * 分机和坐席必须都是启用资源，换绑过程在数据库事务中锁定目标行。</p>
  */
 @Service
 @RequiredArgsConstructor
@@ -157,8 +157,7 @@ public class PhoneBindingService implements SystemFlowRuntime {
             );
         } else {
             log.warn(
-                "[话机绑定] 绑定被拒绝 nodeId={} extension={} callId={}",
-                call.getNodeId(),
+                "[话机绑定] 绑定被拒绝 extension={} callId={}",
                 call.getDataStr(DATA_EXTENSION, ""),
                 call.getCallId()
             );
@@ -178,7 +177,7 @@ public class PhoneBindingService implements SystemFlowRuntime {
             .path(FccEventParameter.AUTHENTICATED_EXTENSION.getWireName())
             .asText();
         Map<String, Object> context = extension.matches("[0-9]{2,20}")
-            ? mapper.bindingContext(call.getNodeId(), extension)
+            ? mapper.bindingContext(extension)
             : null;
         if (context == null || promptFile.isBlank()) {
             reject(call);
@@ -233,7 +232,7 @@ public class PhoneBindingService implements SystemFlowRuntime {
     private Boolean bind(CallInfoBO call, String workNo) {
         String extension = call.getDataStr(DATA_EXTENSION, "");
         return transactions.execute(status -> {
-            Map<String, Object> target = mapper.lockBindingTarget(call.getNodeId(), extension, workNo);
+            Map<String, Object> target = mapper.lockBindingTarget(extension, workNo);
             if (target == null) {
                 return false;
             }
@@ -255,7 +254,7 @@ public class PhoneBindingService implements SystemFlowRuntime {
     }
 
     /**
-     * 拒绝无法确认节点或 SIP 身份的绑定通话。
+     * 拒绝无法确认 SIP 身份的绑定通话。
      *
      * @param call 当前通话
      */
