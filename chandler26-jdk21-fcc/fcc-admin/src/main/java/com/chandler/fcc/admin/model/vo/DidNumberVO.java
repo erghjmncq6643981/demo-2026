@@ -29,8 +29,8 @@ public class DidNumberVO implements Serializable {
     @Schema(description = "电话号码", example = "01088889999")
     private String phoneNumber;
 
-    @Schema(description = "关联中继线路 ID", example = "3001")
-    private Long trunkId;
+    @Schema(description = "FreeSWITCH 入局拨号计划上下文", example = "telecom")
+    private String routingContext;
 
     @Schema(description = "业务路由 Key", example = "ROUTING_DEFAULT_IVR")
     private String routeKey;

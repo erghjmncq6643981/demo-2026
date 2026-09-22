@@ -36,7 +36,7 @@ public class FlowExecutionRecorder {
     @Transactional(rollbackFor = Exception.class)
     public void record(CallInfoBO call) {
         String template = call.getDataStr("runtimeTemplate", "");
-        if (!Set.of("INBOUND", "AGENT_FIRST", "NOTIFICATION", "PHONE_BINDING").contains(template)) return;
+        if (!Set.of("INBOUND", "AGENT_FIRST", "AGENT_ORIGINATED", "NOTIFICATION", "PHONE_BINDING").contains(template)) return;
         try {
             var existing = mapper.lock(call.getCallId());
             Map<String, Object> row = new HashMap<>();
@@ -136,6 +136,9 @@ public class FlowExecutionRecorder {
         if ("AGENT_FIRST".equals(template)) return call.getData().containsKey("agentReady")
             ? "DIAL_CUSTOMER"
             : "DIAL_AGENT";
+        if ("AGENT_ORIGINATED".equals(template)) return call.getData().containsKey("agentReady")
+            ? "DIAL_CUSTOMER"
+            : "ENTRY";
         if (call.getData().containsKey("ivrWaiting")) return "MENU";
         if (call.getData().containsKey("ivrBranchPending")) return "BRANCH";
         return call.getData().containsKey("guestReady") ? "ROUTE" : "ENTRY";

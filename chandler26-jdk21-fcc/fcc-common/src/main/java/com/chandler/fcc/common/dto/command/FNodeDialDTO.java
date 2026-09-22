@@ -108,11 +108,17 @@ public class FNodeDialDTO implements Serializable {
         private static final long serialVersionUID = 1L;
 
         /**
-         * FreeSWITCH 拨号串（如 user/1007 或 sofia/gateway/trunk/13800000000）
+         * 业务目标号码或内部分机；节点侧结合 context 构造 FreeSWITCH 拨号表达式。
          */
         @JsonProperty("dial_string")
-        @Schema(description = "拨号串表达式", example = "user/1007")
+        @Schema(description = "待路由的分机或电话号码；必须是业务号码，不能包含 FreeSWITCH 拨号前缀", example = "1007")
         private String dialString;
+
+        /**
+         * FreeSWITCH 拨号计划上下文。
+         */
+        @Schema(description = "必填拨号计划上下文，内部分机使用 default，运营商使用其配置上下文", example = "default")
+        private String context;
 
         /**
          * 主叫名称

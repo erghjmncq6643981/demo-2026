@@ -1,6 +1,5 @@
 package com.chandler.fcc.admin.infrastructure.persistence.entity;
 
-import com.baomidou.mybatisplus.annotation.TableLogic;
 import com.baomidou.mybatisplus.annotation.TableName;
 import lombok.*;
 import lombok.experimental.SuperBuilder;
@@ -25,9 +24,9 @@ import java.time.LocalDateTime;
 public class OutboundNumberEntity extends BaseEntity {
 
     /**
-     * 绑定的出局中继线路 ID
+     * FreeSWITCH 出局拨号计划上下文
      */
-    private Long trunkId;
+    private String routingContext;
 
     /**
      * 外呼展示号码

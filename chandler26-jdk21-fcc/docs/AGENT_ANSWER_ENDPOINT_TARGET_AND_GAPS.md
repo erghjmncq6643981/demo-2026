@@ -41,9 +41,10 @@
    - 工作状态回答“坐席是否 READY/BUSY/REST/ACW”。
 6. 接听方式切换不能修改进行中 Call/Leg 的终端快照。处于 `RINGING`、`CALLING`、`CONNECTED`、`ENDING` 或 `ACW` 时必须拒绝切换；`ACW` 不是可切换窗口。
 7. 呼入和外呼都由 `fcc-server` 创建并持有业务 Call。软电话只承担 SIP 信令与 WebRTC 媒体，不承担业务外呼编排。
-8. 新外呼统一采用“坐席先接听”：先呼叫当前接听终端，坐席接听后再呼叫客户并桥接。
-9. 所有 Java `Long` ID 在前端按不透明字符串处理。
-10. 手机接听本期不得以假成功、模拟振铃或硬编码号码冒充实现。
+8. 人工外呼支持两个独立入口：系统先呼叫当前接听终端，再呼叫客户并桥接；或坐席在已认证终端主动拨客户号码，fcc-server 接管坐席 Leg 后再呼叫客户并桥接。
+9. 终端注册状态是观测事实，不是 Dial 的同步硬前置；启用绑定和坐席 `READY/BUSY/REST/ACW` 仍用于业务路由与并发占用。
+10. 所有 Java `Long` ID 在前端按不透明字符串处理。
+11. 手机接听本期不得以假成功、模拟振铃或硬编码号码冒充实现。
 
 ## 4. 目标数据语义
 
@@ -67,9 +68,9 @@
 - 管理端只能查看、切换已有有效绑定或停用绑定，不能凭空创建物理 SIP 绑定；
 - 物理 SIP 绑定只能由已认证话机拨 `0000`，由运行面校验分机身份并完成事务换绑；
 - 切换操作使用事务和坐席行锁，并记录操作者、旧终端、新终端、结果和时间；
-- 对 `WEBRTC` 与 `SIP` 路由前同时验证资源启用状态和最新注册状态。
+- 对 `WEBRTC` 与 `SIP` 路由前验证绑定和分机资源启用状态，不把最近注册在线作为 Dial 的同步前置；注册事件只用于管理端观测、诊断和告警。
 
-`priority` 仅保留为历史排序字段，不再表达当前接听终端。基线表已包含 `is_active`、生成列和唯一约束；已有数据库使用 [V20260922_01__endpoint_selection_and_command_node.sql](./migrations/V20260922_01__endpoint_selection_and_command_node.sql) 按“启用绑定中 `priority` 最小、再按 `id` 最小”回填一个当前终端。迁移必须先完成重复数据预检，执行期间停止绑定写入，部署 `fcc-admin` 与 `fcc-server` 后再恢复写入。回滚只能按迁移文件中的停写、复制字段和修复步骤执行，不能在混合版本写入期间删除唯一约束。
+`priority` 仅保留为历史排序字段，不再表达当前接听终端。基线表直接包含 `is_active`、生成列和唯一约束。当前是开发期全新项目，不为旧表结构维护数据迁移；数据结构变更时重建空库，再导入经过审查的开发配置。
 
 ### 4.2 通话事实
 
@@ -85,7 +86,7 @@
 
 ### 4.3 节点归属
 
-`fcc-server` 不感知、也不选择底层 FreeSWITCH/Sidecar 节点。业务命令只携带 `call_id`、`channel_uuid`、被叫、媒体和幂等信息，统一发送到逻辑分发入口；命令请求不能携带 `node_id`。Sidecar/Coordinator 根据新建话道的容量、健康、中继和既有话道 ownership 选择节点，并在应答及规范事件中返回实际 `node_id`。数据库字段 `fcc_call_command.assigned_node_id` 只记录这个执行后的基础设施事实；Call Leg 的 `node_id` 同样来自事件，不是业务路由入参。
+`fcc-server` 不感知、也不选择底层 FreeSWITCH/Sidecar 节点。业务命令只携带 `call_id`、`channel_uuid`、目标号码、`routing_context`、媒体和幂等信息，统一发送到逻辑分发入口；命令请求不能携带 `node_id`，也不能拼接 gateway 拨号串。Sidecar/Coordinator 根据新建话道的容量、健康、context 可用性和既有话道 ownership 选择节点，并在应答及规范事件中返回实际 `node_id`。数据库字段 `fcc_call_command.assigned_node_id` 只记录这个执行后的基础设施事实；Call Leg 的 `node_id` 同样来自事件，不是业务路由入参。
 
 单节点部署可以由逻辑入口直接转发到本地 Sidecar，多节点的 ownership registry、跨节点 Bridge 和快照聚合必须在 Sidecar/Coordinator 层完成。没有多节点真实证据时，不能在 `fcc-server` 增加 `nodeId` 请求字段或把单节点配置伪装成集群路由。
 
@@ -130,12 +131,12 @@
 
 SIP INVITE 与 `SCREEN_POP` 可能先后到达、重复或缺失。客户端必须以稳定 Session/Leg 关联表对账，不得用无身份的回调结束“当前任意通话”。临时 `sip-{sessionId}` 只可用于短暂关联，拿到真实 `call_id` 后必须原子替换并保留 Session 映射。
 
-### 5.3 呼出到 WebRTC
+### 5.3 系统发起的呼出到 WebRTC
 
 ```text
 坐席在客户端输入客户号码
   -> POST /api/telephony/call/outbound
-  -> fcc-server 校验本人身份、READY 状态、号码路由和当前 WEBRTC 终端
+  -> fcc-server 校验本人身份、READY 状态、号码路由和当前启用 WEBRTC 绑定
   -> 先持久化 Call、坐席 Leg 意图和命令事实
   -> FNode.Dial 呼叫 user/{workNo}
   -> 客户端收到 SIP INVITE 并接听
@@ -145,6 +146,8 @@ SIP INVITE 与 `SCREEN_POP` 可能先后到达、重复或缺失。客户端必�
 ```
 
 禁止客户端直接使用 `JsSIP.call(客户号码)` 绕过 `fcc-server`。客户端的 JsSIP UA 是媒体终端，不是业务呼叫编排器。
+
+坐席也可以在已认证终端通过内部 `default` context 直接拨客户号码。Sidecar 必须上报认证分机、真实被叫和入口 context；fcc-server 以认证分机查找坐席，原子接管现有坐席 Leg，再 Dial 客户并 Bridge。该入口不重新 Dial 坐席，也不依赖最近注册事件判断在线；未绑定坐席的认证终端会被拒绝，不能回落为普通客户呼入。当前代码已包含 `AGENT_ORIGINATED` 固定模型和事件入口，但 FreeSWITCH 默认 context 的拦截规则、号码前缀转换及异常事件顺序仍需真实联调。
 
 ### 5.4 物理 SIP 话机绑定
 
@@ -188,9 +191,9 @@ Linphone/Zoiper/真实 SIP 话机注册 FreeSWITCH
 
 - `PhoneBindingService` 已识别 `0000`、校验认证分机、收取工号并更新绑定；
 - 呼入服务已有选择坐席并拨打坐席分机的路径；
-- 外呼服务已有“坐席先接听”模板；
+- 外呼服务已有“系统先呼坐席”和“坐席终端主动拨号”两个固定模板；
 - Call/Leg/Bridge/Command/Event 和流程执行事实已有持久化基础；
-- 注册事件写入 `fcc_endpoint_registration_event`，运行端按最近注册事实过滤可呼叫终端。
+- 注册事件写入 `fcc_endpoint_registration_event` 供展示和诊断；运行端不再用最近注册事实阻断 Dial。
 
 ### 6.3 `fcc-client`
 
@@ -210,14 +213,14 @@ Linphone/Zoiper/真实 SIP 话机注册 FreeSWITCH
 | 客户端强制所有接听方式为 `SIP` | 客户端按后端 `WEBRTC/SIP/MOBILE` 映射，未实现的 `MOBILE` 不可选 | 浏览器/Electron 登录、切换和重新登录实测 |
 | 软电话组件正常流程不可达 | `WEBRTC` 才创建 JsSIP UA，`SIP` 不启动浏览器媒体 | WebRTC SIP-WSS 和双向媒体实测 |
 | Electron 拒绝麦克风 | 仅对白名单工作台来源放行 `media` 音频权限，其他权限拒绝 | Windows 权限允许/拒绝路径实测 |
-| WebRTC 外呼绕过 FCC | 客户端统一调用 `fcc-server` 外呼，移除直接 `JsSIP.call(客户号码)` | 坐席先接听、客户侧桥接实测 |
+| WebRTC 外呼绕过 FCC | 客户端统一调用 `fcc-server` 外呼，移除直接 `JsSIP.call(客户号码)`；物理终端主动拨号由事件入口接管 | 两类外呼、客户侧桥接和异常事件实测 |
 
 ### 7.2 已修复的 P0：当前活跃终端事实
 
 | 原偏差 | 当前实现 | 剩余验证 |
 | --- | --- | --- |
-| `priority` 推断当前终端 | `is_active` 显式事实、坐席行锁、唯一索引和切换审计已实现 | MySQL 8 迁移及并发测试 |
-| 运行端只读取 extension | 呼入、外呼和 Call Leg 均保留 endpoint 类型和值快照，并过滤注册事实 | 真实注册事件和话机路由实测 |
+| `priority` 推断当前终端 | `is_active` 显式事实、坐席行锁、唯一索引和切换审计已实现 | MySQL 8 全新基线建库及并发测试 |
+| 运行端只读取 extension | 呼入、外呼和 Call Leg 均保留 endpoint 类型、值与 routing context 快照；不以注册投影阻断 Dial | 真实注册事件、不可达终端和话机路由实测 |
 | 通话中切换未统一阻断 | 服务端阻断 `BUSY`、活动 Call 和 `ACW`；前端仅提供状态提示 | 各状态组合的接口验收 |
 | 管理 API 与 `0000` 绑定竞争 | 两条路径共用活跃事实、事务和审计；管理端不能创建 SIP 绑定 | 并发换绑与重复事件测试 |
 
@@ -247,7 +250,7 @@ Linphone/Zoiper/真实 SIP 话机注册 FreeSWITCH
 
 ### 7.5 P1：注册、可用性与恢复
 
-- 运行路由已读取 `fcc_endpoint_registration_event` 的最近事实并要求 `REGISTERED` 且在有效窗口内；仍需确认 Sidecar 的注册/注销事件在所有入口都完整落库；
+- 发起 Dial 不再要求最近注册事实为 `REGISTERED`；需验证离线、过期 Contact、Sidecar 明确拒绝和命令结果未知都能由应答/Channel 事件进入准确失败状态；
 - 需要区分配置缺失、密码错误、WSS 失败、注册超时、注册被拒绝和网络断开；
 - 需要验证应用隐藏、Windows 锁屏、休眠唤醒、网络切换和重新登录后的 UA/Session 清理；
 - 缺少真实 FreeSWITCH SIP-WSS、DTLS-SRTP、NAT/TURN 和双向媒体证据；
@@ -283,11 +286,12 @@ Linphone/Zoiper/真实 SIP 话机注册 FreeSWITCH
 ### 阶段 C：统一呼入/外呼编排
 
 - [x] 删除软电话直接呼叫客户号码的路径。
-- [x] WebRTC 与 SIP 外呼都走 `fcc-server` 坐席先接听流程。
+- [x] WebRTC 与 SIP 外呼都由 `fcc-server` 编排，不由客户端构造 FNode 命令。
+- [x] 系统先拨坐席与坐席终端主动拨号使用两个独立固定模型。
 - [x] 运行端按活跃终端生成坐席侧拨号目标。
 - [x] 呼入路由按活跃终端呼叫工号或绑定分机。
 - [x] Call/Leg 持久化终端类型和值快照。
-- [ ] 补齐失败、超时、无应答、注册离线和晚到事件的全量测试与恢复对账。
+- [ ] 补齐失败、超时、无应答、终端不可达、主动拨号重复/乱序和晚到事件的全量测试与恢复对账。
 
 ### 阶段 D：媒体可靠性和桌面权限
 
@@ -314,10 +318,10 @@ Linphone/Zoiper/真实 SIP 话机注册 FreeSWITCH
 - `WEBRTC -> SIP -> WEBRTC` 切换保留两种绑定，且始终只有一个活跃终端；
 - 两个并发切换请求不能产生两个活跃终端；
 - 活动通话期间切换被拒绝；
-- 未注册/停用 WebRTC 或 SIP 终端不进入可呼叫路由；
+- 停用或未绑定的 WebRTC/SIP 终端不进入路由；注册投影过期不会在发送 Dial 前伪造失败；
 - `0000` 绑定成功、未知分机、错误工号、冲突分机、重复 DTMF 和重复事件；
 - WebRTC 和 SIP 呼入都使用正确 EndpointRoute；
-- WebRTC 和 SIP 人工外呼都先呼叫坐席，再呼叫客户；
+- WebRTC 和 SIP 系统外呼都先呼叫坐席，再呼叫客户；坐席终端主动拨号不重复呼叫坐席；
 - 任何失败都不会伪造 Answered/Connected；
 - 重复、乱序、晚到挂机事件不重复释放坐席或结束新通话。
 
@@ -344,11 +348,12 @@ Linphone/Zoiper/真实 SIP 话机注册 FreeSWITCH
 3. Linphone/Zoiper 拨 `0000` 完成工号绑定；
 4. 切换到 SIP 后，呼入振铃物理话机，客户端不请求麦克风；
 5. SIP 人工外呼先振铃物理话机，拿起后呼叫客户；
-6. 从 SIP 切回 WebRTC 后只振铃软电话；
-7. 通话中尝试切换被前后端共同拒绝；
-8. 断网、WSS 断开、FreeSWITCH 重启、客户端重启和远端挂机后状态可恢复或明确进入未知/失败；
-9. CDR 中 Call、双方 Leg、终端类型、Channel UUID、Bridge、开始/接听/结束时间和挂机原因一致；
-10. 日志、接口、浏览器存储和安装目录不存在 SIP 明文口令或真实测试号码泄漏。
+6. SIP 话机主动拨客户号码时，系统接管当前坐席 Leg，不再次振铃坐席，并在客户接通后桥接；
+7. 从 SIP 切回 WebRTC 后只振铃软电话；
+8. 通话中尝试切换被前后端共同拒绝；
+9. 断网、WSS 断开、FreeSWITCH 重启、客户端重启和远端挂机后状态可恢复或明确进入未知/失败；
+10. CDR 中 Call、双方 Leg、终端类型、Channel UUID、Bridge、routing context、开始/接听/结束时间和挂机原因一致；
+11. 日志、接口、浏览器存储和安装目录不存在 SIP 明文口令或真实测试号码泄漏。
 
 `MOBILE` 不在本期真实验收范围内。
 
@@ -364,7 +369,7 @@ Linphone/Zoiper/真实 SIP 话机注册 FreeSWITCH
 - 真实 FreeSWITCH 环境完成本节验收并保存不含敏感信息的证据；
 - Java 编译与测试、前端构建与聚焦测试、Sidecar 测试、Mapper XML 解析和 `git diff --check` 均通过；外部依赖不可用项如实记录。
 
-只有完成 `0000` 真实绑定以及 SIP 呼入、坐席先接听外呼和切换回 WebRTC 的闭环，才能将物理话机接听描述为“已实现”。
+只有完成 `0000` 真实绑定以及 SIP 呼入、系统先拨坐席外呼、坐席终端主动外呼和切换回 WebRTC 的闭环，才能将物理话机接听描述为“已实现”。
 
 手机接听在本期只能描述为“领域模型预留，运行能力未实现”。
 
@@ -376,7 +381,7 @@ Linphone/Zoiper/真实 SIP 话机注册 FreeSWITCH
 - 三端查询与切换：`fcc-admin/.../AgentService.java`
 - 物理话机绑定：`fcc-server/.../PhoneBindingService.java`
 - 呼入编排：`fcc-server/.../InboundCallService.java`
-- 坐席先接听外呼：`fcc-server/.../OutboundCallService.java`
+- 两类人工外呼：`fcc-server/.../OutboundCallService.java`
 - 客户端 Endpoint 状态：`chandler26-fcc-client-web/src/stores/agentStore.ts`
 - 客户端 SIP/WebRTC：`chandler26-fcc-client-web/src/services/sipWebRtcService.ts`
 - 客户端软电话界面：`chandler26-fcc-client-web/src/components/telephony/SoftphoneDialer.vue`

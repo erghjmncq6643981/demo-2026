@@ -253,11 +253,10 @@ public class CallCdrService {
           .fromNumber(l.getCallerNumber())
           .toNumber(l.getDestinationNumber())
           .endpointType(l.getEndpointType())
+          .routingContext(l.getRoutingContext())
           .status(l.getState())
           .ringDurationMs(l.getRingDurationMs())
           .billDurationMs(l.getTalkDurationMs())
-          .readCodec("PCMA")
-          .writeCodec("PCMA")
           .build()
       )
       .toList();

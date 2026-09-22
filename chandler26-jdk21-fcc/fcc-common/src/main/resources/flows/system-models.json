@@ -35,6 +35,18 @@
       {"key":"END","label":"结束外呼","action":"FINALIZE_OUTBOUND","parameters":{"releaseAgent":true,"hangupRemainingLeg":true},"outputs":["hangupCause","duration","billsec"],"terminal":true,"transitions":[]}
     ]
   },
+  "AGENT_ORIGINATED": {
+    "schemaVersion":2,"template":"AGENT_ORIGINATED","executionMode":"FIXED_RUNTIME","entry":"ENTRY",
+    "stages":["ENTRY","DIAL_CUSTOMER","BRIDGE","CONNECTED","END"],
+    "parameters":{"dialSeconds":30,"routeSource":"DIALED_NUMBER_AND_CONTEXT","triggerSource":"AUTHENTICATED_AGENT_LEG"},
+    "nodes":[
+      {"key":"ENTRY","label":"接管坐席主动外呼","action":"ACCEPT_AGENT_ORIGINATED_CALL","inputs":["authenticatedExtension","agentChannelUuid","number"],"outputs":["callId","owner","guestChannelUuid"],"transitions":[{"when":"AGENT_READY","to":"DIAL_CUSTOMER"},{"when":"REJECTED_OR_DESTROY","to":"END"}]},
+      {"key":"DIAL_CUSTOMER","label":"呼叫客户","action":"DIAL_CUSTOMER","parameters":{"timeoutSeconds":30,"destinationSource":"DIALED_NUMBER_AND_CONTEXT"},"transitions":[{"when":"CUSTOMER_READY","to":"BRIDGE"},{"when":"DESTROY","to":"END"}]},
+      {"key":"BRIDGE","label":"桥接双方","action":"CHANNEL_BRIDGE","inputs":["agentChannelUuid","guestChannelUuid"],"transitions":[{"when":"BRIDGE_EVENT","to":"CONNECTED"},{"when":"DESTROY","to":"END"}]},
+      {"key":"CONNECTED","label":"双方通话","action":"WAIT_FOR_HANGUP","transitions":[{"when":"DESTROY","to":"END"}]},
+      {"key":"END","label":"结束外呼","action":"FINALIZE_OUTBOUND","parameters":{"releaseAgent":true,"hangupRemainingLeg":true},"outputs":["hangupCause","duration","billsec"],"terminal":true,"transitions":[]}
+    ]
+  },
   "NOTIFICATION": {
     "schemaVersion":2,"template":"NOTIFICATION","executionMode":"FIXED_RUNTIME","entry":"ENTRY",
     "stages":["ENTRY","DIAL_CUSTOMER","NOTIFY","CONFIRM","END"],

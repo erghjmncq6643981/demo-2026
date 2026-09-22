@@ -5,11 +5,9 @@ import com.chandler.fcc.admin.controller.req.BindDidFlowReq;
 import com.chandler.fcc.admin.model.CommonResult;
 import com.chandler.fcc.admin.model.dto.DidNumberCreateReq;
 import com.chandler.fcc.admin.model.dto.OutboundNumberCreateReq;
-import com.chandler.fcc.admin.model.dto.TrunkCreateReq;
 import com.chandler.fcc.admin.model.vo.DidNumberVO;
 import com.chandler.fcc.admin.model.vo.OutboundNumberVO;
 import com.chandler.fcc.admin.model.vo.TelephonyNodeVO;
-import com.chandler.fcc.admin.model.vo.TrunkVO;
 import com.chandler.fcc.admin.service.TelephonyResourceService;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
@@ -24,51 +22,13 @@ import java.util.List;
  *
  * @author Chandler
  */
-@Tag(name = "通信资源与网关管理", description = "提供SIP中继、DID呼入引示号、外呼主叫池及FreeSWITCH集群节点监控接口")
+@Tag(name = "通信资源管理", description = "提供DID呼入引示号、外呼主叫池及FreeSWITCH集群节点监控接口")
 @RestController
 @RequestMapping("/api/admin/resources")
 @RequiredArgsConstructor
 public class TelephonyResourceController {
 
     private final TelephonyResourceService resourceService;
-
-    /**
-     * 创建通信中继线路
-     *
-     * @param req 中继创建参数
-     * @return 中继 ID
-     */
-    @Operation(summary = "创建SIP通信中继线路")
-    @PostMapping("/trunks")
-    public CommonResult<Long> createTrunk(@Valid @RequestBody TrunkCreateReq req) {
-        Long id = resourceService.createTrunk(req);
-        return CommonResult.success(id);
-    }
-
-    /**
-     * 查询全量有效中继线路
-     *
-     * @return 中继列表
-     */
-    @Operation(summary = "查询中继线路列表")
-    @GetMapping("/trunks")
-    public CommonResult<List<TrunkVO>> listTrunks() {
-        List<TrunkVO> list = resourceService.listTrunks();
-        return CommonResult.success(list);
-    }
-
-    /**
-     * 删除中继线路
-     *
-     * @param id 中继 ID
-     * @return 操作成功响应
-     */
-    @Operation(summary = "删除中继线路")
-    @DeleteMapping("/trunks/{id}")
-    public CommonResult<Void> deleteTrunk(@PathVariable("id") Long id) {
-        resourceService.deleteTrunk(id);
-        return CommonResult.success();
-    }
 
     /**
      * 录入呼入 DID 号码

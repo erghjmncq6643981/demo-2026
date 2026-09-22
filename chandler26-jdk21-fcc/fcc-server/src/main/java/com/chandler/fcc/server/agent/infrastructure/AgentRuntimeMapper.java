@@ -29,6 +29,14 @@ public interface AgentRuntimeMapper {
     Map<String, Object> agent(@Param("owner") String owner);
 
     /**
+     * 按已认证终端查找唯一启用坐席，不依赖易失的注册在线投影。
+     *
+     * @param extension 已认证的 SIP/WebRTC 终端账号
+     * @return 坐席与终端摘要，不存在时为空
+     */
+    Map<String, Object> agentByEndpoint(@Param("extension") String extension);
+
+    /**
      * 初始化坐席状态记录。
      *
      * @param owner 坐席工号
@@ -55,6 +63,15 @@ public interface AgentRuntimeMapper {
     int reserve(@Param("owner") String owner, @Param("callId") String callId);
 
     /**
+     * 原子接管由坐席终端主动建立的话道。
+     *
+     * @param owner 坐席工号
+     * @param callId 通话标识
+     * @return 更新数量
+     */
+    int reserveOriginated(@Param("owner") String owner, @Param("callId") String callId);
+
+    /**
      * 幂等释放坐席至整理态。
      *
      * @param owner 坐席工号
@@ -74,7 +91,7 @@ public interface AgentRuntimeMapper {
     /**
      * 读取首个可用出局资源。
      *
-     * @return 主叫号码和网关配置
+     * @return 主叫号码和拨号上下文配置
      */
     Map<String, Object> outbound();
 
@@ -98,9 +115,13 @@ public interface AgentRuntimeMapper {
      * 按 DID 定位发布流程。
      *
      * @param number DID 号码
+     * @param context FreeSWITCH 入局拨号计划上下文
      * @return 路由定义，最多两条用于歧义检查
      */
-    List<Map<String, Object>> inbound(@Param("number") String number);
+    List<Map<String, Object>> inbound(
+        @Param("number") String number,
+        @Param("context") String context
+    );
 
     /**
      * 选择技能组内最久空闲坐席。

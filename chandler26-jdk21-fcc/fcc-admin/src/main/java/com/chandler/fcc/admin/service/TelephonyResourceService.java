@@ -6,19 +6,15 @@ import com.chandler.fcc.admin.infrastructure.persistence.entity.FlowDefinitionEn
 import com.chandler.fcc.admin.infrastructure.persistence.entity.DidNumberEntity;
 import com.chandler.fcc.admin.infrastructure.persistence.entity.OutboundNumberEntity;
 import com.chandler.fcc.admin.infrastructure.persistence.entity.TelephonyNodeEntity;
-import com.chandler.fcc.admin.infrastructure.persistence.entity.TelephonyTrunkEntity;
 import com.chandler.fcc.admin.infrastructure.persistence.mapper.DidNumberMapper;
 import com.chandler.fcc.admin.infrastructure.persistence.mapper.FlowDefinitionMapper;
 import com.chandler.fcc.admin.infrastructure.persistence.mapper.OutboundNumberMapper;
 import com.chandler.fcc.admin.infrastructure.persistence.mapper.TelephonyNodeMapper;
-import com.chandler.fcc.admin.infrastructure.persistence.mapper.TelephonyTrunkMapper;
 import com.chandler.fcc.admin.model.dto.DidNumberCreateReq;
 import com.chandler.fcc.admin.model.dto.OutboundNumberCreateReq;
-import com.chandler.fcc.admin.model.dto.TrunkCreateReq;
 import com.chandler.fcc.admin.model.vo.DidNumberVO;
 import com.chandler.fcc.admin.model.vo.OutboundNumberVO;
 import com.chandler.fcc.admin.model.vo.TelephonyNodeVO;
-import com.chandler.fcc.admin.model.vo.TrunkVO;
 import com.chandler.fcc.common.util.IdUtil;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -31,7 +27,7 @@ import java.util.List;
 /**
  * 通信资源管理业务服务
  * <p>
- * 统一管理 SIP 中继网关、呼入 DID 引示号、外呼主叫号池及 FreeSWITCH 通信节点集群状态。
+ * 统一管理呼入 DID 引示号、外呼主叫号池及 FreeSWITCH 通信节点集群状态。
  * </p>
  *
  * @author Chandler
@@ -41,87 +37,10 @@ import java.util.List;
 @RequiredArgsConstructor
 public class TelephonyResourceService {
 
-    private final TelephonyTrunkMapper trunkMapper;
     private final DidNumberMapper didMapper;
     private final FlowDefinitionMapper flowMapper;
     private final OutboundNumberMapper outboundMapper;
     private final TelephonyNodeMapper nodeMapper;
-
-    /**
-     * 创建 SIP 通信中继线路
-     *
-     * @param req 中继创建入参
-     * @return 中继雪花主键 ID
-     */
-    @Transactional(rollbackFor = Exception.class)
-    public Long createTrunk(TrunkCreateReq req) {
-        LambdaQueryWrapper<TelephonyTrunkEntity> check = new LambdaQueryWrapper<TelephonyTrunkEntity>()
-                .eq(TelephonyTrunkEntity::getTrunkCode, req.getTrunkCode().trim());
-        if (trunkMapper.selectCount(check) > 0) {
-            throw new IllegalArgumentException("中继编码已存在: " + req.getTrunkCode());
-        }
-
-        Long id = IdUtil.nextId();
-        LocalDateTime now = LocalDateTime.now();
-        TelephonyTrunkEntity entity = TelephonyTrunkEntity.builder()
-                .id(id)
-                .trunkCode(req.getTrunkCode().trim())
-                .trunkName(req.getTrunkName().trim())
-                .carrierCode(req.getCarrierCode())
-                .gatewayName(req.getGatewayName().trim())
-                .direction(req.getDirection())
-                .status("ENABLED")
-                .maxConcurrent(req.getMaxConcurrent())
-                .configJson(req.getConfigJson())
-                .createdAt(now)
-                .updatedAt(now)
-                .build();
-
-        trunkMapper.insert(entity);
-        log.info("[TelephonyResourceService] 创建中继成功: id={}, code={}", id, req.getTrunkCode());
-        return id;
-    }
-
-    /**
-     * 查询全量有效中继线路列表
-     *
-     * @return 中继视图列表
-     */
-    public List<TrunkVO> listTrunks() {
-        List<TelephonyTrunkEntity> trunks = trunkMapper.selectList(
-                new LambdaQueryWrapper<TelephonyTrunkEntity>()
-                        .isNull(TelephonyTrunkEntity::getDeletedAt)
-                        .orderByAsc(TelephonyTrunkEntity::getId));
-
-        return trunks.stream().map(t -> TrunkVO.builder()
-                .id(t.getId())
-                .trunkCode(t.getTrunkCode())
-                .trunkName(t.getTrunkName())
-                .carrierCode(t.getCarrierCode())
-                .gatewayName(t.getGatewayName())
-                .direction(t.getDirection())
-                .status(t.getStatus())
-                .maxConcurrent(t.getMaxConcurrent())
-                .createdAt(t.getCreatedAt())
-                .build()
-        ).toList();
-    }
-
-    /**
-     * 删除中继线路
-     *
-     * @param id 中继主键 ID
-     */
-    @Transactional(rollbackFor = Exception.class)
-    public void deleteTrunk(Long id) {
-        TelephonyTrunkEntity trunk = trunkMapper.selectById(id);
-        if (trunk != null) {
-            trunk.setStatus("DISABLED");
-            trunk.setDeletedAt(LocalDateTime.now());
-            trunkMapper.updateById(trunk);
-            log.info("[TelephonyResourceService] 成功软删除中继: id={}", id);
-        }
-    }
 
     /**
      * 录入呼入 DID 引示号
@@ -132,8 +51,10 @@ public class TelephonyResourceService {
     @Transactional(rollbackFor = Exception.class)
     public Long createDidNumber(DidNumberCreateReq req) {
         String phone = req.getPhoneNumber().trim();
+        String routingContext = normalizeRoutingContext(req.getRoutingContext());
         LambdaQueryWrapper<DidNumberEntity> check = new LambdaQueryWrapper<DidNumberEntity>()
                 .isNull(DidNumberEntity::getDeletedAt)
+                .eq(DidNumberEntity::getRoutingContext, routingContext)
                 .eq(DidNumberEntity::getPhoneNumber, phone);
         if (didMapper.selectCount(check) > 0) {
             throw new IllegalArgumentException("DID号码已存在: " + phone);
@@ -143,7 +64,7 @@ public class TelephonyResourceService {
         LocalDateTime now = LocalDateTime.now();
         DidNumberEntity entity = DidNumberEntity.builder()
                 .id(id)
-                .trunkId(req.getTrunkId())
+                .routingContext(routingContext)
                 .phoneNumber(phone)
                 .routeKey(req.getRouteKey())
                 .status("ENABLED")
@@ -168,11 +89,10 @@ public class TelephonyResourceService {
                         .orderByAsc(DidNumberEntity::getPhoneNumber));
 
         return dids.stream().map(d -> {
-            TelephonyTrunkEntity trunk = d.getTrunkId() != null ? trunkMapper.selectById(d.getTrunkId()) : null;
             return DidNumberVO.builder()
                     .id(d.getId())
                     .phoneNumber(d.getPhoneNumber())
-                    .trunkId(d.getTrunkId())
+                    .routingContext(d.getRoutingContext())
                     .routeKey(d.getRouteKey())
                     .status(d.getStatus())
                     .createdAt(d.getCreatedAt())
@@ -285,7 +205,10 @@ public class TelephonyResourceService {
     @Transactional(rollbackFor = Exception.class)
     public Long createOutboundNumber(OutboundNumberCreateReq req) {
         String phone = req.getPhoneNumber().trim();
+        String routingContext = normalizeRoutingContext(req.getRoutingContext());
         LambdaQueryWrapper<OutboundNumberEntity> check = new LambdaQueryWrapper<OutboundNumberEntity>()
+                .isNull(OutboundNumberEntity::getDeletedAt)
+                .eq(OutboundNumberEntity::getRoutingContext, routingContext)
                 .eq(OutboundNumberEntity::getPhoneNumber, phone);
         if (outboundMapper.selectCount(check) > 0) {
             throw new IllegalArgumentException("外呼号码已存在: " + phone);
@@ -295,7 +218,7 @@ public class TelephonyResourceService {
         LocalDateTime now = LocalDateTime.now();
         OutboundNumberEntity entity = OutboundNumberEntity.builder()
                 .id(id)
-                .trunkId(req.getTrunkId())
+                .routingContext(routingContext)
                 .phoneNumber(phone)
                 .poolCode(req.getPoolCode() == null ? "default" : req.getPoolCode().trim())
                 .status("AVAILABLE")
@@ -324,7 +247,7 @@ public class TelephonyResourceService {
         return list.stream().map(o -> OutboundNumberVO.builder()
                 .id(o.getId())
                 .phoneNumber(o.getPhoneNumber())
-                .trunkId(o.getTrunkId())
+                .routingContext(o.getRoutingContext())
                 .poolCode(o.getPoolCode())
                 .status(o.getStatus())
                 .maxConcurrent(o.getMaxConcurrent())
@@ -355,5 +278,20 @@ public class TelephonyResourceService {
                 .lastHeartbeatAt(n.getLastHeartbeatAt())
                 .build()
         ).toList();
+    }
+
+    /**
+     * 规范并校验 FreeSWITCH 拨号计划上下文。
+     *
+     * @param routingContext 管理端提交的上下文
+     * @return 去除首尾空白后的合法上下文
+     * @throws IllegalArgumentException 上下文缺失或包含不受支持字符
+     */
+    private String normalizeRoutingContext(String routingContext) {
+        String normalized = routingContext == null ? "" : routingContext.trim();
+        if (!normalized.matches("[A-Za-z0-9_.-]{1,64}")) {
+            throw new IllegalArgumentException("拨号上下文不合法");
+        }
+        return normalized;
     }
 }

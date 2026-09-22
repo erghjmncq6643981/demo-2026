@@ -17,6 +17,7 @@ public enum FccEventField {
     DIRECTION("direction", "话道方向"),
     CALLER_NUMBER("cid_number", "主叫号码"),
     DESTINATION_NUMBER("dest_number", "被叫号码"),
+    CONTEXT("context", "FreeSWITCH 拨号计划上下文"),
     CAUSE("cause", "挂机原因"),
     DURATION("duration", "通话持续秒数"),
     BILL_SECONDS("billsec", "计费秒数"),

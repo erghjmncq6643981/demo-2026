@@ -14,7 +14,7 @@ import java.util.Locale;
  * </p>
  * <pre>
  * {baseDir}/{yyyy}/{MM}/{dd}/{callId}.{format}
- * 例: /Users/chandler/fcc-records/2026/09/19/18...81.wav
+ * 例: /var/lib/fcc/recordings/2026/09/19/18...81.wav
  * </pre>
  *
  * <p>文件名直接使用业务 {@code call_id}：它由 FCC 生成并在转移、重试、多信道场景下保持稳定，

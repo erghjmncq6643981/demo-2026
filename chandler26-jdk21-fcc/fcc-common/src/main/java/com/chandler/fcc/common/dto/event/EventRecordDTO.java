@@ -54,7 +54,7 @@ public class EventRecordDTO implements Serializable {
     /**
      * 录音文件绝对物理路径
      */
-    @Schema(description = "录音文件物理路径", example = "/Users/chandler/fcc-records/2026/09/19/1789693905.wav")
+    @Schema(description = "录音文件物理路径", example = "/var/lib/fcc/recordings/2026/09/19/1789693905.wav")
     private String path;
 
     /**

@@ -2,7 +2,7 @@
 
 ## 1. 文档状态
 
-本文描述 `chandler26-jdk21-fcc` 当前代码边界，核对日期为 2026-09-20。本项目是全新 FreeSWITCH 呼叫中心，不继承参考项目的旧协议、旧流程定义、演示账户或业务兼容层，也不引入租户模型。未完成或未验证的能力在本文中明确列为已知缺口。
+本文描述 `chandler26-jdk21-fcc` 当前代码边界，核对日期为 2026-09-22。本项目是全新 FreeSWITCH 呼叫中心，不继承参考项目的旧协议、旧流程定义、演示账户或业务兼容层，也不引入租户模型。未完成或未验证的能力在本文中明确列为已知缺口。
 
 跨工程入口见 [产品设计总览](../../docs/fcc-product-design.md)，源码对齐证据见 [前后端契约检查](../../docs/fcc-contract-alignment.md)。本文描述现状；总览中的待完善清单是验收目标，不代表已实现。
 
@@ -95,7 +95,7 @@ fcc-server 统一拥有话机绑定运行流程、呼入、呼出、自动外呼
 - 回拨任务；
 - 流程动作目录、固定模型、分页摘要、版本详情、草稿和发布；
 - 客户资料与自动外呼的维护/查看 API；实际事实、调度和执行仍在 fcc-server；
-- Trunk、DID、外呼号码、节点；
+- DID、外呼号码使用的拨号上下文，以及节点运行状态；
 - 系统配置和客户端版本/硬件记录。
 
 ### 3.4 starter SDK
@@ -135,11 +135,24 @@ fcc-server 统一拥有话机绑定运行流程、呼入、呼出、自动外呼
 
 ### 5.1 命令路由边界
 
-呼叫中心业务只表达 `Dial`、`Play`、`ReadDTMF`、`Bridge`、`Record`、`Hangup`、`Transfer` 等逻辑命令。`FccClient` 统一发布到 `fs.cmd.dispatch`，命令参数只携带控制标识、话道 UUID、被叫和媒体等业务信息，不携带 `node_id`。
+呼叫中心业务只表达 `Dial`、`Play`、`ReadDTMF`、`Bridge`、`Record`、`Hangup`、`Transfer` 等逻辑命令。`FccClient` 统一发布到 `fs.cmd.dispatch`，命令参数只携带控制标识、话道 UUID、目标号码、`routing_context` 和媒体等业务信息，不携带 `node_id`，也不拼接 `sofia/gateway/...` 等 FreeSWITCH 拨号串。
 
-Sidecar 的 dispatch ingress 在单节点部署中可直接调用本地 Dispatcher；多节点部署由独立 Coordinator 根据新建 Dial 的健康、容量、中继策略，以及既有 `channel_uuid` 的 ownership 选择节点，再转发到内部 `fs.cmd.{nodeId}`。所有 Sidecar 仍以 `fs.event.{nodeId}.{category}` 发布事件，事件中的 `node_id`、CallLeg 的 `node_id` 和命令应答的 `node_id` 是基础设施事实，用于归属、审计、去重和恢复，不是业务路由参数。
+`routing_context` 是呼叫中心配置选择的业务路由入口，例如内部分机 `default`、移动或电信的独立 context；具体 gateway、SIP profile 和运营商线路由 FreeSWITCH/Sidecar 配置拥有。Sidecar 在受控校验后把“目标号码 + context”转换为节点侧拨号表达式。`fcc_telephony_trunk`、`trunk_id`、`trunk_code` 和 `gateway_name` 不再是 FCC 运行时路由模型。
+
+Sidecar 的 dispatch ingress 在单节点部署中可直接调用本地 Dispatcher；多节点部署由独立 Coordinator 根据新建 Dial 的健康、容量、context 可用性，以及既有 `channel_uuid` 的 ownership 选择节点，再转发到内部 `fs.cmd.{nodeId}`。所有 Sidecar 仍以 `fs.event.{nodeId}.{category}` 发布事件，事件中的 `node_id`、CallLeg 的 `node_id` 和命令应答的 `node_id` 是基础设施事实，用于归属、审计、去重和恢复，不是业务路由参数。
 
 `FNode.ChannelSnapshot` 通过逻辑入口返回 Coordinator 聚合的完整话道集合。当前代码已实现逻辑入口和单节点直执行；跨节点 ownership registry、跨节点 Bridge 和快照聚合需要多 Sidecar 环境联调，不能以单节点测试宣称完成。
+
+### 5.2 人工外呼与坐席可用性
+
+终端绑定、终端注册事实和坐席业务状态是三个独立概念。系统发起 Dial 前要求存在启用的 SIP/WebRTC 绑定，并通过 `fcc_agent_presence` 的 `READY/BUSY/REST/ACW` 做业务并发控制；不再把最近注册事件为 `REGISTERED` 作为同步硬前置。终端是否真实可达由 Sidecar 命令应答和后续 Channel 事件判定，注册事件继续用于管理端展示、诊断和告警。
+
+人工外呼有两个固定模型：
+
+1. `AGENT_FIRST`：REST/API/自动任务发起，先 Dial 坐席绑定终端；坐席 Leg `READY` 后 Dial 客户，客户 Leg `READY` 后 Bridge。
+2. `AGENT_ORIGINATED`：坐席在已认证 SIP/WebRTC 终端通过内部 `default` context 拨客户号码；Sidecar 上报 `authenticated_extension`、真实被叫和 context，fcc-server 接管现有坐席 Leg、原子占用坐席，再 Dial 客户并 Bridge。未绑定坐席的认证终端会被拒绝，不能回落为普通客户呼入。
+
+两条路径共享 Call/Leg/Bridge 事实和终态幂等处理，但入口与首个动作不同，不能把终端主动拨号伪装成“系统先拨坐席”。`AGENT_ORIGINATED` 已有固定模型和事件入口；真实 FreeSWITCH 默认 context 的外呼捕获规则、号码前缀处理及异常事件顺序仍需联调验证。
 
 ## 6. 当前 API
 
@@ -197,13 +210,15 @@ WebSocket：`/ws/agent`，通过认证子协议头核验管理端登录身份，
 
 MySQL 是持久事实来源。Redis 只存可重建的运行态和通知。内存 `CallSessionManager` 是当前事件关联索引，不是持久事实来源。
 
+通信资源基线只保存 FCC 需要的业务选择：`fcc_did_number(routing_context, phone_number)` 定位呼入入口，`fcc_outbound_number(routing_context, phone_number)` 提供出局 context 与主叫号码，`fcc_call_leg.routing_context` 保存实际话道快照。当前是开发期全新项目，不保留 trunk/gateway 表的数据升级路径；表结构变更后直接使用 `docs/fcc-schema.sql` 重建空库。
+
 ## 8. 流程版本
 
 管理端支持流程：
 
 - 分页流程摘要和分页版本摘要；
 - 单版本完整定义按需查询；
-- 公共动作目录和四个固定系统模型查询；
+- 公共动作目录和五个固定系统模型查询；
 - 草稿保存；
 - 发布；
 - 按通话查询实际经过的阶段、action、指令、事件和结果；
@@ -222,11 +237,11 @@ MySQL 是持久事实来源。Redis 只存可重建的运行态和通知。内�
 
 `call-center-backend` 运行多年，其 XSwitch 多 subject 入口、硬编码 Flow 和历史表结构不是新系统架构模板，但其业务细节作为验收清单：号码入口分流、IVR/直达、排队与顺振、无人/超时出口、录音、评价、漏话回拨、盲转/咨询转/三方、自动外呼确认，以及司机热线等第三方业务回调。`chandler26-jdk17-freeswitch-FCC` 已验证 FNode Dial、ReadDTMF、Bridge、Record、Hangup 的协议链路，作为协议回归参考。
 
-参考旧系统时以“业务输入、判断、动作、持久事实、外部通知、失败出口是否闭环”为抽取单位，不以 Controller、Listener、NATS subject、数据库表或隐藏代码分支为复制单位。旧系统中按运营商拆分 subject 的真实业务含义是保留入口号码、线路/运营商归属和路由上下文；新系统由统一标准事件中的 `node_id`、`dest_number`、DID/Trunk 主数据及固定流程版本承载这些信息。
+参考旧系统时以“业务输入、判断、动作、持久事实、外部通知、失败出口是否闭环”为抽取单位，不以 Controller、Listener、NATS subject、数据库表或隐藏代码分支为复制单位。旧系统中按运营商拆分 subject 的真实业务含义是保留入口号码、线路/运营商归属和路由上下文；新系统由统一标准事件中的 `node_id`、`dest_number`、`context`、DID/外呼号码配置及固定流程版本承载这些信息。gateway 和 SIP profile 留在 FreeSWITCH/Sidecar 运维边界。
 
 | 旧系统已打磨的业务语义 | 新系统承载方式 | 当前证据与缺口 |
 | --- | --- | --- |
-| 不同运营商/400 入口、被叫号码与直达入口 | 标准 Channel 事件 + DID 主数据 + `flow_key` | DID 精确绑定和无入口禁止发布已实现；真实运营商送号格式、前缀归一化和 Trunk 归属待联调 |
+| 不同运营商/400 入口、被叫号码与直达入口 | 标准 Channel 事件的 `context`/`dest_number` + DID 主数据 + `flow_key` | DID 按 context 与号码精确绑定已实现；真实运营商送号格式、前缀归一化和 context 映射待联调 |
 | IVR 收号、按键分支及无输入兜底 | `MENU`、`BRANCH`、唯一 `defaultRoute` 和 `timeoutAction` | 编辑、校验和运行分支已实现；真实音频、DTMF 超时事件待 FreeSWITCH 验证 |
 | 指定坐席、技能组、同组代答、忙/离线/无人和多次尝试 | 路由尝试事实 + 并发预占 + 可替换路由策略 | 指定坐席/技能组与排队期轮询已实现；代班、营业时间、溢出层级及细分失败原因尚未动作化 |
 | 来电弹屏、接听、桥接、挂机和坐席释放 | Call/Leg/Bridge 事实 + Windows 客户端回执 + 终态幂等 | 核心链路和弹屏回执已实现；真实 SIP/Windows 联调与异常恢复验收未完成 |
@@ -271,6 +286,7 @@ MySQL 是持久事实来源。Redis 只存可重建的运行态和通知。内�
 - Agent WebSocket 已通过令牌在线核验坐席身份；身份服务故障时拒绝收发，尚需真实环境验证及性能评估；
 - 共享 Jackson 标识符模块已加入，但命名外字段、Map 和实际 HTTP 输出仍需完整契约验证；
 - Dial Job 已有持久领取、频控、时段、暂停/取消、逐次结果及原子批量回填；真实话务与未知结果恢复尚未完整验收。
+- 坐席终端主动外呼已有模型、事件识别和 Leg 接管代码；真实默认 context 拨号计划、号码转换、重复/乱序/先挂机等场景尚未完成 FreeSWITCH 联调。
 
 挂机/保持/DTMF/转接已校验本人 callId、话道 UUID 和底层响应；返回 ACCEPTED 而非最终状态，错误/超时不再伪造成功。班长四类干预均明确返回 501，前端禁用。保持媒体完成态和完整转接生命周期仍需联调。
 
@@ -279,7 +295,7 @@ MySQL 是持久事实来源。Redis 只存可重建的运行态和通知。内�
 - 数据库、Redis、NATS、Sidecar、SIP 和录音配置从部署环境注入。
 - 管理操作需要后端授权；隐藏按钮不能替代权限校验。
 - 电话号码、录音、协议原文和文件路径属于敏感数据。
-- 强拆、流程发布、分机/中继变更和录音访问需要业务审计。
+- 强拆、流程发布、分机、DID/context 变更和录音访问需要业务审计。
 - `FNode.NativeAPI` 只允许受限运维调用。
 - 节点 `DRAINING` 拒绝新呼叫但不应主动结束存量通话。
 

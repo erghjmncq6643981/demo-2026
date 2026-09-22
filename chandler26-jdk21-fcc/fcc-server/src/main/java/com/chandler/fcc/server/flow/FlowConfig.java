@@ -151,6 +151,9 @@ public class FlowConfig {
         if (flowKey.endsWith("AGENT_FIRST") || "AGENT_FIRST".equalsIgnoreCase(modelType)) {
             return FlowModelType.OUTBOUND_TWO_WAY_CALL.name();
         }
+        if (flowKey.endsWith("AGENT_ORIGINATED") || "AGENT_ORIGINATED".equalsIgnoreCase(modelType)) {
+            return FlowModelType.OUTBOUND_TWO_WAY_CALL.name();
+        }
         if (flowKey.endsWith("NOTIFICATION") || "NOTIFICATION".equalsIgnoreCase(modelType)) {
             return FlowModelType.AUTO_DIAL_NOTIFICATION.name();
         }

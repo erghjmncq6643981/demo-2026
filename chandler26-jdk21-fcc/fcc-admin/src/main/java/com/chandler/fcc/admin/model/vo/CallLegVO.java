@@ -37,8 +37,11 @@ public class CallLegVO implements Serializable {
     @Schema(description = "对端号码", example = "1001")
     private String toNumber;
 
-    @Schema(description = "终端类型 (SIP, WEBRTC, TRUNK)", example = "SIP")
+    @Schema(description = "终端类型 (SIP, WEBRTC, CARRIER)", example = "SIP")
     private String endpointType;
+
+    @Schema(description = "建立该话道时使用的 FreeSWITCH 拨号计划上下文", example = "telecom")
+    private String routingContext;
 
     @Schema(description = "Leg 终态状态", example = "HANGUP")
     private String status;

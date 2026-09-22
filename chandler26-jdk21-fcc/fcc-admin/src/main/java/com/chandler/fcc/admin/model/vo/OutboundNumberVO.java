@@ -29,8 +29,8 @@ public class OutboundNumberVO implements Serializable {
     @Schema(description = "电话号码", example = "02195588")
     private String phoneNumber;
 
-    @Schema(description = "出局中继线路 ID", example = "3001")
-    private Long trunkId;
+    @Schema(description = "FreeSWITCH 出局拨号计划上下文", example = "mobile")
+    private String routingContext;
 
     @Schema(description = "号码池编码", example = "default")
     private String poolCode;

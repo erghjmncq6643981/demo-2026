@@ -121,9 +121,16 @@ public class InboundCallService implements SystemFlowRuntime {
                     .endpointType(
                         uuid.equals(call.getAgentChannelUuid())
                             ? call.getDataStr("agentEndpointType", null)
-                            : "TRUNK"
+                            : "CARRIER"
                     )
                     .endpointId(uuid.equals(call.getAgentChannelUuid()) ? call.getAgentExt() : null)
+                    .callerNumber(call.getCallerNumber())
+                    .destinationNumber(call.getDestinationNumber())
+                    .routingContext(
+                        uuid.equals(call.getAgentChannelUuid())
+                            ? "default"
+                            : call.getDataStr("routingContext", "default")
+                    )
                     .state(state)
                     .hangupCause(params.path(FccEventField.CAUSE.getWireName()).asText(null))
                     .endedAt(
@@ -224,7 +231,10 @@ public class InboundCallService implements SystemFlowRuntime {
      * @return 是否成功初始化呼入模型
      */
     private Boolean initialize(CallInfoBO call, String channelUuid) {
-        var routes = agents.inbound(call.getDestinationNumber());
+        var routes = agents.inbound(
+            call.getDestinationNumber(),
+            call.getDataStr("routingContext", "default")
+        );
         if (routes.size() != 1) {
             client.hangup(call.getCtrlId(), channelUuid, "UNALLOCATED_NUMBER");
             sessions.removeSession(call.getCtrlId());
@@ -301,8 +311,7 @@ public class InboundCallService implements SystemFlowRuntime {
             : agents.candidate(call.getDataStr("groupCode", ""), tried);
         if (
             candidate == null ||
-            candidate.get("extension") == null ||
-            !"ONLINE".equals(candidate.get("registrationStatus"))
+            candidate.get("extension") == null
         ) return;
         String owner = candidate.get("workNo").toString(),
             extension = candidate.get("extension").toString();
@@ -346,7 +355,8 @@ public class InboundCallService implements SystemFlowRuntime {
                         List.of(
                             FNodeDialDTO.CallParam.builder()
                                 .uuid(call.getAgentChannelUuid())
-                                .dialString("user/" + extension)
+                                .dialString(extension)
+                                .context("default")
                                 .cidNumber(call.getCallerNumber())
                                 .cidName("FCC")
                                 .build()

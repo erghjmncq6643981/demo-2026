@@ -19,17 +19,7 @@
   </update>
   <select id="agent" resultType="map">
     SELECT a.id, a.work_no AS workNo, b.endpoint_type AS endpointType,
-           b.endpoint_value AS extension,
-           CASE WHEN (
-             SELECT r.status FROM fcc_endpoint_registration_event r
-             WHERE r.extension = b.endpoint_value
-             ORDER BY r.occurred_at DESC, r.id DESC LIMIT 1
-           ) = 'REGISTERED' AND (
-             SELECT r.occurred_at FROM fcc_endpoint_registration_event r
-             WHERE r.extension = b.endpoint_value
-             ORDER BY r.occurred_at DESC, r.id DESC LIMIT 1
-           ) &gt;= DATE_SUB(UTC_TIMESTAMP(3), INTERVAL 1 HOUR)
-           THEN 'ONLINE' ELSE 'OFFLINE' END AS registrationStatus
+           b.endpoint_value AS extension
     FROM fcc_agent a
     JOIN fcc_agent_endpoint_binding b
       ON b.agent_id = a.id AND b.status = 'ENABLED' AND b.is_active = 1
@@ -39,6 +29,24 @@
      AND e.status = 'ENABLED'
      AND e.deleted_at IS NULL
     WHERE a.work_no = #{owner} AND a.status = 'ENABLED' AND a.deleted_at IS NULL
+  </select>
+  <select id="agentByEndpoint" resultType="map">
+    SELECT a.id, a.work_no AS workNo, b.endpoint_type AS endpointType,
+           b.endpoint_value AS extension
+    FROM fcc_agent a
+    JOIN fcc_agent_endpoint_binding b
+      ON b.agent_id = a.id AND b.status = 'ENABLED'
+    JOIN fcc_extension e
+      ON e.extension = b.endpoint_value
+     AND e.endpoint_type = b.endpoint_type
+     AND e.status = 'ENABLED'
+     AND e.deleted_at IS NULL
+    WHERE b.endpoint_value = #{extension}
+      AND b.endpoint_type IN ('WEBRTC', 'SIP')
+      AND a.status = 'ENABLED'
+      AND a.deleted_at IS NULL
+    ORDER BY b.is_active DESC, b.id DESC
+    LIMIT 1
   </select>
   <insert id="ensurePresence">
     INSERT IGNORE INTO fcc_agent_presence(agent_id, login_status, work_status, last_state_at)
@@ -68,6 +76,17 @@
       AND a.status = 'ENABLED'
       AND a.deleted_at IS NULL
   </update>
+  <update id="reserveOriginated">
+    UPDATE fcc_agent_presence p
+    JOIN fcc_agent a ON a.id = p.agent_id
+    SET p.login_status = 'ONLINE', p.work_status = 'BUSY', p.active_call_id = #{callId},
+        p.last_state_at = UTC_TIMESTAMP(3), p.version = p.version + 1
+    WHERE a.work_no = #{owner}
+      AND p.work_status IN ('READY', 'REST')
+      AND p.active_call_id IS NULL
+      AND a.status = 'ENABLED'
+      AND a.deleted_at IS NULL
+  </update>
   <update id="release">
     UPDATE fcc_agent_presence p
     JOIN fcc_agent a ON a.id = p.agent_id
@@ -82,14 +101,10 @@
     WHERE a.work_no = #{owner}
   </select>
   <select id="outbound" resultType="map">
-    SELECT n.phone_number AS caller, t.gateway_name AS gateway
+    SELECT n.phone_number AS caller, n.routing_context AS context
     FROM fcc_outbound_number n
-    JOIN fcc_telephony_trunk t ON t.id = n.trunk_id
     WHERE n.status = 'AVAILABLE'
       AND n.deleted_at IS NULL
-      AND t.status = 'ENABLED'
-      AND t.deleted_at IS NULL
-      AND t.direction IN ('BOTH', 'OUTBOUND')
     ORDER BY n.id
     LIMIT 1
   </select>
@@ -111,13 +126,16 @@
     LEFT JOIN fcc_flow_definition f ON f.flow_key = d.route_key
     LEFT JOIN fcc_flow_definition_version v
       ON v.flow_definition_id = f.id AND v.publish_status = 'PUBLISHED'
-    WHERE d.phone_number = #{number} AND d.status = 'ENABLED' AND d.deleted_at IS NULL
+    WHERE d.phone_number = #{number}
+      AND d.routing_context = #{context}
+      AND d.status = 'ENABLED'
+      AND d.deleted_at IS NULL
     ORDER BY v.version_no DESC
     LIMIT 2
   </select>
   <select id="candidate" resultType="map">
     SELECT a.work_no AS workNo, b.endpoint_type AS endpointType,
-           b.endpoint_value AS extension, 'ONLINE' AS registrationStatus
+           b.endpoint_value AS extension
     FROM fcc_agent a
     JOIN fcc_agent_presence p ON p.agent_id = a.id
     JOIN fcc_agent_group_member m ON m.agent_id = a.id
@@ -136,16 +154,6 @@
       AND a.deleted_at IS NULL
       AND a.status = 'ENABLED'
       AND b.endpoint_type IN ('WEBRTC', 'SIP')
-      AND (
-        SELECT r.status FROM fcc_endpoint_registration_event r
-        WHERE r.extension = b.endpoint_value
-        ORDER BY r.occurred_at DESC, r.id DESC LIMIT 1
-      ) = 'REGISTERED'
-      AND (
-        SELECT r.occurred_at FROM fcc_endpoint_registration_event r
-        WHERE r.extension = b.endpoint_value
-        ORDER BY r.occurred_at DESC, r.id DESC LIMIT 1
-      ) &gt;= DATE_SUB(UTC_TIMESTAMP(3), INTERVAL 1 HOUR)
       AND p.login_status = 'ONLINE'
       AND p.work_status = 'READY'
       AND p.active_call_id IS NULL

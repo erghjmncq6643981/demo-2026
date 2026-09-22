@@ -64,7 +64,20 @@ public class ChannelEventHandler implements FccEventHandler {
             .or(() -> sessions.getByChannelUuid(channelUuid))
             .orElse(null);
         if (call == null) {
-            call = createInboundCall(params, nodeId, state, channelUuid, controlId);
+            if (outboundCalls.isAgentOriginatedEntry(params, state)) {
+                call = outboundCalls.createAgentOriginated(
+                    params,
+                    nodeId,
+                    state,
+                    channelUuid,
+                    controlId
+                );
+                if (call == null) {
+                    return;
+                }
+            } else {
+                call = createInboundCall(params, nodeId, state, channelUuid, controlId);
+            }
             if (call == null) return;
         } else {
             refreshCallFacts(call, params, nodeId);
@@ -137,6 +150,7 @@ public class ChannelEventHandler implements FccEventHandler {
         call.putData("ctrlId", effectiveControlId);
         call.putData("callId", call.getCallId());
         call.putData("guestChannelUuid", channelUuid);
+        call.putData("routingContext", text(params, FccEventField.CONTEXT));
         sessions.registerSession(call);
         sessions.bindChannel(channelUuid, effectiveControlId);
         return call;

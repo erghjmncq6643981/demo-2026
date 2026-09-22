@@ -1,6 +1,5 @@
 package com.chandler.fcc.admin.infrastructure.persistence.entity;
 
-import com.baomidou.mybatisplus.annotation.TableLogic;
 import com.baomidou.mybatisplus.annotation.TableName;
 import lombok.*;
 import lombok.experimental.SuperBuilder;
@@ -10,7 +9,7 @@ import java.time.LocalDateTime;
 /**
  * 呼入 DID 引示号持久化实体 (fcc_did_number)
  * <p>
- * 对应 MySQL 中 fcc_did_number 表，记录呼入接入号、关联中继及默认路由关键字。
+ * 对应 MySQL 中 fcc_did_number 表，记录呼入接入号、拨号上下文及默认路由关键字。
  * </p>
  *
  * @author Chandler
@@ -25,9 +24,9 @@ import java.time.LocalDateTime;
 public class DidNumberEntity extends BaseEntity {
 
     /**
-     * 归属中继线路 ID
+     * FreeSWITCH 入局拨号计划上下文
      */
-    private Long trunkId;
+    private String routingContext;
 
     /**
      * 呼入电话号码

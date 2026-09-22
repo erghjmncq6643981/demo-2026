@@ -3,7 +3,7 @@ import apiClient from "./apiClient";
 export interface DidNumberVO {
   id: string;
   phoneNumber: string;
-  trunkId?: string;
+  routingContext: string;
   routeKey?: string;
   status: string;
   createdAt?: string;

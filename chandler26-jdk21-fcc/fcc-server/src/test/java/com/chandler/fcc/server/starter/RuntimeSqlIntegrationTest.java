@@ -121,9 +121,7 @@ class RuntimeSqlIntegrationTest {
         assertEquals(0, bindings.busy("test-agent", "1001"));
         bindings.disableBindings("test-agent", "1001");
         bindings.clearExtensions("test-agent", "1001");
-        bindings.clearAgents("test-agent", "1001");
         assertEquals(1, bindings.bindExtension("test-agent", "1001"));
-        assertEquals(1, bindings.bindAgent("test-agent", "1001"));
         assertEquals(1, bindings.appendBinding(900003, "test-agent", "1001"));
 
         AgentRuntimeMapper runtime = session.getMapper(AgentRuntimeMapper.class);

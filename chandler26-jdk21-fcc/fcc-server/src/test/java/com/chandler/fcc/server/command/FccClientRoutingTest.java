@@ -57,7 +57,8 @@ class FccClientRoutingTest {
                         List.of(
                             FNodeDialDTO.CallParam.builder()
                                 .uuid("channel-a")
-                                .dialString("user/1001")
+                                .dialString("1001")
+                                .context("default")
                                 .build()
                         )
                     )

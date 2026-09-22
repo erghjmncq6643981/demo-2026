@@ -247,6 +247,9 @@ public class CallPersistenceService {
             if (existing.getNodeId() == null && leg.getNodeId() != null) {
                 existing.setNodeId(leg.getNodeId());
             }
+            if (existing.getRoutingContext() == null && leg.getRoutingContext() != null) {
+                existing.setRoutingContext(leg.getRoutingContext());
+            }
             existing.setUpdatedAt(now);
             callLegMapper.updateById(existing);
             return existing;

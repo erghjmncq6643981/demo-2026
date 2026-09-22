@@ -16,11 +16,7 @@
      ON b.agent_id=a.id AND b.status='ENABLED' AND b.is_active=1
    WHERE a.work_no=j.owner_work_no AND a.status='ENABLED' AND a.deleted_at IS NULL
     AND b.endpoint_type IN ('WEBRTC','SIP')
-    AND p.login_status='ONLINE' AND p.work_status='READY' AND p.active_call_id IS NULL
-    AND (SELECT r.status FROM fcc_endpoint_registration_event r
-         WHERE r.extension=b.endpoint_value ORDER BY r.occurred_at DESC,r.id DESC LIMIT 1)='REGISTERED'
-    AND (SELECT r.occurred_at FROM fcc_endpoint_registration_event r
-         WHERE r.extension=b.endpoint_value ORDER BY r.occurred_at DESC,r.id DESC LIMIT 1)&gt;=DATE_SUB(UTC_TIMESTAMP(3),INTERVAL 1 HOUR)))
+    AND p.login_status='ONLINE' AND p.work_status='READY' AND p.active_call_id IS NULL))
   ORDER BY j.scheduled_at,j.id LIMIT 1 FOR UPDATE SKIP LOCKED
  </select>
  <update id="claim">UPDATE fcc_dial_job SET status='RUNNING' WHERE id=#{id} AND status='PENDING'</update>

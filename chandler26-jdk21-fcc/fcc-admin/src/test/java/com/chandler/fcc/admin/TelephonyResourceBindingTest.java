@@ -15,7 +15,6 @@ import com.chandler.fcc.admin.infrastructure.persistence.mapper.DidNumberMapper;
 import com.chandler.fcc.admin.infrastructure.persistence.mapper.FlowDefinitionMapper;
 import com.chandler.fcc.admin.infrastructure.persistence.mapper.OutboundNumberMapper;
 import com.chandler.fcc.admin.infrastructure.persistence.mapper.TelephonyNodeMapper;
-import com.chandler.fcc.admin.infrastructure.persistence.mapper.TelephonyTrunkMapper;
 import com.chandler.fcc.admin.service.TelephonyResourceService;
 import org.mockito.ArgumentCaptor;
 import org.junit.jupiter.api.Test;
@@ -103,7 +102,6 @@ class TelephonyResourceBindingTest {
      */
     private TelephonyResourceService service(DidNumberMapper dids, FlowDefinitionMapper flows) {
         return new TelephonyResourceService(
-            mock(TelephonyTrunkMapper.class),
             dids,
             flows,
             mock(OutboundNumberMapper.class),

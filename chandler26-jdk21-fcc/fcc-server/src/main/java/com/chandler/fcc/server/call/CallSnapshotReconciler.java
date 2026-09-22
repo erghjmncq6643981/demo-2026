@@ -28,6 +28,7 @@ public class CallSnapshotReconciler {
     private static final Set<String> RECOVERABLE_TEMPLATES = Set.of(
         "INBOUND",
         "AGENT_FIRST",
+        "AGENT_ORIGINATED",
         "NOTIFICATION"
     );
 

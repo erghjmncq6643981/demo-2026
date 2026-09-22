@@ -2,7 +2,7 @@ package com.chandler.fcc.admin.model.dto;
 
 import io.swagger.v3.oas.annotations.media.Schema;
 import jakarta.validation.constraints.NotBlank;
-import jakarta.validation.constraints.NotNull;
+import jakarta.validation.constraints.Pattern;
 import lombok.AllArgsConstructor;
 import lombok.Builder;
 import lombok.Data;
@@ -28,9 +28,13 @@ public class OutboundNumberCreateReq implements Serializable {
     @Schema(description = "外呼展示电话号码", example = "02195588")
     private String phoneNumber;
 
-    @NotNull(message = "中继ID不能为空")
-    @Schema(description = "出局中继线路 ID", example = "3001")
-    private Long trunkId;
+    @NotBlank(message = "出局拨号上下文不能为空")
+    @Pattern(
+        regexp = "^[A-Za-z0-9_.-]{1,64}$",
+        message = "出局拨号上下文只能包含字母、数字、点、下划线或连字符"
+    )
+    @Schema(description = "FreeSWITCH 出局拨号计划上下文", example = "mobile")
+    private String routingContext;
 
     @Schema(description = "号码池编码", example = "default")
     @Builder.Default

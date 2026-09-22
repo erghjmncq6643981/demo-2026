@@ -27,7 +27,7 @@ class SystemFlowModelsTest {
      */
     @Test
     void everyModelHasCompleteReachableActions() {
-        for (String name : List.of("INBOUND", "AGENT_FIRST", "NOTIFICATION", "PHONE_BINDING")) {
+        for (String name : List.of("INBOUND", "AGENT_FIRST", "AGENT_ORIGINATED", "NOTIFICATION", "PHONE_BINDING")) {
             var model = SystemFlowModels.get(name);
             model.path("nodes").forEach(node ->
                 assertFalse(node.path("inputs").toString().contains("\"nodeId\""))

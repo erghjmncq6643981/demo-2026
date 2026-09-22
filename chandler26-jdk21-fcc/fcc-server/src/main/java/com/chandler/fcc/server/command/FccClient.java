@@ -306,7 +306,7 @@ public class FccClient {
                 CallCommandEntity.builder()
                     .commandId(commandId)
                     .idempotencyKey(commandId)
-                     .assignedNodeId(result == null ? null : result.getNodeId())
+                    .assignedNodeId(result == null ? null : result.getNodeId())
                     .methodName(method.getWireName())
                     .requestPayload(new String(requestPayload, StandardCharsets.UTF_8))
                     .responsePayload(responsePayload)

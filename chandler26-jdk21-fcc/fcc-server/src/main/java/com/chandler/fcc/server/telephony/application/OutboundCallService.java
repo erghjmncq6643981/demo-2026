@@ -11,6 +11,7 @@ import com.chandler.fcc.common.enums.FlowActionType;
 import com.chandler.fcc.common.enums.FlowModelType;
 import com.chandler.fcc.common.protocol.ChannelEventState;
 import com.chandler.fcc.common.protocol.FccEventField;
+import com.chandler.fcc.common.protocol.FccEventParameter;
 import com.chandler.fcc.common.util.IdUtil;
 import com.chandler.fcc.server.agent.infrastructure.AgentRuntimeMapper;
 import com.chandler.fcc.server.call.CallSessionManager;
@@ -37,7 +38,7 @@ import org.springframework.transaction.support.TransactionTemplate;
 import org.springframework.web.server.ResponseStatusException;
 
 /**
- * 执行坐席先接听外呼和通知外呼两个固定流程。
+ * 执行系统先呼坐席、坐席终端主动呼出和通知外呼固定流程。
  *
  * <p>本服务先持久化业务意图和坐席占用，再通过 Sidecar 发起呼叫；通道事件按稳定的
  * Call、Leg 和控制标识推进流程，不把 FreeSWITCH Channel UUID 当作业务通话标识。</p>
@@ -47,6 +48,7 @@ import org.springframework.web.server.ResponseStatusException;
 public class OutboundCallService implements SystemFlowRuntime {
 
     private static final String TEMPLATE_AGENT_FIRST = "AGENT_FIRST";
+    private static final String TEMPLATE_AGENT_ORIGINATED = "AGENT_ORIGINATED";
     private static final String TEMPLATE_NOTIFICATION = "NOTIFICATION";
     private static final String DATA_TERMINAL = "terminal";
 
@@ -65,6 +67,13 @@ public class OutboundCallService implements SystemFlowRuntime {
         FlowActionType.PERSIST_CONFIRMATION_AND_HANGUP,
         FlowActionType.FINALIZE_NOTIFICATION
     );
+    private static final Set<FlowActionType> AGENT_ORIGINATED_ACTIONS = Set.of(
+        FlowActionType.ACCEPT_AGENT_ORIGINATED_CALL,
+        FlowActionType.DIAL_CUSTOMER,
+        FlowActionType.CHANNEL_BRIDGE,
+        FlowActionType.WAIT_FOR_HANGUP,
+        FlowActionType.FINALIZE_OUTBOUND
+    );
 
     private final AgentIdentityService identity;
     private final AgentRuntimeMapper agents;
@@ -82,13 +91,13 @@ public class OutboundCallService implements SystemFlowRuntime {
     private String notificationFile;
 
     /**
-     * 返回本服务负责的两个外呼模板。
+     * 返回本服务负责的外呼模板。
      *
      * @return 外呼模板集合
      */
     @Override
     public Set<String> templates() {
-        return Set.of(TEMPLATE_AGENT_FIRST, TEMPLATE_NOTIFICATION);
+        return Set.of(TEMPLATE_AGENT_FIRST, TEMPLATE_AGENT_ORIGINATED, TEMPLATE_NOTIFICATION);
     }
 
     /**
@@ -101,6 +110,7 @@ public class OutboundCallService implements SystemFlowRuntime {
     public Set<FlowActionType> supportedActions(String template) {
         return switch (template) {
             case TEMPLATE_AGENT_FIRST -> AGENT_FIRST_ACTIONS;
+            case TEMPLATE_AGENT_ORIGINATED -> AGENT_ORIGINATED_ACTIONS;
             case TEMPLATE_NOTIFICATION -> NOTIFICATION_ACTIONS;
             default -> Set.of();
         };
@@ -123,7 +133,8 @@ public class OutboundCallService implements SystemFlowRuntime {
         var data = new HashMap<String, Object>();
         data.put("runtimeTemplate", TEMPLATE_NOTIFICATION);
         data.put("dialJobId", attemptId);
-        data.put("guestDialString", route.dialString());
+        data.put("guestNumber", route.number());
+        data.put("guestContext", route.context());
         data.put("primaryWorkNo", owner);
 
         CallInfoBO call = CallInfoBO.builder()
@@ -216,10 +227,9 @@ public class OutboundCallService implements SystemFlowRuntime {
         if (
             agent == null ||
             agent.get("extension") == null ||
-            !"ONLINE".equals(agent.get("registrationStatus")) ||
             !agent.get("extension").toString().matches("[0-9]{2,20}")
         ) {
-            throw new ResponseStatusException(HttpStatus.CONFLICT, "坐席当前接听终端未绑定、未启用或未注册");
+            throw new ResponseStatusException(HttpStatus.CONFLICT, "坐席当前接听终端未绑定或未启用");
         }
 
         var route = routes.resolve(number);
@@ -228,7 +238,8 @@ public class OutboundCallService implements SystemFlowRuntime {
         var data = new HashMap<String, Object>();
         data.put("runtimeTemplate", TEMPLATE_AGENT_FIRST);
         data.put("primaryWorkNo", owner);
-        data.put("guestDialString", route.dialString());
+        data.put("guestNumber", route.number());
+        data.put("guestContext", route.context());
         data.put("agentExt", extension);
         data.put("agentEndpointType", String.valueOf(agent.get("endpointType")));
         if (taskId != null) {
@@ -281,6 +292,139 @@ public class OutboundCallService implements SystemFlowRuntime {
             "status",
             "ACCEPTED"
         );
+    }
+
+    /**
+     * 判断首次话道事件是否来自默认拨号上下文中的已认证坐席终端。
+     *
+     * <p>该判断只负责区分坐席主动外呼与普通运营商呼入。匹配后即由外呼服务负责，
+     * 即使分机未绑定坐席也不能回落成客户呼入。</p>
+     *
+     * @param params 标准化通道事件参数
+     * @param state 事件话道状态
+     * @return 是否为坐席终端主动外呼入口
+     */
+    public boolean isAgentOriginatedEntry(JsonNode params, ChannelEventState state) {
+        if (
+            state != ChannelEventState.START ||
+            !"inbound".equalsIgnoreCase(
+                params.path(FccEventField.DIRECTION.getWireName()).asText()
+            ) ||
+            !"default".equalsIgnoreCase(
+                params.path(FccEventField.CONTEXT.getWireName()).asText()
+            )
+        ) {
+            return false;
+        }
+        String number = params.path(FccEventField.DESTINATION_NUMBER.getWireName()).asText();
+        String extension = params
+            .path(FccEventField.PARAMETERS.getWireName())
+            .path(FccEventParameter.AUTHENTICATED_EXTENSION.getWireName())
+            .asText();
+        return !number.isBlank() && !"0000".equals(number) && !extension.isBlank();
+    }
+
+    /**
+     * 将坐席终端主动拨入形成的话道接管为外呼坐席 Leg。
+     *
+     * <p>该入口以 Sidecar 上报的已认证终端为身份依据，不查询注册在线投影。坐席 Leg
+     * 进入 READY 后才会呼叫客户，因此与“系统先呼叫坐席”的模板保持两个独立入口。</p>
+     *
+     * @param params 标准化通道事件参数
+     * @param nodeId 事件实际来源节点
+     * @param state 事件话道状态
+     * @param channelUuid 坐席已建立的话道标识
+     * @param controlId 事件携带的控制标识，可为空
+     * @return 已接管通话；事件不属于坐席主动外呼时返回空
+     * @throws ResponseStatusException 坐席被其他通话占用或出局路由不可用
+     */
+    public CallInfoBO createAgentOriginated(
+        JsonNode params,
+        String nodeId,
+        ChannelEventState state,
+        String channelUuid,
+        String controlId
+    ) {
+        if (!isAgentOriginatedEntry(params, state)) {
+            return null;
+        }
+        String number = params.path(FccEventField.DESTINATION_NUMBER.getWireName()).asText();
+        String extension = params
+            .path(FccEventField.PARAMETERS.getWireName())
+            .path(FccEventParameter.AUTHENTICATED_EXTENSION.getWireName())
+            .asText();
+        Map<String, Object> agent = agents.agentByEndpoint(extension);
+        if (agent == null || agent.get("workNo") == null) {
+            client.hangup(controlId, channelUuid, "CALL_REJECTED");
+            return null;
+        }
+
+        OutboundRoutePolicy.Route route;
+        try {
+            route = routes.resolve(number);
+        } catch (ResponseStatusException | IllegalArgumentException rejection) {
+            client.hangup(controlId, channelUuid, "UNALLOCATED_NUMBER");
+            return null;
+        }
+        String owner = agent.get("workNo").toString();
+        var data = new HashMap<String, Object>();
+        data.put("runtimeTemplate", TEMPLATE_AGENT_ORIGINATED);
+        data.put("primaryWorkNo", owner);
+        data.put("agentExt", extension);
+        data.put("agentEndpointType", String.valueOf(agent.get("endpointType")));
+        data.put("agentChannelUuid", channelUuid);
+        data.put("guestNumber", route.number());
+        data.put("guestContext", route.context());
+        data.put("routingContext", params.path(FccEventField.CONTEXT.getWireName()).asText("default"));
+
+        CallInfoBO call = CallInfoBO.builder()
+            .nodeId(nodeId)
+            .callId(IdUtil.getCallId())
+            .ctrlId(
+                controlId == null || controlId.isBlank()
+                    ? IdUtil.getCtrlId("agent-outbound")
+                    : controlId
+            )
+            .modelKey(FlowModelType.OUTBOUND_TWO_WAY_CALL.name())
+            .direction(DirectionType.OUTBOUND)
+            .stageState(CallStageState.CALLING)
+            .callerNumber(route.caller())
+            .destinationNumber(route.number())
+            .agentWorkNo(owner)
+            .agentExt(extension)
+            .agentChannelUuid(channelUuid)
+            .guestChannelUuid(IdUtil.getUuid())
+            .data(data)
+            .build();
+        call.putData("guestChannelUuid", call.getGuestChannelUuid());
+
+        try {
+            flowActions.executeInternal(
+                call,
+                FlowActionType.ACCEPT_AGENT_ORIGINATED_CALL,
+                () -> {
+                    transactions.executeWithoutResult(transaction -> {
+                        agents.ensurePresence(owner);
+                        if (agents.reserveOriginated(owner, call.getCallId()) != 1) {
+                            throw new ResponseStatusException(
+                                HttpStatus.CONFLICT,
+                                "坐席已被其他通话占用"
+                            );
+                        }
+                        persistence.saveOrUpdateSession(call);
+                    });
+                    return true;
+                }
+            );
+        } catch (ResponseStatusException rejection) {
+            client.hangup(call.getCtrlId(), channelUuid, "USER_BUSY");
+            return null;
+        }
+        sessions.registerSession(call);
+        sessions.bindChannel(channelUuid, call.getCtrlId());
+        sessions.bindChannel(call.getGuestChannelUuid(), call.getCtrlId());
+        screenPop.pushForAgentLeg(call, owner, extension, 30);
+        return call;
     }
 
     /**
@@ -348,22 +492,29 @@ public class OutboundCallService implements SystemFlowRuntime {
      * @param cause 挂机原因，可为空
      */
     private void persistLeg(CallInfoBO call, String channelUuid, String state, String cause) {
+        boolean agentLeg = channelUuid.equals(call.getAgentChannelUuid());
+        boolean agentOriginated = TEMPLATE_AGENT_ORIGINATED.equals(
+            call.getDataStr("runtimeTemplate", "")
+        );
         persistence.saveOrUpdateLeg(
             CallLegEntity.builder()
                 .callId(CallPersistenceService.parseNumericId(call.getCallId()))
                 .channelUuid(channelUuid)
                 .nodeId(call.getNodeId())
-                .roleType(
-                    channelUuid.equals(call.getAgentChannelUuid()) ? "AGENT" : "CUSTOMER"
-                )
-                .direction("OUTBOUND")
+                .roleType(agentLeg ? "AGENT" : "CUSTOMER")
+                .direction(agentLeg && agentOriginated ? "INBOUND" : "OUTBOUND")
                 .endpointType(
-                    channelUuid.equals(call.getAgentChannelUuid())
+                    agentLeg
                         ? call.getDataStr("agentEndpointType", null)
-                        : "TRUNK"
+                        : "CARRIER"
                 )
-                .endpointId(
-                    channelUuid.equals(call.getAgentChannelUuid()) ? call.getAgentExt() : null
+                .endpointId(agentLeg ? call.getAgentExt() : null)
+                .callerNumber(agentLeg && agentOriginated ? call.getAgentExt() : call.getCallerNumber())
+                .destinationNumber(call.getDestinationNumber())
+                .routingContext(
+                    agentLeg
+                        ? call.getDataStr("routingContext", "default")
+                        : call.getDataStr("guestContext", null)
                 )
                 .state(state)
                 .hangupCause(cause)
@@ -483,7 +634,7 @@ public class OutboundCallService implements SystemFlowRuntime {
         String destroyedChannelUuid,
         JsonNode params
     ) {
-        FlowActionType action = TEMPLATE_AGENT_FIRST.equals(template)
+        FlowActionType action = isAgentCall(template)
             ? FlowActionType.FINALIZE_OUTBOUND
             : FlowActionType.FINALIZE_NOTIFICATION;
         flowActions.executeInternal(
@@ -522,7 +673,7 @@ public class OutboundCallService implements SystemFlowRuntime {
         try {
             transactions.executeWithoutResult(status -> {
                 persistence.saveOrUpdateSession(call);
-                if (TEMPLATE_AGENT_FIRST.equals(template)) {
+                if (isAgentCall(template)) {
                     agents.release(call.getAgentWorkNo(), call.getCallId());
                 }
             });
@@ -538,7 +689,7 @@ public class OutboundCallService implements SystemFlowRuntime {
         if (peerUuid != null) {
             client.hangup(call.getCtrlId(), peerUuid, "NORMAL_CLEARING");
         }
-        if (TEMPLATE_AGENT_FIRST.equals(template)) {
+        if (isAgentCall(template)) {
             websocket.pushCallHangup(
                 call.getAgentWorkNo(),
                 call.getCallId(),
@@ -559,8 +710,9 @@ public class OutboundCallService implements SystemFlowRuntime {
             ? call.getAgentChannelUuid()
             : call.getGuestChannelUuid();
         String destination = agentSide
-            ? "user/" + call.getAgentExt()
-            : call.getDataStr("guestDialString", "");
+            ? call.getAgentExt()
+            : call.getDataStr("guestNumber", "");
+        String context = agentSide ? "default" : call.getDataStr("guestContext", "");
         FNodeDialDTO command = FNodeDialDTO.builder()
             .ctrlUuid(call.getCtrlId())
             .uuid(channelUuid)
@@ -572,6 +724,7 @@ public class OutboundCallService implements SystemFlowRuntime {
                             FNodeDialDTO.CallParam.builder()
                                 .uuid(channelUuid)
                                 .dialString(destination)
+                                .context(context)
                                 .cidNumber(call.getCallerNumber())
                                 .cidName("FCC")
                                 .build()
@@ -586,5 +739,15 @@ public class OutboundCallService implements SystemFlowRuntime {
             command,
             "dial-" + channelUuid
         );
+    }
+
+    /**
+     * 判断模板是否包含需要占用和释放坐席的双向人工外呼。
+     *
+     * @param template 固定运行模板代码
+     * @return 两类人工外呼返回 {@code true}
+     */
+    private boolean isAgentCall(String template) {
+        return TEMPLATE_AGENT_FIRST.equals(template) || TEMPLATE_AGENT_ORIGINATED.equals(template);
     }
 }

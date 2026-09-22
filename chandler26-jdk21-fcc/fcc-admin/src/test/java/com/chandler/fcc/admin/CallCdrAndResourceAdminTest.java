@@ -60,32 +60,18 @@ public class CallCdrAndResourceAdminTest {
   private AdminCallRecordingMapper recordingMapper;
 
   /**
-   * 测试通信中继、DID引示号与外呼号池维护
+   * 测试拨号上下文、DID引示号与外呼号池维护
    */
   @Test
-  @DisplayName("测试中继网关、DID呼入引示号与外呼号池录入与查询")
+  @DisplayName("测试拨号上下文、DID呼入引示号与外呼号池录入与查询")
   void testResourceManagement() {
-    // 1. 中继线路
-    Long trunkId = resourceService.createTrunk(
-      TrunkCreateReq.builder()
-        .trunkCode("TRUNK_TEST_CUCC")
-        .trunkName("中国联通测试中继")
-        .carrierCode("CUCC")
-        .gatewayName("gw_test_cucc")
-        .direction("BOTH")
-        .maxConcurrent(50)
-        .build()
-    );
-    assertNotNull(trunkId);
+    String routingContext = "telecom";
 
-    List<TrunkVO> trunks = resourceService.listTrunks();
-    assertTrue(trunks.stream().anyMatch(t -> t.getId().equals(trunkId)));
-
-    // 2. DID 号码
+    // 1. DID 号码
     Long didId = resourceService.createDidNumber(
       DidNumberCreateReq.builder()
         .phoneNumber("01099998888")
-        .trunkId(trunkId)
+        .routingContext(routingContext)
         .routeKey("IVR_HOTLINE")
         .build()
     );
@@ -96,11 +82,11 @@ public class CallCdrAndResourceAdminTest {
       dids.stream().anyMatch(d -> d.getPhoneNumber().equals("01099998888"))
     );
 
-    // 3. 外呼号码池
+    // 2. 外呼号码池
     Long outId = resourceService.createOutboundNumber(
       OutboundNumberCreateReq.builder()
         .phoneNumber("02195588001")
-        .trunkId(trunkId)
+        .routingContext(routingContext)
         .poolCode("vip")
         .maxConcurrent(3)
         .build()
@@ -226,6 +212,7 @@ public class CallCdrAndResourceAdminTest {
       .callerNumber("13800138999")
       .destinationNumber("01088889999")
       .endpointType("SIP")
+      .routingContext("telecom")
       .state("DESTROY")
       .createdTime(now.minusSeconds(60))
       .ringDurationMs(3200L)
@@ -287,7 +274,8 @@ public class CallCdrAndResourceAdminTest {
       assertNotNull(detail);
       assertFalse(detail.getLegs().isEmpty());
       assertEquals("CALLER", detail.getLegs().getFirst().getLegType());
-      assertEquals("PCMA", detail.getLegs().getFirst().getReadCodec());
+      assertEquals("telecom", detail.getLegs().getFirst().getRoutingContext());
+      assertNull(detail.getLegs().getFirst().getReadCodec());
     }
   }
 }

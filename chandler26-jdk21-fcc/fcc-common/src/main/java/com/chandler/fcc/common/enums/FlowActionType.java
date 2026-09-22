@@ -29,6 +29,7 @@ public enum FlowActionType {
     WAIT_FOR_HANGUP("等待通话挂机事件", "call.wait-for-hangup"),
     FINALIZE_INBOUND("结算呼入并按需生成回拨", "inbound.finalize"),
     VALIDATE_ROUTE_AND_RESERVE_AGENT("校验外呼路由并预占坐席", "outbound.validate-and-reserve"),
+    ACCEPT_AGENT_ORIGINATED_CALL("接管坐席终端主动外呼话道", "outbound.accept-agent-originated"),
     DIAL_AGENT("呼叫坐席话机", FNodeMethod.DIAL),
     DIAL_CUSTOMER("呼叫客户号码", FNodeMethod.DIAL),
     FINALIZE_OUTBOUND("结算双向外呼", "outbound.finalize"),

@@ -21,13 +21,16 @@ class RuntimeDeliveryTest {
   assertEquals("+8613800000000",PhoneNumber.normalize("+86 (138) 0000-0000"));
   for(String value:List.of("user/1001","1001&park()","${system(x)}","1\n2",""))assertThrows(IllegalArgumentException.class,()->PhoneNumber.normalize(value));
  }
- /** 外部号码没有中继则拒绝，不再硬编码 external。 */
+ /** 外部号码没有出局 context 则拒绝，运行面不拼接 gateway 拨号串。 */
  @Test void externalRouteRequiresRealConfiguration(){
   var mapper=mock(AgentRuntimeMapper.class);var policy=new OutboundRoutePolicy(mapper);
   assertThrows(ResponseStatusException.class,()->policy.resolve("13800000000"));
-  when(mapper.outbound()).thenReturn(Map.of("gateway","carrier-a","caller","4000000000"));
-  assertEquals("sofia/gateway/carrier-a/13800000000",policy.resolve("13800000000").dialString());
-  when(mapper.outbound()).thenReturn(Map.of("gateway","bad/route","caller","4000000000"));
+  when(mapper.outbound()).thenReturn(Map.of("context","mobile","caller","4000000000"));
+  var route=policy.resolve("13800000000");
+  assertEquals("13800000000",route.number());
+  assertEquals("mobile",route.context());
+  assertEquals("4000000000",route.caller());
+  when(mapper.outbound()).thenReturn(Map.of("context","bad/route","caller","4000000000"));
   assertThrows(ResponseStatusException.class,()->policy.resolve("13800000000"));
  }
  /** 所有客户查询使用认证坐席；歧义匹配不选第一个。 */

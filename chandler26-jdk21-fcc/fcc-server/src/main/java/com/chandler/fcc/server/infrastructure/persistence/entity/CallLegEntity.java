@@ -55,7 +55,7 @@ public class CallLegEntity extends BaseEntity {
     private String direction;
 
     /**
-     * 终端接入类型 (SIP, WEBRTC, TRUNK)
+     * 终端接入类型 (SIP, WEBRTC, CARRIER)
      */
     private String endpointType;
 
@@ -75,14 +75,9 @@ public class CallLegEntity extends BaseEntity {
     private String destinationNumber;
 
     /**
-     * 关联中继网关 ID
+     * 建立当前话道时使用的 FreeSWITCH 拨号计划上下文
      */
-    private Long trunkId;
-
-    /**
-     * 关联网关名称
-     */
-    private String gatewayName;
+    private String routingContext;
 
     /**
      * 话道状态 (START, RINGING, READY, BRIDGE, DESTROY)
