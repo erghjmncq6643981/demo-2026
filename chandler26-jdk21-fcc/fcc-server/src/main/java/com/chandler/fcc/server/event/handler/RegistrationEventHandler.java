@@ -3,8 +3,14 @@ package com.chandler.fcc.server.event.handler;
 import com.chandler.fcc.common.dto.event.EventRegistrationDTO;
 import com.chandler.fcc.common.protocol.FccEventMethod;
 import com.chandler.fcc.common.protocol.FccEventField;
+import com.chandler.fcc.common.util.IdUtil;
+import com.chandler.fcc.server.infrastructure.persistence.entity.EndpointRegistrationEventEntity;
+import com.chandler.fcc.server.infrastructure.persistence.mapper.EndpointRegistrationEventMapper;
 import com.fasterxml.jackson.databind.JsonNode;
 import java.time.Duration;
+import java.time.Instant;
+import java.time.LocalDateTime;
+import java.time.ZoneOffset;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.data.redis.core.StringRedisTemplate;
@@ -22,6 +28,7 @@ public class RegistrationEventHandler implements FccEventHandler {
     private static final Duration PRESENCE_LEASE = Duration.ofHours(1);
 
     private final StringRedisTemplate redis;
+    private final EndpointRegistrationEventMapper registrationMapper;
 
     /**
      * 判断是否为 SIP 注册状态事件。
@@ -64,6 +71,25 @@ public class RegistrationEventHandler implements FccEventHandler {
                     .asLong(System.currentTimeMillis())
             )
             .build();
+        LocalDateTime occurredAt = LocalDateTime.ofInstant(
+            Instant.ofEpochMilli(registration.getTimestamp()),
+            ZoneOffset.UTC
+        );
+        registrationMapper.insert(
+            EndpointRegistrationEventEntity.builder()
+                .id(IdUtil.nextId())
+                .extension(extension)
+                .protocol("SIP")
+                .status(status.toUpperCase())
+                .contact(registration.getContact())
+                .userAgent(registration.getUserAgent())
+                .networkIp(registration.getNetworkIp())
+                .networkPort(registration.getPort())
+                .nodeId(registration.getNodeId())
+                .occurredAt(occurredAt)
+                .createdAt(LocalDateTime.now(ZoneOffset.UTC))
+                .build()
+        );
         log.info(
             "[SIP 注册] nodeId={} extension={} status={} networkIp={}",
             registration.getNodeId(),

@@ -53,9 +53,9 @@ public class CallCommandEntity implements Serializable {
     private Long legId;
 
     /**
-     * 目标软交换节点标识符 (target_node_id)
+     * Sidecar 接受后返回的实际执行节点 (assigned_node_id)
      */
-    private String targetNodeId;
+    private String assignedNodeId;
 
     /**
      * 调用的 RPC 方法名 (如 FNode.Dial, FNode.Bridge, FNode.Play)

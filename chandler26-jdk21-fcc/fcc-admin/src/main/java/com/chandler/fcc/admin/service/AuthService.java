@@ -163,7 +163,7 @@ public class AuthService {
         AuthRoleEnum role = AgentRoleEnum.toAuthRole(agent.getRoleCode());
         String loginId = agent.getWorkNo();
 
-        EndpointChoice endpoint = resolveEndpoint(agent);
+        AgentEndpointBindingEntity endpoint = resolveEndpoint(agent);
 
         StpUtil.login(loginId);
         SaSession session = StpUtil.getSession();
@@ -173,8 +173,8 @@ public class AuthService {
         session.set("role", role.getCode());
         session.set("roles", role.getRoles());
         session.set("permissions", role.getPermissions());
-        session.set("extension", endpoint.extension());
-        session.set("endpointType", endpoint.endpointType());
+        session.set("extension", endpoint.getEndpointValue());
+        session.set("endpointType", endpoint.getEndpointType());
 
         agentMapper.updateById(AgentEntity.builder()
                 .id(agent.getId())
@@ -183,7 +183,7 @@ public class AuthService {
                 .build());
 
         log.info("🎧 [Sa-Token] 坐席 {} ({}) 登录成功, role={}, extension={}, endpointType={}",
-                loginId, resolveAgentDisplayName(agent), role.getCode(), endpoint.extension(), endpoint.endpointType());
+                loginId, resolveAgentDisplayName(agent), role.getCode(), endpoint.getEndpointValue(), endpoint.getEndpointType());
 
         return LoginRespVO.builder()
                 .tokenValue(StpUtil.getTokenValue())
@@ -193,8 +193,8 @@ public class AuthService {
                 .role(role.getCode())
                 .permissions(role.getPermissions())
                 .accountType(SUBJECT_AGENT)
-                .extension(endpoint.extension())
-                .endpointType(endpoint.endpointType())
+                .extension(endpoint.getEndpointValue())
+                .endpointType(endpoint.getEndpointType())
                 .build();
     }
 
@@ -364,39 +364,24 @@ public class AuthService {
      * </p>
      *
      * @param agent 坐席实体
-     * @return 分机号与终端类型
+     * @return 唯一当前终端绑定
+     * @throws IllegalStateException 当前终端事实缺失或不唯一
      */
-    private EndpointChoice resolveEndpoint(AgentEntity agent) {
+    private AgentEndpointBindingEntity resolveEndpoint(AgentEntity agent) {
         List<AgentEndpointBindingEntity> bindings = bindingMapper.selectList(
                 new LambdaQueryWrapper<AgentEndpointBindingEntity>()
                         .eq(AgentEndpointBindingEntity::getAgentId, agent.getId())
                         .eq(AgentEndpointBindingEntity::getStatus, STATUS_ENABLED)
-                        .orderByAsc(AgentEndpointBindingEntity::getPriority));
+                        .eq(AgentEndpointBindingEntity::getActive, true));
 
-        if (bindings.isEmpty()) {
-            // 未配置显式绑定时，以坐席工号作为默认 WebRTC 软话机分机
-            return new EndpointChoice(agent.getWorkNo(), "WEBRTC");
+        if (bindings.size() != 1) {
+            throw new IllegalStateException("坐席当前接听终端缺失或不唯一: workNo=" + agent.getWorkNo());
         }
-
         AgentEndpointBindingEntity binding = bindings.getFirst();
-        String endpointType = (binding.getEndpointType() != null && !binding.getEndpointType().isBlank())
-                ? binding.getEndpointType().toUpperCase()
-                : "WEBRTC";
-
-        switch (endpointType) {
-            case "SIP" -> {
-                String extension = firstNonBlank(agent.getCurrentExtension(), binding.getEndpointValue(), agent.getWorkNo());
-                return new EndpointChoice(extension, "SIP");
-            }
-            case "MOBILE" -> {
-                String mobile = firstNonBlank(binding.getEndpointValue(), agent.getPhoneNumber());
-                return new EndpointChoice(mobile, "MOBILE");
-            }
-            default -> {
-                String extension = firstNonBlank(binding.getEndpointValue(), agent.getCurrentExtension(), agent.getWorkNo());
-                return new EndpointChoice(extension, "WEBRTC");
-            }
+        if (binding.getEndpointType() == null || binding.getEndpointValue() == null) {
+            throw new IllegalStateException("坐席当前接听终端数据不完整: workNo=" + agent.getWorkNo());
         }
+        return binding;
     }
 
     /**
@@ -410,30 +395,10 @@ public class AuthService {
     }
 
     /**
-     * 返回第一个非空白取值
-     */
-    private String firstNonBlank(String... candidates) {
-        for (String candidate : candidates) {
-            if (candidate != null && !candidate.isBlank()) {
-                return candidate;
-            }
-        }
-        return null;
-    }
-
-    /**
      * 归一化状态取值
      */
     private String normalizeStatus(String status) {
         return status == null || status.isBlank() ? STATUS_ENABLED : status.trim().toUpperCase();
     }
 
-    /**
-     * 坐席接听终端选择结果
-     *
-     * @param extension    分机号或随行手机号
-     * @param endpointType 终端类型 (WEBRTC / SIP / MOBILE)
-     */
-    private record EndpointChoice(String extension, String endpointType) {
-    }
 }

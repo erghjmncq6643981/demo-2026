@@ -56,6 +56,9 @@ public class AgentVO implements Serializable {
     @Schema(description = "当前绑定的分机号", example = "1001")
     private String currentExtension;
 
+    @Schema(description = "当前接听终端类型", example = "WEBRTC")
+    private String boundEndpointType;
+
     @Schema(description = "扩展元数据 (JSON)", example = "{}")
     private String metadata;
 

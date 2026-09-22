@@ -18,9 +18,27 @@
       )
   </update>
   <select id="agent" resultType="map">
-    SELECT id, work_no AS workNo, current_extension AS extension
-    FROM fcc_agent
-    WHERE work_no = #{owner} AND status = 'ENABLED' AND deleted_at IS NULL
+    SELECT a.id, a.work_no AS workNo, b.endpoint_type AS endpointType,
+           b.endpoint_value AS extension,
+           CASE WHEN (
+             SELECT r.status FROM fcc_endpoint_registration_event r
+             WHERE r.extension = b.endpoint_value
+             ORDER BY r.occurred_at DESC, r.id DESC LIMIT 1
+           ) = 'REGISTERED' AND (
+             SELECT r.occurred_at FROM fcc_endpoint_registration_event r
+             WHERE r.extension = b.endpoint_value
+             ORDER BY r.occurred_at DESC, r.id DESC LIMIT 1
+           ) &gt;= DATE_SUB(UTC_TIMESTAMP(3), INTERVAL 1 HOUR)
+           THEN 'ONLINE' ELSE 'OFFLINE' END AS registrationStatus
+    FROM fcc_agent a
+    JOIN fcc_agent_endpoint_binding b
+      ON b.agent_id = a.id AND b.status = 'ENABLED' AND b.is_active = 1
+    JOIN fcc_extension e
+      ON e.extension = b.endpoint_value
+     AND e.endpoint_type = b.endpoint_type
+     AND e.status = 'ENABLED'
+     AND e.deleted_at IS NULL
+    WHERE a.work_no = #{owner} AND a.status = 'ENABLED' AND a.deleted_at IS NULL
   </select>
   <insert id="ensurePresence">
     INSERT IGNORE INTO fcc_agent_presence(agent_id, login_status, work_status, last_state_at)
@@ -98,18 +116,36 @@
     LIMIT 2
   </select>
   <select id="candidate" resultType="map">
-    SELECT a.work_no AS workNo, a.current_extension AS extension
+    SELECT a.work_no AS workNo, b.endpoint_type AS endpointType,
+           b.endpoint_value AS extension, 'ONLINE' AS registrationStatus
     FROM fcc_agent a
     JOIN fcc_agent_presence p ON p.agent_id = a.id
     JOIN fcc_agent_group_member m ON m.agent_id = a.id
     JOIN fcc_agent_group g ON g.id = m.group_id
+    JOIN fcc_agent_endpoint_binding b
+      ON b.agent_id = a.id AND b.status = 'ENABLED' AND b.is_active = 1
+    JOIN fcc_extension e
+      ON e.extension = b.endpoint_value
+     AND e.endpoint_type = b.endpoint_type
+     AND e.status = 'ENABLED'
+     AND e.deleted_at IS NULL
     WHERE g.group_code = #{group}
       AND g.status = 'ENABLED'
       AND g.deleted_at IS NULL
       AND m.deleted_at IS NULL
       AND a.deleted_at IS NULL
       AND a.status = 'ENABLED'
-      AND a.current_extension IS NOT NULL
+      AND b.endpoint_type IN ('WEBRTC', 'SIP')
+      AND (
+        SELECT r.status FROM fcc_endpoint_registration_event r
+        WHERE r.extension = b.endpoint_value
+        ORDER BY r.occurred_at DESC, r.id DESC LIMIT 1
+      ) = 'REGISTERED'
+      AND (
+        SELECT r.occurred_at FROM fcc_endpoint_registration_event r
+        WHERE r.extension = b.endpoint_value
+        ORDER BY r.occurred_at DESC, r.id DESC LIMIT 1
+      ) &gt;= DATE_SUB(UTC_TIMESTAMP(3), INTERVAL 1 HOUR)
       AND p.login_status = 'ONLINE'
       AND p.work_status = 'READY'
       AND p.active_call_id IS NULL

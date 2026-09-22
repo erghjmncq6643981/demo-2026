@@ -30,8 +30,6 @@ import jakarta.annotation.PostConstruct;
 import com.chandler.fcc.admin.model.vo.AgentGroupMemberVO;
 
 import com.chandler.fcc.admin.client.SidecarAdminClient;
-import com.chandler.fcc.admin.model.vo.AgentEndpointsVO;
-import cn.dev33.satoken.stp.StpUtil;
 
 /**
  * 坐席人员、技能组、终端绑定与替班全生命周期业务服务
@@ -153,30 +151,18 @@ public class AgentService {
             extensionMapper.updateById(existingExtension);
         }
 
-        // 初始化坐席接听终端绑定 (WebRTC 软话机优先；SIP 工位话机与随行手机按需登记)
+        // 新坐席以 WebRTC 作为唯一当前接听终端；物理 SIP 必须由话机拨 0000 绑定。
         bindingMapper.insert(AgentEndpointBindingEntity.builder()
                 .id(IdUtil.nextId())
                 .agentId(agentId)
                 .endpointType("WEBRTC")
                 .endpointValue(workNo)
                 .priority(0)
+                .active(true)
                 .status("ENABLED")
                 .validFrom(now)
                 .createdAt(now)
                 .build());
-
-        if (req.getSipExtension() != null && !req.getSipExtension().isBlank()) {
-            bindingMapper.insert(AgentEndpointBindingEntity.builder()
-                    .id(IdUtil.nextId())
-                    .agentId(agentId)
-                    .endpointType("SIP")
-                    .endpointValue(req.getSipExtension().trim())
-                    .priority(1)
-                    .status("ENABLED")
-                    .validFrom(now)
-                    .createdAt(now)
-                    .build());
-        }
 
         if (req.getPhoneNumber() != null && !req.getPhoneNumber().isBlank()) {
             bindingMapper.insert(AgentEndpointBindingEntity.builder()
@@ -566,7 +552,6 @@ public class AgentService {
                 .workNo(req.getWorkNo().trim())
                 .agentName(req.getAgentName().trim())
                 .phoneNumber(req.getPhoneNumber())
-                .sipExtension(req.getSipExtension())
                 .roleCode(AgentRoleEnum.normalizeCode(req.getRoleCode()))
                 .password(req.getPassword())
                 .build();
@@ -625,35 +610,6 @@ public class AgentService {
     }
 
     /**
-     * 绑定坐席分机/终端话机
-     *
-     * @param req 绑定入参
-     * @return 绑定记录主键 ID
-     */
-    @Transactional(rollbackFor = Exception.class)
-    public Long bindEndpoint(AgentBindingReq req) {
-        Long bindingId = IdUtil.nextId();
-        LocalDateTime now = LocalDateTime.now();
-
-        AgentEndpointBindingEntity binding = AgentEndpointBindingEntity.builder()
-                .id(bindingId)
-                .agentId(req.getAgentId())
-                .endpointType(req.getEndpointType())
-                .extensionId(req.getExtensionId())
-                .endpointValue(req.getEndpointValue())
-                .priority(req.getPriority())
-                .status("ENABLED")
-                .validFrom(req.getValidFrom() == null ? now : req.getValidFrom())
-                .validTo(req.getValidTo())
-                .createdAt(now)
-                .build();
-
-        bindingMapper.insert(binding);
-        log.info("[AgentService] 坐席终端绑定成功: agentId={}, endpoint={}", req.getAgentId(), req.getEndpointValue());
-        return bindingId;
-    }
-
-    /**
      * 查询坐席终端绑定记录
      *
      * @param agentId 坐席 ID
@@ -678,6 +634,7 @@ public class AgentService {
                 .extensionId(b.getExtensionId())
                 .endpointValue(b.getEndpointValue())
                 .priority(b.getPriority())
+                .active(b.getActive())
                 .status(b.getStatus())
                 .validFrom(b.getValidFrom())
                 .validTo(b.getValidTo())
@@ -795,12 +752,15 @@ public class AgentService {
         AuthRoleEnum authRole = AgentRoleEnum.toAuthRole(entity.getRoleCode());
         boolean isSupervisor = authRole == AuthRoleEnum.SUPERVISOR;
 
-        // 获取最新有效分机绑定
+        // 当前接听终端必须由显式唯一事实给出，不能通过优先级排序推断。
         List<AgentEndpointBindingEntity> bindings = bindingMapper.selectList(
                 new LambdaQueryWrapper<AgentEndpointBindingEntity>()
                         .eq(AgentEndpointBindingEntity::getAgentId, entity.getId())
                         .eq(AgentEndpointBindingEntity::getStatus, "ENABLED")
-                        .orderByAsc(AgentEndpointBindingEntity::getPriority));
+                        .eq(AgentEndpointBindingEntity::getActive, true));
+        if (bindings.size() > 1) {
+            throw new IllegalStateException("坐席存在多个当前接听终端: workNo=" + entity.getWorkNo());
+        }
         String currentExt = bindings.isEmpty() ? null : bindings.getFirst().getEndpointValue();
 
         return AgentVO.builder()
@@ -814,153 +774,11 @@ public class AgentService {
                 .passwordConfigured(entity.getPasswordHash() != null && !entity.getPasswordHash().isBlank())
                 .lastLoginAt(entity.getLastLoginAt())
                 .currentExtension(currentExt)
+                .boundEndpointType(bindings.isEmpty() ? null : bindings.getFirst().getEndpointType())
                 .metadata(entity.getMetadata())
                 .createdAt(entity.getCreatedAt())
                 .updatedAt(entity.getUpdatedAt())
                 .build();
     }
 
-    /**
-     * 获取指定坐席的三端接听配置全貌 (软话机 WebRTC、工位 SIP 话机、随行手机)
-     *
-     * @param workNo 坐席工号
-     * @return 三端详情 VO
-     */
-    public AgentEndpointsVO getAgentEndpoints(String workNo) {
-        AgentEntity agent = agentMapper.selectOne(new LambdaQueryWrapper<AgentEntity>()
-                .eq(AgentEntity::getWorkNo, workNo.trim()));
-        if (agent == null) {
-            throw new IllegalArgumentException("坐席档案不存在: workNo=" + workNo);
-        }
-
-        List<AgentEndpointBindingEntity> bindings = bindingMapper.selectList(
-                new LambdaQueryWrapper<AgentEndpointBindingEntity>()
-                        .eq(AgentEndpointBindingEntity::getAgentId, agent.getId())
-                        .eq(AgentEndpointBindingEntity::getStatus, "ENABLED")
-                        .orderByAsc(AgentEndpointBindingEntity::getPriority));
-
-        String activeEndpointType = "WEBRTC";
-        String activeEndpointValue = workNo.trim();
-        String webrtcWorkNo = workNo.trim();
-        String sipExtension = null;
-        String mobilePhone = agent.getPhoneNumber();
-
-        for (AgentEndpointBindingEntity b : bindings) {
-            if ("WEBRTC".equalsIgnoreCase(b.getEndpointType())) {
-                webrtcWorkNo = b.getEndpointValue();
-            } else if ("SIP".equalsIgnoreCase(b.getEndpointType())) {
-                sipExtension = b.getEndpointValue();
-            } else if ("MOBILE".equalsIgnoreCase(b.getEndpointType())) {
-                mobilePhone = b.getEndpointValue();
-            }
-        }
-
-        if (!bindings.isEmpty()) {
-            activeEndpointType = bindings.getFirst().getEndpointType();
-            activeEndpointValue = bindings.getFirst().getEndpointValue();
-        }
-
-        List<String> availableSipExtensions = extensionMapper.selectList(
-                new LambdaQueryWrapper<ExtensionEntity>()
-                        .eq(ExtensionEntity::getEndpointType, "SIP")
-                        .eq(ExtensionEntity::getStatus, "ENABLED")
-                        .isNull(ExtensionEntity::getDeletedAt)
-                        .orderByAsc(ExtensionEntity::getExtension))
-                .stream().map(ExtensionEntity::getExtension).toList();
-
-        return AgentEndpointsVO.builder()
-                .workNo(workNo.trim())
-                .agentName(agent.getAgentName())
-                .activeEndpointType(activeEndpointType)
-                .activeEndpointValue(activeEndpointValue)
-                .webrtcWorkNo(webrtcWorkNo)
-                .sipExtension(sipExtension)
-                .mobilePhone(mobilePhone)
-                .availableSipExtensions(availableSipExtensions)
-                .build();
-    }
-
-    /**
-     * 快速切换坐席接听方式 (软话机 WebRTC / 工位 SIP 话机 / 随行手机)
-     *
-     * @param req 切换入参
-     * @return 切换后的最新三端配置
-     */
-    @Transactional(rollbackFor = Exception.class)
-    public AgentEndpointsVO switchEndpoint(SwitchEndpointReq req) {
-        String workNo = req.getWorkNo().trim();
-        AgentEntity agent = agentMapper.selectOne(new LambdaQueryWrapper<AgentEntity>()
-                .eq(AgentEntity::getWorkNo, workNo));
-        if (agent == null) {
-            throw new IllegalArgumentException("坐席档案不存在: workNo=" + workNo);
-        }
-
-        String targetType = req.getEndpointType().trim().toUpperCase();
-        String targetValue = req.getEndpointValue();
-        LocalDateTime now = LocalDateTime.now();
-
-        List<AgentEndpointBindingEntity> bindings = bindingMapper.selectList(
-                new LambdaQueryWrapper<AgentEndpointBindingEntity>()
-                        .eq(AgentEndpointBindingEntity::getAgentId, agent.getId()));
-
-        AgentEndpointBindingEntity targetBinding = null;
-        for (AgentEndpointBindingEntity b : bindings) {
-            if (targetType.equalsIgnoreCase(b.getEndpointType())) {
-                targetBinding = b;
-                break;
-            }
-        }
-
-        if (targetBinding == null) {
-            if ("WEBRTC".equalsIgnoreCase(targetType)) {
-                targetValue = workNo;
-            } else if ("SIP".equalsIgnoreCase(targetType) && (targetValue == null || targetValue.isBlank())) {
-                throw new IllegalArgumentException("SIP 接听方式必须选择已绑定分机");
-            } else if ("MOBILE".equalsIgnoreCase(targetType) && (targetValue == null || targetValue.isBlank())) {
-                if (agent.getPhoneNumber() == null || agent.getPhoneNumber().isBlank()) {
-                    throw new IllegalArgumentException("移动接听方式必须先维护手机号");
-                }
-                targetValue = agent.getPhoneNumber();
-            }
-            targetBinding = AgentEndpointBindingEntity.builder()
-                    .id(IdUtil.nextId())
-                    .agentId(agent.getId())
-                    .endpointType(targetType)
-                    .endpointValue(targetValue != null ? targetValue.trim() : workNo)
-                    .priority(0)
-                    .status("ENABLED")
-                    .validFrom(now)
-                    .createdAt(now)
-                    .build();
-            bindingMapper.insert(targetBinding);
-        } else {
-            if (targetValue != null && !targetValue.isBlank()) {
-                targetBinding.setEndpointValue(targetValue.trim());
-            }
-            targetBinding.setPriority(0);
-            targetBinding.setStatus("ENABLED");
-            bindingMapper.updateById(targetBinding);
-        }
-
-        // 将其他绑定降低优先级为 1
-        for (AgentEndpointBindingEntity b : bindings) {
-            if (!b.getId().equals(targetBinding.getId())) {
-                b.setPriority(1);
-                bindingMapper.updateById(b);
-            }
-        }
-
-        // 如果用户已登录 Sa-Token，同步更新 Session
-        try {
-            if (StpUtil.isLogin() && workNo.equals(StpUtil.getLoginIdDefaultNull())) {
-                StpUtil.getSession().set("endpointType", targetType);
-                StpUtil.getSession().set("extension", targetBinding.getEndpointValue());
-            }
-        } catch (Exception e) {
-            // ignore non-web context
-        }
-
-        log.info("🔄 [AgentService] 坐席 {} 接听方式切换成功: type={}, endpoint={}", workNo, targetType, targetBinding.getEndpointValue());
-        return getAgentEndpoints(workNo);
-    }
 }

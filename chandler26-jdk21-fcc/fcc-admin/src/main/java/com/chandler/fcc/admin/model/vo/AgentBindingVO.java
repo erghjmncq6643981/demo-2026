@@ -35,7 +35,7 @@ public class AgentBindingVO implements Serializable {
     @Schema(description = "坐席工号", example = "901001")
     private String workNo;
 
-    @Schema(description = "终端类型 (SIP, WEBRTC, MOBILE, PSTN)", example = "SIP")
+    @Schema(description = "终端类型 (SIP, WEBRTC, MOBILE)", example = "SIP")
     private String endpointType;
 
     @Schema(description = "关联的分机表主键 ID", example = "5001")
@@ -46,6 +46,9 @@ public class AgentBindingVO implements Serializable {
 
     @Schema(description = "优先级", example = "0")
     private Integer priority;
+
+    @Schema(description = "是否为当前接听终端", example = "true")
+    private Boolean active;
 
     @Schema(description = "状态 (ENABLED, DISABLED)", example = "ENABLED")
     private String status;

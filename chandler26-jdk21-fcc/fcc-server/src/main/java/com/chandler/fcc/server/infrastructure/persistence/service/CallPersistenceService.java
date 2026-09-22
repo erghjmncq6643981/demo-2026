@@ -238,6 +238,15 @@ public class CallPersistenceService {
             );
             if (leg.getHangupCause() != null) existing.setHangupCause(leg.getHangupCause());
             if (leg.getTalkDurationMs() != null) existing.setTalkDurationMs(leg.getTalkDurationMs());
+            if (existing.getEndpointType() == null && leg.getEndpointType() != null) {
+                existing.setEndpointType(leg.getEndpointType());
+            }
+            if (existing.getEndpointId() == null && leg.getEndpointId() != null) {
+                existing.setEndpointId(leg.getEndpointId());
+            }
+            if (existing.getNodeId() == null && leg.getNodeId() != null) {
+                existing.setNodeId(leg.getNodeId());
+            }
             existing.setUpdatedAt(now);
             callLegMapper.updateById(existing);
             return existing;

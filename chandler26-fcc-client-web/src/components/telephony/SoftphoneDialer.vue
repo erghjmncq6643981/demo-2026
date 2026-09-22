@@ -324,16 +324,11 @@ async function handleCall() {
   const num = dialedNumber.value.trim();
   if (!num) return;
 
-  if (sipWebRtcService.isRegistered.value) {
-    const ok = sipWebRtcService.call(num);
-    if (ok) {
-      callStore.startOutbound();
-      return;
-    }
-  }
-
   try {
-    const caller = agentStore.boundSipExtension || agentStore.extension || agentStore.workNo;
+    if (agentStore.endpoint !== 'WEBRTC') {
+      throw new Error('当前接听方式不是 WebRTC，请使用已绑定的终端发起呼叫');
+    }
+    const caller = agentStore.extension || agentStore.workNo;
     const response = await triggerOutboundCall(
       agentStore.workNo,
       caller,

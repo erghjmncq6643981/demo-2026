@@ -169,15 +169,13 @@ CREATE TABLE IF NOT EXISTS fcc_agent (
     password_hash         VARCHAR(255) NULL COMMENT '坐席登录口令派生串 pbkdf2-sha256$iterations$salt$hash，为空表示禁止登录',
     password_updated_at   DATETIME(3) NULL COMMENT '口令最近一次设置时间',
     last_login_at         DATETIME(3) NULL COMMENT '最近一次成功登录时间',
-    current_extension     VARCHAR(32) NULL COMMENT '当前绑定使用的分机号',
     metadata              JSON NULL,
     created_at            DATETIME(3) NOT NULL DEFAULT CURRENT_TIMESTAMP(3),
     updated_at            DATETIME(3) NOT NULL DEFAULT CURRENT_TIMESTAMP(3) ON UPDATE CURRENT_TIMESTAMP(3),
     deleted_at            DATETIME(3) NULL,
     PRIMARY KEY (id),
     UNIQUE KEY uk_agent_work_no (work_no),
-    KEY idx_agent_phone (phone_number),
-    KEY idx_agent_cur_ext (current_extension)
+    KEY idx_agent_phone (phone_number)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci COMMENT='Agent master data';
 
 -- -----------------------------------------------------------------------------
@@ -237,14 +235,44 @@ CREATE TABLE IF NOT EXISTS fcc_agent_endpoint_binding (
     extension_id        BIGINT UNSIGNED NULL,
     endpoint_value      VARCHAR(128) NULL,
     priority            INT NOT NULL DEFAULT 0,
+    is_active           TINYINT(1) NOT NULL DEFAULT 0 COMMENT '是否为坐席当前接听终端',
     status              VARCHAR(32) NOT NULL DEFAULT 'ENABLED',
+    active_agent_id     BIGINT UNSIGNED GENERATED ALWAYS AS (
+        CASE WHEN is_active = 1 AND status = 'ENABLED' THEN agent_id ELSE NULL END
+    ) STORED,
+    enabled_binding_key VARCHAR(512) GENERATED ALWAYS AS (
+        CASE WHEN status = 'ENABLED'
+             THEN CONCAT(agent_id, ':', endpoint_type, ':', COALESCE(endpoint_value, ''))
+             ELSE NULL END
+    ) STORED,
+    enabled_sip_value   VARCHAR(128) GENERATED ALWAYS AS (
+        CASE WHEN status = 'ENABLED' AND endpoint_type = 'SIP' THEN endpoint_value ELSE NULL END
+    ) STORED,
     valid_from          DATETIME(3) NOT NULL DEFAULT CURRENT_TIMESTAMP(3),
     valid_to            DATETIME(3) NULL,
     created_at          DATETIME(3) NOT NULL DEFAULT CURRENT_TIMESTAMP(3),
     PRIMARY KEY (id),
+    UNIQUE KEY uk_binding_active_agent (active_agent_id),
+    UNIQUE KEY uk_binding_enabled_identity (enabled_binding_key),
+    UNIQUE KEY uk_binding_enabled_sip (enabled_sip_value),
     KEY idx_binding_agent_status (agent_id, status),
+    KEY idx_binding_endpoint_status (endpoint_type, endpoint_value, status),
     KEY idx_binding_extension (extension_id)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci COMMENT='Agent endpoint binding history';
+
+CREATE TABLE IF NOT EXISTS fcc_agent_endpoint_selection_audit (
+    id                  BIGINT UNSIGNED NOT NULL,
+    agent_id            BIGINT UNSIGNED NOT NULL,
+    actor               VARCHAR(128) NOT NULL,
+    old_binding_id      BIGINT UNSIGNED NULL,
+    new_binding_id      BIGINT UNSIGNED NOT NULL,
+    result              VARCHAR(32) NOT NULL,
+    reason              VARCHAR(512) NULL,
+    created_at          DATETIME(3) NOT NULL DEFAULT CURRENT_TIMESTAMP(3),
+    PRIMARY KEY (id),
+    KEY idx_endpoint_audit_agent_time (agent_id, created_at),
+    KEY idx_endpoint_audit_actor_time (actor, created_at)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci COMMENT='Agent active endpoint selection audit';
 
 CREATE TABLE IF NOT EXISTS fcc_agent_presence (
     agent_id            BIGINT UNSIGNED NOT NULL,
@@ -413,7 +441,7 @@ CREATE TABLE IF NOT EXISTS fcc_call_command (
     idempotency_key     VARCHAR(128) NOT NULL,
     call_id             BIGINT UNSIGNED NULL,
     leg_id              BIGINT UNSIGNED NULL,
-    target_node_id      VARCHAR(128) NOT NULL,
+    assigned_node_id    VARCHAR(128) NULL COMMENT 'Sidecar 接受命令后返回的实际执行节点；发送前未知',
     method_name         VARCHAR(64) NOT NULL,
     request_payload     JSON NULL,
     response_payload    JSON NULL,

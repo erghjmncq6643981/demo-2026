@@ -10,9 +10,17 @@
   SELECT CAST(j.id AS CHAR) AS id,j.owner_work_no AS owner,j.job_type AS mode,j.max_attempts AS maxAttempts,JSON_UNQUOTE(JSON_EXTRACT(j.payload,'$.number')) AS number
   FROM fcc_dial_job j WHERE j.status='PENDING' AND j.owner_work_no IS NOT NULL AND j.scheduled_at&lt;=UTC_TIMESTAMP(3)
   AND (j.job_type='NOTIFICATION' OR EXISTS (
-   SELECT 1 FROM fcc_agent a JOIN fcc_agent_presence p ON p.agent_id=a.id
+   SELECT 1 FROM fcc_agent a
+   JOIN fcc_agent_presence p ON p.agent_id=a.id
+   JOIN fcc_agent_endpoint_binding b
+     ON b.agent_id=a.id AND b.status='ENABLED' AND b.is_active=1
    WHERE a.work_no=j.owner_work_no AND a.status='ENABLED' AND a.deleted_at IS NULL
-    AND a.current_extension IS NOT NULL AND p.login_status='ONLINE' AND p.work_status='READY' AND p.active_call_id IS NULL))
+    AND b.endpoint_type IN ('WEBRTC','SIP')
+    AND p.login_status='ONLINE' AND p.work_status='READY' AND p.active_call_id IS NULL
+    AND (SELECT r.status FROM fcc_endpoint_registration_event r
+         WHERE r.extension=b.endpoint_value ORDER BY r.occurred_at DESC,r.id DESC LIMIT 1)='REGISTERED'
+    AND (SELECT r.occurred_at FROM fcc_endpoint_registration_event r
+         WHERE r.extension=b.endpoint_value ORDER BY r.occurred_at DESC,r.id DESC LIMIT 1)&gt;=DATE_SUB(UTC_TIMESTAMP(3),INTERVAL 1 HOUR)))
   ORDER BY j.scheduled_at,j.id LIMIT 1 FOR UPDATE SKIP LOCKED
  </select>
  <update id="claim">UPDATE fcc_dial_job SET status='RUNNING' WHERE id=#{id} AND status='PENDING'</update>

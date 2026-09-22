@@ -34,9 +34,6 @@ public class AgentCreateAndBindGroupReq implements Serializable {
     @Schema(description = "联系电话")
     private String phoneNumber;
 
-    @Schema(description = "工位 SIP 话机分机号；留空则不登记 SIP 接听终端", example = "1005")
-    private String sipExtension;
-
     @Schema(description = "坐席角色编码 (AGENT_ADMIN / SUPERVISOR / AGENT_MEMBER)", example = "AGENT_MEMBER")
     private String roleCode;
 

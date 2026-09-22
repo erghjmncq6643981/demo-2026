@@ -77,7 +77,14 @@ else {
     window.webContents.setWindowOpenHandler(() => ({ action: 'deny' }));
     window.webContents.on('will-navigate', (event, url) => { if (new URL(url).origin !== deployment.origin) event.preventDefault(); });
     window.webContents.on('will-redirect', (event, url) => { if (new URL(url).origin !== deployment.origin) event.preventDefault(); });
-    window.webContents.session.setPermissionRequestHandler((_contents, _permission, callback) => callback(false));
+    window.webContents.session.setPermissionRequestHandler((contents, permission, callback) => {
+      const trustedMediaRequest = contents.getURL().startsWith(deployment.origin)
+        && permission === 'media';
+      callback(trustedMediaRequest);
+    });
+    window.webContents.session.setPermissionCheckHandler((contents, permission) => {
+      return contents.getURL().startsWith(deployment.origin) && permission === 'media';
+    });
     const icon = nativeImage.createFromDataURL('data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVQIHWP4z8DwHwAFgAI/ScLbtAAAAABJRU5ErkJggg==');
     tray = new Tray(icon);
     tray.setToolTip('FCC 坐席工作台');

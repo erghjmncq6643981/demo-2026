@@ -16,7 +16,7 @@ import java.util.stream.Collectors;
 /**
  * 管理台统一全局异常处理器
  * <p>
- * 统一拦截参数校验失败、白名单准入受限及未知异常并封装为规范的 CommonResult 返回。
+ * 统一拦截参数校验失败、业务约束异常及未知异常并封装为规范的 CommonResult 返回。
  * </p>
  *
  * @author Chandler
@@ -34,7 +34,7 @@ public class AdminGlobalExceptionHandler {
     @ExceptionHandler(IllegalArgumentException.class)
     @ResponseStatus(HttpStatus.BAD_REQUEST)
     public CommonResult<Void> handleIllegalArgument(IllegalArgumentException e) {
-        log.warn("⚠️ [Admin] 请求参数或白名单准入校验未通过: {}", e.getMessage());
+        log.warn("⚠️ [Admin] 请求参数或业务约束校验未通过: {}", e.getMessage());
         return CommonResult.error(400, e.getMessage());
     }
 

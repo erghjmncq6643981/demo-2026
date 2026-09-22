@@ -216,9 +216,10 @@ public class OutboundCallService implements SystemFlowRuntime {
         if (
             agent == null ||
             agent.get("extension") == null ||
+            !"ONLINE".equals(agent.get("registrationStatus")) ||
             !agent.get("extension").toString().matches("[0-9]{2,20}")
         ) {
-            throw new ResponseStatusException(HttpStatus.CONFLICT, "坐席没有可用话机绑定");
+            throw new ResponseStatusException(HttpStatus.CONFLICT, "坐席当前接听终端未绑定、未启用或未注册");
         }
 
         var route = routes.resolve(number);
@@ -229,6 +230,7 @@ public class OutboundCallService implements SystemFlowRuntime {
         data.put("primaryWorkNo", owner);
         data.put("guestDialString", route.dialString());
         data.put("agentExt", extension);
+        data.put("agentEndpointType", String.valueOf(agent.get("endpointType")));
         if (taskId != null) {
             data.put("dialJobId", taskId);
         }
@@ -355,6 +357,14 @@ public class OutboundCallService implements SystemFlowRuntime {
                     channelUuid.equals(call.getAgentChannelUuid()) ? "AGENT" : "CUSTOMER"
                 )
                 .direction("OUTBOUND")
+                .endpointType(
+                    channelUuid.equals(call.getAgentChannelUuid())
+                        ? call.getDataStr("agentEndpointType", null)
+                        : "TRUNK"
+                )
+                .endpointId(
+                    channelUuid.equals(call.getAgentChannelUuid()) ? call.getAgentExt() : null
+                )
                 .state(state)
                 .hangupCause(cause)
                 .endedAt(

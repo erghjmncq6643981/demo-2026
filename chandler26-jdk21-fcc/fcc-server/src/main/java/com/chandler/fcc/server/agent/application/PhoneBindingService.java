@@ -239,13 +239,22 @@ public class PhoneBindingService implements SystemFlowRuntime {
             if (mapper.busy(workNo, extension) > 0) {
                 return false;
             }
+            Long oldBindingId = target.get("activeBindingId") instanceof Number value
+                ? value.longValue()
+                : null;
+            long newBindingId = IdUtil.nextId();
+            mapper.deactivateCurrent(workNo);
             mapper.disableBindings(workNo, extension);
             mapper.clearExtensions(workNo, extension);
-            mapper.clearAgents(workNo, extension);
             if (
                 mapper.bindExtension(workNo, extension) != 1 ||
-                mapper.bindAgent(workNo, extension) != 1 ||
-                mapper.appendBinding(IdUtil.nextId(), workNo, extension) != 1
+                mapper.appendBinding(newBindingId, workNo, extension) != 1 ||
+                mapper.appendSelectionAudit(
+                    IdUtil.nextId(),
+                    workNo,
+                    oldBindingId,
+                    newBindingId
+                ) != 1
             ) {
                 throw new IllegalStateException("话机绑定对象在事务中发生变化");
             }

@@ -1,5 +1,9 @@
 package com.chandler.fcc.admin.controller;
 
+import cn.dev33.satoken.stp.StpUtil;
+import com.chandler.fcc.admin.agent.application.AgentEndpointService;
+import com.chandler.fcc.admin.controller.req.SwitchAgentEndpointReq;
+import com.chandler.fcc.admin.controller.resp.AgentEndpointsResp;
 import com.chandler.fcc.admin.model.CommonResult;
 import com.chandler.fcc.admin.model.PageResult;
 import com.chandler.fcc.admin.model.dto.*;
@@ -28,6 +32,7 @@ import java.util.List;
 public class AgentController {
 
     private final AgentService agentService;
+    private final AgentEndpointService agentEndpointService;
 
     /**
      * 新增坐席人员
@@ -234,19 +239,6 @@ public class AgentController {
     }
 
     /**
-     * 绑定坐席分机/终端话机
-     *
-     * @param req 绑定入参
-     * @return 绑定记录 ID
-     */
-    @Operation(summary = "绑定坐席话机/分机终端")
-    @PostMapping("/bindings")
-    public CommonResult<Long> bindEndpoint(@Valid @RequestBody AgentBindingReq req) {
-        Long id = agentService.bindEndpoint(req);
-        return CommonResult.success(id);
-    }
-
-    /**
      * 查询坐席终端绑定记录
      *
      * @param agentId 坐席 ID
@@ -255,6 +247,7 @@ public class AgentController {
     @Operation(summary = "查询坐席名下绑定的终端记录")
     @GetMapping("/{agentId}/bindings")
     public CommonResult<List<AgentBindingVO>> listBindings(@PathVariable("agentId") Long agentId) {
+        StpUtil.checkPermission("agent:view");
         List<AgentBindingVO> list = agentService.listBindingsByAgentId(agentId);
         return CommonResult.success(list);
     }
@@ -305,9 +298,9 @@ public class AgentController {
      */
     @Operation(summary = "获取坐席三种接听终端配置")
     @GetMapping("/{workNo}/endpoints")
-    public CommonResult<AgentEndpointsVO> getAgentEndpoints(@PathVariable("workNo") String workNo) {
-        AgentEndpointsVO vo = agentService.getAgentEndpoints(workNo);
-        return CommonResult.success(vo);
+    public CommonResult<AgentEndpointsResp> getAgentEndpoints(@PathVariable("workNo") String workNo) {
+        StpUtil.checkPermission("agent:view");
+        return CommonResult.success(AgentEndpointsResp.from(agentEndpointService.get(workNo)));
     }
 
     /**
@@ -318,8 +311,19 @@ public class AgentController {
      */
     @Operation(summary = "快速切换坐席接听方式与终端")
     @PostMapping("/switch-endpoint")
-    public CommonResult<AgentEndpointsVO> switchEndpoint(@Valid @RequestBody SwitchEndpointReq req) {
-        AgentEndpointsVO vo = agentService.switchEndpoint(req);
-        return CommonResult.success(vo);
+    public CommonResult<AgentEndpointsResp> switchEndpoint(
+        @Valid @RequestBody SwitchAgentEndpointReq req
+    ) {
+        StpUtil.checkPermission("agent:write");
+        return CommonResult.success(
+            AgentEndpointsResp.from(
+                agentEndpointService.switchEndpoint(
+                    req.getWorkNo(),
+                    req.getEndpointType(),
+                    req.getEndpointValue(),
+                    StpUtil.getLoginIdAsString()
+                )
+            )
+        );
     }
 }

@@ -67,11 +67,6 @@ public class AgentEntity extends BaseEntity {
     private LocalDateTime lastLoginAt;
 
     /**
-     * 当前绑定使用的分机号 (由实体话机 0000 语音自助绑定或后台分配)
-     */
-    private String currentExtension;
-
-    /**
      * 扩展元数据 (JSON 字符串)
      */
     private String metadata;

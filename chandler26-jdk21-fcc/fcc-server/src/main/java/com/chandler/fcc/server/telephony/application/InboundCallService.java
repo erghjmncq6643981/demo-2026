@@ -118,6 +118,12 @@ public class InboundCallService implements SystemFlowRuntime {
                     .nodeId(call.getNodeId())
                     .roleType(uuid.equals(call.getGuestChannelUuid()) ? "CUSTOMER" : "AGENT")
                     .direction(uuid.equals(call.getGuestChannelUuid()) ? "INBOUND" : "OUTBOUND")
+                    .endpointType(
+                        uuid.equals(call.getAgentChannelUuid())
+                            ? call.getDataStr("agentEndpointType", null)
+                            : "TRUNK"
+                    )
+                    .endpointId(uuid.equals(call.getAgentChannelUuid()) ? call.getAgentExt() : null)
                     .state(state)
                     .hangupCause(params.path(FccEventField.CAUSE.getWireName()).asText(null))
                     .endedAt(
@@ -293,7 +299,11 @@ public class InboundCallService implements SystemFlowRuntime {
         Map<String, Object> candidate = direct != null
             ? agents.agent(direct)
             : agents.candidate(call.getDataStr("groupCode", ""), tried);
-        if (candidate == null || candidate.get("extension") == null) return;
+        if (
+            candidate == null ||
+            candidate.get("extension") == null ||
+            !"ONLINE".equals(candidate.get("registrationStatus"))
+        ) return;
         String owner = candidate.get("workNo").toString(),
             extension = candidate.get("extension").toString();
         if (tried.contains(owner) || !extension.matches("[0-9]{2,20}")) return;
@@ -312,6 +322,7 @@ public class InboundCallService implements SystemFlowRuntime {
                 tried.add(owner);
                 call.putData("primaryWorkNo", owner);
                 call.putData("agentExt", extension);
+                call.putData("agentEndpointType", String.valueOf(candidate.get("endpointType")));
                 call.putData("agentChannelUuid", call.getAgentChannelUuid());
                 persistence.saveOrUpdateSession(call);
                 return true;

@@ -30,7 +30,7 @@
         通话话单记录
       </button>
 
-      <!-- Tab 3: 坐席监控 -->
+      <!-- Tab 3: 本人状态 -->
       <button
         @click="currentTab = 'agents'"
         :class="[
@@ -39,7 +39,7 @@
         ]"
       >
         <span>👥</span>
-        <span>坐席监控</span>
+        <span>本人状态</span>
         <span class="text-[10px] opacity-70 bg-black/10 px-1 py-0.2 rounded font-mono hidden md:inline">F2</span>
       </button>
     </div>

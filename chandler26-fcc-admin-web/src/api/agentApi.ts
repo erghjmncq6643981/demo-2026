@@ -1,13 +1,6 @@
 import apiClient from './apiClient';
 import type { PageResult } from '../shared/api/page';
 
-export interface WhitelistItem {
-  realName: string;
-  desc: string;
-  defaultWorkNo: string;
-  isSupervisor: boolean;
-}
-
 export interface AgentVO {
   id: string;
   workNo: string;
@@ -37,11 +30,15 @@ export interface AgentCreateReq {
   metadata?: string;
 }
 
-export interface AgentBindingReq {
-  agentId: string;
-  endpointType: string;
-  endpointValue: string;
-  priority?: number;
+export interface AgentEndpointsResp {
+  workNo: string;
+  agentName: string;
+  activeEndpointType: 'WEBRTC' | 'SIP' | 'MOBILE';
+  activeEndpointValue: string;
+  webrtcWorkNo?: string;
+  sipExtension?: string;
+  mobilePhone?: string;
+  availableSipExtensions: string[];
 }
 
 export interface AgentBindingVO {
@@ -113,9 +110,6 @@ export interface AgentCreateAndBindGroupReq {
 }
 
 export const agentApi = {
-  getWhitelist(): Promise<WhitelistItem[]> {
-    return apiClient.get('/agents/whitelist');
-  },
   list(params?: { pageNum?: number; pageSize?: number; workNo?: string; realName?: string; status?: string; role?: string }): Promise<PageResult<AgentVO>> {
     return apiClient.get('/agents', { params });
   },
@@ -128,8 +122,11 @@ export const agentApi = {
   delete(id: string): Promise<void> {
     return apiClient.delete(`/agents/${id}`);
   },
-  bindEndpoint(data: AgentBindingReq): Promise<string> {
-    return apiClient.post('/agents/bindings', data);
+  endpoints(workNo: string): Promise<AgentEndpointsResp> {
+    return apiClient.get(`/agents/${encodeURIComponent(workNo)}/endpoints`);
+  },
+  switchEndpoint(data: { workNo: string; endpointType: 'WEBRTC' | 'SIP'; endpointValue?: string }): Promise<AgentEndpointsResp> {
+    return apiClient.post('/agents/switch-endpoint', data);
   },
   listBindings(agentId: string): Promise<AgentBindingVO[]> {
     return apiClient.get(`/agents/${agentId}/bindings`);

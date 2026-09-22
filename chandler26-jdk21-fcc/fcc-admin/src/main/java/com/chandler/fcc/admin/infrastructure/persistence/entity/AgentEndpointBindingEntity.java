@@ -1,6 +1,7 @@
 package com.chandler.fcc.admin.infrastructure.persistence.entity;
 
 import com.baomidou.mybatisplus.annotation.TableId;
+import com.baomidou.mybatisplus.annotation.TableField;
 import com.baomidou.mybatisplus.annotation.TableName;
 import lombok.*;
 
@@ -56,6 +57,14 @@ public class AgentEndpointBindingEntity implements Serializable {
      * 优先级 (0 为最高优先级)
      */
     private Integer priority;
+
+    /**
+     * 是否为该坐席当前生效的接听终端。
+     *
+     * <p>该字段是当前选择事实，不能再通过查询结果排序推断。</p>
+     */
+    @TableField("is_active")
+    private Boolean active;
 
     /**
      * 绑定状态 (ENABLED, DISABLED)

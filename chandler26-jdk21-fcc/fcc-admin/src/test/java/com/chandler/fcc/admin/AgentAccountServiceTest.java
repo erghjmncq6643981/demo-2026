@@ -2,6 +2,7 @@ package com.chandler.fcc.admin;
 
 import com.chandler.fcc.admin.infrastructure.persistence.entity.AgentEntity;
 import com.chandler.fcc.admin.infrastructure.persistence.mapper.AgentMapper;
+import com.chandler.fcc.admin.agent.application.AgentEndpointService;
 import com.chandler.fcc.admin.model.PageResult;
 import com.chandler.fcc.admin.model.dto.*;
 import com.chandler.fcc.admin.model.vo.AccountCredentialVO;
@@ -51,6 +52,9 @@ public class AgentAccountServiceTest extends EphemeralSipKeyTest {
 
     @Autowired
     private AgentMapper agentMapper;
+
+    @Autowired
+    private AgentEndpointService agentEndpointService;
 
     @BeforeEach
     void cleanupPreExistingAgents() {
@@ -208,25 +212,18 @@ public class AgentAccountServiceTest extends EphemeralSipKeyTest {
      * 测试坐席终端绑定
      */
     @Test
-    @DisplayName("测试坐席绑定分机终端与查询")
-    void testEndpointBindingAndQuery() {
+    @DisplayName("新坐席只初始化唯一 WebRTC 当前终端")
+    void testDefaultEndpointSelection() {
         AccountCredentialVO credential = agentService.createAgent(AgentCreateReq.builder()
                 .workNo(TEST_WORK_NO_BINDING)
                 .agentName("终端绑定测试成员")
                 .build());
 
-        Long bindingId = agentService.bindEndpoint(AgentBindingReq.builder()
-                .agentId(credential.getId())
-                .endpointType("SIP")
-                .endpointValue("1104")
-                .priority(0)
-                .build());
-        assertNotNull(bindingId);
-
         List<AgentBindingVO> bindings = agentService.listBindingsByAgentId(credential.getId());
-        assertFalse(bindings.isEmpty());
-        assertTrue(bindings.stream()
-                .anyMatch(b -> "1104".equals(b.getEndpointValue()) && "终端绑定测试成员".equals(b.getAgentName())));
+        assertEquals(1, bindings.size());
+        assertEquals("WEBRTC", agentEndpointService.get(TEST_WORK_NO_BINDING).getActiveEndpointType());
+        assertEquals(TEST_WORK_NO_BINDING, agentEndpointService.get(TEST_WORK_NO_BINDING).getActiveEndpointValue());
+        assertTrue(agentEndpointService.get(TEST_WORK_NO_BINDING).getAvailableSipExtensions().isEmpty());
     }
 
     /**

@@ -239,31 +239,6 @@ class SipWebRtcService {
   }
 
   /**
-   * 发起 WebRTC 外呼直拨
-   */
-  public call(targetNumber: string): boolean {
-    if (!this.ua || !this.isRegistered.value || !this.runtimeConfig) {
-      console.warn('[WebRTC SIP] 客户端未注册，无法发起呼叫');
-      return false;
-    }
-
-    const targetUri = `sip:${targetNumber}@${this.runtimeConfig.domain}`;
-
-    try {
-      this.ua.call(targetUri, {
-        mediaConstraints: { audio: true, video: false },
-        pcConfig: {
-          iceServers: this.runtimeConfig.iceServers
-        }
-      });
-      return true;
-    } catch (e) {
-      console.error('[WebRTC SIP] 发起外呼失败:', e);
-      return false;
-    }
-  }
-
-  /**
    * 发送二次 DTMF 按键
    */
   public sendDtmf(digit: string) {

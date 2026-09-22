@@ -41,10 +41,6 @@ public class AgentCreateReq implements Serializable {
     @Schema(description = "坐席手机联系电话", example = "13800138000")
     private String phoneNumber;
 
-    @Size(max = 32, message = "SIP 分机号长度不能超过 32")
-    @Schema(description = "工位 SIP 话机分机号；留空则不登记 SIP 接听终端", example = "1001")
-    private String sipExtension;
-
     @Schema(description = "坐席角色代码 (AGENT_ADMIN 班长, SUPERVISOR 值班长, AGENT_MEMBER 普通坐席)；缺省为 AGENT_MEMBER",
             example = "AGENT_MEMBER")
     private String roleCode;

@@ -168,7 +168,7 @@ public class CallFactsQueryService {
     /**
      * 按坐席工号解析其绑定终端分机
      * <p>
-     * 优先取坐席当前使用分机 {@code current_extension}，其次取启用的 SIP 终端绑定值。
+     * 只读取坐席唯一当前接听绑定，不再读取坐席主表中的冗余分机字段。
      * </p>
      *
      * @param workNo 坐席工号
@@ -180,19 +180,16 @@ public class CallFactsQueryService {
         }
         try {
             List<Map<String, Object>> rows = jdbcTemplate.queryForList(
-                    "SELECT a.current_extension, b.endpoint_type, b.endpoint_value " +
+                    "SELECT b.endpoint_type, b.endpoint_value " +
                             "FROM fcc_agent a " +
-                            "LEFT JOIN fcc_agent_endpoint_binding b ON a.id = b.agent_id AND b.status = 'ENABLED' " +
+                            "JOIN fcc_agent_endpoint_binding b ON a.id = b.agent_id " +
+                            "AND b.status = 'ENABLED' AND b.is_active = 1 " +
                             "WHERE a.work_no = ? AND a.deleted_at IS NULL LIMIT 1",
                     workNo);
             if (rows.isEmpty()) {
                 return Optional.empty();
             }
             Map<String, Object> row = rows.getFirst();
-            Object currentExtension = row.get("current_extension");
-            if (currentExtension != null && !String.valueOf(currentExtension).isBlank()) {
-                return Optional.of(String.valueOf(currentExtension));
-            }
             Object endpointValue = row.get("endpoint_value");
             if (endpointValue != null && !String.valueOf(endpointValue).isBlank()) {
                 return Optional.of(String.valueOf(endpointValue));

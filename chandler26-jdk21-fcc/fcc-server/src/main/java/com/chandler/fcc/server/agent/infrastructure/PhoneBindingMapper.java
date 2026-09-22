@@ -49,6 +49,14 @@ public interface PhoneBindingMapper {
     int disableBindings(@Param("owner") String owner, @Param("extension") String extension);
 
     /**
+     * 清除目标坐席原当前终端。
+     *
+     * @param owner 坐席工号
+     * @return 更新数量
+     */
+    int deactivateCurrent(@Param("owner") String owner);
+
+    /**
      * 清理旧分机归属。
      *
      * @param owner 坐席工号
@@ -58,15 +66,6 @@ public interface PhoneBindingMapper {
     int clearExtensions(@Param("owner") String owner, @Param("extension") String extension);
 
     /**
-     * 清理旧坐席当前分机。
-     *
-     * @param owner 坐席工号
-     * @param extension 分机号
-     * @return 更新数量
-     */
-    int clearAgents(@Param("owner") String owner, @Param("extension") String extension);
-
-    /**
      * 将分机绑定到坐席。
      *
      * @param owner 坐席工号
@@ -74,15 +73,6 @@ public interface PhoneBindingMapper {
      * @return 更新数量
      */
     int bindExtension(@Param("owner") String owner, @Param("extension") String extension);
-
-    /**
-     * 更新坐席当前分机。
-     *
-     * @param owner 坐席工号
-     * @param extension 分机号
-     * @return 更新数量
-     */
-    int bindAgent(@Param("owner") String owner, @Param("extension") String extension);
 
     /**
      * 追加可审计的终端绑定历史。
@@ -96,5 +86,21 @@ public interface PhoneBindingMapper {
         @Param("id") long id,
         @Param("owner") String owner,
         @Param("extension") String extension
+    );
+
+    /**
+     * 追加话机自助绑定形成的当前终端切换审计。
+     *
+     * @param id 审计主键
+     * @param owner 坐席工号
+     * @param oldBindingId 原当前绑定主键
+     * @param newBindingId 新当前绑定主键
+     * @return 插入数量
+     */
+    int appendSelectionAudit(
+        @Param("id") long id,
+        @Param("owner") String owner,
+        @Param("oldBindingId") Long oldBindingId,
+        @Param("newBindingId") long newBindingId
     );
 }
