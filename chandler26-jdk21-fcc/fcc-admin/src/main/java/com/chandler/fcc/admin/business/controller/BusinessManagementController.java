@@ -4,7 +4,6 @@ import com.chandler.fcc.admin.business.application.BusinessManagementService;
 import com.chandler.fcc.admin.business.controller.req.CreateDialJobReq;
 import com.chandler.fcc.admin.business.controller.req.SaveCustomerReq;
 import com.chandler.fcc.admin.model.CommonResult;
-import com.fasterxml.jackson.databind.JsonNode;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.Valid;
@@ -39,7 +38,7 @@ public class BusinessManagementController {
      */
     @GetMapping("/customers")
     @Operation(summary = "分页查询客户资料")
-    public CommonResult<JsonNode> customers(
+    public CommonResult<Object> customers(
         @RequestParam(defaultValue = "1") int page,
         @RequestParam(required = false) String owner,
         @RequestParam(required = false) String phone
@@ -55,7 +54,7 @@ public class BusinessManagementController {
      */
     @GetMapping("/customers/{id}")
     @Operation(summary = "查询客户详情")
-    public CommonResult<JsonNode> customer(@PathVariable String id) {
+    public CommonResult<Object> customer(@PathVariable String id) {
         return CommonResult.success(service.customer(id));
     }
 
@@ -68,7 +67,7 @@ public class BusinessManagementController {
      */
     @PostMapping("/customers")
     @Operation(summary = "创建客户资料")
-    public CommonResult<JsonNode> createCustomer(
+    public CommonResult<Object> createCustomer(
         @RequestParam String owner,
         @Valid @RequestBody SaveCustomerReq request
     ) {
@@ -84,7 +83,7 @@ public class BusinessManagementController {
      */
     @PutMapping("/customers/{id}")
     @Operation(summary = "按版本修改客户资料")
-    public CommonResult<JsonNode> updateCustomer(
+    public CommonResult<Object> updateCustomer(
         @PathVariable String id,
         @Valid @RequestBody SaveCustomerReq request
     ) {
@@ -100,7 +99,7 @@ public class BusinessManagementController {
      */
     @GetMapping("/dial-jobs")
     @Operation(summary = "分页查询自动外呼任务")
-    public CommonResult<JsonNode> jobs(
+    public CommonResult<Object> jobs(
         @RequestParam(defaultValue = "1") int page,
         @RequestParam(required = false) String owner
     ) {
@@ -115,7 +114,7 @@ public class BusinessManagementController {
      */
     @PostMapping("/dial-jobs")
     @Operation(summary = "创建自动外呼任务")
-    public CommonResult<JsonNode> createJob(@Valid @RequestBody CreateDialJobReq request) {
+    public CommonResult<Object> createJob(@Valid @RequestBody CreateDialJobReq request) {
         return CommonResult.success(service.createJob(request));
     }
 
@@ -127,7 +126,7 @@ public class BusinessManagementController {
      */
     @GetMapping("/dial-jobs/{id}/attempts")
     @Operation(summary = "查询自动外呼逐次结果")
-    public CommonResult<JsonNode> attempts(@PathVariable String id) {
+    public CommonResult<Object> attempts(@PathVariable String id) {
         return CommonResult.success(service.attempts(id));
     }
 
@@ -140,7 +139,7 @@ public class BusinessManagementController {
      */
     @PostMapping("/dial-jobs/{id}/{action}")
     @Operation(summary = "变更自动外呼任务状态")
-    public CommonResult<JsonNode> control(@PathVariable String id, @PathVariable String action) {
+    public CommonResult<Object> control(@PathVariable String id, @PathVariable String action) {
         return CommonResult.success(service.control(id, action));
     }
 }

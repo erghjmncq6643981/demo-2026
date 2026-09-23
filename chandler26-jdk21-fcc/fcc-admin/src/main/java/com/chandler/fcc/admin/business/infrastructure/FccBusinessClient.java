@@ -44,7 +44,7 @@ public class FccBusinessClient {
      * @param body 可选请求体
      * @return 内部接口的业务数据
      */
-    public JsonNode exchange(String method, String path, Map<String, ?> query, Object body) {
+    public Object exchange(String method, String path, Map<String, ?> query, Object body) {
         try {
             HttpRequest.Builder request = HttpRequest.newBuilder(buildUri(path, query))
                 .timeout(Duration.ofSeconds(8))
@@ -64,7 +64,11 @@ public class FccBusinessClient {
                 String message = root.path("message").asText("运行控制服务拒绝了管理请求");
                 throw new ResponseStatusException(HttpStatus.valueOf(response.statusCode()), message);
             }
-            return root.path("data");
+            JsonNode dataNode = root.path("data");
+            if (dataNode.isMissingNode() || dataNode.isNull()) {
+                return null;
+            }
+            return objectMapper.treeToValue(dataNode, Object.class);
         } catch (ResponseStatusException exception) {
             throw exception;
         } catch (InterruptedException exception) {

@@ -51,10 +51,11 @@ export function useDialJobManagement() {
     loading.value = true;
     error.value = "";
     try {
-      rows.value = await dialJobManagementApi.list({
+      const result = await dialJobManagementApi.list({
         page: page.value,
         owner: ownerFilter.value || undefined,
       });
+      rows.value = Array.isArray(result) ? result : [];
     } catch (cause) {
       rows.value = [];
       error.value = errorText(cause, "自动外呼任务加载失败");

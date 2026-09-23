@@ -12,54 +12,68 @@ import {
 import { useDialJobManagement } from "../composables/useDialJobManagement";
 
 const state = useDialJobManagement();
-const statusLabel: Record<string, string> = {
-  PENDING: "待调度",
-  RUNNING: "执行中",
-  PAUSED: "已暂停",
-  SUCCEEDED: "已完成",
-  FAILED: "失败",
-  CANCELLED: "已取消",
+const statusConfig: Record<string, { label: string; class: string }> = {
+  PENDING: { label: "待调度", class: "bg-blue-50 text-blue-700 border-blue-200" },
+  RUNNING: { label: "执行中", class: "bg-amber-50 text-amber-700 border-amber-200" },
+  PAUSED: { label: "已暂停", class: "bg-slate-100 text-slate-600 border-slate-200" },
+  SUCCEEDED: { label: "已完成", class: "bg-emerald-50 text-emerald-700 border-emerald-200" },
+  FAILED: { label: "失败", class: "bg-rose-50 text-rose-700 border-rose-200" },
+  CANCELLED: { label: "已取消", class: "bg-slate-100 text-slate-400 border-slate-200" },
 };
-const modeLabel: Record<string, string> = {
-  PROGRESSIVE: "坐席先接",
-  NOTIFICATION: "通知外呼",
+const modeConfig: Record<string, { label: string; class: string }> = {
+  PROGRESSIVE: { label: "坐席先接", class: "bg-purple-50 text-purple-700 border-purple-200" },
+  NOTIFICATION: { label: "通知外呼", class: "bg-cyan-50 text-cyan-700 border-cyan-200" },
 };
 </script>
 
 <template>
-  <section class="h-full min-w-0 overflow-y-auto">
-    <header class="mb-5 flex flex-wrap items-center justify-between gap-3">
+  <div class="space-y-6">
+    <!-- Header Card -->
+    <div
+      class="flex flex-col sm:flex-row sm:items-center justify-between gap-4 bg-white p-5 rounded-3xl border border-slate-100 shadow-card"
+    >
       <div>
-        <h2 class="text-xl font-bold text-slate-900">自动外呼</h2>
-        <p class="mt-1 text-sm text-slate-500">
-          管理持久任务、调度状态和每次呼叫结果。
+        <h2 class="text-base font-black text-slate-900 flex items-center gap-2">
+          <PhoneOutgoing class="w-5 h-5 text-brand-600" />
+          自动外呼管理
+        </h2>
+        <p class="text-xs text-slate-400 mt-0.5">
+          管理持久任务、调度状态及逐次外呼结果
         </p>
       </div>
-      <div class="flex gap-2">
+
+      <div class="flex items-center space-x-3">
         <button
-          title="刷新任务"
-          class="icon-button"
+          title="刷新任务列表"
+          class="p-2.5 bg-slate-100 hover:bg-slate-200 text-slate-600 rounded-xl transition border border-slate-200 cursor-pointer disabled:opacity-40"
           :disabled="state.loading.value"
           @click="state.load"
         >
           <RefreshCw
-            class="h-4 w-4"
-            :class="state.loading.value ? 'animate-spin' : ''"
-          /></button
-        ><button class="primary-button" @click="state.openCreate">
-          <Plus class="h-4 w-4" />新建任务
+            class="w-4 h-4"
+            :class="{ 'animate-spin': state.loading.value }"
+          />
+        </button>
+        <button
+          class="px-4 py-2 bg-brand-500 hover:bg-brand-600 text-white rounded-xl text-xs font-bold flex items-center gap-1.5 shadow-xs transition cursor-pointer"
+          @click="state.openCreate"
+        >
+          <Plus class="w-4 h-4" />
+          <span>新建任务</span>
         </button>
       </div>
-    </header>
+    </div>
 
+    <!-- Filter Card -->
     <div
-      class="mb-4 flex flex-wrap items-end gap-3 border-y border-slate-200 bg-white px-4 py-3"
+      class="flex flex-wrap items-end gap-3 text-sm bg-white p-4 rounded-3xl border border-slate-100 shadow-card"
     >
-      <label class="field"
-        ><span>执行坐席</span
-        ><select
+      <div class="w-56">
+        <label class="block text-xs font-bold text-slate-600 mb-1.5">执行坐席</label>
+        <select
           v-model="state.ownerFilter.value"
           :disabled="state.agentsLoading.value"
+          class="w-full bg-slate-50/70 border border-slate-200 rounded-xl px-3 py-2 text-slate-800 text-xs focus:outline-none focus:border-brand-500 focus:ring-1 focus:ring-brand-500/20 font-medium cursor-pointer"
         >
           <option value="">
             {{ state.agentsLoading.value ? "坐席加载中..." : "全部坐席" }}
@@ -72,150 +86,211 @@ const modeLabel: Record<string, string> = {
             {{ agent.workNo }} ·
             {{ agent.agentName || agent.realName || "未命名" }}
           </option>
-        </select></label
+        </select>
+      </div>
+
+      <button
+        class="px-4 py-2 bg-brand-500 hover:bg-brand-600 text-white rounded-xl text-xs font-bold flex items-center gap-1.5 shadow-xs transition cursor-pointer"
+        @click="state.search"
       >
-      <button class="secondary-button" @click="state.search">
-        <Search class="h-4 w-4" />查询
+        <Search class="w-3.5 h-3.5" />
+        <span>查询</span>
       </button>
-      <span v-if="state.agentsError.value" class="text-xs text-rose-600">
+
+      <span v-if="state.agentsError.value" class="text-xs text-rose-600 flex items-center gap-1 ml-2">
         {{ state.agentsError.value }}
-        <button class="font-semibold underline" @click="state.loadAgents">
+        <button class="font-bold underline cursor-pointer" @click="state.loadAgents">
           重试
         </button>
       </span>
     </div>
 
+    <!-- Error Alert -->
     <div
       v-if="state.error.value"
       role="alert"
-      class="mb-4 border border-rose-200 bg-rose-50 px-4 py-3 text-sm text-rose-700"
+      class="p-4 rounded-2xl bg-rose-50 border border-rose-200 flex items-center justify-between text-xs text-rose-700 font-bold"
     >
-      {{ state.error.value }}
-      <button class="ml-2 font-semibold underline" @click="state.load">
+      <span>{{ state.error.value }}</span>
+      <button class="font-bold underline cursor-pointer" @click="state.load">
         重试
       </button>
     </div>
 
-    <div class="overflow-x-auto border border-slate-200 bg-white">
-      <table class="w-full min-w-[980px] text-left text-sm">
-        <thead class="bg-slate-50 text-xs text-slate-500">
-          <tr>
-            <th>任务</th>
-            <th>被叫号码</th>
-            <th>坐席</th>
-            <th>模式</th>
-            <th>状态</th>
-            <th>计划时间</th>
-            <th>操作</th>
-          </tr>
-        </thead>
-        <tbody class="divide-y divide-slate-100">
-          <tr v-if="state.loading.value">
-            <td colspan="7" class="empty">正在加载自动外呼任务...</td>
-          </tr>
-          <tr v-else-if="state.rows.value.length === 0">
-            <td colspan="7" class="empty">
-              <PhoneOutgoing
-                class="mx-auto mb-2 h-6 w-6 text-slate-300"
-              />暂无自动外呼任务
-            </td>
-          </tr>
-          <tr v-for="row in state.rows.value" v-else :key="row.id">
-            <td>
-              <div
-                class="font-mono font-semibold text-slate-900"
-                :title="row.id"
-              >
-                {{ row.id }}
-              </div>
-              <div class="text-xs text-slate-400">
-                最多 {{ row.maxAttempts }} 次
-              </div>
-            </td>
-            <td class="font-mono">{{ row.number }}</td>
-            <td class="font-mono">{{ row.owner }}</td>
-            <td>{{ modeLabel[row.mode] || row.mode }}</td>
-            <td>
-              <span class="status">{{
-                statusLabel[row.status] || row.status
-              }}</span>
-            </td>
-            <td class="text-xs text-slate-500">{{ row.scheduledAt || "-" }}</td>
-            <td>
-              <div class="flex gap-1">
-                <button
-                  title="查看尝试记录"
-                  class="icon-button"
-                  @click="state.showAttempts(row)"
-                >
-                  <ListRestart class="h-4 w-4" /></button
-                ><button
-                  v-if="row.status === 'PENDING'"
-                  title="暂停任务"
-                  class="icon-button"
-                  :disabled="state.controllingId.value === row.id"
-                  @click="state.control(row, 'PAUSE')"
-                >
-                  <Pause class="h-4 w-4" /></button
-                ><button
-                  v-if="row.status === 'PAUSED'"
-                  title="恢复任务"
-                  class="icon-button"
-                  :disabled="state.controllingId.value === row.id"
-                  @click="state.control(row, 'RESUME')"
-                >
-                  <Play class="h-4 w-4" /></button
-                ><button
-                  v-if="['PENDING', 'PAUSED', 'RUNNING'].includes(row.status)"
-                  title="取消任务"
-                  class="icon-button text-rose-600"
-                  :disabled="state.controllingId.value === row.id"
-                  @click="state.control(row, 'CANCEL')"
-                >
-                  <X class="h-4 w-4" />
-                </button>
-              </div>
-            </td>
-          </tr>
-        </tbody>
-      </table>
-    </div>
-    <footer
-      class="mt-4 flex items-center justify-end gap-3 text-sm text-slate-500"
+    <!-- Table Card -->
+    <div
+      class="bg-white border border-slate-100 rounded-3xl overflow-hidden shadow-card p-6"
     >
-      <button
-        class="secondary-button"
-        :disabled="state.page.value === 1"
-        @click="state.previous"
-      >
-        上一页</button
-      ><span>第 {{ state.page.value }} 页</span
-      ><button
-        class="secondary-button"
-        :disabled="!state.hasNext.value"
-        @click="state.next"
-      >
-        下一页
-      </button>
-    </footer>
+      <div class="overflow-x-auto">
+        <table class="w-full text-left border-collapse text-sm">
+          <thead>
+            <tr
+              class="border-b border-slate-100 text-xs uppercase tracking-wider text-slate-400 font-bold"
+            >
+              <th class="py-3.5 px-4">任务编号 / 尝试限制</th>
+              <th class="py-3.5 px-4">被叫号码</th>
+              <th class="py-3.5 px-4">执行坐席</th>
+              <th class="py-3.5 px-4">外呼模式</th>
+              <th class="py-3.5 px-4">任务状态</th>
+              <th class="py-3.5 px-4">计划时间</th>
+              <th class="py-3.5 px-4 text-right">调度控制</th>
+            </tr>
+          </thead>
+          <tbody class="divide-y divide-slate-100 text-sm text-slate-700">
+            <tr v-if="state.loading.value">
+              <td colspan="7" class="py-12 text-center text-slate-400">
+                <RefreshCw
+                  class="w-6 h-6 animate-spin mx-auto mb-2 text-brand-500"
+                />
+                正在加载自动外呼任务...
+              </td>
+            </tr>
+            <tr v-else-if="state.rows.value.length === 0">
+              <td colspan="7" class="py-12 text-center text-slate-400 font-medium">
+                <PhoneOutgoing class="w-8 h-8 mx-auto mb-2 text-slate-300" />
+                暂无自动外呼任务
+              </td>
+            </tr>
+            <tr
+              v-for="row in state.rows.value"
+              v-else
+              :key="row.id"
+              class="hover:bg-slate-50/80 transition-colors"
+            >
+              <td class="py-4 px-4">
+                <div class="font-mono font-bold text-slate-900" :title="row.id">
+                  {{ row.id }}
+                </div>
+                <div class="text-xs text-slate-400 font-medium">
+                  最多 {{ row.maxAttempts }} 次尝试
+                </div>
+              </td>
+              <td class="py-4 px-4 font-mono text-xs font-bold text-slate-800">
+                {{ row.number }}
+              </td>
+              <td class="py-4 px-4">
+                <span
+                  class="px-2.5 py-0.5 rounded-lg font-mono text-xs bg-slate-100 text-slate-800 border border-slate-200"
+                >
+                  {{ row.owner }}
+                </span>
+              </td>
+              <td class="py-4 px-4">
+                <span
+                  class="px-2.5 py-0.5 rounded-full text-xs font-bold border"
+                  :class="modeConfig[row.mode]?.class || 'bg-slate-50 text-slate-700 border-slate-200'"
+                >
+                  {{ modeConfig[row.mode]?.label || row.mode }}
+                </span>
+              </td>
+              <td class="py-4 px-4">
+                <span
+                  class="px-2.5 py-0.5 rounded-full text-xs font-bold border"
+                  :class="statusConfig[row.status]?.class || 'bg-slate-100 text-slate-700 border-slate-200'"
+                >
+                  {{ statusConfig[row.status]?.label || row.status }}
+                </span>
+              </td>
+              <td class="py-4 px-4 font-mono text-xs text-slate-500">
+                {{ row.scheduledAt || "-" }}
+              </td>
+              <td class="py-4 px-4 text-right">
+                <div class="inline-flex items-center gap-1.5">
+                  <button
+                    title="查看尝试记录"
+                    class="px-2.5 py-1.5 bg-indigo-50 hover:bg-indigo-100 text-brand-600 border border-brand-200 rounded-xl text-xs font-bold inline-flex items-center gap-1 transition cursor-pointer"
+                    @click="state.showAttempts(row)"
+                  >
+                    <ListRestart class="w-3.5 h-3.5" />
+                    <span>记录</span>
+                  </button>
 
+                  <button
+                    v-if="row.status === 'PENDING'"
+                    title="暂停任务"
+                    class="px-2.5 py-1.5 bg-amber-50 hover:bg-amber-100 text-amber-700 border border-amber-200 rounded-xl text-xs font-bold inline-flex items-center gap-1 transition cursor-pointer disabled:opacity-40"
+                    :disabled="state.controllingId.value === row.id"
+                    @click="state.control(row, 'PAUSE')"
+                  >
+                    <Pause class="w-3.5 h-3.5" />
+                    <span>暂停</span>
+                  </button>
+
+                  <button
+                    v-if="row.status === 'PAUSED'"
+                    title="恢复任务"
+                    class="px-2.5 py-1.5 bg-emerald-50 hover:bg-emerald-100 text-emerald-700 border border-emerald-200 rounded-xl text-xs font-bold inline-flex items-center gap-1 transition cursor-pointer disabled:opacity-40"
+                    :disabled="state.controllingId.value === row.id"
+                    @click="state.control(row, 'RESUME')"
+                  >
+                    <Play class="w-3.5 h-3.5" />
+                    <span>恢复</span>
+                  </button>
+
+                  <button
+                    v-if="['PENDING', 'PAUSED', 'RUNNING'].includes(row.status)"
+                    title="取消任务"
+                    class="px-2.5 py-1.5 bg-rose-50 hover:bg-rose-100 text-rose-700 border border-rose-200 rounded-xl text-xs font-bold inline-flex items-center gap-1 transition cursor-pointer disabled:opacity-40"
+                    :disabled="state.controllingId.value === row.id"
+                    @click="state.control(row, 'CANCEL')"
+                  >
+                    <X class="w-3.5 h-3.5" />
+                    <span>取消</span>
+                  </button>
+                </div>
+              </td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+
+      <!-- Pagination Footer -->
+      <div
+        class="mt-5 flex items-center justify-between text-xs text-slate-500 pt-3 border-t border-slate-100"
+      >
+        <span class="font-medium">第 {{ state.page.value }} 页</span>
+        <div class="flex items-center gap-2">
+          <button
+            class="px-3 py-1.5 rounded-xl border border-slate-200 bg-white hover:bg-slate-50 text-slate-700 disabled:opacity-40 disabled:cursor-not-allowed font-bold transition cursor-pointer"
+            :disabled="state.page.value === 1"
+            @click="state.previous"
+          >
+            上一页
+          </button>
+          <button
+            class="px-3 py-1.5 rounded-xl border border-slate-200 bg-white hover:bg-slate-50 text-slate-700 disabled:opacity-40 disabled:cursor-not-allowed font-bold transition cursor-pointer"
+            :disabled="!state.hasNext.value"
+            @click="state.next"
+          >
+            下一页
+          </button>
+        </div>
+      </div>
+    </div>
+
+    <!-- Create Task Dialog -->
     <el-dialog
       v-model="state.createVisible.value"
       title="新建自动外呼任务"
       width="min(34rem, calc(100vw - 2rem))"
       append-to-body
-      ><form
-        class="grid grid-cols-1 gap-4 sm:grid-cols-2"
+      class="rounded-3xl"
+    >
+      <form
+        class="grid grid-cols-1 gap-4 sm:grid-cols-2 p-1"
         @submit.prevent="state.create"
       >
-        <label class="field sm:col-span-2"
-          ><span>执行坐席</span
-          ><select
+        <div class="sm:col-span-2">
+          <label class="block text-xs font-bold text-slate-600 mb-1.5"
+            >执行坐席 <span class="text-rose-500">*</span></label
+          >
+          <select
             v-model="state.form.value.owner"
             :disabled="state.agentsLoading.value"
+            class="w-full bg-slate-50/70 border border-slate-200 rounded-xl px-3 py-2 text-slate-800 text-xs focus:outline-none focus:border-brand-500 focus:ring-1 focus:ring-brand-500/20 font-medium cursor-pointer"
           >
             <option value="">
-              {{ state.agentsLoading.value ? "坐席加载中..." : "请选择" }}
+              {{ state.agentsLoading.value ? "坐席加载中..." : "请选择执行坐席" }}
             </option>
             <option
               v-for="agent in state.agents.value"
@@ -226,164 +301,128 @@ const modeLabel: Record<string, string> = {
               {{ agent.agentName || agent.realName || "未命名" }}
             </option>
           </select>
-          <span v-if="state.agentsError.value" class="text-xs text-rose-600">
+          <span v-if="state.agentsError.value" class="text-xs text-rose-600 flex items-center gap-1 mt-1">
             {{ state.agentsError.value }}
-            <button class="font-semibold underline" @click="state.loadAgents">
+            <button class="font-bold underline cursor-pointer" @click="state.loadAgents">
               重试
             </button>
-          </span></label
-        ><label class="field sm:col-span-2"
-          ><span>被叫号码</span
-          ><input v-model="state.form.value.number" /></label
-        ><label class="field"
-          ><span>外呼模式</span
-          ><select v-model="state.form.value.mode">
-            <option value="PROGRESSIVE">坐席先接</option>
-            <option value="NOTIFICATION">通知外呼</option>
-          </select></label
-        ><label class="field"
-          ><span>最多尝试</span
-          ><select v-model="state.form.value.maxAttempts">
+          </span>
+        </div>
+
+        <div class="sm:col-span-2">
+          <label class="block text-xs font-bold text-slate-600 mb-1.5"
+            >被叫号码 <span class="text-rose-500">*</span></label
+          >
+          <input
+            v-model="state.form.value.number"
+            placeholder="输入外呼被叫号码"
+            class="w-full bg-slate-50/70 border border-slate-200 rounded-xl px-3 py-2 text-slate-800 text-xs focus:outline-none focus:border-brand-500 focus:ring-1 focus:ring-brand-500/20 font-medium font-mono"
+          />
+        </div>
+
+        <div>
+          <label class="block text-xs font-bold text-slate-600 mb-1.5"
+            >外呼模式</label
+          >
+          <select
+            v-model="state.form.value.mode"
+            class="w-full bg-slate-50/70 border border-slate-200 rounded-xl px-3 py-2 text-slate-800 text-xs focus:outline-none focus:border-brand-500 focus:ring-1 focus:ring-brand-500/20 font-medium cursor-pointer"
+          >
+            <option value="PROGRESSIVE">坐席先接 (Progressive)</option>
+            <option value="NOTIFICATION">通知外呼 (Notification)</option>
+          </select>
+        </div>
+
+        <div>
+          <label class="block text-xs font-bold text-slate-600 mb-1.5"
+            >最多尝试次数</label
+          >
+          <select
+            v-model="state.form.value.maxAttempts"
+            class="w-full bg-slate-50/70 border border-slate-200 rounded-xl px-3 py-2 text-slate-800 text-xs focus:outline-none focus:border-brand-500 focus:ring-1 focus:ring-brand-500/20 font-medium cursor-pointer"
+          >
             <option :value="1">1 次</option>
             <option :value="2">2 次</option>
             <option :value="3">3 次</option>
-          </select></label
-        >
-        <p class="sm:col-span-2 text-xs text-slate-500">
-          任务创建后由服务端在配置的工作时段内调度；通知外呼依赖通知音频配置。
+          </select>
+        </div>
+
+        <p class="sm:col-span-2 text-xs text-slate-400 bg-slate-50 p-3 rounded-xl border border-slate-100">
+          💡 任务创建后由服务端调度引擎在外呼时段内自动调度；通知模式将自动播报通知语音。
         </p>
-        <div class="sm:col-span-2 flex justify-end gap-2">
+
+        <div class="sm:col-span-2 flex justify-end gap-2 pt-2 border-t border-slate-100">
           <button
             type="button"
-            class="secondary-button"
+            class="px-3.5 py-2 bg-slate-100 hover:bg-slate-200 text-slate-600 rounded-xl text-xs font-bold transition cursor-pointer"
             @click="state.createVisible.value = false"
           >
-            取消</button
-          ><button class="primary-button" :disabled="state.saving.value">
+            取消
+          </button>
+          <button
+            type="submit"
+            class="px-4 py-2 bg-brand-500 hover:bg-brand-600 text-white rounded-xl text-xs font-bold shadow-xs transition cursor-pointer disabled:opacity-50"
+            :disabled="state.saving.value"
+          >
             {{ state.saving.value ? "创建中..." : "创建任务" }}
           </button>
         </div>
-      </form></el-dialog
-    >
+      </form>
+    </el-dialog>
 
+    <!-- Attempt Records Dialog -->
     <el-dialog
       v-model="state.attemptsVisible.value"
       :title="`任务执行记录 · ${state.selectedJob.value?.id || ''}`"
       width="min(46rem, calc(100vw - 2rem))"
       append-to-body
-      ><div v-if="state.attemptsLoading.value" class="empty">
+      class="rounded-3xl"
+    >
+      <div v-if="state.attemptsLoading.value" class="py-12 text-center text-slate-400">
+        <RefreshCw class="w-6 h-6 animate-spin mx-auto mb-2 text-brand-500" />
         正在加载执行记录...
       </div>
-      <div v-else-if="state.attempts.value.length === 0" class="empty">
-        任务尚未产生呼叫尝试
+      <div v-else-if="state.attempts.value.length === 0" class="py-12 text-center text-slate-400 font-medium">
+        <ListRestart class="w-8 h-8 mx-auto mb-2 text-slate-300" />
+        该任务尚未产生呼叫尝试
       </div>
-      <div v-else class="divide-y divide-slate-200 border-y border-slate-200">
-        <article
+      <div v-else class="space-y-3 p-1 max-h-[60vh] overflow-y-auto">
+        <div
           v-for="attempt in state.attempts.value"
           :key="attempt.id"
-          class="grid grid-cols-2 gap-2 py-3 text-sm sm:grid-cols-4"
+          class="p-4 rounded-2xl bg-slate-50/80 border border-slate-100 space-y-2"
         >
-          <div>
-            <span class="meta">尝试</span
-            ><strong>第 {{ attempt.attemptNo }} 次</strong>
-          </div>
-          <div>
-            <span class="meta">状态</span
-            >{{ statusLabel[attempt.status] || attempt.status }}
-          </div>
-          <div>
-            <span class="meta">结果</span>{{ attempt.result || "等待结果" }}
-          </div>
-          <div>
-            <span class="meta">通话 ID</span
-            ><span class="font-mono text-xs break-all">{{
-              attempt.callId || "-"
-            }}</span>
-          </div>
-          <div class="col-span-2 sm:col-span-4 text-xs text-slate-500">
-            {{ attempt.startedAt || "-" }} → {{ attempt.endedAt || "未结束"
-            }}<span v-if="attempt.failureReason">
-              · {{ attempt.failureReason }}</span
+          <div class="flex items-center justify-between">
+            <span class="font-bold text-slate-900 text-xs">
+              第 {{ attempt.attemptNo }} 次尝试
+            </span>
+            <span
+              class="px-2.5 py-0.5 rounded-full text-xs font-bold border"
+              :class="statusConfig[attempt.status]?.class || 'bg-slate-100 text-slate-700 border-slate-200'"
             >
+              {{ statusConfig[attempt.status]?.label || attempt.status }}
+            </span>
           </div>
-        </article>
-      </div></el-dialog
-    >
-  </section>
-</template>
 
-<style scoped>
-th,
-td {
-  padding: 0.75rem 1rem;
-}
-.empty {
-  padding: 2.5rem 1rem;
-  text-align: center;
-  color: #64748b;
-}
-.field {
-  display: flex;
-  min-width: 12rem;
-  flex-direction: column;
-  gap: 0.35rem;
-  font-size: 0.75rem;
-  font-weight: 600;
-  color: #475569;
-}
-.field input,
-.field select {
-  min-height: 2.5rem;
-  border: 1px solid #cbd5e1;
-  background: #fff;
-  padding: 0.55rem 0.75rem;
-  font-size: 0.875rem;
-  color: #0f172a;
-}
-.icon-button,
-.primary-button,
-.secondary-button {
-  display: inline-flex;
-  min-height: 2.25rem;
-  align-items: center;
-  justify-content: center;
-  gap: 0.4rem;
-  padding: 0 0.8rem;
-  font-size: 0.8rem;
-  font-weight: 600;
-}
-.icon-button {
-  width: 2.25rem;
-  border: 1px solid #cbd5e1;
-  background: #fff;
-  padding: 0;
-}
-.primary-button {
-  background: #2563eb;
-  color: #fff;
-}
-.secondary-button {
-  border: 1px solid #cbd5e1;
-  background: #fff;
-  color: #334155;
-}
-.icon-button:disabled,
-.primary-button:disabled,
-.secondary-button:disabled {
-  cursor: not-allowed;
-  opacity: 0.45;
-}
-.status {
-  display: inline-flex;
-  background: #f1f5f9;
-  padding: 0.2rem 0.5rem;
-  font-size: 0.75rem;
-  font-weight: 600;
-  color: #334155;
-}
-.meta {
-  display: block;
-  font-size: 0.7rem;
-  color: #94a3b8;
-}
-</style>
+          <div class="grid grid-cols-2 gap-2 text-xs">
+            <div>
+              <span class="text-slate-400">执行结果：</span>
+              <span class="font-semibold text-slate-700">{{ attempt.result || "等待结果" }}</span>
+            </div>
+            <div>
+              <span class="text-slate-400">通话 ID：</span>
+              <span class="font-mono text-slate-700 truncate" :title="attempt.callId">{{ attempt.callId || "-" }}</span>
+            </div>
+          </div>
+
+          <div class="text-xs text-slate-400 font-mono flex items-center justify-between pt-1 border-t border-slate-200/60">
+            <span>{{ attempt.startedAt || "-" }} → {{ attempt.endedAt || "未结束" }}</span>
+            <span v-if="attempt.failureReason" class="text-rose-500 font-sans font-bold">
+              {{ attempt.failureReason }}
+            </span>
+          </div>
+        </div>
+      </div>
+    </el-dialog>
+  </div>
+</template>

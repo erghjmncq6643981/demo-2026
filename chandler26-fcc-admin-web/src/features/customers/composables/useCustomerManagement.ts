@@ -39,11 +39,12 @@ export function useCustomerManagement() {
     loading.value = true;
     error.value = "";
     try {
-      rows.value = await customerManagementApi.list({
+      const result = await customerManagementApi.list({
         page: page.value,
         owner: ownerFilter.value || undefined,
         phone: phoneFilter.value.trim() || undefined,
       });
+      rows.value = Array.isArray(result) ? result : [];
     } catch (cause) {
       rows.value = [];
       error.value = errorText(cause, "客户资料加载失败");
