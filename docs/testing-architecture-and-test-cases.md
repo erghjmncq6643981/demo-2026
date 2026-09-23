@@ -1,137 +1,83 @@
-# FCC 测试现状与交付验证要求
+# FCC 测试策略与用例
 
-## 1. 文档目的
+## 1. 目的
 
-本文记录仓库中实际存在的测试资产和 FCC 变更的最低验证要求。测试文件存在不等于已经在当前环境通过；依赖 MySQL、Redis、NATS、Sidecar、FreeSWITCH、SIP 终端或浏览器的结果必须单独说明。
+本文规定 FCC 变更的最低验证层级、核心场景和结果记录方式。它不保存某一次执行的测试数量或机器故障。测试文件存在、Mock 通过、页面可打开或 RPC 返回 `ACCEPTED` 都不能替代真实话务验收。
 
-## 2. 当前自动化资产
+验证结论必须区分：
 
-### 2.1 JDK 21 FCC
+1. 静态检查或构建通过；
+2. 自动化测试通过；
+3. 依赖真实基础设施的集成测试通过；
+4. FreeSWITCH/SIP/双向媒体/Windows 人工验收通过；
+5. 未执行或失败，并说明原因。
 
-`chandler26-jdk21-fcc` 当前包含：
+## 2. 分层测试矩阵
 
-- `fcc-common`
-  - `IdUtilTest`
-  - `TimeUtilTest`
-  - `FccIdentifierJacksonModuleTest`
-  - `FccEventMethodsTest`
-- `fcc-server`
-  - `AgentWebSocketIntegrationTest`
-  - `AgentWebSocketRoutingBoundaryTest`
-  - `CallControlBoundaryTest`
-  - `DatabaseConnectionTest`
-  - `FccTelephonyFlowTest`
-  - `FlowReloadBoundaryTest`
-  - `RuntimeSqlIntegrationTest`
-- `fcc-admin`
-  - `AgentAccountServiceTest`
-  - `CallCdrAndResourceAdminTest`
-  - `ExtensionAdminIntegrationTest`
-  - `P0P1CoreFeaturesTest`
-  - `AdminMapperRegistrationTest`
-  - `CallCdrQueryBoundaryTest`
-
-这些测试覆盖部分工具、坐席 WebSocket、数据库连接、话务流程、坐席账户、资源、CDR、回拨、分机和流程定义。环境型测试是否可运行取决于本地依赖与测试配置。
-
-### 2.2 JDK 17 FCC 验证工程
-
-`cloud-2025/chandler26-jdk17-freeswitch-FCC` 包含一个 `ChandlerFccFlowTest`，用于验证前代内存流程实现、FNode RPC 和 Sidecar 分机管理。它不是当前管理端/坐席端的主后端测试套件。
-
-### 2.3 Go Sidecar
-
-Sidecar 已有 `event/normalizer_test.go`、`rpc/handler_test.go`、`db/models_test.go`，分别检查录音事件契约、规范方法/旧别名拒绝、凭据和路径序列化边界。仓库中的：
-
-- `test/nats_client_demo.go`
-- `test/verify_fnode_flow.go`
-
-是手动联调程序，不应计入 `go test` 覆盖率或自动化通过率。
-
-两个程序位于同一目录并分别定义了 `main` 和同名 DTO，因此当前执行 `go test ./...` 会在工具链编译阶段产生包内重复定义。自动化命令需要显式列出 Sidecar 生产包，手工程序分别使用 `go run <file>`。
-
-### 2.4 前端
-
-当前测试资产：
-
-- 管理端 `tests/governance.test.mjs`：4 个模型测试，覆盖定义 JSON、组树与字符串 ID、CDR 缺失/零测量值。
-- 坐席端：4 个测试文件、10 个测试，覆盖运行配置、呼叫状态、控制结果、DTMF 单路径和 WebSocket 认证头。
-- `cloud-2025/fswitch-web`：尚无自动化测试；本轮执行构建、额外类型检查及离线浏览器检查。
-
-`npm run build` 只能证明类型检查/打包链路，不证明 API、呼叫状态机、权限或浏览器交互正确。
-
-### 2.5 Shell 验证脚本
-
-仓库存在：
-
-- `tests/run-all-tests.sh`
-- `tests/telephony-benchmark/draining-chaos-test.sh`
-
-脚本存在不代表已经在当前拓扑执行或达到其目标。运行前必须检查路径、端口、依赖和脚本假设，运行后保留命令、环境与结果。
-
-## 3. 分层验证矩阵
-
-| 变更类型 | 最低自动化 | 环境验证 |
+| 变更类型 | 最低自动化 | 必要环境验证 |
 | --- | --- | --- |
-| Java DTO/枚举/工具 | 相关单元测试、全量 compile/test | 无 |
-| Java Controller/Application/Mapper | compile/test、Mapper XML 解析、契约测试 | 可用 MySQL/Redis 下验证事务和查询 |
-| NATS/FCC 命令 | 协议 fixture、超时/无响应/重复测试 | NATS + Sidecar 联调 |
-| 事件与呼叫状态机 | 正常、重复、乱序、终态幂等、重启恢复测试 | Sidecar + FreeSWITCH 事件闭环 |
-| WebSocket | 握手、心跳、断线、重连、重复会话与清理测试 | 浏览器或 WebSocket 客户端 |
-| SIP/WebRTC | 状态与资源清理单测 | 真实浏览器、麦克风、SIP WS/WSS、双向音频 |
-| 管理端 CRUD | API adapter/权限/分页/错误状态测试 | 浏览器 + fcc-admin |
-| 运维控制 | 命令校验、错误映射、stale 状态测试 | Sidecar + FreeSWITCH；破坏性操作使用隔离环境 |
-| 数据库 DDL | 静态审查、迁移顺序、Mapper 对齐 | 一次性 MySQL 8 实例执行与回滚/修复演练 |
+| Java DTO、枚举、序列化、工具 | 相关单元测试；全项目 compile/test | 对外 JSON 变化需真实 HTTP 契约检查 |
+| Controller、Application、Service、Mapper | compile/test；Mapper XML 解析；权限和事务否定用例 | MySQL/Redis 下验证锁、唯一约束、分页和回滚 |
+| Flow Model 与 Action | 资源解析；动作目录完备性；定义校验；版本并发测试 | admin 保存/发布、server 加载固定版本和真实通话轨迹 |
+| NATS/FNode 命令 | Java/Go fixture；非法值、超时、重复和未知结果测试 | NATS + Sidecar + FreeSWITCH，核对命令与最终事件 |
+| 事件与状态机 | 重复、乱序、晚到、终态幂等、重启恢复测试 | JetStream 重投、Sidecar outbox、FreeSWITCH 快照竞态 |
+| SIP/WebRTC | Session/Call 关联、资源清理和失败状态测试 | 真实 WSS、麦克风、ICE/TURN、双向音频和双方挂机 |
+| 业务 WebSocket | 握手鉴权、心跳、断线、重连、重复 Session 测试 | 浏览器/Electron 登录、网络切换和服务重启 |
+| 管理端 CRUD | API adapter、字符串 ID、分页、空/错/无权限状态 | 认证浏览器操作、长文本和移动敏感宽度 |
+| Windows 客户端 | IPC 白名单、通知去重、回执和退出清理测试 | 最小化、托盘、锁屏、专注助手、重连和安装包 |
+| Sidecar 运维 | 参数校验、凭据脱敏、stale/错误映射测试 | PostgreSQL、ESL、注册终端；破坏性操作使用隔离环境 |
+| Schema | DDL 静态审查、实体/Mapper 对齐 | 一次性 MySQL 8/PostgreSQL 空库执行；生产期再验证迁移和回退 |
 
-## 4. 必测业务场景
+## 3. 核心业务用例
 
-### 4.1 呼叫与事件
+### 3.1 身份、终端和权限
 
-- 外呼命令受理、超时、无响应和 Sidecar 业务错误。
-- Channel START/RINGING/READY/BRIDGE/DESTROY 正常链路。
-- 重复事件、乱序事件和未知 Channel。
-- 坐席/客户单边挂机、双方重复挂机和满意度分支。
-- 转接过程中原坐席退出、目标坐席失败和客户提前挂机。
-- 录音开始、停止、文件缺失和元数据重复上报。
-- 使用协议 fixture 校验 Sidecar 和 Java 对录音方法名、字段名及 NATS category 完全一致；规范方法为 `Event.Recording`，category 为 `record`，不接受旧别名。
-- 服务重启后从 MySQL/Sidecar 恢复或明确进入待核对状态。
+- 首个管理员 bootstrap 默认关闭；缺少配置时拒绝；已有控制台账号时不覆盖。
+- 坐席只能取得本人 SIP 配置；响应不可缓存，日志和前端存储没有明文口令。
+- `WEBRTC -> SIP -> WEBRTC` 切换始终只有一个活跃终端；通话中和 ACW 期间拒绝切换。
+- 物理话机 `0000` 绑定覆盖成功、错误工号、未知分机、冲突分机、重复 DTMF 和并发换绑。
+- 未登录、停用账号、伪造工号、跨坐席控制、客户/录音越权全部被后端拒绝。
 
-### 4.2 坐席端
+### 3.2 呼入、外呼和事件
 
-- 登录过期和无权限。
-- 业务 WebSocket 心跳超时、断线重连和登出清理。
-- SIP 注册成功、失败、麦克风拒绝和媒体建立失败。
-- WebSocket 与 SIP 对同一接听/挂机事件重复通知。
-- 页面卸载、终端切换和重新登录不遗留定时器或音频 Session。
-- ACW 只进入一次，并在提交/取消后恢复一致状态。
+- DID 精确命中发布流程；不存在、停用或未绑定 DID 时明确失败。
+- 菜单按键、if 分支、唯一 else、收号超时、无坐席、排队超时和客户提前挂机。
+- 系统先呼坐席：坐席拒接或超时不得继续呼客户；客户忙线/超时有明确终态。
+- 坐席终端主动拨号：接管认证坐席 Leg，不重复呼叫坐席；未绑定终端拒绝。
+- Channel 正常链路及重复、乱序、未知 Channel、单边挂机、双方重复挂机。
+- 命令超时或应答未知时先查询/对账，不自动重复产生副作用。
+- 服务重启后从 MySQL、Sidecar 快照和事件事实恢复，或明确进入 `UNKNOWN` 待核对。
 
-### 4.3 管理端
+### 3.3 流程、录音与业务闭环
 
-- 列表分页、空数据、筛选保持、详情加载失败。
-- 对大于 JavaScript 安全整数范围的 `Long` ID 做序列化与前端透传测试。
-- 坐席/组/分机变更的后端授权和操作审计。
-- 流程草稿保存、发布失败、运行时 reload 未确认和版本回看。
-- 空库首个管理员 bootstrap：默认关闭、缺少配置失败、仅首次创建、已有账号不覆盖口令。
-- DID 被叫号码与流程绑定：不存在流程拒绝、一个号码单一归属、无启用 DID 的呼入流程拒绝发布。
-- Flow Studio：首个草稿由服务端分配版本号，已发布版本只读，BRANCH 的 else 与 ROUTE 共用同一个 `defaultRoute`。
-- 录音无权限、文件不存在、范围请求和下载审计。
-- 回拨任务重复指派、重复发起和并发状态变化。
+- 流程编码唯一；首个草稿由服务端分配版本；已发布版本只读。
+- 并发发布最多一个版本生效；发布失败保留旧版本；存量通话不切换版本。
+- `BRANCH.defaultRoute` 与 `ROUTE` 编辑同一份 else 数据，重复按键和未知字段被拒绝。
+- 五个固定系统模型都可加载，所有 FNode 方法都有公共 Action 对应关系。
+- 录音开始/停止、重复事件、文件缺失、完成态、范围读取和下载审计。
+- 坐席先挂机进入评价/结束语音；客户先挂机不继续播放；评分与超时路径均留痕。
+- 第三方动作拒绝模型中的任意 URL，校验协议版本、`commandId` 和结构化响应。
 
-### 4.4 运维端
+### 3.4 自动外呼、回拨和弹屏
 
-- Sidecar、PostgreSQL 或 ESL 分别不可用。
-- 上次数据 stale 标识和恢复刷新。
-- 强制注销、强拆、转接、网关修改、reload 和原生命令的确认与失败反馈。
-- 日志 WebSocket 断线重连、消息突发和页面卸载清理。
+- 通知型的应答、按 1 确认、未确认、忙线、无应答和可重试分类。
+- 渐进式先预占/呼叫坐席，再呼客户；坐席忙碌不消耗客户拨号尝试。
+- 领取租约、多实例竞争、暂停、取消、重启恢复、结果未知和成功项不重拨。
+- 回拨原 Call 关联、原子领取、重复点击和并发状态变化。
+- 弹屏收件人、过期、断线补发、重复回执、通话结束撤销和客户详情授权。
 
-## 5. 标准命令
+### 3.5 前端和运维
+
+- 列表分页、空数据、失败重试、登录失效、无权限、stale 数据和长文本。
+- Java `Long`/雪花 ID 全程作为字符串；禁止 `Number`、`parseInt`、算术或数值排序。
+- SIP 注册失败、麦克风拒绝、ICE 失败、第二来电、远端挂机和旧 Session 晚到。
+- 页面卸载、退出、终端切换和重连不遗留定时器、监听器、UA、Session 或 MediaStream。
+- Sidecar、PostgreSQL、ESL 分别不可用时不展示伪造的健康、容量、网关状态或 RTT。
+- 强拆、注销、转接、网关修改和 NativeAPI 有确认、授权、审计和失败反馈。
+
+## 4. 标准命令
 
 JDK 21 FCC：
-
-```bash
-mvn -q -DskipTests compile
-mvn -q test
-```
-
-JDK 17 FCC：
 
 ```bash
 mvn -q -DskipTests compile
@@ -143,33 +89,51 @@ Go Sidecar：
 ```bash
 go build -o fs-sidecar-agent .
 go test ./api ./config ./db ./esl ./event ./governance ./nats ./rpc
+```
+
+`test/nats_client_demo.go` 与 `test/verify_fnode_flow.go` 是两个独立手工联调程序，不计入自动化通过率，也不能用 `go test ./...` 一并编译：
+
+```bash
 go run test/nats_client_demo.go
 go run test/verify_fnode_flow.go
 ```
 
-三个前端分别执行：
+管理端：
+
+```bash
+npm ci
+node --test tests/governance.test.mjs
+npm run build
+```
+
+坐席端：
+
+```bash
+npm ci
+npm run test
+npm run desktop:test
+npm run build
+```
+
+运维端：
 
 ```bash
 npm ci
 npm run build
 ```
 
-变更完成后：
+所有工程完成后执行 `git diff --check`。变更 JavaScript 模块时额外执行 `node --check <file>`；变更 Mapper XML 时解析所有受影响 XML；视觉变更必须在浏览器检查桌面、长文本和移动敏感宽度。
 
-```bash
-git diff --check
+## 5. 结果记录模板
+
+```text
+变更范围：
+环境与外部依赖：
+已通过：
+失败（首个有效错误）：
+未执行及原因：
+真实 FreeSWITCH/SIP/媒体/Windows 验收：
+剩余风险：
 ```
 
-## 6. 结果记录
-
-2026-09-23：使用本机 JDK 21 后 Java 编译、`fcc-common` 全量测试以及录音、评价、拨号超时、事件分发、流程缓存和话务控制定向测试通过；Sidecar 使用 Go 1.27.1 完成全部生产包测试及构建。验证时临时启动 NATS Server 2.15.0 与 JetStream，应用日志确认连接 `127.0.0.1:4222`。完整 `mvn -q test` 中 `fcc-server` 共运行 48 项，0 项断言失败、9 项环境错误、1 项跳过；Windows/JDK selector 无法建立 Lettuce Redis 事件循环，应用上下文提前失败，MySQL 业务 Schema 因而未完成本轮验证，仍不能记为全量通过。定向 Java 命令、部署顺序和新增测试详见 [契约修复记录](fcc-contract-remediation.md)。Sidecar 真实事件写入/重投、ESL、SIP、媒体及登录态业务页面回归尚未完成。
-
-交付说明必须区分：
-
-- 已执行且通过；
-- 已执行但失败，并给出首个有效错误；
-- 因缺少外部依赖未执行；
-- 仅完成静态检查；
-- 浏览器、媒体或真实电话链路未验证。
-
-禁止用 Mock、静态页面、命令受理响应或脚本文件存在来替代端到端通过结论。
+交付说明不得把缺少外部依赖写成通过，也不得用 Mock、静态页面、日志中“已发送”或脚本文件存在代替端到端证据。

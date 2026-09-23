@@ -1,20 +1,22 @@
-# FCC IVR Flow Studio 现状
+# FCC IVR Flow Studio 设计
 
-更新：2026-09-20。本页只描述已实现的管理面契约，不把发布通知或 FNode 同步应答当作真实通话完成。
+本页只描述已实现的管理面契约，不把发布通知或 FNode 同步应答当作真实通话完成。
 
 ## 业务模型
 
-`fcc-common/src/main/resources/flows/system-models.json` 是呼入、坐席先接外呼、通知外呼和话机绑定四个固定模型的唯一来源。管理页通过后端模型和动作目录显示 action 中文名、执行器类型与 operation，不在 Vue 中复制 Java 动作枚举。
+`fcc-common/src/main/resources/flows/system-models.json` 是呼入、坐席先接外呼、坐席终端主动外呼、通知外呼和话机绑定五个固定模型的唯一来源。管理页通过后端模型和动作目录显示 action 中文名、执行器类型与 operation，不在 Vue 中复制 Java 动作枚举。
 
 可编辑定义只支持 `routeMode=IVR`、`template=INBOUND` 的固定阶段：
 
 ```text
-ENTRY -> MENU -> BRANCH -> ROUTE -> BRIDGE -> CONNECTED -> END
+ENTRY -> MENU -> BRANCH -> ROUTE -> BRIDGE
+      -> RECORD_START -> CONNECTED -> RECORD_STOP
+      -> RATING -> RATING_SAVE -> CLOSING -> END
 ```
 
-动作和顺序不可修改。画布只允许配置菜单媒体、收号超时、单键 if/else 分支、坐席/技能组目标、排队时限和未接通处理。后端拒绝重复按键、非安全媒体路径、未知字段、旧 `DID_DIRECT` 模型及任意脚本/类名/URL。
+动作和顺序不可修改。画布只允许配置菜单媒体、收号超时、单键 if/else 分支、坐席/技能组目标、排队时限和未接通处理；录音、服务评价和结束语音是系统固定阶段。后端拒绝重复按键、非安全媒体路径、未知字段、旧 `DID_DIRECT` 模型及任意脚本/类名/URL。
 
-`call-center-backend` 用于核对多年运行后形成的业务闭环，包括入口分流、路由失败出口、同组代答、漏话、评价、转接、自动外呼确认和业务系统回调；它的多 topic、硬编码流程和隐藏条件分支不作为画布结构。只有已经进入公共动作目录、具备管理端校验、运行端执行和动作事实记录的能力，才允许出现在 Flow Studio 中。当前未动作化的营业时间、溢出、评价、复杂转接和具体第三方回调继续显示为待完善能力，不提供看似可配置但运行端无法兑现的控件。
+`call-center-backend` 用于核对多年运行后形成的业务闭环，包括入口分流、路由失败出口、同组代答、漏话、评价、转接、自动外呼确认和业务系统回调；它的多 topic、硬编码流程和隐藏条件分支不作为画布结构。只有已经进入公共动作目录、具备管理端校验、运行端执行和动作事实记录的能力，才允许出现在 Flow Studio 中。当前未动作化的营业时间、溢出、复杂转接和具体第三方回调继续显示为待完善能力，不提供看似可配置但运行端无法兑现的控件。
 
 ## 呼入入口与被叫号码
 

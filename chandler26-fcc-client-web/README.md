@@ -2,7 +2,7 @@
 
 FCC agent desktop built with Vue 3, TypeScript, Pinia, JsSIP, Tailwind CSS, and Vite.
 
-2026-09-20: Windows Electron test shell is available. Build with `npm run desktop:build`; verify with `npm run desktop:test`. The latest locally verified unsigned installer is `release/current/FCC Agent Setup 2.0.0.exe`. First launch asks for the hosted HTTPS workspace URL. The main process owns the authenticated business socket, tray notifications and received/shown/activated receipts; physical SIP phone is the desktop delivery target. Lock-screen notifications omit customer data. Signing, automatic updates and real Windows notification acceptance are not verified.
+A Windows Electron test shell is available. Build it with `npm run desktop:build` and verify its focused tests with `npm run desktop:test`. First launch asks for the hosted HTTPS workspace URL. The main process owns the authenticated business socket, tray notifications and received/shown/activated receipts. Signing, automatic updates and real Windows notification acceptance are not verified.
 
 Customer records, phone binding, automatic outbound, callback scheduling and after-call summaries use fcc-server. Callback actions enqueue a durable progressive job; they do not separately originate in the browser. Summaries persist before completing ACW. See [cross-machine deployment and acceptance](../docs/fcc-cross-machine-acceptance.md).
 
@@ -25,10 +25,10 @@ The three channels have independent lifecycle and failure states. A successful R
 ## Implemented workflows
 
 - Agent login and endpoint loading/switching.
-- WebRTC, SIP phone, and mobile answer-mode selection.
+- WebRTC and SIP-phone answer-mode selection; the `MOBILE` domain value is reserved but its call path is unavailable.
 - Agent business WebSocket with heartbeat and reconnect.
 - JsSIP registration, incoming/outbound session handling, remote audio, DTMF, mute, answer, and hangup.
-- Outbound call, hold, transfer, supervisor actions, and call-end handling.
+- Outbound call, hold, transfer, and call-end handling. Supervisor actions are explicitly unavailable.
 - Incoming screen pop, in-call workspace, ACW, callback queue, CDR list, and agent monitoring.
 
 The client uses `/api/admin` for business data, `/api/telephony` for call commands, and `/ws/agent` for business events.
@@ -60,11 +60,9 @@ Known debt:
 - Hold and transfer report accepted requests, not final media outcomes; failures preserve the active view. Supervisor actions are explicitly unavailable. Real media confirmation still requires integration checks.
 - Some components call API functions directly instead of dispatching a feature use case/store action.
 - Generated Vite/declaration/build-info files have been removed from tracked sources and ignored.
-- Ten tests cover selected configuration, lifecycle, control outcomes, DTMF single-path delivery and WebSocket identity boundaries. Real SIP registration, media failure and authenticated browser workflows remain unverified.
+- Focused tests cover selected configuration, lifecycle, control outcomes, DTMF single-path delivery and WebSocket identity boundaries. Real SIP registration, media failure and authenticated browser workflows remain unverified.
 - Other agents' presence and endpoints are now shown as unknown; authoritative team presence is still unavailable.
 
 See [the FCC frontend architecture](../docs/frontend-architecture-and-ui-design.md) for shared boundaries and acceptance rules.
 
-See [contract findings](../docs/fcc-contract-alignment.md) and [product priorities](../docs/fcc-product-design.md) for remaining functional gaps.
-
-Deployment and credential format changes are documented in [the remediation record](../docs/fcc-contract-remediation.md).
+See the [FCC documentation index](../docs/README.md), [product design](../docs/fcc-product-design.md), and [cross-machine deployment and acceptance](../docs/fcc-cross-machine-acceptance.md) for current boundaries and remaining work.

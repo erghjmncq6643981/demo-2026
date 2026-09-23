@@ -1,8 +1,6 @@
 # chandler26-jdk21-fcc
 
-Current FCC control-plane backend for the admin and agent frontends. It is a Java 21, Spring Boot 4.1.1 modular monolith that controls FreeSWITCH through NATS and the Go Sidecar.
-
-The earlier statement that this repository contained only a skeleton is no longer accurate. The source now includes administration APIs, call-control APIs, persistence, authentication, WebSocket delivery, flow handling, recording access, and integration tests.
+FCC control-plane backend for the admin and agent frontends. It is a Java 21, Spring Boot 4.1.1 modular monolith that controls FreeSWITCH through NATS and the Go Sidecar.
 
 ## Modules
 
@@ -69,13 +67,13 @@ The `/api/admin` surface includes:
 
 - MySQL is the source of truth for FCC business facts and configuration.
 - Redis accelerates reconstructable runtime state such as extension presence and publication notifications.
-- NATS Core provides request/reply and current event delivery.
+- NATS Core provides request/reply; JetStream carries persistent FCC events.
 - FreeSWITCH media files are shared through the configured recording base directory.
 - `docs/fcc-schema.sql` is the baseline schema. Not every baseline table has a complete runtime workflow yet; mapper/service coverage is the implementation boundary.
 
 Active calls also use an in-memory session index for event correlation. MySQL remains necessary for durable facts; recovery behavior must not be inferred solely from the in-memory map.
 
-The shared `FccIdentifierJacksonModule` is registered in admin/server and serializes Long bean properties named `id` or ending in `Id` as strings. Numeric measurements stay numeric. Its unit test passes under the temporary JDK 21; Map values, other names and actual Spring HTTP integration still require verification.
+The shared `FccIdentifierJacksonModule` is registered in admin/server and serializes Long bean properties named `id` or ending in `Id` as strings. Numeric measurements stay numeric. Map values, other names and actual Spring HTTP integration still require verification.
 
 ## Configuration
 
@@ -105,7 +103,7 @@ FCC_BOOTSTRAP_ADMIN_PASSWORD=<8-64 character secret>
 
 The service stores only a PBKDF2 hash. It never logs or returns the password. Bootstrap does nothing when disabled, is idempotent only for the same already-created administrator, and refuses to create or overwrite an account when any other console account exists. Remove all `FCC_BOOTSTRAP_ADMIN_*` variables and restart immediately after the first successful login.
 
-The Java node ID must exactly match the Sidecar `NODE_ID`. Database, Redis, NATS, Sidecar, SIP, and recording credentials/paths must be supplied by deployment configuration rather than committed defaults.
+`NODE_ID` belongs to Sidecar. Java business commands do not select a node. Database, Redis, NATS, Sidecar, SIP, and recording credentials/paths must be supplied by deployment configuration rather than committed defaults.
 
 ## Build and test
 
@@ -125,11 +123,12 @@ Test sources cover utilities, WebSocket behavior, database connectivity, telepho
 
 ## Documentation
 
+- [FCC documentation index](../docs/README.md)
 - [Architecture and current boundaries](./docs/DESIGN.md)
-- [Product design and completion priorities](../docs/fcc-product-design.md)
-- [Frontend/backend contract findings](../docs/fcc-contract-alignment.md)
-- [Contract remediation and deployment order](../docs/fcc-contract-remediation.md)
+- [Product design](../docs/fcc-product-design.md)
+- [Delivery plan](../docs/fcc-delivery-plan.md)
 - [Baseline schema](./docs/fcc-schema.sql)
 - [Project rules](./AGENTS.md)
 - [Cross-project frontend architecture](../docs/frontend-architecture-and-ui-design.md)
-- [Testing status and acceptance](../docs/testing-architecture-and-test-cases.md)
+- [Testing strategy](../docs/testing-architecture-and-test-cases.md)
+- [Cross-machine deployment and acceptance](../docs/fcc-cross-machine-acceptance.md)

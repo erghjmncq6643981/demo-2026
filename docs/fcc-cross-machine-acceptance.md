@@ -1,56 +1,85 @@
 # FCC 跨电脑部署与验收
 
-更新：2026-09-20。本文对应当前源码和本地证据，不是生产验收通过证明。FreeSWITCH、SIP、双向音频与 Windows 实际通知行为由目标电脑验收。
+## 1. 文档目的
 
-## 部署顺序
+本文用于部署当前 FCC 源码并完成真实环境验收，不是“已经验收通过”的证明。测试结果应记录在当次交付或验收报告中，不回填本文。
 
-1. 这是全新项目，只支持空库初始化。备份已有开发数据后创建空 MySQL 8 数据库，执行 `chandler26-jdk21-fcc/docs/fcc-schema.sql`；不要导入旧呼叫中心表、话单或流程 JSON。仓库当前没有可执行增量迁移目录，不得按不存在的迁移文件升级旧库。
-2. 启动 MySQL 8、Redis、Sidecar 所需 PostgreSQL 与启用 JetStream 的 NATS。NATS 使用持久存储。以受控管理员身份执行 `nats stream add --config chandler26-jdk21-fcc/docs/fcc-events-stream.json`，已有流先用 `nats stream info FCC_EVENTS` 检查，不自动覆盖配置。该文件是单节点测试配置，生产集群需按部署拓扑调整副本数。
-3. Sidecar 每节点配置独占持久目录 `COMMAND_JOURNAL_DIR`、`EVENT_OUTBOX_DIR`，不能放临时盘、共享给另一进程或发布时清空。配置真实 `NODE_ID`、ESL、NATS 和 PostgreSQL；先验证节点健康，再启动 Java。
-4. Java 不配置 `FCC_DEFAULT_NODE_ID`，只配置 `NATS_URL`、数据库、Redis、`FCC_ADMIN_BASE_URL`、`FCC_WS_ALLOWED_ORIGINS` 和录音共享路径。业务命令发送到 `fs.cmd.dispatch`；单节点测试由本地 Sidecar 直接执行，多节点必须先部署能够维护 Channel ownership 的 Coordinator。当前运行模板只部署一个活跃 fcc-server；共享 durable consumer 尚不支持安全的多实例内存会话分配。
-5. 配置 HTTPS 反向代理：`/api/admin` 到管理服务 8089，`/api/telephony` 和 `/ws/agent` 到控制服务 8085；WS 转发必须支持 Upgrade。管理、业务和节点运维入口保持分离。
-6. 部署坐席 Vue 页面，安装客户端测试包。首次启动填写该页面的 HTTPS 地址。仅本机开发允许 HTTP 回环地址；测试包未签名，不能宣称已完成可信发布。客户端以实体话机通话，不开放麦克风权限。
+至少准备 MySQL 8、Redis、启用 JetStream 的 NATS、PostgreSQL、Go Sidecar、FreeSWITCH、一个 SIP 终端，以及可运行浏览器/Electron 的 Windows 电脑。涉及 WebRTC 时还需可用的 WSS、麦克风、DTLS-SRTP 与必要的 ICE/TURN 配置。
 
-本轮未连接一次性 MySQL 8 执行基线，也未验证旧库升级；只有静态 DDL 与源码检查。由于不提供旧库兼容，结构不一致的开发环境应重建，不应在运行中的库上临时删列。进入生产变更管理后必须引入不可变迁移、执行记录和隔离库回退验证。
+## 2. 部署顺序
 
-## 标识与升级注意事项
+1. **初始化业务库**：创建空 MySQL 8 数据库，使用 `utf8mb4` 执行 `chandler26-jdk21-fcc/docs/fcc-schema.sql`。不得导入旧呼叫中心表、话单、流程 JSON 或演示账户。
+2. **准备基础设施**：启动 Redis、PostgreSQL 和 NATS/JetStream。使用 `chandler26-jdk21-fcc/docs/fcc-events-stream.json` 创建或核对 `FCC_EVENTS`；生产副本数、容量和保留期按实际拓扑调整。
+3. **启动 Sidecar**：每个进程配置唯一 `NODE_ID` 和独占持久目录 `COMMAND_JOURNAL_DIR`、`EVENT_OUTBOX_DIR`，再配置 ESL、NATS、PostgreSQL、TTS 及媒体共享目录。目录不得位于临时盘，也不得由多个进程共享。
+4. **验证 FreeSWITCH 入口**：配置真实 SIP Profile、运营商 context、DID、`default` 内部分机 context、`0000` 绑定拨号计划和录音/TTS 共享目录。确认 Sidecar 达到可接单状态后再启动 Java。
+5. **启动 Java 服务**：配置 MySQL、Redis、`NATS_URL`、`FCC_ADMIN_BASE_URL`、`FCC_SERVER_BASE_URL`、允许的 WebSocket Origin 和录音共享根目录。Java 不配置默认 `nodeId`，业务命令统一发送到 `fs.cmd.dispatch`。
+6. **创建首个管理员**：首次启动 `fcc-admin` 时显式设置 `FCC_BOOTSTRAP_ADMIN_ENABLED=true` 及操作者选择的用户名、显示名和 8–64 位密码。成功登录后立即移除全部 `FCC_BOOTSTRAP_ADMIN_*` 变量并重启；日志和验收材料不得记录密码。
+7. **配置业务数据**：创建坐席、组、分机、终端、DID、外呼号码/context，创建并发布流程。确认每个呼入流程至少绑定一个启用 DID。
+8. **部署前端**：分别路由 `/api/admin`、`/api/telephony`、`/ws/agent` 和 Sidecar 运维入口；WebSocket 代理必须支持 Upgrade。业务工作台和运维台保持独立访问控制。
+9. **部署 Windows 测试客户端**：配置可信 HTTPS 工作台地址。未签名安装包只能用于受控测试，不能描述为正式可信发布。
 
-业务 callId 为无前缀正整数雪花 ID，HTTP/WS 以字符串传递，所有关联表使用同一 BIGINT 数值。Channel UUID 独立生成，采用标准 36 位 UUID。非法业务标识直接拒绝，不兼容 `call-` 或哈希映射。旧实验产生的前缀上下文不能直接恢复：升级前排空实验呼叫并归档；新环境使用新基线，禁止搬运参考项目话单。
+当前多节点 Coordinator 的 ownership、跨节点 Bridge 和聚合快照尚未完成真实验收。在完成前只部署一个 dispatch ingress 和一个活跃 `fcc-server`，不要让多个 Sidecar 同时竞争 `fs.cmd.dispatch`。
 
-## 实体话机与业务配置
+## 3. 配置检查
 
-- 在管理端配置真实坐席、启用分机、DID、已发布的固定阶段 IVR 流程或 `group:技能组代码` 路由，以及外呼主叫和中继。不导入参考项目账户或演示话单。
-- `FCC_BINDING_PROMPT_FILE` 为 FreeSWITCH 可读取的提示音绝对路径，提示用户输入坐席工号。`0000` 的 FreeSWITCH dialplan 必须把已认证 SIP 话机呼叫 answer/park 给 Sidecar 事件链路；保留真实 `sip_auth_username`，不从 Caller-ID 伪造。已认证话机拨 `0000`→输入坐席工号→fcc-server 锁定坐席与分机完成换绑→挂断。
-- 只有绑定完成且工作台状态 READY 的坐席参与外呼预占。人工/渐进式外呼先拨坐席，接听后再拨客户，双方就绪才请求桥接；命令 ACCEPTED 不表示通话已经接通。
-- 通知型需要 `FCC_NOTIFICATION_FILE`，提示“按 1 确认”，FreeSWITCH 必须可读该文件。通知应答与按键确认是不同结果。
-- 自动外呼默认关闭。配置完成后设置 `FCC_OUTBOUND_ENABLED=true`；默认同时 5 次、Asia/Shanghai 9–18 时、同号码 24 小时最多 3 次。任务暂停只作用于尚未执行的任务；取消不会强制挂断已开始的通话。未知结果不得人工连续点击创建重复任务。
+### 3.1 标识和路由
 
-## 验收用例及证据
+- `callId` 是无前缀正整数雪花 ID，HTTP/WS 以字符串传递；不兼容 `call-` 前缀或哈希转换。
+- `channelUuid` 是标准 FreeSWITCH UUID，不能代替 `callId`。
+- Java 命令使用业务号码与 `routingContext`；gateway、SIP Profile 和线路映射留在 Sidecar/FreeSWITCH。
+- `nodeId` 只从命令应答、事件或快照返回，不作为拨号请求参数。
 
-| 用例 | 应检查的结果 |
-| --- | --- |
-| 绑定失败、换座、并发绑定 | 无验证码/过期码失败；三处绑定数据一致；通话中的坐席不能被换绑 |
-| 呼入 IVR 与技能组 | 命中正确坐席或技能组；两通来电不能占用同一坐席；无人接听换人；客户提前挂机不再分配 |
-| 人工与渐进式外呼 | 坐席先响；拒接不拨客户；客户忙线/超时产生明确结果；双方挂机只释放一次 |
-| 通知外呼 | 提示音可听；按 1 与未确认结果不同；仅允许的失败原因重试，成功项不重拨 |
-| Windows | 前台、最小化、托盘、锁屏、专注助手、断网重连、退出重登；提醒点击恢复窗口；接听/挂机后不保留旧提醒 |
-| 故障恢复 | 分别断开 NATS、停止 Java、重启 Sidecar；保留同一 callId/channelUuid/commandId/eventId；检查重复拨号与未释放占用 |
-| 权限 | 未登录、越权坐席或客户查询/修改被拒绝；通知不泄露客户详情 |
+### 3.2 话机与媒体
 
-每条用例保留脱敏后的 Call、Leg、任务尝试、命令和事件关联。记录“指令受理”“FS 最终事件”“音频实际可听”三个证据，不能互相替代。不要在问题截图和日志中附口令、令牌或验证码。
+- 已认证物理话机拨 `0000` 后，Sidecar 必须保留真实认证分机；Caller-ID 不能代替 SIP 身份。
+- Java、Sidecar 和 FreeSWITCH 对录音/TTS 共享目录必须看到同一文件；验证路径边界、权限、剩余空间和原子写入。
+- 导航语音可发送文案，Sidecar 负责 TTS；服务评价和结束语音使用受控预设。供应商密钥只存在 Sidecar 部署环境。
+- 终端注册投影用于观察和诊断，不作为拨号同步硬前置；最终可达性由命令应答和 Channel 事件确认。
 
-## 本地证据与剩余阻断
+### 3.3 自动外呼
 
-本轮已验证范围以最终交付记录为准：JDK 21 编译、`fcc-common` 全量测试、录音/评价/拨号超时/事件/流程缓存/话务控制定向测试、Sidecar 全部生产包测试与构建、36 个 Mapper XML 解析和静态契约扫描。验证时临时启动 NATS Server 2.15.0 与 JetStream，应用日志确认连接成功。完整 `mvn -q test` 中 `fcc-server` 共运行 48 项，0 项断言失败、9 项环境错误、1 项跳过；Windows/JDK selector 无法建立 Lettuce Redis 事件循环，应用上下文提前失败，MySQL 业务 Schema 未完成本轮验证。没有验证 Sidecar 真实事件写入/重投、FreeSWITCH 或 SIP 终端，也没有执行认证后的浏览器与 Windows 通知验收。单元测试、NATS 可连接和模拟 Sidecar RPC 均不代表 ESL、音频或故障恢复通过。
+- 初次部署保持自动外呼关闭，配置号码、context、时段、频控和并发限制后再启用。
+- 渐进式外呼必须先占用并呼叫坐席，坐席就绪后才呼客户；通知型直接呼客户并执行放音/按键确认。
+- 暂停或取消只影响尚未开始的尝试，不默认强拆已建立通话。
+- 结果未知时先对账 Call/Command/Event，不通过重复点击创建新任务。
 
-派发租约已实现：领取后两分钟未写 Call 的任务会失败并记录 DISPATCH_EXPIRED；迟到线程必须通过同事务租约校验才可保存 Call。已存在 Call 的尝试不按租约过期重拨。
+## 4. 验收矩阵
 
-新增闭环：服务端持久保存弹屏，重连仅补发当前坐席仍在振铃且未过期的提醒，记录 RECEIVED/SHOWN/ACTIVATED/UNSUPPORTED 回执；话后小结保存成功才结束整理；回拨领取与创建渐进式任务同事务提交，重复领取返回现有待执行任务。渐进式任务等待目标坐席就绪，不因忙碌消耗尝试次数。
+| 领域 | 必测用例 | 通过证据 |
+| --- | --- | --- |
+| 身份与权限 | 未登录、停用账号、越权坐席、客户/录音越权、伪造工号 | HTTP/WS 明确拒绝，审计记录不泄露敏感数据 |
+| 物理话机绑定 | 成功、错误工号、未知/停用分机、重复 DTMF、并发换绑、通话中换绑 | 绑定、活跃终端和审计一致；只有一个有效归属 |
+| 呼入 IVR | DID 命中、菜单按键、else/超时、无人、客户提前挂机 | 固定 flow version、阶段轨迹、Call/Leg/Command/Event 可关联 |
+| 系统先呼坐席外呼 | 坐席接听/拒接/超时、客户忙/无应答、双方挂机 | 未接坐席时不呼客户；Bridge、双向音频、CDR 和释放状态一致 |
+| 坐席终端主动外呼 | 已认证终端拨号、未绑定终端、号码转换、重复/乱序事件 | 系统接管已有坐席 Leg，不再次拨坐席；客户 Leg 与 Bridge 正确 |
+| WebRTC | 注册成功/失败、麦克风拒绝、ICE 失败、来去电、第二来电、远端挂机 | SIP Session、业务 Call、Leg 和 UI 状态一致，真实双向音频可听 |
+| 录音与评价 | 开始/停止、坐席先挂、客户先挂、评分/超时、文件缺失 | 评价和结束语音分支正确；元数据与最终文件、时长、权限一致 |
+| 自动外呼 | 通知确认/未确认；渐进式坐席忙/就绪；暂停、取消、重试 | 每次尝试单独留痕，多实例或重启不重复拨号，成功项不重试 |
+| Windows 弹屏 | 前台、最小化、托盘、锁屏、专注助手、断网重连、退出重登 | 收到/展示/激活/不支持可区分；过期提醒不补发，通知不泄露客户详情 |
+| 故障恢复 | 断开 NATS、停止 Java、重启 Sidecar/FreeSWITCH、事件重复或乱序 | 保留稳定身份；终态不回退；占用不重复释放；未知状态进入对账而非假成功 |
+| 管理端 | 流程首个草稿、保存、发布、并发发布、DID 绑定、客户和外呼管理 | 一个流程最多一个发布版本；失败不覆盖草稿；列表分页、详情按需加载 |
 
-恢复范围：Java 每 15 秒查询 ChannelSnapshot，双方话道持续 120 秒在成功快照中缺失后按 RECOVERY_UNKNOWN 结束并释放占用；查询失败不推断挂机。重连恢复不覆盖已存在的内存会话。Leg 状态不会被迟到振铃回退，小结不会被后续会话保存覆盖。
+每条真实呼叫至少保存三类脱敏证据：命令受理或失败、FreeSWITCH 最终事件、媒体/用户实际结果。三者不能互相替代。
 
-事件消费边界：明确失败会 NAK，Inbox 最多重新领取 5 次；已处理重复事件直接 ACK；遗留 `PROCESSING` 与耗尽次数的 `FAILED` 转为 `UNKNOWN`。副作用与 Inbox 仍不是同一事务，`UNKNOWN` 事件需要人工或恢复任务核对；上述逻辑只有单元测试证据，尚未在真实 JetStream 验证重投。
+## 5. 证据记录模板
 
-其余边界：当前快照不能重建桥接事实或解决单边残留话道，也不自动重发未知命令。Windows 包尚未签名，当前采用人工安装新版，不支持自动升级。不得以本地测试替代这些能力的实现或真实环境验收。
+```text
+用例：
+环境与版本：
+前置配置（不含凭据和真实个人号码）：
+操作步骤：
+预期结果：
+实际结果：
+关联 callId / channelUuid / commandId / eventId：
+自动化结果：
+真实媒体或 Windows 结果：
+未验证项与原因：
+结论：通过 / 失败 / 阻塞
+```
 
-JetStream 文件示例保留七天、最多 10 GiB，满额拒绝新消息以保留本地 outbox。必须监控容量和消费滞后：超出保留期仍可能丢失未消费历史；本地盘满会停止 Sidecar 事件入口。命令日志尚无安全清理工具，不能自行按时间删除未知命令记录。
+## 6. 上线限制
+
+- 当前开发阶段只支持空库基线，不支持旧库升级。进入生产变更管理后再建立不可变迁移和回退演练。
+- Sidecar 运维 HTTP/CLI 当前仍依赖可信网络或上游认证网关；未补齐原生授权与持久审计前不得暴露到公网。
+- 未完成签名、升级恢复和 Windows 实机验收前，Electron 包只能称为测试客户端。
+- 未完成真实 TTS、录音完成态、双向媒体、事件重投和重启恢复前，不能宣称端到端可用。
