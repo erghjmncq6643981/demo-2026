@@ -1,18 +1,33 @@
 package com.chandler.fcc.admin;
 
+import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertNotEquals;
+import static org.junit.jupiter.api.Assertions.assertNotNull;
+import static org.junit.jupiter.api.Assertions.assertNull;
+import static org.junit.jupiter.api.Assertions.assertThrows;
+import static org.junit.jupiter.api.Assertions.assertTrue;
+
+import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
+import com.chandler.fcc.admin.agent.application.AgentEndpointService;
 import com.chandler.fcc.admin.infrastructure.persistence.entity.AgentEntity;
 import com.chandler.fcc.admin.infrastructure.persistence.mapper.AgentMapper;
-import com.chandler.fcc.admin.agent.application.AgentEndpointService;
 import com.chandler.fcc.admin.model.PageResult;
-import com.chandler.fcc.admin.model.dto.*;
+import com.chandler.fcc.admin.model.dto.AgentCreateReq;
+import com.chandler.fcc.admin.model.dto.AgentGroupCreateReq;
+import com.chandler.fcc.admin.model.dto.AgentGroupMemberReq;
+import com.chandler.fcc.admin.model.dto.AgentQueryReq;
+import com.chandler.fcc.admin.model.dto.AgentSubstituteReq;
 import com.chandler.fcc.admin.model.vo.AccountCredentialVO;
 import com.chandler.fcc.admin.model.vo.AgentBindingVO;
+import com.chandler.fcc.admin.model.vo.AgentGroupMemberVO;
 import com.chandler.fcc.admin.model.vo.AgentGroupVO;
 import com.chandler.fcc.admin.model.vo.AgentSubstituteVO;
 import com.chandler.fcc.admin.model.vo.AgentVO;
 import com.chandler.fcc.admin.service.AgentService;
-import com.chandler.fcc.admin.FccAdminApplication;
 import com.chandler.fcc.common.util.PasswordHasher;
+import java.time.LocalDateTime;
+import java.util.List;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
@@ -20,11 +35,6 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.test.context.ActiveProfiles;
 import org.springframework.transaction.annotation.Transactional;
-
-import java.time.LocalDateTime;
-import java.util.List;
-
-import static org.junit.jupiter.api.Assertions.*;
 
 /**
  * 坐席账号、组织协同与口令治理集成测试
@@ -58,7 +68,7 @@ public class AgentAccountServiceTest extends EphemeralSipKeyTest {
 
     @BeforeEach
     void cleanupPreExistingAgents() {
-        agentMapper.delete(new com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper<AgentEntity>()
+        agentMapper.delete(new LambdaQueryWrapper<AgentEntity>()
                 .in(AgentEntity::getWorkNo, List.of(TEST_WORK_NO, TEST_WORK_NO_MEMBER, TEST_WORK_NO_GROUP,
                         TEST_WORK_NO_BINDING, TEST_WORK_NO_APPLICANT, TEST_WORK_NO_SUBSTITUTE)));
     }
@@ -206,6 +216,83 @@ public class AgentAccountServiceTest extends EphemeralSipKeyTest {
         agentService.removeMemberFromGroup(groupId, credential.getId());
         groups = agentService.listGroups();
         assertTrue(groups.stream().anyMatch(g -> g.getId().equals(groupId) && g.getMemberCount() == 0));
+    }
+
+    /**
+     * 验证父组织查询会一次返回子树坐席，并按坐席主键去重。
+     */
+    @Test
+    @DisplayName("父组织成员列表包含子节点坐席并去重分页")
+    void testListSubtreeMembers() {
+        AccountCredentialVO directAgent = agentService.createAgent(AgentCreateReq.builder()
+                .workNo(TEST_WORK_NO_GROUP)
+                .agentName("父节点直属坐席")
+                .build());
+        AccountCredentialVO childAgent = agentService.createAgent(AgentCreateReq.builder()
+                .workNo(TEST_WORK_NO_MEMBER)
+                .agentName("子节点坐席")
+                .build());
+
+        Long parentId = agentService.createGroup(AgentGroupCreateReq.builder()
+                .groupCode("ORG_SUBTREE_PARENT_TEST")
+                .groupName("子树查询父节点")
+                .groupType("CENTER")
+                .build());
+        Long childId = agentService.createGroup(AgentGroupCreateReq.builder()
+                .groupCode("ORG_SUBTREE_CHILD_TEST")
+                .groupName("子树查询子节点")
+                .groupType("SKILL")
+                .parentId(parentId)
+                .build());
+
+        agentService.addMemberToGroup(AgentGroupMemberReq.builder()
+                .groupId(parentId)
+                .agentId(directAgent.getId())
+                .memberRole("MEMBER")
+                .priority(0)
+                .build());
+        agentService.addMemberToGroup(AgentGroupMemberReq.builder()
+                .groupId(childId)
+                .agentId(directAgent.getId())
+                .memberRole("MEMBER")
+                .priority(2)
+                .build());
+        agentService.addMemberToGroup(AgentGroupMemberReq.builder()
+                .groupId(childId)
+                .agentId(childAgent.getId())
+                .memberRole("MEMBER")
+                .priority(1)
+                .build());
+
+        PageResult<AgentGroupMemberVO> page = agentService.listGroupMembers(
+                parentId,
+                1,
+                10,
+                null
+        );
+        assertEquals(2L, page.getTotal());
+        assertEquals(2, page.getList().size());
+        assertEquals(
+                String.valueOf(parentId),
+                page.getList().stream()
+                        .filter(member -> member.getAgentId().equals(String.valueOf(directAgent.getId())))
+                        .findFirst()
+                        .orElseThrow()
+                        .getGroupId(),
+                "同一坐席重复入组时应优先展示距离所选节点最近的成员关系"
+        );
+        assertTrue(page.getList().stream().anyMatch(member ->
+                member.getAgentId().equals(String.valueOf(childAgent.getId()))
+                        && member.getGroupId().equals(String.valueOf(childId))));
+
+        PageResult<AgentGroupMemberVO> searched = agentService.listGroupMembers(
+                parentId,
+                1,
+                10,
+                "子节点坐席"
+        );
+        assertEquals(1L, searched.getTotal());
+        assertEquals(String.valueOf(childAgent.getId()), searched.getList().getFirst().getAgentId());
     }
 
     /**

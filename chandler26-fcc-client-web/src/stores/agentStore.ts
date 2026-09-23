@@ -1,9 +1,15 @@
 import { defineStore } from 'pinia';
 import { ref, computed } from 'vue';
-import type { AgentStatus, AnswerEndpointType } from '../types/telephony';
+import type { AgentLoginStatus, AgentWorkStatus, AnswerEndpointType } from '../types/telephony';
 import { authApi, type AgentEndpointsResp } from '../api/authApi';
 import { telephonyApi } from '../api/apiClient';
-import { toastError } from '../utils/feedback';
+import { errorText, toastError, toastSuccess } from '../utils/feedback';
+
+interface AgentRuntimeStateResp {
+  loginStatus: AgentLoginStatus;
+  workStatus: AgentWorkStatus;
+  activeCallId?: string;
+}
 
 export const useAgentStore = defineStore('agent', () => {
   const token = ref<string | null>(localStorage.getItem('fcc_agent_satoken'));
@@ -11,32 +17,55 @@ export const useAgentStore = defineStore('agent', () => {
   const agentName = ref(localStorage.getItem('fcc_agent_name') || '');
   const role = ref(localStorage.getItem('fcc_agent_role') || '');
   const permissions = ref<string[]>([]);
-  const status = ref<AgentStatus>('REST');
+  const loginStatus = ref<AgentLoginStatus>('LOGOUT');
+  const workStatus = ref<AgentWorkStatus>('UNREADY');
+  const runtimeCallId = ref('');
+  const presencePending = ref(false);
   const endpoint = ref<AnswerEndpointType>(readEndpoint(localStorage.getItem('fcc_agent_endpoint')));
   const extension = ref(localStorage.getItem('fcc_agent_extension') || '');
   const serviceGroup = ref('');
 
   // 三端具体配置
+  const webrtcWorkNo = ref(localStorage.getItem('fcc_webrtc_workno') || '');
   const boundSipExtension = ref(localStorage.getItem('fcc_bound_sip_extension') || '');
   const boundMobile = ref(localStorage.getItem('fcc_bound_mobile') || '');
   const availableSipExtensions = ref<string[]>([]);
+  const endpointsLoading = ref(false);
+  const endpointSwitching = ref(false);
+  const endpointError = ref('');
 
   const isLoggedIn = computed(() => !!token.value);
   const isSupervisor = computed(() => role.value === 'SUPERVISOR');
 
-  async function setStatus(newStatus: AgentStatus) {
+  async function setLoginStatus(newStatus: Exclude<AgentLoginStatus, 'LOGOUT'>) {
+    if (presencePending.value || loginStatus.value === newStatus) return;
+    presencePending.value = true;
     try {
-      const response = await telephonyApi.post<unknown, { data: { status: AgentStatus } }>('/agent-state', { status: newStatus });
-      status.value = response.data.status;
-    } catch (error) { toastError(error instanceof Error ? error.message : '状态变更失败'); }
+      const response = await telephonyApi.post<unknown, { data: AgentRuntimeStateResp }>(
+        '/agent-state',
+        { status: newStatus },
+      );
+      applyRuntimeState(response.data);
+      toastSuccess(newStatus === 'LOGIN' ? '坐席已示闲，可接来电' : '坐席已示忙，仅允许主动外呼');
+    } catch (error) {
+      toastError(errorText(error, '工作状态变更失败'));
+    } finally {
+      presencePending.value = false;
+    }
   }
 
-  async function refreshStatus() {
+  async function refreshRuntimeState() {
     if (!token.value) return;
     try {
-      const response = await telephonyApi.get<unknown, { data: { status: AgentStatus } }>('/agent-state');
-      status.value = response.data.status;
+      const response = await telephonyApi.get<unknown, { data: AgentRuntimeStateResp }>('/agent-state');
+      applyRuntimeState(response.data);
     } catch { /* Keep the last confirmed state; do not invent READY on failure. */ }
+  }
+
+  function applyRuntimeState(data: AgentRuntimeStateResp) {
+    loginStatus.value = data.loginStatus;
+    workStatus.value = data.workStatus;
+    runtimeCallId.value = data.activeCallId || '';
   }
 
   function setEndpoint(newEndpoint: AnswerEndpointType) {
@@ -52,29 +81,46 @@ export const useAgentStore = defineStore('agent', () => {
     endpoint.value = readEndpoint(data.activeEndpointType);
     localStorage.setItem('fcc_agent_endpoint', endpoint.value);
     extension.value = data.activeEndpointValue || '';
+    webrtcWorkNo.value = data.webrtcWorkNo || data.workNo || '';
     boundSipExtension.value = data.sipExtension || '';
     boundMobile.value = data.mobilePhone || '';
     availableSipExtensions.value = data.availableSipExtensions || [];
     if (extension.value) localStorage.setItem('fcc_agent_extension', extension.value);
+    if (webrtcWorkNo.value) localStorage.setItem('fcc_webrtc_workno', webrtcWorkNo.value);
     if (boundSipExtension.value) localStorage.setItem('fcc_bound_sip_extension', boundSipExtension.value);
     if (boundMobile.value) localStorage.setItem('fcc_bound_mobile', boundMobile.value);
   }
 
   async function loadEndpoints() {
     if (!token.value || !workNo.value) return;
+    endpointsLoading.value = true;
+    endpointError.value = '';
     try {
       const response = await authApi.endpoints();
       if (response?.data) applyEndpointData(response.data);
     } catch (err) {
-      console.warn('加载坐席三端配置失败:', err);
+      endpointError.value = errorText(err, '接听终端加载失败');
+    } finally {
+      endpointsLoading.value = false;
     }
   }
 
   async function switchEndpoint(targetType: AnswerEndpointType, targetValue?: string) {
     if (targetType === 'MOBILE') throw new Error('手机接听尚未实现');
-    const response = await authApi.switchEndpoint({ endpointType: targetType, endpointValue: targetValue });
-    if (response?.data) applyEndpointData(response.data);
-    return response?.data;
+    if (endpointSwitching.value) return;
+    endpointSwitching.value = true;
+    endpointError.value = '';
+    try {
+      const response = await authApi.switchEndpoint({ endpointType: targetType, endpointValue: targetValue });
+      if (response?.data) applyEndpointData(response.data);
+      toastSuccess('接听终端已切换');
+      return response?.data;
+    } catch (cause) {
+      endpointError.value = errorText(cause, '接听终端切换失败');
+      throw cause;
+    } finally {
+      endpointSwitching.value = false;
+    }
   }
 
   async function login(workNumber: string, pass: string) {
@@ -102,6 +148,7 @@ export const useAgentStore = defineStore('agent', () => {
       localStorage.setItem('fcc_agent_role', data.role);
 
       await loadEndpoints();
+      await refreshRuntimeState();
       return data;
     } else {
       throw new Error(res?.message || '登录失败');
@@ -117,12 +164,16 @@ export const useAgentStore = defineStore('agent', () => {
       // ignore
     } finally {
       token.value = null;
+      loginStatus.value = 'LOGOUT';
+      workStatus.value = 'UNREADY';
+      runtimeCallId.value = '';
       localStorage.removeItem('fcc_agent_satoken');
       localStorage.removeItem('fcc_agent_workno');
       localStorage.removeItem('fcc_agent_name');
       localStorage.removeItem('fcc_agent_role');
       localStorage.removeItem('fcc_agent_extension');
       localStorage.removeItem('fcc_agent_endpoint');
+      localStorage.removeItem('fcc_webrtc_workno');
       localStorage.removeItem('fcc_bound_sip_extension');
       localStorage.removeItem('fcc_bound_mobile');
     }
@@ -134,19 +185,26 @@ export const useAgentStore = defineStore('agent', () => {
     agentName,
     role,
     permissions,
-    status,
+    loginStatus,
+    workStatus,
+    runtimeCallId,
+    presencePending,
     endpoint,
     extension,
     serviceGroup,
+    webrtcWorkNo,
     boundSipExtension,
     boundMobile,
     availableSipExtensions,
+    endpointsLoading,
+    endpointSwitching,
+    endpointError,
     isLoggedIn,
     isSupervisor,
-    setStatus,
+    setLoginStatus,
     setEndpoint,
     loadEndpoints,
-    refreshStatus,
+    refreshRuntimeState,
     switchEndpoint,
     login,
     logout,

@@ -62,6 +62,11 @@ export interface FlowPublishResp {
   runtimeActivationStatus: string;
 }
 
+export interface FlowValidationResp {
+  valid: boolean;
+  normalizedDefinitionJson: string;
+}
+
 export interface FlowExecutionResp {
   instance: {
     id?: string;
@@ -118,6 +123,12 @@ export const flowApi = {
   saveDraft(flowKey: string, data: FlowSaveDraftReq): Promise<FlowVersionVO> {
     return apiClient.put(
       `/flow-studio/flows/${encodeURIComponent(flowKey)}/draft`,
+      data,
+    );
+  },
+  validate(flowKey: string, data: FlowSaveDraftReq): Promise<FlowValidationResp> {
+    return apiClient.post(
+      `/flow-studio/flows/${encodeURIComponent(flowKey)}/validate`,
       data,
     );
   },

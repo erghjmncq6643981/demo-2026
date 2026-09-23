@@ -1,15 +1,12 @@
 package com.chandler.fcc.admin.model.vo;
 
-import com.fasterxml.jackson.databind.annotation.JsonSerialize;
-import com.fasterxml.jackson.databind.ser.std.ToStringSerializer;
 import io.swagger.v3.oas.annotations.media.Schema;
+import java.io.Serializable;
+import java.time.LocalDateTime;
 import lombok.AllArgsConstructor;
 import lombok.Builder;
 import lombok.Data;
 import lombok.NoArgsConstructor;
-
-import java.io.Serializable;
-import java.time.LocalDateTime;
 
 /**
  * 坐席技能组成员视图对象 VO
@@ -30,6 +27,9 @@ public class AgentGroupMemberVO implements Serializable {
 
     @Schema(description = "技能组 ID")
     private String groupId;
+
+    @Schema(description = "成员实际所属组织或技能组名称")
+    private String groupName;
 
     @Schema(description = "坐席 ID")
     private String agentId;

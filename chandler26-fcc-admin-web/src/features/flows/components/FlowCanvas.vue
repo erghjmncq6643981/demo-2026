@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import {
   stageLabels,
+  configurableStages,
   executionLabels,
   type FlowModelNode,
   type StagedFlow,
@@ -47,7 +48,9 @@ const node = (stage: string) =>
               ? executionLabels[latest(stage)!.status] || latest(stage)!.status
               : readonly
                 ? "未经过"
-                : "固定动作"
+                : configurableStages.has(stage)
+                  ? "可配置"
+                  : "固定动作"
           }}</span>
         </div>
         <p class="stage-key">{{ stage }}</p>
@@ -83,6 +86,11 @@ const node = (stage: string) =>
           {{ flow.defaultRoute?.queueSeconds || 120 }} 秒
         </p>
         <p v-if="stage === 'BRIDGE'">等待真实桥接事件后进入通话阶段</p>
+        <p v-if="stage === 'RECORD_START'">桥接成功后启动录音，路径由共享录音布局生成</p>
+        <p v-if="stage === 'RECORD_STOP'">任一通话方结束后停止录音并保存结果</p>
+        <p v-if="stage === 'RATING'">坐席先挂机时播放预设评价语音并收取 1–5 分</p>
+        <p v-if="stage === 'RATING_SAVE'">持久化本次服务评价结果</p>
+        <p v-if="stage === 'CLOSING'">播放预设结束语音后结束客户话道</p>
         <p v-if="stage === 'END'">
           {{
             flow.timeoutAction === "HANGUP"

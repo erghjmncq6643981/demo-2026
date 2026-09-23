@@ -92,10 +92,9 @@ public class CallbackRuntimeService {
 
         int attempt = ((Number) row.get("attempts")).intValue() + 1;
         String requestKey = "callback-" + callbackId + "-" + attempt;
-        String jobId = jobs.createFor(
+        String jobId = jobs.createAgentCallback(
             owner,
             row.get("number").toString(),
-            "PROGRESSIVE",
             1,
             requestKey
         );

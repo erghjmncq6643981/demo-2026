@@ -9,16 +9,23 @@
     ORDER BY id DESC LIMIT 50 OFFSET #{offset}
   </select>
   <select id="jobs" resultType="map">
-    SELECT CAST(id AS CHAR) AS id,owner_work_no AS owner,job_type AS mode,status,max_attempts AS
-    maxAttempts,JSON_UNQUOTE(JSON_EXTRACT(payload,'$.number')) AS number,scheduled_at AS scheduledAt FROM
-    fcc_dial_job WHERE 1=1
-    <if test="owner != null and owner != ''">AND owner_work_no=#{owner}</if>
-    ORDER BY id DESC LIMIT 50 OFFSET #{offset}
+    SELECT CAST(id AS CHAR) AS id,
+           flow_key AS flowKey,
+           created_by AS createdBy,
+           status,
+           max_attempts AS maxAttempts,
+           JSON_UNQUOTE(JSON_EXTRACT(payload, '$.number')) AS number,
+           scheduled_at AS scheduledAt
+    FROM fcc_dial_job
+    WHERE job_type = 'AUTO_FLOW'
+    <if test="flowKey != null and flowKey != ''">AND flow_key = #{flowKey}</if>
+    ORDER BY id DESC
+    LIMIT 50 OFFSET #{offset}
   </select>
   <select id="customerOwner" resultType="string">
     SELECT owner_work_no FROM fcc_customer WHERE id=#{id}
   </select>
-  <select id="jobOwner" resultType="string">
-    SELECT owner_work_no FROM fcc_dial_job WHERE id=#{id}
+  <select id="jobExists" resultType="int">
+    SELECT COUNT(*) FROM fcc_dial_job WHERE id = #{id} AND job_type = 'AUTO_FLOW'
   </select>
 </mapper>

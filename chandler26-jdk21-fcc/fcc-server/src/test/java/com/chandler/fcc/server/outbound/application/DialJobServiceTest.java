@@ -1,6 +1,7 @@
 package com.chandler.fcc.server.outbound.application;
 
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.anyMap;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.mock;
@@ -9,7 +10,7 @@ import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 import com.chandler.fcc.server.outbound.infrastructure.DialJobMapper;
-import com.chandler.fcc.server.telephony.application.AgentIdentityService;
+import com.chandler.fcc.server.flow.FlowConfig;
 import com.chandler.fcc.server.telephony.application.OutboundCallService;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import java.util.HashMap;
@@ -42,10 +43,10 @@ class DialJobServiceTest {
     void setUp() {
         service = new DialJobService(
             mapper,
-            mock(AgentIdentityService.class),
             transactions,
             calls,
-            new ObjectMapper()
+            new ObjectMapper(),
+            mock(FlowConfig.class)
         );
         ReflectionTestUtils.setField(service, "enabled", true);
         ReflectionTestUtils.setField(service, "maxInFlight", 5);
@@ -74,7 +75,12 @@ class DialJobServiceTest {
      */
     @Test
     void keepsAttemptRunningWhenDispatchOutcomeIsUnknown() {
-        when(calls.startFor(eq("901001"), eq("13800000000"), anyString()))
+        when(calls.startAutoDial(
+            eq("13800000000"),
+            anyString(),
+            eq("SYSTEM_NOTIFICATION"),
+            anyMap()
+        ))
             .thenThrow(new ResponseStatusException(HttpStatus.GATEWAY_TIMEOUT, "结果未知"));
 
         service.dispatch();
@@ -84,18 +90,74 @@ class DialJobServiceTest {
     }
 
     /**
-     * 构造一条可领取的渐进式外呼任务。
+     * 无人自动外呼必须直接拨打客户，不能退化为依赖坐席终端的人工外呼。
+     */
+    @Test
+    void dispatchesAutoFlowWithoutAgentDependency() {
+        when(calls.startAutoDial(
+            eq("13800000000"),
+            anyString(),
+            eq("SYSTEM_NOTIFICATION"),
+            eq(Map.of())
+        )).thenReturn(Map.of("callId", "300"));
+
+        service.dispatch();
+
+        verify(calls).startAutoDial(
+            eq("13800000000"),
+            anyString(),
+            eq("SYSTEM_NOTIFICATION"),
+            eq(Map.of())
+        );
+        verify(calls, never()).startFor(anyString(), anyString(), anyString());
+        verify(mapper).attach(anyString(), eq("300"));
+    }
+
+    /**
+     * 漏话回拨是坐席人工外呼，必须保留任务指定的执行坐席。
+     */
+    @Test
+    void dispatchesAgentCallbackForAssignedAgent() {
+        when(mapper.next()).thenReturn(callbackJob());
+        when(calls.startFor(eq("901001"), eq("13800000000"), anyString()))
+            .thenReturn(Map.of("callId", "301"));
+
+        service.dispatch();
+
+        verify(calls).startFor(eq("901001"), eq("13800000000"), anyString());
+        verify(calls, never()).startAutoDial(anyString(), anyString(), anyString(), anyMap());
+        verify(mapper).attach(anyString(), eq("301"));
+    }
+
+    /**
+     * 构造一条不绑定坐席的流程型自动外呼任务。
      *
      * @return 可由服务补充尝试字段的任务参数
      */
     private Map<String, Object> job() {
         Map<String, Object> row = new HashMap<>();
         row.put("id", "100");
-        row.put("owner", "901001");
-        row.put("mode", "PROGRESSIVE");
+        row.put("jobType", "AUTO_FLOW");
+        row.put("flowKey", "SYSTEM_NOTIFICATION");
+        row.put("variables", "{}");
         row.put("maxAttempts", 2);
         row.put("number", "13800000000");
         row.put("attempt", "200");
+        return row;
+    }
+
+    /**
+     * 构造一条需要指定坐席执行的漏话回拨任务。
+     *
+     * @return 可由服务补充尝试字段的回拨任务参数
+     */
+    private Map<String, Object> callbackJob() {
+        Map<String, Object> row = new HashMap<>();
+        row.put("id", "100");
+        row.put("jobType", "AGENT_CALLBACK");
+        row.put("owner", "901001");
+        row.put("maxAttempts", 2);
+        row.put("number", "13800000000");
         return row;
     }
 }

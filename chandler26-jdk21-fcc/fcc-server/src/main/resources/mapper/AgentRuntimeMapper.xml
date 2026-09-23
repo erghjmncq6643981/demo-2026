@@ -5,7 +5,12 @@
     UPDATE fcc_agent_presence p
     JOIN fcc_agent a ON a.id = p.agent_id
     JOIN fcc_call_session c ON c.id = #{callId} AND c.primary_work_no = a.work_no
-    SET p.work_status = 'READY', p.last_state_at = UTC_TIMESTAMP(3), p.version = p.version + 1
+    SET p.work_status = CASE p.login_status
+          WHEN 'LOGIN' THEN 'READY'
+          WHEN 'LOGIN_BUSY' THEN 'BUSY'
+          ELSE 'UNREADY'
+        END,
+        p.last_state_at = UTC_TIMESTAMP(3), p.version = p.version + 1
     WHERE a.work_no = #{owner}
       AND p.work_status = 'ACW'
       AND p.active_call_id IS NULL
@@ -50,27 +55,46 @@
   </select>
   <insert id="ensurePresence">
     INSERT IGNORE INTO fcc_agent_presence(agent_id, login_status, work_status, last_state_at)
-    SELECT id, 'ONLINE', 'REST', UTC_TIMESTAMP(3)
+    SELECT id, 'LOGOUT', 'UNREADY', UTC_TIMESTAMP(3)
     FROM fcc_agent
     WHERE work_no = #{owner} AND status = 'ENABLED' AND deleted_at IS NULL
   </insert>
-  <update id="setPresence">
+  <update id="setLoginStatus">
     UPDATE fcc_agent_presence p
     JOIN fcc_agent a ON a.id = p.agent_id
-    SET p.login_status = 'ONLINE', p.work_status = #{state},
+    SET p.login_status = #{status},
+        p.work_status = CASE #{status}
+          WHEN 'LOGIN' THEN 'READY'
+          WHEN 'LOGIN_BUSY' THEN 'BUSY'
+          ELSE 'UNREADY'
+        END,
         p.last_state_at = UTC_TIMESTAMP(3), p.version = p.version + 1
     WHERE a.work_no = #{owner}
+      AND p.active_call_id IS NULL
+      AND p.work_status IN ('READY', 'BUSY', 'UNREADY')
+      AND a.status = 'ENABLED'
+      AND a.deleted_at IS NULL
+  </update>
+  <update id="reserveInbound">
+    UPDATE fcc_agent_presence p
+    JOIN fcc_agent a ON a.id = p.agent_id
+    SET p.work_status = 'RINGING', p.active_call_id = #{callId},
+        p.last_state_at = UTC_TIMESTAMP(3), p.version = p.version + 1
+    WHERE a.work_no = #{owner}
+      AND p.login_status = 'LOGIN'
+      AND p.work_status = 'READY'
       AND p.active_call_id IS NULL
       AND a.status = 'ENABLED'
       AND a.deleted_at IS NULL
   </update>
-  <update id="reserve">
+  <update id="reserveOutbound">
     UPDATE fcc_agent_presence p
     JOIN fcc_agent a ON a.id = p.agent_id
-    SET p.work_status = 'BUSY', p.active_call_id = #{callId},
+    SET p.work_status = 'CALLING', p.active_call_id = #{callId},
         p.last_state_at = UTC_TIMESTAMP(3), p.version = p.version + 1
     WHERE a.work_no = #{owner}
-      AND p.work_status = 'READY'
+      AND ((p.login_status = 'LOGIN' AND p.work_status = 'READY')
+        OR (p.login_status = 'LOGIN_BUSY' AND p.work_status = 'BUSY'))
       AND p.active_call_id IS NULL
       AND a.status = 'ENABLED'
       AND a.deleted_at IS NULL
@@ -78,13 +102,23 @@
   <update id="reserveOriginated">
     UPDATE fcc_agent_presence p
     JOIN fcc_agent a ON a.id = p.agent_id
-    SET p.login_status = 'ONLINE', p.work_status = 'BUSY', p.active_call_id = #{callId},
+    SET p.work_status = 'ANSWERED', p.active_call_id = #{callId},
         p.last_state_at = UTC_TIMESTAMP(3), p.version = p.version + 1
     WHERE a.work_no = #{owner}
-      AND p.work_status IN ('READY', 'REST')
+      AND ((p.login_status = 'LOGIN' AND p.work_status = 'READY')
+        OR (p.login_status = 'LOGIN_BUSY' AND p.work_status = 'BUSY'))
       AND p.active_call_id IS NULL
       AND a.status = 'ENABLED'
       AND a.deleted_at IS NULL
+  </update>
+  <update id="updateCallStatus">
+    UPDATE fcc_agent_presence p
+    JOIN fcc_agent a ON a.id = p.agent_id
+    SET p.work_status = #{status},
+        p.last_state_at = UTC_TIMESTAMP(3), p.version = p.version + 1
+    WHERE a.work_no = #{owner}
+      AND p.active_call_id = #{callId}
+      AND #{status} IN ('CALLING', 'RINGING', 'ANSWERED')
   </update>
   <update id="release">
     UPDATE fcc_agent_presence p
@@ -93,8 +127,10 @@
         p.last_state_at = UTC_TIMESTAMP(3), p.version = p.version + 1
     WHERE a.work_no = #{owner} AND p.active_call_id = #{callId}
   </update>
-  <select id="presence" resultType="map">
-    SELECT p.work_status AS status, CAST(p.active_call_id AS CHAR) AS callId
+  <select id="presence" resultType="com.chandler.fcc.server.agent.infrastructure.data.AgentRuntimeStateData">
+    SELECT p.login_status AS loginStatus,
+           p.work_status AS workStatus,
+           CAST(p.active_call_id AS CHAR) AS activeCallId
     FROM fcc_agent_presence p
     JOIN fcc_agent a ON a.id = p.agent_id
     WHERE a.work_no = #{owner}
@@ -153,6 +189,7 @@
       AND a.deleted_at IS NULL
       AND a.status = 'ENABLED'
       AND b.endpoint_type IN ('WEBRTC', 'SIP')
+      AND p.login_status = 'LOGIN'
       AND p.work_status = 'READY'
       AND p.active_call_id IS NULL
     <if test="excluded != null and !excluded.isEmpty()">

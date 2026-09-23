@@ -149,7 +149,7 @@ export const useCallStore = defineStore('call', () => {
       await telephonyApi.post(`/calls/${encodeURIComponent(callId)}/summary`, summary || { category: '未分类', intent: 'UNASSESSED', notes: '' });
     }
     catch (error) { toastError(error instanceof Error ? error.message : '整理提交失败'); return; }
-    await useAgentStore().refreshStatus();
+    await useAgentStore().refreshRuntimeState();
     if (!applyLifecycle({ type: 'ACW_COMPLETED' })) return;
     showAcwDrawer.value = false;
     currentCall.value = null;

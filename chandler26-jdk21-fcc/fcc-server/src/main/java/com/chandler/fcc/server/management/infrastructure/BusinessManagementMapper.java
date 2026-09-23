@@ -14,7 +14,7 @@ public interface BusinessManagementMapper {
     /**
      * 查询客户摘要。
      *
-     * @param owner 坐席筛选，可为空
+     * @param flowKey 流程编码筛选，可为空
      * @param phone 号码筛选，可为空
      * @param offset 分页偏移
      * @return 客户摘要
@@ -33,7 +33,7 @@ public interface BusinessManagementMapper {
      * @return 任务摘要
      */
     List<Map<String, Object>> jobs(
-        @Param("owner") String owner,
+        @Param("flowKey") String flowKey,
         @Param("offset") int offset
     );
 
@@ -46,10 +46,10 @@ public interface BusinessManagementMapper {
     String customerOwner(@Param("id") String id);
 
     /**
-     * 查询任务的负责坐席。
+     * 判断自动外呼任务是否存在。
      *
      * @param id 任务标识
-     * @return 负责工号，不存在时为空
+     * @return 匹配数量
      */
-    String jobOwner(@Param("id") String id);
+    int jobExists(@Param("id") String id);
 }

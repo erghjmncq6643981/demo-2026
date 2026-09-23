@@ -14,7 +14,7 @@
     SELECT COUNT(*)
     FROM fcc_agent_presence
     WHERE agent_id = #{agentId}
-      AND (active_call_id IS NOT NULL OR work_status IN ('BUSY', 'ACW'))
+      AND (active_call_id IS NOT NULL OR work_status = 'ACW')
   </select>
   <update id="deactivateByAgentId">
     UPDATE fcc_agent_endpoint_binding

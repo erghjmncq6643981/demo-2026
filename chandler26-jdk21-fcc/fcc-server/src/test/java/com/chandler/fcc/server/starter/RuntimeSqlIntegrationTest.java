@@ -15,6 +15,7 @@ import com.chandler.fcc.server.event.infrastructure.EventInboxMapper;
 import com.chandler.fcc.server.outbound.infrastructure.DialJobMapper;
 import com.chandler.fcc.server.websocket.persistence.ScreenPopDeliveryMapper;
 import java.sql.Timestamp;
+import java.util.HashMap;
 import java.util.Map;
 import org.apache.ibatis.session.Configuration;
 import org.junit.jupiter.api.Test;
@@ -57,7 +58,7 @@ class RuntimeSqlIntegrationTest {
         transaction.executeWithoutResult(status -> {
             status.setRollbackOnly();
             seedResources(jdbc);
-            verifyBindingAndPresence(session);
+            verifyBindingAndPresence(session, jdbc);
             verifyCustomerAndDialJob(session, jdbc);
             verifyScreenPopAndAfterCall(session, jdbc);
             verifyCallbackAndInbox(session);
@@ -113,8 +114,9 @@ class RuntimeSqlIntegrationTest {
      * 验证拨号绑定和坐席原子占用 SQL。
      *
      * @param session SQL 会话
+     * @param jdbc 数据库访问器
      */
-    private void verifyBindingAndPresence(SqlSessionTemplate session) {
+    private void verifyBindingAndPresence(SqlSessionTemplate session, JdbcTemplate jdbc) {
         PhoneBindingMapper bindings = session.getMapper(PhoneBindingMapper.class);
         assertNotNull(bindings.bindingContext("1001"));
         assertNotNull(bindings.lockBindingTarget("1001", "test-agent"));
@@ -126,13 +128,33 @@ class RuntimeSqlIntegrationTest {
 
         AgentRuntimeMapper runtime = session.getMapper(AgentRuntimeMapper.class);
         runtime.ensurePresence("test-agent");
-        runtime.setPresence("test-agent", "READY");
-        assertEquals(1, runtime.reserve("test-agent", "900010"));
-        assertEquals(0, runtime.reserve("test-agent", "900011"));
+        assertEquals("LOGOUT", runtime.presence("test-agent").getLoginStatus());
+        assertEquals("UNREADY", runtime.presence("test-agent").getWorkStatus());
+        runtime.setLoginStatus("test-agent", "LOGIN_BUSY");
+        assertEquals("BUSY", runtime.presence("test-agent").getWorkStatus());
+        assertEquals(0, runtime.reserveInbound("test-agent", "900009"));
+        assertEquals(1, runtime.reserveOutbound("test-agent", "900009"));
+        assertEquals("CALLING", runtime.presence("test-agent").getWorkStatus());
+        assertEquals(1, runtime.updateCallStatus("test-agent", "900009", "RINGING"));
+        assertEquals(1, runtime.updateCallStatus("test-agent", "900009", "ANSWERED"));
+        assertEquals(1, runtime.release("test-agent", "900009"));
+        jdbc.update(
+            "INSERT INTO fcc_call_session(id,ctrl_id,model_type,direction,status,started_at,ended_at,primary_work_no) "
+                + "VALUES(900009,'busy-call','OUTBOUND_TWO_WAY_CALL','OUTBOUND','NORMAL_END',UTC_TIMESTAMP(3),UTC_TIMESTAMP(3),'test-agent')"
+        );
+        assertEquals(1, runtime.completeAcw("test-agent", "900009"));
+        assertEquals("BUSY", runtime.presence("test-agent").getWorkStatus());
+        runtime.setLoginStatus("test-agent", "LOGOUT");
+        assertEquals("UNREADY", runtime.presence("test-agent").getWorkStatus());
+        runtime.setLoginStatus("test-agent", "LOGIN");
+        assertEquals(1, runtime.reserveInbound("test-agent", "900010"));
+        assertEquals("RINGING", runtime.presence("test-agent").getWorkStatus());
+        assertEquals(0, runtime.reserveInbound("test-agent", "900011"));
         assertEquals(1, bindings.busy("test-agent", "1001"));
         assertEquals(0, runtime.release("test-agent", "900011"));
         assertEquals(1, runtime.release("test-agent", "900010"));
-        assertEquals("ACW", runtime.presence("test-agent").get("status"));
+        assertEquals("LOGIN", runtime.presence("test-agent").getLoginStatus());
+        assertEquals("ACW", runtime.presence("test-agent").getWorkStatus());
     }
 
     /**
@@ -156,22 +178,21 @@ class RuntimeSqlIntegrationTest {
         assertEquals(0, customers.update("test-agent", customer));
 
         DialJobMapper jobs = session.getMapper(DialJobMapper.class);
+        Map<String, Object> autoJob = new HashMap<>(Map.of(
+            "id", "900005",
+            "createdBy", "test-admin",
+            "key", "test-job-1",
+            "flowKey", "SYSTEM_NOTIFICATION",
+            "jobType", "AUTO_FLOW",
+            "maxAttempts", 2,
+            "payload", "{\"number\":\"1001\",\"variables\":{}}"
+        ));
+        autoJob.put("owner", null);
         assertEquals(
             1,
-            jobs.create(
-                Map.of(
-                    "id", "900005",
-                    "owner", "test-agent",
-                    "key", "test-job-1",
-                    "mode", "PROGRESSIVE",
-                    "maxAttempts", 2,
-                    "payload", "{\"number\":\"1001\"}"
-                )
-            )
+            jobs.create(autoJob)
         );
         assertEquals(1L, jobs.schedulerLock());
-        assertNull(jobs.next(), "整理态坐席的任务必须等待");
-        session.getMapper(AgentRuntimeMapper.class).setPresence("test-agent", "READY");
         assertEquals("900005", jobs.next().get("id"));
         assertEquals(1, jobs.claim("900005"));
         assertEquals(0, jobs.claim("900005"));
@@ -189,8 +210,7 @@ class RuntimeSqlIntegrationTest {
         assertEquals(1, jobs.attach("900006", "900010"));
         assertEquals(1, jobs.finishAttempt("900006", "FAILED", "NO_ANSWER"));
         assertEquals(1, jobs.finishJob("900005", "PENDING"));
-        assertEquals(1, jobs.control("test-agent", "900005", "PAUSE"));
-        assertNull(jobs.detail("another-agent", "900005"));
+        assertEquals(1, jobs.control("900005", "PAUSE"));
         assertEquals(1, jobs.frequency("1001"));
 
         jdbc.update(

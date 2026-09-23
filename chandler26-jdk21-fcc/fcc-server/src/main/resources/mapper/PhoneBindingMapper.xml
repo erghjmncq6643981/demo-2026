@@ -33,7 +33,7 @@
     LEFT JOIN fcc_agent_endpoint_binding b
       ON b.agent_id = a.id AND b.status = 'ENABLED' AND b.is_active = 1
     WHERE (a.work_no = #{owner} OR b.endpoint_value = #{extension})
-      AND (p.active_call_id IS NOT NULL OR p.work_status IN ('BUSY', 'ACW'))
+      AND (p.active_call_id IS NOT NULL OR p.work_status = 'ACW')
   </select>
   <update id="disableBindings">
     UPDATE fcc_agent_endpoint_binding b

@@ -76,12 +76,17 @@ public class BusinessManagementService {
      * 分页查询自动外呼任务。
      *
      * @param page 页码
-     * @param owner 执行坐席筛选
+     * @param flowKey 流程编码筛选
      * @return 任务摘要数组
      */
-    public Object jobs(int page, String owner) {
+    public Object jobs(int page, String flowKey) {
         checkPermission();
-        return client.exchange("GET", INTERNAL_BASE + "/dial-jobs", Map.of("page", page, "owner", owner == null ? "" : owner), null);
+        return client.exchange(
+            "GET",
+            INTERNAL_BASE + "/dial-jobs",
+            Map.of("page", page, "flowKey", flowKey == null ? "" : flowKey),
+            null
+        );
     }
 
     /**

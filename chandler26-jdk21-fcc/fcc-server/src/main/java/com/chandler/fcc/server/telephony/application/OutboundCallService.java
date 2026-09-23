@@ -15,6 +15,7 @@ import com.chandler.fcc.common.protocol.FNodeMediaType;
 import com.chandler.fcc.common.protocol.FccEventField;
 import com.chandler.fcc.common.protocol.FccEventParameter;
 import com.chandler.fcc.common.util.IdUtil;
+import com.chandler.fcc.server.agent.domain.AgentWorkStatus;
 import com.chandler.fcc.server.agent.infrastructure.AgentRuntimeMapper;
 import com.chandler.fcc.server.call.CallSessionManager;
 import com.chandler.fcc.server.command.FccClient;
@@ -127,25 +128,42 @@ public class OutboundCallService implements SystemFlowRuntime {
     }
 
     /**
-     * 为自动外呼尝试创建通知型通话并持久化意图。
+     * 为流程型自动外呼创建客户侧通话并持久化意图。
      *
-     * @param owner 任务所属坐席工号
      * @param number 被叫号码
      * @param attemptId 自动外呼尝试标识
+     * @param flowKey 已发布自动外呼流程编码
+     * @param variables 流程输入变量
      * @return 通话标识和受理状态
      * @throws ResponseStatusException 通知媒体或出局路由不可用
      */
-    public Map<String, Object> startNotificationFor(String owner, String number, String attemptId) {
-        if (notificationText.isBlank()) {
+    public Map<String, Object> startAutoDial(
+        String number,
+        String attemptId,
+        String flowKey,
+        Map<String, Object> variables
+    ) {
+        Map<String, Object> inputs = variables == null
+            ? Map.of()
+            : new HashMap<>(variables);
+        String text = String.valueOf(inputs.getOrDefault("text", notificationText)).trim();
+        String confirmDigit = String.valueOf(inputs.getOrDefault("confirmDigit", "1")).trim();
+        if (text.isBlank()) {
             throw new ResponseStatusException(HttpStatus.CONFLICT, "未配置通知文案");
+        }
+        if (!confirmDigit.matches("[0-9]")) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "确认按键只支持一位数字");
         }
         var route = routes.resolve(number);
         var data = new HashMap<String, Object>();
         data.put("runtimeTemplate", TEMPLATE_NOTIFICATION);
         data.put("dialJobId", attemptId);
+        data.put("flowKey", flowKey);
+        data.put("flowVariables", inputs);
+        data.put("notificationText", text);
+        data.put("confirmDigit", confirmDigit);
         data.put("guestNumber", route.number());
         data.put("guestContext", route.context());
-        data.put("primaryWorkNo", owner);
 
         CallInfoBO call = CallInfoBO.builder()
             .callId(IdUtil.getCallId())
@@ -155,11 +173,10 @@ public class OutboundCallService implements SystemFlowRuntime {
             .stageState(CallStageState.CALLING)
             .callerNumber(route.caller())
             .destinationNumber(route.number())
-            .agentWorkNo(owner)
             .guestChannelUuid(IdUtil.getUuid())
             .data(data)
             .build();
-        pinFlow(call, TEMPLATE_NOTIFICATION);
+        pinFlow(call, flowKey);
         call.putData("guestChannelUuid", call.getGuestChannelUuid());
 
         flowActions.executeInternal(
@@ -189,7 +206,7 @@ public class OutboundCallService implements SystemFlowRuntime {
         if (!TEMPLATE_NOTIFICATION.equals(call.getDataStr("runtimeTemplate", ""))) {
             return false;
         }
-        if ("1".equals(digit)) {
+        if (call.getDataStr("confirmDigit", "1").equals(digit)) {
             flowActions.executeInternal(
                 call,
                 FlowActionType.PERSIST_CONFIRMATION_AND_HANGUP,
@@ -282,7 +299,7 @@ public class OutboundCallService implements SystemFlowRuntime {
                 transactions.executeWithoutResult(status -> {
                     attemptGuard.beforePersist(taskId);
                     agents.ensurePresence(owner);
-                    if (agents.reserve(owner, callId) != 1) {
+                    if (agents.reserveOutbound(owner, callId) != 1) {
                         throw new ResponseStatusException(
                             HttpStatus.CONFLICT,
                             "坐席未就绪或已被其他通话占用"
@@ -475,6 +492,7 @@ public class OutboundCallService implements SystemFlowRuntime {
                 state,
                 params.path(FccEventField.CAUSE.getWireName()).asText(null)
             );
+            updateAgentWorkStatus(call, eventState, channelUuid);
             if (TEMPLATE_NOTIFICATION.equals(template) && eventState == ChannelEventState.READY) {
                 startNotificationPrompt(call);
             } else if (
@@ -574,7 +592,7 @@ public class OutboundCallService implements SystemFlowRuntime {
                 .media(
                     MediaInfo.builder()
                         .type(FNodeMediaType.TEXT)
-                        .data(notificationText)
+                        .data(call.getDataStr("notificationText", notificationText))
                         .build()
                 )
                     .minDigits(1)
@@ -583,7 +601,7 @@ public class OutboundCallService implements SystemFlowRuntime {
                     .timeout(10_000)
                     .digitTimeout(2_000)
                     .terminators("#")
-                    .regex("^[1]$")
+                    .regex("^[" + call.getDataStr("confirmDigit", "1") + "]$")
                     .actionAfter(FNodeDtmfPostAction.HANGUP)
                     .build(),
             "notification-dtmf-" + call.getCallId()
@@ -731,6 +749,35 @@ public class OutboundCallService implements SystemFlowRuntime {
             );
         }
         sessions.removeSession(call.getCtrlId());
+    }
+
+    /**
+     * 使用坐席话道事件推进人工外呼工作状态，自动外呼不会进入本分支。
+     *
+     * @param call 当前通话
+     * @param eventState 标准话道事件状态
+     * @param channelUuid 事件话道标识
+     */
+    private void updateAgentWorkStatus(
+        CallInfoBO call,
+        ChannelEventState eventState,
+        String channelUuid
+    ) {
+        if (
+            call.getAgentWorkNo() == null ||
+            !channelUuid.equals(call.getAgentChannelUuid())
+        ) {
+            return;
+        }
+        AgentWorkStatus status = switch (eventState) {
+            case CALLING -> AgentWorkStatus.CALLING;
+            case RINGING -> AgentWorkStatus.RINGING;
+            case ANSWERED, READY, BRIDGE -> AgentWorkStatus.ANSWERED;
+            default -> null;
+        };
+        if (status != null) {
+            agents.updateCallStatus(call.getAgentWorkNo(), call.getCallId(), status.name());
+        }
     }
 
     /**

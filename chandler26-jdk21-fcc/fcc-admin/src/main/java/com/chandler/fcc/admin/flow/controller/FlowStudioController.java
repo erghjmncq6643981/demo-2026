@@ -10,6 +10,7 @@ import com.chandler.fcc.admin.flow.controller.resp.FlowExecutionResp;
 import com.chandler.fcc.admin.flow.controller.resp.FlowPublishResp;
 import com.chandler.fcc.admin.flow.controller.resp.FlowSummaryResp;
 import com.chandler.fcc.admin.flow.controller.resp.FlowVersionResp;
+import com.chandler.fcc.admin.flow.controller.resp.FlowValidationResp;
 import com.chandler.fcc.admin.flow.controller.resp.SystemFlowModelResp;
 import com.chandler.fcc.admin.model.CommonResult;
 import com.chandler.fcc.admin.model.PageResult;
@@ -152,6 +153,22 @@ public class FlowStudioController {
         @Valid @RequestBody SaveFlowDraftReq request
     ) {
         return CommonResult.success(service.saveDraft(flowKey, request));
+    }
+
+    /**
+     * 使用与运行端相同的契约校验草稿，但不写入数据库。
+     *
+     * @param flowKey 稳定流程代码
+     * @param request 待校验定义
+     * @return 规范化定义
+     */
+    @Operation(summary = "校验 IVR 流程草稿")
+    @PostMapping("/flows/{flowKey}/validate")
+    public CommonResult<FlowValidationResp> validate(
+        @PathVariable String flowKey,
+        @Valid @RequestBody SaveFlowDraftReq request
+    ) {
+        return CommonResult.success(service.validate(flowKey, request));
     }
 
     /**

@@ -59,9 +59,9 @@
   "NOTIFICATION": {
     "schemaVersion":2,"template":"NOTIFICATION","executionMode":"FIXED_RUNTIME","entry":"ENTRY",
     "stages":["ENTRY","DIAL_CUSTOMER","NOTIFY","CONFIRM","END"],
-    "parameters":{"dialSeconds":30,"mediaSource":"fcc.outbound.notification-text","mediaType":"TEXT","confirmationDigit":"1"},
+    "parameters":{"dialSeconds":30,"mediaSource":"flow.variables.text","mediaType":"TEXT","confirmationDigitSource":"flow.variables.confirmDigit"},
     "nodes":[
-      {"key":"ENTRY","label":"通知任务受理","action":"VALIDATE_NOTIFICATION_AND_ROUTE","inputs":["owner","number","attemptId"],"transitions":[{"when":"ACCEPTED","to":"DIAL_CUSTOMER"},{"when":"REJECTED","to":"END"}]},
+      {"key":"ENTRY","label":"通知任务受理","action":"VALIDATE_NOTIFICATION_AND_ROUTE","inputs":["number","attemptId","flowKey","variables"],"transitions":[{"when":"ACCEPTED","to":"DIAL_CUSTOMER"},{"when":"REJECTED","to":"END"}]},
       {"key":"DIAL_CUSTOMER","label":"呼叫客户","action":"DIAL_CUSTOMER","parameters":{"timeoutSeconds":30},"transitions":[{"when":"CUSTOMER_READY","to":"NOTIFY"},{"when":"DESTROY","to":"END"}]},
       {"key":"NOTIFY","label":"通知放音与收号","action":"READ_DTMF","parameters":{"minDigits":1,"maxDigits":1,"tries":1,"timeoutSeconds":10,"digitTimeoutMs":2000,"terminators":"#","regex":"^[1]$","actionAfter":"HANGUP"},"transitions":[{"when":"DIGIT_EQUALS_1","to":"CONFIRM"},{"when":"DESTROY_WITHOUT_CONFIRMATION","to":"END","result":"UNCONFIRMED"}]},
       {"key":"CONFIRM","label":"保存客户确认","action":"PERSIST_CONFIRMATION_AND_HANGUP","outputs":["notificationConfirmed"],"transitions":[{"when":"DESTROY","to":"END"}]},

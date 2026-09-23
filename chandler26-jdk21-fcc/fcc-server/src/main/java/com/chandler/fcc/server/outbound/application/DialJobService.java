@@ -2,13 +2,14 @@ package com.chandler.fcc.server.outbound.application;
 
 import com.chandler.fcc.common.util.IdUtil;
 import com.chandler.fcc.server.customer.domain.PhoneNumber;
+import com.chandler.fcc.server.flow.FlowConfig;
 import com.chandler.fcc.server.outbound.infrastructure.DialJobMapper;
-import com.chandler.fcc.server.telephony.application.AgentIdentityService;
 import com.chandler.fcc.server.telephony.application.OutboundCallService;
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import java.time.ZoneId;
 import java.time.ZonedDateTime;
+import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
@@ -34,16 +35,21 @@ import org.springframework.web.server.ResponseStatusException;
 @Slf4j
 public class DialJobService {
 
-    private static final Set<String> SUPPORTED_MODES = Set.of("PROGRESSIVE", "NOTIFICATION");
-    private static final String MODE_NOTIFICATION = "NOTIFICATION";
+    private static final String TYPE_AUTO_FLOW = "AUTO_FLOW";
+    private static final String TYPE_AGENT_CALLBACK = "AGENT_CALLBACK";
+    private static final Set<String> AUTO_FLOW_MODEL_TYPES = Set.of(
+        "NOTIFICATION",
+        "AUTO_DIAL",
+        "AUTO_DIAL_NOTIFICATION"
+    );
     private static final String STATUS_FAILED = "FAILED";
     private static final int MAX_DAILY_NUMBER_ATTEMPTS = 3;
 
     private final DialJobMapper mapper;
-    private final AgentIdentityService identity;
     private final TransactionTemplate transactions;
     private final OutboundCallService calls;
     private final ObjectMapper objectMapper;
+    private final FlowConfig flowConfig;
 
     @Value("${fcc.outbound.enabled:false}")
     private boolean enabled;
@@ -61,108 +67,119 @@ public class DialJobService {
     private String timezone;
 
     /**
-     * 为当前登录坐席创建自动外呼任务。
+     * 创建与坐席无关的流程型自动外呼任务。
      *
+     * <p>任务只拨打客户号码；只有流程执行到转人工节点时，运行时才动态路由坐席。</p>
+     *
+     * @param createdBy 创建人账号，仅用于审计
      * @param number 目标号码
-     * @param mode 外呼模式
+     * @param flowKey 已发布自动外呼流程编码
+     * @param variables 流程输入变量
      * @param maxAttempts 最大尝试次数
      * @param requestKey 业务幂等键
      * @return 任务标识
      */
-    public String create(String number, String mode, int maxAttempts, String requestKey) {
-        var actor = identity.requirePrincipal();
-        return createFor(actor.workNo(), number, mode, maxAttempts, requestKey);
-    }
-
-    /**
-     * 在调用方完成身份校验后，为指定坐席创建自动外呼任务。
-     *
-     * <p>本方法只持久化任务，不产生网络副作用，因此可以加入调用方事务。</p>
-     *
-     * @param owner 负责坐席工号
-     * @param number 目标号码
-     * @param mode 外呼模式
-     * @param maxAttempts 最大尝试次数
-     * @param requestKey 业务幂等键
-     * @return 任务标识
-     */
-    public String createFor(
-        String owner,
+    public String createAuto(
+        String createdBy,
         String number,
-        String mode,
+        String flowKey,
+        Map<String, Object> variables,
         int maxAttempts,
         String requestKey
     ) {
-        validateCreate(mode, maxAttempts, requestKey);
+        validateAutoFlow(flowKey);
+        Map<String, Object> payload = new LinkedHashMap<>();
+        payload.put("number", PhoneNumber.normalize(number));
+        payload.put("variables", variables == null ? Map.of() : variables);
+        return createJob(
+            null,
+            createdBy,
+            flowKey,
+            TYPE_AUTO_FLOW,
+            maxAttempts,
+            requestKey,
+            payload
+        );
+    }
+
+    /**
+     * 创建漏话回拨使用的坐席人工外呼任务。
+     *
+     * <p>该任务与无人自动外呼使用不同任务类型，调度时才校验指定坐席可发起外呼。</p>
+     *
+     * @param owner 执行回拨的坐席工号
+     * @param number 客户号码
+     * @param maxAttempts 最大尝试次数
+     * @param requestKey 业务幂等键
+     * @return 任务标识
+     */
+    public String createAgentCallback(
+        String owner,
+        String number,
+        int maxAttempts,
+        String requestKey
+    ) {
+        return createJob(
+            owner,
+            owner,
+            null,
+            TYPE_AGENT_CALLBACK,
+            maxAttempts,
+            requestKey,
+            Map.of("number", PhoneNumber.normalize(number))
+        );
+    }
+
+    /**
+     * 持久化一种明确类型的外呼任务。
+     *
+     * @param owner 仅人工回拨任务使用的坐席工号
+     * @param createdBy 创建人账号
+     * @param flowKey 自动外呼流程编码
+     * @param jobType 任务类型
+     * @param maxAttempts 最大尝试次数
+     * @param requestKey 业务幂等键
+     * @param payload 任务载荷
+     * @return 任务标识
+     */
+    private String createJob(
+        String owner,
+        String createdBy,
+        String flowKey,
+        String jobType,
+        int maxAttempts,
+        String requestKey,
+        Map<String, Object> payload
+    ) {
+        validateCreate(maxAttempts, requestKey);
+        if (createdBy == null || createdBy.isBlank()) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "任务创建人不能为空");
+        }
         String id = String.valueOf(IdUtil.nextId());
+        Map<String, Object> row = new LinkedHashMap<>();
+        row.put("id", id);
+        row.put("owner", owner);
+        row.put("createdBy", createdBy);
+        row.put("flowKey", flowKey);
+        row.put("key", requestKey);
+        row.put("jobType", jobType);
+        row.put("maxAttempts", maxAttempts);
         try {
-            mapper.create(
-                Map.of(
-                    "id",
-                    id,
-                    "owner",
-                    owner,
-                    "key",
-                    requestKey,
-                    "mode",
-                    mode,
-                    "maxAttempts",
-                    maxAttempts,
-                    "payload",
-                    objectMapper.writeValueAsString(Map.of("number", PhoneNumber.normalize(number)))
-                )
-            );
+            row.put("payload", objectMapper.writeValueAsString(payload));
+            mapper.create(row);
         } catch (DuplicateKeyException failure) {
             throw new ResponseStatusException(HttpStatus.CONFLICT, "该请求已创建，请刷新任务列表");
         } catch (JsonProcessingException failure) {
             throw new IllegalStateException("外呼任务序列化失败", failure);
         }
-        log.info("[自动外呼] 创建任务 workNo={} jobId={} mode={}", owner, id, mode);
+        log.info(
+            "[外呼调度] 创建任务 jobId={} jobType={} flowKey={} createdBy={}",
+            id,
+            jobType,
+            flowKey,
+            createdBy
+        );
         return id;
-    }
-
-    /**
-     * 分页查询当前坐席的任务。
-     *
-     * @param page 页码
-     * @return 任务摘要
-     */
-    public List<Map<String, Object>> list(int page) {
-        var actor = identity.requirePrincipal();
-        validatePage(page);
-        return mapper.list(actor.workNo(), (page - 1) * 50);
-    }
-
-    /**
-     * 查询当前坐席有权访问的任务及逐次结果。
-     *
-     * @param id 任务标识
-     * @return 任务详情
-     */
-    public Map<String, Object> detail(String id) {
-        validateId(id);
-        var actor = identity.requirePrincipal();
-        Map<String, Object> row = mapper.detail(actor.workNo(), id);
-        if (row == null) throw new ResponseStatusException(HttpStatus.NOT_FOUND, "任务不存在");
-        row.put("attempts", mapper.attempts(id));
-        return row;
-    }
-
-    /**
-     * 暂停、恢复或取消当前坐席的任务。
-     *
-     * <p>取消任务不会强制挂断已经开始的通话。</p>
-     *
-     * @param id 任务标识
-     * @param action 操作代码
-     */
-    public void control(String id, String action) {
-        validateId(id);
-        var actor = identity.requirePrincipal();
-        if (mapper.control(actor.workNo(), id, action) != 1) {
-            throw new ResponseStatusException(HttpStatus.CONFLICT, "当前任务不允许该操作");
-        }
-        log.info("[自动外呼] 任务操作 jobId={} action={} workNo={}", id, action, actor.workNo());
     }
 
     /**
@@ -222,11 +239,12 @@ public class DialJobService {
     private void dispatchClaimed(Map<String, Object> job) {
         String attemptId = job.get("attempt").toString();
         try {
-            Map<String, Object> result = MODE_NOTIFICATION.equals(job.get("mode"))
-                ? calls.startNotificationFor(
-                    job.get("owner").toString(),
+            Map<String, Object> result = TYPE_AUTO_FLOW.equals(job.get("jobType"))
+                ? calls.startAutoDial(
                     job.get("number").toString(),
-                    attemptId
+                    attemptId,
+                    job.get("flowKey").toString(),
+                    readVariables(job.get("variables"))
                 )
                 : calls.startFor(
                     job.get("owner").toString(),
@@ -304,41 +322,55 @@ public class DialJobService {
     /**
      * 校验任务创建参数。
      *
-     * @param mode 外呼模式
      * @param maxAttempts 最大尝试次数
      * @param requestKey 业务幂等键
      */
-    private void validateCreate(String mode, int maxAttempts, String requestKey) {
+    private void validateCreate(int maxAttempts, String requestKey) {
         if (
-            !SUPPORTED_MODES.contains(mode) ||
             maxAttempts < 1 ||
             maxAttempts > 3 ||
             requestKey == null ||
             !requestKey.matches("[A-Za-z0-9_-]{8,100}")
         ) {
-            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "外呼模式、次数或请求标识不合法");
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "尝试次数或请求标识不合法");
         }
     }
 
     /**
-     * 校验分页范围。
+     * 校验自动外呼流程存在已发布版本且类型正确。
      *
-     * @param page 页码
+     * @param flowKey 流程编码
      */
-    private void validatePage(int page) {
-        if (page < 1 || page > 10000) {
-            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "页码无效");
+    private void validateAutoFlow(String flowKey) {
+        if (flowKey == null || !flowKey.matches("[A-Za-z][A-Za-z0-9_-]{0,63}")) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "自动外呼流程编码无效");
+        }
+        FlowConfig.FlowSnapshot flow = flowConfig.getPublishedFlow(null, flowKey)
+            .orElseThrow(() -> new ResponseStatusException(HttpStatus.CONFLICT, "自动外呼流程尚未发布"));
+        String modelType = flow.modelType() == null ? "" : flow.modelType().toUpperCase();
+        if (!AUTO_FLOW_MODEL_TYPES.contains(modelType)) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "所选流程不是自动外呼流程");
         }
     }
 
     /**
-     * 验证雪花标识的公开字符串形式。
+     * 将数据库 JSON 变量转换为运行参数。
      *
-     * @param id 待验证标识
+     * @param value JSON 文本或映射
+     * @return 非空流程变量
      */
-    private void validateId(String id) {
-        if (id == null || !id.matches("[1-9][0-9]{0,18}")) {
-            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "任务标识无效");
+    @SuppressWarnings("unchecked")
+    private Map<String, Object> readVariables(Object value) {
+        if (value instanceof Map<?, ?> map) {
+            return (Map<String, Object>) map;
+        }
+        if (value == null || value.toString().isBlank()) {
+            return Map.of();
+        }
+        try {
+            return objectMapper.readValue(value.toString(), Map.class);
+        } catch (JsonProcessingException failure) {
+            throw new IllegalStateException("自动外呼流程变量不是有效 JSON", failure);
         }
     }
 }

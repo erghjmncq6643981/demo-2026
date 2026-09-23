@@ -2,4 +2,75 @@
 <!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
         "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
 <mapper namespace="com.chandler.fcc.admin.infrastructure.persistence.mapper.AgentGroupMemberMapper">
+    <sql id="subtreeCte">
+        WITH RECURSIVE group_tree AS (
+            SELECT id, group_name, 0 AS depth
+            FROM fcc_agent_group
+            WHERE id = #{groupId} AND deleted_at IS NULL AND status = 'ENABLED'
+            UNION ALL
+            SELECT child.id, child.group_name, tree.depth + 1
+            FROM fcc_agent_group child
+            JOIN group_tree tree ON child.parent_id = tree.id
+            WHERE child.deleted_at IS NULL AND child.status = 'ENABLED'
+        )
+    </sql>
+
+    <select id="countSubtreeMembers" resultType="long">
+        <include refid="subtreeCte" />
+        SELECT COUNT(DISTINCT member.agent_id)
+        FROM group_tree tree
+        JOIN fcc_agent_group_member member
+             ON member.group_id = tree.id AND member.deleted_at IS NULL
+        JOIN fcc_agent agent
+             ON agent.id = member.agent_id AND agent.deleted_at IS NULL
+        <where>
+            <if test="keyword != null and keyword != ''">
+                AND (agent.agent_name LIKE CONCAT('%', #{keyword}, '%')
+                     OR agent.work_no LIKE CONCAT('%', #{keyword}, '%')
+                     OR agent.phone_number LIKE CONCAT('%', #{keyword}, '%'))
+            </if>
+        </where>
+    </select>
+
+    <select id="selectSubtreeMembers"
+            resultType="com.chandler.fcc.admin.infrastructure.persistence.data.AgentGroupMemberRow">
+        <include refid="subtreeCte" />,
+        ranked_member AS (
+            SELECT member.id AS membership_id,
+                   member.group_id,
+                   tree.group_name,
+                   member.agent_id,
+                   agent.work_no,
+                   agent.agent_name,
+                   agent.phone_number,
+                   member.member_role,
+                   member.priority,
+                   agent.role_code,
+                   agent.status,
+                   member.created_at,
+                   tree.depth,
+                   ROW_NUMBER() OVER (
+                       PARTITION BY member.agent_id
+                       ORDER BY tree.depth, member.priority, member.id
+                   ) AS member_rank
+            FROM group_tree tree
+            JOIN fcc_agent_group_member member
+                 ON member.group_id = tree.id AND member.deleted_at IS NULL
+            JOIN fcc_agent agent
+                 ON agent.id = member.agent_id AND agent.deleted_at IS NULL
+            <where>
+                <if test="keyword != null and keyword != ''">
+                    AND (agent.agent_name LIKE CONCAT('%', #{keyword}, '%')
+                         OR agent.work_no LIKE CONCAT('%', #{keyword}, '%')
+                         OR agent.phone_number LIKE CONCAT('%', #{keyword}, '%'))
+                </if>
+            </where>
+        )
+        SELECT membership_id, group_id, group_name, agent_id, work_no, agent_name,
+               phone_number, member_role, priority, role_code, status, created_at
+        FROM ranked_member
+        WHERE member_rank = 1
+        ORDER BY depth, priority, work_no, agent_id
+        LIMIT #{limit} OFFSET #{offset}
+    </select>
 </mapper>

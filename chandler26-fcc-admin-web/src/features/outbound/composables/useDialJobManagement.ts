@@ -1,5 +1,5 @@
 import { computed, onMounted, ref } from "vue";
-import { agentApi, type AgentVO } from "../../../api/agentApi";
+import { flowApi, type FlowDefinitionVO } from "../../../api/flowApi";
 import {
   confirmAction,
   errorText,
@@ -11,7 +11,6 @@ import {
   type DialAttempt,
   type DialJobAction,
   type DialJobSummary,
-  type DialMode,
 } from "../api/dialJobManagementApi";
 
 const createRequestKey = () => {
@@ -24,9 +23,9 @@ const createRequestKey = () => {
 /** 管理自动外呼任务、逐次结果和受控状态操作。 */
 export function useDialJobManagement() {
   const rows = ref<DialJobSummary[]>([]);
-  const agents = ref<AgentVO[]>([]);
-  const agentsLoading = ref(false);
-  const agentsError = ref("");
+  const flows = ref<FlowDefinitionVO[]>([]);
+  const flowsLoading = ref(false);
+  const flowsError = ref("");
   const attempts = ref<DialAttempt[]>([]);
   const loading = ref(false);
   const attemptsLoading = ref(false);
@@ -34,14 +33,14 @@ export function useDialJobManagement() {
   const controllingId = ref("");
   const error = ref("");
   const page = ref(1);
-  const ownerFilter = ref("");
+  const flowFilter = ref("");
   const createVisible = ref(false);
   const attemptsVisible = ref(false);
   const selectedJob = ref<DialJobSummary | null>(null);
   const form = ref<CreateDialJobReq>({
-    owner: "",
     number: "",
-    mode: "PROGRESSIVE",
+    flowKey: "",
+    variables: { text: "", confirmDigit: "1" },
     maxAttempts: 1,
     requestKey: createRequestKey(),
   });
@@ -53,7 +52,7 @@ export function useDialJobManagement() {
     try {
       const result = await dialJobManagementApi.list({
         page: page.value,
-        owner: ownerFilter.value || undefined,
+        flowKey: flowFilter.value || undefined,
       });
       rows.value = Array.isArray(result) ? result : [];
     } catch (cause) {
@@ -64,21 +63,24 @@ export function useDialJobManagement() {
     }
   }
 
-  async function loadAgents() {
-    agentsLoading.value = true;
-    agentsError.value = "";
+  async function loadFlows() {
+    flowsLoading.value = true;
+    flowsError.value = "";
     try {
-      const result = await agentApi.list({
+      const result = await flowApi.list({
         pageNum: 1,
-        pageSize: 200,
-        status: "ENABLED",
+        pageSize: 100,
       });
-      agents.value = result.list || [];
+      flows.value = (result.list || []).filter(
+        (flow) =>
+          flow.status === "PUBLISHED"
+          && ["NOTIFICATION", "AUTO_DIAL", "AUTO_DIAL_NOTIFICATION"].includes(flow.modelType),
+      );
     } catch (cause) {
-      agents.value = [];
-      agentsError.value = errorText(cause, "可选坐席加载失败");
+      flows.value = [];
+      flowsError.value = errorText(cause, "已发布自动外呼流程加载失败");
     } finally {
-      agentsLoading.value = false;
+      flowsLoading.value = false;
     }
   }
 
@@ -89,9 +91,9 @@ export function useDialJobManagement() {
 
   function openCreate() {
     form.value = {
-      owner: "",
       number: "",
-      mode: "PROGRESSIVE",
+      flowKey: flows.value[0]?.flowKey || "",
+      variables: { text: "", confirmDigit: "1" },
       maxAttempts: 1,
       requestKey: createRequestKey(),
     };
@@ -99,8 +101,9 @@ export function useDialJobManagement() {
   }
 
   async function create() {
-    if (!form.value.owner || !form.value.number.trim()) {
-      error.value = "执行坐席和被叫号码不能为空";
+    const text = String(form.value.variables.text || "").trim();
+    if (!form.value.flowKey || !form.value.number.trim() || !text) {
+      error.value = "自动外呼流程、被叫号码和播报文案不能为空";
       return;
     }
     saving.value = true;
@@ -109,6 +112,10 @@ export function useDialJobManagement() {
       await dialJobManagementApi.create({
         ...form.value,
         number: form.value.number.trim(),
+        variables: {
+          ...form.value.variables,
+          text,
+        },
       });
       createVisible.value = false;
       toastSuccess("自动外呼任务已进入持久调度队列");
@@ -176,14 +183,14 @@ export function useDialJobManagement() {
   }
 
   onMounted(() => {
-    void Promise.all([load(), loadAgents()]);
+    void Promise.all([load(), loadFlows()]);
   });
 
   return {
     rows,
-    agents,
-    agentsLoading,
-    agentsError,
+    flows,
+    flowsLoading,
+    flowsError,
     attempts,
     loading,
     attemptsLoading,
@@ -191,14 +198,14 @@ export function useDialJobManagement() {
     controllingId,
     error,
     page,
-    ownerFilter,
+    flowFilter,
     createVisible,
     attemptsVisible,
     selectedJob,
     form,
     hasNext,
     load,
-    loadAgents,
+    loadFlows,
     search,
     openCreate,
     create,

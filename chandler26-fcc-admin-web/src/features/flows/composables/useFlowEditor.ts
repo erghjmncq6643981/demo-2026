@@ -5,7 +5,12 @@ import {
   type FlowDefinitionVO,
   type FlowVersionVO,
 } from "../../../api/flowApi";
-import type { FlowModelNode } from "../model/stagedFlow";
+import {
+  readStagedFlow,
+  validateStagedFlow,
+  type FlowModelNode,
+  type FlowValidationIssue,
+} from "../model/stagedFlow";
 import { confirmAction, errorText } from "../../../utils/feedback";
 import { parseFlowDefinition } from "../model/flowDefinition";
 
@@ -23,11 +28,18 @@ export function useFlowEditor() {
   const savedDefinition = ref("");
   const loading = ref(false);
   const pending = ref(false);
+  const validating = ref(false);
+  const createPending = ref(false);
   const error = ref("");
   const outcome = ref("");
   const modelNodes = ref<FlowModelNode[]>([]);
   const workingCopy = ref(false);
+  const validationIssues = ref<FlowValidationIssue[]>([]);
+  const validatedDefinition = ref("");
   const dirty = computed(() => definition.value !== savedDefinition.value);
+  const validated = computed(
+    () => !!definition.value && definition.value === validatedDefinition.value,
+  );
   const version = computed(() =>
     versions.value.find((item) => item.version === selectedVersion.value),
   );
@@ -37,6 +49,8 @@ export function useFlowEditor() {
     selectedVersion.value = record?.version || "";
     definition.value = record?.definitionJson || "";
     savedDefinition.value = definition.value;
+    validatedDefinition.value = definition.value;
+    validationIssues.value = [];
   }
 
   function beginDraft(initialDefinition: string) {
@@ -49,6 +63,8 @@ export function useFlowEditor() {
     selectedVersion.value = "";
     definition.value = initialDefinition;
     savedDefinition.value = "";
+    validatedDefinition.value = "";
+    validationIssues.value = [];
     workingCopy.value = true;
     error.value = "";
     outcome.value = "新草稿尚未保存；保存后由服务端分配版本号。";
@@ -181,11 +197,29 @@ export function useFlowEditor() {
     }
   }
 
+  async function createFlow(flowKey: string, flowName: string) {
+    if (createPending.value || loading.value || pending.value) return null;
+    createPending.value = true;
+    error.value = "";
+    try {
+      const created = await flowApi.create(flowKey.trim(), flowName.trim());
+      selectedFlow.value = created;
+      await reload(1);
+      outcome.value = "流程已创建，请创建并维护首个草稿版本。";
+      return created;
+    } catch (cause) {
+      error.value = errorText(cause);
+      return null;
+    } finally {
+      createPending.value = false;
+    }
+  }
+
   async function saveDraft() {
     if (!selectedFlow.value || pending.value || loading.value) return;
     error.value = "";
     try {
-      parseFlowDefinition(definition.value);
+      assertDefinition();
     } catch (cause) {
       error.value = errorText(cause);
       return;
@@ -196,6 +230,8 @@ export function useFlowEditor() {
         definitionJson: definition.value,
       });
       savedDefinition.value = definition.value;
+      validatedDefinition.value = definition.value;
+      validationIssues.value = [];
       workingCopy.value = false;
       outcome.value = "草稿已保存，尚未发布。";
       versionPage.value = 1;
@@ -207,12 +243,53 @@ export function useFlowEditor() {
     }
   }
 
+  async function validateDraft() {
+    if (!selectedFlow.value || pending.value || loading.value || validating.value) return;
+    error.value = "";
+    try {
+      assertDefinition();
+    } catch (cause) {
+      error.value = errorText(cause);
+      return;
+    }
+    validating.value = true;
+    try {
+      const result = await flowApi.validate(selectedFlow.value.flowKey, {
+        definitionJson: definition.value,
+      });
+      if (!result.valid) throw new Error("服务端未通过流程定义校验");
+      definition.value = JSON.stringify(
+        parseFlowDefinition(result.normalizedDefinitionJson),
+        null,
+        2,
+      );
+      validatedDefinition.value = definition.value;
+      validationIssues.value = [];
+      outcome.value = "流程定义已通过服务端校验；尚未保存或发布。";
+    } catch (cause) {
+      validatedDefinition.value = "";
+      error.value = errorText(cause);
+    } finally {
+      validating.value = false;
+    }
+  }
+
+  function assertDefinition() {
+    const parsed = readStagedFlow(definition.value);
+    if (!parsed) throw new Error("流程定义不能为空");
+    validationIssues.value = validateStagedFlow(parsed);
+    if (validationIssues.value.length) {
+      throw new Error(validationIssues.value[0]!.message);
+    }
+  }
+
   async function publish() {
     if (
       !selectedFlow.value ||
       pending.value ||
       loading.value ||
       dirty.value ||
+      !validated.value ||
       version.value?.publishStatus !== "DRAFT"
     )
       return;
@@ -256,17 +333,23 @@ export function useFlowEditor() {
     modelNodes,
     loading,
     pending,
+    validating,
+    createPending,
     error,
     outcome,
     dirty,
     workingCopy,
+    validationIssues,
+    validated,
     reload,
     selectFlow,
     selectFlowPage,
     selectVersion,
     selectVersionPage,
+    createFlow,
     beginDraft,
     saveDraft,
+    validateDraft,
     publish,
   };
 }

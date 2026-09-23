@@ -14,6 +14,7 @@ import com.chandler.fcc.admin.flow.controller.resp.FlowExecutionStepResp;
 import com.chandler.fcc.admin.flow.controller.resp.FlowPublishResp;
 import com.chandler.fcc.admin.flow.controller.resp.FlowSummaryResp;
 import com.chandler.fcc.admin.flow.controller.resp.FlowVersionResp;
+import com.chandler.fcc.admin.flow.controller.resp.FlowValidationResp;
 import com.chandler.fcc.admin.flow.controller.resp.SystemFlowModelResp;
 import com.chandler.fcc.admin.flow.infrastructure.FlowStudioMapper;
 import com.chandler.fcc.admin.flow.infrastructure.data.FlowExecutionInstanceData;
@@ -295,6 +296,24 @@ public class FlowStudioService {
         flowMapper.updateById(flow);
         log.info("[流程管理] 保存草稿 flowKey={}, version={}", flowKey, formatVersion(draft.getVersionNo()));
         return version(draft, true);
+    }
+
+    /**
+     * 使用管理端与运行端共享的严格契约校验草稿，不产生版本或其他持久化副作用。
+     *
+     * @param flowKey 稳定流程代码
+     * @param request 待校验完整定义
+     * @return 规范化定义
+     */
+    public FlowValidationResp validate(String flowKey, SaveFlowDraftReq request) {
+        StpUtil.checkPermission("flow:write");
+        requireFlow(flowKey, true);
+        rejectSystemFlow(flowKey);
+        String normalized = FlowDefinitionValidator.validate(request.getDefinitionJson()).toString();
+        return FlowValidationResp.builder()
+            .valid(true)
+            .normalizedDefinitionJson(normalized)
+            .build();
     }
 
     /**

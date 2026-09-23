@@ -9,6 +9,7 @@ import com.chandler.fcc.common.enums.FlowActionType;
 import com.chandler.fcc.common.protocol.ChannelEventState;
 import com.chandler.fcc.common.protocol.FccEventField;
 import com.chandler.fcc.common.util.IdUtil;
+import com.chandler.fcc.server.agent.domain.AgentWorkStatus;
 import com.chandler.fcc.server.agent.infrastructure.AgentRuntimeMapper;
 import com.chandler.fcc.server.call.CallSessionManager;
 import com.chandler.fcc.server.command.FccClient;
@@ -154,6 +155,7 @@ public class InboundCallService implements SystemFlowRuntime {
                     )
                     .build()
             );
+            updateAgentWorkStatus(call, eventState, uuid);
             if (eventState == ChannelEventState.READY && uuid.equals(call.getGuestChannelUuid())) {
                 call.putData("guestReady", true);
                 if (menu.ready(call)) return true;
@@ -359,7 +361,7 @@ public class InboundCallService implements SystemFlowRuntime {
         Boolean reserved;
         try {
             reserved = transactions.execute(transaction -> {
-                if (agents.reserve(owner, call.getCallId()) != 1) return false;
+                if (agents.reserveInbound(owner, call.getCallId()) != 1) return false;
                 call.setAgentWorkNo(owner);
                 call.setAgentExt(extension);
                 call.setAgentChannelUuid(IdUtil.getUuid());
@@ -469,6 +471,35 @@ public class InboundCallService implements SystemFlowRuntime {
     private void release(CallInfoBO call) {
         if (call.getAgentWorkNo() != null) {
             agents.release(call.getAgentWorkNo(), call.getCallId());
+        }
+    }
+
+    /**
+     * 仅依据坐席话道的真实事件推进工作状态，不使用客户端推测状态。
+     *
+     * @param call 当前通话
+     * @param eventState 标准话道事件状态
+     * @param channelUuid 事件话道标识
+     */
+    private void updateAgentWorkStatus(
+        CallInfoBO call,
+        ChannelEventState eventState,
+        String channelUuid
+    ) {
+        if (
+            call.getAgentWorkNo() == null ||
+            !channelUuid.equals(call.getAgentChannelUuid())
+        ) {
+            return;
+        }
+        AgentWorkStatus status = switch (eventState) {
+            case CALLING -> AgentWorkStatus.CALLING;
+            case RINGING -> AgentWorkStatus.RINGING;
+            case ANSWERED, READY, BRIDGE -> AgentWorkStatus.ANSWERED;
+            default -> null;
+        };
+        if (status != null) {
+            agents.updateCallStatus(call.getAgentWorkNo(), call.getCallId(), status.name());
         }
     }
 

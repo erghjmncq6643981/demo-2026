@@ -44,7 +44,7 @@ public class InternalBusinessController {
      * 客户摘要。
      *
      * @param page 页码
-     * @param owner 工号过滤
+     * @param flowKey 流程编码过滤
      * @param phone 号码过滤
      * @return 列表
      */
@@ -128,9 +128,9 @@ public class InternalBusinessController {
     @GetMapping("/dial-jobs")
     public ManagementResp<?> jobs(
         @RequestParam(defaultValue = "1") int page,
-        @RequestParam(required = false) String owner
+        @RequestParam(required = false) String flowKey
     ) {
-        return ok(service.jobs(page, owner));
+        return ok(service.jobs(page, flowKey));
     }
 
     /**
@@ -143,9 +143,9 @@ public class InternalBusinessController {
     public ManagementResp<?> createJob(@Valid @RequestBody CreateDialJobReq request) {
         return ok(
             service.createJob(
-                request.getOwner(),
                 request.getNumber(),
-                request.getMode(),
+                request.getFlowKey(),
+                request.getVariables(),
                 request.getMaxAttempts(),
                 request.getRequestKey()
             )

@@ -4,6 +4,8 @@ import io.swagger.v3.oas.annotations.media.Schema;
 import jakarta.validation.constraints.Max;
 import jakarta.validation.constraints.Min;
 import jakarta.validation.constraints.NotBlank;
+import java.util.LinkedHashMap;
+import java.util.Map;
 import lombok.Data;
 
 /**
@@ -13,20 +15,19 @@ import lombok.Data;
 @Schema(description = "管理端创建自动外呼任务请求")
 public class CreateDialJobReq {
 
-    /** 执行任务的坐席工号。 */
-    @NotBlank(message = "执行坐席不能为空")
-    @Schema(description = "执行任务的坐席工号", example = "901001")
-    private String owner;
-
     /** 被叫号码。 */
     @NotBlank(message = "被叫号码不能为空")
     @Schema(description = "自动外呼的被叫号码", example = "13800138000")
     private String number;
 
-    /** 外呼模式。 */
-    @NotBlank(message = "外呼模式不能为空")
-    @Schema(description = "外呼模式：PROGRESSIVE 或 NOTIFICATION", example = "PROGRESSIVE")
-    private String mode;
+    /** 已发布自动外呼流程编码。 */
+    @NotBlank(message = "自动外呼流程不能为空")
+    @Schema(description = "已发布自动外呼流程编码", example = "SYSTEM_NOTIFICATION")
+    private String flowKey;
+
+    /** 传给流程模型的输入变量。 */
+    @Schema(description = "流程输入变量；通知文案使用 text，确认按键使用 confirmDigit")
+    private Map<String, Object> variables = new LinkedHashMap<>();
 
     /** 最大尝试次数。 */
     @Min(value = 1, message = "最多尝试次数不能小于1")

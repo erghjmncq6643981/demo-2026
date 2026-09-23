@@ -145,7 +145,7 @@ Sidecar 的 dispatch ingress 在单节点部署中可直接调用本地 Dispatch
 
 ### 5.2 人工外呼与坐席可用性
 
-终端绑定、终端注册事实和坐席业务状态是三个独立概念。系统发起 Dial 前只要求存在启用的 SIP/WebRTC 绑定，并通过 `fcc_agent_presence` 的 `READY/BUSY/REST/ACW` 做业务并发控制；`login_status`、最近注册事件和 WebRTC/SIP 在线投影不再作为拨号同步硬前置，避免把注册状态同步延迟误判为坐席不可用。终端是否真实可达由 Sidecar 命令应答和后续 Channel 事件判定，注册事件继续用于管理端展示、诊断和告警。
+终端绑定、终端注册事实与坐席业务状态相互独立。坐席业务状态只采用两个维度：`login_status` 保存 `LOGIN/LOGOUT/LOGIN_BUSY`，`work_status` 保存 `READY/UNREADY/BUSY/CALLING/RINGING/ANSWERED/ACW`。`LOGIN + READY` 表示示闲，`LOGIN_BUSY + BUSY` 表示示忙但仍允许主动外呼，`LOGOUT + UNREADY` 表示退出；人工通话按真实话道事件进入 `CALLING/RINGING/ANSWERED`，挂机后进入 `ACW`，话后完成再按 `login_status` 恢复 `READY/BUSY/UNREADY`。呼入只原子选择 `LOGIN + READY`，人工外呼允许 `LOGIN + READY` 或 `LOGIN_BUSY + BUSY`。系统发起 Dial 不要求 SIP/WebRTC 注册在线投影同步，避免把注册事件延迟误判为终端不可用；终端是否真实可达由 Sidecar 命令应答和后续 Channel 事件判定。
 
 人工外呼有两个固定模型：
 
@@ -153,6 +153,12 @@ Sidecar 的 dispatch ingress 在单节点部署中可直接调用本地 Dispatch
 2. `AGENT_ORIGINATED`：坐席在已认证 SIP/WebRTC 终端通过内部 `default` context 拨客户号码；Sidecar 上报 `authenticated_extension`、真实被叫和 context，fcc-server 接管现有坐席 Leg、原子占用坐席，再 Dial 客户并 Bridge。未绑定坐席的认证终端会被拒绝，不能回落为普通客户呼入。
 
 两条路径共享 Call/Leg/Bridge 事实和终态幂等处理，但入口与首个动作不同，不能把终端主动拨号伪装成“系统先拨坐席”。`AGENT_ORIGINATED` 已有固定模型和事件入口；真实 FreeSWITCH 默认 context 的外呼捕获规则、号码前缀处理及异常事件顺序仍需联调验证。
+
+### 5.3 自动外呼与人工回拨
+
+无人自动外呼任务不绑定坐席。`AUTO_FLOW` 任务只保存创建人审计、被叫号码、已发布 `flow_key`、流程输入变量、最大尝试次数和幂等键；调度领取不查询坐席、终端绑定或在线状态，直接执行 `dial guest`，客户应答后继续执行该通话固定的流程版本。当前通知模型使用 `text` 和 `confirmDigit` 流程变量完成 TTS 文案播放与收号；只有后续流程进入“排队/转人工”动作时才允许动态选择坐席。
+
+漏话回拨是人工外呼，不复用无人外呼语义。它以 `AGENT_CALLBACK` 任务类型保存领取坐席，调度时允许 `LOGIN + READY` 和 `LOGIN_BUSY + BUSY`，执行 `AGENT_FIRST`；该坐席状态检查不会影响 `AUTO_FLOW`。
 
 ## 6. 当前 API
 
@@ -273,7 +279,7 @@ node tools/generate-system-models.mjs
 | 未接、超时、客户先挂产生漏话及回拨闭环 | `FINALIZE_INBOUND` + `fcc_callback_task` + 渐进式外呼任务 | 未接回拨创建、领取和任务关联已实现；运营规则、SLA 和人工处置结果仍需补齐 |
 | 录音、满意度评价及文件完成态 | `START_RECORDING`/`STOP_RECORDING`、`PLAY_NAVIGATION_VOICE`、`COLLECT_SERVICE_RATING`、`PLAY_CLOSING_VOICE`、`PERSIST_SERVICE_RATING` + Recording/评价事实 | 桥接后幂等开始录音，终态前停止录音；坐席先挂机时收取 1-5 分评价，评价或超时后播放预设结束语音再挂机。真实 FreeSWITCH 录音文件完成态仍待联调 |
 | 盲转、咨询转、三方与转接后话单归属 | 显式转接动作 + 多 Leg/Bridge 成员事实 | 数据模型可承载，完整动作与生命周期尚未实现，不能以普通桥接代替 |
-| 自动外呼放音、按键确认、重试和终态通知 | 通知外呼固定模型 + 持久调度/尝试 + 确认事实 | 调度、租约和确认模型已有基础；真实并发、重试、音频与终态通知待联调 |
+| 自动外呼放音、按键确认、重试和终态通知 | 与坐席无关的 `AUTO_FLOW` 任务 + 已发布流程版本 + 持久尝试/确认事实 | 调度不再查询坐席；流程版本在通话创建时固定，文案和确认键作为流程变量；通用转人工节点、真实并发、重试、音频与终态通知待联调 |
 | 司机热线路由、港口映射和结束后同步业务系统 | 命名第三方端点 + 显式请求/响应动作 + 幂等业务回调事实 | 通用 HTTPS 执行边界已存在；具体业务契约、端点配置、补偿与对账尚未实现 |
 
 新系统当前已对象化并运行的呼入动作是 DID 解析、菜单收号、if/else 路由、坐席预占与呼叫、桥接、录音、坐席先挂机后的评价/结束语音和未接通回拨收尾；菜单与通知文案的 TTS 生成由 Sidecar 完成。复杂转接、营业时间/溢出、第三方业务回调等不能继续隐藏在监听器条件分支中；后续加入时必须先进入 `fcc-common` 动作目录，声明 FNode 指令、内部方法或第三方接口执行边界，再由 admin 校验、server 执行并记录每次动作事实。在这些动作真正接入运行流程并验证前，文档不将其描述为可配置完成。
@@ -310,7 +316,7 @@ node tools/generate-system-models.mjs
 - 流程发布数据库切换已由流程主行锁和 `published_marker` 唯一约束保证；Redis 与 HTTP 仍是提交后的 best-effort 运行端通知，通知失败不会回滚已提交版本，需通过重载接口或运维告警补偿；
 - Agent WebSocket 已通过令牌在线核验坐席身份；身份服务故障时拒绝收发，尚需真实环境验证及性能评估；
 - 共享 Jackson 标识符模块已加入，但命名外字段、Map 和实际 HTTP 输出仍需完整契约验证；
-- Dial Job 已有持久领取、频控、时段、暂停/取消、逐次结果、超时未知保留和通话事实回填；真实话务与多实例恢复尚未完整验收。
+- `AUTO_FLOW` 与 `AGENT_CALLBACK` 已区分：前者不绑定坐席，后者才检查领取坐席；Dial Job 已有持久领取、频控、时段、暂停/取消、逐次结果、超时未知保留和通话事实回填。通用流程动作推进、真实话务与多实例恢复尚未完整验收。
 - 坐席终端主动外呼已有模型、事件识别和 Leg 接管代码；真实默认 context 拨号计划、号码转换、重复/乱序/先挂机等场景尚未完成 FreeSWITCH 联调。
 
 挂机/转接已校验本人 callId、话道 UUID 和底层响应，并分别进入 `HANGUP_CALL`/`TRANSFER_CALL` 公共动作；返回 ACCEPTED 而非最终状态，错误/超时不再伪造成功。保持和通话中 DTMF 目前仍通过受控 NativeAPI，班长四类干预均明确返回 501，前端禁用。保持媒体完成态和完整转接生命周期仍需联调。

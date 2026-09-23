@@ -7,7 +7,18 @@
 
 export type CallState = 'IDLE' | 'CALLING' | 'RINGING' | 'CONNECTED' | 'ENDING' | 'ACW';
 
-export type AgentStatus = 'READY' | 'REST' | 'BUSY' | 'ACW';
+/** 坐席业务登录状态：示忙只屏蔽呼入，仍允许主动外呼。 */
+export type AgentLoginStatus = 'LOGIN' | 'LOGIN_BUSY' | 'LOGOUT';
+
+/** 服务端权威工作状态，包含空闲基态和人工通话生命周期。 */
+export type AgentWorkStatus =
+  | 'READY'
+  | 'UNREADY'
+  | 'BUSY'
+  | 'CALLING'
+  | 'RINGING'
+  | 'ANSWERED'
+  | 'ACW';
 
 export type AnswerEndpointType = 'WEBRTC' | 'SIP' | 'MOBILE';
 

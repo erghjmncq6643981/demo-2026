@@ -2,6 +2,8 @@ package com.chandler.fcc.admin.service;
 
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
+import com.chandler.fcc.admin.client.SidecarAdminClient;
+import com.chandler.fcc.admin.infrastructure.persistence.data.AgentGroupMemberRow;
 import com.chandler.fcc.admin.infrastructure.persistence.entity.*;
 import com.chandler.fcc.admin.infrastructure.persistence.mapper.*;
 import com.chandler.fcc.admin.model.PageResult;
@@ -10,26 +12,22 @@ import com.chandler.fcc.admin.model.enums.AgentRoleEnum;
 import com.chandler.fcc.admin.model.enums.AuthRoleEnum;
 import com.chandler.fcc.admin.model.vo.AccountCredentialVO;
 import com.chandler.fcc.admin.model.vo.AgentBindingVO;
+import com.chandler.fcc.admin.model.vo.AgentGroupMemberVO;
 import com.chandler.fcc.admin.model.vo.AgentGroupVO;
 import com.chandler.fcc.admin.model.vo.AgentSubstituteVO;
 import com.chandler.fcc.admin.model.vo.AgentVO;
 import com.chandler.fcc.common.util.IdUtil;
 import com.chandler.fcc.common.util.PasswordHasher;
+import jakarta.annotation.PostConstruct;
+import java.nio.charset.StandardCharsets;
+import java.time.LocalDateTime;
+import java.util.List;
+import java.util.Map;
+import java.util.stream.Collectors;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
-
-import java.nio.charset.StandardCharsets;
-import java.time.LocalDateTime;
-import java.util.Collections;
-import java.util.List;
-import java.util.Map;
-import java.util.stream.Collectors;
-import jakarta.annotation.PostConstruct;
-import com.chandler.fcc.admin.model.vo.AgentGroupMemberVO;
-
-import com.chandler.fcc.admin.client.SidecarAdminClient;
 
 /**
  * 坐席人员、技能组、终端绑定与替班全生命周期业务服务
@@ -450,65 +448,96 @@ public class AgentService {
                 .isNull(AgentGroupEntity::getDeletedAt)
                 .eq(AgentGroupEntity::getStatus, "ENABLED")
                 .orderByAsc(AgentGroupEntity::getId));
+        Map<Long, Long> subtreeMemberCounts = groupMapper.selectSubtreeMemberCounts().stream()
+                .collect(Collectors.toMap(
+                        row -> row.getGroupId(),
+                        row -> row.getMemberCount() == null ? 0L : row.getMemberCount()
+                ));
 
-        return groups.stream().map(g -> {
-            Long count = groupMemberMapper.selectCount(new LambdaQueryWrapper<AgentGroupMemberEntity>()
-                    .isNull(AgentGroupMemberEntity::getDeletedAt)
-                    .eq(AgentGroupMemberEntity::getGroupId, g.getId()));
-            return AgentGroupVO.builder()
-                    .id(g.getId())
-                    .parentId(g.getParentId() == null ? 0L : g.getParentId())
-                    .groupCode(g.getGroupCode())
-                    .groupName(g.getGroupName())
-                    .groupType(g.getGroupType())
-                    .routingStrategy(g.getRoutingStrategy())
-                    .status(g.getStatus())
-                    .memberCount(count.intValue())
-                    .createdAt(g.getCreatedAt())
-                    .build();
-        }).toList();
+        return groups.stream()
+                .map(group -> AgentGroupVO.builder()
+                        .id(group.getId())
+                        .parentId(group.getParentId() == null ? 0L : group.getParentId())
+                        .groupCode(group.getGroupCode())
+                        .groupName(group.getGroupName())
+                        .groupType(group.getGroupType())
+                        .routingStrategy(group.getRoutingStrategy())
+                        .status(group.getStatus())
+                        .memberCount(subtreeMemberCounts.getOrDefault(group.getId(), 0L).intValue())
+                        .createdAt(group.getCreatedAt())
+                        .build())
+                .toList();
     }
 
     /**
-     * 查询指定技能组的全部坐席成员
+     * 分页查询指定组织节点及全部启用子节点中的去重坐席。
      *
      * @param groupId 技能组 ID
-     * @return 成员详情列表
+     * @param pageNum 页码，从一开始
+     * @param pageSize 每页条数
+     * @param keyword 坐席姓名、工号或手机号搜索词，可为空
+     * @return 子树成员分页结果
      */
-    public List<AgentGroupMemberVO> listGroupMembers(Long groupId) {
-        List<AgentGroupMemberEntity> members = groupMemberMapper.selectList(new LambdaQueryWrapper<AgentGroupMemberEntity>()
-                .isNull(AgentGroupMemberEntity::getDeletedAt)
-                .eq(AgentGroupMemberEntity::getGroupId, groupId)
-                .orderByAsc(AgentGroupMemberEntity::getPriority));
-
-        if (members.isEmpty()) {
-            return Collections.emptyList();
+    public PageResult<AgentGroupMemberVO> listGroupMembers(
+            Long groupId,
+            int pageNum,
+            int pageSize,
+            String keyword
+    ) {
+        AgentGroupEntity group = groupMapper.selectById(groupId);
+        if (group == null || group.getDeletedAt() != null || !"ENABLED".equals(group.getStatus())) {
+            throw new IllegalArgumentException("组织或技能组不存在: id=" + groupId);
+        }
+        if (pageNum < 1 || pageNum > 10_000 || pageSize < 1 || pageSize > 100) {
+            throw new IllegalArgumentException("成员分页参数不合法");
+        }
+        String normalizedKeyword = keyword == null || keyword.isBlank() ? null : keyword.trim();
+        if (normalizedKeyword != null && normalizedKeyword.length() > 64) {
+            throw new IllegalArgumentException("成员搜索词不能超过64个字符");
         }
 
-        List<Long> agentIds = members.stream().map(AgentGroupMemberEntity::getAgentId).toList();
-        List<AgentEntity> agents = agentMapper.selectBatchIds(agentIds);
-        Map<Long, AgentEntity> agentMap = agents.stream()
-                .filter(a -> a.getDeletedAt() == null)
-                .collect(Collectors.toMap(AgentEntity::getId, a -> a, (k1, k2) -> k1));
+        long total = groupMemberMapper.countSubtreeMembers(groupId, normalizedKeyword);
+        if (total == 0L) {
+            return PageResult.empty(pageNum, pageSize);
+        }
+        long offset = (long) (pageNum - 1) * pageSize;
+        List<AgentGroupMemberVO> members = groupMemberMapper.selectSubtreeMembers(
+                        groupId,
+                        normalizedKeyword,
+                        offset,
+                        pageSize
+                ).stream()
+                .map(this::toGroupMemberVO)
+                .toList();
+        return PageResult.<AgentGroupMemberVO>builder()
+                .pageNum(pageNum)
+                .pageSize(pageSize)
+                .total(total)
+                .list(members)
+                .build();
+    }
 
-        return members.stream()
-                .filter(m -> agentMap.containsKey(m.getAgentId()))
-                .map(m -> {
-                    AgentEntity agent = agentMap.get(m.getAgentId());
-                    return AgentGroupMemberVO.builder()
-                            .id(m.getId() == null ? null : String.valueOf(m.getId()))
-                            .groupId(m.getGroupId() == null ? null : String.valueOf(m.getGroupId()))
-                            .agentId(m.getAgentId() == null ? null : String.valueOf(m.getAgentId()))
-                            .workNo(agent.getWorkNo())
-                            .agentName(agent.getAgentName())
-                            .phoneNumber(agent.getPhoneNumber())
-                            .memberRole(m.getMemberRole())
-                            .priority(m.getPriority())
-                            .roleCode(agent.getRoleCode())
-                            .status(agent.getStatus())
-                            .createdAt(m.getCreatedAt())
-                            .build();
-                }).toList();
+    /**
+     * 将持久化查询行转换为管理端成员视图。
+     *
+     * @param row 子树成员查询行
+     * @return 管理端成员视图
+     */
+    private AgentGroupMemberVO toGroupMemberVO(AgentGroupMemberRow row) {
+        return AgentGroupMemberVO.builder()
+                .id(row.getMembershipId() == null ? null : String.valueOf(row.getMembershipId()))
+                .groupId(row.getGroupId() == null ? null : String.valueOf(row.getGroupId()))
+                .groupName(row.getGroupName())
+                .agentId(row.getAgentId() == null ? null : String.valueOf(row.getAgentId()))
+                .workNo(row.getWorkNo())
+                .agentName(row.getAgentName())
+                .phoneNumber(row.getPhoneNumber())
+                .memberRole(row.getMemberRole())
+                .priority(row.getPriority())
+                .roleCode(row.getRoleCode())
+                .status(row.getStatus())
+                .createdAt(row.getCreatedAt())
+                .build();
     }
 
     /**

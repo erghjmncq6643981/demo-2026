@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { useGroupManagement } from '../features/groups/composables/useGroupManagement';
+import GroupMemberTable from '../features/groups/components/GroupMemberTable.vue';
 import OrgTreeItem from './OrgTreeItem.vue';
 import { KeyRound, ShieldCheck, Copy, Check } from 'lucide-vue-next';
 
@@ -18,6 +19,9 @@ const {
   searchMemberQuery,
   triggerToast,
   currentMembers,
+  loadingMembers,
+  membersError,
+  memberTotal,
   handleSelectNode,
   contextMenu,
   handleTreeContextMenu,
@@ -42,9 +46,11 @@ const {
   handleSaveGroupConfig,
   memberPage,
   memberPageSize,
-  filteredMembers,
-  pagedMembers,
   totalMemberPages,
+  memberPageOptions,
+  changeMemberPage,
+  changeMemberPageSize,
+  retryMembers,
   showAddAgentModal,
   newAgentName,
   newAgentWorkNo,
@@ -306,204 +312,27 @@ const {
         </div>
       </div>
 
-      <!-- ======================================================================= -->
-      <!-- 2.2 技能组坐席成员列表 (真实数据库绑定，新增坐席 + 绑定已有坐席) -->
-      <!-- ======================================================================= -->
-      <div class="bg-white rounded-2xl border border-slate-200/80 shadow-2xs p-5 space-y-4">
-        <!-- 顶栏：标题、快速检索与新增/绑定按钮 -->
-        <div class="flex items-center justify-between flex-wrap gap-4">
-          <div class="flex items-center gap-3">
-            <div class="w-2.5 h-5 bg-indigo-500 rounded-full"></div>
-            <h3 class="text-sm font-black text-slate-900">技能组坐席成员</h3>
-            <span class="px-2 py-0.5 rounded-full bg-indigo-50 text-indigo-700 font-mono text-xs font-bold">
-              共 {{ filteredMembers.length }} 名成员
-            </span>
-          </div>
-
-          <div class="flex items-center gap-2.5 text-xs">
-            <!-- 坐席检索框 -->
-            <div class="relative">
-              <input
-                v-model="searchMemberQuery"
-                type="text"
-                placeholder="搜索姓名/工号/手机..."
-                class="w-48 bg-[#f8fafc] border border-slate-200 rounded-xl pl-3 pr-7 py-1.5 text-xs text-slate-700 placeholder-slate-400 focus:outline-none focus:border-[#1677ff]"
-              />
-              <span class="absolute right-2 top-2 text-slate-400 text-xs">🔍</span>
-            </div>
-
-            <!-- 按钮 1: ➕ 新增坐席 (新建档案并入组) -->
-            <button
-              @click="openAddAgentModal"
-              class="px-3.5 py-1.5 bg-[#1677ff] hover:bg-blue-600 text-white rounded-xl text-xs font-bold shadow-xs transition flex items-center gap-1 cursor-pointer"
-            >
-              <span>➕</span>
-              <span>新增坐席</span>
-            </button>
-
-            <!-- 按钮 2: 🔗 绑定坐席 (从系统已有坐席中选取) -->
-            <button
-              @click="openBindAgentModal"
-              class="px-3.5 py-1.5 bg-indigo-50 hover:bg-indigo-100 text-indigo-700 border border-indigo-200 rounded-xl text-xs font-bold shadow-xs transition flex items-center gap-1 cursor-pointer"
-            >
-              <span>🔗</span>
-              <span>绑定坐席</span>
-            </button>
-          </div>
-        </div>
-
-        <!-- 坐席成员表格 (支持横向滑动，单元格防折行) -->
-        <div class="border border-slate-200/90 rounded-xl overflow-x-auto">
-          <table class="w-full min-w-[850px] text-xs text-center">
-            <thead class="bg-[#f8fafc] text-slate-600 border-b border-slate-200 font-bold">
-              <tr>
-                <th class="py-3 px-4 text-left whitespace-nowrap">坐席姓名</th>
-                <th class="py-3 px-4 whitespace-nowrap">工号</th>
-                <th class="py-3 px-4 whitespace-nowrap">联系电话</th>
-                <th class="py-3 px-4 whitespace-nowrap">组内身份</th>
-                <th class="py-3 px-4 whitespace-nowrap">调度优先级</th>
-                <th class="py-3 px-4 whitespace-nowrap">系统角色</th>
-                <th class="py-3 px-4 whitespace-nowrap">入组时间</th>
-                <th class="py-3 px-4 text-right whitespace-nowrap">操作</th>
-              </tr>
-            </thead>
-            <tbody class="divide-y divide-slate-100 bg-white">
-              <tr v-for="mem in pagedMembers" :key="mem.id" class="hover:bg-blue-50/30 transition-colors">
-                <!-- 姓名 + 头像 -->
-                <td class="py-3 px-4 text-left whitespace-nowrap">
-                  <div class="flex items-center gap-2.5">
-                    <div class="w-7 h-7 rounded-full bg-gradient-to-tr from-blue-500 to-indigo-500 text-white font-bold flex items-center justify-center text-xs shadow-2xs shrink-0">
-                      {{ mem.agentName ? mem.agentName.slice(0, 1) : '坐' }}
-                    </div>
-                    <div>
-                      <div class="font-bold text-slate-900">{{ mem.agentName }}</div>
-                      <div class="text-[10px] text-slate-400 font-mono">ID: {{ mem.agentId }}</div>
-                    </div>
-                  </div>
-                </td>
-                <!-- 工号 -->
-                <td class="py-3 px-4 font-mono font-bold text-slate-700 whitespace-nowrap">
-                  <span class="px-2 py-0.5 rounded bg-slate-100 text-slate-700">
-                    {{ mem.workNo }}
-                  </span>
-                </td>
-                <!-- 手机号 -->
-                <td class="py-3 px-4 font-mono text-slate-700 whitespace-nowrap">
-                  {{ mem.phoneNumber || '-' }}
-                </td>
-                <!-- 组内身份 (LEADER / MEMBER) -->
-                <td class="py-3 px-4 whitespace-nowrap">
-                  <span
-                    class="px-2.5 py-0.5 rounded-full text-[11px] font-bold"
-                    :class="mem.memberRole === 'LEADER' ? 'bg-purple-100 text-purple-700 border border-purple-200' : 'bg-blue-50 text-blue-700'"
-                  >
-                    {{ mem.memberRole === 'LEADER' ? '👑 班长席 / 组长' : '👤 普通坐席' }}
-                  </span>
-                </td>
-                <!-- 优先级 -->
-                <td class="py-3 px-4 font-mono font-bold text-slate-700 whitespace-nowrap">
-                  <span class="px-2 py-0.5 rounded bg-amber-50 text-amber-700 border border-amber-200 text-[11px]">
-                    优先级 {{ mem.priority ?? 0 }}
-                  </span>
-                </td>
-                <!-- 系统角色 -->
-                <td class="py-3 px-4 whitespace-nowrap">
-                  <span class="text-xs text-slate-600 font-medium">
-                    {{ mem.roleCode === 'SUPERVISOR' ? '主管' : '坐席' }}
-                  </span>
-                </td>
-                <!-- 加入时间 -->
-                <td class="py-3 px-4 font-mono text-slate-400 text-[11px] whitespace-nowrap">
-                  {{ mem.createdAt ? mem.createdAt.replace('T', ' ').slice(0, 19) : '-' }}
-                </td>
-                <!-- 操作 -->
-                <td class="py-3 px-4 text-right whitespace-nowrap">
-                  <div class="inline-flex items-center gap-1.5">
-                    <button
-                      @click="handleOpenEditMember(mem)"
-                      class="text-[#1677ff] hover:text-blue-700 hover:bg-blue-50 px-2 py-1 rounded transition font-bold cursor-pointer"
-                    >
-                      修改
-                    </button>
-                    <span class="text-slate-200">|</span>
-                    <button
-                      @click="openResetPasswordModal(mem)"
-                      class="text-indigo-600 hover:text-indigo-800 hover:bg-indigo-50 px-2 py-1 rounded transition font-bold cursor-pointer"
-                      title="重置坐席登录密码"
-                    >
-                      重置口令
-                    </button>
-                    <span class="text-slate-200">|</span>
-                    <button
-                      @click="handleUnbindMember(mem)"
-                      class="text-amber-600 hover:text-amber-800 hover:bg-amber-50 px-2 py-1 rounded transition font-bold cursor-pointer"
-                      title="仅将该坐席移出当前技能组，保留坐席账号"
-                    >
-                      解绑
-                    </button>
-                    <span class="text-slate-200">|</span>
-                    <button
-                      @click="handleDeleteMemberAccount(mem)"
-                      class="text-rose-600 hover:text-rose-800 hover:bg-rose-50 px-2 py-1 rounded transition font-bold cursor-pointer"
-                      title="彻底注销并删除该坐席账号"
-                    >
-                      删除
-                    </button>
-                  </div>
-                </td>
-              </tr>
-              <tr v-if="pagedMembers.length === 0">
-                <td colspan="8" class="py-12 text-center text-slate-400">
-                  <div class="text-2xl mb-1">📭</div>
-                  <div>当前技能组暂无坐席成员，请点击右上角「新增坐席」或「绑定坐席」</div>
-                </td>
-              </tr>
-            </tbody>
-          </table>
-        </div>
-
-        <!-- 成员表分页器 -->
-        <div class="flex items-center justify-between text-xs text-slate-500 pt-2">
-          <span>共 {{ filteredMembers.length }} 名成员 ({{ currentMembers.length }} 条数据库记录)</span>
-          <div class="flex items-center gap-3">
-            <div class="flex items-center gap-1">
-              <button
-                :disabled="memberPage <= 1"
-                @click="memberPage--"
-                class="w-6 h-6 border border-slate-200 rounded flex items-center justify-center hover:bg-slate-50 disabled:opacity-30 cursor-pointer"
-              >
-                &lt;
-              </button>
-              <button
-                v-for="p in totalMemberPages"
-                :key="p"
-                @click="memberPage = p"
-                class="w-6 h-6 rounded flex items-center justify-center text-xs cursor-pointer font-bold"
-                :class="memberPage === p ? 'bg-[#1677ff] text-white' : 'border border-slate-200 hover:bg-slate-50 text-slate-700'"
-              >
-                {{ p }}
-              </button>
-              <button
-                :disabled="memberPage >= totalMemberPages"
-                @click="memberPage++"
-                class="w-6 h-6 border border-slate-200 rounded flex items-center justify-center hover:bg-slate-50 disabled:opacity-30 cursor-pointer"
-              >
-                &gt;
-              </button>
-            </div>
-            <div class="relative">
-              <select
-                v-model="memberPageSize"
-                class="border border-slate-200 rounded px-2 py-0.5 text-xs text-slate-600 bg-white focus:outline-none cursor-pointer pr-5 appearance-none"
-              >
-                <option :value="10">10 条/页</option>
-                <option :value="20">20 条/页</option>
-              </select>
-              <span class="absolute right-1.5 top-1 text-[10px] text-slate-400 pointer-events-none">⌄</span>
-            </div>
-          </div>
-        </div>
-      </div>
+      <GroupMemberTable
+        v-model:search-query="searchMemberQuery"
+        :rows="currentMembers"
+        :loading="loadingMembers"
+        :error="membersError"
+        :total="memberTotal"
+        :page="memberPage"
+        :page-size="memberPageSize"
+        :total-pages="totalMemberPages"
+        :page-options="memberPageOptions"
+        :selected-node-id="selectedNodeId"
+        @add="openAddAgentModal"
+        @bind="openBindAgentModal"
+        @edit="handleOpenEditMember"
+        @reset-password="openResetPasswordModal"
+        @unbind="handleUnbindMember"
+        @delete-account="handleDeleteMemberAccount"
+        @retry="retryMembers"
+        @change-page="changeMemberPage"
+        @change-page-size="changeMemberPageSize"
+      />
     </div>
 
     <!-- ==================== 右键悬浮上下文菜单 ==================== -->

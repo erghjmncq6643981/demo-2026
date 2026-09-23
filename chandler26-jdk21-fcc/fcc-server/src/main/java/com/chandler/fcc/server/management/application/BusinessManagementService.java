@@ -37,7 +37,7 @@ public class BusinessManagementService {
      * 分页查询客户摘要。
      *
      * @param page 页码
-     * @param owner 坐席筛选，可为空
+     * @param flowKey 流程编码筛选，可为空
      * @param phone 号码筛选，可为空
      * @return 客户摘要
      */
@@ -105,30 +105,37 @@ public class BusinessManagementService {
      * @param owner 坐席筛选，可为空
      * @return 任务摘要
      */
-    public List<Map<String, Object>> jobs(int page, String owner) {
+    public List<Map<String, Object>> jobs(int page, String flowKey) {
         identity.requireManagement();
-        return mapper.jobs(owner, offset(page));
+        return mapper.jobs(flowKey, offset(page));
     }
 
     /**
-     * 为已启用坐席创建自动外呼任务。
+     * 创建不绑定坐席的流程型自动外呼任务。
      *
-     * @param owner 执行坐席
      * @param number 目标号码
-     * @param mode 外呼模式
+     * @param flowKey 已发布流程编码
+     * @param variables 流程输入变量
      * @param attempts 最大尝试次数
      * @param requestKey 业务幂等键
      * @return 任务标识
      */
     public String createJob(
-        String owner,
         String number,
-        String mode,
+        String flowKey,
+        Map<String, Object> variables,
         int attempts,
         String requestKey
     ) {
-        identity.requireManagement();
-        return jobs.createFor(requireAgent(owner), number, mode, attempts, requestKey);
+        var actor = identity.requireManagement();
+        return jobs.createAuto(
+            actor.workNo(),
+            number,
+            flowKey,
+            variables,
+            attempts,
+            requestKey
+        );
     }
 
     /**
@@ -140,7 +147,7 @@ public class BusinessManagementService {
     public List<Map<String, Object>> attempts(String id) {
         validateId(id, "任务标识无效");
         identity.requireManagement();
-        requireOwner(mapper.jobOwner(id));
+        requireJob(id);
         return jobMapper.attempts(id);
     }
 
@@ -153,8 +160,8 @@ public class BusinessManagementService {
     public void control(String id, String action) {
         validateId(id, "任务标识无效");
         var actor = identity.requireManagement();
-        String owner = requireOwner(mapper.jobOwner(id));
-        if (jobMapper.control(owner, id, action) != 1) {
+        requireJob(id);
+        if (jobMapper.control(id, action) != 1) {
             throw new ResponseStatusException(HttpStatus.CONFLICT, "当前状态不允许此操作");
         }
         log.info(
@@ -200,6 +207,17 @@ public class BusinessManagementService {
     private String requireOwner(String owner) {
         if (owner == null) throw new ResponseStatusException(HttpStatus.NOT_FOUND, "记录不存在");
         return owner;
+    }
+
+    /**
+     * 确认目标是自动外呼任务，而不是坐席回拨调度。
+     *
+     * @param id 任务标识
+     */
+    private void requireJob(String id) {
+        if (mapper.jobExists(id) != 1) {
+            throw new ResponseStatusException(HttpStatus.NOT_FOUND, "自动外呼任务不存在");
+        }
     }
 
     /**

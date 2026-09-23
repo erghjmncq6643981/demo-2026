@@ -2,4 +2,32 @@
 <!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
         "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
 <mapper namespace="com.chandler.fcc.admin.infrastructure.persistence.mapper.AgentMapper">
+  <insert id="markLogin">
+    INSERT INTO fcc_agent_presence(
+      agent_id, login_status, work_status, login_at, last_state_at
+    )
+    VALUES(#{agentId}, 'LOGIN', 'READY', UTC_TIMESTAMP(3), UTC_TIMESTAMP(3))
+    ON DUPLICATE KEY UPDATE
+      login_status = 'LOGIN',
+      work_status = CASE
+        WHEN active_call_id IS NULL AND work_status IN ('UNREADY', 'READY', 'BUSY') THEN 'READY'
+        ELSE work_status
+      END,
+      login_at = UTC_TIMESTAMP(3),
+      last_state_at = UTC_TIMESTAMP(3),
+      version = version + 1
+  </insert>
+  <update id="markLogout">
+    UPDATE fcc_agent_presence p
+    JOIN fcc_agent a ON a.id = p.agent_id
+    SET p.login_status = 'LOGOUT',
+        p.work_status = CASE
+          WHEN p.active_call_id IS NULL AND p.work_status IN ('READY', 'BUSY', 'UNREADY') THEN 'UNREADY'
+          ELSE p.work_status
+        END,
+        p.last_state_at = UTC_TIMESTAMP(3),
+        p.version = p.version + 1
+    WHERE a.work_no = #{workNo}
+      AND a.deleted_at IS NULL
+  </update>
 </mapper>

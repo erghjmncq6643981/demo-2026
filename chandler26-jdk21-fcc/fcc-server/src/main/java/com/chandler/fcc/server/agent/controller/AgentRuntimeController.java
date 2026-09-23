@@ -2,7 +2,9 @@ package com.chandler.fcc.server.agent.controller;
 
 import com.chandler.fcc.server.agent.application.AgentRuntimeService;
 import com.chandler.fcc.server.agent.controller.req.ChangeAgentStateReq;
-import java.util.Map;
+import com.chandler.fcc.server.agent.controller.resp.AgentRuntimeResp;
+import com.chandler.fcc.server.agent.controller.resp.AgentRuntimeStateResp;
+import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PostMapping;
@@ -26,8 +28,8 @@ public class AgentRuntimeController {
      * @return 状态响应
      */
     @GetMapping
-    public Map<String, Object> state() {
-        return Map.of("code", 200, "data", service.status());
+    public AgentRuntimeResp state() {
+        return AgentRuntimeResp.success(AgentRuntimeStateResp.from(service.status()));
     }
 
     /**
@@ -37,7 +39,9 @@ public class AgentRuntimeController {
      * @return 数据库中的最终状态
      */
     @PostMapping
-    public Map<String, Object> change(@RequestBody ChangeAgentStateReq request) {
-        return Map.of("code", 200, "data", service.change(request.getStatus()));
+    public AgentRuntimeResp change(@Valid @RequestBody ChangeAgentStateReq request) {
+        return AgentRuntimeResp.success(
+            AgentRuntimeStateResp.from(service.change(request.getStatus()))
+        );
     }
 }

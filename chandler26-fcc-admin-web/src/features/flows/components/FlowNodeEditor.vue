@@ -4,11 +4,18 @@ import {
   stageLabels,
   updateDefaultRoute,
   type FlowTarget,
+  type FlowValidationIssue,
   type StagedFlow,
 } from '../model/stagedFlow';
-const props = defineProps<{ modelValue: StagedFlow; stage: string; disabled?: boolean }>();
+const props = defineProps<{
+  modelValue: StagedFlow;
+  stage: string;
+  disabled?: boolean;
+  issues?: FlowValidationIssue[];
+}>();
 const emit = defineEmits<{ 'update:modelValue': [value: StagedFlow]; close: [] }>();
 const flow = computed(() => props.modelValue);
+const stageIssues = computed(() => (props.issues || []).filter((item) => item.stage === props.stage));
 function change(mutator: (value: StagedFlow) => void) {
   const copy = JSON.parse(JSON.stringify(props.modelValue)) as StagedFlow;
   mutator(copy);
@@ -33,6 +40,9 @@ function defaultRoute(key: keyof FlowTarget, value: string | number) {
       <el-button text @click="emit('close')">关闭</el-button>
     </header>
     <p class="hint">阶段动作固定。修改只作用于草稿，发布后供新通话使用。</p>
+    <ul v-if="stageIssues.length" class="issues" role="alert">
+      <li v-for="issue in stageIssues" :key="issue.field">{{ issue.message }}</li>
+    </ul>
     <fieldset :disabled="disabled">
       <template v-if="stage === 'MENU'">
         <label class="check"
@@ -43,10 +53,12 @@ function defaultRoute(key: keyof FlowTarget, value: string | number) {
           />启用语音菜单（true / false）</label
         >
         <label
-          >提示音路径<input
+          >导航语音文案或预置音频路径<textarea
             :value="flow.menu?.prompt"
-            placeholder="/sounds/welcome.wav"
-            @change="menu('prompt', ($event.target as HTMLInputElement).value)"
+            rows="4"
+            maxlength="1000"
+            placeholder="例如：您好，请按 1 转人工；也可填写 /sounds/welcome.wav"
+            @change="menu('prompt', ($event.target as HTMLTextAreaElement).value)"
         /></label>
         <label
           >等待按键（秒）<input
@@ -56,7 +68,7 @@ function defaultRoute(key: keyof FlowTarget, value: string | number) {
             :value="flow.menu?.timeoutSeconds"
             @change="menu('timeoutSeconds', ($event.target as HTMLInputElement).valueAsNumber)"
         /></label>
-        <p class="hint">放音与单键采集合为一个固定动作；最多等待上述时限，超时进入结束处理。</p>
+        <p class="hint">普通文案由 Sidecar 生成并复用 TTS 文件；绝对路径只用于 FreeSWITCH 已有的预置音频。</p>
       </template>
       <template v-else-if="stage === 'BRANCH'">
         <div v-for="(branch, index) in flow.branches" :key="index" class="branch-editor">
@@ -243,6 +255,7 @@ label {
   margin: 14px 0;
 }
 input:not([type='checkbox']),
+textarea,
 select {
   display: block;
   width: 100%;
@@ -252,6 +265,9 @@ select {
   padding: 9px;
   background: #fff;
   font-size: 12px;
+}
+textarea {
+  resize: vertical;
 }
 .check {
   display: flex;
@@ -274,5 +290,16 @@ select {
 }
 fieldset:disabled {
   opacity: 0.55;
+}
+.issues {
+  display: grid;
+  gap: 5px;
+  margin: 12px 0;
+  border: 1px solid #fecaca;
+  border-radius: 8px;
+  background: #fff1f2;
+  padding: 10px 12px 10px 28px;
+  color: #b42318;
+  font-size: 12px;
 }
 </style>

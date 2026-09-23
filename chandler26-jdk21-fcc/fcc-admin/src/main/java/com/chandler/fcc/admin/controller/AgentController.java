@@ -166,16 +166,29 @@ public class AgentController {
     }
 
     /**
-     * 查询指定技能组的成员列表
+     * 分页查询指定组织节点及全部子节点中的坐席成员。
      *
-     * @param groupId 技能组 ID
-     * @return 成员详情列表
+     * @param groupId 组织或技能组 ID
+     * @param pageNum 页码，从一开始
+     * @param pageSize 每页条数，最大一百
+     * @param keyword 坐席姓名、工号或手机号搜索词，可为空
+     * @return 去重后的子树成员分页结果
      */
-    @Operation(summary = "获取指定技能组成员列表")
+    @Operation(summary = "分页获取组织节点及子节点成员")
     @GetMapping("/groups/{groupId}/members")
-    public CommonResult<List<AgentGroupMemberVO>> listGroupMembers(@PathVariable("groupId") Long groupId) {
-        List<AgentGroupMemberVO> list = agentService.listGroupMembers(groupId);
-        return CommonResult.success(list);
+    public CommonResult<PageResult<AgentGroupMemberVO>> listGroupMembers(
+            @PathVariable("groupId") Long groupId,
+            @RequestParam(defaultValue = "1") int pageNum,
+            @RequestParam(defaultValue = "20") int pageSize,
+            @RequestParam(required = false) String keyword
+    ) {
+        PageResult<AgentGroupMemberVO> result = agentService.listGroupMembers(
+                groupId,
+                pageNum,
+                pageSize,
+                keyword
+        );
+        return CommonResult.success(result);
     }
 
     /**

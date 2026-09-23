@@ -2,13 +2,12 @@ import apiClient from "../../../api/apiClient";
 
 const managementBaseUrl = "/api/admin/business";
 
-export type DialMode = "PROGRESSIVE" | "NOTIFICATION";
 export type DialJobAction = "PAUSE" | "RESUME" | "CANCEL";
 
 export interface DialJobSummary {
   id: string;
-  owner: string;
-  mode: DialMode;
+  flowKey: string;
+  createdBy: string;
   status: string;
   maxAttempts: number;
   number: string;
@@ -26,16 +25,21 @@ export interface DialAttempt {
   endedAt?: string;
 }
 
+export interface AutoDialVariables extends Record<string, unknown> {
+  text: string;
+  confirmDigit: string;
+}
+
 export interface CreateDialJobReq {
-  owner: string;
   number: string;
-  mode: DialMode;
+  flowKey: string;
+  variables: AutoDialVariables;
   maxAttempts: number;
   requestKey: string;
 }
 
 export const dialJobManagementApi = {
-  list(params: { page: number; owner?: string }): Promise<DialJobSummary[]> {
+  list(params: { page: number; flowKey?: string }): Promise<DialJobSummary[]> {
     return apiClient.get("/dial-jobs", { baseURL: managementBaseUrl, params });
   },
   create(data: CreateDialJobReq): Promise<string> {

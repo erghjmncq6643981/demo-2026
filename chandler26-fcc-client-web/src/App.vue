@@ -149,6 +149,7 @@ watch(() => agentStore.isLoggedIn, (loggedIn) => {
   if (loggedIn) {
     wsService.connect(agentStore.workNo);
     agentStore.loadEndpoints();
+    agentStore.refreshRuntimeState();
     syncWebRtcRegistration();
   } else {
     registrationGeneration++;
@@ -168,6 +169,7 @@ onMounted(() => {
   if (agentStore.isLoggedIn) {
     wsService.connect(agentStore.workNo);
     agentStore.loadEndpoints();
+    agentStore.refreshRuntimeState();
     syncWebRtcRegistration();
   }
 
@@ -183,15 +185,15 @@ onMounted(() => {
   // 监听后端推送的真实话务事件
   unsubscribeWs = wsService.subscribe((msg: WsMessage) => {
     if (msg.type === 'SCREEN_POP' && msg.data) {
-      void agentStore.refreshStatus();
+      void agentStore.refreshRuntimeState();
       callStore.triggerIncoming(msg.data as IncomingScreenPopPayload);
     } else if (msg.type === 'CALL_ANSWERED') {
       callStore.observeAnswered(msg.callId);
     } else if (msg.type === 'CALL_HANGUP') {
       callStore.observeEnded(msg.callId);
-      void agentStore.refreshStatus();
+      void agentStore.refreshRuntimeState();
     } else if (msg.type === 'CHANNEL_READY') {
-      void agentStore.refreshStatus();
+      void agentStore.refreshRuntimeState();
     }
   });
 });

@@ -1,10 +1,11 @@
 <script setup lang="ts">
 import { computed, ref } from "vue";
-import { Plus, Unlink } from "lucide-vue-next";
+import { CheckCircle2, Plus, Unlink } from "lucide-vue-next";
 import { useFlowEditor } from "../features/flows/composables/useFlowEditor";
 import { useFlowDidBindings } from "../features/flows/composables/useFlowDidBindings";
 import FlowCanvas from "../features/flows/components/FlowCanvas.vue";
 import FlowNodeEditor from "../features/flows/components/FlowNodeEditor.vue";
+import FlowDirectory from "../features/flows/components/FlowDirectory.vue";
 import {
   readStagedFlow,
   newInboundFlow,
@@ -12,7 +13,6 @@ import {
   flowVersionStatusLabel,
   type StagedFlow,
 } from "../features/flows/model/stagedFlow";
-import { flowApi } from "../api/flowApi";
 import { errorText } from "../utils/feedback";
 const {
   flows,
@@ -27,18 +27,24 @@ const {
   version,
   loading,
   pending,
+  validating,
+  createPending,
   error,
   outcome,
   dirty,
   workingCopy,
+  validationIssues,
+  validated,
   modelNodes,
   reload,
   selectFlow,
   selectFlowPage,
   selectVersion,
   selectVersionPage,
+  createFlow: createFlowModel,
   beginDraft,
   saveDraft,
+  validateDraft,
   publish,
 } = useFlowEditor();
 const {
@@ -56,7 +62,6 @@ const {
 const selectedStage = ref("");
 const advanced = ref(false);
 const creating = ref(false);
-const createPending = ref(false);
 const createKey = ref("");
 const createName = ref("");
 const graphError = ref("");
@@ -90,11 +95,12 @@ const versionState = computed(() => {
 });
 function startFirstDraft() {
   beginDraft(JSON.stringify(newInboundFlow(), null, 2));
-  selectedStage.value = "ENTRY";
+  selectedStage.value = "MENU";
 }
 function copyAsDraft() {
   if (!definition.value) return;
   beginDraft(definition.value);
+  selectedStage.value = "MENU";
 }
 async function openExistingDraft() {
   if (draftVersion.value) await selectVersion(draftVersion.value.version);
@@ -103,18 +109,12 @@ function updateGraph(value: StagedFlow) {
   definition.value = JSON.stringify(value, null, 2);
 }
 async function createFlow() {
-  createPending.value = true;
-  try {
-    const created = await flowApi.create(createKey.value, createName.value);
+  const created = await createFlowModel(createKey.value, createName.value);
+  if (created) {
     creating.value = false;
-    selectedFlow.value = created;
-    await reload(1);
     createKey.value = "";
     createName.value = "";
-  } catch (cause) {
-    error.value = errorText(cause);
-  } finally {
-    createPending.value = false;
+    startFirstDraft();
   }
 }
 </script>
@@ -123,11 +123,17 @@ async function createFlow() {
     <header class="toolbar">
       <div>
         <h1>IVR 流程编排</h1>
-        <p>固定阶段 · 条件分支 · 版本发布</p>
+        <p>DID 入口 · 导航语音 · if/else 路由 · 草稿校验与发布</p>
       </div>
       <div class="actions">
         <el-button :loading="loading" :disabled="pending" @click="reload()"
           >刷新</el-button
+        >
+        <el-button
+          :loading="validating"
+          :disabled="!editable || !definition || validating"
+          @click="validateDraft"
+          >校验流程</el-button
         >
         <el-button :disabled="!editable || !definition || !dirty" @click="saveDraft"
           >保存草稿</el-button
@@ -137,6 +143,7 @@ async function createFlow() {
           :disabled="
             !editable ||
             dirty ||
+            !validated ||
             version?.publishStatus !== 'DRAFT' ||
             !boundDids.length
           "
@@ -149,42 +156,32 @@ async function createFlow() {
       {{ error || graphError || didError }}
     </div>
     <div v-if="outcome" role="status" class="message">{{ outcome }}</div>
+    <div v-if="validationIssues.length" class="validation-errors" role="alert">
+      <strong>当前有 {{ validationIssues.length }} 项配置需要处理</strong>
+      <button
+        v-for="issue in validationIssues"
+        :key="issue.field + issue.message"
+        type="button"
+        @click="selectedStage = issue.stage"
+      >
+        {{ issue.message }}
+      </button>
+    </div>
     <div class="body">
-      <aside class="directory">
-        <div class="directory-head">
-          <strong>业务流程</strong
-          ><el-button text type="primary" @click="creating = true"
-            >＋ 新建</el-button
-          >
-        </div>
-        <p v-if="!flows.length" class="empty">
-          {{ loading ? "加载中…" : "尚无流程，请先新建" }}
-        </p>
-        <button
-          v-for="flow in flows"
-          :key="flow.id"
-          :disabled="loading || pending"
-          :class="{ active: flow.flowKey === selectedFlow?.flowKey }"
-          @click="
-            selectFlow(flow);
-            selectedStage = '';
-          "
-        >
-          <strong>{{ flow.flowName }}</strong
-          ><small>{{ flow.flowKey }}</small
-          ><span>{{ flow.status === "PUBLISHED" ? "已发布" : "草稿" }}</span>
-        </button>
-        <el-pagination
-          v-if="flowTotal > 20"
-          small
-          layout="prev, next"
-          :current-page="flowPage"
-          :page-size="20"
-          :total="flowTotal"
-          :disabled="loading || pending"
-          @current-change="selectFlowPage"
-        />
-      </aside>
+      <FlowDirectory
+        :flows="flows"
+        :selected-flow-key="selectedFlow?.flowKey"
+        :loading="loading"
+        :pending="pending"
+        :page="flowPage"
+        :total="flowTotal"
+        @create="creating = true"
+        @select="
+          selectFlow($event);
+          selectedStage = '';
+        "
+        @page="selectFlowPage"
+      />
       <main v-if="selectedFlow" class="workspace">
         <div class="version-bar">
           <el-select
@@ -213,6 +210,9 @@ async function createFlow() {
           />
           <span class="version-state">{{ versionState }}</span>
           <span v-if="dirty" class="dirty">有未保存修改</span>
+          <span v-else-if="validated" class="validated">
+            <CheckCircle2 :size="14" /> 已通过模型校验
+          </span>
           <el-button
             v-if="
               version?.publishStatus === 'PUBLISHED' &&
@@ -236,7 +236,7 @@ async function createFlow() {
             >返回现有草稿</el-button
           >
           <el-button v-if="definition" text @click="advanced = !advanced">{{
-            advanced ? "返回画布" : "高级定义"
+            advanced ? "返回画布" : "JSON 预览"
           }}</el-button>
         </div>
         <section class="entry-bindings" aria-label="呼入被叫号码">
@@ -280,10 +280,10 @@ async function createFlow() {
         </div>
         <textarea
           v-else-if="advanced"
-          v-model="definition"
-          :disabled="!editable"
+          :value="definition"
+          readonly
           class="json-editor"
-          aria-label="高级流程定义"
+          aria-label="流程定义 JSON 预览"
           spellcheck="false"
         />
         <div v-else-if="graph" class="canvas-layout">
@@ -299,12 +299,13 @@ async function createFlow() {
             :model-value="graph"
             :stage="selectedStage"
             :disabled="!editable"
+            :issues="validationIssues"
             @update:model-value="updateGraph"
             @close="selectedStage = ''"
           />
         </div>
         <footer>
-          点击节点配置参数。每通电话固定启动时的版本；发布不会改写正在执行的通话。
+          动作与阶段由运行时固定，画布维护导航文案、按键 if 分支、else 兜底路由和超时结果。每通电话固定启动时的版本。
         </footer>
       </main>
       <div v-else class="empty">选择流程，查看阶段和版本。</div>
@@ -407,43 +408,6 @@ async function createFlow() {
   flex: 1;
   min-height: 0;
 }
-.directory {
-  width: 230px;
-  flex-shrink: 0;
-  padding: 14px;
-  border-right: 1px solid #e2e8f0;
-  overflow: auto;
-}
-.directory-head {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  font-size: 12px;
-}
-.directory > button {
-  display: block;
-  width: 100%;
-  text-align: left;
-  border: 1px solid #e2e8f0;
-  border-radius: 9px;
-  padding: 12px;
-  margin-top: 10px;
-  font-size: 12px;
-}
-.directory > button.active {
-  background: #eef3ff;
-  border-color: #8da6ed;
-}
-.directory small {
-  display: block;
-  overflow-wrap: anywhere;
-  color: #8793a3;
-  margin: 7px 0;
-}
-.directory span {
-  color: #6d7e98;
-  font-size: 11px;
-}
 .workspace {
   min-width: 0;
   display: flex;
@@ -533,6 +497,30 @@ async function createFlow() {
   color: #b42318;
   background: #fff1f0;
 }
+.validation-errors {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+  padding: 9px 20px;
+  border-bottom: 1px solid #fecaca;
+  background: #fff7f7;
+  color: #b42318;
+  font-size: 12px;
+}
+.validation-errors button {
+  border: 1px solid #fecaca;
+  border-radius: 999px;
+  background: #fff;
+  padding: 4px 8px;
+}
+.validated {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  color: #047857;
+  font-size: 12px;
+}
 footer {
   padding: 10px 18px;
   font-size: 11px;
@@ -547,9 +535,6 @@ footer {
   font-size: 12px;
 }
 @media (max-width: 900px) {
-  .directory {
-    width: 180px;
-  }
   .canvas-layout {
     overflow: auto;
     flex-direction: column;
@@ -566,11 +551,6 @@ footer {
   .body {
     flex-direction: column;
     overflow: auto;
-  }
-  .directory {
-    width: 100%;
-    max-height: 190px;
-    border-bottom: 1px solid #e2e8f0;
   }
   .workspace {
     min-height: 650px;

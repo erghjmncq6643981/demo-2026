@@ -1,5 +1,6 @@
 package com.chandler.fcc.server.agent.infrastructure;
 
+import com.chandler.fcc.server.agent.infrastructure.data.AgentRuntimeStateData;
 import java.util.List;
 import java.util.Map;
 import org.apache.ibatis.annotations.Mapper;
@@ -51,7 +52,7 @@ public interface AgentRuntimeMapper {
      * @param state 就绪或休息状态
      * @return 更新数量
      */
-    int setPresence(@Param("owner") String owner, @Param("state") String state);
+    int setLoginStatus(@Param("owner") String owner, @Param("status") String status);
 
     /**
      * 原子占用坐席。
@@ -60,7 +61,16 @@ public interface AgentRuntimeMapper {
      * @param callId 通话标识
      * @return 更新数量
      */
-    int reserve(@Param("owner") String owner, @Param("callId") String callId);
+    int reserveInbound(@Param("owner") String owner, @Param("callId") String callId);
+
+    /**
+     * 原子占用外呼坐席；LOGIN_BUSY 仍允许主动外呼。
+     *
+     * @param owner 坐席工号
+     * @param callId 通话标识
+     * @return 更新数量
+     */
+    int reserveOutbound(@Param("owner") String owner, @Param("callId") String callId);
 
     /**
      * 原子接管由坐席终端主动建立的话道。
@@ -70,6 +80,20 @@ public interface AgentRuntimeMapper {
      * @return 更新数量
      */
     int reserveOriginated(@Param("owner") String owner, @Param("callId") String callId);
+
+    /**
+     * 根据真实话道事件推进坐席通话工作状态。
+     *
+     * @param owner 坐席工号
+     * @param callId 通话标识
+     * @param status CALLING、RINGING 或 ANSWERED
+     * @return 更新数量
+     */
+    int updateCallStatus(
+        @Param("owner") String owner,
+        @Param("callId") String callId,
+        @Param("status") String status
+    );
 
     /**
      * 幂等释放坐席至整理态。
@@ -86,7 +110,7 @@ public interface AgentRuntimeMapper {
      * @param owner 坐席工号
      * @return 当前状态
      */
-    Map<String, Object> presence(@Param("owner") String owner);
+    AgentRuntimeStateData presence(@Param("owner") String owner);
 
     /**
      * 读取首个可用出局资源。

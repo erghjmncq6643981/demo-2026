@@ -1,5 +1,5 @@
 import { buildTree } from '../model/groupTree';
-import { ref, computed, onMounted, onUnmounted } from 'vue';
+import { ref, computed, onMounted, onUnmounted, watch } from 'vue';
 import { type OrgNode } from '../../../views/OrgTreeItem.vue';
 import {
   agentApi,
@@ -36,6 +36,12 @@ export function useGroupManagement() {
   // 成员数据源 (真实从数据库拉取)
   const currentMembers = ref<AgentGroupMemberVO[]>([]);
   const loadingMembers = ref(false);
+  const membersError = ref('');
+  const memberPage = ref(1);
+  const memberPageSize = ref(10);
+  const memberTotal = ref(0);
+  let memberRequestSequence = 0;
+  let memberSearchTimer: ReturnType<typeof setTimeout> | undefined;
 
   // 系统已有坐席库 (用于“绑定坐席”下拉选择)
   const systemAgents = ref<AgentVO[]>([]);
@@ -81,6 +87,7 @@ export function useGroupManagement() {
   // 切换选中的组
   const handleSelectGroup = (group: AgentGroupVO) => {
     selectedNodeId.value = group.id;
+    memberPage.value = 1;
     selectedDept.value = group.groupName;
     selectedDeptCode.value = group.groupCode;
     selectedDeptType.value = group.groupType || 'SKILL';
@@ -103,16 +110,31 @@ export function useGroupManagement() {
 
   // 加载指定组的成员列表
   const loadMembers = async (groupId: string) => {
+    if (!groupId) return;
+    const requestSequence = ++memberRequestSequence;
     loadingMembers.value = true;
+    membersError.value = '';
     try {
-      const list = await agentApi.listGroupMembers(groupId);
-      currentMembers.value = list || [];
+      const result = await agentApi.listGroupMembers(groupId, {
+        pageNum: memberPage.value,
+        pageSize: memberPageSize.value,
+        keyword: searchMemberQuery.value.trim() || undefined,
+      });
+      if (requestSequence !== memberRequestSequence) return;
+      currentMembers.value = result.list || [];
+      memberTotal.value = result.total || 0;
+
+      if (currentMembers.value.length === 0 && memberTotal.value > 0 && memberPage.value > 1) {
+        memberPage.value--;
+        await loadMembers(groupId);
+        return;
+      }
 
       // 同步更新树节点人数徽章
       const updateCountRecursive = (nodes: OrgNode[]) => {
         for (const n of nodes) {
           if (n.id === groupId) {
-            n.count = currentMembers.value.length;
+            n.count = memberTotal.value;
             return true;
           }
           if (n.children && updateCountRecursive(n.children)) return true;
@@ -121,10 +143,15 @@ export function useGroupManagement() {
       };
       updateCountRecursive(treeData.value);
     } catch (err) {
+      if (requestSequence !== memberRequestSequence) return;
       console.error('加载成员失败:', err);
       currentMembers.value = [];
+      memberTotal.value = 0;
+      membersError.value = errorText(err, '组织成员加载失败');
     } finally {
-      loadingMembers.value = false;
+      if (requestSequence === memberRequestSequence) {
+        loadingMembers.value = false;
+      }
     }
   };
 
@@ -311,29 +338,46 @@ export function useGroupManagement() {
 
   onUnmounted(() => {
     window.removeEventListener('click', closeContextMenu);
+    if (memberSearchTimer) clearTimeout(memberSearchTimer);
   });
 
   // ==================== 3. 坐席成员管理 (新增坐席 vs 绑定坐席) ====================
-  const memberPage = ref(1);
-  const memberPageSize = ref(10);
-
-  const filteredMembers = computed(() => {
-    if (!searchMemberQuery.value.trim()) return currentMembers.value;
-    const q = searchMemberQuery.value.trim().toLowerCase();
-    return currentMembers.value.filter(m =>
-      m.agentName.toLowerCase().includes(q) ||
-      m.workNo.includes(q) ||
-      (m.phoneNumber && m.phoneNumber.includes(q))
-    );
-  });
-
-  const pagedMembers = computed(() => {
-    const start = (memberPage.value - 1) * memberPageSize.value;
-    return filteredMembers.value.slice(start, start + memberPageSize.value);
-  });
-
   const totalMemberPages = computed(() => {
-    return Math.ceil(filteredMembers.value.length / memberPageSize.value) || 1;
+    return Math.ceil(memberTotal.value / memberPageSize.value) || 1;
+  });
+
+  const memberPageOptions = computed(() => {
+    const visiblePageCount = Math.min(5, totalMemberPages.value);
+    const start = Math.max(
+      1,
+      Math.min(memberPage.value - 2, totalMemberPages.value - visiblePageCount + 1),
+    );
+    return Array.from({ length: visiblePageCount }, (_, index) => start + index);
+  });
+
+  const changeMemberPage = (page: number) => {
+    const nextPage = Math.min(Math.max(page, 1), totalMemberPages.value);
+    if (nextPage === memberPage.value) return;
+    memberPage.value = nextPage;
+    void loadMembers(selectedNodeId.value);
+  };
+
+  const changeMemberPageSize = (pageSize: number) => {
+    memberPageSize.value = pageSize;
+    memberPage.value = 1;
+    void loadMembers(selectedNodeId.value);
+  };
+
+  const retryMembers = () => {
+    void loadMembers(selectedNodeId.value);
+  };
+
+  watch(searchMemberQuery, () => {
+    memberPage.value = 1;
+    if (memberSearchTimer) clearTimeout(memberSearchTimer);
+    memberSearchTimer = setTimeout(() => {
+      void loadMembers(selectedNodeId.value);
+    }, 250);
   });
 
   // 弹窗：➕ 新增坐席 (新建档案并入组)
@@ -563,7 +607,7 @@ export function useGroupManagement() {
 
   // 解绑坐席 (从当前组移出，保留账号)
   const handleUnbindMember = async (mem: AgentGroupMemberVO) => {
-    const ok = await confirmAction(`确认将坐席 ${mem.agentName} (${mem.workNo}) 从【${selectedDept.value}】解绑移出吗？\n（注：坐席人员账号依然完好保留在系统中）`, { title: '解绑坐席' });
+    const ok = await confirmAction(`确认将坐席 ${mem.agentName} (${mem.workNo}) 从【${mem.groupName || selectedDept.value}】解绑移出吗？\n（注：坐席人员账号依然完好保留在系统中）`, { title: '解绑坐席' });
     if (!ok) {
       return;
     }
@@ -617,6 +661,9 @@ export function useGroupManagement() {
     searchMemberQuery,
     triggerToast,
     currentMembers,
+    loadingMembers,
+    membersError,
+    memberTotal,
     handleSelectNode,
     contextMenu,
     handleTreeContextMenu,
@@ -641,9 +688,11 @@ export function useGroupManagement() {
     handleSaveGroupConfig,
     memberPage,
     memberPageSize,
-    filteredMembers,
-    pagedMembers,
     totalMemberPages,
+    memberPageOptions,
+    changeMemberPage,
+    changeMemberPageSize,
+    retryMembers,
     showAddAgentModal,
     newAgentName,
     newAgentWorkNo,

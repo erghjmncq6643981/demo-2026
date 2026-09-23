@@ -102,6 +102,7 @@ export interface AgentGroupUpdateReq {
 export interface AgentGroupMemberVO {
   id: string;
   groupId: string;
+  groupName: string;
   agentId: string;
   workNo: string;
   agentName: string;
@@ -167,8 +168,11 @@ export const agentApi = {
   deleteGroup(id: string): Promise<void> {
     return apiClient.delete(`/agents/groups/${id}`);
   },
-  listGroupMembers(groupId: string): Promise<AgentGroupMemberVO[]> {
-    return apiClient.get(`/agents/groups/${groupId}/members`);
+  listGroupMembers(
+    groupId: string,
+    params: { pageNum: number; pageSize: number; keyword?: string },
+  ): Promise<PageResult<AgentGroupMemberVO>> {
+    return apiClient.get(`/agents/groups/${groupId}/members`, { params });
   },
   addMemberToGroup(data: AgentGroupMemberReq): Promise<void> {
     return apiClient.post('/agents/groups/members', data);

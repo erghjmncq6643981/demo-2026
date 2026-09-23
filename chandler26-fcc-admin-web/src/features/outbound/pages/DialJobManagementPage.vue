@@ -20,10 +20,6 @@ const statusConfig: Record<string, { label: string; class: string }> = {
   FAILED: { label: "失败", class: "bg-rose-50 text-rose-700 border-rose-200" },
   CANCELLED: { label: "已取消", class: "bg-slate-100 text-slate-400 border-slate-200" },
 };
-const modeConfig: Record<string, { label: string; class: string }> = {
-  PROGRESSIVE: { label: "坐席先接", class: "bg-purple-50 text-purple-700 border-purple-200" },
-  NOTIFICATION: { label: "通知外呼", class: "bg-cyan-50 text-cyan-700 border-cyan-200" },
-};
 </script>
 
 <template>
@@ -68,23 +64,22 @@ const modeConfig: Record<string, { label: string; class: string }> = {
     <div
       class="flex flex-wrap items-end gap-3 text-sm bg-white p-4 rounded-3xl border border-slate-100 shadow-card"
     >
-      <div class="w-56">
-        <label class="block text-xs font-bold text-slate-600 mb-1.5">执行坐席</label>
+      <div class="w-72">
+        <label class="block text-xs font-bold text-slate-600 mb-1.5">自动外呼流程</label>
         <select
-          v-model="state.ownerFilter.value"
-          :disabled="state.agentsLoading.value"
+          v-model="state.flowFilter.value"
+          :disabled="state.flowsLoading.value"
           class="w-full bg-slate-50/70 border border-slate-200 rounded-xl px-3 py-2 text-slate-800 text-xs focus:outline-none focus:border-brand-500 focus:ring-1 focus:ring-brand-500/20 font-medium cursor-pointer"
         >
           <option value="">
-            {{ state.agentsLoading.value ? "坐席加载中..." : "全部坐席" }}
+            {{ state.flowsLoading.value ? "流程加载中..." : "全部流程" }}
           </option>
           <option
-            v-for="agent in state.agents.value"
-            :key="agent.id"
-            :value="agent.workNo"
+            v-for="flow in state.flows.value"
+            :key="flow.id"
+            :value="flow.flowKey"
           >
-            {{ agent.workNo }} ·
-            {{ agent.agentName || agent.realName || "未命名" }}
+            {{ flow.flowName }} · {{ flow.flowKey }}
           </option>
         </select>
       </div>
@@ -97,9 +92,9 @@ const modeConfig: Record<string, { label: string; class: string }> = {
         <span>查询</span>
       </button>
 
-      <span v-if="state.agentsError.value" class="text-xs text-rose-600 flex items-center gap-1 ml-2">
-        {{ state.agentsError.value }}
-        <button class="font-bold underline cursor-pointer" @click="state.loadAgents">
+      <span v-if="state.flowsError.value" class="text-xs text-rose-600 flex items-center gap-1 ml-2">
+        {{ state.flowsError.value }}
+        <button class="font-bold underline cursor-pointer" @click="state.loadFlows">
           重试
         </button>
       </span>
@@ -129,8 +124,8 @@ const modeConfig: Record<string, { label: string; class: string }> = {
             >
               <th class="py-3.5 px-4">任务编号 / 尝试限制</th>
               <th class="py-3.5 px-4">被叫号码</th>
-              <th class="py-3.5 px-4">执行坐席</th>
-              <th class="py-3.5 px-4">外呼模式</th>
+              <th class="py-3.5 px-4">流程模型</th>
+              <th class="py-3.5 px-4">创建人</th>
               <th class="py-3.5 px-4">任务状态</th>
               <th class="py-3.5 px-4">计划时间</th>
               <th class="py-3.5 px-4 text-right">调度控制</th>
@@ -172,15 +167,12 @@ const modeConfig: Record<string, { label: string; class: string }> = {
                 <span
                   class="px-2.5 py-0.5 rounded-lg font-mono text-xs bg-slate-100 text-slate-800 border border-slate-200"
                 >
-                  {{ row.owner }}
+                  {{ row.flowKey }}
                 </span>
               </td>
               <td class="py-4 px-4">
-                <span
-                  class="px-2.5 py-0.5 rounded-full text-xs font-bold border"
-                  :class="modeConfig[row.mode]?.class || 'bg-slate-50 text-slate-700 border-slate-200'"
-                >
-                  {{ modeConfig[row.mode]?.label || row.mode }}
+                <span class="text-xs font-semibold text-slate-700">
+                  {{ row.createdBy }}
                 </span>
               </td>
               <td class="py-4 px-4">
@@ -282,28 +274,27 @@ const modeConfig: Record<string, { label: string; class: string }> = {
       >
         <div class="sm:col-span-2">
           <label class="block text-xs font-bold text-slate-600 mb-1.5"
-            >执行坐席 <span class="text-rose-500">*</span></label
+            >自动外呼流程 <span class="text-rose-500">*</span></label
           >
           <select
-            v-model="state.form.value.owner"
-            :disabled="state.agentsLoading.value"
+            v-model="state.form.value.flowKey"
+            :disabled="state.flowsLoading.value"
             class="w-full bg-slate-50/70 border border-slate-200 rounded-xl px-3 py-2 text-slate-800 text-xs focus:outline-none focus:border-brand-500 focus:ring-1 focus:ring-brand-500/20 font-medium cursor-pointer"
           >
             <option value="">
-              {{ state.agentsLoading.value ? "坐席加载中..." : "请选择执行坐席" }}
+              {{ state.flowsLoading.value ? "流程加载中..." : "请选择已发布流程" }}
             </option>
             <option
-              v-for="agent in state.agents.value"
-              :key="agent.id"
-              :value="agent.workNo"
+              v-for="flow in state.flows.value"
+              :key="flow.id"
+              :value="flow.flowKey"
             >
-              {{ agent.workNo }} ·
-              {{ agent.agentName || agent.realName || "未命名" }}
+              {{ flow.flowName }} · {{ flow.flowKey }}
             </option>
           </select>
-          <span v-if="state.agentsError.value" class="text-xs text-rose-600 flex items-center gap-1 mt-1">
-            {{ state.agentsError.value }}
-            <button class="font-bold underline cursor-pointer" @click="state.loadAgents">
+          <span v-if="state.flowsError.value" class="text-xs text-rose-600 flex items-center gap-1 mt-1">
+            {{ state.flowsError.value }}
+            <button class="font-bold underline cursor-pointer" @click="state.loadFlows">
               重试
             </button>
           </span>
@@ -320,16 +311,29 @@ const modeConfig: Record<string, { label: string; class: string }> = {
           />
         </div>
 
+        <div class="sm:col-span-2">
+          <label class="block text-xs font-bold text-slate-600 mb-1.5"
+            >播报文案 <span class="text-rose-500">*</span></label
+          >
+          <textarea
+            v-model="state.form.value.variables.text"
+            rows="4"
+            placeholder="输入客户接通后播放的文案，服务端将其作为流程变量交给 Sidecar TTS"
+            class="w-full resize-y bg-slate-50/70 border border-slate-200 rounded-xl px-3 py-2 text-slate-800 text-xs focus:outline-none focus:border-brand-500 focus:ring-1 focus:ring-brand-500/20 font-medium"
+          />
+        </div>
+
         <div>
           <label class="block text-xs font-bold text-slate-600 mb-1.5"
-            >外呼模式</label
+            >确认按键</label
           >
           <select
-            v-model="state.form.value.mode"
+            v-model="state.form.value.variables.confirmDigit"
             class="w-full bg-slate-50/70 border border-slate-200 rounded-xl px-3 py-2 text-slate-800 text-xs focus:outline-none focus:border-brand-500 focus:ring-1 focus:ring-brand-500/20 font-medium cursor-pointer"
           >
-            <option value="PROGRESSIVE">坐席先接 (Progressive)</option>
-            <option value="NOTIFICATION">通知外呼 (Notification)</option>
+            <option v-for="digit in ['0','1','2','3','4','5','6','7','8','9']" :key="digit" :value="digit">
+              按 {{ digit }} 确认
+            </option>
           </select>
         </div>
 
@@ -348,7 +352,7 @@ const modeConfig: Record<string, { label: string; class: string }> = {
         </div>
 
         <p class="sm:col-span-2 text-xs text-slate-400 bg-slate-50 p-3 rounded-xl border border-slate-100">
-          💡 任务创建后由服务端调度引擎在外呼时段内自动调度；通知模式将自动播报通知语音。
+          任务只拨打客户并执行所选流程，与坐席无关；只有流程进入“转人工”节点时才动态选择坐席。
         </p>
 
         <div class="sm:col-span-2 flex justify-end gap-2 pt-2 border-t border-slate-100">

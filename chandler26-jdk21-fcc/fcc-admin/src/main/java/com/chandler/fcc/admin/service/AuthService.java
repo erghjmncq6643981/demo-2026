@@ -181,6 +181,7 @@ public class AuthService {
                 .lastLoginAt(LocalDateTime.now())
                 .updatedAt(LocalDateTime.now())
                 .build());
+        agentMapper.markLogin(agent.getId());
 
         log.info("🎧 [Sa-Token] 坐席 {} ({}) 登录成功, role={}, extension={}, endpointType={}",
                 loginId, resolveAgentDisplayName(agent), role.getCode(), endpoint.getEndpointValue(), endpoint.getEndpointType());
@@ -310,6 +311,10 @@ public class AuthService {
     public void logout() {
         if (StpUtil.isLogin()) {
             String loginId = StpUtil.getLoginIdAsString();
+            String accountType = StpUtil.getSession().getString("accountType");
+            if (SUBJECT_AGENT.equals(accountType)) {
+                agentMapper.markLogout(loginId);
+            }
             StpUtil.logout();
             log.info("🚪 [Sa-Token] 用户 {} 已成功登出", loginId);
         }

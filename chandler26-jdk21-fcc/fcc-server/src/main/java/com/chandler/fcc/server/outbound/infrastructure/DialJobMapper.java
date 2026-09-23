@@ -20,24 +20,6 @@ public interface DialJobMapper {
     int create(Map<String, Object> row);
 
     /**
-     * 分页查询指定坐席的外呼任务。
-     *
-     * @param owner 坐席工号
-     * @param offset 分页偏移
-     * @return 任务摘要
-     */
-    List<Map<String, Object>> list(@Param("owner") String owner, @Param("offset") int offset);
-
-    /**
-     * 查询指定坐席有权访问的任务详情。
-     *
-     * @param owner 坐席工号
-     * @param id 任务标识
-     * @return 任务详情，不存在时为空
-     */
-    Map<String, Object> detail(@Param("owner") String owner, @Param("id") String id);
-
-    /**
      * 查询任务的逐次尝试结果。
      *
      * @param id 任务标识
@@ -162,18 +144,13 @@ public interface DialJobMapper {
     int finishJob(@Param("id") String id, @Param("status") String status);
 
     /**
-     * 由任务归属坐席暂停、恢复或取消任务。
+     * 由管理用例在完成权限校验后暂停、恢复或取消任务。
      *
-     * @param owner 坐席工号
      * @param id 任务标识
      * @param action 操作代码
      * @return 更新数量
      */
-    int control(
-        @Param("owner") String owner,
-        @Param("id") String id,
-        @Param("action") String action
-    );
+    int control(@Param("id") String id, @Param("action") String action);
 
     /**
      * 统计全局运行中尝试数。
