@@ -145,7 +145,7 @@ Sidecar 的 dispatch ingress 在单节点部署中可直接调用本地 Dispatch
 
 ### 5.2 人工外呼与坐席可用性
 
-终端绑定、终端注册事实和坐席业务状态是三个独立概念。系统发起 Dial 前要求存在启用的 SIP/WebRTC 绑定，并通过 `fcc_agent_presence` 的 `READY/BUSY/REST/ACW` 做业务并发控制；不再把最近注册事件为 `REGISTERED` 作为同步硬前置。终端是否真实可达由 Sidecar 命令应答和后续 Channel 事件判定，注册事件继续用于管理端展示、诊断和告警。
+终端绑定、终端注册事实和坐席业务状态是三个独立概念。系统发起 Dial 前只要求存在启用的 SIP/WebRTC 绑定，并通过 `fcc_agent_presence` 的 `READY/BUSY/REST/ACW` 做业务并发控制；`login_status`、最近注册事件和 WebRTC/SIP 在线投影不再作为拨号同步硬前置，避免把注册状态同步延迟误判为坐席不可用。终端是否真实可达由 Sidecar 命令应答和后续 Channel 事件判定，注册事件继续用于管理端展示、诊断和告警。
 
 人工外呼有两个固定模型：
 
@@ -227,11 +227,13 @@ MySQL 是持久事实来源。Redis 只存可重建的运行态和通知。内�
 
 呼入入口和流程版本是两个不同层次。`fcc_did_number.phone_number` 保存 XSwitch/运营商实际送达的被叫 DID，`route_key` 绑定稳定 `flow_key`；同一流程可绑定多个 DID，一个 DID 同时只指向一个流程。Sidecar 将真实 `dest_number` 放入规范 Channel 事件，fcc-server 先按 DID 找到绑定，再固定当时最新的已发布版本。号码不写入版本 JSON，号码调整也不会篡改历史流程版本。Flow Studio 可绑定和解绑已录入 DID；没有启用 DID 的呼入流程不能发布。
 
-发布接口成功表示数据库版本切换完成，运行端状态返回 `PENDING`；这不等于所有运行实例或 FreeSWITCH 节点已验证切换。新通话在创建 Flow Instance 时固定版本快照，存量通话不随发布改写。
+发布接口成功表示数据库版本切换完成，运行端状态返回 `PENDING`；这不等于所有运行实例或 FreeSWITCH 节点已验证切换。发布事务先锁定流程主定义行，再把原 `PUBLISHED` 版本改为 `ARCHIVED`，最后把草稿改为 `PUBLISHED` 并更新 `current_version`。`fcc_flow_definition_version.published_marker` 对 `PUBLISHED` 状态建立唯一索引，因此同一流程编码在数据库层最多只能有一个生效版本；并发发布失败时事务回滚，旧版本仍保持生效。新通话在创建 Flow Instance 时固定版本快照，存量通话不随发布改写。
 
-可编辑流程只支持 `routeMode=IVR` 的呼入固定阶段：`ENTRY -> MENU -> BRANCH -> ROUTE -> BRIDGE -> CONNECTED -> END`。编辑者只能修改菜单媒体、收号超时、单键 if/else 分支、坐席/技能组目标、排队时限和未接通处理。不接受旧 `DID_DIRECT`、任意 Java 类/方法、脚本、表达式或动态 URL。
+可编辑流程只支持 `routeMode=IVR` 的呼入固定阶段：`ENTRY -> MENU -> BRANCH -> ROUTE -> BRIDGE -> RECORD_START -> CONNECTED -> RECORD_STOP -> RATING -> RATING_SAVE -> CLOSING -> END`。编辑者只能修改菜单媒体、收号超时、单键 if/else 分支、坐席/技能组目标、排队时限和未接通处理；录音、评价和结束语音使用系统固定动作，不允许画布把它们替换成任意脚本。不接受旧 `DID_DIRECT`、任意 Java 类/方法、脚本、表达式或动态 URL。
 
-版本号由服务端分配，前端不允许手填。无版本流程通过“创建首个草稿版本”进入工作区；已发布和历史版本只读，需要基于已发布版本创建新草稿后才能修改。`BRANCH` 中的 `else` 直接维护唯一的 `defaultRoute`，`ROUTE` 阶段展示和编辑同一份兜底路由，不存在两套相互冲突的数据。
+版本号由服务端分配，前端不允许手填。无版本流程通过“创建首个草稿版本”进入工作区；已发布和历史版本只读，需要基于已发布版本创建新草稿后才能修改。保存草稿不会影响当前通话；只有发布才切换生效版本。`BRANCH` 中的 `else` 直接维护唯一的 `defaultRoute`，`ROUTE` 阶段展示和编辑同一份兜底路由，不存在两套相互冲突的数据。
+
+运行端采用按需加载：首次需要某个流程时查询其 `PUBLISHED` 版本并完成动作目录校验，使用 Caffeine `expireAfterWrite=3h`；写入后 175 分钟（剩余 5 分钟）触发异步刷新。刷新失败保留旧快照，过期且无法重新加载时才拒绝新的流程实例。Redis 发布通知只负责主动刷新/失效对应键，不会改写已经固定版本的通话实例。启动阶段不再全量读取所有流程，减少服务启动对数据库和流程数量的耦合。
 
 ### 8.1 业务闭环参考和模型演进
 
@@ -246,16 +248,16 @@ MySQL 是持久事实来源。Redis 只存可重建的运行态和通知。内�
 | 指定坐席、技能组、同组代答、忙/离线/无人和多次尝试 | 路由尝试事实 + 并发预占 + 可替换路由策略 | 指定坐席/技能组与排队期轮询已实现；代班、营业时间、溢出层级及细分失败原因尚未动作化 |
 | 来电弹屏、接听、桥接、挂机和坐席释放 | Call/Leg/Bridge 事实 + Windows 客户端回执 + 终态幂等 | 核心链路和弹屏回执已实现；真实 SIP/Windows 联调与异常恢复验收未完成 |
 | 未接、超时、客户先挂产生漏话及回拨闭环 | `FINALIZE_INBOUND` + `fcc_callback_task` + 渐进式外呼任务 | 未接回拨创建、领取和任务关联已实现；运营规则、SLA 和人工处置结果仍需补齐 |
-| 录音、满意度评价及文件完成态 | `START_RECORDING`/`STOP_RECORDING`、`PLAY_NAVIGATION_VOICE`、`COLLECT_SERVICE_RATING`、`PLAY_CLOSING_VOICE`、`PERSIST_SERVICE_RATING` + Recording/评价事实 | 动作目录和协议边界已声明；评价持久化、流程接入及真实文件完成态未完成 |
+| 录音、满意度评价及文件完成态 | `START_RECORDING`/`STOP_RECORDING`、`PLAY_NAVIGATION_VOICE`、`COLLECT_SERVICE_RATING`、`PLAY_CLOSING_VOICE`、`PERSIST_SERVICE_RATING` + Recording/评价事实 | 桥接后幂等开始录音，终态前停止录音；坐席先挂机时收取 1-5 分评价，评价或超时后播放预设结束语音再挂机。真实 FreeSWITCH 录音文件完成态仍待联调 |
 | 盲转、咨询转、三方与转接后话单归属 | 显式转接动作 + 多 Leg/Bridge 成员事实 | 数据模型可承载，完整动作与生命周期尚未实现，不能以普通桥接代替 |
 | 自动外呼放音、按键确认、重试和终态通知 | 通知外呼固定模型 + 持久调度/尝试 + 确认事实 | 调度、租约和确认模型已有基础；真实并发、重试、音频与终态通知待联调 |
 | 司机热线路由、港口映射和结束后同步业务系统 | 命名第三方端点 + 显式请求/响应动作 + 幂等业务回调事实 | 通用 HTTPS 执行边界已存在；具体业务契约、端点配置、补偿与对账尚未实现 |
 
-新系统当前已对象化并运行的呼入动作是 DID 解析、菜单收号、if/else 路由、坐席预占与呼叫、桥接、等待挂机和未接通回拨收尾。录音、评价、复杂转接、营业时间/溢出、第三方业务回调等不能继续隐藏在监听器条件分支中；后续加入时必须先进入 `fcc-common` 动作目录，声明 FNode 指令、内部方法或第三方接口执行边界，再由 admin 校验、server 执行并记录每次动作事实。在这些动作真正接入运行流程并验证前，文档不将其描述为可配置完成。
+新系统当前已对象化并运行的呼入动作是 DID 解析、菜单收号、if/else 路由、坐席预占与呼叫、桥接、录音、坐席先挂机后的评价/结束语音和未接通回拨收尾；菜单与通知文案的 TTS 生成由 Sidecar 完成。复杂转接、营业时间/溢出、第三方业务回调等不能继续隐藏在监听器条件分支中；后续加入时必须先进入 `fcc-common` 动作目录，声明 FNode 指令、内部方法或第三方接口执行边界，再由 admin 校验、server 执行并记录每次动作事实。在这些动作真正接入运行流程并验证前，文档不将其描述为可配置完成。
 
-`FlowActionType` 是 admin/server 共用动作目录，每个动作明确归属 FNode 指令、内部业务方法或第三方接口。每个 `FNodeMethod` 都必须至少有一个对应动作；一个底层方法允许有多个业务语义，例如坐席外呼和客户外呼都使用 `FNode.Dial`。FNode 方法和事件方法/字段由 `FNodeMethod`、`FccEventMethod`、`FccEventField` 等公共对象定义，不在执行器中解析裸 wire 字符串。
+`FlowActionType` 是 admin/server 共用动作目录，每个动作明确归属 FNode 指令、内部业务方法或第三方接口。每个 `FNodeMethod` 都必须至少有一个对应动作；一个底层方法允许有多个业务语义，例如坐席外呼和客户外呼都使用 `FNode.Dial`。FNode 方法、事件方法/字段及命令选项由 `FNodeMethod`、`FccEventMethod`、`FccEventField`、`FNodeMediaType`、`FNodeDtmfPostAction`、`FNodePlayPostAction`、`FNodeRecordAction` 等公共对象定义，不在执行器中解析裸 wire 字符串。转接只发送业务 `target` 和 `context`，FreeSWITCH 的 `XML` 表达式由 Sidecar 生成。
 
-内部动作只保留高内聚的业务闭环，例如 DID 解析、路由分支选择、坐席预占与收尾；播放、录音、转接、挂机等 FreeSWITCH 能力必须建模为 FNode 动作，不得复制成内部动作。第三方动作使用固定 `ThirdPartyFlowRequest/ThirdPartyFlowResponse` 协议：请求由 FCC 补齐协议版本、`commandId`、`callId`、流程实例和动作编码，端点只能来自服务端 HTTPS 白名单；响应必须原样回传协议版本和 `commandId`，并提供 `accepted`、业务码、消息和结构化 `data`。发布通知在 afterCommit 执行，但尚无持久通知重试与激活看板。
+内部动作只保留高内聚的业务闭环，例如 DID 解析、路由分支选择、坐席预占与收尾；播放、录音、转接、挂机等 FreeSWITCH 能力必须建模为 FNode 动作，不得复制成内部动作。第三方动作使用固定 `ThirdPartyFlowRequest/ThirdPartyFlowResponse` 协议：请求由 FCC 补齐协议版本、`commandId`、`callId`、流程实例和动作编码，端点只能来自服务端已启用的 HTTPS 配置；响应必须原样回传协议版本和 `commandId`，并提供 `accepted`、业务码、消息和结构化 `data`。发布通知在 afterCommit 执行，但尚无持久通知重试与激活看板。
 
 ## 9. 录音
 
@@ -276,19 +278,19 @@ MySQL 是持久事实来源。Redis 只存可重建的运行态和通知。内�
 
 仍需作为已知缺口处理：
 
-- Sidecar 事件现有稳定源 `event_id` 与落盘 outbox；事件按接收顺序写入，Java Inbox 去重。明确处理失败会 NAK 并最多重新领取 5 次，已完成的重复事件直接 ACK；遗留 `PROCESSING` 或耗尽重试的 `FAILED` 转为 `UNKNOWN`，等待人工或恢复任务对账；
-- 录音事件已统一为 `Event.Recording`，分类为 `record`；真实完成态、时长和文件大小仍需 Sidecar/FreeSWITCH 联调验证；
+- Sidecar 事件现有稳定源 `event_id` 与落盘 outbox；Java Inbox 在业务分发前去重，`fcc_call_event` 先幂等写入 `RECEIVED`，处理器完成后回填 `PROCESSED/FAILED` 及可解析的 Call 关联。明确处理失败会 NAK 并最多重新领取 5 次，已完成的重复事件直接 ACK；遗留 `PROCESSING` 或耗尽重试的 `FAILED` 转为 `UNKNOWN`，等待人工或恢复任务对账；事件事实与 Inbox 仍不是同一数据库事务，需保留重放/对账指标。
+- 录音事件已统一为 `Event.Recording`，分类为 `record`；Java 在桥接后登记共享路径、幂等发送 START/STOP，并将停止未知写为 `UNKNOWN` 等待对账；真实完成态、时长和文件大小仍需 Sidecar/FreeSWITCH 联调验证；
 - NATS 事件使用 `FCC_EVENTS` JetStream；`fcc-control` durable 每次处理一条并显式 ACK。本机已创建订阅 `fs.event.*.*` 的文件存储流，但业务副作用与 Inbox 状态仍不是同一事务，也没有 Sidecar 真实事件写入和 JetStream 重投证据；
 - 当前只支持一个活跃 fcc-server，不能把共享 durable 等同安全的多实例会话处理；
-- 命令重试尚未形成跨请求稳定的业务幂等键；
+- 副作用命令已按操作边界生成跨请求稳定的 `cmd-` 幂等标识，超时查询仍使用查询请求自身的传输标识；真实 Sidecar 重复命令和跨实例结果对账尚未联调验证；
 - 消费前从 MySQL 分页恢复固定模板会话；已有 ChannelSnapshot 双方持续缺失对账，失败快照不视为挂机，单边残留和桥接重建仍需补齐；
-- 流程发布使用 Redis 与 HTTP best-effort 通知，不是事务性发布；
+- 流程发布数据库切换已由流程主行锁和 `published_marker` 唯一约束保证；Redis 与 HTTP 仍是提交后的 best-effort 运行端通知，通知失败不会回滚已提交版本，需通过重载接口或运维告警补偿；
 - Agent WebSocket 已通过令牌在线核验坐席身份；身份服务故障时拒绝收发，尚需真实环境验证及性能评估；
 - 共享 Jackson 标识符模块已加入，但命名外字段、Map 和实际 HTTP 输出仍需完整契约验证；
-- Dial Job 已有持久领取、频控、时段、暂停/取消、逐次结果及原子批量回填；真实话务与未知结果恢复尚未完整验收。
+- Dial Job 已有持久领取、频控、时段、暂停/取消、逐次结果、超时未知保留和通话事实回填；真实话务与多实例恢复尚未完整验收。
 - 坐席终端主动外呼已有模型、事件识别和 Leg 接管代码；真实默认 context 拨号计划、号码转换、重复/乱序/先挂机等场景尚未完成 FreeSWITCH 联调。
 
-挂机/保持/DTMF/转接已校验本人 callId、话道 UUID 和底层响应；返回 ACCEPTED 而非最终状态，错误/超时不再伪造成功。班长四类干预均明确返回 501，前端禁用。保持媒体完成态和完整转接生命周期仍需联调。
+挂机/转接已校验本人 callId、话道 UUID 和底层响应，并分别进入 `HANGUP_CALL`/`TRANSFER_CALL` 公共动作；返回 ACCEPTED 而非最终状态，错误/超时不再伪造成功。保持和通话中 DTMF 目前仍通过受控 NativeAPI，班长四类干预均明确返回 501，前端禁用。保持媒体完成态和完整转接生命周期仍需联调。
 
 ## 11. 安全与运维
 
@@ -310,7 +312,7 @@ mvn -q test
 
 涉及 Mapper/DDL 时还需解析 XML、检查查询形状和在一次性 MySQL 8 环境验证。涉及 NATS、事件、录音、WebSocket 或媒体时，必须报告外部依赖是否真实可用。
 
-2026-09-20 本轮：JDK 21 编译、Flow Studio/Action Executor 定向测试和前端构建按交付时结果记录。本机已安装并启动 NATS Server 2.15.0，应用测试日志确认成功连接 `nats://127.0.0.1:4222`；JetStream 已创建文件存储流 `FCC_EVENTS`，订阅 `fs.event.*.*`。完整 Java 测试中 `fcc-server` 共运行 38 项，0 项断言失败、9 项环境错误、1 项跳过；当前错误来自 MySQL JDBC、Redis 和 Windows loopback 建连，不能记为全量通过。本轮没有验证 Sidecar 真实事件写入/重投、FreeSWITCH、双向媒体、录音、认证浏览器或 Windows 交互。
+2026-09-23 本轮：JDK 21 编译、`fcc-common` 全量测试以及录音、评价、拨号超时、事件分发、流程缓存和话务控制定向测试通过；Sidecar 使用 Go 1.27.1 完成全部生产包测试和构建。验证时临时启动 NATS Server 2.15.0 与 JetStream，应用日志确认成功连接 `nats://127.0.0.1:4222`。完整 Java 测试中 `fcc-server` 共运行 48 项，0 项断言失败、9 项环境错误、1 项跳过；错误发生在 Windows/JDK selector 建立 Lettuce Redis 事件循环时（`Unable to establish loopback connection`），应用上下文因此未完成，MySQL 业务 Schema 也未能在本轮完整验证，不能记为全量通过。本轮没有验证 Sidecar 真实事件写入/重投、FreeSWITCH、双向媒体、录音完成态、真实阿里云 TTS、认证浏览器或 Windows 交互。
 
 ### 运行端补充接口
 

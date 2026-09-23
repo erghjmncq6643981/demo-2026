@@ -1,10 +1,15 @@
 package com.chandler.fcc.common.dto.command;
 
+import com.chandler.fcc.common.protocol.FNodePlayPostAction;
 import com.fasterxml.jackson.annotation.JsonProperty;
 import io.swagger.v3.oas.annotations.media.Schema;
-import lombok.*;
-
 import java.io.Serializable;
+import lombok.AllArgsConstructor;
+import lombok.Builder;
+import lombok.Getter;
+import lombok.NoArgsConstructor;
+import lombok.Setter;
+import lombok.ToString;
 
 /**
  * FNode.Play 放音播报指令入参模型
@@ -43,4 +48,11 @@ public class FNodePlayDTO implements Serializable {
      */
     @Schema(description = "播报媒体详细参数")
     private MediaInfo media;
+
+    /**
+     * 播放完成后的受控动作。
+     */
+    @JsonProperty("action_after")
+    @Schema(description = "播放完成后的动作：NONE(继续当前话务) 或 HANGUP(正常挂机)", example = "HANGUP")
+    private FNodePlayPostAction actionAfter;
 }

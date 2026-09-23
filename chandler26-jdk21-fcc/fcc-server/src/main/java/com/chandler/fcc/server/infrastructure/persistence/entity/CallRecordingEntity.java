@@ -49,7 +49,7 @@ public class CallRecordingEntity extends BaseEntity {
     private String nodeId;
 
     /**
-     * 录音状态 (RECORDING, COMPLETED, FAILED)
+     * 录音状态 (REQUESTED, RECORDING, COMPLETED, FAILED, UNKNOWN)
      */
     private String status;
 

@@ -29,8 +29,21 @@ class FlowDefinitionValidatorTest {
         var root = FlowDefinitionValidator.validate(VALID_IVR);
 
         assertEquals("IVR", root.path("routeMode").asText());
-        assertEquals(7, root.path("stages").size());
+        assertEquals(12, root.path("stages").size());
         assertEquals("901001", root.path("defaultRoute").path("target").asText());
+    }
+
+    /**
+     * 普通导航文案交给 Sidecar TTS，仍使用同一流程定义校验边界。
+     */
+    @Test
+    void acceptsTextPromptForSidecarTts() {
+        String definition = VALID_IVR.replace("/sounds/welcome.wav", "您好，请按 1 转人工");
+
+        assertEquals(
+            "您好，请按 1 转人工",
+            FlowDefinitionValidator.validate(definition).path("menu").path("prompt").asText()
+        );
     }
 
     /**

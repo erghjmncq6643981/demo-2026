@@ -10,6 +10,8 @@ import com.chandler.fcc.common.enums.DirectionType;
 import com.chandler.fcc.common.enums.FlowActionType;
 import com.chandler.fcc.common.enums.FlowModelType;
 import com.chandler.fcc.common.protocol.ChannelEventState;
+import com.chandler.fcc.common.protocol.FNodeDtmfPostAction;
+import com.chandler.fcc.common.protocol.FNodeMediaType;
 import com.chandler.fcc.common.protocol.FccEventField;
 import com.chandler.fcc.common.protocol.FccEventParameter;
 import com.chandler.fcc.common.util.IdUtil;
@@ -18,9 +20,11 @@ import com.chandler.fcc.server.call.CallSessionManager;
 import com.chandler.fcc.server.command.FccClient;
 import com.chandler.fcc.server.flow.application.SystemFlowRuntime;
 import com.chandler.fcc.server.flow.application.FlowActionExecutionService;
+import com.chandler.fcc.server.flow.FlowConfig;
 import com.chandler.fcc.server.infrastructure.persistence.entity.CallLegEntity;
 import com.chandler.fcc.server.infrastructure.persistence.service.CallPersistenceService;
 import com.chandler.fcc.server.outbound.application.DialAttemptGuard;
+import com.chandler.fcc.server.recording.application.CallRecordingService;
 import com.chandler.fcc.server.websocket.service.AgentWebSocketService;
 import com.chandler.fcc.server.websocket.service.ScreenPopService;
 import com.fasterxml.jackson.databind.JsonNode;
@@ -57,7 +61,9 @@ public class OutboundCallService implements SystemFlowRuntime {
         FlowActionType.DIAL_AGENT,
         FlowActionType.DIAL_CUSTOMER,
         FlowActionType.CHANNEL_BRIDGE,
+        FlowActionType.START_RECORDING,
         FlowActionType.WAIT_FOR_HANGUP,
+        FlowActionType.STOP_RECORDING,
         FlowActionType.FINALIZE_OUTBOUND
     );
     private static final Set<FlowActionType> NOTIFICATION_ACTIONS = Set.of(
@@ -71,7 +77,9 @@ public class OutboundCallService implements SystemFlowRuntime {
         FlowActionType.ACCEPT_AGENT_ORIGINATED_CALL,
         FlowActionType.DIAL_CUSTOMER,
         FlowActionType.CHANNEL_BRIDGE,
+        FlowActionType.START_RECORDING,
         FlowActionType.WAIT_FOR_HANGUP,
+        FlowActionType.STOP_RECORDING,
         FlowActionType.FINALIZE_OUTBOUND
     );
 
@@ -82,13 +90,15 @@ public class OutboundCallService implements SystemFlowRuntime {
     private final CallPersistenceService persistence;
     private final FccClient client;
     private final FlowActionExecutionService flowActions;
+    private final FlowConfig flowConfig;
     private final ScreenPopService screenPop;
     private final AgentWebSocketService websocket;
     private final TransactionTemplate transactions;
     private final DialAttemptGuard attemptGuard;
+    private final CallRecordingService recordings;
 
-    @Value("${fcc.outbound.notification-file:}")
-    private String notificationFile;
+    @Value("${fcc.outbound.notification-text:}")
+    private String notificationText;
 
     /**
      * 返回本服务负责的外呼模板。
@@ -126,8 +136,8 @@ public class OutboundCallService implements SystemFlowRuntime {
      * @throws ResponseStatusException 通知媒体或出局路由不可用
      */
     public Map<String, Object> startNotificationFor(String owner, String number, String attemptId) {
-        if (notificationFile.isBlank()) {
-            throw new ResponseStatusException(HttpStatus.CONFLICT, "未配置通知提示音");
+        if (notificationText.isBlank()) {
+            throw new ResponseStatusException(HttpStatus.CONFLICT, "未配置通知文案");
         }
         var route = routes.resolve(number);
         var data = new HashMap<String, Object>();
@@ -149,6 +159,7 @@ public class OutboundCallService implements SystemFlowRuntime {
             .guestChannelUuid(IdUtil.getUuid())
             .data(data)
             .build();
+        pinFlow(call, TEMPLATE_NOTIFICATION);
         call.putData("guestChannelUuid", call.getGuestChannelUuid());
 
         flowActions.executeInternal(
@@ -260,6 +271,7 @@ public class OutboundCallService implements SystemFlowRuntime {
             .guestChannelUuid(IdUtil.getUuid())
             .data(data)
             .build();
+        pinFlow(call, TEMPLATE_AGENT_FIRST);
         call.putData("agentChannelUuid", call.getAgentChannelUuid());
         call.putData("guestChannelUuid", call.getGuestChannelUuid());
 
@@ -396,6 +408,7 @@ public class OutboundCallService implements SystemFlowRuntime {
             .guestChannelUuid(IdUtil.getUuid())
             .data(data)
             .build();
+        pinFlow(call, TEMPLATE_AGENT_ORIGINATED);
         call.putData("guestChannelUuid", call.getGuestChannelUuid());
 
         try {
@@ -484,6 +497,20 @@ public class OutboundCallService implements SystemFlowRuntime {
     }
 
     /**
+     * 在通话意图落库前固定当前发布流程版本，后续发布不会改变本通话模型。
+     *
+     * @param call 待持久化通话
+     * @param template 固定流程模板
+     * @throws ResponseStatusException 未找到可用发布版本
+     */
+    private void pinFlow(CallInfoBO call, String template) {
+        FlowConfig.FlowSnapshot flow = flowConfig.getPublishedFlow(null, template)
+            .orElseThrow(() -> new ResponseStatusException(HttpStatus.CONFLICT, "未找到已发布流程: " + template));
+        call.putData("flowDefinitionId", flow.definitionId());
+        call.putData("flowVersionId", flow.versionId());
+    }
+
+    /**
      * 保存当前外呼话道事实。
      *
      * @param call 当前业务通话
@@ -543,16 +570,21 @@ public class OutboundCallService implements SystemFlowRuntime {
             FlowActionType.READ_DTMF,
             FNodeReadDTMFDTO.builder()
                     .ctrlUuid(call.getCtrlId())
-                    .uuid(call.getGuestChannelUuid())
-                    .media(MediaInfo.builder().type("FILE").data(notificationFile).build())
+                .uuid(call.getGuestChannelUuid())
+                .media(
+                    MediaInfo.builder()
+                        .type(FNodeMediaType.TEXT)
+                        .data(notificationText)
+                        .build()
+                )
                     .minDigits(1)
                     .maxDigits(1)
                     .tries(1)
-                    .timeout(10)
+                    .timeout(10_000)
                     .digitTimeout(2_000)
                     .terminators("#")
                     .regex("^[1]$")
-                    .actionAfter("HANGUP")
+                    .actionAfter(FNodeDtmfPostAction.HANGUP)
                     .build(),
             "notification-dtmf-" + call.getCallId()
         );
@@ -602,6 +634,7 @@ public class OutboundCallService implements SystemFlowRuntime {
      * @param call 当前通话
      */
     private void markConnected(CallInfoBO call) {
+        recordings.start(call);
         flowActions.executeInternal(
             call,
             FlowActionType.WAIT_FOR_HANGUP,
@@ -661,6 +694,7 @@ public class OutboundCallService implements SystemFlowRuntime {
         String destroyedChannelUuid,
         JsonNode params
     ) {
+        recordings.stop(call);
         CallStageState previousStage = call.getStageState();
         call.putData(DATA_TERMINAL, true);
         call.setHangupCause(

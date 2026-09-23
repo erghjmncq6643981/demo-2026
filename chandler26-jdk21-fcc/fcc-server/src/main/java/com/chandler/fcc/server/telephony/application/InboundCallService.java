@@ -12,17 +12,23 @@ import com.chandler.fcc.common.util.IdUtil;
 import com.chandler.fcc.server.agent.infrastructure.AgentRuntimeMapper;
 import com.chandler.fcc.server.call.CallSessionManager;
 import com.chandler.fcc.server.command.FccClient;
+import com.chandler.fcc.server.flow.FlowConfig;
 import com.chandler.fcc.server.flow.application.SystemFlowRuntime;
 import com.chandler.fcc.server.flow.application.FlowActionExecutionService;
 import com.chandler.fcc.server.infrastructure.persistence.service.CallPersistenceService;
 import com.chandler.fcc.server.infrastructure.persistence.entity.CallLegEntity;
+import com.chandler.fcc.server.recording.application.CallRecordingService;
 import com.chandler.fcc.server.websocket.service.AgentWebSocketService;
 import com.chandler.fcc.server.websocket.service.ScreenPopService;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import java.time.LocalDateTime;
 import java.time.ZoneOffset;
-import java.util.*;
+import java.util.ArrayList;
+import java.util.HashMap;
+import java.util.List;
+import java.util.Map;
+import java.util.Set;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.scheduling.annotation.Scheduled;
@@ -44,7 +50,12 @@ public class InboundCallService implements SystemFlowRuntime {
         FlowActionType.SELECT_DIGIT_ROUTE,
         FlowActionType.RESERVE_AND_DIAL_AGENT,
         FlowActionType.CHANNEL_BRIDGE,
+        FlowActionType.START_RECORDING,
         FlowActionType.WAIT_FOR_HANGUP,
+        FlowActionType.STOP_RECORDING,
+        FlowActionType.COLLECT_SERVICE_RATING,
+        FlowActionType.PERSIST_SERVICE_RATING,
+        FlowActionType.PLAY_CLOSING_VOICE,
         FlowActionType.FINALIZE_INBOUND
     );
 
@@ -57,6 +68,9 @@ public class InboundCallService implements SystemFlowRuntime {
     private final AgentWebSocketService websocket;
     private final TransactionTemplate transactions;
     private final InboundMenuService menu;
+    private final InboundPostCallService postCall;
+    private final CallRecordingService recordings;
+    private final FlowConfig flowConfig;
     private final ObjectMapper json = new ObjectMapper();
 
     /**
@@ -161,6 +175,7 @@ public class InboundCallService implements SystemFlowRuntime {
                     );
                 }
             } else if (eventState == ChannelEventState.BRIDGE) {
+                recordings.start(call);
                 flowActions.executeInternal(
                     call,
                     FlowActionType.WAIT_FOR_HANGUP,
@@ -177,9 +192,12 @@ public class InboundCallService implements SystemFlowRuntime {
                 );
             } else if (eventState == ChannelEventState.DESTROY) {
                 if (
-                    uuid.equals(call.getGuestChannelUuid()) ||
-                    call.getStageState() == CallStageState.CONNECTED
+                    call.getStageState() == CallStageState.CONNECTED &&
+                    uuid.equals(call.getAgentChannelUuid()) &&
+                    !uuid.equals(call.getGuestChannelUuid())
                 ) {
+                    beginPostCall(call, params.path(FccEventField.CAUSE.getWireName()).asText());
+                } else if (uuid.equals(call.getGuestChannelUuid())) {
                     finish(
                         call,
                         params.path(FccEventField.CAUSE.getWireName()).asText("NORMAL_CLEARING")
@@ -216,6 +234,9 @@ public class InboundCallService implements SystemFlowRuntime {
         for (var call : sessions.snapshot())
             if ("INBOUND".equals(call.getDataStr("runtimeTemplate", ""))) try {
                 synchronized (call) {
+                    if (postCall.expire(call)) {
+                        continue;
+                    }
                     route(call);
                 }
             } catch (RuntimeException e) {
@@ -246,18 +267,32 @@ public class InboundCallService implements SystemFlowRuntime {
         call.putData("guestChannelUuid", call.getGuestChannelUuid());
         call.putData("queueDeadline", System.currentTimeMillis() + 120000);
         call.putData("triedAgents", new ArrayList<String>());
-        if (key.startsWith("group:")) {
-            call.putData("groupCode", key.substring(6));
-        } else {
-            try {
-                menu.configure(call, String.valueOf(route.get("definition")));
-                call.putData("flowVersionId", String.valueOf(route.get("versionId")));
-            } catch (Exception invalid) {
-                call.getData().remove("runtimeTemplate");
-                client.hangup(call.getCtrlId(), channelUuid, "CALL_REJECTED");
-                sessions.removeSession(call.getCtrlId());
-                return false;
+        try {
+            if (key.startsWith("group:")) {
+                FlowConfig.FlowSnapshot flow = flowConfig
+                    .getPublishedFlow(null, TEMPLATE)
+                    .orElseThrow(() -> new IllegalArgumentException("呼入流程未发布"));
+                call.putData("flowDefinitionId", flow.definitionId());
+                call.putData("flowVersionId", flow.versionId());
+                call.putData("groupCode", key.substring(6));
+                call.putData("flowBranch", "route.group=" + key.substring(6));
+            } else {
+                String versionId = String.valueOf(route.get("versionId"));
+                FlowConfig.FlowSnapshot flow = flowConfig
+                    .getPublishedFlow(versionId, key)
+                    .orElseThrow(() -> new IllegalArgumentException("呼入流程版本不存在"));
+                if (!key.equals(flow.flowKey())) {
+                    throw new IllegalArgumentException("DID 路由与流程编码不一致");
+                }
+                menu.configure(call, flow.definitionJson());
+                call.putData("flowDefinitionId", flow.definitionId());
+                call.putData("flowVersionId", flow.versionId());
             }
+        } catch (Exception invalid) {
+            call.getData().remove("runtimeTemplate");
+            client.hangup(call.getCtrlId(), channelUuid, "CALL_REJECTED");
+            sessions.removeSession(call.getCtrlId());
+            return false;
         }
         call.setStageState(CallStageState.CALLING);
         persistence.saveOrUpdateSession(call);
@@ -394,6 +429,7 @@ public class InboundCallService implements SystemFlowRuntime {
      */
     private void finishInternal(CallInfoBO call, String cause) {
         if (call.getData().putIfAbsent("terminal", true) != null) return;
+        recordings.stop(call);
         boolean answered = call.getStageState() == CallStageState.CONNECTED;
         var previousStage = call.getStageState();
         call.setStageState(CallStageState.NORMAL_END);
@@ -437,6 +473,30 @@ public class InboundCallService implements SystemFlowRuntime {
     }
 
     /**
+     * 释放已离开的坐席，并在仍存活的客户话道上启动服务评价。
+     *
+     * @param call 已接通的呼入通话
+     * @param cause 坐席侧挂机原因
+     */
+    private void beginPostCall(CallInfoBO call, String cause) {
+        recordings.stop(call);
+        if (call.getData().putIfAbsent("agentEndedForRating", true) == null) {
+            transactions.executeWithoutResult(transaction -> {
+                release(call);
+                persistence.saveOrUpdateSession(call);
+            });
+            websocket.pushCallHangup(
+                call.getAgentWorkNo(),
+                call.getCallId(),
+                Map.of("cause", cause == null || cause.isBlank() ? "NORMAL_CLEARING" : cause)
+            );
+        }
+        if (!postCall.begin(call)) {
+            finish(call, cause == null || cause.isBlank() ? "NORMAL_CLEARING" : cause);
+        }
+    }
+
+    /**
      * 只处理本呼入固定模板的客户按键，不回落旧路由逻辑。
      *
      * @param call 通话
@@ -446,7 +506,15 @@ public class InboundCallService implements SystemFlowRuntime {
     public boolean digits(CallInfoBO call, JsonNode params) {
         if (!"INBOUND".equals(call.getDataStr("runtimeTemplate", ""))) return false;
         synchronized (call) {
-            if (!call.getData().containsKey("terminal") && menu.digits(call, params)) route(call);
+            if (call.getData().containsKey("terminal")) {
+                return true;
+            }
+            if (postCall.digits(call, params)) {
+                return true;
+            }
+            if (menu.digits(call, params)) {
+                route(call);
+            }
         }
         return true;
     }

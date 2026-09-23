@@ -112,11 +112,11 @@ public interface AgentRuntimeMapper {
     List<Map<String, Object>> active(@Param("after") long after);
 
     /**
-     * 按 DID 定位发布流程。
+     * 按 DID 定位已发布流程版本。
      *
      * @param number DID 号码
      * @param context FreeSWITCH 入局拨号计划上下文
-     * @return 路由定义，最多两条用于歧义检查
+     * @return 路由键和版本标识，最多两条用于歧义检查
      */
     List<Map<String, Object>> inbound(
         @Param("number") String number,

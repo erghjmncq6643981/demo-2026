@@ -46,7 +46,7 @@
 }
 ```
 
-固定阶段为 `ENTRY -> MENU -> BRANCH -> ROUTE -> BRIDGE -> CONNECTED -> END`，动作和顺序不能由管理端改变。服务端校验菜单、媒体绝对路径、单键分支、坐席/技能组目标、排队时限和结束动作；旧路由模型、未知字段、脚本、Java 类名和动态 URL 均被拒绝。呼入、外呼、通知外呼和话机绑定的完整系统模型由 `system-models.json` 生成并随全新数据库基线发布；运行端应用服务执行对应动作并记录阶段事实。发布结果中的 `PENDING` 仍表示运行端激活待确认，不代表真实 FreeSWITCH 链路已完成。
+呼入固定阶段为 `ENTRY -> MENU -> BRANCH -> ROUTE -> BRIDGE -> RECORD_START -> CONNECTED -> RECORD_STOP -> RATING -> RATING_SAVE -> CLOSING -> END`，动作和顺序不能由管理端改变。服务端校验菜单、媒体、单键分支、坐席/技能组目标、排队时限和结束动作；录音、评价及结束语音是系统固定阶段。旧路由模型、未知字段、脚本、Java 类名和动态 URL 均被拒绝。呼入、两类坐席外呼、通知外呼和话机绑定五个完整系统模型由 `system-models.json` 生成并随全新数据库基线发布；运行端应用服务执行对应动作并记录阶段事实。发布结果中的 `PENDING` 仍表示运行端激活待确认，不代表真实 FreeSWITCH 链路已完成。
 
 ## 必需部署配置
 

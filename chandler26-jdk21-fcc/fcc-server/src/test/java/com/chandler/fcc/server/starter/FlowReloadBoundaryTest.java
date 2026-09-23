@@ -41,4 +41,24 @@ class FlowReloadBoundaryTest {
         assertFalse(flow.reloadFlow("FLOW-INBOUND"));
         assertEquals("test-flow", flow.getFlowName(FlowModelType.INBOUND_CUSTOMER_SERVICE.name()).orElseThrow());
     }
+
+    /**
+     * 未触发业务访问时不查询流程；首次访问后命中缓存。
+     */
+    @Test void flowIsLoadedLazilyAndCached() {
+        var mapper = mock(FlowConfigMapper.class);
+        var flow = new FlowConfig(mapper, new ObjectMapper());
+        Map<String, Object> good = Map.of(
+            "flowKey", "FLOW-INBOUND",
+            "modelType", "INBOUND",
+            "flowName", "test-flow",
+            "definitionJson", VALID_IVR
+        );
+        when(mapper.findPublishedByKey("FLOW-INBOUND")).thenReturn(good);
+
+        verify(mapper, never()).findPublishedByKey(anyString());
+        assertEquals("test-flow", flow.getFlowName("FLOW-INBOUND").orElseThrow());
+        assertEquals("test-flow", flow.getFlowName("FLOW-INBOUND").orElseThrow());
+        verify(mapper, times(1)).findPublishedByKey("FLOW-INBOUND");
+    }
 }

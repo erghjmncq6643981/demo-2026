@@ -8,6 +8,8 @@ import com.chandler.fcc.common.entity.FNodeResult;
 import com.chandler.fcc.common.enums.DirectionType;
 import com.chandler.fcc.common.enums.FlowModelType;
 import com.chandler.fcc.common.enums.CallStageState;
+import com.chandler.fcc.common.protocol.FNodeMediaType;
+import com.chandler.fcc.common.protocol.FNodeRecordAction;
 import com.chandler.fcc.common.util.IdUtil;
 import com.chandler.fcc.server.call.CallSessionManager;
 import com.chandler.fcc.server.command.FccClient;
@@ -56,7 +58,7 @@ import static org.junit.jupiter.api.Assertions.*;
  *
  * @author Chandler
  */
-@SpringBootTest(classes = FccServerApplication.class, properties = "fcc.outbound.notification-file=/test/notification.wav")
+@SpringBootTest(classes = FccServerApplication.class, properties = "fcc.outbound.notification-text=测试通知文案")
 @TestMethodOrder(MethodOrderer.OrderAnnotation.class)
 @DirtiesContext
 public class FccTelephonyFlowTest {
@@ -324,7 +326,7 @@ public class FccTelephonyFlowTest {
                 .ctrlUuid(ctrlUuid)
                 .uuid(testUuid)
                 .media(MediaInfo.builder()
-                        .type("FILE")
+                        .type(FNodeMediaType.FILE)
                         .data("/var/sounds/ivr-welcome.wav")
                         .build())
                 .build();
@@ -339,10 +341,10 @@ public class FccTelephonyFlowTest {
                 .minDigits(1)
                 .maxDigits(1)
                 .media(MediaInfo.builder()
-                        .type("FILE")
+                        .type(FNodeMediaType.FILE)
                         .data("/var/sounds/survey.wav")
                         .build())
-                .timeout(5)
+                .timeout(5_000)
                 .build();
         FNodeResult readRes = fccClient.readDTMF(dtmfDto);
         assertNotNull(readRes);
@@ -352,7 +354,7 @@ public class FccTelephonyFlowTest {
         FNodeRecordDTO recDto = FNodeRecordDTO.builder()
                 .ctrlUuid(ctrlUuid)
                 .uuid(testUuid)
-                .action("START")
+                .action(FNodeRecordAction.START)
                 .path("/var/recordings/test.wav")
                 .build();
         FNodeResult recRes = fccClient.record(recDto);

@@ -35,7 +35,12 @@ fcc:
     start-hour: ${FCC_OUTBOUND_START_HOUR:9}
     end-hour: ${FCC_OUTBOUND_END_HOUR:18}
     timezone: ${FCC_OUTBOUND_TIMEZONE:Asia/Shanghai}
-    notification-file: ${FCC_NOTIFICATION_FILE:}
+    # Java 只发送业务文案；Sidecar 使用配置的 TTS provider 合成共享音频。
+    notification-text: ${FCC_NOTIFICATION_TEXT:}
+  inbound:
+    # 服务评价和结束语音为预设共享音频，必须同时配置才启用评价流程。
+    service-rating-prompt-file: ${FCC_SERVICE_RATING_PROMPT_FILE:}
+    closing-prompt-file: ${FCC_CLOSING_PROMPT_FILE:}
   binding:
     prompt-file: ${FCC_BINDING_PROMPT_FILE:}
   admin:

@@ -162,7 +162,7 @@ git diff --check
 
 ## 6. 结果记录
 
-2026-09-20：使用本机 JDK 21 后 Java compile 和 Flow/Action/Event Inbox 等 20 个定向测试通过；管理端构建及 4 个治理测试通过，坐席端既有 10 个测试通过。本机 NATS Server 2.15.0 已在 `127.0.0.1:4222` 运行，监控端口为 `8222`；应用测试日志确认连接成功，JetStream 文件存储流 `FCC_EVENTS` 已创建并订阅 `fs.event.*.*`。完整 `mvn -q test` 中 `fcc-server` 共运行 38 项，0 项断言失败、9 项环境错误、1 项跳过；当前错误来自 MySQL JDBC、Redis 和 Windows loopback 建连，仍不能记为全量通过。定向 Java 命令、部署顺序和新增测试详见 [契约修复记录](fcc-contract-remediation.md)。Go 工具链限制仍存在；Sidecar 真实事件写入/重投、ESL、SIP、媒体及登录态业务页面回归尚未完成。
+2026-09-23：使用本机 JDK 21 后 Java 编译、`fcc-common` 全量测试以及录音、评价、拨号超时、事件分发、流程缓存和话务控制定向测试通过；Sidecar 使用 Go 1.27.1 完成全部生产包测试及构建。验证时临时启动 NATS Server 2.15.0 与 JetStream，应用日志确认连接 `127.0.0.1:4222`。完整 `mvn -q test` 中 `fcc-server` 共运行 48 项，0 项断言失败、9 项环境错误、1 项跳过；Windows/JDK selector 无法建立 Lettuce Redis 事件循环，应用上下文提前失败，MySQL 业务 Schema 因而未完成本轮验证，仍不能记为全量通过。定向 Java 命令、部署顺序和新增测试详见 [契约修复记录](fcc-contract-remediation.md)。Sidecar 真实事件写入/重投、ESL、SIP、媒体及登录态业务页面回归尚未完成。
 
 交付说明必须区分：
 

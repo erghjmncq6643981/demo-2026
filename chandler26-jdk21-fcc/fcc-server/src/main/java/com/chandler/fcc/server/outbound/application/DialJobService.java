@@ -235,6 +235,10 @@ public class DialJobService {
                 );
             mapper.attach(attemptId, result.get("callId").toString());
         } catch (RuntimeException failure) {
+            if (isUnknownDispatch(failure)) {
+                log.warn("[自动外呼] 派发结果未知，保留尝试等待对账 attemptId={}", attemptId);
+                return;
+            }
             handleUnconfirmedDispatch(job.get("id").toString(), attemptId);
             log.warn("[自动外呼] 派发未确认 attemptId={}", attemptId);
         }
@@ -262,12 +266,28 @@ public class DialJobService {
         List<String> expired = mapper.expiredDispatches();
         if (!expired.isEmpty()) mapper.expireDispatches(expired);
 
+        mapper.unattached().forEach(row -> mapper.attach(
+            row.get("id").toString(),
+            row.get("callId").toString()
+        ));
+
         List<String> running = mapper.running()
             .stream()
             .map(row -> row.get("id").toString())
             .distinct()
             .toList();
         if (!running.isEmpty()) mapper.reconcileBatch(running);
+    }
+
+    /**
+     * 判断异常是否表示 Sidecar 已经可能执行但 FCC 未收到确认。
+     *
+     * @param failure 派发异常
+     * @return 结果未知时返回 {@code true}
+     */
+    private boolean isUnknownDispatch(RuntimeException failure) {
+        return failure instanceof ResponseStatusException response &&
+            response.getStatusCode().value() == HttpStatus.GATEWAY_TIMEOUT.value();
     }
 
     /**

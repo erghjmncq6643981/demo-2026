@@ -1,10 +1,15 @@
 package com.chandler.fcc.common.dto.command;
 
+import com.chandler.fcc.common.protocol.FNodeRecordAction;
 import com.fasterxml.jackson.annotation.JsonProperty;
 import io.swagger.v3.oas.annotations.media.Schema;
-import lombok.*;
-
 import java.io.Serializable;
+import lombok.AllArgsConstructor;
+import lombok.Builder;
+import lombok.Getter;
+import lombok.NoArgsConstructor;
+import lombok.Setter;
+import lombok.ToString;
 
 /**
  * FNode.Record 通道录音指令入参模型
@@ -42,7 +47,7 @@ public class FNodeRecordDTO implements Serializable {
      * 录音动作类型
      */
     @Schema(description = "录音动作指令：START(开始录音) 或 STOP(停止录音)", example = "START")
-    private String action;
+    private FNodeRecordAction action;
 
     /**
      * 录音文件落盘完整路径

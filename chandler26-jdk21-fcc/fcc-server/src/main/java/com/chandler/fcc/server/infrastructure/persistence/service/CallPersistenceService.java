@@ -273,16 +273,61 @@ public class CallPersistenceService {
             event.setEventId(IdUtil.getEventId());
         }
         if (event.getEventTime() == null) {
-            event.setEventTime(LocalDateTime.now());
+            event.setEventTime(LocalDateTime.now(ZoneOffset.UTC));
         }
         if (event.getReceivedAt() == null) {
-            event.setReceivedAt(LocalDateTime.now());
+            event.setReceivedAt(LocalDateTime.now(ZoneOffset.UTC));
         }
         if (event.getProcessStatus() == null) {
             event.setProcessStatus("PROCESSED");
         }
         callEventMapper.insert(event);
         log.debug("💾 [持久化] 记录事件: type={}, id={}", event.getEventType(), event.getEventId());
+    }
+
+    /**
+     * 幂等写入收到的标准事件，重复投递只保留第一次原始载荷。
+     *
+     * @param event 已解析的标准事件事实
+     */
+    @Transactional(rollbackFor = Exception.class)
+    public void receiveEvent(CallEventEntity event) {
+        if (event == null || event.getEventId() == null || event.getEventId().isBlank()) {
+            throw new IllegalArgumentException("事件标识不能为空");
+        }
+        CallEventEntity existing = callEventMapper.selectOne(
+            new LambdaQueryWrapper<CallEventEntity>().eq(CallEventEntity::getEventId, event.getEventId())
+        );
+        if (existing == null) {
+            recordEvent(event);
+        }
+    }
+
+    /**
+     * 更新事件处理结果及其已经解析出的通话关联。
+     *
+     * @param eventId 事件标识
+     * @param status 处理状态
+     * @param error 脱敏错误分类，可为空
+     * @param callId 已关联的业务通话数值标识，可为空
+     */
+    @Transactional(rollbackFor = Exception.class)
+    public void finishEvent(String eventId, String status, String error, Long callId) {
+        if (eventId == null || eventId.isBlank()) {
+            return;
+        }
+        CallEventEntity event = callEventMapper.selectOne(
+            new LambdaQueryWrapper<CallEventEntity>().eq(CallEventEntity::getEventId, eventId)
+        );
+        if (event == null) {
+            return;
+        }
+        event.setProcessStatus(status);
+        event.setProcessError(error);
+        if (callId != null) {
+            event.setCallId(callId);
+        }
+        callEventMapper.updateById(event);
     }
 
     /**

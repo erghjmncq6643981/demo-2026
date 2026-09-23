@@ -4,7 +4,7 @@
     "template": "INBOUND",
     "executionMode": "FIXED_RUNTIME",
     "entry": "ENTRY",
-    "stages": ["ENTRY", "MENU", "BRANCH", "ROUTE", "BRIDGE", "CONNECTED", "END"],
+    "stages": ["ENTRY", "MENU", "BRANCH", "ROUTE", "BRIDGE", "RECORD_START", "CONNECTED", "RECORD_STOP", "RATING", "RATING_SAVE", "CLOSING", "END"],
     "parameters": {
       "routeSource": "DID_BINDING",
       "menuSource": "PINNED_FLOW_VERSION",
@@ -17,40 +17,49 @@
       {"key":"MENU","label":"欢迎语与按键收号","action":"READ_DTMF","parameters":{"minDigits":1,"maxDigits":1,"tries":1,"timeoutSource":"menu.timeoutSeconds","mediaSource":"menu.prompt","actionAfter":"PARK"},"outputs":["digit"],"transitions":[{"when":"VALID_DIGIT","to":"BRANCH"},{"when":"TIMEOUT_OR_DESTROY","to":"END"}]},
       {"key":"BRANCH","label":"按键条件分支","action":"SELECT_DIGIT_ROUTE","inputs":["digit","branches","defaultRoute"],"outputs":["flowBranch","routeTarget"],"transitions":[{"when":"DIGIT_MATCH","to":"ROUTE","result":"MATCHED_BRANCH"},{"when":"ELSE","to":"ROUTE","result":"DEFAULT_ROUTE"}]},
       {"key":"ROUTE","label":"分配并呼叫坐席","action":"RESERVE_AND_DIAL_AGENT","parameters":{"strategy":"READY_UNTRIED_AGENT","ringSeconds":30,"queueTimeoutSource":"route.queueSeconds"},"outputs":["agentWorkNo","agentChannelUuid"],"transitions":[{"when":"AGENT_READY","to":"BRIDGE"},{"when":"AGENT_FAILED_AND_QUEUE_OPEN","to":"ROUTE","result":"NEXT_AGENT_ATTEMPT"},{"when":"NO_AGENT_AND_QUEUE_OPEN","to":"ROUTE","result":"WAIT"},{"when":"QUEUE_TIMEOUT_OR_CUSTOMER_DESTROY","to":"END"}]},
-      {"key":"BRIDGE","label":"桥接双方","action":"CHANNEL_BRIDGE","inputs":["agentChannelUuid","guestChannelUuid"],"transitions":[{"when":"BRIDGE_EVENT","to":"CONNECTED"},{"when":"DESTROY","to":"END"}]},
-      {"key":"CONNECTED","label":"双方通话","action":"WAIT_FOR_HANGUP","transitions":[{"when":"DESTROY","to":"END"}]},
+      {"key":"BRIDGE","label":"桥接双方","action":"CHANNEL_BRIDGE","inputs":["agentChannelUuid","guestChannelUuid"],"transitions":[{"when":"BRIDGE_EVENT","to":"RECORD_START"},{"when":"DESTROY","to":"END"}]},
+      {"key":"RECORD_START","label":"开始录音","action":"START_RECORDING","parameters":{"pathSource":"SHARED_RECORDING_LAYOUT"},"transitions":[{"when":"ACCEPTED_OR_EVENT","to":"CONNECTED"}]},
+      {"key":"CONNECTED","label":"双方通话","action":"WAIT_FOR_HANGUP","transitions":[{"when":"AGENT_DESTROY","to":"RECORD_STOP"},{"when":"CUSTOMER_DESTROY","to":"RECORD_STOP"}]},
+      {"key":"RECORD_STOP","label":"停止录音","action":"STOP_RECORDING","transitions":[{"when":"AGENT_DESTROY_AND_CUSTOMER_ALIVE","to":"RATING"},{"when":"CUSTOMER_DESTROY","to":"END"}]},
+      {"key":"RATING","label":"收取服务评价","action":"COLLECT_SERVICE_RATING","parameters":{"mediaSource":"fcc.inbound.service-rating-prompt-file","digits":"1-5","timeoutSeconds":10},"transitions":[{"when":"VALID_DIGIT","to":"RATING_SAVE"},{"when":"TIMEOUT","to":"CLOSING"},{"when":"CUSTOMER_DESTROY","to":"END"}]},
+      {"key":"RATING_SAVE","label":"保存服务评价","action":"PERSIST_SERVICE_RATING","outputs":["evaluationScore"],"transitions":[{"when":"SAVED","to":"CLOSING"}]},
+      {"key":"CLOSING","label":"播放结束语音","action":"PLAY_CLOSING_VOICE","parameters":{"mediaSource":"fcc.inbound.closing-prompt-file","actionAfter":"HANGUP"},"transitions":[{"when":"DESTROY","to":"END"}]},
       {"key":"END","label":"结束与回拨处理","action":"FINALIZE_INBOUND","parameters":{"releaseAgent":true,"hangupRemainingLeg":true,"createCallbackWhen":"UNANSWERED_AND_CALLBACK_ENABLED"},"outputs":["hangupCause","duration","billsec"],"terminal":true,"transitions":[]}
     ]
   },
   "AGENT_FIRST": {
     "schemaVersion":2,"template":"AGENT_FIRST","executionMode":"FIXED_RUNTIME","entry":"ENTRY",
-    "stages":["ENTRY","DIAL_AGENT","DIAL_CUSTOMER","BRIDGE","CONNECTED","END"],
+    "stages":["ENTRY","DIAL_AGENT","DIAL_CUSTOMER","BRIDGE","RECORD_START","CONNECTED","RECORD_STOP","END"],
     "parameters":{"dialSeconds":30,"routeSource":"OUTBOUND_ROUTE","triggerSources":["MANUAL","PROGRESSIVE_JOB","CALLBACK"]},
     "nodes":[
       {"key":"ENTRY","label":"外呼受理","action":"VALIDATE_ROUTE_AND_RESERVE_AGENT","inputs":["owner","number"],"outputs":["callId","agentChannelUuid","guestChannelUuid"],"transitions":[{"when":"ACCEPTED","to":"DIAL_AGENT"},{"when":"REJECTED","to":"END"}]},
       {"key":"DIAL_AGENT","label":"先呼坐席","action":"DIAL_AGENT","parameters":{"timeoutSeconds":30,"destinationSource":"BOUND_EXTENSION"},"transitions":[{"when":"AGENT_READY","to":"DIAL_CUSTOMER"},{"when":"DESTROY","to":"END"}]},
       {"key":"DIAL_CUSTOMER","label":"呼叫客户","action":"DIAL_CUSTOMER","parameters":{"timeoutSeconds":30,"destinationSource":"RESOLVED_OUTBOUND_ROUTE"},"transitions":[{"when":"CUSTOMER_READY","to":"BRIDGE"},{"when":"DESTROY","to":"END"}]},
-      {"key":"BRIDGE","label":"桥接双方","action":"CHANNEL_BRIDGE","inputs":["agentChannelUuid","guestChannelUuid"],"transitions":[{"when":"BRIDGE_EVENT","to":"CONNECTED"},{"when":"DESTROY","to":"END"}]},
-      {"key":"CONNECTED","label":"双方通话","action":"WAIT_FOR_HANGUP","transitions":[{"when":"DESTROY","to":"END"}]},
+      {"key":"BRIDGE","label":"桥接双方","action":"CHANNEL_BRIDGE","inputs":["agentChannelUuid","guestChannelUuid"],"transitions":[{"when":"BRIDGE_EVENT","to":"RECORD_START"},{"when":"DESTROY","to":"END"}]},
+      {"key":"RECORD_START","label":"开始录音","action":"START_RECORDING","parameters":{"pathSource":"SHARED_RECORDING_LAYOUT"},"transitions":[{"when":"ACCEPTED_OR_EVENT","to":"CONNECTED"}]},
+      {"key":"CONNECTED","label":"双方通话","action":"WAIT_FOR_HANGUP","transitions":[{"when":"DESTROY","to":"RECORD_STOP"}]},
+      {"key":"RECORD_STOP","label":"停止录音","action":"STOP_RECORDING","transitions":[{"when":"ACCEPTED_OR_UNKNOWN","to":"END"}]},
       {"key":"END","label":"结束外呼","action":"FINALIZE_OUTBOUND","parameters":{"releaseAgent":true,"hangupRemainingLeg":true},"outputs":["hangupCause","duration","billsec"],"terminal":true,"transitions":[]}
     ]
   },
   "AGENT_ORIGINATED": {
     "schemaVersion":2,"template":"AGENT_ORIGINATED","executionMode":"FIXED_RUNTIME","entry":"ENTRY",
-    "stages":["ENTRY","DIAL_CUSTOMER","BRIDGE","CONNECTED","END"],
+    "stages":["ENTRY","DIAL_CUSTOMER","BRIDGE","RECORD_START","CONNECTED","RECORD_STOP","END"],
     "parameters":{"dialSeconds":30,"routeSource":"DIALED_NUMBER_AND_CONTEXT","triggerSource":"AUTHENTICATED_AGENT_LEG"},
     "nodes":[
       {"key":"ENTRY","label":"接管坐席主动外呼","action":"ACCEPT_AGENT_ORIGINATED_CALL","inputs":["authenticatedExtension","agentChannelUuid","number"],"outputs":["callId","owner","guestChannelUuid"],"transitions":[{"when":"AGENT_READY","to":"DIAL_CUSTOMER"},{"when":"REJECTED_OR_DESTROY","to":"END"}]},
       {"key":"DIAL_CUSTOMER","label":"呼叫客户","action":"DIAL_CUSTOMER","parameters":{"timeoutSeconds":30,"destinationSource":"DIALED_NUMBER_AND_CONTEXT"},"transitions":[{"when":"CUSTOMER_READY","to":"BRIDGE"},{"when":"DESTROY","to":"END"}]},
-      {"key":"BRIDGE","label":"桥接双方","action":"CHANNEL_BRIDGE","inputs":["agentChannelUuid","guestChannelUuid"],"transitions":[{"when":"BRIDGE_EVENT","to":"CONNECTED"},{"when":"DESTROY","to":"END"}]},
-      {"key":"CONNECTED","label":"双方通话","action":"WAIT_FOR_HANGUP","transitions":[{"when":"DESTROY","to":"END"}]},
+      {"key":"BRIDGE","label":"桥接双方","action":"CHANNEL_BRIDGE","inputs":["agentChannelUuid","guestChannelUuid"],"transitions":[{"when":"BRIDGE_EVENT","to":"RECORD_START"},{"when":"DESTROY","to":"END"}]},
+      {"key":"RECORD_START","label":"开始录音","action":"START_RECORDING","parameters":{"pathSource":"SHARED_RECORDING_LAYOUT"},"transitions":[{"when":"ACCEPTED_OR_EVENT","to":"CONNECTED"}]},
+      {"key":"CONNECTED","label":"双方通话","action":"WAIT_FOR_HANGUP","transitions":[{"when":"DESTROY","to":"RECORD_STOP"}]},
+      {"key":"RECORD_STOP","label":"停止录音","action":"STOP_RECORDING","transitions":[{"when":"ACCEPTED_OR_UNKNOWN","to":"END"}]},
       {"key":"END","label":"结束外呼","action":"FINALIZE_OUTBOUND","parameters":{"releaseAgent":true,"hangupRemainingLeg":true},"outputs":["hangupCause","duration","billsec"],"terminal":true,"transitions":[]}
     ]
   },
   "NOTIFICATION": {
     "schemaVersion":2,"template":"NOTIFICATION","executionMode":"FIXED_RUNTIME","entry":"ENTRY",
     "stages":["ENTRY","DIAL_CUSTOMER","NOTIFY","CONFIRM","END"],
-    "parameters":{"dialSeconds":30,"mediaSource":"fcc.outbound.notification-file","confirmationDigit":"1"},
+    "parameters":{"dialSeconds":30,"mediaSource":"fcc.outbound.notification-text","mediaType":"TEXT","confirmationDigit":"1"},
     "nodes":[
       {"key":"ENTRY","label":"通知任务受理","action":"VALIDATE_NOTIFICATION_AND_ROUTE","inputs":["owner","number","attemptId"],"transitions":[{"when":"ACCEPTED","to":"DIAL_CUSTOMER"},{"when":"REJECTED","to":"END"}]},
       {"key":"DIAL_CUSTOMER","label":"呼叫客户","action":"DIAL_CUSTOMER","parameters":{"timeoutSeconds":30},"transitions":[{"when":"CUSTOMER_READY","to":"NOTIFY"},{"when":"DESTROY","to":"END"}]},

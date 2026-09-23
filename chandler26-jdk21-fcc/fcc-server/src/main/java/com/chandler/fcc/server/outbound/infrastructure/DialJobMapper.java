@@ -93,6 +93,13 @@ public interface DialJobMapper {
     List<Map<String, Object>> running();
 
     /**
+     * 查询已经创建通话但尚未回填尝试关联的任务。
+     *
+     * @return 尝试标识和通话标识
+     */
+    List<Map<String, Object>> unattached();
+
+    /**
      * 根据已结束通话原子回填一批尝试及所属任务。
      *
      * @param ids 非空尝试标识集合

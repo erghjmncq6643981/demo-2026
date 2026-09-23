@@ -70,7 +70,6 @@
     SET p.work_status = 'BUSY', p.active_call_id = #{callId},
         p.last_state_at = UTC_TIMESTAMP(3), p.version = p.version + 1
     WHERE a.work_no = #{owner}
-      AND p.login_status = 'ONLINE'
       AND p.work_status = 'READY'
       AND p.active_call_id IS NULL
       AND a.status = 'ENABLED'
@@ -121,7 +120,7 @@
     LIMIT 200
   </select>
   <select id="inbound" resultType="map">
-    SELECT d.route_key AS routeKey, v.id AS versionId, v.definition_json AS definition
+    SELECT d.route_key AS routeKey, CAST(v.id AS CHAR) AS versionId
     FROM fcc_did_number d
     LEFT JOIN fcc_flow_definition f ON f.flow_key = d.route_key
     LEFT JOIN fcc_flow_definition_version v
@@ -154,7 +153,6 @@
       AND a.deleted_at IS NULL
       AND a.status = 'ENABLED'
       AND b.endpoint_type IN ('WEBRTC', 'SIP')
-      AND p.login_status = 'ONLINE'
       AND p.work_status = 'READY'
       AND p.active_call_id IS NULL
     <if test="excluded != null and !excluded.isEmpty()">

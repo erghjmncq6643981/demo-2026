@@ -2,21 +2,14 @@
 <!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
 <mapper namespace="com.chandler.fcc.server.flow.infrastructure.FlowConfigMapper">
   <sql id="publishedColumns">
+    CAST(f.id AS CHAR) AS definitionId,
+    CAST(v.id AS CHAR) AS versionId,
     f.flow_key AS flowKey,
     f.flow_name AS flowName,
     f.model_type AS modelType,
     v.version_no AS versionNo,
     v.definition_json AS definitionJson
   </sql>
-
-  <select id="findAllPublished" resultType="map">
-    SELECT
-    <include refid="publishedColumns" />
-    FROM fcc_flow_definition f
-    JOIN fcc_flow_definition_version v ON v.flow_definition_id = f.id
-    WHERE v.publish_status = 'PUBLISHED'
-    ORDER BY f.id, v.version_no DESC
-  </select>
 
   <select id="findPublishedByKey" resultType="map">
     SELECT
@@ -26,6 +19,26 @@
     WHERE f.flow_key = #{flowKey}
       AND v.publish_status = 'PUBLISHED'
     ORDER BY v.version_no DESC
+    LIMIT 1
+  </select>
+
+  <select id="findPublishedByModelType" resultType="map">
+    SELECT
+    <include refid="publishedColumns" />
+    FROM fcc_flow_definition f
+    JOIN fcc_flow_definition_version v ON v.flow_definition_id = f.id
+    WHERE f.model_type = #{modelType}
+      AND v.publish_status = 'PUBLISHED'
+    ORDER BY v.version_no DESC, f.id
+    LIMIT 1
+  </select>
+
+  <select id="findByVersionId" resultType="map">
+    SELECT
+    <include refid="publishedColumns" />
+    FROM fcc_flow_definition f
+    JOIN fcc_flow_definition_version v ON v.flow_definition_id = f.id
+    WHERE v.id = #{versionId}
     LIMIT 1
   </select>
 </mapper>

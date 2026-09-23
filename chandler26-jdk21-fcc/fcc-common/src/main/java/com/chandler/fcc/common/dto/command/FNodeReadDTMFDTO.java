@@ -1,10 +1,15 @@
 package com.chandler.fcc.common.dto.command;
 
+import com.chandler.fcc.common.protocol.FNodeDtmfPostAction;
 import com.fasterxml.jackson.annotation.JsonProperty;
 import io.swagger.v3.oas.annotations.media.Schema;
-import lombok.*;
-
 import java.io.Serializable;
+import lombok.AllArgsConstructor;
+import lombok.Builder;
+import lombok.Getter;
+import lombok.NoArgsConstructor;
+import lombok.Setter;
+import lombok.ToString;
 
 /**
  * FNode.ReadDTMF 按键收号指令入参模型
@@ -65,9 +70,9 @@ public class FNodeReadDTMFDTO implements Serializable {
     private Integer tries;
 
     /**
-     * 首位按键等待超时时间（秒）
-     */
-    @Schema(description = "等待用户首按键超时时间（秒）", example = "5")
+     * 首位按键等待超时时间（毫秒）
+    */
+    @Schema(description = "等待用户首按键超时时间（毫秒）", example = "5000")
     private Integer timeout;
 
     /**
@@ -101,5 +106,5 @@ public class FNodeReadDTMFDTO implements Serializable {
      */
     @JsonProperty("action_after")
     @Schema(description = "收号完成后的行为（如 HANGUP）", example = "HANGUP")
-    private String actionAfter;
+    private FNodeDtmfPostAction actionAfter;
 }

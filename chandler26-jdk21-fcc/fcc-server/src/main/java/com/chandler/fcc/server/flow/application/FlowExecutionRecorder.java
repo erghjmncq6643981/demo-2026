@@ -5,6 +5,7 @@ import com.chandler.fcc.common.enums.CallStageState;
 import com.chandler.fcc.common.protocol.StagedFlowDefinition;
 import com.chandler.fcc.common.protocol.SystemFlowModels;
 import com.chandler.fcc.common.util.IdUtil;
+import com.chandler.fcc.server.flow.FlowConfig;
 import com.chandler.fcc.server.flow.infrastructure.FlowExecutionMapper;
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.ObjectMapper;
@@ -25,6 +26,7 @@ import org.springframework.transaction.annotation.Transactional;
 public class FlowExecutionRecorder {
 
     private final FlowExecutionMapper mapper;
+    private final FlowConfig flowConfig;
     private final ObjectMapper json = new ObjectMapper();
 
     /**
@@ -42,12 +44,17 @@ public class FlowExecutionRecorder {
             Map<String, Object> row = new HashMap<>();
             row.put("call", call.getCallId());
             if (existing == null) {
-                var definition = mapper.definition(call.getDataStr("flowVersionId", null), template);
-                if (definition == null) throw new IllegalStateException(
+                var definition = flowConfig.getPublishedFlow(
+                    call.getDataStr("flowVersionId", null),
+                    template
+                ).orElseThrow(() -> new IllegalStateException(
                     "缺少数据库固定流程模板，请执行阶段流程迁移"
-                );
-                row.putAll(definition);
-                var snapshot = json.readTree(definition.get("definition").toString());
+                ));
+                row.put("flowKey", definition.flowKey());
+                row.put("versionNo", definition.versionNo());
+                row.put("definitionId", definition.definitionId());
+                row.put("versionId", definition.versionId());
+                var snapshot = json.readTree(definition.definitionJson());
                 if (!snapshot.has("nodes")) {
                     var fullModel = (ObjectNode) StagedFlowDefinition.template(template);
                     fullModel.setAll((ObjectNode) snapshot);
@@ -60,9 +67,9 @@ public class FlowExecutionRecorder {
                             "definition",
                             snapshot,
                             "flowKey",
-                            definition.get("flowKey"),
+                            definition.flowKey(),
                             "versionNo",
-                            definition.get("versionNo")
+                            definition.versionNo()
                         )
                     )
                 );

@@ -6,12 +6,15 @@ import com.chandler.fcc.common.dto.command.MediaInfo;
 import com.chandler.fcc.common.entity.CallInfoBO;
 import com.chandler.fcc.common.enums.FlowActionType;
 import com.chandler.fcc.common.protocol.ChannelEventState;
+import com.chandler.fcc.common.protocol.FNodeDtmfPostAction;
+import com.chandler.fcc.common.protocol.FNodeMediaType;
 import com.chandler.fcc.common.protocol.FccEventField;
 import com.chandler.fcc.common.protocol.FccEventParameter;
 import com.chandler.fcc.common.util.IdUtil;
 import com.chandler.fcc.server.agent.infrastructure.PhoneBindingMapper;
 import com.chandler.fcc.server.flow.application.FlowActionExecutionService;
 import com.chandler.fcc.server.flow.application.SystemFlowRuntime;
+import com.chandler.fcc.server.flow.FlowConfig;
 import com.chandler.fcc.server.infrastructure.persistence.service.CallPersistenceService;
 import com.fasterxml.jackson.databind.JsonNode;
 import java.util.Map;
@@ -49,6 +52,7 @@ public class PhoneBindingService implements SystemFlowRuntime {
     private final TransactionTemplate transactions;
     private final FlowActionExecutionService flowActions;
     private final CallPersistenceService persistence;
+    private final FlowConfig flowConfig;
 
     @Value("${fcc.binding.prompt-file:}")
     private String promptFile;
@@ -183,9 +187,16 @@ public class PhoneBindingService implements SystemFlowRuntime {
             reject(call);
             return;
         }
+        FlowConfig.FlowSnapshot flow = flowConfig.getPublishedFlow(null, TEMPLATE).orElse(null);
+        if (flow == null) {
+            reject(call);
+            return;
+        }
         call.putData(DATA_EXTENSION, extension);
         call.setModelKey("PHONE_BINDING");
         call.putData("runtimeTemplate", TEMPLATE);
+        call.putData("flowDefinitionId", flow.definitionId());
+        call.putData("flowVersionId", flow.versionId());
         persistence.saveOrUpdateSession(call);
     }
 
@@ -209,14 +220,15 @@ public class PhoneBindingService implements SystemFlowRuntime {
             FNodeReadDTMFDTO.builder()
                 .ctrlUuid(call.getCtrlId())
                 .uuid(call.getGuestChannelUuid())
-                .media(MediaInfo.builder().type("FILE").data(promptFile).build())
+                .media(MediaInfo.builder().type(FNodeMediaType.FILE).data(promptFile).build())
                 .minDigits(minWorkNoDigits)
                 .maxDigits(maxWorkNoDigits)
                 .tries(1)
-                .timeout(60)
+                .timeout(60_000)
                 .digitTimeout(10_000)
                 .terminators("#")
                 .regex("^[0-9]+$")
+                .actionAfter(FNodeDtmfPostAction.PARK)
                 .build(),
             "binding-dtmf-" + call.getCallId()
         );

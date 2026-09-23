@@ -23,6 +23,7 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import io.nats.client.Connection;
 import io.nats.client.Message;
 import java.nio.charset.StandardCharsets;
+import java.security.MessageDigest;
 import java.time.Duration;
 import java.time.LocalDateTime;
 import lombok.RequiredArgsConstructor;
@@ -84,7 +85,7 @@ public class FccClient {
         return sendRequest(
             FNodeMethod.CHANNEL_BRIDGE,
             FNodeBridgeDTO.builder().ctrlUuid(ctrlUuid).uuid(uuid).peerUuid(peerUuid).build(),
-            IdUtil.getCommandId()
+            stableCommandId("bridge", ctrlUuid, uuid, peerUuid)
         );
     }
 
@@ -95,7 +96,17 @@ public class FccClient {
      * @return Sidecar 受理结果
      */
     public FNodeResult readDTMF(FNodeReadDTMFDTO dto) {
-        return sendRequest(FNodeMethod.READ_DTMF, dto, IdUtil.getCommandId());
+        return sendRequest(
+            FNodeMethod.READ_DTMF,
+            dto,
+            stableCommandId(
+                "dtmf",
+                dto.getCtrlUuid(),
+                dto.getUuid(),
+                dto.getMedia() == null ? null : dto.getMedia().getType(),
+                dto.getMedia() == null ? null : dto.getMedia().getData()
+            )
+        );
     }
 
     /**
@@ -116,7 +127,17 @@ public class FccClient {
      * @return Sidecar 受理结果
      */
     public FNodeResult play(FNodePlayDTO dto) {
-        return sendRequest(FNodeMethod.PLAY, dto, IdUtil.getCommandId());
+        return sendRequest(
+            FNodeMethod.PLAY,
+            dto,
+            stableCommandId(
+                "play",
+                dto.getCtrlUuid(),
+                dto.getUuid(),
+                dto.getMedia() == null ? null : dto.getMedia().getType(),
+                dto.getMedia() == null ? null : dto.getMedia().getData()
+            )
+        );
     }
 
     /**
@@ -126,7 +147,11 @@ public class FccClient {
      * @return Sidecar 受理结果
      */
     public FNodeResult record(FNodeRecordDTO dto) {
-        return sendRequest(FNodeMethod.RECORD, dto, IdUtil.getCommandId());
+        return sendRequest(
+            FNodeMethod.RECORD,
+            dto,
+            stableCommandId("record", dto.getCtrlUuid(), dto.getUuid(), dto.getAction(), dto.getPath())
+        );
     }
 
     /**
@@ -143,7 +168,7 @@ public class FccClient {
             .uuid(uuid)
             .cause(cause == null ? "NORMAL_CLEARING" : cause)
             .build();
-        return sendRequest(FNodeMethod.HANGUP, dto, IdUtil.getCommandId());
+        return sendRequest(FNodeMethod.HANGUP, dto, stableCommandId("hangup", ctrlUuid, uuid, cause));
     }
 
     /**
@@ -157,7 +182,7 @@ public class FccClient {
         return sendRequest(
             FNodeMethod.NATIVE_API,
             FNodeNativeApiDTO.builder().cmd(cmd).args(args).build(),
-            IdUtil.getCommandId()
+            stableCommandId("native", cmd, args)
         );
     }
 
@@ -212,7 +237,42 @@ public class FccClient {
      * @return Sidecar 受理结果
      */
     public FNodeResult transfer(FNodeTransferDTO params) {
-        return sendRequest(FNodeMethod.TRANSFER, params, IdUtil.getCommandId());
+        return sendRequest(
+            FNodeMethod.TRANSFER,
+            params,
+            stableCommandId(
+                "transfer",
+                params.getCtrlUuid(),
+                params.getUuid(),
+                params.getTarget(),
+                params.getContext()
+            )
+        );
+    }
+
+    /**
+     * 为同一业务副作用生成稳定命令标识，确保超时查询或重试不会再次执行拨号/桥接。
+     *
+     * @param operation 业务动作
+     * @param parts 动作边界参数
+     * @return 稳定命令标识
+     */
+    private String stableCommandId(String operation, Object... parts) {
+        StringBuilder input = new StringBuilder(operation);
+        for (Object part : parts) {
+            input.append('|').append(part == null ? "" : part);
+        }
+        try {
+            byte[] digest = MessageDigest.getInstance("SHA-256")
+                .digest(input.toString().getBytes(StandardCharsets.UTF_8));
+            StringBuilder hex = new StringBuilder("cmd-");
+            for (int index = 0; index < 16; index++) {
+                hex.append(String.format("%02x", digest[index]));
+            }
+            return hex.toString();
+        } catch (Exception failure) {
+            throw new IllegalStateException("无法生成稳定命令标识", failure);
+        }
     }
 
     /**

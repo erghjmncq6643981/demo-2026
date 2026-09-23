@@ -4,8 +4,10 @@ import com.chandler.fcc.common.dto.command.FNodeReadDTMFDTO;
 import com.chandler.fcc.common.dto.command.MediaInfo;
 import com.chandler.fcc.common.entity.CallInfoBO;
 import com.chandler.fcc.common.enums.FlowActionType;
-import com.chandler.fcc.common.protocol.FlowDefinitionValidator;
+import com.chandler.fcc.common.protocol.FNodeDtmfPostAction;
+import com.chandler.fcc.common.protocol.FNodeMediaType;
 import com.chandler.fcc.common.protocol.FccEventField;
+import com.chandler.fcc.common.protocol.FlowDefinitionValidator;
 import com.chandler.fcc.server.flow.application.FlowActionExecutionService;
 import com.chandler.fcc.server.infrastructure.persistence.service.CallPersistenceService;
 import com.fasterxml.jackson.databind.JsonNode;
@@ -63,12 +65,15 @@ public class InboundMenuService {
                     .minDigits(1)
                     .maxDigits(1)
                     .tries(1)
-                    .timeout(menu.path("timeoutSeconds").asInt())
+                    .timeout(menu.path("timeoutSeconds").asInt() * 1_000)
                     .digitTimeout(1000)
                     .terminators("#")
                     .regex("^[0-9]$")
-                    .media(MediaInfo.builder().type("FILE").data(menu.path("prompt").asText()).build())
-                    .actionAfter("PARK")
+                    .media(MediaInfo.builder()
+                        .type(mediaType(menu.path("prompt").asText()))
+                        .data(menu.path("prompt").asText())
+                        .build())
+                    .actionAfter(FNodeDtmfPostAction.PARK)
                     .build(),
             command
         );
@@ -157,5 +162,17 @@ public class InboundMenuService {
      */
     private JsonNode definition(CallInfoBO call) {
         return FlowDefinitionValidator.validate(call.getDataStr("ivrDefinition", ""));
+    }
+
+    /**
+     * 识别预置音频或导航文案。绝对路径由 FreeSWITCH 直接读取，其余内容交给 Sidecar TTS。
+     *
+     * @param prompt 流程中的导航提示
+     * @return 规范媒体类型
+     */
+    private FNodeMediaType mediaType(String prompt) {
+        return prompt != null && prompt.startsWith("/")
+            ? FNodeMediaType.FILE
+            : FNodeMediaType.TEXT;
     }
 }

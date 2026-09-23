@@ -33,4 +33,4 @@
 
 坐席 outbound/hangup/hold/dtmf/supervise/transfer 与 Java 路径对应；流程版本和草稿字段对应。DTMF 已统一从控制面发送，仍需验证目标话道实际收号。录音规范为 Event.Recording、category=record，Sidecar 保留规范 FNode 方法。
 
-JDK 21 编译、Flow/Action/Event Inbox 等 20 个定向测试、坐席端 10 个既有测试及管理端 4 个治理测试通过。本机 NATS Server 2.15.0 与 `FCC_EVENTS` JetStream 流已启动，应用测试日志确认连接成功；完整 `mvn -q test` 中 `fcc-server` 共运行 38 项，0 项断言失败、9 项环境错误、1 项跳过，仍因 MySQL JDBC、Redis 和 Windows loopback 建连错误未通过。没有全量接口无差异或端到端通过结论。
+2026-09-23：JDK 21 编译、`fcc-common` 全量测试以及录音、评价、拨号超时、事件分发、流程缓存和话务控制定向测试通过；Sidecar 全部生产包测试与构建通过。验证时临时启动 NATS Server 2.15.0 与 JetStream，应用连接成功；完整 `mvn -q test` 中 `fcc-server` 共运行 48 项，0 项断言失败、9 项环境错误、1 项跳过，仍因 Windows/JDK selector 无法建立 Lettuce Redis 事件循环而未通过，MySQL 业务 Schema 未完成本轮验证。没有全量接口无差异或端到端通过结论。

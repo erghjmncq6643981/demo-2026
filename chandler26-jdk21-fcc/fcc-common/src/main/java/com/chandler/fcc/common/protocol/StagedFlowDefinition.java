@@ -20,9 +20,41 @@ public final class StagedFlowDefinition {
      */
     private static final Map<String, List<String>> STAGES = Map.of(
         "INBOUND",
-        List.of("ENTRY", "MENU", "BRANCH", "ROUTE", "BRIDGE", "CONNECTED", "END"),
+        List.of(
+            "ENTRY",
+            "MENU",
+            "BRANCH",
+            "ROUTE",
+            "BRIDGE",
+            "RECORD_START",
+            "CONNECTED",
+            "RECORD_STOP",
+            "RATING",
+            "RATING_SAVE",
+            "CLOSING",
+            "END"
+        ),
         "AGENT_FIRST",
-        List.of("ENTRY", "DIAL_AGENT", "DIAL_CUSTOMER", "BRIDGE", "CONNECTED", "END"),
+        List.of(
+            "ENTRY",
+            "DIAL_AGENT",
+            "DIAL_CUSTOMER",
+            "BRIDGE",
+            "RECORD_START",
+            "CONNECTED",
+            "RECORD_STOP",
+            "END"
+        ),
+        "AGENT_ORIGINATED",
+        List.of(
+            "ENTRY",
+            "DIAL_CUSTOMER",
+            "BRIDGE",
+            "RECORD_START",
+            "CONNECTED",
+            "RECORD_STOP",
+            "END"
+        ),
         "NOTIFICATION",
         List.of("ENTRY", "DIAL_CUSTOMER", "NOTIFY", "CONFIRM", "END")
     );
@@ -53,13 +85,8 @@ public final class StagedFlowDefinition {
             throw new IllegalArgumentException("必须明确是否启用菜单");
         }
         range(menu.path("timeoutSeconds"), 3, 60, "收号超时");
-        if (
-            menu.path("enabled").asBoolean() &&
-            (!menu.path("prompt").isTextual() ||
-                !menu.path("prompt").asText().matches("/[A-Za-z0-9_./-]{1,240}\\.(wav|mp3)") ||
-                menu.path("prompt").asText().contains(".."))
-        ) {
-            throw new IllegalArgumentException("请选择软交换可读取的安全音频绝对路径");
+        if (menu.path("enabled").asBoolean() && !validPrompt(menu.path("prompt"))) {
+            throw new IllegalArgumentException("导航语音必须是文案或安全音频绝对路径");
         }
         target(root.path("defaultRoute"), false);
         if (
@@ -126,6 +153,26 @@ public final class StagedFlowDefinition {
             throw new IllegalArgumentException("请选择有效坐席工号或技能组代码");
         }
         range(node.path("queueSeconds"), 5, 300, "排队时限");
+    }
+
+    /**
+     * 校验导航提示。普通文本由 Sidecar TTS 合成；绝对音频路径用于预置提示音。
+     *
+     * @param prompt 导航提示
+     * @return 是否可执行
+     */
+    private static boolean validPrompt(JsonNode prompt) {
+        if (!prompt.isTextual()) {
+            return false;
+        }
+        String value = prompt.asText().trim();
+        if (value.isEmpty() || value.length() > 1000) {
+            return false;
+        }
+        if (value.startsWith("/")) {
+            return value.matches("/[A-Za-z0-9_./-]{1,240}\\.(wav|mp3)") && !value.contains("..");
+        }
+        return !value.contains("\u0000");
     }
 
     /**

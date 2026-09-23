@@ -1,9 +1,13 @@
 package com.chandler.fcc.server.telephony.application;
 
+import com.chandler.fcc.common.dto.command.FNodeHangupDTO;
+import com.chandler.fcc.common.dto.command.FNodeTransferDTO;
 import com.chandler.fcc.common.entity.CallInfoBO;
 import com.chandler.fcc.common.entity.FNodeResult;
+import com.chandler.fcc.common.enums.FlowActionType;
 import com.chandler.fcc.server.call.CallSessionManager;
 import com.chandler.fcc.server.command.FccClient;
+import com.chandler.fcc.server.flow.application.FlowActionExecutionService;
 import java.util.LinkedHashSet;
 import java.util.Map;
 import lombok.RequiredArgsConstructor;
@@ -24,6 +28,7 @@ public class CallControlService {
 
     private final CallSessionManager sessions;
     private final FccClient client;
+    private final FlowActionExecutionService actions;
     private final AgentIdentityService identity;
 
     /**
@@ -72,7 +77,16 @@ public class CallControlService {
             throw new ResponseStatusException(HttpStatus.CONFLICT, "话道尚未确认");
         }
         for (String uuid : channels) {
-            requireAccepted(client.hangup(call.getCtrlId(), uuid, "NORMAL_CLEARING"));
+            actions.executeFNode(
+                call,
+                FlowActionType.HANGUP_CALL,
+                FNodeHangupDTO.builder()
+                    .ctrlUuid(call.getCtrlId())
+                    .uuid(uuid)
+                    .cause("NORMAL_CLEARING")
+                    .build(),
+                "hangup-" + call.getCallId() + "-" + uuid
+            );
         }
         return accepted(call, "挂机指令已受理，等待结束事件");
     }
@@ -124,11 +138,16 @@ public class CallControlService {
         if (target == null || !target.matches("[+0-9]{1,32}")) {
             throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "无效转接号码");
         }
-        requireAccepted(
-            client.nativeAPI(
-                "uuid_transfer",
-                channel(call.getGuestChannelUuid()) + " " + target + " XML default"
-            )
+        actions.executeFNode(
+            call,
+            FlowActionType.TRANSFER_CALL,
+            FNodeTransferDTO.builder()
+                .ctrlUuid(call.getCtrlId())
+                .uuid(channel(call.getGuestChannelUuid()))
+                .target(target)
+                .context("default")
+                .build(),
+            "transfer-" + call.getCallId()
         );
         return accepted(call, "转接指令已受理，等待话务事件确认");
     }

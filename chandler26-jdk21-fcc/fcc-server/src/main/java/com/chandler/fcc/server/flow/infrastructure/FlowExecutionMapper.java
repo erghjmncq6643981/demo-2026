@@ -10,15 +10,6 @@ import org.apache.ibatis.annotations.Param;
 @Mapper
 public interface FlowExecutionMapper {
     /**
-     * 查询固定模板或指定发布版本。
-     *
-     * @param version 指定版本，可空
-     * @param template 固定模板
-     * @return 版本快照
-     */
-    Map<String, Object> definition(@Param("version") String version, @Param("template") String template);
-
-    /**
      * 幂等创建通话流程实例。
      *
      * @param row 实例参数

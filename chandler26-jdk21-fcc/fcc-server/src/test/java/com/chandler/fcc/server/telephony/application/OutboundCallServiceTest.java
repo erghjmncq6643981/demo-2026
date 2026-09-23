@@ -23,13 +23,16 @@ import com.chandler.fcc.server.flow.application.FlowActionExecutionService;
 import com.chandler.fcc.server.flow.application.executor.FlowActionResult;
 import com.chandler.fcc.server.flow.application.executor.FlowActionStatus;
 import com.chandler.fcc.server.flow.application.executor.InternalFlowActionInvocation;
+import com.chandler.fcc.server.flow.FlowConfig;
 import com.chandler.fcc.server.infrastructure.persistence.service.CallPersistenceService;
 import com.chandler.fcc.server.outbound.application.DialAttemptGuard;
+import com.chandler.fcc.server.recording.application.CallRecordingService;
 import com.chandler.fcc.server.websocket.service.AgentWebSocketService;
 import com.chandler.fcc.server.websocket.service.ScreenPopService;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.node.ObjectNode;
 import java.util.Map;
+import java.util.Optional;
 import java.util.function.Consumer;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -51,6 +54,7 @@ class OutboundCallServiceTest {
     private final TransactionTemplate transactions = mock(TransactionTemplate.class);
     private final ObjectMapper json = new ObjectMapper();
     private final FccClient client = mock(FccClient.class);
+    private final FlowConfig flowConfig = mock(FlowConfig.class);
 
     private OutboundCallService service;
 
@@ -59,6 +63,10 @@ class OutboundCallServiceTest {
      */
     @BeforeEach
     void setUp() {
+        FlowConfig.FlowSnapshot snapshot = mock(FlowConfig.FlowSnapshot.class);
+        when(snapshot.definitionId()).thenReturn("flow-definition");
+        when(snapshot.versionId()).thenReturn("flow-version");
+        when(flowConfig.getPublishedFlow(any(), any())).thenReturn(Optional.of(snapshot));
         when(flowActions.executeInternal(any(), any(), any())).thenAnswer(invocation -> {
             InternalFlowActionInvocation action = invocation.getArgument(2);
             Object output = action.invoke();
@@ -81,10 +89,12 @@ class OutboundCallServiceTest {
             persistence,
             client,
             flowActions,
+            flowConfig,
             screenPop,
             mock(AgentWebSocketService.class),
             transactions,
-            mock(DialAttemptGuard.class)
+            mock(DialAttemptGuard.class),
+            mock(CallRecordingService.class)
         );
     }
 

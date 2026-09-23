@@ -32,9 +32,6 @@ public class FNodeTransferDTO implements Serializable {
     @Schema(description = "受控转接目标号码或分机", example = "901001")
     private String target;
 
-    @Schema(description = "FreeSWITCH 拨号计划", example = "XML")
-    private String dialplan;
-
-    @Schema(description = "FreeSWITCH 拨号上下文", example = "default")
+    @Schema(description = "目标业务路由上下文", example = "default")
     private String context;
 }
