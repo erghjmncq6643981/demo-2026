@@ -65,7 +65,7 @@
 
       <button
         @click="handleOutbound"
-        :disabled="!outboundPhone.trim()"
+        :disabled="!outboundPhone.trim() || isCalling || callStore.callState !== 'IDLE'"
         class="h-9 px-5 bg-brand-500 hover:bg-brand-600 active:scale-95 disabled:opacity-40 disabled:cursor-not-allowed text-white font-extrabold text-xs rounded-full shadow-pill flex items-center gap-1.5 transition cursor-pointer"
       >
         <span>📞</span>
@@ -78,6 +78,7 @@
 <script setup lang="ts">
 import { ref } from 'vue';
 import { useAgentStore } from '../../stores/agentStore';
+import { useCallStore } from '../../stores/callStore';
 import { triggerOutboundCall } from '../../api/telephonyApi';
 import { toastError } from '../../utils/feedback';
 
@@ -86,21 +87,26 @@ const currentTab = defineModel<'callback' | 'records' | 'agents'>('currentTab', 
 const outboundPhone = ref('');
 const isCalling = ref(false);
 const agentStore = useAgentStore();
+const callStore = useCallStore();
 
 async function handleOutbound() {
   const phone = outboundPhone.value.trim();
-  if (!phone || isCalling.value) return;
+  if (!phone || isCalling.value || callStore.callState !== 'IDLE') return;
 
   isCalling.value = true;
   try {
     const caller = agentStore.boundSipExtension || agentStore.extension || '';
-    await triggerOutboundCall(
+    const response = await triggerOutboundCall(
       agentStore.workNo,
       caller,
       phone,
       '',
       ''
     );
+    const callId = response.data?.callId;
+    if (!callId) throw new Error('外呼已受理但未返回业务通话标识，请核对话务状态');
+    callStore.startOutbound(callId, phone);
+    outboundPhone.value = '';
   } catch (e) {
     toastError(e instanceof Error ? e.message : '外呼失败');
   } finally {

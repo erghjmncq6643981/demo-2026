@@ -29,7 +29,7 @@
         <div class="flex items-center gap-2">
           <label class="text-sm font-extrabold text-slate-800 shrink-0">接听方式:</label>
           <span class="text-sm font-bold text-slate-700">
-            实体话机 · {{ agentStore.boundSipExtension || agentStore.extension || '尚未绑定' }}
+            {{ endpointLabel }} · {{ endpointValue }}
           </span>
         </div>
 
@@ -77,9 +77,21 @@
 </template>
 
 <script setup lang="ts">
+import { computed } from 'vue';
 import { useAgentStore } from '../../stores/agentStore';
 import { useCallStore } from '../../stores/callStore';
 
 const agentStore = useAgentStore();
 const callStore = useCallStore();
+
+const endpointLabel = computed(() => {
+  if (agentStore.endpoint === 'WEBRTC') return 'WebRTC 软话机';
+  if (agentStore.endpoint === 'SIP') return 'SIP 话机';
+  return '手机';
+});
+
+const endpointValue = computed(() => {
+  if (agentStore.endpoint === 'MOBILE') return agentStore.boundMobile || '尚未绑定';
+  return agentStore.boundSipExtension || agentStore.extension || '尚未绑定';
+});
 </script>

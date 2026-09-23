@@ -1,59 +1,81 @@
-/**
- * 电信级 WebRTC 语音流与 SIP 信令服务 (基于 JsSIP)
- * <p>
- * 负责与 FreeSWITCH 5066 (ws/wss) 建立 SIP over WebSocket 长连接注册，
- * 并在通话生命周期中接管本地麦克风与远端 RTP 语音流的 WebRTC 协商与播放。
- * </p>
- */
-
 import JsSIP from 'jssip';
 import { ref } from 'vue';
+import {
+  SessionCallRegistry,
+  type SipSessionDirection,
+} from '../features/media/model/sessionCallRegistry';
+import { BrowserAudioManager } from '../features/media/services/browserAudioManager';
 import type { SipRuntimeConfig } from '../shared/config/runtimeConfig';
 
-export type SipRegistrationState = 'UNREGISTERED' | 'CONNECTING' | 'REGISTERED' | 'REGISTRATION_FAILED';
-export type WebRtcSessionState = 'IDLE' | 'CALLING' | 'RINGING' | 'CONNECTED' | 'TERMINATED';
+export type SipRegistrationState =
+  | 'UNREGISTERED'
+  | 'CONNECTING'
+  | 'REGISTERED'
+  | 'REGISTRATION_FAILED';
 
+export type WebRtcSessionState =
+  | 'IDLE'
+  | 'CALLING'
+  | 'RINGING'
+  | 'CONNECTED'
+  | 'TERMINATED';
+
+export type WebRtcMediaState =
+  | 'IDLE'
+  | 'CHECKING_PERMISSION'
+  | 'READY'
+  | 'PERMISSION_DENIED'
+  | 'NEGOTIATING'
+  | 'CONNECTED'
+  | 'DISCONNECTED'
+  | 'FAILED';
+
+export interface SipIncomingCallEvent {
+  sessionId: string;
+  callId?: string;
+  caller: string;
+}
+
+export interface SipCallLifecycleEvent {
+  sessionId: string;
+  callId?: string;
+  cause?: string;
+}
+
+interface SessionContext {
+  session: any;
+  peerConnection: RTCPeerConnection | null;
+  cleanupCallbacks: Array<() => void>;
+  connectedNotifiedCallId: string | null;
+}
+
+/**
+ * Owns the browser SIP user agent, one active RTC session, and the association
+ * between that media session and an FCC business call.
+ */
 class SipWebRtcService {
   private ua: JsSIP.UA | null = null;
-  private currentSession: any = null;
-  private remoteAudioElement: HTMLAudioElement | null = null;
+  private readonly registry = new SessionCallRegistry();
+  private readonly sessions = new Map<string, SessionContext>();
   private runtimeConfig: SipRuntimeConfig | null = null;
+  private sessionSequence = 0;
+  public readonly audio = new BrowserAudioManager();
 
   public registrationState = ref<SipRegistrationState>('UNREGISTERED');
   public sessionState = ref<WebRtcSessionState>('IDLE');
+  public mediaState = ref<WebRtcMediaState>('IDLE');
   public isRegistered = ref(false);
   public lastError = ref<string | null>(null);
+  public mediaMessage = ref('尚未检查音频设备');
+  public incomingCaller = ref('');
 
-  // 回调事件钩子
-  private onIncomingCallCallback?: (session: any, caller: string) => void;
-  private onCallConnectedCallback?: () => void;
-  private onCallEndedCallback?: (cause: string) => void;
+  private onIncomingCallCallback?: (event: SipIncomingCallEvent) => void;
+  private onCallConnectedCallback?: (event: SipCallLifecycleEvent) => void;
+  private onCallEndedCallback?: (event: SipCallLifecycleEvent) => void;
 
-  /**
-   * 确保页面中存在用于播放远程对方声音的全局 <audio> 元素
-   */
-  private ensureAudioElement(): HTMLAudioElement {
-    if (!this.remoteAudioElement) {
-      let el = document.getElementById('fcc-remote-audio-sink') as HTMLAudioElement;
-      if (!el) {
-        el = document.createElement('audio');
-        el.id = 'fcc-remote-audio-sink';
-        el.autoplay = true;
-        el.style.display = 'none';
-        document.body.appendChild(el);
-      }
-      this.remoteAudioElement = el;
-    }
-    return this.remoteAudioElement;
-  }
-
-  /**
-   * 注册与初始化 WebRTC SIP 客户端
-   */
-  public init(extension: string, runtimeConfig: SipRuntimeConfig | null) {
-    if (this.ua) {
-      this.destroy();
-    }
+  /** Register and initialize the WebRTC SIP client for the current agent. */
+  public init(extension: string, runtimeConfig: SipRuntimeConfig | null): void {
+    if (this.ua) this.destroy();
 
     if (!runtimeConfig) {
       this.registrationState.value = 'REGISTRATION_FAILED';
@@ -63,252 +85,375 @@ class SipWebRtcService {
     }
 
     this.runtimeConfig = runtimeConfig;
-    const sipUri = `sip:${extension}@${runtimeConfig.domain}`;
-
-    console.log(`[WebRTC SIP] 正在初始化 WebRTC SIP 客户端: ${sipUri}, WS: ${runtimeConfig.wsUrl}`);
     this.registrationState.value = 'CONNECTING';
+    this.audio.start(message => {
+      this.mediaMessage.value = message;
+    });
 
     try {
       const socket = new JsSIP.WebSocketInterface(runtimeConfig.wsUrl);
-
-      const configuration = {
+      const userAgent = new JsSIP.UA({
         sockets: [socket],
-        uri: sipUri,
+        uri: `sip:${extension}@${runtimeConfig.domain}`,
         password: runtimeConfig.password,
         register: true,
         session_timers: false,
-        user_agent: 'FCC-Agent-WebRTC/2.0'
-      };
-
-      this.ua = new JsSIP.UA(configuration);
-
-      // SIP 传输与注册事件
-      this.ua.on('connected', () => {
-        console.log('✅ [WebRTC SIP] WebSocket 传输通道连接成功');
+        user_agent: 'FCC-Agent-WebRTC/2.0',
       });
+      this.ua = userAgent;
 
-      this.ua.on('disconnected', () => {
-        console.warn('⚠️ [WebRTC SIP] WebSocket 传输通道断开');
+      userAgent.on('disconnected', () => {
+        if (this.ua !== userAgent) return;
         this.registrationState.value = 'UNREGISTERED';
         this.isRegistered.value = false;
       });
-
-      this.ua.on('registered', () => {
-        console.log(`🎉 [WebRTC SIP] 分机 ${extension} 在软交换注册成功 (200 OK)`);
+      userAgent.on('registered', () => {
+        if (this.ua !== userAgent) return;
         this.registrationState.value = 'REGISTERED';
         this.isRegistered.value = true;
         this.lastError.value = null;
       });
-
-      this.ua.on('unregistered', () => {
-        console.log(`[WebRTC SIP] 分机 ${extension} 已注销`);
+      userAgent.on('unregistered', () => {
+        if (this.ua !== userAgent) return;
         this.registrationState.value = 'UNREGISTERED';
         this.isRegistered.value = false;
       });
-
-      this.ua.on('registrationFailed', (e: any) => {
-        const cause = e?.cause || 'Unknown';
-        console.error(`❌ [WebRTC SIP] 分机 ${extension} 注册失败:`, cause);
+      userAgent.on('registrationFailed', (event: any) => {
+        if (this.ua !== userAgent) return;
+        const cause = String(event?.cause || 'Unknown');
         this.registrationState.value = 'REGISTRATION_FAILED';
         this.isRegistered.value = false;
         this.lastError.value = `注册失败: ${cause}`;
       });
-
-      // 通话 Session 监听 (来电与外呼)
-      this.ua.on('newRTCSession', (data: any) => {
-        const session = data.session;
-        this.handleNewSession(session);
+      userAgent.on('newRTCSession', (data: any) => {
+        if (this.ua === userAgent) this.handleNewSession(data.session);
       });
-
-      this.ua.start();
-    } catch (err: any) {
-      console.error('[WebRTC SIP] 初始化失败，请核对本人终端配置');
+      userAgent.start();
+      void this.checkMicrophonePermission();
+    } catch {
+      this.ua = null;
+      this.audio.stop();
       this.registrationState.value = 'REGISTRATION_FAILED';
+      this.isRegistered.value = false;
       this.lastError.value = 'SIP 初始化失败，请核对本人终端配置';
     }
   }
 
-  /**
-   * 处理新建 RTC 通话 Session (来电或去电)
-   */
-  private handleNewSession(session: any) {
-    this.currentSession = session;
+  /** Associate the active, or next, SIP session with an authoritative call ID. */
+  public bindBusinessCall(callId: string): void {
+    if (!callId || !this.ua) return;
+    const binding = this.registry.bindBusinessCall(callId);
+    if (!binding || binding.phase !== 'CONNECTED') return;
 
-    if (session.direction === 'incoming') {
-      console.log('📞 [WebRTC SIP] 收到远程来电 INVITE:', session.remote_identity.uri.toString());
-      this.sessionState.value = 'RINGING';
-      const caller = session.remote_identity.uri.user || '外部来电';
-      if (this.onIncomingCallCallback) {
-        this.onIncomingCallCallback(session, caller);
-      }
-    } else {
-      console.log('📱 [WebRTC SIP] 发起外呼 Session:', session.remote_identity.uri.toString());
-      this.sessionState.value = 'CALLING';
+    const context = this.sessions.get(binding.sessionId);
+    if (context && context.connectedNotifiedCallId !== callId) {
+      context.connectedNotifiedCallId = callId;
+      this.onCallConnectedCallback?.({ sessionId: binding.sessionId, callId });
     }
-
-    // 绑定 WebRTC PeerConnection 媒体流事件
-    session.on('peerconnection', (e: any) => {
-      const pc: RTCPeerConnection = e.peerconnection;
-      console.log('🔗 [WebRTC SIP] RTCPeerConnection 建立就绪');
-
-      pc.addEventListener('track', (trackEvent: RTCTrackEvent) => {
-        console.log('🎵 [WebRTC SIP] 捕获远端音频媒体流 Track:', trackEvent.track.kind);
-        const [remoteStream] = trackEvent.streams;
-        if (remoteStream) {
-          const audioEl = this.ensureAudioElement();
-          audioEl.srcObject = remoteStream;
-          audioEl.play().catch(pErr => {
-            console.warn('[WebRTC SIP] 自动播放远端音频被浏览器策略拦截，等待用户交互:', pErr);
-          });
-        }
-      });
-    });
-
-    session.on('connecting', () => {
-      console.log('[WebRTC SIP] 正在进行 SDP 握手协商...');
-    });
-
-    session.on('progress', () => {
-      console.log('[WebRTC SIP] 对方话道振铃中 (180/183 Session Progress)');
-    });
-
-    session.on('confirmed', () => {
-      console.log('🎙️ [WebRTC SIP] 双方通话接通成功 (200 OK ACK), RTP 媒体通道开始双向送音');
-      this.sessionState.value = 'CONNECTED';
-      if (this.onCallConnectedCallback) {
-        this.onCallConnectedCallback();
-      }
-    });
-
-    session.on('ended', (e: any) => {
-      console.log('📴 [WebRTC SIP] 通话正常结束 (BYE):', e?.cause);
-      this.cleanupSession();
-      if (this.onCallEndedCallback) {
-        this.onCallEndedCallback(e?.cause || 'BYE');
-      }
-    });
-
-    session.on('failed', (e: any) => {
-      console.warn('❌ [WebRTC SIP] 通话失败或拒接:', e?.cause);
-      this.cleanupSession();
-      if (this.onCallEndedCallback) {
-        this.onCallEndedCallback(e?.cause || 'FAILED');
-      }
-    });
   }
 
-  /**
-   * 软话机接听来电
-   */
-  public answer(): boolean {
-    if (!this.currentSession || this.currentSession.direction !== 'incoming') {
-      console.warn('[WebRTC SIP] 当前没有可接听的来电 Session');
-      return false;
+  /** Remove a call that ended before its expected SIP session was created. */
+  public releasePendingBusinessCall(callId: string): void {
+    this.registry.releasePendingBusinessCall(callId);
+  }
+
+  /** Request microphone permission and immediately release the probe track. */
+  public async checkMicrophonePermission(): Promise<boolean> {
+    const activeUserAgent = this.ua;
+    if (!activeUserAgent) return false;
+    this.mediaState.value = 'CHECKING_PERMISSION';
+    this.mediaMessage.value = '正在检查麦克风权限';
+    const result = await this.audio.checkMicrophonePermission();
+    if (this.ua !== activeUserAgent) return false;
+    if (result.failureType === 'CANCELLED') return false;
+    this.mediaMessage.value = result.message;
+    if (result.ok) {
+      if (this.sessionState.value === 'IDLE') this.mediaState.value = 'READY';
+      return true;
+    }
+    this.mediaState.value = result.failureType === 'PERMISSION_DENIED' ? 'PERMISSION_DENIED' : 'FAILED';
+    return false;
+  }
+
+  /** Answer the active incoming SIP session after validating microphone access. */
+  public async answer(): Promise<{ ok: boolean; message?: string }> {
+    const context = this.getActiveContext();
+    if (!context || context.session.direction !== 'incoming') {
+      return { ok: false, message: '当前没有可接听的软电话来电' };
+    }
+    if (!this.audio.microphonePermissionGranted.value) {
+      const allowed = await this.checkMicrophonePermission();
+      if (!allowed) return { ok: false, message: this.mediaMessage.value };
     }
 
     try {
-      this.currentSession.answer({
-        mediaConstraints: { audio: true, video: false },
-        pcConfig: {
-          iceServers: this.runtimeConfig?.iceServers ?? []
-        }
+      context.session.answer({
+        mediaConstraints: {
+          audio: this.audio.selectedInputDeviceId.value
+            ? { deviceId: { exact: this.audio.selectedInputDeviceId.value } }
+            : true,
+          video: false,
+        },
+        pcConfig: { iceServers: this.runtimeConfig?.iceServers ?? [] },
       });
-      return true;
-    } catch (e) {
-      console.error('[WebRTC SIP] 接听失败:', e);
-      return false;
+      return { ok: true };
+    } catch {
+      return { ok: false, message: '软电话接听失败，请检查麦克风和 SIP 状态' };
     }
   }
 
-  /**
-   * 软话机挂断通话
-   */
+  /** Ask the active SIP session to terminate; final state still comes from events. */
   public hangup(): boolean {
-    if (!this.currentSession) {
-      return false;
-    }
+    const context = this.getActiveContext();
+    if (!context) return false;
     try {
-      this.currentSession.terminate();
-      this.cleanupSession();
+      context.session.terminate();
       return true;
-    } catch (e) {
-      console.warn('[WebRTC SIP] 挂断异常:', e);
-      this.cleanupSession();
+    } catch {
       return false;
     }
   }
 
-  /**
-   * 发送二次 DTMF 按键
-   */
-  public sendDtmf(digit: string) {
-    if (this.currentSession && this.sessionState.value === 'CONNECTED') {
+  /** Apply mute only when an active connected WebRTC session exists. */
+  public toggleMute(mute: boolean): boolean {
+    const context = this.getActiveContext();
+    if (!context || this.sessionState.value !== 'CONNECTED') return false;
+    try {
+      if (mute) context.session.mute({ audio: true });
+      else context.session.unmute({ audio: true });
+      return true;
+    } catch {
+      return false;
+    }
+  }
+
+  public onIncomingCall(callback: (event: SipIncomingCallEvent) => void): void {
+    this.onIncomingCallCallback = callback;
+  }
+
+  public onCallConnected(callback: (event: SipCallLifecycleEvent) => void): void {
+    this.onCallConnectedCallback = callback;
+  }
+
+  public onCallEnded(callback: (event: SipCallLifecycleEvent) => void): void {
+    this.onCallEndedCallback = callback;
+  }
+
+  /** Tear down registration, sessions, media tracks, audio elements, and listeners. */
+  public destroy(): void {
+    for (const [sessionId, context] of Array.from(this.sessions.entries())) {
+      this.cleanupSession(sessionId);
       try {
-        this.currentSession.sendDTMF(digit);
-      } catch (e) {
-        console.warn('[WebRTC SIP] 发送 DTMF 失败:', e);
+        context.session.terminate();
+      } catch {
+        // Session may already be terminal.
       }
-    }
-  }
-
-  /**
-   * 静音/解除静音麦克风
-   */
-  public toggleMute(mute: boolean) {
-    if (this.currentSession) {
-      try {
-        if (mute) {
-          this.currentSession.mute({ audio: true });
-        } else {
-          this.currentSession.unmute({ audio: true });
-        }
-      } catch (e) {
-        console.warn('[WebRTC SIP] 切换静音失败:', e);
-      }
-    }
-  }
-
-  private cleanupSession() {
-    this.sessionState.value = 'IDLE';
-    this.currentSession = null;
-    if (this.remoteAudioElement) {
-      this.remoteAudioElement.srcObject = null;
-    }
-  }
-
-  /**
-   * 注册事件监听钩子
-   */
-  public onIncomingCall(cb: (session: any, caller: string) => void) {
-    this.onIncomingCallCallback = cb;
-  }
-
-  public onCallConnected(cb: () => void) {
-    this.onCallConnectedCallback = cb;
-  }
-
-  public onCallEnded(cb: (cause: string) => void) {
-    this.onCallEndedCallback = cb;
-  }
-
-  /**
-   * 销毁并注销
-   */
-  public destroy() {
-    if (this.currentSession) {
-      try { this.currentSession.terminate(); } catch {}
-      this.currentSession = null;
     }
     if (this.ua) {
-      try {
-        this.ua.stop();
-      } catch {}
+      const userAgent = this.ua;
       this.ua = null;
+      try {
+        userAgent.stop();
+      } catch {
+        // User agent may already be stopped.
+      }
     }
+    this.audio.stop();
+    this.registry.reset();
     this.registrationState.value = 'UNREGISTERED';
     this.isRegistered.value = false;
     this.sessionState.value = 'IDLE';
+    this.mediaState.value = 'IDLE';
+    this.mediaMessage.value = '尚未检查音频设备';
     this.runtimeConfig = null;
+    this.incomingCaller.value = '';
+  }
+
+  private handleNewSession(session: any): void {
+    const sessionId = this.resolveSessionId(session);
+    const direction: SipSessionDirection = session.direction === 'incoming' ? 'incoming' : 'outgoing';
+    const registration = this.registry.register(sessionId, direction);
+    if (!registration.accepted) {
+      this.rejectBusySession(session);
+      return;
+    }
+    if (!registration.isNew) return;
+
+    const context: SessionContext = {
+      session,
+      peerConnection: null,
+      cleanupCallbacks: [],
+      connectedNotifiedCallId: null,
+    };
+    this.sessions.set(sessionId, context);
+    this.mediaState.value = 'NEGOTIATING';
+    this.mediaMessage.value = '正在协商通话媒体';
+
+    if (direction === 'incoming') {
+      this.sessionState.value = 'RINGING';
+      const caller = String(session.remote_identity?.uri?.user || '外部来电');
+      this.incomingCaller.value = caller;
+      this.onIncomingCallCallback?.({
+        sessionId,
+        callId: registration.binding?.callId ?? undefined,
+        caller,
+      });
+    } else {
+      this.sessionState.value = 'CALLING';
+    }
+
+    this.listenSession(context, 'peerconnection', (event: any) => {
+      this.attachPeerConnection(sessionId, context, event.peerconnection as RTCPeerConnection);
+    });
+    this.listenSession(context, 'connecting', () => {
+      this.registry.markPhase(sessionId, 'CONNECTING');
+      this.mediaState.value = 'NEGOTIATING';
+      this.mediaMessage.value = '正在协商通话媒体';
+    });
+    this.listenSession(context, 'progress', () => {
+      const binding = this.registry.get(sessionId);
+      this.registry.markPhase(sessionId, binding?.direction === 'incoming' ? 'RINGING' : 'CONNECTING');
+    });
+    this.listenSession(context, 'confirmed', () => this.handleConfirmed(sessionId, context));
+    this.listenSession(context, 'ended', (event: any) => {
+      this.handleTerminalSession(sessionId, String(event?.cause || 'BYE'));
+    });
+    this.listenSession(context, 'failed', (event: any) => {
+      this.handleTerminalSession(sessionId, String(event?.cause || 'FAILED'));
+    });
+  }
+
+  private handleConfirmed(sessionId: string, context: SessionContext): void {
+    const binding = this.registry.markPhase(sessionId, 'CONNECTED');
+    if (!binding) return;
+    this.sessionState.value = 'CONNECTED';
+    this.mediaState.value = 'CONNECTED';
+    this.mediaMessage.value = '通话媒体已连接';
+    if (binding.callId && context.connectedNotifiedCallId !== binding.callId) {
+      context.connectedNotifiedCallId = binding.callId;
+      this.onCallConnectedCallback?.({ sessionId, callId: binding.callId });
+    }
+  }
+
+  private handleTerminalSession(sessionId: string, cause: string): void {
+    const result = this.registry.finish(sessionId);
+    if (!result.binding) return;
+    this.cleanupSession(sessionId, result.wasActive);
+    this.onCallEndedCallback?.({
+      sessionId,
+      callId: result.binding.callId ?? undefined,
+      cause,
+    });
+  }
+
+  private attachPeerConnection(
+    sessionId: string,
+    context: SessionContext,
+    peerConnection: RTCPeerConnection,
+  ): void {
+    context.peerConnection = peerConnection;
+    const onTrack = (event: RTCTrackEvent) => {
+      if (this.registry.getActive()?.sessionId !== sessionId) return;
+      const [stream] = event.streams;
+      if (!stream) return;
+      void this.audio.attachRemoteStream(stream);
+    };
+    const onConnectionStateChange = () => {
+      if (this.registry.getActive()?.sessionId !== sessionId) return;
+      switch (peerConnection.connectionState) {
+        case 'connected':
+          this.mediaState.value = 'CONNECTED';
+          this.mediaMessage.value = '通话媒体已连接';
+          break;
+        case 'disconnected':
+          this.mediaState.value = 'DISCONNECTED';
+          this.mediaMessage.value = '通话媒体暂时中断，正在等待恢复';
+          break;
+        case 'failed':
+          this.mediaState.value = 'FAILED';
+          this.mediaMessage.value = 'ICE 媒体连接失败';
+          break;
+        case 'closed':
+          if (this.sessionState.value !== 'IDLE') {
+            this.mediaState.value = 'DISCONNECTED';
+            this.mediaMessage.value = '通话媒体已关闭';
+          }
+          break;
+      }
+    };
+    const onIceConnectionStateChange = () => {
+      if (this.registry.getActive()?.sessionId !== sessionId) return;
+      if (peerConnection.iceConnectionState === 'failed') {
+        this.mediaState.value = 'FAILED';
+        this.mediaMessage.value = 'ICE 协商失败，请检查网络或 TURN 配置';
+      }
+    };
+
+    peerConnection.addEventListener('track', onTrack);
+    peerConnection.addEventListener('connectionstatechange', onConnectionStateChange);
+    peerConnection.addEventListener('iceconnectionstatechange', onIceConnectionStateChange);
+    context.cleanupCallbacks.push(() => {
+      peerConnection.removeEventListener('track', onTrack);
+      peerConnection.removeEventListener('connectionstatechange', onConnectionStateChange);
+      peerConnection.removeEventListener('iceconnectionstatechange', onIceConnectionStateChange);
+    });
+  }
+
+  private cleanupSession(sessionId: string, wasActive = true): void {
+    const context = this.sessions.get(sessionId);
+    if (!context) return;
+    context.cleanupCallbacks.splice(0).forEach(cleanup => cleanup());
+    context.peerConnection?.getSenders().forEach(sender => sender.track?.stop());
+    context.peerConnection?.getReceivers().forEach(receiver => receiver.track?.stop());
+    this.sessions.delete(sessionId);
+
+    if (wasActive) {
+      this.sessionState.value = 'IDLE';
+      this.mediaState.value = this.registrationState.value === 'REGISTERED' ? 'READY' : 'IDLE';
+      this.mediaMessage.value = this.registrationState.value === 'REGISTERED'
+        ? '麦克风可用'
+        : '软电话未注册';
+      this.incomingCaller.value = '';
+      this.audio.clearRemoteStream();
+    }
+  }
+
+  private listenSession(
+    context: SessionContext,
+    eventName: string,
+    listener: (...args: any[]) => void,
+  ): void {
+    context.session.on(eventName, listener);
+    context.cleanupCallbacks.push(() => {
+      if (typeof context.session.off === 'function') context.session.off(eventName, listener);
+      else if (typeof context.session.removeListener === 'function') {
+        context.session.removeListener(eventName, listener);
+      }
+    });
+  }
+
+  private rejectBusySession(session: any): void {
+    try {
+      if (session.direction === 'incoming') {
+        session.terminate({ status_code: 486, reason_phrase: 'Busy Here' });
+      } else {
+        session.terminate();
+      }
+    } catch {
+      // The rejected session may already have become terminal.
+    }
+  }
+
+  private getActiveContext(): SessionContext | null {
+    const active = this.registry.getActive();
+    return active ? this.sessions.get(active.sessionId) ?? null : null;
+  }
+
+  private resolveSessionId(session: any): string {
+    const candidate = session?.id || session?._request?.call_id || session?.request?.call_id;
+    if (candidate) return String(candidate);
+    this.sessionSequence += 1;
+    return `sip-session-${this.sessionSequence}`;
   }
 }
 

@@ -32,6 +32,73 @@
           </div>
         </div>
 
+        <div
+          v-if="mediaNeedsAttention || sipWebRtcService.audio.autoplayBlocked.value"
+          class="mx-4 mt-3 rounded-xl border border-amber-200 bg-amber-50 p-2.5 text-[11px] text-amber-800"
+        >
+          <div>{{ sipWebRtcService.mediaMessage.value }}</div>
+          <div class="mt-2 flex gap-2">
+            <button
+              v-if="mediaNeedsAttention"
+              @click="sipWebRtcService.checkMicrophonePermission()"
+              class="rounded-lg bg-amber-100 px-2 py-1 font-bold hover:bg-amber-200"
+            >
+              重新检查麦克风
+            </button>
+            <button
+              v-if="sipWebRtcService.audio.autoplayBlocked.value"
+              @click="sipWebRtcService.audio.resumeRemoteAudio()"
+              class="rounded-lg bg-amber-100 px-2 py-1 font-bold hover:bg-amber-200"
+            >
+              恢复远端声音
+            </button>
+          </div>
+        </div>
+
+        <details v-if="!isRinging && !isConnected" class="mx-4 mt-3 rounded-xl border border-slate-200 bg-slate-50 p-2.5 text-[11px]">
+          <summary class="cursor-pointer font-bold text-slate-600">音频设备</summary>
+          <div class="mt-2 space-y-2">
+            <label class="block text-slate-500">
+              <span>麦克风</span>
+              <select
+                :value="sipWebRtcService.audio.selectedInputDeviceId.value"
+                class="mt-1 w-full rounded-lg border border-slate-200 bg-white p-1.5 text-slate-700"
+                @change="handleInputDeviceChange"
+              >
+                <option v-if="sipWebRtcService.audio.audioInputDevices.value.length === 0" value="">未检测到麦克风</option>
+                <option
+                  v-for="(device, index) in sipWebRtcService.audio.audioInputDevices.value"
+                  :key="device.deviceId"
+                  :value="device.deviceId"
+                >
+                  {{ device.label || `麦克风 ${index + 1}` }}
+                </option>
+              </select>
+            </label>
+            <label class="block text-slate-500">
+              <span>扬声器</span>
+              <select
+                :value="sipWebRtcService.audio.selectedOutputDeviceId.value"
+                :disabled="!sipWebRtcService.audio.outputSelectionSupported.value"
+                class="mt-1 w-full rounded-lg border border-slate-200 bg-white p-1.5 text-slate-700 disabled:opacity-60"
+                @change="handleOutputDeviceChange"
+              >
+                <option v-if="sipWebRtcService.audio.audioOutputDevices.value.length === 0" value="">未检测到扬声器</option>
+                <option
+                  v-for="(device, index) in sipWebRtcService.audio.audioOutputDevices.value"
+                  :key="device.deviceId"
+                  :value="device.deviceId"
+                >
+                  {{ device.label || `扬声器 ${index + 1}` }}
+                </option>
+              </select>
+              <span v-if="!sipWebRtcService.audio.outputSelectionSupported.value" class="mt-1 block text-slate-400">
+                当前浏览器不支持指定输出设备
+              </span>
+            </label>
+          </div>
+        </details>
+
         <!-- 响铃动态提醒区 (仅软电话接听模式且处于振铃态时显现) -->
         <div
           v-if="isRinging"
@@ -47,7 +114,7 @@
           </div>
           <div class="text-xs font-bold text-brand-700">来电振铃中</div>
           <div class="text-lg font-extrabold font-mono text-slate-900 mt-0.5">
-            {{ callStore.currentCall?.callerNumber || dialedNumber || '未知号码' }}
+            {{ callStore.currentCall?.callerNumber || sipWebRtcService.incomingCaller.value || dialedNumber || '未知号码' }}
           </div>
           <div class="text-[11px] text-slate-500">
             {{ callStore.currentCall?.customerName || (callStore.currentCall?.direction === 'OUTBOUND' ? '外呼中' : '来电') }}
@@ -184,7 +251,7 @@
           <div v-else>
             <button
               @click="handleCall"
-              :disabled="!dialedNumber.trim()"
+              :disabled="!dialedNumber.trim() || callStore.callState !== 'IDLE' || sipWebRtcService.registrationState.value !== 'REGISTERED'"
               class="w-full py-3.5 bg-gradient-to-r from-brand-600 to-indigo-600 hover:from-brand-500 hover:to-indigo-500 active:scale-98 disabled:opacity-40 disabled:cursor-not-allowed text-white font-extrabold text-sm rounded-2xl shadow-lg shadow-brand-500/25 flex items-center justify-center gap-2 transition"
             >
               <span>📞</span>
@@ -237,6 +304,7 @@ import { useAgentStore } from '../../stores/agentStore';
 import { audioService } from '../../services/audioService';
 import { sipWebRtcService } from '../../services/sipWebRtcService';
 import { triggerOutboundCall } from '../../api/telephonyApi';
+import { toastError } from '../../utils/feedback';
 
 const callStore = useCallStore();
 const agentStore = useAgentStore();
@@ -259,8 +327,11 @@ const keypad = [
   { key: '#', sub: '' },
 ];
 
-const isRinging = computed(() => callStore.callState === 'RINGING');
-const isConnected = computed(() => callStore.callState === 'CONNECTED');
+const isRinging = computed(() => callStore.callState === 'RINGING' || sipWebRtcService.sessionState.value === 'RINGING');
+const isConnected = computed(() => callStore.callState === 'CONNECTED' || sipWebRtcService.sessionState.value === 'CONNECTED');
+const mediaNeedsAttention = computed(() => ['PERMISSION_DENIED', 'DISCONNECTED', 'FAILED'].includes(
+  sipWebRtcService.mediaState.value,
+));
 
 // 核心规则：当接听方式为软电话时，来电响铃软电话自动展开以显示动画
 watch(
@@ -278,13 +349,15 @@ const statusTitle = computed(() => {
   if (callStore.callState === 'ACW') return '话后整理';
   if (sipWebRtcService.registrationState.value === 'REGISTERED') return '软话机 · 在线已注册 (WebRTC)';
   if (sipWebRtcService.registrationState.value === 'CONNECTING') return '软话机 · 正在连接软交换...';
-  return '软话机 · 就绪待命';
+  if (sipWebRtcService.registrationState.value === 'REGISTRATION_FAILED') return '软话机 · SIP 注册失败';
+  return '软话机 · 未注册';
 });
 
 const statusDotClass = computed(() => {
   if (isRinging.value) return 'bg-amber-400 animate-ping';
   if (isConnected.value) return 'bg-emerald-400 animate-pulse';
   if (sipWebRtcService.registrationState.value === 'REGISTERED') return 'bg-emerald-400';
+  if (sipWebRtcService.registrationState.value === 'REGISTRATION_FAILED') return 'bg-rose-500';
   return 'bg-amber-400';
 });
 
@@ -320,13 +393,24 @@ function backspace() {
   }
 }
 
+function handleInputDeviceChange(event: Event) {
+  sipWebRtcService.audio.selectInputDevice((event.target as HTMLSelectElement).value);
+}
+
+function handleOutputDeviceChange(event: Event) {
+  void sipWebRtcService.audio.selectOutputDevice((event.target as HTMLSelectElement).value);
+}
+
 async function handleCall() {
   const num = dialedNumber.value.trim();
-  if (!num) return;
+  if (!num || callStore.callState !== 'IDLE') return;
 
   try {
     if (agentStore.endpoint !== 'WEBRTC') {
       throw new Error('当前接听方式不是 WebRTC，请使用已绑定的终端发起呼叫');
+    }
+    if (sipWebRtcService.registrationState.value !== 'REGISTERED') {
+      throw new Error('软电话尚未完成 SIP 注册，暂时无法外呼');
     }
     const caller = agentStore.extension || agentStore.workNo;
     const response = await triggerOutboundCall(
@@ -334,9 +418,11 @@ async function handleCall() {
       caller,
       num,
     );
-    callStore.startOutbound(response.data?.callId);
+    const callId = response.data?.callId;
+    if (!callId) throw new Error('外呼已受理但未返回业务通话标识，请核对话务状态');
+    callStore.startOutbound(callId, num);
   } catch (e) {
-    console.error('Softphone call failed:', e);
+    toastError(e instanceof Error ? e.message : '外呼失败');
   }
 }
 

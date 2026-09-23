@@ -15,6 +15,7 @@
 
     <!-- 坐席接听方式与终端状态 -->
     <AgentProfile />
+    <CallProgressBanner />
 
     <!-- 
       核心内容与业务工作台流转:
@@ -76,6 +77,7 @@
 import { ref, watch, onMounted, onUnmounted } from 'vue';
 import HeaderBar from './components/layout/HeaderBar.vue';
 import AgentProfile from './components/layout/AgentProfile.vue';
+import CallProgressBanner from './features/call/components/CallProgressBanner.vue';
 import StatusBar from './components/layout/StatusBar.vue';
 import IncomingCallCard from './components/telephony/IncomingCallCard.vue';
 import AcwDrawer from './components/telephony/AcwDrawer.vue';
@@ -170,22 +172,12 @@ onMounted(() => {
   }
 
   // 绑定 WebRTC 呼叫信令钩子
-  sipWebRtcService.onIncomingCall((session, caller) => {
-    if (callStore.callState !== 'RINGING') {
-      // 软电话侧只掌握 INVITE 带来的真实主叫号码，其余弹屏字段由后端按事实补齐
-      callStore.triggerIncoming({
-        callId: `sip-${session.id}`,
-        callerNumber: caller,
-      });
-    }
+  sipWebRtcService.onCallConnected(({ callId }) => {
+    if (callId) callStore.observeAnswered(callId);
   });
 
-  sipWebRtcService.onCallConnected(() => {
-    callStore.observeAnswered();
-  });
-
-  sipWebRtcService.onCallEnded((_cause) => {
-    callStore.observeEnded();
+  sipWebRtcService.onCallEnded(({ callId }) => {
+    if (callId) callStore.observeEnded(callId);
   });
 
   // 监听后端推送的真实话务事件

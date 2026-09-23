@@ -11,8 +11,8 @@ export const useCdrStore = defineStore('cdr', () => {
   const isLoading = ref(false);
   const searchCaller = ref('');
   const searchDirection = ref('');
-  const answeredCountToday = ref(0);
-  const outboundCountToday = ref(0);
+  const pageInboundCount = ref(0);
+  const pageOutboundCount = ref(0);
 
   async function loadRecords(page: number = 1) {
     isLoading.value = true;
@@ -28,19 +28,21 @@ export const useCdrStore = defineStore('cdr', () => {
       records.value = res.list || [];
       total.value = res.total || 0;
 
-      // 计算今日统计指标
+      // Only summarize the loaded page; the list API does not return daily aggregates.
       let inCount = 0;
       let outCount = 0;
       records.value.forEach((r) => {
         if (r.direction === 'INBOUND') inCount++;
         if (r.direction === 'OUTBOUND') outCount++;
       });
-      answeredCountToday.value = inCount;
-      outboundCountToday.value = outCount;
+      pageInboundCount.value = inCount;
+      pageOutboundCount.value = outCount;
     } catch (e) {
       console.error('Failed to load CDRs from admin backend:', e);
       records.value = [];
       total.value = 0;
+      pageInboundCount.value = 0;
+      pageOutboundCount.value = 0;
     } finally {
       isLoading.value = false;
     }
@@ -54,8 +56,8 @@ export const useCdrStore = defineStore('cdr', () => {
     isLoading,
     searchCaller,
     searchDirection,
-    answeredCountToday,
-    outboundCountToday,
+    pageInboundCount,
+    pageOutboundCount,
     loadRecords,
   };
 });

@@ -2,9 +2,28 @@ import { beforeEach, afterEach, describe, expect, it, vi } from 'vitest';
 import { createPinia, setActivePinia } from 'pinia';
 import { useCallStore } from '../../../stores/callStore';
 
-const mocks = vi.hoisted(() => ({ hold: vi.fn(), hangup: vi.fn(), dtmf: vi.fn(), sipDtmf: vi.fn(), sipHangup: vi.fn() }));
+const mocks = vi.hoisted(() => ({
+  hold: vi.fn(),
+  hangup: vi.fn(),
+  dtmf: vi.fn(),
+  sipDtmf: vi.fn(),
+  sipHangup: vi.fn(),
+  sipAnswer: vi.fn(),
+  sipMute: vi.fn(),
+  sipBind: vi.fn(),
+  sipRelease: vi.fn(),
+}));
 vi.mock('../../../api/telephonyApi', () => ({ triggerHoldCall: mocks.hold, triggerHangupCall: mocks.hangup, triggerDtmfCall: mocks.dtmf }));
-vi.mock('../../../services/sipWebRtcService', () => ({ sipWebRtcService: { hangup: mocks.sipHangup, sendDtmf: mocks.sipDtmf } }));
+vi.mock('../../../services/sipWebRtcService', () => ({
+  sipWebRtcService: {
+    hangup: mocks.sipHangup,
+    answer: mocks.sipAnswer,
+    toggleMute: mocks.sipMute,
+    bindBusinessCall: mocks.sipBind,
+    releasePendingBusinessCall: mocks.sipRelease,
+    sendDtmf: mocks.sipDtmf,
+  },
+}));
 vi.mock('../../../services/audioService', () => ({ audioService: { startRingtone: vi.fn(), stopRingtone: vi.fn() } }));
 vi.mock('../../../utils/feedback', () => ({ toast: vi.fn(), toastError: vi.fn() }));
 
@@ -52,5 +71,32 @@ describe('call command outcomes', () => {
     await store.sendDtmf('1');
     expect(mocks.dtmf).toHaveBeenCalledOnce();
     expect(mocks.sipDtmf).not.toHaveBeenCalled();
+  });
+
+  it('changes mute state only after the media operation succeeds', () => {
+    const store = connected();
+    mocks.sipMute.mockReturnValueOnce(false).mockReturnValueOnce(true);
+
+    store.toggleMute();
+    expect(store.isMuted).toBe(false);
+    store.toggleMute();
+    expect(store.isMuted).toBe(true);
+  });
+
+  it('keeps the outbound call ID and merges its later screen-pop facts', () => {
+    const store = useCallStore();
+    store.startOutbound('business-outbound', 'customer-number');
+    store.triggerIncoming({
+      callId: 'business-outbound',
+      direction: 'OUTBOUND',
+      callerNumber: 'customer-number',
+      customerName: '已确认客户',
+    });
+
+    expect(store.callState).toBe('CALLING');
+    expect(store.currentCall).toMatchObject({
+      callId: 'business-outbound',
+      customerName: '已确认客户',
+    });
   });
 });

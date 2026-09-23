@@ -30,9 +30,9 @@
       </button>
 
       <!-- SIP 状态 -->
-      <div class="hidden md:flex items-center gap-1 bg-emerald-50 border border-emerald-200 rounded-full px-2.5 py-0.5 text-[11px] font-mono text-emerald-700 font-bold">
-        <span class="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse"></span>
-        <span>SIP就绪</span>
+      <div :class="['hidden md:flex items-center gap-1 border rounded-full px-2.5 py-0.5 text-[11px] font-mono font-bold', endpointStateClass]">
+        <span :class="['w-1.5 h-1.5 rounded-full', endpointDotClass]"></span>
+        <span>{{ endpointStateLabel }}</span>
       </div>
 
       <!-- WebSocket 状态 -->
@@ -64,6 +64,7 @@
 import { computed } from 'vue';
 import { useAgentStore } from '../../stores/agentStore';
 import { wsService } from '../../services/websocketService';
+import { sipWebRtcService } from '../../services/sipWebRtcService';
 import { confirmAction } from '../../utils/feedback';
 
 defineEmits<{
@@ -73,6 +74,35 @@ defineEmits<{
 
 const agentStore = useAgentStore();
 const wsConnected = computed(() => wsService.isConnected.value);
+
+const endpointStateLabel = computed(() => {
+  if (agentStore.endpoint === 'SIP') return 'SIP 外部终端';
+  if (agentStore.endpoint === 'MOBILE') return '手机终端';
+  switch (sipWebRtcService.registrationState.value) {
+    case 'REGISTERED': return 'SIP 已注册';
+    case 'CONNECTING': return 'SIP 注册中';
+    case 'REGISTRATION_FAILED': return 'SIP 注册失败';
+    default: return 'SIP 未注册';
+  }
+});
+
+const endpointStateClass = computed(() => {
+  if (agentStore.endpoint !== 'WEBRTC') return 'bg-slate-50 border-slate-200 text-slate-600';
+  if (sipWebRtcService.registrationState.value === 'REGISTERED') {
+    return 'bg-emerald-50 border-emerald-200 text-emerald-700';
+  }
+  if (sipWebRtcService.registrationState.value === 'REGISTRATION_FAILED') {
+    return 'bg-rose-50 border-rose-200 text-rose-700';
+  }
+  return 'bg-amber-50 border-amber-200 text-amber-700';
+});
+
+const endpointDotClass = computed(() => {
+  if (agentStore.endpoint !== 'WEBRTC') return 'bg-slate-400';
+  if (sipWebRtcService.registrationState.value === 'REGISTERED') return 'bg-emerald-500';
+  if (sipWebRtcService.registrationState.value === 'REGISTRATION_FAILED') return 'bg-rose-500';
+  return 'bg-amber-500';
+});
 
 async function handleLogout() {
   const ok = await confirmAction('确认注销当前坐席登录状态吗？', { title: '退出登录', confirmText: '退出登录' });

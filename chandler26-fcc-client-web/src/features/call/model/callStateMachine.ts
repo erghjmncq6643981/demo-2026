@@ -7,7 +7,7 @@ export interface CallLifecycle {
 
 export type CallLifecycleEvent =
   | { type: 'INCOMING'; callId: string }
-  | { type: 'OUTBOUND_STARTED'; callId?: string }
+  | { type: 'OUTBOUND_STARTED'; callId: string }
   | { type: 'ANSWERED'; callId?: string }
   | { type: 'HANGUP_REQUESTED'; callId?: string }
   | { type: 'ENDED'; callId?: string }
@@ -18,7 +18,8 @@ export type CallLifecycleEvent =
 const INITIAL_LIFECYCLE: CallLifecycle = { state: 'IDLE', callId: null };
 
 function eventBelongsToActiveCall(current: CallLifecycle, callId?: string): boolean {
-  return !current.callId || !callId || current.callId === callId;
+  if (!current.callId) return true;
+  return Boolean(callId) && current.callId === callId;
 }
 
 /**
@@ -41,7 +42,7 @@ export function reduceCallLifecycle(
   switch (current.state) {
     case 'IDLE':
       if (event.type === 'INCOMING') return { state: 'RINGING', callId: event.callId };
-      if (event.type === 'OUTBOUND_STARTED') return { state: 'CALLING', callId: event.callId ?? null };
+      if (event.type === 'OUTBOUND_STARTED') return { state: 'CALLING', callId: event.callId };
       return current;
     case 'CALLING':
     case 'RINGING':

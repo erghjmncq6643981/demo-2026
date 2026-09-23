@@ -129,7 +129,7 @@
             <!-- 7. 满意度 -->
             <td class="py-3.5 px-3">
               <span v-if="record.evaluationScore" class="text-amber-500 font-extrabold text-[11px]">
-                ★★★★★ {{ record.evaluationScore }}.0
+                ★ {{ record.evaluationScore }}
               </span>
               <span v-else class="text-slate-300 text-[11px]">-</span>
             </td>

@@ -29,16 +29,10 @@
       </div>
     </div>
 
-    <!-- 中间: VoIP 语音质量指标 -->
+    <!-- 中间: 质量指标必须来自实时 WebRTC getStats 或服务端事实。 -->
     <div class="hidden xl:flex items-center gap-3 bg-white/10 px-4 py-2 rounded-2xl border border-white/10 text-[11px] font-mono">
       <span class="text-indigo-200">链路质量:</span>
-      <span class="text-emerald-300 font-bold flex items-center gap-1">● MOS 4.4 优</span>
-      <span class="text-white/40">|</span>
-      <span class="text-indigo-200">RTT: <strong class="text-white">18ms</strong></span>
-      <span class="text-white/40">|</span>
-      <span class="text-indigo-200">丢包: <strong class="text-emerald-300">0.0%</strong></span>
-      <span class="text-white/40">|</span>
-      <span class="text-indigo-200">编解码: <strong class="text-white">Opus-HD</strong></span>
+      <span class="text-slate-300">实时质量统计尚未接入</span>
     </div>
 
     <!-- 右侧: 电话控制操作组 -->

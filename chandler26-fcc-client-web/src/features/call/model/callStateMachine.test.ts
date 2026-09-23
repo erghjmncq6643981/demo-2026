@@ -16,6 +16,7 @@ describe('call lifecycle', () => {
     const ringing = reduceCallLifecycle(initialCallLifecycle(), { type: 'INCOMING', callId: 'call-1' });
     expect(reduceCallLifecycle(ringing, { type: 'ANSWERED', callId: 'call-2' })).toEqual(ringing);
     expect(reduceCallLifecycle(ringing, { type: 'ENDED', callId: 'call-2' })).toEqual(ringing);
+    expect(reduceCallLifecycle(ringing, { type: 'ENDED' })).toEqual(ringing);
   });
 
   it('waits for a terminal transport event after a hangup request', () => {

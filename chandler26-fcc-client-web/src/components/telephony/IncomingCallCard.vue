@@ -72,15 +72,11 @@
         </div>
       </div>
 
-      <!-- 3. 底部操作按钮组 -->
+      <!-- 3. 外部终端只提供业务拒接；接听动作在实体终端完成。 -->
       <div class="p-6 pt-0 space-y-2">
-        <button
-          @click="callStore.answerCall()"
-          class="w-full py-3 bg-emerald-500 hover:bg-emerald-600 active:scale-98 text-white font-extrabold rounded-2xl text-xs shadow-md shadow-emerald-500/25 transition flex items-center justify-center gap-2"
-        >
-          <span>✓</span>
-          <span>界面接听 (Answer)</span>
-        </button>
+        <p class="rounded-xl bg-emerald-50 px-3 py-2 text-xs font-medium text-emerald-700">
+          请直接在当前接听终端上接听，页面将等待话务事件确认。
+        </p>
         <button
           @click="callStore.rejectCall()"
           class="w-full py-2.5 bg-slate-100 hover:bg-rose-50 hover:text-rose-600 text-slate-600 font-bold rounded-2xl text-xs transition flex items-center justify-center gap-1.5"

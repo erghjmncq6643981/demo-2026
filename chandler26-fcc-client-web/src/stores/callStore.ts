@@ -55,25 +55,50 @@ export const useCallStore = defineStore('call', () => {
   }
 
   function triggerIncoming(payload: IncomingScreenPopPayload) {
-    if (callState.value === 'RINGING' && currentCall.value) {
+    sipWebRtcService.bindBusinessCall(payload.callId);
+    if (currentCall.value?.callId === payload.callId && callState.value !== 'ACW') {
       currentCall.value = { ...currentCall.value, ...payload };
-      if (!lifecycle.value.callId || lifecycle.value.callId.startsWith('sip-')) {
-        lifecycle.value = { ...lifecycle.value, callId: payload.callId };
-      }
       return;
     }
-    if (!applyLifecycle({ type: 'INCOMING', callId: payload.callId })) return;
+    if (callState.value !== 'IDLE') return;
+    const event: CallLifecycleEvent = payload.direction === 'OUTBOUND'
+      ? { type: 'OUTBOUND_STARTED', callId: payload.callId }
+      : { type: 'INCOMING', callId: payload.callId };
+    if (!applyLifecycle(event)) return;
     currentCall.value = payload;
-    audioService.startRingtone();
+    controlMessage.value = '';
+    isMuted.value = false;
+    if (event.type === 'INCOMING') audioService.startRingtone();
   }
 
-  function startOutbound(callId?: string) {
-    applyLifecycle({ type: 'OUTBOUND_STARTED', callId });
+  function startOutbound(callId: string, calleeNumber?: string) {
+    sipWebRtcService.bindBusinessCall(callId);
+    if (currentCall.value?.callId === callId && callState.value === 'CALLING') {
+      currentCall.value = {
+        ...currentCall.value,
+        direction: 'OUTBOUND',
+        callerNumber: currentCall.value.callerNumber || calleeNumber,
+      };
+      return;
+    }
+    if (!applyLifecycle({ type: 'OUTBOUND_STARTED', callId })) return;
+    currentCall.value = {
+      callId,
+      direction: 'OUTBOUND',
+      callerNumber: calleeNumber,
+    };
+    controlMessage.value = '';
+    isMuted.value = false;
   }
 
-  function answerCall() {
+  async function answerCall() {
+    const result = await sipWebRtcService.answer();
+    if (!result.ok) {
+      toastError(result.message || '软电话接听失败');
+      return false;
+    }
     audioService.stopRingtone();
-    sipWebRtcService.answer();
+    return true;
   }
 
   function observeAnswered(callId?: string) {
@@ -94,13 +119,11 @@ export const useCallStore = defineStore('call', () => {
     if (!callId || callState.value === 'ACW' || callState.value === 'ENDING' || hangupRequestKey) return;
     hangupRequestKey = callId;
     try {
-      if (!callId.startsWith('sip-')) {
-        const workNo = getWorkNo();
-        if (!workNo) throw new Error('登录身份不可用');
-        const result = await triggerHangupCall(workNo, callId, reason || 'NORMAL_CLEARING');
-        if (currentCall.value?.callId !== callId) return;
-        controlMessage.value = result.message;
-      }
+      const workNo = getWorkNo();
+      if (!workNo) throw new Error('登录身份不可用');
+      const result = await triggerHangupCall(workNo, callId, reason || 'NORMAL_CLEARING');
+      if (currentCall.value?.callId !== callId) return;
+      controlMessage.value = result.message;
       audioService.stopRingtone();
       applyLifecycle({ type: 'HANGUP_REQUESTED', callId });
       sipWebRtcService.hangup();
@@ -111,6 +134,7 @@ export const useCallStore = defineStore('call', () => {
   }
 
   function observeEnded(callId?: string) {
+    if (callId) sipWebRtcService.releasePendingBusinessCall(callId);
     if (!applyLifecycle({ type: 'ENDED', callId })) return;
     audioService.stopRingtone();
     stopCallTimer();
@@ -132,6 +156,8 @@ export const useCallStore = defineStore('call', () => {
     durationSeconds.value = 0;
     isHeld.value = false;
     isMuted.value = false;
+    holdRequested.value = false;
+    controlMessage.value = '';
   }
 
   async function toggleHold() {
@@ -152,8 +178,12 @@ export const useCallStore = defineStore('call', () => {
   }
 
   function toggleMute() {
-    isMuted.value = !isMuted.value;
-    sipWebRtcService.toggleMute(isMuted.value);
+    const nextMuted = !isMuted.value;
+    if (!sipWebRtcService.toggleMute(nextMuted)) {
+      toastError('软电话媒体未连接，无法切换静音');
+      return;
+    }
+    isMuted.value = nextMuted;
   }
 
   async function sendDtmf(digit: string) {
