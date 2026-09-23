@@ -22,11 +22,31 @@ export interface AgentVO {
   createdAt?: string;
 }
 
+export interface AccountCredentialVO {
+  subjectType?: string;
+  id?: string;
+  account: string;
+  displayName: string;
+  initialPassword?: string;
+  extensionSecret?: string;
+  hint?: string;
+}
+
 export interface AgentCreateReq {
   workNo: string;
   agentName: string;
   phoneNumber?: string;
   roleCode?: string;
+  password?: string;
+  metadata?: string;
+}
+
+export interface AgentUpdateReq {
+  id: string | number;
+  agentName?: string;
+  phoneNumber?: string;
+  roleCode?: string;
+  status?: string;
   metadata?: string;
 }
 
@@ -105,6 +125,7 @@ export interface AgentCreateAndBindGroupReq {
   agentName: string;
   phoneNumber?: string;
   roleCode?: string;
+  password?: string;
   memberRole?: string;
   priority?: number;
 }
@@ -116,8 +137,11 @@ export const agentApi = {
   get(id: string): Promise<AgentVO> {
     return apiClient.get(`/agents/${id}`);
   },
-  create(data: AgentCreateReq): Promise<string> {
+  create(data: AgentCreateReq): Promise<AccountCredentialVO> {
     return apiClient.post('/agents', data);
+  },
+  update(data: AgentUpdateReq): Promise<void> {
+    return apiClient.put('/agents', data);
   },
   delete(id: string): Promise<void> {
     return apiClient.delete(`/agents/${id}`);
@@ -149,7 +173,7 @@ export const agentApi = {
   addMemberToGroup(data: AgentGroupMemberReq): Promise<void> {
     return apiClient.post('/agents/groups/members', data);
   },
-  createAndBindAgent(groupId: string, data: AgentCreateAndBindGroupReq): Promise<string> {
+  createAndBindAgent(groupId: string, data: AgentCreateAndBindGroupReq): Promise<AccountCredentialVO> {
     return apiClient.post(`/agents/groups/${groupId}/create-and-bind`, data);
   },
   updateGroupMember(groupId: string, agentId: string, data: { memberRole?: string; priority?: number }): Promise<void> {
@@ -158,7 +182,7 @@ export const agentApi = {
   removeMemberFromGroup(groupId: string, agentId: string): Promise<void> {
     return apiClient.delete(`/agents/groups/${groupId}/members/${agentId}`);
   },
-  resetPassword(agentId: string, password?: string): Promise<{ loginPassword?: string; sipPassword?: string }> {
+  resetPassword(agentId: string | number, password?: string): Promise<AccountCredentialVO> {
     return apiClient.post(`/agents/${agentId}/reset-password`, { password: password || undefined });
   },
 };

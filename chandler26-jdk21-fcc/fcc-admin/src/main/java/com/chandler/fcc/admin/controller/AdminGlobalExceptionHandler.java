@@ -11,6 +11,10 @@ import org.springframework.web.bind.annotation.ResponseStatus;
 import org.springframework.web.bind.annotation.RestControllerAdvice;
 import org.springframework.web.server.ResponseStatusException;
 
+import cn.dev33.satoken.exception.NotLoginException;
+import cn.dev33.satoken.exception.NotPermissionException;
+import cn.dev33.satoken.exception.NotRoleException;
+import org.springframework.dao.DuplicateKeyException;
 import java.util.stream.Collectors;
 
 /**
@@ -36,6 +40,19 @@ public class AdminGlobalExceptionHandler {
     public CommonResult<Void> handleIllegalArgument(IllegalArgumentException e) {
         log.warn("⚠️ [Admin] 请求参数或业务约束校验未通过: {}", e.getMessage());
         return CommonResult.error(400, e.getMessage());
+    }
+
+    /**
+     * 数据库唯一键冲突拦截 (如工号重复创建等)
+     *
+     * @param e 唯一键冲突异常
+     * @return 400 业务错误响应
+     */
+    @ExceptionHandler(DuplicateKeyException.class)
+    @ResponseStatus(HttpStatus.BAD_REQUEST)
+    public CommonResult<Void> handleDuplicateKey(DuplicateKeyException e) {
+        log.warn("⚠️ [Admin] 数据库唯一约束冲突: {}", e.getMessage());
+        return CommonResult.error(400, "操作失败：目标工号或关键标识已存在，请勿重复创建");
     }
 
     /**
@@ -68,6 +85,32 @@ public class AdminGlobalExceptionHandler {
             e.getReason() == null ? "请求处理失败" : e.getReason()
         );
         return ResponseEntity.status(e.getStatusCode()).body(body);
+    }
+
+    /**
+     * Sa-Token 未登录或凭据失效拦截 (返回标准 401 Unauthorized)
+     *
+     * @param e 未登录异常对象
+     * @return 401 统一响应
+     */
+    @ExceptionHandler(NotLoginException.class)
+    @ResponseStatus(HttpStatus.UNAUTHORIZED)
+    public CommonResult<Void> handleNotLogin(NotLoginException e) {
+        log.warn("⚠️ [Admin] 请求未通过登录认证: type={}, msg={}", e.getType(), e.getMessage());
+        return CommonResult.error(401, "登录已失效，请重新登录");
+    }
+
+    /**
+     * Sa-Token 角色或权限不足拦截 (返回 403 Forbidden)
+     *
+     * @param e 权限异常对象
+     * @return 403 统一响应
+     */
+    @ExceptionHandler({NotRoleException.class, NotPermissionException.class})
+    @ResponseStatus(HttpStatus.FORBIDDEN)
+    public CommonResult<Void> handleNotPermission(Exception e) {
+        log.warn("⚠️ [Admin] 用户操作权限不足: {}", e.getMessage());
+        return CommonResult.error(403, "没有操作该资源的权限");
     }
 
     /**

@@ -19,6 +19,9 @@ const CdrReportView = defineAsyncComponent(
 const GroupManageView = defineAsyncComponent(
   () => import("./views/GroupManageView.vue"),
 );
+const AgentManageView = defineAsyncComponent(
+  () => import("./views/AgentManageView.vue"),
+);
 const IvrFlowView = defineAsyncComponent(
   () => import("./views/IvrFlowView.vue"),
 );
@@ -88,6 +91,9 @@ onUnmounted(() => {
 
       <!-- 菜单 2: 客服组与排队 (module-groups) -->
       <GroupManageView v-else-if="activeTab === 'groups'" />
+
+      <!-- 菜单 2.1: 坐席人员 -->
+      <AgentManageView v-else-if="activeTab === 'agents'" />
 
       <!-- 菜单 3: IVR 流程编排 (module-flows) -->
       <IvrFlowView v-else-if="activeTab === 'flows'" />

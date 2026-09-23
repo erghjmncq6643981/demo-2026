@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { onMounted, reactive, ref, watch } from 'vue';
-import { Pencil, Plus, RefreshCw, Trash2, X } from 'lucide-vue-next';
+import { Pencil, Plus, RefreshCw, Trash2, X, Sliders, ShieldAlert } from 'lucide-vue-next';
 import { systemConfigApi, type ConfigScope, type ConfigValueType, type SystemConfigVO } from '../api/systemConfigApi';
 import { confirmAction, errorText, toastError, toastSuccess, toastWarning } from '../../../utils/feedback';
 
@@ -12,6 +12,13 @@ const saving = ref(false);
 const showEditor = ref(false);
 const editingId = ref<string | null>(null);
 const form = reactive({ propName: '', propValue: '', propType: 'STRING' as ConfigValueType, description: '' });
+
+const scopes: { label: string; value: ConfigScope; desc: string }[] = [
+  { label: 'BACKEND', value: 'BACKEND', desc: '后端核心服务' },
+  { label: 'WEB', value: 'WEB', desc: '管理后台 Web' },
+  { label: 'CLIENT', value: 'CLIENT', desc: '坐席工作台客户端' },
+  { label: 'SYSTEM', value: 'SYSTEM', desc: '底层基座与信令' },
+];
 
 async function loadConfigs(): Promise<void> {
   loading.value = true;
@@ -69,11 +76,15 @@ async function saveConfig(): Promise<void> {
 }
 
 async function removeConfig(row: SystemConfigVO): Promise<void> {
-  const confirmed = await confirmAction(`确认删除配置 ${row.propName} 吗？`, { title: '删除系统配置', confirmText: '确认删除', danger: true });
+  const confirmed = await confirmAction(`确认删除配置项【${row.propName}】吗？此操作将立即影响当前作用域的运行时配置。`, {
+    title: '删除系统配置',
+    confirmText: '确认删除',
+    danger: true,
+  });
   if (!confirmed) return;
   try {
     await systemConfigApi.delete(row.id);
-    toastSuccess('系统配置已删除');
+    toastSuccess('系统配置已成功删除');
     await loadConfigs();
   } catch (error) {
     toastError(`删除失败：${errorText(error)}`);
@@ -85,25 +96,233 @@ onMounted(loadConfigs);
 </script>
 
 <template>
-  <section class="h-full min-h-0 flex flex-col gap-4">
-    <header class="flex flex-wrap items-center justify-between gap-3">
-      <div><h2 class="text-xl font-bold text-slate-900">系统变量</h2><p class="mt-1 text-sm text-slate-500">配置值直接读写后端配置表，不提供静态示例或浏览器内假保存。</p></div>
-      <div class="flex gap-2"><button title="刷新配置" class="h-9 w-9 inline-flex items-center justify-center border border-slate-200 bg-white" @click="loadConfigs"><RefreshCw class="h-4 w-4" :class="loading ? 'animate-spin' : ''" /></button><button class="h-9 px-3 inline-flex items-center gap-2 bg-blue-600 text-sm font-semibold text-white" @click="openCreate"><Plus class="h-4 w-4" />新增配置</button></div>
-    </header>
+  <div class="space-y-6">
+    <!-- Header Card -->
+    <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-4 bg-white p-5 rounded-3xl border border-slate-100 shadow-card">
+      <div>
+        <h2 class="text-base font-black text-slate-900 flex items-center gap-2">
+          <Sliders class="w-5 h-5 text-brand-600" />
+          系统变量 (业务配置)
+        </h2>
+        <p class="text-xs text-slate-400 mt-0.5">
+          实时管理后端微服务、Web 控制台与工作台客户端的运行时业务参数
+        </p>
+      </div>
 
-    <div class="flex items-center gap-2 border-y border-slate-200 py-3"><span class="text-sm font-semibold text-slate-600">作用域</span><select v-model="scope" class="h-9 w-44 border border-slate-300 bg-white px-3 text-sm"><option value="WEB">WEB</option><option value="BACKEND">BACKEND</option><option value="CLIENT">CLIENT</option><option value="SYSTEM">SYSTEM</option></select></div>
-    <div v-if="loadError" class="flex items-center justify-between border border-rose-200 bg-rose-50 px-4 py-3 text-sm text-rose-700"><span>{{ loadError }}</span><button class="font-semibold underline" @click="loadConfigs">重试</button></div>
-    <div class="min-h-0 flex-1 overflow-auto border border-slate-200 bg-white">
-      <table class="w-full min-w-[900px] text-left text-sm"><thead class="sticky top-0 bg-slate-50 text-xs text-slate-500"><tr><th class="px-4 py-3">配置键</th><th class="px-4 py-3">值</th><th class="px-4 py-3">类型</th><th class="px-4 py-3">说明</th><th class="px-4 py-3">最后更新</th><th class="px-4 py-3 text-right">操作</th></tr></thead>
-        <tbody class="divide-y divide-slate-100"><tr v-if="loading"><td colspan="6" class="px-4 py-14 text-center text-slate-500">正在加载配置...</td></tr><tr v-else-if="rows.length === 0"><td colspan="6" class="px-4 py-14 text-center text-slate-500">当前作用域没有配置</td></tr>
-          <tr v-for="row in rows" v-else :key="row.id" class="hover:bg-slate-50"><td class="px-4 py-3 font-mono font-semibold">{{ row.propName }}</td><td class="max-w-sm truncate px-4 py-3 font-mono text-xs" :title="row.propValue">{{ row.propValue }}</td><td class="px-4 py-3">{{ row.propType }}</td><td class="px-4 py-3 text-slate-600">{{ row.description || '-' }}</td><td class="px-4 py-3 text-xs text-slate-500">{{ row.updatedAt || '-' }}<span v-if="row.updatedBy" class="ml-1">· {{ row.updatedBy }}</span></td><td class="px-4 py-3"><div class="flex justify-end gap-1"><button title="编辑配置" class="h-8 w-8 inline-flex items-center justify-center text-blue-600" @click="openEdit(row)"><Pencil class="h-4 w-4" /></button><button title="删除配置" class="h-8 w-8 inline-flex items-center justify-center text-rose-600" @click="removeConfig(row)"><Trash2 class="h-4 w-4" /></button></div></td></tr>
-        </tbody></table>
+      <div class="flex items-center space-x-3">
+        <button
+          @click="loadConfigs"
+          :disabled="loading"
+          class="p-2.5 bg-slate-100 hover:bg-slate-200 text-slate-600 rounded-xl transition border border-slate-200 cursor-pointer"
+          title="刷新配置列表"
+        >
+          <RefreshCw class="w-4 h-4" :class="{ 'animate-spin': loading }" />
+        </button>
+
+        <button
+          @click="openCreate"
+          class="px-4 py-2 bg-brand-500 hover:bg-brand-600 text-white rounded-xl text-xs font-bold flex items-center gap-1.5 shadow-xs transition cursor-pointer"
+        >
+          <Plus class="w-4 h-4" />
+          <span>新增配置</span>
+        </button>
+      </div>
     </div>
 
-    <div v-if="showEditor" class="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/50 p-4"><form class="w-full max-w-lg bg-white p-5 shadow-xl" @submit.prevent="saveConfig">
-      <div class="mb-5 flex items-center justify-between"><h3 class="font-bold text-slate-900">{{ editingId ? '编辑配置' : '新增配置' }}</h3><button type="button" title="关闭" @click="showEditor = false"><X class="h-5 w-5" /></button></div>
-      <div class="space-y-4"><label class="block text-sm font-semibold">配置键<input v-model="form.propName" :disabled="Boolean(editingId)" class="mt-1 h-10 w-full border border-slate-300 px-3 disabled:bg-slate-100"></label><label class="block text-sm font-semibold">配置值<textarea v-model="form.propValue" rows="4" class="mt-1 w-full border border-slate-300 p-3 font-mono text-sm"></textarea></label><label class="block text-sm font-semibold">数据类型<select v-model="form.propType" class="mt-1 h-10 w-full border border-slate-300 px-3"><option value="STRING">STRING</option><option value="JSON">JSON</option><option value="INT">INT</option><option value="BOOLEAN">BOOLEAN</option></select></label><label class="block text-sm font-semibold">业务说明<input v-model="form.description" class="mt-1 h-10 w-full border border-slate-300 px-3"></label></div>
-      <div class="mt-6 flex justify-end gap-2"><button type="button" class="h-9 px-4 border border-slate-300" @click="showEditor = false">取消</button><button :disabled="saving" class="h-9 px-4 bg-blue-600 font-semibold text-white disabled:opacity-50">{{ saving ? '保存中...' : '保存' }}</button></div>
-    </form></div>
-  </section>
+    <!-- Scope Selector Card -->
+    <div class="bg-white p-4 rounded-2xl border border-slate-100 shadow-card flex flex-wrap items-center justify-between gap-3">
+      <div class="flex items-center gap-2">
+        <span class="text-xs font-bold text-slate-500 mr-1">配置作用域:</span>
+        <button
+          v-for="s in scopes"
+          :key="s.value"
+          @click="scope = s.value"
+          class="px-3.5 py-1.5 rounded-xl text-xs font-bold transition cursor-pointer flex items-center gap-1.5"
+          :class="scope === s.value ? 'bg-brand-50 text-brand-600 border border-brand-200 shadow-xs' : 'bg-slate-50 text-slate-600 hover:bg-slate-100 border border-slate-200/80'"
+        >
+          <span>{{ s.label }}</span>
+          <span class="text-[10px] font-normal opacity-70">({{ s.desc }})</span>
+        </button>
+      </div>
+
+      <div class="text-xs text-slate-400">
+        当前作用域包含 <span class="font-bold text-slate-700 font-mono">{{ rows.length }}</span> 项配置
+      </div>
+    </div>
+
+    <!-- Error Alert -->
+    <div
+      v-if="loadError"
+      role="alert"
+      class="p-4 rounded-2xl bg-rose-50 border border-rose-200 flex items-center justify-between text-xs text-rose-700 font-bold"
+    >
+      <span>{{ loadError }}</span>
+      <button class="font-bold underline cursor-pointer" @click="loadConfigs">
+        重试
+      </button>
+    </div>
+
+    <!-- Table Card -->
+    <div class="bg-white border border-slate-100 rounded-3xl overflow-hidden shadow-card p-6">
+      <div class="overflow-x-auto">
+        <table class="w-full text-left border-collapse text-sm">
+          <thead>
+            <tr class="border-b border-slate-100 text-xs uppercase tracking-wider text-slate-400 font-bold">
+              <th class="py-3.5 px-4">配置键 (Prop Name)</th>
+              <th class="py-3.5 px-4">配置值 (Value)</th>
+              <th class="py-3.5 px-4">数据类型</th>
+              <th class="py-3.5 px-4">说明备注</th>
+              <th class="py-3.5 px-4">最后更新</th>
+              <th class="py-3.5 px-4 text-right">操作管理</th>
+            </tr>
+          </thead>
+          <tbody class="divide-y divide-slate-100 text-sm text-slate-700">
+            <tr v-if="loading && rows.length === 0">
+              <td colspan="6" class="py-12 text-center text-slate-400">
+                <RefreshCw class="w-6 h-6 animate-spin mx-auto mb-2 text-brand-500" />
+                正在加载系统配置...
+              </td>
+            </tr>
+            <tr v-else-if="rows.length === 0">
+              <td colspan="6" class="py-12 text-center text-slate-400 font-medium">
+                当前【{{ scope }}】作用域下暂无配置项
+              </td>
+            </tr>
+            <tr v-for="row in rows" :key="row.id" class="hover:bg-slate-50/80 transition-colors">
+              <td class="py-4 px-4 font-mono font-bold text-slate-900 text-xs">
+                {{ row.propName }}
+              </td>
+              <td class="py-4 px-4 font-mono text-xs text-slate-700 max-w-sm truncate" :title="row.propValue">
+                <span class="bg-slate-50 px-2 py-1 rounded-md border border-slate-200/80 font-medium select-all">
+                  {{ row.propValue }}
+                </span>
+              </td>
+              <td class="py-4 px-4">
+                <span
+                  class="px-2 py-0.5 rounded-md font-mono font-bold text-[11px]"
+                  :class="row.propType === 'INT' ? 'bg-blue-50 text-blue-700 border border-blue-200' : row.propType === 'JSON' ? 'bg-purple-50 text-purple-700 border border-purple-200' : 'bg-slate-100 text-slate-700 border border-slate-200'"
+                >
+                  {{ row.propType }}
+                </span>
+              </td>
+              <td class="py-4 px-4 text-xs text-slate-500 max-w-xs truncate" :title="row.description || ''">
+                {{ row.description || '-' }}
+              </td>
+              <td class="py-4 px-4 text-xs text-slate-400 font-mono">
+                <div>{{ row.updatedAt || '-' }}</div>
+                <div v-if="row.updatedBy" class="text-[11px] text-slate-300">by {{ row.updatedBy }}</div>
+              </td>
+              <td class="py-4 px-4 text-right">
+                <div class="flex items-center justify-end gap-1.5">
+                  <button
+                    @click="openEdit(row)"
+                    class="p-1.5 text-brand-600 hover:text-brand-800 hover:bg-brand-50 rounded-xl transition cursor-pointer"
+                    title="编辑此配置"
+                  >
+                    <Pencil class="w-4 h-4" />
+                  </button>
+                  <button
+                    @click="removeConfig(row)"
+                    class="p-1.5 text-rose-500 hover:text-rose-700 hover:bg-rose-50 rounded-xl transition cursor-pointer"
+                    title="删除此配置"
+                  >
+                    <Trash2 class="w-4 h-4" />
+                  </button>
+                </div>
+              </td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+
+    <!-- Create/Edit Modal -->
+    <div v-if="showEditor" class="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/50 backdrop-blur-xs p-4">
+      <form class="w-full max-w-md bg-white border border-slate-100 rounded-3xl p-6 shadow-popover space-y-4 animate-in fade-in zoom-in-95 duration-150" @submit.prevent="saveConfig">
+        <div class="flex items-center justify-between border-b border-slate-100 pb-3">
+          <h3 class="text-base font-black text-slate-900 flex items-center gap-2">
+            <Sliders class="w-5 h-5 text-brand-600" />
+            {{ editingId ? '修改系统配置' : '新增系统配置' }}
+          </h3>
+          <button type="button" @click="showEditor = false" class="text-slate-400 hover:text-slate-600 text-lg font-bold cursor-pointer">&times;</button>
+        </div>
+
+        <div class="space-y-3.5 text-xs">
+          <div>
+            <div class="flex items-center justify-between mb-1">
+              <label class="block text-slate-700 font-bold">配置作用域</label>
+              <span class="text-[11px] text-slate-400">跟随当前选中的作用域</span>
+            </div>
+            <input
+              :value="scope"
+              disabled
+              class="w-full px-3.5 py-2.5 bg-slate-100 border border-slate-200 rounded-xl text-slate-600 font-mono font-bold cursor-not-allowed"
+            />
+          </div>
+
+          <div>
+            <label class="block text-slate-700 font-bold mb-1">配置键 (Prop Name) *</label>
+            <input
+              v-model="form.propName"
+              type="text"
+              :disabled="!!editingId"
+              placeholder="例如: fcc.call.timeout"
+              class="w-full px-3.5 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-slate-900 font-mono placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-brand-500 font-medium disabled:bg-slate-100 disabled:text-slate-500 disabled:cursor-not-allowed"
+            />
+          </div>
+
+          <div class="grid grid-cols-2 gap-3">
+            <div>
+              <label class="block text-slate-700 font-bold mb-1">数据类型</label>
+              <select
+                v-model="form.propType"
+                class="w-full px-3 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-slate-800 font-medium focus:outline-none focus:ring-2 focus:ring-brand-500 bg-white"
+              >
+                <option value="STRING">STRING (字符串)</option>
+                <option value="INT">INT (整型数值)</option>
+                <option value="JSON">JSON (结构体/对象)</option>
+              </select>
+            </div>
+
+            <div>
+              <label class="block text-slate-700 font-bold mb-1">说明摘要</label>
+              <input
+                v-model="form.description"
+                type="text"
+                placeholder="简述配置用途"
+                class="w-full px-3.5 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-slate-900 placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-brand-500"
+              />
+            </div>
+          </div>
+
+          <div>
+            <label class="block text-slate-700 font-bold mb-1">配置值 (Prop Value) *</label>
+            <textarea
+              v-model="form.propValue"
+              rows="3"
+              placeholder="输入该配置的具体值"
+              class="w-full px-3.5 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-slate-900 font-mono placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-brand-500"
+            ></textarea>
+          </div>
+        </div>
+
+        <div class="flex items-center justify-end space-x-3 pt-3 border-t border-slate-100">
+          <button
+            type="button"
+            @click="showEditor = false"
+            class="px-4 py-2 text-slate-600 hover:text-slate-800 font-bold cursor-pointer transition text-xs"
+          >
+            取消
+          </button>
+          <button
+            type="submit"
+            :disabled="saving"
+            class="px-5 py-2.5 bg-brand-500 hover:bg-brand-600 disabled:opacity-50 text-white rounded-xl font-bold shadow-xs transition cursor-pointer text-xs"
+          >
+            {{ saving ? '保存中...' : '确认保存' }}
+          </button>
+        </div>
+      </form>
+    </div>
+  </div>
 </template>

@@ -5,7 +5,8 @@ import {
   agentApi,
   type AgentGroupVO,
   type AgentGroupMemberVO,
-  type AgentVO
+  type AgentVO,
+  type AccountCredentialVO
 } from '../../../api/agentApi';
 import { toast, confirmAction, errorText } from '../../../utils/feedback';
 
@@ -176,16 +177,26 @@ export function useGroupManagement() {
     closeContextMenu();
   };
 
-  const openEditDept = () => {
-    const targetNode = contextMenu.value.node || treeData.value.find(n => n.id === selectedNodeId.value);
-    if (!targetNode) return;
-    const group = rawGroups.value.find(g => String(g.id) === targetNode.id);
+  const openEditDept = (node?: OrgNode | unknown) => {
+    const isOrgNode = node && typeof node === 'object' && 'id' in node && typeof (node as any).id === 'string';
+    const targetId = (isOrgNode ? (node as OrgNode).id : undefined) || contextMenu.value.node?.id || selectedNodeId.value;
+    if (!targetId) {
+      toast('请先选择需要编辑的组织或技能组节点', 'warning');
+      return;
+    }
+    const group = rawGroups.value.find(g => String(g.id) === String(targetId));
     if (group) {
-      editDeptId.value = group.id;
+      editDeptId.value = String(group.id);
       editDeptName.value = group.groupName;
       editDeptCode.value = group.groupCode;
       editDeptType.value = group.groupType || 'SKILL';
       editDeptStrategy.value = group.routingStrategy || 'ROUND_ROBIN';
+    } else {
+      editDeptId.value = String(targetId);
+      editDeptName.value = selectedDept.value;
+      editDeptCode.value = selectedDeptCode.value;
+      editDeptType.value = selectedDeptType.value || 'SKILL';
+      editDeptStrategy.value = strategy.value || 'ROUND_ROBIN';
     }
     showEditDeptModal.value = true;
     closeContextMenu();
@@ -210,12 +221,13 @@ export function useGroupManagement() {
       toast('请填写部门名称和唯一编码！', 'warning');
       return;
     }
-    const parentNode = contextMenu.value.node || treeData.value.find(n => n.id === selectedNodeId.value);
-    if (!parentNode) {
+    const parentId = contextMenu.value.node?.id || selectedNodeId.value;
+    if (!parentId) {
       toast('请先选择上级部门', 'warning');
       return;
     }
-    const parentId = parentNode.id;
+    const parentGroup = rawGroups.value.find(g => String(g.id) === String(parentId));
+    const parentName = parentGroup?.groupName || contextMenu.value.node?.name || selectedDept.value || '当前部门';
 
     try {
       const newId = await agentApi.createGroup({
@@ -226,7 +238,7 @@ export function useGroupManagement() {
         routingStrategy: newDeptStrategy.value
       });
       showAddDeptModal.value = false;
-      triggerToast(`成功在【${parentNode?.name || '根节点'}】下新增部门【${newDeptName.value}】！`);
+      triggerToast(`成功在【${parentName}】下新增部门【${newDeptName.value}】！`);
       await loadOrgTree(newId);
     } catch (err: any) {
       toast('创建失败: ' + (err.message || '请检查编码是否冲突'), 'error');
@@ -329,14 +341,40 @@ export function useGroupManagement() {
   const newAgentName = ref('');
   const newAgentWorkNo = ref('');
   const newAgentPhone = ref('');
+  const newAgentPassword = ref('');
   const newAgentRoleCode = ref('AGENT');
   const newAgentMemberRole = ref('MEMBER');
   const newAgentPriority = ref(0);
+
+  // 弹窗：🎫 坐席凭据交付展示与一键复制
+  const showCredentialModal = ref(false);
+  const deliveredCredential = ref<AccountCredentialVO | null>(null);
+  const isCopied = ref(false);
+
+  const copyCredential = async () => {
+    if (!deliveredCredential.value) return;
+    const text = `坐席工号：${deliveredCredential.value.account}\n坐席姓名：${deliveredCredential.value.displayName}\n登录密码：${deliveredCredential.value.initialPassword || ''}`;
+    try {
+      await navigator.clipboard.writeText(text);
+      isCopied.value = true;
+      setTimeout(() => (isCopied.value = false), 3000);
+    } catch {
+      const textarea = document.createElement('textarea');
+      textarea.value = text;
+      document.body.appendChild(textarea);
+      textarea.select();
+      document.execCommand('copy');
+      document.body.removeChild(textarea);
+      isCopied.value = true;
+      setTimeout(() => (isCopied.value = false), 3000);
+    }
+  };
 
   const openAddAgentModal = () => {
     newAgentName.value = '';
     newAgentWorkNo.value = '';
     newAgentPhone.value = '';
+    newAgentPassword.value = '';
     newAgentRoleCode.value = 'AGENT';
     newAgentMemberRole.value = 'MEMBER';
     newAgentPriority.value = 0;
@@ -348,16 +386,30 @@ export function useGroupManagement() {
       toast('坐席姓名和工号为必填项！', 'warning');
       return;
     }
+    const pwd = newAgentPassword.value.trim();
+    if (pwd && (pwd.length < 8 || pwd.length > 64)) {
+      toast('密码长度需在 8 到 64 位之间！', 'warning');
+      return;
+    }
     try {
-      await agentApi.createAndBindAgent(selectedNodeId.value, {
+      const cred = await agentApi.createAndBindAgent(selectedNodeId.value, {
         agentName: newAgentName.value.trim(),
         workNo: newAgentWorkNo.value.trim(),
         phoneNumber: newAgentPhone.value.trim() || undefined,
         roleCode: newAgentRoleCode.value,
+        password: pwd || undefined,
         memberRole: newAgentMemberRole.value,
         priority: newAgentPriority.value
       });
       showAddAgentModal.value = false;
+      deliveredCredential.value = {
+        ...cred,
+        account: cred?.account || newAgentWorkNo.value.trim(),
+        displayName: cred?.displayName || newAgentName.value.trim(),
+        initialPassword: cred?.initialPassword || (pwd ? pwd : '(已按指定密码设置)'),
+      };
+      isCopied.value = false;
+      showCredentialModal.value = true;
       triggerToast(`坐席 ${newAgentName.value} (${newAgentWorkNo.value}) 创建并加入【${selectedDept.value}】成功！`);
       await loadMembers(selectedNodeId.value);
     } catch (err: any) {
@@ -415,32 +467,83 @@ export function useGroupManagement() {
     }
   };
 
-  // 弹窗：✏️ 修改组员在组内的身份或优先级
+  // 弹窗：🔑 专属重置坐席登录口令
+  const showResetPasswordModal = ref(false);
+  const resettingMember = ref<AgentGroupMemberVO | null>(null);
+  const resetPasswordInput = ref('');
+  const resetSubmitting = ref(false);
+
+  const openResetPasswordModal = (mem: AgentGroupMemberVO) => {
+    resettingMember.value = mem;
+    resetPasswordInput.value = '';
+    showResetPasswordModal.value = true;
+  };
+
+  const handleConfirmResetPassword = async () => {
+    if (!resettingMember.value) return;
+    const pwd = resetPasswordInput.value.trim();
+    if (pwd && (pwd.length < 8 || pwd.length > 64)) {
+      toast('密码长度需在 8 到 64 位之间！', 'warning');
+      return;
+    }
+    resetSubmitting.value = true;
+    try {
+      const cred = await agentApi.resetPassword(resettingMember.value.agentId, pwd || undefined);
+      showResetPasswordModal.value = false;
+      deliveredCredential.value = {
+        ...cred,
+        account: cred?.account || resettingMember.value.workNo,
+        displayName: cred?.displayName || resettingMember.value.agentName,
+        initialPassword: cred?.initialPassword || (pwd ? pwd : '(已按指定密码设置)'),
+      };
+      isCopied.value = false;
+      showCredentialModal.value = true;
+      triggerToast(`坐席 ${resettingMember.value.agentName} 登录口令已更新！`);
+    } catch (err: any) {
+      toast('重置密码失败: ' + (err.message || '网络异常'), 'error');
+    } finally {
+      resetSubmitting.value = false;
+    }
+  };
+
+  // 弹窗：✏️ 修改组员资料与配置
   const showEditMemberModal = ref(false);
   const editingMember = ref<AgentGroupMemberVO | null>(null);
+  const editMemberName = ref('');
+  const editMemberPhone = ref('');
+  const editMemberRoleCode = ref('AGENT');
   const editMemberRole = ref('MEMBER');
   const editMemberPriority = ref(0);
-  const editMemberPassword = ref('');
 
   const handleOpenEditMember = (mem: AgentGroupMemberVO) => {
     editingMember.value = mem;
+    editMemberName.value = mem.agentName || '';
+    editMemberPhone.value = mem.phoneNumber || '';
+    editMemberRoleCode.value = mem.roleCode || 'AGENT';
     editMemberRole.value = mem.memberRole || 'MEMBER';
     editMemberPriority.value = mem.priority || 0;
-    editMemberPassword.value = '';
     showEditMemberModal.value = true;
   };
 
   const handleConfirmEditMember = async () => {
     if (!editingMember.value) return;
-
-    const newPwd = editMemberPassword.value.trim();
-    if (newPwd && (newPwd.length < 8 || newPwd.length > 64)) {
-      toast('新密码长度需在 8 到 64 位之间！', 'warning');
+    if (!editMemberName.value.trim()) {
+      toast('坐席姓名不能为空！', 'warning');
       return;
     }
 
     try {
       const targetGroupId = editingMember.value.groupId || selectedNodeId.value;
+
+      // 1. 同步更新坐席人员档案资料 (姓名、手机号、权限角色)
+      await agentApi.update({
+        id: editingMember.value.agentId,
+        agentName: editMemberName.value.trim(),
+        phoneNumber: editMemberPhone.value.trim() || undefined,
+        roleCode: editMemberRoleCode.value,
+      });
+
+      // 2. 同步更新组内身份与调度优先级
       await agentApi.updateGroupMember(
         targetGroupId,
         editingMember.value.agentId,
@@ -450,12 +553,8 @@ export function useGroupManagement() {
         }
       );
 
-      if (newPwd) {
-        await agentApi.resetPassword(editingMember.value.agentId, newPwd);
-      }
-
       showEditMemberModal.value = false;
-      triggerToast(`组员 ${editingMember.value.agentName} 配置${newPwd ? '及密码' : ''}已成功更新！`);
+      triggerToast(`坐席【${editMemberName.value}】资料与组内配置已成功更新！`);
       await loadMembers(selectedNodeId.value);
     } catch (err: any) {
       toast('修改失败: ' + (err.message || '网络异常'), 'error');
@@ -552,6 +651,7 @@ export function useGroupManagement() {
     newAgentRoleCode,
     newAgentMemberRole,
     newAgentPriority,
+    newAgentPassword,
     openAddAgentModal,
     handleConfirmCreateAgent,
     showBindAgentModal,
@@ -562,11 +662,24 @@ export function useGroupManagement() {
     openBindAgentModal,
     availableAgentsToBind,
     handleConfirmBindAgent,
+    showResetPasswordModal,
+    resettingMember,
+    resetPasswordInput,
+    resetSubmitting,
+    openResetPasswordModal,
+    handleConfirmResetPassword,
+    showCredentialModal,
+    deliveredCredential,
+    isCopied,
+    copyCredential,
+    editDeptId,
     showEditMemberModal,
     editingMember,
+    editMemberName,
+    editMemberPhone,
+    editMemberRoleCode,
     editMemberRole,
     editMemberPriority,
-    editMemberPassword,
     handleOpenEditMember,
     handleConfirmEditMember,
     handleUnbindMember,

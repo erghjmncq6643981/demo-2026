@@ -182,6 +182,43 @@ const emit = defineEmits<{ (event: "select", tab: string): void }>();
               ></span>
             </button>
 
+            <!-- 菜单: 坐席人员 -->
+            <button
+              @click="emit('select', 'agents')"
+              class="w-full flex items-center justify-between px-3 py-2 rounded-xl transition-all cursor-pointer text-xs"
+              :class="
+                activeTab === 'agents'
+                  ? 'bg-brand-50 text-brand-600 shadow-xs'
+                  : 'text-slate-600 hover:text-slate-900 hover:bg-slate-50'
+              "
+            >
+              <div class="flex items-center gap-2.5">
+                <svg
+                  class="w-4 h-4 shrink-0"
+                  :class="
+                    activeTab === 'agents' ? 'text-brand-500' : 'text-slate-400'
+                  "
+                  fill="none"
+                  stroke="currentColor"
+                  viewBox="0 0 24 24"
+                >
+                  <path
+                    stroke-linecap="round"
+                    stroke-linejoin="round"
+                    stroke-width="2"
+                    d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z"
+                  />
+                </svg>
+                <span>坐席人员</span>
+              </div>
+              <span
+                class="w-1.5 h-1.5 rounded-full shrink-0"
+                :class="
+                  activeTab === 'agents' ? 'bg-brand-500' : 'bg-transparent'
+                "
+              ></span>
+            </button>
+
             <!-- 菜单 3: 组织效能报表 (紧随客服组管理下方) -->
             <button
               @click="emit('select', 'orgreport')"
