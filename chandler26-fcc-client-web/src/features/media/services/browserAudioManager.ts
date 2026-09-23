@@ -1,249 +1,204 @@
-import { computed, ref } from 'vue';
+import { ref } from 'vue';
 
 export interface MicrophoneCheckResult {
   ok: boolean;
   message: string;
-  failureType?: 'CANCELLED' | 'PERMISSION_DENIED' | 'FAILED';
+  failureType?: 'PERMISSION_DENIED' | 'UNAVAILABLE' | 'CANCELLED';
 }
 
-/**
- * Manages browser audio input/output devices, microphone permissions,
- * and remote WebRTC audio playback.
- */
+/** Owns browser audio permissions, device selection, and remote playback. */
 export class BrowserAudioManager {
-  public readonly audioInputDevices = ref<MediaDeviceInfo[]>([]);
-  public readonly audioOutputDevices = ref<MediaDeviceInfo[]>([]);
-  public readonly selectedInputDeviceId = ref<string>('');
-  public readonly selectedOutputDeviceId = ref<string>('');
-  public readonly microphonePermissionGranted = ref<boolean>(false);
-  public readonly autoplayBlocked = ref<boolean>(false);
-  public readonly outputSelectionSupported = ref<boolean>(
-    typeof HTMLAudioElement !== 'undefined' && 'setSinkId' in HTMLAudioElement.prototype
-  );
+  private remoteAudioElement: HTMLAudioElement | null = null;
+  private remoteStream: MediaStream | null = null;
+  private permissionGeneration = 0;
+  private deviceChangeHandler: (() => void) | null = null;
+  private onPlaybackProblem: (message: string) => void = () => undefined;
 
-  private audioElement: HTMLAudioElement | null = null;
-  private messageCallback: ((message: string) => void) | null = null;
-  private deviceChangeListener: (() => void) | null = null;
+  public autoplayBlocked = ref(false);
+  public microphonePermissionGranted = ref(false);
+  public audioInputDevices = ref<MediaDeviceInfo[]>([]);
+  public audioOutputDevices = ref<MediaDeviceInfo[]>([]);
+  public selectedInputDeviceId = ref('');
+  public selectedOutputDeviceId = ref('');
+  public audioInputLabel = ref('未检测麦克风');
+  public audioOutputLabel = ref('未检测扬声器');
+  public outputSelectionSupported = ref(false);
 
-  public readonly audioInputLabel = computed<string>(() => {
-    if (!this.selectedInputDeviceId.value) {
-      return this.audioInputDevices.value[0]?.label || '默认麦克风';
-    }
-    const found = this.audioInputDevices.value.find(
-      d => d.deviceId === this.selectedInputDeviceId.value
-    );
-    return found?.label || '默认麦克风';
-  });
-
-  public readonly audioOutputLabel = computed<string>(() => {
-    if (!this.outputSelectionSupported.value) {
-      return '系统默认扬声器';
-    }
-    if (!this.selectedOutputDeviceId.value) {
-      return this.audioOutputDevices.value[0]?.label || '默认扬声器';
-    }
-    const found = this.audioOutputDevices.value.find(
-      d => d.deviceId === this.selectedOutputDeviceId.value
-    );
-    return found?.label || '默认扬声器';
-  });
-
-  public start(onMessage?: (message: string) => void): void {
-    this.messageCallback = onMessage ?? null;
-    this.ensureAudioElement();
-
-    if (typeof navigator !== 'undefined' && navigator.mediaDevices) {
+  start(onPlaybackProblem: (message: string) => void): void {
+    this.onPlaybackProblem = onPlaybackProblem;
+    if (!navigator.mediaDevices || this.deviceChangeHandler) return;
+    this.deviceChangeHandler = () => {
       void this.refreshDevices();
-
-      if (!this.deviceChangeListener && typeof navigator.mediaDevices.addEventListener === 'function') {
-        this.deviceChangeListener = () => {
-          void this.refreshDevices();
-        };
-        navigator.mediaDevices.addEventListener('devicechange', this.deviceChangeListener);
-      }
-    }
+    };
+    navigator.mediaDevices.addEventListener('devicechange', this.deviceChangeHandler);
   }
 
-  public stop(): void {
+  stop(): void {
+    this.permissionGeneration += 1;
+    if (navigator.mediaDevices && this.deviceChangeHandler) {
+      navigator.mediaDevices.removeEventListener('devicechange', this.deviceChangeHandler);
+    }
+    this.deviceChangeHandler = null;
     this.clearRemoteStream();
-    if (
-      this.deviceChangeListener &&
-      typeof navigator !== 'undefined' &&
-      navigator.mediaDevices &&
-      typeof navigator.mediaDevices.removeEventListener === 'function'
-    ) {
-      navigator.mediaDevices.removeEventListener('devicechange', this.deviceChangeListener);
-      this.deviceChangeListener = null;
-    }
-    this.messageCallback = null;
+    this.microphonePermissionGranted.value = false;
   }
 
-  public async refreshDevices(): Promise<void> {
-    if (typeof navigator === 'undefined' || !navigator.mediaDevices?.enumerateDevices) {
-      return;
-    }
-
-    try {
-      const devices = await navigator.mediaDevices.enumerateDevices();
-      this.audioInputDevices.value = devices.filter(d => d.kind === 'audioinput');
-      this.audioOutputDevices.value = devices.filter(d => d.kind === 'audiooutput');
-
-      if (
-        this.selectedInputDeviceId.value &&
-        !this.audioInputDevices.value.some(d => d.deviceId === this.selectedInputDeviceId.value)
-      ) {
-        this.selectedInputDeviceId.value = '';
-      }
-
-      if (
-        this.selectedOutputDeviceId.value &&
-        !this.audioOutputDevices.value.some(d => d.deviceId === this.selectedOutputDeviceId.value)
-      ) {
-        this.selectedOutputDeviceId.value = '';
-      }
-    } catch (err) {
-      console.warn('[BrowserAudioManager] 无法枚举音频设备:', err);
-    }
-  }
-
-  public async checkMicrophonePermission(): Promise<MicrophoneCheckResult> {
-    if (typeof navigator === 'undefined' || !navigator.mediaDevices?.getUserMedia) {
-      return {
-        ok: false,
-        message: '当前浏览器环境不支持获取麦克风',
-        failureType: 'FAILED',
-      };
-    }
-
-    try {
-      const constraints: MediaStreamConstraints = {
-        audio: this.selectedInputDeviceId.value
-          ? { deviceId: { exact: this.selectedInputDeviceId.value } }
-          : true,
-        video: false,
-      };
-
-      const stream = await navigator.mediaDevices.getUserMedia(constraints);
-      stream.getTracks().forEach(track => track.stop());
-
-      this.microphonePermissionGranted.value = true;
-      await this.refreshDevices();
-
-      return {
-        ok: true,
-        message: '麦克风权限正常，设备就绪',
-      };
-    } catch (error: any) {
+  async checkMicrophonePermission(): Promise<MicrophoneCheckResult> {
+    const generation = ++this.permissionGeneration;
+    if (!navigator.mediaDevices?.getUserMedia) {
       this.microphonePermissionGranted.value = false;
-      const errorName = String(error?.name || '');
-
-      if (errorName === 'NotAllowedError' || errorName === 'PermissionDeniedError') {
-        return {
-          ok: false,
-          message: '麦克风权限已被拒绝，请在浏览器地址栏允许麦克风权限后重试',
-          failureType: 'PERMISSION_DENIED',
-        };
-      }
-
-      if (errorName === 'AbortError') {
-        return {
-          ok: false,
-          message: '麦克风权限请求已取消',
-          failureType: 'CANCELLED',
-        };
-      }
-
-      if (errorName === 'NotFoundError' || errorName === 'DevicesNotFoundError') {
-        return {
-          ok: false,
-          message: '未检测到可用的麦克风硬件设备',
-          failureType: 'FAILED',
-        };
-      }
-
       return {
         ok: false,
-        message: `麦克风不可用: ${error?.message || '未知异常'}`,
-        failureType: 'FAILED',
+        message: '当前环境不支持 WebRTC 音频设备',
+        failureType: 'UNAVAILABLE',
       };
     }
-  }
 
-  public async attachRemoteStream(stream: MediaStream): Promise<void> {
-    const audioEl = this.ensureAudioElement();
-    if (!audioEl) return;
-
-    audioEl.srcObject = stream;
+    let probeStream: MediaStream | null = null;
     try {
-      await audioEl.play();
-      this.autoplayBlocked.value = false;
-    } catch (err: any) {
-      console.warn('[BrowserAudioManager] 远端音频自动播放受限:', err);
-      this.autoplayBlocked.value = true;
-      this.messageCallback?.('浏览器自动播放受阻，请点击“恢复远端声音”');
+      probeStream = await navigator.mediaDevices.getUserMedia({ audio: true, video: false });
+      probeStream.getTracks().forEach(track => track.stop());
+      probeStream = null;
+      if (generation !== this.permissionGeneration) {
+        return { ok: false, message: '麦克风检查已取消', failureType: 'CANCELLED' };
+      }
+      await this.refreshDevices();
+      this.microphonePermissionGranted.value = true;
+      return { ok: true, message: '麦克风可用' };
+    } catch (error) {
+      this.microphonePermissionGranted.value = false;
+      const message = error instanceof DOMException && error.name === 'NotAllowedError'
+        ? '麦克风权限被拒绝，请在系统设置中允许访问'
+        : '无法访问麦克风，请检查设备占用与系统权限';
+      return {
+        ok: false,
+        message,
+        failureType: error instanceof DOMException && error.name === 'NotAllowedError'
+          ? 'PERMISSION_DENIED'
+          : 'UNAVAILABLE',
+      };
+    } finally {
+      probeStream?.getTracks().forEach(track => track.stop());
     }
   }
 
-  public clearRemoteStream(): void {
-    if (this.audioElement) {
-      this.audioElement.srcObject = null;
-      try {
-        this.audioElement.pause();
-      } catch {
-        // ignore
-      }
+  async refreshDevices(): Promise<void> {
+    if (!navigator.mediaDevices?.enumerateDevices) return;
+    const devices = await navigator.mediaDevices.enumerateDevices();
+    this.audioInputDevices.value = devices.filter(device => device.kind === 'audioinput');
+    this.audioOutputDevices.value = devices.filter(device => device.kind === 'audiooutput');
+    this.outputSelectionSupported.value = Boolean(this.getSetSinkId(this.ensureAudioElement()));
+
+    this.selectedInputDeviceId.value = this.resolveSelectedDevice(
+      this.audioInputDevices.value,
+      this.selectedInputDeviceId.value,
+    );
+    this.selectedOutputDeviceId.value = this.resolveSelectedDevice(
+      this.audioOutputDevices.value,
+      this.selectedOutputDeviceId.value,
+    );
+    this.updateDeviceLabels();
+    await this.applyOutputDevice();
+  }
+
+  selectInputDevice(deviceId: string): void {
+    if (!this.audioInputDevices.value.some(device => device.deviceId === deviceId)) return;
+    this.selectedInputDeviceId.value = deviceId;
+    this.updateDeviceLabels();
+  }
+
+  async selectOutputDevice(deviceId: string): Promise<boolean> {
+    if (!this.audioOutputDevices.value.some(device => device.deviceId === deviceId)) return false;
+    this.selectedOutputDeviceId.value = deviceId;
+    this.updateDeviceLabels();
+    return this.applyOutputDevice();
+  }
+
+  async attachRemoteStream(stream: MediaStream): Promise<void> {
+    this.remoteStream = stream;
+    const audioElement = this.ensureAudioElement();
+    audioElement.srcObject = stream;
+    await this.applyOutputDevice();
+    try {
+      await audioElement.play();
+      this.autoplayBlocked.value = false;
+    } catch {
+      this.autoplayBlocked.value = true;
+      this.onPlaybackProblem('浏览器阻止了远端音频自动播放');
+    }
+  }
+
+  async resumeRemoteAudio(): Promise<boolean> {
+    if (!this.remoteAudioElement?.srcObject) return false;
+    try {
+      await this.remoteAudioElement.play();
+      this.autoplayBlocked.value = false;
+      return true;
+    } catch {
+      this.autoplayBlocked.value = true;
+      return false;
+    }
+  }
+
+  clearRemoteStream(): void {
+    this.remoteStream?.getTracks().forEach(track => track.stop());
+    this.remoteStream = null;
+    if (this.remoteAudioElement) {
+      this.remoteAudioElement.pause();
+      this.remoteAudioElement.srcObject = null;
     }
     this.autoplayBlocked.value = false;
   }
 
-  public async resumeRemoteAudio(): Promise<void> {
-    if (!this.audioElement || !this.audioElement.srcObject) return;
+  private ensureAudioElement(): HTMLAudioElement {
+    if (!this.remoteAudioElement) {
+      let element = document.getElementById('fcc-remote-audio-sink') as HTMLAudioElement | null;
+      if (!element) {
+        element = document.createElement('audio');
+        element.id = 'fcc-remote-audio-sink';
+        element.autoplay = true;
+        element.style.display = 'none';
+        document.body.appendChild(element);
+      }
+      this.remoteAudioElement = element;
+    }
+    return this.remoteAudioElement;
+  }
 
+  private resolveSelectedDevice(devices: MediaDeviceInfo[], currentDeviceId: string): string {
+    if (devices.some(device => device.deviceId === currentDeviceId)) return currentDeviceId;
+    return devices.find(device => device.deviceId === 'default')?.deviceId
+      || devices[0]?.deviceId
+      || '';
+  }
+
+  private updateDeviceLabels(): void {
+    const input = this.audioInputDevices.value.find(
+      device => device.deviceId === this.selectedInputDeviceId.value,
+    );
+    const output = this.audioOutputDevices.value.find(
+      device => device.deviceId === this.selectedOutputDeviceId.value,
+    );
+    this.audioInputLabel.value = input?.label || (input ? '默认麦克风' : '未检测麦克风');
+    this.audioOutputLabel.value = output?.label || (output ? '默认扬声器' : '未检测扬声器');
+  }
+
+  private async applyOutputDevice(): Promise<boolean> {
+    const setSinkId = this.getSetSinkId(this.ensureAudioElement());
+    if (!setSinkId || !this.selectedOutputDeviceId.value) return false;
     try {
-      await this.audioElement.play();
-      this.autoplayBlocked.value = false;
-      this.messageCallback?.('远端音频已恢复播放');
-    } catch (err) {
-      console.warn('[BrowserAudioManager] 无法恢复音频播放:', err);
+      await setSinkId(this.selectedOutputDeviceId.value);
+      return true;
+    } catch {
+      this.onPlaybackProblem('无法切换扬声器，请检查系统音频权限');
+      return false;
     }
   }
 
-  public selectInputDevice(deviceId: string): void {
-    this.selectedInputDeviceId.value = deviceId;
-  }
-
-  public async selectOutputDevice(deviceId: string): Promise<void> {
-    this.selectedOutputDeviceId.value = deviceId;
-    if (
-      this.audioElement &&
-      this.outputSelectionSupported.value &&
-      typeof (this.audioElement as any).setSinkId === 'function'
-    ) {
-      try {
-        await (this.audioElement as any).setSinkId(deviceId);
-      } catch (err) {
-        console.warn('[BrowserAudioManager] 设置扬声器输出设备失败:', err);
-      }
-    }
-  }
-
-  private ensureAudioElement(): HTMLAudioElement | null {
-    if (!this.audioElement && typeof document !== 'undefined') {
-      const el = document.createElement('audio');
-      el.autoplay = true;
-      el.setAttribute('playsinline', 'true');
-      el.style.display = 'none';
-      document.body.appendChild(el);
-      this.audioElement = el;
-
-      if (
-        this.outputSelectionSupported.value &&
-        this.selectedOutputDeviceId.value &&
-        typeof (el as any).setSinkId === 'function'
-      ) {
-        void (el as any).setSinkId(this.selectedOutputDeviceId.value);
-      }
-    }
-    return this.audioElement;
+  private getSetSinkId(audioElement: HTMLAudioElement): ((sinkId: string) => Promise<void>) | null {
+    const candidate = (audioElement as unknown as {
+      setSinkId?: (sinkId: string) => Promise<void>;
+    }).setSinkId;
+    return typeof candidate === 'function' ? candidate.bind(audioElement) : null;
   }
 }
