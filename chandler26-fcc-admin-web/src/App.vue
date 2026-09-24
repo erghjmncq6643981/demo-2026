@@ -53,7 +53,8 @@ watch(canManageBusiness, (allowed) => {
 });
 
 const handleUnauthorized = () => {
-  authStore.logout();
+  authStore.clearAuth();
+  activeTab.value = "routes";
 };
 
 onMounted(() => {

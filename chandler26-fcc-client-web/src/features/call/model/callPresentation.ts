@@ -13,6 +13,7 @@ const workStatusLabels: Record<AgentWorkStatus, string> = {
   READY: '空闲',
   UNREADY: '空闲',
   BUSY: '空闲',
+  REST: '空闲',
   CALLING: '呼叫中（恢复中）',
   RINGING: '振铃中（恢复中）',
   ANSWERED: '通话中（恢复中）',

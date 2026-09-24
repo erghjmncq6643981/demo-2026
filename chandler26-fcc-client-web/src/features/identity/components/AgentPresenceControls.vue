@@ -3,6 +3,15 @@ import { computed } from 'vue';
 import { useAgentStore } from '../../../stores/agentStore';
 import { useCallStore } from '../../../stores/callStore';
 
+const props = withDefaults(
+  defineProps<{
+    hideLabel?: boolean;
+  }>(),
+  {
+    hideLabel: false,
+  },
+);
+
 const agentStore = useAgentStore();
 const callStore = useCallStore();
 const blocked = computed(() =>
@@ -13,39 +22,41 @@ const blocked = computed(() =>
 </script>
 
 <template>
-  <div class="presence">
-    <span class="label">工作状态</span>
-    <div class="controls" role="group" aria-label="坐席工作状态">
+  <div class="flex items-center gap-2">
+    <span v-if="!props.hideLabel" class="text-xs font-bold text-slate-600 select-none">工作状态</span>
+    <div
+      class="flex items-center gap-1 bg-slate-100/90 p-1 rounded-2xl border border-slate-200/80 shadow-2xs"
+      role="group"
+      aria-label="坐席工作状态"
+    >
       <button
         type="button"
         :disabled="blocked"
         :aria-pressed="agentStore.loginStatus === 'LOGIN'"
-        :class="{ active: agentStore.loginStatus === 'LOGIN', ready: true }"
+        class="h-8 px-3.5 rounded-xl text-xs font-bold flex items-center gap-1.5 transition-all cursor-pointer disabled:opacity-40 disabled:cursor-not-allowed select-none"
+        :class="agentStore.loginStatus === 'LOGIN' ? 'bg-white text-emerald-700 shadow-xs font-black' : 'text-slate-500 hover:text-slate-900'"
         @click="agentStore.setLoginStatus('LOGIN')"
       >
-        <span class="dot" />示闲
+        <span
+          class="w-2 h-2 rounded-full transition-colors"
+          :class="agentStore.loginStatus === 'LOGIN' ? 'bg-emerald-500 ring-2 ring-emerald-200' : 'bg-slate-300'"
+        />
+        <span>示闲</span>
       </button>
       <button
         type="button"
         :disabled="blocked"
         :aria-pressed="agentStore.loginStatus === 'LOGIN_BUSY'"
-        :class="{ active: agentStore.loginStatus === 'LOGIN_BUSY', busy: true }"
+        class="h-8 px-3.5 rounded-xl text-xs font-bold flex items-center gap-1.5 transition-all cursor-pointer disabled:opacity-40 disabled:cursor-not-allowed select-none"
+        :class="agentStore.loginStatus === 'LOGIN_BUSY' ? 'bg-white text-amber-700 shadow-xs font-black' : 'text-slate-500 hover:text-slate-900'"
         @click="agentStore.setLoginStatus('LOGIN_BUSY')"
       >
-        <span class="dot" />示忙
+        <span
+          class="w-2 h-2 rounded-full transition-colors"
+          :class="agentStore.loginStatus === 'LOGIN_BUSY' ? 'bg-amber-500 ring-2 ring-amber-200' : 'bg-slate-300'"
+        />
+        <span>示忙</span>
       </button>
     </div>
   </div>
 </template>
-
-<style scoped>
-.presence { display: grid; gap: 5px; }
-.label { color: #475569; font-size: 11px; font-weight: 800; }
-.controls { display: flex; gap: 4px; padding: 3px; border: 1px solid #e2e8f0; border-radius: 10px; background: #f1f5f9; }
-button { display: flex; align-items: center; gap: 6px; border-radius: 7px; padding: 6px 11px; color: #64748b; font-size: 12px; font-weight: 800; }
-button.active { background: #fff; box-shadow: 0 1px 2px rgb(15 23 42 / 8%); }
-button.ready.active { color: #047857; }
-button.busy.active { color: #b45309; }
-button:disabled { cursor: not-allowed; opacity: 0.58; }
-.dot { width: 8px; height: 8px; border-radius: 999px; background: currentColor; }
-</style>

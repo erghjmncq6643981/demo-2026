@@ -49,6 +49,13 @@ export const useAdminAuthStore = defineStore('adminAuth', () => {
     }
   }
 
+  function clearAuth() {
+    token.value = null;
+    user.value = null;
+    localStorage.removeItem('satoken');
+    localStorage.removeItem('fcc_admin_user');
+  }
+
   async function fetchUser() {
     if (!token.value) return;
     try {
@@ -56,7 +63,7 @@ export const useAdminAuthStore = defineStore('adminAuth', () => {
       user.value = info;
       localStorage.setItem('fcc_admin_user', JSON.stringify(info));
     } catch (err) {
-      logout();
+      clearAuth();
     }
   }
 
@@ -68,10 +75,7 @@ export const useAdminAuthStore = defineStore('adminAuth', () => {
     } catch (err) {
       // ignore
     } finally {
-      token.value = null;
-      user.value = null;
-      localStorage.removeItem('satoken');
-      localStorage.removeItem('fcc_admin_user');
+      clearAuth();
     }
   }
 
@@ -86,6 +90,7 @@ export const useAdminAuthStore = defineStore('adminAuth', () => {
     permissions,
     login,
     fetchUser,
+    clearAuth,
     logout,
   };
 });

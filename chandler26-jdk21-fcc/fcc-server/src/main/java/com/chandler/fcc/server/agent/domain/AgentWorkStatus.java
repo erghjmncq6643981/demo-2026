@@ -11,6 +11,7 @@ public enum AgentWorkStatus {
     READY("示闲，当前可接来电或主动外呼"),
     UNREADY("已退出，不参与呼叫"),
     BUSY("示忙，不接来电但允许主动外呼"),
+    REST("小休，不接来电但允许主动外呼"),
     CALLING("正在发起呼叫"),
     RINGING("坐席终端正在振铃"),
     ANSWERED("坐席已应答或正在通话"),

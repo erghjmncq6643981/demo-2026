@@ -9,6 +9,15 @@ import {
   parseEndpointKey,
 } from '../model/endpointSelection';
 
+const props = withDefaults(
+  defineProps<{
+    layout?: 'horizontal' | 'vertical';
+  }>(),
+  {
+    layout: 'horizontal',
+  },
+);
+
 const agentStore = useAgentStore();
 const callStore = useCallStore();
 
@@ -44,24 +53,15 @@ async function change(event: Event) {
 </script>
 
 <template>
-  <div class="endpoint-selector">
-    <div class="endpoint-heading">
-      <span>接听终端</span>
-      <button
-        v-if="agentStore.endpointError"
-        type="button"
-        class="retry"
-        :disabled="agentStore.endpointsLoading"
-        @click="agentStore.loadEndpoints()"
-      >
-        重试
-      </button>
-    </div>
-    <div class="select-wrap">
+  <!-- Horizontal layout (default): label on the left -->
+  <div v-if="props.layout === 'horizontal'" class="flex items-center gap-2.5">
+    <span class="text-xs font-bold text-slate-600 shrink-0 select-none">接听终端</span>
+    <div class="relative flex items-center">
       <select
         :value="currentKey"
         :disabled="disabled"
         aria-label="切换接听终端"
+        class="h-9 bg-slate-50 hover:bg-slate-100/80 focus:bg-white border border-slate-200/90 rounded-xl px-3 py-1.5 text-xs font-bold text-slate-800 focus:outline-none focus:ring-2 focus:ring-brand-500/20 focus:border-brand-500 transition shadow-2xs cursor-pointer disabled:bg-slate-100 disabled:text-slate-400 disabled:cursor-not-allowed max-w-[280px]"
         @change="change"
       >
         <option v-if="agentStore.endpointsLoading" :value="currentKey">正在加载终端…</option>
@@ -75,68 +75,57 @@ async function change(event: Event) {
           {{ option.label }} · {{ option.detail }}
         </option>
       </select>
-      <span v-if="agentStore.endpointSwitching" class="pending">切换中…</span>
+      <span v-if="agentStore.endpointSwitching" class="ml-2 text-xs font-bold text-brand-600 animate-pulse whitespace-nowrap">切换中…</span>
+      <button
+        v-if="agentStore.endpointError"
+        type="button"
+        class="ml-2 text-xs font-bold text-rose-600 underline hover:text-rose-700 cursor-pointer whitespace-nowrap"
+        :disabled="agentStore.endpointsLoading"
+        @click="agentStore.loadEndpoints()"
+      >
+        重试
+      </button>
     </div>
-    <p v-if="callBlocksSwitch" class="hint">通话或话后整理期间不可切换</p>
-    <p v-else-if="agentStore.endpointError" class="error" role="alert">
+  </div>
+
+  <!-- Vertical layout: heading on top -->
+  <div v-else class="min-w-full">
+    <div class="flex items-center justify-between mb-1.5 text-slate-600 text-xs font-extrabold">
+      <span>接听终端</span>
+      <button
+        v-if="agentStore.endpointError"
+        type="button"
+        class="text-brand-600 text-xs font-bold underline"
+        :disabled="agentStore.endpointsLoading"
+        @click="agentStore.loadEndpoints()"
+      >
+        重试
+      </button>
+    </div>
+    <div class="flex items-center gap-2">
+      <select
+        :value="currentKey"
+        :disabled="disabled"
+        aria-label="切换接听终端"
+        class="w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-2 text-xs font-bold text-slate-800 focus:outline-none focus:ring-2 focus:ring-brand-500/20 focus:border-brand-500"
+        @change="change"
+      >
+        <option v-if="agentStore.endpointsLoading" :value="currentKey">正在加载终端…</option>
+        <option v-else-if="!options.length" :value="currentKey">没有可用接听终端</option>
+        <option
+          v-for="option in options"
+          :key="option.key"
+          :value="option.key"
+          :disabled="option.disabled"
+        >
+          {{ option.label }} · {{ option.detail }}
+        </option>
+      </select>
+      <span v-if="agentStore.endpointSwitching" class="text-xs font-bold text-brand-600 animate-pulse">切换中…</span>
+    </div>
+    <p v-if="callBlocksSwitch" class="mt-1 text-[11px] text-slate-400">通话或话后整理期间不可切换</p>
+    <p v-else-if="agentStore.endpointError" class="mt-1 text-[11px] text-rose-600" role="alert">
       {{ agentStore.endpointError }}
     </p>
   </div>
 </template>
-
-<style scoped>
-.endpoint-selector {
-  min-width: min(100%, 300px);
-}
-.endpoint-heading {
-  display: flex;
-  justify-content: space-between;
-  margin-bottom: 5px;
-  color: #475569;
-  font-size: 11px;
-  font-weight: 800;
-}
-.select-wrap {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-}
-select {
-  width: 100%;
-  max-width: 290px;
-  border: 1px solid #cbd5e1;
-  border-radius: 9px;
-  background: #fff;
-  padding: 8px 32px 8px 10px;
-  color: #1e293b;
-  font-size: 12px;
-  font-weight: 700;
-}
-select:disabled {
-  background: #f8fafc;
-  color: #64748b;
-}
-.pending,
-.hint,
-.error,
-.retry {
-  font-size: 11px;
-}
-.pending {
-  color: #4f46e5;
-  white-space: nowrap;
-}
-.hint,
-.error {
-  margin-top: 5px;
-}
-.hint {
-  color: #64748b;
-}
-.error {
-  color: #b42318;
-}
-.retry {
-  color: #4f46e5;
-}
-</style>

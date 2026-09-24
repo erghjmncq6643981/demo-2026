@@ -71,7 +71,7 @@
         p.last_state_at = UTC_TIMESTAMP(3), p.version = p.version + 1
     WHERE a.work_no = #{owner}
       AND p.active_call_id IS NULL
-      AND p.work_status IN ('READY', 'BUSY', 'UNREADY')
+      AND p.work_status IN ('READY', 'BUSY', 'REST', 'UNREADY')
       AND a.status = 'ENABLED'
       AND a.deleted_at IS NULL
   </update>

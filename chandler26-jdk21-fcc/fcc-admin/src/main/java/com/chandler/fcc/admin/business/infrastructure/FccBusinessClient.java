@@ -17,6 +17,7 @@ import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Component;
 import org.springframework.web.context.request.RequestContextHolder;
 import org.springframework.web.context.request.ServletRequestAttributes;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.web.server.ResponseStatusException;
 
 /**
@@ -25,6 +26,7 @@ import org.springframework.web.server.ResponseStatusException;
  * <p>适配器只转发当前控制台会话令牌，操作者身份与数据权限仍由 fcc-server 在线核验，
  * 前端不会直接访问运行控制面。</p>
  */
+@Slf4j
 @Component
 @RequiredArgsConstructor
 public class FccBusinessClient {
@@ -60,9 +62,27 @@ public class FccBusinessClient {
                 HttpResponse.BodyHandlers.ofString(StandardCharsets.UTF_8)
             );
             JsonNode root = objectMapper.readTree(response.body());
-            if (response.statusCode() < 200 || response.statusCode() >= 300 || root.path("code").asInt() != 200) {
-                String message = root.path("message").asText("运行控制服务拒绝了管理请求");
-                throw new ResponseStatusException(HttpStatus.valueOf(response.statusCode()), message);
+            int statusCode = response.statusCode();
+            int bizCode = root.path("code").asInt();
+            if (statusCode < 200 || statusCode >= 300 || (bizCode != 0 && bizCode != 200)) {
+                String message = root.path("message").asText(null);
+                if (message == null || message.isBlank()) {
+                    message = root.path("error").asText(null);
+                }
+                if (message == null || message.isBlank()) {
+                    if (statusCode == 401 || bizCode == 401) {
+                        message = "登录已失效，请重新登录";
+                    } else if (statusCode == 403 || bizCode == 403) {
+                        message = "缺少客户和自动外呼管理权限";
+                    } else {
+                        message = "运行控制服务拒绝了管理请求";
+                    }
+                }
+                log.warn("⚠️ [FccBusinessClient] 内部业务服务响应非成功: method={}, path={}, status={}, bizCode={}, message={}",
+                        method, path, statusCode, bizCode, message);
+                int effectiveStatus = (statusCode >= 400 && statusCode < 600) ? statusCode : (bizCode >= 400 && bizCode < 600 ? bizCode : 500);
+                HttpStatus resolved = HttpStatus.resolve(effectiveStatus);
+                throw new ResponseStatusException(resolved != null ? resolved : HttpStatus.INTERNAL_SERVER_ERROR, message);
             }
             JsonNode dataNode = root.path("data");
             if (dataNode.isMissingNode() || dataNode.isNull()) {

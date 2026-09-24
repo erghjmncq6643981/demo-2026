@@ -15,6 +15,7 @@ export type AgentWorkStatus =
   | 'READY'
   | 'UNREADY'
   | 'BUSY'
+  | 'REST'
   | 'CALLING'
   | 'RINGING'
   | 'ANSWERED'

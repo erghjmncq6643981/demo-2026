@@ -10,7 +10,7 @@
     ON DUPLICATE KEY UPDATE
       login_status = 'LOGIN',
       work_status = CASE
-        WHEN active_call_id IS NULL AND work_status IN ('UNREADY', 'READY', 'BUSY') THEN 'READY'
+        WHEN active_call_id IS NULL AND work_status IN ('UNREADY', 'READY', 'BUSY', 'REST') THEN 'READY'
         ELSE work_status
       END,
       login_at = UTC_TIMESTAMP(3),
@@ -22,7 +22,7 @@
     JOIN fcc_agent a ON a.id = p.agent_id
     SET p.login_status = 'LOGOUT',
         p.work_status = CASE
-          WHEN p.active_call_id IS NULL AND p.work_status IN ('READY', 'BUSY', 'UNREADY') THEN 'UNREADY'
+          WHEN p.active_call_id IS NULL AND p.work_status IN ('READY', 'BUSY', 'REST', 'UNREADY') THEN 'UNREADY'
           ELSE p.work_status
         END,
         p.last_state_at = UTC_TIMESTAMP(3),
