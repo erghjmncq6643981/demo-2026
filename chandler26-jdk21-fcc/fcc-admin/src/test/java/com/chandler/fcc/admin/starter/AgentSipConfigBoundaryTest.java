@@ -1,5 +1,6 @@
 package com.chandler.fcc.admin.starter;
 
+import com.chandler.fcc.admin.client.SidecarAdminClient;
 import com.chandler.fcc.admin.service.AgentSipConfigService;
 import com.chandler.fcc.admin.service.AuthService;
 import com.chandler.fcc.admin.service.SipCredentialCipher;
@@ -20,9 +21,10 @@ class AgentSipConfigBoundaryTest {
         var mapper = mock(ExtensionMapper.class);
         var auth = mock(AuthService.class);
         var cipher = mock(SipCredentialCipher.class);
-        var service = new AgentSipConfigService(mapper, auth, cipher);
-        ReflectionTestUtils.setField(service, "wsUrl", "wss://sip.example/ws");
-        ReflectionTestUtils.setField(service, "domain", "sip.example");
+        var sidecar = mock(SidecarAdminClient.class);
+        var service = new AgentSipConfigService(mapper, auth, cipher, sidecar);
+        ReflectionTestUtils.setField(service, "configuredWsUrl", "wss://sip.example/ws");
+        ReflectionTestUtils.setField(service, "configuredDomain", "sip.example");
         when(auth.getLoginUserInfo()).thenReturn(UserInfoVO.builder().accountType("CONSOLE").build());
         assertThrows(ResponseStatusException.class, service::current);
         verifyNoInteractions(mapper, cipher);

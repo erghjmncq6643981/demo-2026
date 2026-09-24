@@ -23,7 +23,10 @@ import org.springframework.transaction.annotation.Transactional;
 
 import java.nio.charset.StandardCharsets;
 import java.time.LocalDateTime;
+import java.util.Collections;
 import java.util.List;
+import java.util.Map;
+import java.util.stream.Collectors;
 
 /**
  * 通信分机与 FreeSWITCH Sidecar 双向同步业务服务
@@ -146,8 +149,11 @@ public class ExtensionService {
 
         Page<ExtensionEntity> entityPage = extensionMapper.selectPage(page, wrapper);
 
+        // 批量获取 Go Sidecar / FreeSWITCH 权威实时注册状态
+        Map<String, Map<String, Object>> regMap = queryRealtimeRegistrations();
+
         List<ExtensionVO> voList = entityPage.getRecords().stream()
-                .map(this::buildExtensionVO)
+                .map(entity -> buildExtensionVO(entity, regMap))
                 .toList();
 
         return PageResult.<ExtensionVO>builder()
@@ -172,26 +178,69 @@ public class ExtensionService {
         if (entity == null) {
             return null;
         }
-        return buildExtensionVO(entity);
+        return buildExtensionVO(entity, queryRealtimeRegistrations());
     }
 
     /**
-     * 组装分机视图对象，填充 Redis 在线态与绑定坐席
+     * 查询 Go Sidecar 活跃注册态并以分机号为索引组织
      */
-    private ExtensionVO buildExtensionVO(ExtensionEntity entity) {
-        String ext = entity.getExtension();
-
-        // 1. 查询 Redis 在线状态
-        String onlineStatus = "OFFLINE";
+    private Map<String, Map<String, Object>> queryRealtimeRegistrations() {
         try {
-            if (stringRedisTemplate != null) {
-                String val = stringRedisTemplate.opsForValue().get(EXTENSION_PRESENCE_PREFIX + ext);
-                if ("ONLINE".equalsIgnoreCase(val) || "REGISTERED".equalsIgnoreCase(val)) {
-                    onlineStatus = "ONLINE";
-                }
+            List<Map<String, Object>> regs = sidecarAdminClient.getRegistrations();
+            if (regs != null && !regs.isEmpty()) {
+                return regs.stream()
+                        .filter(m -> m.get("reg_user") != null)
+                        .collect(Collectors.toMap(
+                                m -> String.valueOf(m.get("reg_user")),
+                                m -> m,
+                                (a, b) -> a
+                        ));
             }
         } catch (Exception e) {
-            log.debug("[ExtensionService] Redis 获取分机注册态失败: ext={}", ext);
+            log.warn("[ExtensionService] 查询 Go Sidecar 注册态异常: {}", e.getMessage());
+        }
+        return Collections.emptyMap();
+    }
+
+    /**
+     * 组装分机视图对象，填充实时在线态与绑定坐席
+     */
+    private ExtensionVO buildExtensionVO(ExtensionEntity entity, Map<String, Map<String, Object>> regMap) {
+        String ext = entity.getExtension();
+
+        // 1. 查询实时在线状态 (优先 Go Sidecar 权威实时注册态，降级 Redis)
+        String onlineStatus = "OFFLINE";
+        String registeredContact = null;
+        String registeredIp = null;
+
+        Map<String, Object> regInfo = regMap != null ? regMap.get(ext) : null;
+        if (regInfo != null) {
+            onlineStatus = "ONLINE";
+            registeredContact = regInfo.get("url") != null ? String.valueOf(regInfo.get("url")) : null;
+            String netIp = regInfo.get("network_ip") != null ? String.valueOf(regInfo.get("network_ip")) : null;
+            Object netPort = regInfo.get("network_port");
+            if (netIp != null && netPort != null) {
+                registeredIp = netIp + ":" + netPort;
+            } else if (netIp != null) {
+                registeredIp = netIp;
+            }
+            // 回填 Redis 租约
+            try {
+                if (stringRedisTemplate != null) {
+                    stringRedisTemplate.opsForValue().set(EXTENSION_PRESENCE_PREFIX + ext, "ONLINE", java.time.Duration.ofHours(1));
+                }
+            } catch (Exception ignored) {}
+        } else {
+            try {
+                if (stringRedisTemplate != null) {
+                    String val = stringRedisTemplate.opsForValue().get(EXTENSION_PRESENCE_PREFIX + ext);
+                    if ("ONLINE".equalsIgnoreCase(val) || "REGISTERED".equalsIgnoreCase(val)) {
+                        onlineStatus = "ONLINE";
+                    }
+                }
+            } catch (Exception e) {
+                log.debug("[ExtensionService] Redis 获取分机注册态失败: ext={}", ext);
+            }
         }
 
         // 2. 查询绑定的坐席信息 (优先从 fcc_extension 单表直读，0 延迟无连表损耗)
@@ -221,6 +270,8 @@ public class ExtensionService {
                 .endpointType(entity.getEndpointType())
                 .status(entity.getStatus())
                 .onlineStatus(onlineStatus)
+                .registeredContact(registeredContact)
+                .registeredIp(registeredIp)
                 .boundAgentName(boundAgentName)
                 .boundAgentWorkNo(boundWorkNo)
                 .createdAt(entity.getCreatedAt())

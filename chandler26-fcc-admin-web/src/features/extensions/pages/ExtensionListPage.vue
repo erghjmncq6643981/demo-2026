@@ -273,7 +273,6 @@ onMounted(loadExtensions);
               </td>
               <td class="py-4 px-4 text-right">
                 <div class="flex items-center justify-end gap-2">
-                  <span class="text-xs text-slate-400 hidden md:inline">话机拨 0000 验证</span>
                   <button
                     @click="removeExtension(row)"
                     class="p-1.5 text-rose-500 hover:text-rose-700 hover:bg-rose-50 rounded-xl transition cursor-pointer"

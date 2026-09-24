@@ -31,15 +31,15 @@ fcc:
   bootstrap:
     admin:
       enabled: ${FCC_BOOTSTRAP_ADMIN_ENABLED:false}
-      username: ${FCC_BOOTSTRAP_ADMIN_USERNAME:}
+      username: ${FCC_BOOTSTRAP_ADMIN_USERNAME:admin}
       real-name: ${FCC_BOOTSTRAP_ADMIN_REAL_NAME:系统管理员}
-      password: ${FCC_BOOTSTRAP_ADMIN_PASSWORD:}
+      password: ${FCC_BOOTSTRAP_ADMIN_PASSWORD:admin123}
   sip:
-    encryption-key: ${FCC_SIP_ENCRYPTION_KEY:}
+    encryption-key: ${FCC_SIP_ENCRYPTION_KEY:2N+jAQ5NiOK42Rgm01yM1I1OJ5kV9yWYJTn+DqG3s/Y=}
     ws-url: ${FCC_SIP_WS_URL:}
     domain: ${FCC_SIP_DOMAIN:}
   flow:
-    reload-token: ${FCC_FLOW_RELOAD_TOKEN:}
+    reload-token: ${FCC_FLOW_RELOAD_TOKEN:local-dev-reload-token}
   server:
     base-url: ${FCC_SERVER_BASE_URL:http://127.0.0.1:8085}
   sidecar-admin-url: ${SIDECAR_ADMIN_URL:http://127.0.0.1:8088}

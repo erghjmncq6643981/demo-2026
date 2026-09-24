@@ -45,9 +45,9 @@ fcc:
   admin:
     base-url: ${FCC_ADMIN_BASE_URL:http://127.0.0.1:8089}
   websocket:
-    allowed-origins: ${FCC_WS_ALLOWED_ORIGINS:}
+    allowed-origins: ${FCC_WS_ALLOWED_ORIGINS:"*"}
   flow:
-    reload-token: ${FCC_FLOW_RELOAD_TOKEN:}
+    reload-token: ${FCC_FLOW_RELOAD_TOKEN:local-flow-token-dev}
   nats-url: ${NATS_URL:nats://127.0.0.1:4222}
   ctrl-id-prefix: fcc-ctrl
   rpc-timeout-millis: 5000

@@ -156,4 +156,42 @@ public class SidecarAdminClient {
             return Map.of("status", "UNHEALTHY");
         }
     }
+
+    /**
+     * 查询 FreeSWITCH 实时注册分机列表
+     *
+     * @return 注册态对象列表，包含 reg_user, url, network_ip, network_port, status 等
+     */
+    public java.util.List<Map<String, Object>> getRegistrations() {
+        String url = sidecarAdminUrl + "/api/v1/telephony/registrations";
+        try {
+            @SuppressWarnings("unchecked")
+            Map<String, Object> resp = restTemplate.getForObject(url, Map.class);
+            if (resp != null && resp.get("data") instanceof java.util.List<?> list) {
+                return (java.util.List<Map<String, Object>>) list;
+            }
+        } catch (Exception e) {
+            log.warn("[Sidecar HTTP] 获取分机注册列表失败: {}", e.getMessage());
+        }
+        return java.util.Collections.emptyList();
+    }
+
+    /**
+     * 查询 FreeSWITCH 运行态 Sofia Profiles
+     *
+     * @return profiles 列表，包含 internal profile 的 bind_ip, ws_port, wss_port 等
+     */
+    public java.util.List<Map<String, Object>> getSofiaProfiles() {
+        String url = sidecarAdminUrl + "/api/v1/telephony/sofia/profiles";
+        try {
+            @SuppressWarnings("unchecked")
+            Map<String, Object> resp = restTemplate.getForObject(url, Map.class);
+            if (resp != null && resp.get("data") instanceof java.util.List<?> list) {
+                return (java.util.List<Map<String, Object>>) list;
+            }
+        } catch (Exception e) {
+            log.warn("[Sidecar HTTP] 获取 Sofia Profiles 失败: {}", e.getMessage());
+        }
+        return java.util.Collections.emptyList();
+    }
 }
