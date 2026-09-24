@@ -1,8 +1,9 @@
 package com.chandler.fcc.server.outbound.application;
 
+import com.chandler.fcc.common.enums.AutoDialTaskType;
+import com.chandler.fcc.common.enums.AutoDialTriggerSource;
 import com.chandler.fcc.common.util.IdUtil;
 import com.chandler.fcc.server.customer.domain.PhoneNumber;
-import com.chandler.fcc.server.flow.FlowConfig;
 import com.chandler.fcc.server.outbound.infrastructure.DialJobMapper;
 import com.chandler.fcc.server.telephony.application.OutboundCallService;
 import com.fasterxml.jackson.core.JsonProcessingException;
@@ -12,7 +13,6 @@ import java.time.ZonedDateTime;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
-import java.util.Set;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Value;
@@ -37,11 +37,7 @@ public class DialJobService {
 
     private static final String TYPE_AUTO_FLOW = "AUTO_FLOW";
     private static final String TYPE_AGENT_CALLBACK = "AGENT_CALLBACK";
-    private static final Set<String> AUTO_FLOW_MODEL_TYPES = Set.of(
-        "NOTIFICATION",
-        "AUTO_DIAL",
-        "AUTO_DIAL_NOTIFICATION"
-    );
+    private static final String SYSTEM_NOTIFICATION = "SYSTEM_NOTIFICATION";
     private static final String STATUS_FAILED = "FAILED";
     private static final int MAX_DAILY_NUMBER_ATTEMPTS = 3;
 
@@ -49,7 +45,6 @@ public class DialJobService {
     private final TransactionTemplate transactions;
     private final OutboundCallService calls;
     private final ObjectMapper objectMapper;
-    private final FlowConfig flowConfig;
 
     @Value("${fcc.outbound.enabled:false}")
     private boolean enabled;
@@ -69,33 +64,42 @@ public class DialJobService {
     /**
      * 创建与坐席无关的流程型自动外呼任务。
      *
-     * <p>任务只拨打客户号码；只有流程执行到转人工节点时，运行时才动态路由坐席。</p>
+     * <p>任务只拨打客户号码，接通后使用固定通知模型播放本次任务文案并收取确认按键。</p>
      *
      * @param createdBy 创建人账号，仅用于审计
      * @param number 目标号码
-     * @param flowKey 已发布自动外呼流程编码
-     * @param variables 流程输入变量
+     * @param text 本次通知文案
+     * @param confirmDigit 确认按键
+     * @param timeoutSeconds 确认等待秒数
      * @param maxAttempts 最大尝试次数
      * @param requestKey 业务幂等键
+     * @param bizId 可选业务关联标识
      * @return 任务标识
      */
     public String createAuto(
         String createdBy,
         String number,
-        String flowKey,
-        Map<String, Object> variables,
+        String text,
+        String confirmDigit,
+        int timeoutSeconds,
         int maxAttempts,
-        String requestKey
+        String requestKey,
+        String bizId
     ) {
-        validateAutoFlow(flowKey);
+        String notificationText = validateNotification(text, confirmDigit, timeoutSeconds);
         Map<String, Object> payload = new LinkedHashMap<>();
         payload.put("number", PhoneNumber.normalize(number));
-        payload.put("variables", variables == null ? Map.of() : variables);
+        payload.put("text", notificationText);
+        payload.put("confirmDigit", confirmDigit);
+        payload.put("timeoutSeconds", timeoutSeconds);
         return createJob(
             null,
             createdBy,
-            flowKey,
+            SYSTEM_NOTIFICATION,
             TYPE_AUTO_FLOW,
+            AutoDialTaskType.NOTIFY.name(),
+            AutoDialTriggerSource.FRONTEND.name(),
+            normalizeBizId(bizId),
             maxAttempts,
             requestKey,
             payload
@@ -124,6 +128,9 @@ public class DialJobService {
             owner,
             null,
             TYPE_AGENT_CALLBACK,
+            null,
+            null,
+            null,
             maxAttempts,
             requestKey,
             Map.of("number", PhoneNumber.normalize(number))
@@ -137,6 +144,9 @@ public class DialJobService {
      * @param createdBy 创建人账号
      * @param flowKey 自动外呼流程编码
      * @param jobType 任务类型
+     * @param taskType 自动外呼业务类型
+     * @param triggerSource 自动外呼触发来源
+     * @param bizId 可选业务关联标识
      * @param maxAttempts 最大尝试次数
      * @param requestKey 业务幂等键
      * @param payload 任务载荷
@@ -147,6 +157,9 @@ public class DialJobService {
         String createdBy,
         String flowKey,
         String jobType,
+        String taskType,
+        String triggerSource,
+        String bizId,
         int maxAttempts,
         String requestKey,
         Map<String, Object> payload
@@ -161,6 +174,9 @@ public class DialJobService {
         row.put("owner", owner);
         row.put("createdBy", createdBy);
         row.put("flowKey", flowKey);
+        row.put("taskType", taskType);
+        row.put("triggerSource", triggerSource);
+        row.put("bizId", bizId);
         row.put("key", requestKey);
         row.put("jobType", jobType);
         row.put("maxAttempts", maxAttempts);
@@ -173,10 +189,11 @@ public class DialJobService {
             throw new IllegalStateException("外呼任务序列化失败", failure);
         }
         log.info(
-            "[外呼调度] 创建任务 jobId={} jobType={} flowKey={} createdBy={}",
+            "[外呼调度] 创建任务 jobId={} jobType={} taskType={} triggerSource={} createdBy={}",
             id,
             jobType,
-            flowKey,
+            taskType,
+            triggerSource,
             createdBy
         );
         return id;
@@ -243,8 +260,9 @@ public class DialJobService {
                 ? calls.startAutoDial(
                     job.get("number").toString(),
                     attemptId,
-                    job.get("flowKey").toString(),
-                    readVariables(job.get("variables"))
+                    job.get("text").toString(),
+                    job.get("confirmDigit").toString(),
+                    ((Number) job.get("timeoutSeconds")).intValue()
                 )
                 : calls.startFor(
                     job.get("owner").toString(),
@@ -337,40 +355,41 @@ public class DialJobService {
     }
 
     /**
-     * 校验自动外呼流程存在已发布版本且类型正确。
+     * 校验并规范化固定通知模型所需的本次任务参数。
      *
-     * @param flowKey 流程编码
+     * @param text 通知文案
+     * @param confirmDigit 确认按键
+     * @param timeoutSeconds 确认等待秒数
+     * @return 去除首尾空白后的通知文案
      */
-    private void validateAutoFlow(String flowKey) {
-        if (flowKey == null || !flowKey.matches("[A-Za-z][A-Za-z0-9_-]{0,63}")) {
-            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "自动外呼流程编码无效");
+    private String validateNotification(String text, String confirmDigit, int timeoutSeconds) {
+        String normalized = text == null ? "" : text.trim();
+        if (normalized.isEmpty() || normalized.length() > 1000) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "通知文案不能为空且不能超过1000个字符");
         }
-        FlowConfig.FlowSnapshot flow = flowConfig.getPublishedFlow(null, flowKey)
-            .orElseThrow(() -> new ResponseStatusException(HttpStatus.CONFLICT, "自动外呼流程尚未发布"));
-        String modelType = flow.modelType() == null ? "" : flow.modelType().toUpperCase();
-        if (!AUTO_FLOW_MODEL_TYPES.contains(modelType)) {
-            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "所选流程不是自动外呼流程");
+        if (confirmDigit == null || !confirmDigit.matches("[0-9]")) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "确认按键必须是一位数字");
         }
+        if (timeoutSeconds < 3 || timeoutSeconds > 60) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "确认等待时间必须为3至60秒");
+        }
+        return normalized;
     }
 
     /**
-     * 将数据库 JSON 变量转换为运行参数。
+     * 规范可选业务关联标识。
      *
-     * @param value JSON 文本或映射
-     * @return 非空流程变量
+     * @param bizId 调用方业务标识
+     * @return 空值或规范化业务标识
      */
-    @SuppressWarnings("unchecked")
-    private Map<String, Object> readVariables(Object value) {
-        if (value instanceof Map<?, ?> map) {
-            return (Map<String, Object>) map;
+    private String normalizeBizId(String bizId) {
+        if (bizId == null || bizId.isBlank()) {
+            return null;
         }
-        if (value == null || value.toString().isBlank()) {
-            return Map.of();
+        String normalized = bizId.trim();
+        if (normalized.length() > 128) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "业务标识不能超过128个字符");
         }
-        try {
-            return objectMapper.readValue(value.toString(), Map.class);
-        } catch (JsonProcessingException failure) {
-            throw new IllegalStateException("自动外呼流程变量不是有效 JSON", failure);
-        }
+        return normalized;
     }
 }

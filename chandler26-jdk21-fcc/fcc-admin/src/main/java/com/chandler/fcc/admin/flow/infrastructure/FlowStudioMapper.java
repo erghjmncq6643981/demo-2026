@@ -11,6 +11,23 @@ import org.apache.ibatis.annotations.Param;
  */
 @Mapper
 public interface FlowStudioMapper {
+
+    /**
+     * 批量查询存在且启用的坐席工号，供呼入流程发布前校验路由目标。
+     *
+     * @param workNos 流程引用的去重坐席工号
+     * @return 当前存在且启用的坐席工号
+     */
+    List<String> activeAgentWorkNos(@Param("workNos") List<String> workNos);
+
+    /**
+     * 批量查询存在且启用的技能组代码，供呼入流程发布前校验路由目标。
+     *
+     * @param groupCodes 流程引用的去重技能组代码
+     * @return 当前存在且启用的技能组代码
+     */
+    List<String> activeGroupCodes(@Param("groupCodes") List<String> groupCodes);
+
     /**
      * 查询通话存在性。
      *

@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import type { FlowDefinitionVO } from '../../../api/flowApi';
+import { flowTemplateLabel } from '../model/stagedFlow';
 
 defineProps<{
   flows: FlowDefinitionVO[];
@@ -35,7 +36,7 @@ defineEmits<{
     >
       <strong>{{ flow.flowName }}</strong>
       <small>{{ flow.flowKey }}</small>
-      <span>{{ flow.status === 'PUBLISHED' ? '已发布' : '草稿' }}</span>
+      <span>{{ flowTemplateLabel(flow.modelType) }} · {{ flow.status === 'PUBLISHED' ? '已发布' : '草稿' }}</span>
     </button>
     <el-pagination
       v-if="total > 20"

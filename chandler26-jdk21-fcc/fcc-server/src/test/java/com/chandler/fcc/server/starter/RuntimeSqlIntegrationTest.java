@@ -184,10 +184,13 @@ class RuntimeSqlIntegrationTest {
             "key", "test-job-1",
             "flowKey", "SYSTEM_NOTIFICATION",
             "jobType", "AUTO_FLOW",
+            "taskType", "NOTIFY",
+            "triggerSource", "FRONTEND",
             "maxAttempts", 2,
-            "payload", "{\"number\":\"1001\",\"variables\":{}}"
+            "payload", "{\"number\":\"1001\",\"text\":\"测试通知\",\"confirmDigit\":\"1\",\"timeoutSeconds\":10}"
         ));
         autoJob.put("owner", null);
+        autoJob.put("bizId", "test-biz-1");
         assertEquals(
             1,
             jobs.create(autoJob)

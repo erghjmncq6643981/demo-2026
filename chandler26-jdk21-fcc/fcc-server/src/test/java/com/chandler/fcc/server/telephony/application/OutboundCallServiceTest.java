@@ -55,6 +55,7 @@ class OutboundCallServiceTest {
     private final ObjectMapper json = new ObjectMapper();
     private final FccClient client = mock(FccClient.class);
     private final FlowConfig flowConfig = mock(FlowConfig.class);
+    private FlowConfig.FlowSnapshot snapshot;
 
     private OutboundCallService service;
 
@@ -63,9 +64,18 @@ class OutboundCallServiceTest {
      */
     @BeforeEach
     void setUp() {
-        FlowConfig.FlowSnapshot snapshot = mock(FlowConfig.FlowSnapshot.class);
+        snapshot = mock(FlowConfig.FlowSnapshot.class);
         when(snapshot.definitionId()).thenReturn("flow-definition");
         when(snapshot.versionId()).thenReturn("flow-version");
+        when(snapshot.modelType()).thenReturn("NOTIFICATION");
+        when(snapshot.definitionJson()).thenReturn("""
+            {
+              "routeMode":"AUTO_DIAL",
+              "template":"NOTIFICATION",
+              "notification":{"text":"发布版本通知","confirmDigit":"2","timeoutSeconds":15},
+              "stages":["ENTRY","DIAL_CUSTOMER","NOTIFY","CONFIRM","END"]
+            }
+            """);
         when(flowConfig.getPublishedFlow(any(), any())).thenReturn(Optional.of(snapshot));
         when(flowActions.executeInternal(any(), any(), any())).thenAnswer(invocation -> {
             InternalFlowActionInvocation action = invocation.getArgument(2);
@@ -96,6 +106,39 @@ class OutboundCallServiceTest {
             mock(DialAttemptGuard.class),
             mock(CallRecordingService.class)
         );
+    }
+
+    /**
+     * 自动外呼必须固定系统通知模型，并使用本次任务携带的通知参数。
+     */
+    @Test
+    void startsNotificationFromTaskParameters() {
+        when(routes.resolve("13800000000")).thenReturn(
+            new OutboundRoutePolicy.Route("13800000000", "mobile", "4000000000")
+        );
+
+        service.startAutoDial("13800000000", "attempt-1", "本次任务通知", "8", 12);
+
+        ArgumentCaptor<CallInfoBO> call = ArgumentCaptor.forClass(CallInfoBO.class);
+        verify(sessions).registerSession(call.capture());
+        assertEquals("本次任务通知", call.getValue().getDataStr("notificationText", null));
+        assertEquals("8", call.getValue().getDataStr("confirmDigit", null));
+        assertEquals(12, call.getValue().getData().get("notificationTimeoutSeconds"));
+        assertEquals("SYSTEM_NOTIFICATION", call.getValue().getDataStr("flowKey", null));
+        assertEquals("flow-version", call.getValue().getDataStr("flowVersionId", null));
+        verify(flowConfig).getPublishedFlow(null, "SYSTEM_NOTIFICATION");
+    }
+
+    /**
+     * 自动外呼不能接受缺失文案或非法确认参数。
+     */
+    @Test
+    void rejectsInvalidNotificationParameters() {
+        org.junit.jupiter.api.Assertions.assertThrows(
+            org.springframework.web.server.ResponseStatusException.class,
+            () -> service.startAutoDial("13800000000", "attempt-1", " ", "8", 12)
+        );
+        verify(routes, never()).resolve(any());
     }
 
     /**

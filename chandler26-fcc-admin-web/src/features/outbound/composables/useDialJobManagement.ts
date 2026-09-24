@@ -1,5 +1,4 @@
 import { computed, onMounted, ref } from "vue";
-import { flowApi, type FlowDefinitionVO } from "../../../api/flowApi";
 import {
   confirmAction,
   errorText,
@@ -23,9 +22,6 @@ const createRequestKey = () => {
 /** 管理自动外呼任务、逐次结果和受控状态操作。 */
 export function useDialJobManagement() {
   const rows = ref<DialJobSummary[]>([]);
-  const flows = ref<FlowDefinitionVO[]>([]);
-  const flowsLoading = ref(false);
-  const flowsError = ref("");
   const attempts = ref<DialAttempt[]>([]);
   const loading = ref(false);
   const attemptsLoading = ref(false);
@@ -33,14 +29,16 @@ export function useDialJobManagement() {
   const controllingId = ref("");
   const error = ref("");
   const page = ref(1);
-  const flowFilter = ref("");
+  const triggerSourceFilter = ref("");
   const createVisible = ref(false);
   const attemptsVisible = ref(false);
   const selectedJob = ref<DialJobSummary | null>(null);
   const form = ref<CreateDialJobReq>({
     number: "",
-    flowKey: "",
-    variables: { text: "", confirmDigit: "1" },
+    text: "",
+    confirmDigit: "1",
+    timeoutSeconds: 10,
+    bizId: "",
     maxAttempts: 1,
     requestKey: createRequestKey(),
   });
@@ -52,7 +50,7 @@ export function useDialJobManagement() {
     try {
       const result = await dialJobManagementApi.list({
         page: page.value,
-        flowKey: flowFilter.value || undefined,
+        triggerSource: triggerSourceFilter.value || undefined,
       });
       rows.value = Array.isArray(result) ? result : [];
     } catch (cause) {
@@ -60,27 +58,6 @@ export function useDialJobManagement() {
       error.value = errorText(cause, "自动外呼任务加载失败");
     } finally {
       loading.value = false;
-    }
-  }
-
-  async function loadFlows() {
-    flowsLoading.value = true;
-    flowsError.value = "";
-    try {
-      const result = await flowApi.list({
-        pageNum: 1,
-        pageSize: 100,
-      });
-      flows.value = (result.list || []).filter(
-        (flow) =>
-          flow.status === "PUBLISHED"
-          && ["NOTIFICATION", "AUTO_DIAL", "AUTO_DIAL_NOTIFICATION"].includes(flow.modelType),
-      );
-    } catch (cause) {
-      flows.value = [];
-      flowsError.value = errorText(cause, "已发布自动外呼流程加载失败");
-    } finally {
-      flowsLoading.value = false;
     }
   }
 
@@ -92,8 +69,10 @@ export function useDialJobManagement() {
   function openCreate() {
     form.value = {
       number: "",
-      flowKey: flows.value[0]?.flowKey || "",
-      variables: { text: "", confirmDigit: "1" },
+      text: "",
+      confirmDigit: "1",
+      timeoutSeconds: 10,
+      bizId: "",
       maxAttempts: 1,
       requestKey: createRequestKey(),
     };
@@ -101,9 +80,9 @@ export function useDialJobManagement() {
   }
 
   async function create() {
-    const text = String(form.value.variables.text || "").trim();
-    if (!form.value.flowKey || !form.value.number.trim() || !text) {
-      error.value = "自动外呼流程、被叫号码和播报文案不能为空";
+    const text = form.value.text.trim();
+    if (!form.value.number.trim() || !text) {
+      error.value = "被叫号码和通知文案不能为空";
       return;
     }
     saving.value = true;
@@ -112,10 +91,8 @@ export function useDialJobManagement() {
       await dialJobManagementApi.create({
         ...form.value,
         number: form.value.number.trim(),
-        variables: {
-          ...form.value.variables,
-          text,
-        },
+        text,
+        bizId: form.value.bizId?.trim() || undefined,
       });
       createVisible.value = false;
       toastSuccess("自动外呼任务已进入持久调度队列");
@@ -183,14 +160,11 @@ export function useDialJobManagement() {
   }
 
   onMounted(() => {
-    void Promise.all([load(), loadFlows()]);
+    void load();
   });
 
   return {
     rows,
-    flows,
-    flowsLoading,
-    flowsError,
     attempts,
     loading,
     attemptsLoading,
@@ -198,14 +172,13 @@ export function useDialJobManagement() {
     controllingId,
     error,
     page,
-    flowFilter,
+    triggerSourceFilter,
     createVisible,
     attemptsVisible,
     selectedJob,
     form,
     hasNext,
     load,
-    loadFlows,
     search,
     openCreate,
     create,

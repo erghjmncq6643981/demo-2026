@@ -42,6 +42,7 @@ class FlowPublicationBoundaryTest {
         when(flows.selectOne(any())).thenReturn(FlowDefinitionEntity.builder()
             .id(1L).flowKey("test-flow").modelType("INBOUND").build());
         when(didNumbers.selectCount(any())).thenReturn(1L);
+        when(executions.activeAgentWorkNos(any())).thenReturn(List.of("901001"));
         var draft = FlowDefinitionVersionEntity.builder().id(2L).flowDefinitionId(1L)
             .versionNo(1).publishStatus("DRAFT")
             .definitionJson(VALID_IVR).build();
@@ -76,5 +77,34 @@ class FlowPublicationBoundaryTest {
             assertThrows(ResponseStatusException.class, () -> service.publish("test-flow", request));
         }
         verifyNoInteractions(versions, redis);
+    }
+
+    /** 发布前必须拒绝不存在或停用的坐席路由，避免来电时才暴露配置错误。 */
+    @Test void rejectsInboundPublicationWithInactiveRouteTarget() {
+        var flows = mock(FlowDefinitionMapper.class);
+        var versions = mock(FlowDefinitionVersionMapper.class);
+        var didNumbers = mock(DidNumberMapper.class);
+        var redis = mock(StringRedisTemplate.class);
+        var executions = mock(FlowStudioMapper.class);
+        var service = new FlowStudioService(flows, versions, didNumbers, executions, redis, new ObjectMapper());
+        when(flows.selectOne(any())).thenReturn(FlowDefinitionEntity.builder()
+            .id(1L).flowKey("test-flow").modelType("INBOUND").build());
+        when(didNumbers.selectCount(any())).thenReturn(1L);
+        when(executions.activeAgentWorkNos(any())).thenReturn(List.of());
+        var draft = FlowDefinitionVersionEntity.builder().id(2L).flowDefinitionId(1L)
+            .versionNo(1).publishStatus("DRAFT")
+            .definitionJson(VALID_IVR).build();
+        when(versions.selectList(any())).thenReturn(List.of(draft));
+        var request = new PublishFlowReq();
+        request.setVersion("v1.0.0");
+
+        try (var authentication = mockStatic(StpUtil.class)) {
+            ResponseStatusException failure = assertThrows(
+                ResponseStatusException.class,
+                () -> service.publish("test-flow", request)
+            );
+            assertTrue(failure.getReason().contains("901001"));
+        }
+        verifyNoInteractions(redis);
     }
 }

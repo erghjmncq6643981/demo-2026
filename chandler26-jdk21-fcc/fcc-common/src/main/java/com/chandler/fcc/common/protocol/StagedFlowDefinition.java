@@ -1,5 +1,6 @@
 package com.chandler.fcc.common.protocol;
 
+import com.chandler.fcc.common.enums.FlowTemplateType;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.node.ObjectNode;
@@ -9,7 +10,7 @@ import java.util.Map;
 import java.util.Set;
 
 /**
- * 固定阶段目录和 IVR 参数契约；不执行脚本、表达式或任意软交换命令。
+ * 固定阶段业务流程参数契约；不执行脚本、表达式或任意软交换命令。
  */
 public final class StagedFlowDefinition {
 
@@ -33,36 +34,39 @@ public final class StagedFlowDefinition {
             "RATING_SAVE",
             "CLOSING",
             "END"
-        ),
-        "AGENT_FIRST",
-        List.of(
-            "ENTRY",
-            "DIAL_AGENT",
-            "DIAL_CUSTOMER",
-            "BRIDGE",
-            "RECORD_START",
-            "CONNECTED",
-            "RECORD_STOP",
-            "END"
-        ),
-        "AGENT_ORIGINATED",
-        List.of(
-            "ENTRY",
-            "DIAL_CUSTOMER",
-            "BRIDGE",
-            "RECORD_START",
-            "CONNECTED",
-            "RECORD_STOP",
-            "END"
-        ),
-        "NOTIFICATION",
-        List.of("ENTRY", "DIAL_CUSTOMER", "NOTIFY", "CONFIRM", "END")
+        )
     );
 
     /**
      * 工具类不允许实例化。
      */
     private StagedFlowDefinition() {}
+
+    /**
+     * 创建指定业务类型的首个可维护草稿骨架。
+     *
+     * <p>骨架不填充虚构的坐席、技能组或通知文案，因此在补齐业务参数前不满足发布条件。</p>
+     *
+     * @param template 创建后不可变的流程业务类型
+     * @return 包含固定阶段目录的独立草稿定义
+     */
+    public static JsonNode initialDraft(FlowTemplateType template) {
+        ObjectNode root = JSON.createObjectNode();
+        root.put("template", template.name());
+        root.set("stages", JSON.valueToTree(STAGES.get(template.name())));
+        root.put("routeMode", "IVR");
+        ObjectNode menu = root.putObject("menu");
+        menu.put("enabled", false);
+        menu.put("prompt", "");
+        menu.put("timeoutSeconds", 10);
+        root.putArray("branches");
+        ObjectNode defaultRoute = root.putObject("defaultRoute");
+        defaultRoute.put("targetType", "GROUP");
+        defaultRoute.put("target", "");
+        defaultRoute.put("queueSeconds", 120);
+        root.put("timeoutAction", "CALLBACK");
+        return root;
+    }
 
     /**
      * 验证参数并补充只读阶段目录，目录不能由编辑者改变。
@@ -72,10 +76,50 @@ public final class StagedFlowDefinition {
      * @throws IllegalArgumentException 未实现动作、非法目标或参数
      */
     public static JsonNode validate(JsonNode root) {
+        return normalize(root, true);
+    }
+
+    /**
+     * 规范化可中途保存的草稿结构，不要求业务参数已经满足发布条件。
+     *
+     * @param root 草稿定义
+     * @return 带固定阶段目录的规范草稿
+     * @throws IllegalArgumentException 类型、字段或基础参数结构不合法
+     */
+    public static JsonNode normalizeDraft(JsonNode root) {
+        return normalize(root, false);
+    }
+
+    /**
+     * 按业务类型执行草稿或发布级校验。
+     *
+     * @param root 流程定义
+     * @param complete 是否要求满足发布级完整性
+     * @return 规范化定义
+     */
+    private static JsonNode normalize(JsonNode root, boolean complete) {
+        String template = root.path("template").asText();
+        if (!FlowTemplateType.INBOUND.name().equals(template)) {
+            throw new IllegalArgumentException("暂不支持该流程类型: " + template);
+        }
+        return validateInbound(root, complete);
+    }
+
+    /**
+     * 校验呼入 IVR 参数并补齐固定阶段。
+     *
+     * @param root 呼入定义
+     * @param complete 是否要求满足发布级完整性
+     * @return 规范化呼入定义
+     */
+    private static JsonNode validateInbound(JsonNode root, boolean complete) {
         fields(
             root,
             Set.of("routeMode", "template", "menu", "branches", "defaultRoute", "timeoutAction", "stages")
         );
+        if (!"IVR".equals(root.path("routeMode").asText())) {
+            throw new IllegalArgumentException("呼入流程必须使用 IVR 模型");
+        }
         if (!"INBOUND".equals(root.path("template").asText())) {
             throw new IllegalArgumentException("仅呼入 IVR 开放参数编排");
         }
@@ -85,10 +129,17 @@ public final class StagedFlowDefinition {
             throw new IllegalArgumentException("必须明确是否启用菜单");
         }
         range(menu.path("timeoutSeconds"), 3, 60, "收号超时");
-        if (menu.path("enabled").asBoolean() && !validPrompt(menu.path("prompt"))) {
+        if (
+            complete &&
+            menu.path("enabled").asBoolean() &&
+            !validPrompt(menu.path("prompt"))
+        ) {
             throw new IllegalArgumentException("导航语音必须是文案或安全音频绝对路径");
         }
-        target(root.path("defaultRoute"), false);
+        if (!complete && !validOptionalPrompt(menu.path("prompt"))) {
+            throw new IllegalArgumentException("导航语音必须是文案或安全音频绝对路径");
+        }
+        target(root.path("defaultRoute"), false, complete);
         if (
             !Set.of("CALLBACK", "HANGUP").contains(root.path("timeoutAction").asText())
         ) {
@@ -98,7 +149,7 @@ public final class StagedFlowDefinition {
         if (
             !branches.isArray() ||
             branches.size() > 10 ||
-            (menu.path("enabled").asBoolean() && branches.isEmpty())
+            (complete && menu.path("enabled").asBoolean() && branches.isEmpty())
         ) {
             throw new IllegalArgumentException("启用菜单时需要 1 至 10 个按键分支");
         }
@@ -106,10 +157,13 @@ public final class StagedFlowDefinition {
         for (JsonNode branch : branches) {
             fields(branch, Set.of("digit", "targetType", "target", "queueSeconds"));
             String digit = branch.path("digit").asText();
-            if (!digit.matches("[0-9]") || !digits.add(digit)) {
+            if (
+                (complete && !digit.matches("[0-9]")) ||
+                (!digit.isEmpty() && (!digit.matches("[0-9]") || !digits.add(digit)))
+            ) {
                 throw new IllegalArgumentException("分支按键必须是唯一的一位数字");
             }
-            target(branch, true);
+            target(branch, true, complete);
         }
         ObjectNode normalized = ((ObjectNode) root).deepCopy();
         JsonNode stages = JSON.valueToTree(STAGES.get("INBOUND"));
@@ -138,18 +192,20 @@ public final class StagedFlowDefinition {
      *
      * @param node 路由配置
      * @param branch 是否为按键分支
+     * @param complete 是否要求目标已经填写
      */
-    private static void target(JsonNode node, boolean branch) {
+    private static void target(JsonNode node, boolean branch, boolean complete) {
         fields(
             node,
             branch
                 ? Set.of("digit", "targetType", "target", "queueSeconds")
                 : Set.of("targetType", "target", "queueSeconds")
         );
-        if (
-            !Set.of("AGENT", "GROUP").contains(node.path("targetType").asText()) ||
-            !node.path("target").asText().matches("[A-Za-z0-9_-]{1,64}")
-        ) {
+        String target = node.path("target").asText();
+        boolean targetValid = complete
+            ? target.matches("[A-Za-z0-9_-]{1,64}")
+            : target.isEmpty() || target.matches("[A-Za-z0-9_-]{1,64}");
+        if (!Set.of("AGENT", "GROUP").contains(node.path("targetType").asText()) || !targetValid) {
             throw new IllegalArgumentException("请选择有效坐席工号或技能组代码");
         }
         range(node.path("queueSeconds"), 5, 300, "排队时限");
@@ -173,6 +229,16 @@ public final class StagedFlowDefinition {
             return value.matches("/[A-Za-z0-9_./-]{1,240}\\.(wav|mp3)") && !value.contains("..");
         }
         return !value.contains("\u0000");
+    }
+
+    /**
+     * 校验草稿中的可选提示内容；空值表示尚未配置。
+     *
+     * @param prompt 草稿提示
+     * @return 空值或合法提示时返回 {@code true}
+     */
+    private static boolean validOptionalPrompt(JsonNode prompt) {
+        return prompt.isTextual() && (prompt.asText().isBlank() || validPrompt(prompt));
     }
 
     /**

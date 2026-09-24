@@ -11,14 +11,18 @@
   <select id="jobs" resultType="map">
     SELECT CAST(id AS CHAR) AS id,
            flow_key AS flowKey,
+           task_type AS taskType,
+           trigger_source AS triggerSource,
+           biz_id AS bizId,
            created_by AS createdBy,
            status,
            max_attempts AS maxAttempts,
            JSON_UNQUOTE(JSON_EXTRACT(payload, '$.number')) AS number,
+           JSON_UNQUOTE(JSON_EXTRACT(payload, '$.text')) AS text,
            scheduled_at AS scheduledAt
     FROM fcc_dial_job
     WHERE job_type = 'AUTO_FLOW'
-    <if test="flowKey != null and flowKey != ''">AND flow_key = #{flowKey}</if>
+    <if test="triggerSource != null and triggerSource != ''">AND trigger_source = #{triggerSource}</if>
     ORDER BY id DESC
     LIMIT 50 OFFSET #{offset}
   </select>

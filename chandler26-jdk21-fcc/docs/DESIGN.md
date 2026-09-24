@@ -156,7 +156,7 @@ Sidecar 的 dispatch ingress 在单节点部署中可直接调用本地 Dispatch
 
 ### 5.3 自动外呼与人工回拨
 
-无人自动外呼任务不绑定坐席。`AUTO_FLOW` 任务只保存创建人审计、被叫号码、已发布 `flow_key`、流程输入变量、最大尝试次数和幂等键；调度领取不查询坐席、终端绑定或在线状态，直接执行 `dial guest`，客户应答后继续执行该通话固定的流程版本。当前通知模型使用 `text` 和 `confirmDigit` 流程变量完成 TTS 文案播放与收号；只有后续流程进入“排队/转人工”动作时才允许动态选择坐席。
+无人自动外呼任务不绑定坐席。`AUTO_FLOW` 任务保存创建人审计、被叫号码、本次通知文案、确认按键、等待时间、任务类型、触发来源、可选业务标识、最大尝试次数和幂等键；调度领取不查询坐席、终端绑定或在线状态，直接执行 `dial guest`。运行端固定使用只读系统模型 `SYSTEM_NOTIFICATION`，通话创建时固定该系统版本与本次任务参数，客户应答后执行 TTS 文案播放和收号；当前通知模型没有转人工阶段。触发来源契约为 `FRONTEND`、`API`、`MQ`，当前仅开放管理端 `FRONTEND` 创建，API/MQ 尚未开放入口。
 
 漏话回拨是人工外呼，不复用无人外呼语义。它以 `AGENT_CALLBACK` 任务类型保存领取坐席，调度时允许 `LOGIN + READY` 和 `LOGIN_BUSY + BUSY`，执行 `AGENT_FIRST`；该坐席状态检查不会影响 `AUTO_FLOW`。
 
@@ -229,6 +229,8 @@ MySQL 是持久事实来源。Redis 只存可重建的运行态和通知。内�
 
 管理端支持流程：
 
+- 创建时必须选择不可变的业务类型；当前只开放 `INBOUND`。Admin 在同一事务内创建流程主数据和 V1 草稿骨架，避免刷新后丢失尚未保存的内存草稿；
+- 已发布或历史版本不能原地修改。编辑操作通过后端接口派生或复用唯一草稿，修改只落草稿，当前发布版本继续服务新通话，直到草稿完成校验并发布；
 - 分页流程摘要和分页版本摘要；
 - 单版本完整定义按需查询；
 - 公共动作目录和五个固定系统模型查询；
@@ -245,7 +247,7 @@ MySQL 是持久事实来源。Redis 只存可重建的运行态和通知。内�
 | `INBOUND` | DID 呼入、菜单、分支、路由、桥接、录音、评价和收尾 |
 | `AGENT_FIRST` | 系统先呼坐席，再呼客户 |
 | `AGENT_ORIGINATED` | 接管已认证坐席终端主动发起的 Leg |
-| `NOTIFICATION` | 通知外呼、放音、收号和确认 |
+| `NOTIFICATION` | 固定系统通知模型：拨打客户、播放任务文案、收号和确认 |
 | `PHONE_BINDING` | 已认证物理话机拨 `0000` 后绑定工号 |
 
 五类模型均使用 `executionMode=FIXED_RUNTIME`。真实号码、坐席、技能组、context 和媒体目录属于环境或业务配置，不进入系统模型初始化数据。基线 SQL 中的模型数据由以下命令生成，修改资源后必须重新生成并审查差异：
@@ -256,11 +258,18 @@ node tools/generate-system-models.mjs
 
 呼入入口和流程版本是两个不同层次。`fcc_did_number.phone_number` 保存 XSwitch/运营商实际送达的被叫 DID，`route_key` 绑定稳定 `flow_key`；同一流程可绑定多个 DID，一个 DID 同时只指向一个流程。Sidecar 将真实 `dest_number` 放入规范 Channel 事件，fcc-server 先按 DID 找到绑定，再固定当时最新的已发布版本。号码不写入版本 JSON，号码调整也不会篡改历史流程版本。Flow Studio 可绑定和解绑已录入 DID；没有启用 DID 的呼入流程不能发布。
 
+业务流程主数据的 `model_type` 是不可变执行契约，不是展示标签。创建请求、草稿 JSON 的 `template`、画布模型、发布校验和运行快照必须一致。管理端可创建类型只有 `INBOUND`；`AGENT_FIRST`、`AGENT_ORIGINATED`、`PHONE_BINDING` 和 `NOTIFICATION` 是随应用部署的只读系统固定模型。Flow Studio 展示全部系统模型，但只为业务呼入流程提供有限配置和版本发布能力。自动外呼任务不选择或修改 Flow，始终固定 `SYSTEM_NOTIFICATION`，每次任务独立携带文案等参数。
+
 发布接口成功表示数据库版本切换完成，运行端状态返回 `PENDING`；这不等于所有运行实例或 FreeSWITCH 节点已验证切换。发布事务先锁定流程主定义行，再把原 `PUBLISHED` 版本改为 `ARCHIVED`，最后把草稿改为 `PUBLISHED` 并更新 `current_version`。`fcc_flow_definition_version.published_marker` 对 `PUBLISHED` 状态建立唯一索引，因此同一流程编码在数据库层最多只能有一个生效版本；并发发布失败时事务回滚，旧版本仍保持生效。新通话在创建 Flow Instance 时固定版本快照，存量通话不随发布改写。
 
-可编辑流程只支持 `routeMode=IVR` 的呼入固定阶段：`ENTRY -> MENU -> BRANCH -> ROUTE -> BRIDGE -> RECORD_START -> CONNECTED -> RECORD_STOP -> RATING -> RATING_SAVE -> CLOSING -> END`。编辑者只能修改菜单媒体、收号超时、单键 if/else 分支、坐席/技能组目标、排队时限和未接通处理；录音、评价和结束语音使用系统固定动作，不允许画布把它们替换成任意脚本。不接受旧 `DID_DIRECT`、任意 Java 类/方法、脚本、表达式或动态 URL。
+可编辑业务流程按创建类型使用不同契约：
 
-版本号由服务端分配，前端不允许手填。无版本流程通过“创建首个草稿版本”进入工作区；已发布和历史版本只读，需要基于已发布版本创建新草稿后才能修改。保存草稿不会影响当前通话；只有发布才切换生效版本。`BRANCH` 中的 `else` 直接维护唯一的 `defaultRoute`，`ROUTE` 阶段展示和编辑同一份兜底路由，不存在两套相互冲突的数据。
+- `INBOUND` 使用 `routeMode=IVR`，固定阶段为 `ENTRY -> MENU -> BRANCH -> ROUTE -> BRIDGE -> RECORD_START -> CONNECTED -> RECORD_STOP -> RATING -> RATING_SAVE -> CLOSING -> END`。编辑者可修改菜单媒体、收号超时、单键 if/else 分支、坐席/技能组目标、排队时限和未接通处理；发布前必须至少绑定一个启用 DID，并批量校验全部坐席工号和技能组代码真实存在且启用。技能组运行路由当前只选择该组直接成员，不把管理页面的组织子树展示语义误当成路由语义。
+- `NOTIFICATION` 是只读系统模型，固定阶段为 `ENTRY -> DIAL_CUSTOMER -> NOTIFY -> CONFIRM -> END`。通知文案、确认按键和等待时间来自本次 `fcc_dial_job`，不进入 Flow Studio 草稿，也没有管理员发布通知流程的步骤。
+
+录音、评价、结束语音和通知阶段使用系统固定动作，不允许画布替换成任意脚本。不接受旧 `DID_DIRECT`、`AUTO_DIAL_NOTIFICATION` 等兼容别名，也不接受任意 Java 类/方法、脚本、表达式或动态 URL。
+
+版本号由服务端分配，前端不允许手填。创建流程时已经持久化 V1 草稿骨架，骨架不填充虚构的坐席、技能组或通知文案；用户补齐参数并保存后才能发布。已发布和历史版本只读，需要基于已发布版本创建新草稿后才能修改。保存草稿不会影响当前通话；只有发布才切换生效版本。`BRANCH` 中的 `else` 直接维护唯一的 `defaultRoute`，`ROUTE` 阶段展示和编辑同一份兜底路由，不存在两套相互冲突的数据。
 
 运行端采用按需加载：首次需要某个流程时查询其 `PUBLISHED` 版本并完成动作目录校验，使用 Caffeine `expireAfterWrite=3h`；写入后 175 分钟（剩余 5 分钟）触发异步刷新。刷新失败保留旧快照，过期且无法重新加载时才拒绝新的流程实例。Redis 发布通知只负责主动刷新/失效对应键，不会改写已经固定版本的通话实例。启动阶段不再全量读取所有流程，减少服务启动对数据库和流程数量的耦合。
 
@@ -279,7 +288,7 @@ node tools/generate-system-models.mjs
 | 未接、超时、客户先挂产生漏话及回拨闭环 | `FINALIZE_INBOUND` + `fcc_callback_task` + 渐进式外呼任务 | 未接回拨创建、领取和任务关联已实现；运营规则、SLA 和人工处置结果仍需补齐 |
 | 录音、满意度评价及文件完成态 | `START_RECORDING`/`STOP_RECORDING`、`PLAY_NAVIGATION_VOICE`、`COLLECT_SERVICE_RATING`、`PLAY_CLOSING_VOICE`、`PERSIST_SERVICE_RATING` + Recording/评价事实 | 桥接后幂等开始录音，终态前停止录音；坐席先挂机时收取 1-5 分评价，评价或超时后播放预设结束语音再挂机。真实 FreeSWITCH 录音文件完成态仍待联调 |
 | 盲转、咨询转、三方与转接后话单归属 | 显式转接动作 + 多 Leg/Bridge 成员事实 | 数据模型可承载，完整动作与生命周期尚未实现，不能以普通桥接代替 |
-| 自动外呼放音、按键确认、重试和终态通知 | 与坐席无关的 `AUTO_FLOW` 任务 + 已发布流程版本 + 持久尝试/确认事实 | 调度不再查询坐席；流程版本在通话创建时固定，文案和确认键作为流程变量；通用转人工节点、真实并发、重试、音频与终态通知待联调 |
+| 自动外呼放音、按键确认、重试和终态通知 | 与坐席无关的 `AUTO_FLOW` 任务 + 固定 `SYSTEM_NOTIFICATION` 模型 + 持久尝试/确认事实 | 调度不查询坐席；任务携带文案、确认键和超时，通话固定系统模型版本；当前仅开放管理端创建，真实并发、重试、音频与终态通知待联调 |
 | 司机热线路由、港口映射和结束后同步业务系统 | 命名第三方端点 + 显式请求/响应动作 + 幂等业务回调事实 | 通用 HTTPS 执行边界已存在；具体业务契约、端点配置、补偿与对账尚未实现 |
 
 新系统当前已对象化并运行的呼入动作是 DID 解析、菜单收号、if/else 路由、坐席预占与呼叫、桥接、录音、坐席先挂机后的评价/结束语音和未接通回拨收尾；菜单与通知文案的 TTS 生成由 Sidecar 完成。复杂转接、营业时间/溢出、第三方业务回调等不能继续隐藏在监听器条件分支中；后续加入时必须先进入 `fcc-common` 动作目录，声明 FNode 指令、内部方法或第三方接口执行边界，再由 admin 校验、server 执行并记录每次动作事实。在这些动作真正接入运行流程并验证前，文档不将其描述为可配置完成。

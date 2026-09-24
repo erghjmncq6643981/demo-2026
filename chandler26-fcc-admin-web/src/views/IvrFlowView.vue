@@ -8,16 +8,19 @@ import FlowNodeEditor from "../features/flows/components/FlowNodeEditor.vue";
 import FlowDirectory from "../features/flows/components/FlowDirectory.vue";
 import {
   readStagedFlow,
-  newInboundFlow,
   canEditFlowVersion,
+  flowTemplateLabel,
   flowVersionStatusLabel,
   type StagedFlow,
 } from "../features/flows/model/stagedFlow";
+import type { FlowTemplateType } from "../api/flowApi";
 import { errorText } from "../utils/feedback";
 const {
   flows,
   flowPage,
   flowTotal,
+  flowTypes,
+  systemModels,
   selectedFlow,
   versions,
   versionPage,
@@ -32,7 +35,6 @@ const {
   error,
   outcome,
   dirty,
-  workingCopy,
   validationIssues,
   validated,
   modelNodes,
@@ -42,7 +44,7 @@ const {
   selectVersion,
   selectVersionPage,
   createFlow: createFlowModel,
-  beginDraft,
+  editVersion,
   saveDraft,
   validateDraft,
   publish,
@@ -64,6 +66,7 @@ const advanced = ref(false);
 const creating = ref(false);
 const createKey = ref("");
 const createName = ref("");
+const createType = ref<FlowTemplateType>("INBOUND");
 const graphError = ref("");
 const graph = computed(() => {
   try {
@@ -80,7 +83,6 @@ const editable = computed(
     canEditFlowVersion(
       selectedFlow.value.system,
       version.value?.publishStatus,
-      workingCopy.value,
     ) &&
     !loading.value &&
     !pending.value,
@@ -89,17 +91,12 @@ const draftVersion = computed(() =>
   versions.value.find((item) => item.publishStatus === "DRAFT"),
 );
 const versionState = computed(() => {
-  if (workingCopy.value) return "新草稿 · 尚未保存";
   if (!version.value) return "尚未创建版本";
   return `${version.value.version} · ${flowVersionStatusLabel(version.value.publishStatus)}`;
 });
-function startFirstDraft() {
-  beginDraft(JSON.stringify(newInboundFlow(), null, 2));
-  selectedStage.value = "MENU";
-}
-function copyAsDraft() {
+async function copyAsDraft() {
   if (!definition.value) return;
-  beginDraft(definition.value);
+  await editVersion();
   selectedStage.value = "MENU";
 }
 async function openExistingDraft() {
@@ -109,12 +106,13 @@ function updateGraph(value: StagedFlow) {
   definition.value = JSON.stringify(value, null, 2);
 }
 async function createFlow() {
-  const created = await createFlowModel(createKey.value, createName.value);
+  const created = await createFlowModel(createKey.value, createName.value, createType.value);
   if (created) {
     creating.value = false;
     createKey.value = "";
     createName.value = "";
-    startFirstDraft();
+    createType.value = "INBOUND";
+    selectedStage.value = "MENU";
   }
 }
 </script>
@@ -122,8 +120,8 @@ async function createFlow() {
   <section class="studio">
     <header class="toolbar">
       <div>
-        <h1>IVR 流程编排</h1>
-        <p>DID 入口 · 导航语音 · if/else 路由 · 草稿校验与发布</p>
+        <h1>通话流程模型</h1>
+        <p>查看系统固定模型，并对呼入 IVR 提供有限配置、草稿校验与发布</p>
       </div>
       <div class="actions">
         <el-button :loading="loading" :disabled="pending" @click="reload()"
@@ -145,7 +143,7 @@ async function createFlow() {
             dirty ||
             !validated ||
             version?.publishStatus !== 'DRAFT' ||
-            !boundDids.length
+            (selectedFlow?.modelType === 'INBOUND' && !boundDids.length)
           "
           @click="publish"
           >发布版本</el-button
@@ -186,7 +184,7 @@ async function createFlow() {
         <div class="version-bar">
           <el-select
             :model-value="selectedVersion"
-            :disabled="loading || pending || workingCopy || !versions.length"
+            :disabled="loading || pending || !versions.length"
             placeholder="尚未创建版本"
             style="width: 220px"
             @update:model-value="selectVersion"
@@ -222,7 +220,7 @@ async function createFlow() {
             text
             type="primary"
             @click="copyAsDraft"
-            >基于此版本新建草稿</el-button
+            >编辑此流程</el-button
           >
           <el-button
             v-else-if="
@@ -239,7 +237,7 @@ async function createFlow() {
             advanced ? "返回画布" : "JSON 预览"
           }}</el-button>
         </div>
-        <section class="entry-bindings" aria-label="呼入被叫号码">
+        <section v-if="selectedFlow.modelType === 'INBOUND'" class="entry-bindings" aria-label="呼入被叫号码">
           <div class="entry-copy">
             <strong>被叫号码</strong>
             <span>来电按 DID 选择此流程，并固定当时的已发布版本</span>
@@ -270,13 +268,7 @@ async function createFlow() {
           </div>
         </section>
         <div v-if="!definition" class="empty">
-          <p>此流程尚未创建版本。</p>
-          <el-button
-            v-if="!selectedFlow.system"
-            type="primary"
-            @click="startFirstDraft"
-            >创建首个草稿版本</el-button
-          >
+          <p>此流程缺少版本数据，请刷新后重试。</p>
         </div>
         <textarea
           v-else-if="advanced"
@@ -295,7 +287,7 @@ async function createFlow() {
             @select="selectedStage = $event"
           />
           <FlowNodeEditor
-            v-if="selectedStage && graph.routeMode === 'IVR'"
+            v-if="selectedStage"
             :model-value="graph"
             :stage="selectedStage"
             :disabled="!editable"
@@ -305,13 +297,49 @@ async function createFlow() {
           />
         </div>
         <footer>
-          动作与阶段由运行时固定，画布维护导航文案、按键 if 分支、else 兜底路由和超时结果。每通电话固定启动时的版本。
+          动作与阶段由运行时固定；画布只维护导航、if/else 路由和未接结果。
+          每通电话固定启动时的发布版本。
         </footer>
       </main>
       <div v-else class="empty">选择流程，查看阶段和版本。</div>
     </div>
-    <el-dialog v-model="creating" title="新建呼入流程" width="min(460px, 92vw)">
+    <section class="system-models" aria-label="系统固定流程模型">
+      <div class="system-models-head">
+        <div>
+          <strong>系统固定模型</strong>
+          <span>只读展示运行时动作骨架，不在 Flow Studio 修改</span>
+        </div>
+        <span>{{ systemModels.length }} 个模型</span>
+      </div>
+      <div class="system-model-grid">
+        <details v-for="model in systemModels" :key="model.template">
+          <summary>
+            <strong>{{ model.template }}</strong>
+            <span>{{ model.definition.nodes?.length || 0 }} 个动作</span>
+          </summary>
+          <ol>
+            <li v-for="node in model.definition.nodes || []" :key="node.key">
+              <span>{{ node.label }}</span>
+              <code>{{ node.action }}</code>
+            </li>
+          </ol>
+        </details>
+      </div>
+    </section>
+    <el-dialog v-model="creating" title="新建业务流程" width="min(500px, 92vw)">
       <el-form label-position="top"
+        ><el-form-item label="流程类型"
+          ><el-select v-model="createType" style="width: 100%">
+            <el-option
+              v-for="type in flowTypes"
+              :key="type.code"
+              :value="type.code"
+              :label="type.label"
+            />
+          </el-select>
+          <p class="dialog-hint">
+            {{ flowTypes.find((type) => type.code === createType)?.description || flowTemplateLabel(createType) }}。创建后不可修改类型。
+          </p></el-form-item
         ><el-form-item label="流程代码"
           ><el-input
             v-model="createKey"
@@ -325,7 +353,7 @@ async function createFlow() {
         ><el-button
           type="primary"
           :loading="createPending"
-          :disabled="!createKey.trim() || !createName.trim()"
+          :disabled="!createType || !createKey.trim() || !createName.trim()"
           @click="createFlow"
           >创建</el-button
         ></template
@@ -407,6 +435,65 @@ async function createFlow() {
   display: flex;
   flex: 1;
   min-height: 0;
+}
+.system-models {
+  flex: 0 0 auto;
+  max-height: 35%;
+  overflow: auto;
+  border-top: 1px solid #e2e8f0;
+  padding: 12px 18px 16px;
+  background: #f8fafc;
+}
+.system-models-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  font-size: 12px;
+}
+.system-models-head div {
+  display: grid;
+  gap: 3px;
+}
+.system-models-head span,
+.system-model-grid summary span {
+  color: #718096;
+}
+.system-model-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(210px, 1fr));
+  gap: 8px;
+  margin-top: 10px;
+}
+.system-model-grid details {
+  border: 1px solid #dce3ec;
+  border-radius: 8px;
+  background: #fff;
+  padding: 10px 12px;
+  min-width: 0;
+}
+.system-model-grid summary {
+  display: flex;
+  justify-content: space-between;
+  gap: 8px;
+  cursor: pointer;
+  font-size: 12px;
+}
+.system-model-grid ol {
+  display: grid;
+  gap: 6px;
+  margin: 10px 0 0;
+  padding-left: 18px;
+  font-size: 11px;
+}
+.system-model-grid li span,
+.system-model-grid li code {
+  display: block;
+  overflow-wrap: anywhere;
+}
+.system-model-grid li code {
+  margin-top: 2px;
+  color: #64748b;
 }
 .workspace {
   min-width: 0;

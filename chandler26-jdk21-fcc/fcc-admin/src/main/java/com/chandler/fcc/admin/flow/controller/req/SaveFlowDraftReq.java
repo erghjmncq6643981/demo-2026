@@ -6,11 +6,11 @@ import lombok.Getter;
 import lombok.Setter;
 
 /**
- * 保存 IVR 流程草稿的请求对象。
+ * 保存业务流程草稿的请求对象。
  */
 @Getter
 @Setter
-@Schema(description = "保存 IVR 流程草稿请求")
+@Schema(description = "保存业务流程草稿请求")
 public class SaveFlowDraftReq {
 
     @NotBlank(message = "流程定义不能为空")

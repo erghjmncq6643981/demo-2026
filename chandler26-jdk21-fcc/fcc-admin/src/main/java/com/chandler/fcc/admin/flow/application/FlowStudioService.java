@@ -13,6 +13,7 @@ import com.chandler.fcc.admin.flow.controller.resp.FlowExecutionResp;
 import com.chandler.fcc.admin.flow.controller.resp.FlowExecutionStepResp;
 import com.chandler.fcc.admin.flow.controller.resp.FlowPublishResp;
 import com.chandler.fcc.admin.flow.controller.resp.FlowSummaryResp;
+import com.chandler.fcc.admin.flow.controller.resp.FlowTypeResp;
 import com.chandler.fcc.admin.flow.controller.resp.FlowVersionResp;
 import com.chandler.fcc.admin.flow.controller.resp.FlowValidationResp;
 import com.chandler.fcc.admin.flow.controller.resp.SystemFlowModelResp;
@@ -27,9 +28,12 @@ import com.chandler.fcc.admin.infrastructure.persistence.mapper.FlowDefinitionMa
 import com.chandler.fcc.admin.infrastructure.persistence.mapper.FlowDefinitionVersionMapper;
 import com.chandler.fcc.admin.model.PageResult;
 import com.chandler.fcc.common.enums.FlowActionType;
+import com.chandler.fcc.common.enums.FlowTemplateType;
 import com.chandler.fcc.common.protocol.FlowDefinitionValidator;
+import com.chandler.fcc.common.protocol.StagedFlowDefinition;
 import com.chandler.fcc.common.protocol.SystemFlowModels;
 import com.chandler.fcc.common.util.IdUtil;
+import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import java.net.URI;
 import java.net.URLEncoder;
@@ -40,8 +44,10 @@ import java.nio.charset.StandardCharsets;
 import java.security.MessageDigest;
 import java.time.Duration;
 import java.time.LocalDateTime;
+import java.util.HashSet;
 import java.util.HexFormat;
 import java.util.List;
+import java.util.Set;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Value;
@@ -54,7 +60,7 @@ import org.springframework.transaction.support.TransactionSynchronizationManager
 import org.springframework.web.server.ResponseStatusException;
 
 /**
- * IVR Flow Studio 的模型目录、流程版本维护和执行轨迹应用服务。
+ * Flow Studio 的模型目录、流程版本维护和执行轨迹应用服务。
  *
  * <p>系统模型与动作目录来自 fcc-common；可编辑流程只保存受公共验证器支持的参数，
  * 发布事务提交后才通知运行端加载，新版本不会改变正在执行的通话快照。</p>
@@ -102,6 +108,23 @@ public class FlowStudioService {
     }
 
     /**
+     * 返回当前真正具备管理和运行闭环的可创建流程类型。
+     *
+     * @return 可创建流程类型目录
+     */
+    public List<FlowTypeResp> types() {
+        StpUtil.checkPermission("flow:view");
+        return List.of(FlowTemplateType.values())
+            .stream()
+            .map(type -> FlowTypeResp.builder()
+                .code(type.name())
+                .label(type.getDesc())
+                .description(type.getBusinessDescription())
+                .build())
+            .toList();
+    }
+
+    /**
      * 返回随应用部署的完整固定通话模型。
      *
      * @return 按模板代码排序的模型目录
@@ -139,7 +162,14 @@ public class FlowStudioService {
         Page<FlowDefinitionEntity> page = flowMapper.selectPage(
             new Page<>(request.getPageNum(), request.getPageSize()),
             new LambdaQueryWrapper<FlowDefinitionEntity>()
-                .eq(FlowDefinitionEntity::getModelType, "INBOUND")
+                .eq(FlowDefinitionEntity::getModelType, FlowTemplateType.INBOUND.name())
+                .notIn(
+                    FlowDefinitionEntity::getFlowKey,
+                    SystemFlowModels.templateNames()
+                        .stream()
+                        .map(template -> SYSTEM_PREFIX + template)
+                        .toList()
+                )
                 .isNull(FlowDefinitionEntity::getDeletedAt)
                 .orderByDesc(FlowDefinitionEntity::getId)
         );
@@ -163,7 +193,9 @@ public class FlowStudioService {
     }
 
     /**
-     * 创建一个不含虚构路由数据的新呼入流程。
+     * 创建流程主数据及与类型匹配的首个草稿版本。
+     *
+     * <p>主数据和草稿在同一事务内写入，草稿只包含固定结构，不填充虚构业务数据。</p>
      *
      * @param request 创建参数
      * @return 新流程摘要
@@ -173,6 +205,7 @@ public class FlowStudioService {
         StpUtil.checkPermission("flow:write");
         String flowKey = request.getFlowKey() == null ? "" : request.getFlowKey().trim();
         String flowName = request.getFlowName() == null ? "" : request.getFlowName().trim();
+        FlowTemplateType modelType = request.getModelType();
         if (!flowKey.matches("[A-Za-z][A-Za-z0-9_-]{0,63}") || flowKey.startsWith(SYSTEM_PREFIX)) {
             throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "流程代码不合法");
         }
@@ -187,14 +220,31 @@ public class FlowStudioService {
             .id(IdUtil.nextId())
             .flowKey(flowKey)
             .flowName(flowName)
-            .modelType("INBOUND")
+            .modelType(modelType.name())
             .status("DRAFT")
             .currentVersion(0)
             .createdAt(now)
             .updatedAt(now)
             .build();
         flowMapper.insert(entity);
-        log.info("[流程管理] 新建流程 flowKey={}", flowKey);
+        String definition = StagedFlowDefinition.initialDraft(modelType).toString();
+        FlowDefinitionVersionEntity draft = FlowDefinitionVersionEntity.builder()
+            .id(IdUtil.nextId())
+            .flowDefinitionId(entity.getId())
+            .versionNo(1)
+            .definitionJson(definition)
+            .checksum(sha256(definition))
+            .publishStatus("DRAFT")
+            .createdBy(currentActor())
+            .createdAt(now)
+            .build();
+        versionMapper.insert(draft);
+        log.info(
+            "[流程管理] 新建流程及首个草稿 flowKey={}, modelType={}, version={}",
+            flowKey,
+            modelType.name(),
+            formatVersion(draft.getVersionNo())
+        );
         return summary(entity);
     }
 
@@ -246,6 +296,86 @@ public class FlowStudioService {
     }
 
     /**
+     * 从指定已发布或历史版本派生唯一草稿，实现已发布流程的写时复制编辑。
+     *
+     * <p>已有草稿时幂等返回该草稿，不修改当前生效版本；新草稿使用下一个递增版本号。</p>
+     *
+     * @param flowKey 稳定流程代码
+     * @param versionNo 作为草稿来源的版本序号
+     * @return 已有或新建的唯一草稿详情
+     * @throws ResponseStatusException 来源版本不存在、尚未发布或流程不可编辑
+     */
+    @Transactional(rollbackFor = Exception.class)
+    public FlowVersionResp createDraftFromVersion(String flowKey, int versionNo) {
+        StpUtil.checkPermission("flow:write");
+        if (versionNo < 1) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "版本序号不合法");
+        }
+        FlowDefinitionEntity flow = requireFlow(flowKey, true);
+        rejectSystemFlow(flowKey);
+        List<FlowDefinitionVersionEntity> drafts = versionMapper.selectList(
+            new LambdaQueryWrapper<FlowDefinitionVersionEntity>()
+                .eq(FlowDefinitionVersionEntity::getFlowDefinitionId, flow.getId())
+                .eq(FlowDefinitionVersionEntity::getPublishStatus, "DRAFT")
+        );
+        if (drafts.size() > 1) {
+            throw new IllegalStateException("流程存在多个草稿版本，需要先修复数据");
+        }
+        if (!drafts.isEmpty()) {
+            FlowDefinitionVersionEntity existing = drafts.getFirst();
+            log.info(
+                "[流程管理] 复用已有草稿 flowKey={}, version={}",
+                flowKey,
+                formatVersion(existing.getVersionNo())
+            );
+            return version(existing, true);
+        }
+
+        FlowDefinitionVersionEntity source = versionMapper.selectOne(
+            new LambdaQueryWrapper<FlowDefinitionVersionEntity>()
+                .eq(FlowDefinitionVersionEntity::getFlowDefinitionId, flow.getId())
+                .eq(FlowDefinitionVersionEntity::getVersionNo, versionNo)
+        );
+        if (source == null) {
+            throw new ResponseStatusException(HttpStatus.NOT_FOUND, "流程版本不存在");
+        }
+        if ("DRAFT".equals(source.getPublishStatus())) {
+            throw new ResponseStatusException(HttpStatus.CONFLICT, "草稿版本可以直接编辑，无需再次派生");
+        }
+        String definition = FlowDefinitionValidator.normalizeDraft(
+            source.getDefinitionJson(),
+            flow.getModelType()
+        ).toString();
+        FlowDefinitionVersionEntity latest = versionMapper.selectOne(
+            new LambdaQueryWrapper<FlowDefinitionVersionEntity>()
+                .eq(FlowDefinitionVersionEntity::getFlowDefinitionId, flow.getId())
+                .orderByDesc(FlowDefinitionVersionEntity::getVersionNo)
+                .last("LIMIT 1")
+        );
+        int nextVersionNo = latest == null ? 1 : latest.getVersionNo() + 1;
+        FlowDefinitionVersionEntity draft = FlowDefinitionVersionEntity.builder()
+            .id(IdUtil.nextId())
+            .flowDefinitionId(flow.getId())
+            .versionNo(nextVersionNo)
+            .definitionJson(definition)
+            .checksum(sha256(definition))
+            .publishStatus("DRAFT")
+            .createdBy(currentActor())
+            .createdAt(LocalDateTime.now())
+            .build();
+        versionMapper.insert(draft);
+        flow.setUpdatedAt(LocalDateTime.now());
+        flowMapper.updateById(flow);
+        log.info(
+            "[流程管理] 从历史版本派生草稿 flowKey={}, sourceVersion={}, draftVersion={}",
+            flowKey,
+            formatVersion(source.getVersionNo()),
+            formatVersion(draft.getVersionNo())
+        );
+        return version(draft, true);
+    }
+
+    /**
      * 保存或更新唯一草稿版本。
      *
      * @param flowKey 稳定流程代码
@@ -257,7 +387,10 @@ public class FlowStudioService {
         StpUtil.checkPermission("flow:write");
         FlowDefinitionEntity flow = requireFlow(flowKey, true);
         rejectSystemFlow(flowKey);
-        String definition = FlowDefinitionValidator.validate(request.getDefinitionJson()).toString();
+        String definition = FlowDefinitionValidator.normalizeDraft(
+            request.getDefinitionJson(),
+            flow.getModelType()
+        ).toString();
         List<FlowDefinitionVersionEntity> drafts = versionMapper.selectList(
             new LambdaQueryWrapper<FlowDefinitionVersionEntity>()
                 .eq(FlowDefinitionVersionEntity::getFlowDefinitionId, flow.getId())
@@ -307,9 +440,12 @@ public class FlowStudioService {
      */
     public FlowValidationResp validate(String flowKey, SaveFlowDraftReq request) {
         StpUtil.checkPermission("flow:write");
-        requireFlow(flowKey, true);
+        FlowDefinitionEntity flow = requireFlow(flowKey, true);
         rejectSystemFlow(flowKey);
-        String normalized = FlowDefinitionValidator.validate(request.getDefinitionJson()).toString();
+        String normalized = FlowDefinitionValidator.validate(
+            request.getDefinitionJson(),
+            flow.getModelType()
+        ).toString();
         return FlowValidationResp.builder()
             .valid(true)
             .normalizedDefinitionJson(normalized)
@@ -341,7 +477,11 @@ public class FlowStudioService {
         if (!formatVersion(draft.getVersionNo()).equals(request.getVersion())) {
             throw new ResponseStatusException(HttpStatus.CONFLICT, "待发布版本已变化，请刷新后重试");
         }
-        FlowDefinitionValidator.validate(draft.getDefinitionJson());
+        JsonNode normalized = FlowDefinitionValidator.validate(
+            draft.getDefinitionJson(),
+            flow.getModelType()
+        );
+        requireInboundRouteTargets(flow, normalized);
         versionMapper.selectList(
             new LambdaQueryWrapper<FlowDefinitionVersionEntity>()
                 .eq(FlowDefinitionVersionEntity::getFlowDefinitionId, flow.getId())
@@ -394,6 +534,92 @@ public class FlowStudioService {
         );
         if (count == null || count == 0) {
             throw new ResponseStatusException(HttpStatus.CONFLICT, "请先绑定至少一个被叫号码再发布流程");
+        }
+    }
+
+    /**
+     * 批量校验呼入流程引用的坐席和技能组真实存在且启用。
+     *
+     * @param flow 待发布流程主数据
+     * @param definition 已通过公共协议校验的流程定义
+     * @throws ResponseStatusException 任一路由目标不存在或已停用
+     */
+    private void requireInboundRouteTargets(
+        FlowDefinitionEntity flow,
+        JsonNode definition
+    ) {
+        if (!FlowTemplateType.INBOUND.name().equals(flow.getModelType())) {
+            return;
+        }
+        Set<String> agentWorkNos = new HashSet<>();
+        Set<String> groupCodes = new HashSet<>();
+        collectRouteTarget(definition.path("defaultRoute"), agentWorkNos, groupCodes);
+        definition.path("branches").forEach(
+            branch -> collectRouteTarget(branch, agentWorkNos, groupCodes)
+        );
+
+        Set<String> activeAgents = activeAgentWorkNos(agentWorkNos);
+        Set<String> activeGroups = activeGroupCodes(groupCodes);
+        agentWorkNos.removeAll(activeAgents);
+        groupCodes.removeAll(activeGroups);
+        if (!agentWorkNos.isEmpty() || !groupCodes.isEmpty()) {
+            String agents = agentWorkNos.isEmpty() ? "" : "坐席 " + String.join(", ", agentWorkNos);
+            String groups = groupCodes.isEmpty() ? "" : "技能组 " + String.join(", ", groupCodes);
+            String separator = agents.isEmpty() || groups.isEmpty() ? "" : "；";
+            throw new ResponseStatusException(
+                HttpStatus.CONFLICT,
+                "流程引用了不存在或已停用的路由目标：" + agents + separator + groups
+            );
+        }
+    }
+
+    /**
+     * 批量查询仍处于启用状态的坐席工号。
+     *
+     * @param agentWorkNos 流程引用的坐席工号
+     * @return 启用的坐席工号集合
+     */
+    private Set<String> activeAgentWorkNos(Set<String> agentWorkNos) {
+        if (agentWorkNos.isEmpty()) {
+            return Set.of();
+        }
+        return Set.copyOf(
+            executionMapper.activeAgentWorkNos(agentWorkNos.stream().sorted().toList())
+        );
+    }
+
+    /**
+     * 批量查询仍处于启用状态的技能组代码。
+     *
+     * @param groupCodes 流程引用的技能组代码
+     * @return 启用的技能组代码集合
+     */
+    private Set<String> activeGroupCodes(Set<String> groupCodes) {
+        if (groupCodes.isEmpty()) {
+            return Set.of();
+        }
+        return Set.copyOf(
+            executionMapper.activeGroupCodes(groupCodes.stream().sorted().toList())
+        );
+    }
+
+    /**
+     * 按类型收集一个已校验路由目标。
+     *
+     * @param route 路由节点
+     * @param agentWorkNos 坐席工号集合
+     * @param groupCodes 技能组代码集合
+     */
+    private void collectRouteTarget(
+        JsonNode route,
+        Set<String> agentWorkNos,
+        Set<String> groupCodes
+    ) {
+        String target = route.path("target").asText();
+        if ("AGENT".equals(route.path("targetType").asText())) {
+            agentWorkNos.add(target);
+        } else {
+            groupCodes.add(target);
         }
     }
 

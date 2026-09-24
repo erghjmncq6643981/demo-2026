@@ -188,7 +188,7 @@ public class FlowConfig {
         if (flowKey.startsWith("SYSTEM_")) {
             validateSystemModel(definitionJson);
         } else {
-            FlowDefinitionValidator.validate(definitionJson);
+            FlowDefinitionValidator.validate(definitionJson, modelType);
         }
         Integer versionNo = integer(row, "versionNo");
         return new PublishedFlow(definitionId, versionId, flowKey, modelType, flowName, definitionJson, versionNo);

@@ -122,15 +122,15 @@ public class InternalBusinessController {
      * 外呼摘要。
      *
      * @param page 页码
-     * @param owner 工号过滤
+     * @param triggerSource 触发来源过滤
      * @return 列表
      */
     @GetMapping("/dial-jobs")
     public ManagementResp<?> jobs(
         @RequestParam(defaultValue = "1") int page,
-        @RequestParam(required = false) String flowKey
+        @RequestParam(required = false) String triggerSource
     ) {
-        return ok(service.jobs(page, flowKey));
+        return ok(service.jobs(page, triggerSource));
     }
 
     /**
@@ -144,10 +144,12 @@ public class InternalBusinessController {
         return ok(
             service.createJob(
                 request.getNumber(),
-                request.getFlowKey(),
-                request.getVariables(),
+                request.getText(),
+                request.getConfirmDigit(),
+                request.getTimeoutSeconds(),
                 request.getMaxAttempts(),
-                request.getRequestKey()
+                request.getRequestKey(),
+                request.getBizId()
             )
         );
     }

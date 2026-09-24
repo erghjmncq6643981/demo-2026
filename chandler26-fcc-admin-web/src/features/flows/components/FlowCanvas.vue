@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { computed } from "vue";
 import {
   stageLabels,
   configurableStages,
@@ -25,6 +26,9 @@ const latest = (stage: string) => {
 const node = (stage: string) =>
   props.nodes.find((item) => item.key === stage) ||
   props.flow.nodes?.find((item) => item.key === stage);
+const inbound = computed(() =>
+  props.flow.template === "INBOUND" ? props.flow : null,
+);
 </script>
 
 <template>
@@ -62,28 +66,28 @@ const node = (stage: string) =>
             {{ node(stage)!.operation }}</span
           >
         </div>
-        <p v-if="stage === 'ENTRY'">DID 匹配已发布版本 → 固定本次通话流程</p>
-        <p v-if="stage === 'MENU'">
+        <p v-if="stage === 'ENTRY' && inbound">DID 匹配已发布版本 → 固定本次通话流程</p>
+        <p v-if="stage === 'MENU' && inbound">
           {{
-            flow.menu?.enabled
-              ? `${flow.menu.prompt || "请选择提示音"} · 等待 ${flow.menu.timeoutSeconds} 秒`
+            inbound.menu.enabled
+              ? `${inbound.menu.prompt || "请选择提示音"} · 等待 ${inbound.menu.timeoutSeconds} 秒`
               : "菜单关闭 · false 分支直达路由"
           }}
         </p>
-        <div v-if="stage === 'BRANCH'" class="branches">
-          <span v-for="branch in flow.branches" :key="branch.digit"
+        <div v-if="stage === 'BRANCH' && inbound" class="branches">
+          <span v-for="branch in inbound.branches" :key="branch.digit"
             >if 按 {{ branch.digit }} →
             {{ branch.targetType === "AGENT" ? "坐席" : "技能组" }}
             {{ branch.target || "未配置" }}</span
           >
           <span
-            >else → {{ flow.defaultRoute?.target || "未配置默认目标" }}</span
+            >else → {{ inbound.defaultRoute.target || "未配置默认目标" }}</span
           >
         </div>
-        <p v-if="stage === 'ROUTE'">
-          {{ flow.defaultRoute?.targetType === "GROUP" ? "技能组" : "坐席" }}
-          {{ flow.defaultRoute?.target || "按选中分支分配" }} · 最长
-          {{ flow.defaultRoute?.queueSeconds || 120 }} 秒
+        <p v-if="stage === 'ROUTE' && inbound">
+          {{ inbound.defaultRoute.targetType === "GROUP" ? "技能组" : "坐席" }}
+          {{ inbound.defaultRoute.target || "按选中分支分配" }} · 最长
+          {{ inbound.defaultRoute.queueSeconds }} 秒
         </p>
         <p v-if="stage === 'BRIDGE'">等待真实桥接事件后进入通话阶段</p>
         <p v-if="stage === 'RECORD_START'">桥接成功后启动录音，路径由共享录音布局生成</p>
@@ -91,9 +95,9 @@ const node = (stage: string) =>
         <p v-if="stage === 'RATING'">坐席先挂机时播放预设评价语音并收取 1–5 分</p>
         <p v-if="stage === 'RATING_SAVE'">持久化本次服务评价结果</p>
         <p v-if="stage === 'CLOSING'">播放预设结束语音后结束客户话道</p>
-        <p v-if="stage === 'END'">
+        <p v-if="stage === 'END' && inbound">
           {{
-            flow.timeoutAction === "HANGUP"
+            inbound.timeoutAction === "HANGUP"
               ? "挂机结束"
               : "未接通时记录漏话回拨待办"
           }}

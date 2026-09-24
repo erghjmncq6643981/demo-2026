@@ -3,6 +3,7 @@ import { computed } from 'vue';
 import {
   stageLabels,
   updateDefaultRoute,
+  type FlowBranch,
   type FlowTarget,
   type FlowValidationIssue,
   type StagedFlow,
@@ -14,7 +15,9 @@ const props = defineProps<{
   issues?: FlowValidationIssue[];
 }>();
 const emit = defineEmits<{ 'update:modelValue': [value: StagedFlow]; close: [] }>();
-const flow = computed(() => props.modelValue);
+const inbound = computed(() =>
+  props.modelValue.template === 'INBOUND' ? props.modelValue : null,
+);
 const stageIssues = computed(() => (props.issues || []).filter((item) => item.stage === props.stage));
 function change(mutator: (value: StagedFlow) => void) {
   const copy = JSON.parse(JSON.stringify(props.modelValue)) as StagedFlow;
@@ -23,11 +26,45 @@ function change(mutator: (value: StagedFlow) => void) {
 }
 function menu(key: 'enabled' | 'prompt' | 'timeoutSeconds', value: string | number | boolean) {
   change((f) => {
-    Object.assign(f.menu!, { [key]: value });
+    if (f.template === 'INBOUND') Object.assign(f.menu, { [key]: value });
   });
 }
 function defaultRoute(key: keyof FlowTarget, value: string | number) {
-  emit('update:modelValue', updateDefaultRoute(props.modelValue, { [key]: value }));
+  if (props.modelValue.template === 'INBOUND') {
+    emit('update:modelValue', updateDefaultRoute(props.modelValue, { [key]: value }));
+  }
+}
+function branchField(
+  index: number,
+  key: keyof FlowBranch,
+  value: string | number,
+) {
+  change((flow) => {
+    if (flow.template !== 'INBOUND') return;
+    const branch = flow.branches[index];
+    if (branch) Object.assign(branch, { [key]: value });
+  });
+}
+function addBranch() {
+  change((flow) => {
+    if (flow.template !== 'INBOUND') return;
+    flow.branches.push({
+      digit: '',
+      targetType: 'GROUP',
+      target: '',
+      queueSeconds: 120,
+    });
+  });
+}
+function removeBranch(index: number) {
+  change((flow) => {
+    if (flow.template === 'INBOUND') flow.branches.splice(index, 1);
+  });
+}
+function timeoutAction(value: 'CALLBACK' | 'HANGUP') {
+  change((flow) => {
+    if (flow.template === 'INBOUND') flow.timeoutAction = value;
+  });
 }
 </script>
 <template>
@@ -44,17 +81,17 @@ function defaultRoute(key: keyof FlowTarget, value: string | number) {
       <li v-for="issue in stageIssues" :key="issue.field">{{ issue.message }}</li>
     </ul>
     <fieldset :disabled="disabled">
-      <template v-if="stage === 'MENU'">
+      <template v-if="stage === 'MENU' && inbound">
         <label class="check"
           ><input
             type="checkbox"
-            :checked="flow.menu?.enabled"
+            :checked="inbound.menu.enabled"
             @change="menu('enabled', ($event.target as HTMLInputElement).checked)"
           />启用语音菜单（true / false）</label
         >
         <label
           >导航语音文案或预置音频路径<textarea
-            :value="flow.menu?.prompt"
+            :value="inbound.menu.prompt"
             rows="4"
             maxlength="1000"
             placeholder="例如：您好，请按 1 转人工；也可填写 /sounds/welcome.wav"
@@ -65,31 +102,28 @@ function defaultRoute(key: keyof FlowTarget, value: string | number) {
             type="number"
             min="3"
             max="60"
-            :value="flow.menu?.timeoutSeconds"
+            :value="inbound.menu.timeoutSeconds"
             @change="menu('timeoutSeconds', ($event.target as HTMLInputElement).valueAsNumber)"
         /></label>
         <p class="hint">普通文案由 Sidecar 生成并复用 TTS 文件；绝对路径只用于 FreeSWITCH 已有的预置音频。</p>
       </template>
-      <template v-else-if="stage === 'BRANCH'">
-        <div v-for="(branch, index) in flow.branches" :key="index" class="branch-editor">
+      <template v-else-if="stage === 'BRANCH' && inbound">
+        <div v-for="(branch, index) in inbound.branches" :key="index" class="branch-editor">
           <label
             >if 按键<input
               maxlength="1"
               :value="branch.digit"
-              @change="
-                change((f) => {
-                  f.branches![index]!.digit = ($event.target as HTMLInputElement).value;
-                })
-              "
+              @change="branchField(index, 'digit', ($event.target as HTMLInputElement).value)"
           /></label>
           <label
             >目标类型<select
               :value="branch.targetType"
               @change="
-                change((f) => {
-                  f.branches![index]!.targetType = ($event.target as HTMLSelectElement).value as
-                    'AGENT' | 'GROUP';
-                })
+                branchField(
+                  index,
+                  'targetType',
+                  ($event.target as HTMLSelectElement).value,
+                )
               "
             >
               <option value="AGENT">坐席工号</option>
@@ -99,11 +133,7 @@ function defaultRoute(key: keyof FlowTarget, value: string | number) {
           <label
             >目标<input
               :value="branch.target"
-              @change="
-                change((f) => {
-                  f.branches![index]!.target = ($event.target as HTMLInputElement).value;
-                })
-              "
+              @change="branchField(index, 'target', ($event.target as HTMLInputElement).value)"
           /></label>
           <label
             >排队时限（秒）<input
@@ -112,36 +142,30 @@ function defaultRoute(key: keyof FlowTarget, value: string | number) {
               max="300"
               :value="branch.queueSeconds"
               @change="
-                change((f) => {
-                  f.branches![index]!.queueSeconds = ($event.target as HTMLInputElement).valueAsNumber;
-                })
+                branchField(
+                  index,
+                  'queueSeconds',
+                  ($event.target as HTMLInputElement).valueAsNumber,
+                )
               "
           /></label>
           <el-button
             text
             type="danger"
-            @click="
-              change((f) => {
-                f.branches!.splice(index, 1);
-              })
-            "
+            @click="removeBranch(index)"
             >移除此分支</el-button
           >
         </div>
         <el-button
-          :disabled="disabled || (flow.branches?.length || 0) >= 10"
-          @click="
-            change((f) => {
-              f.branches!.push({ digit: '', targetType: 'GROUP', target: '', queueSeconds: 120 });
-            })
-          "
+          :disabled="disabled || inbound.branches.length >= 10"
+          @click="addBranch"
           >添加按键分支</el-button
         >
         <section class="else-editor" aria-label="else 默认路由">
           <strong>else · 未匹配按键</strong>
           <label
             >目标类型<select
-              :value="flow.defaultRoute?.targetType"
+              :value="inbound.defaultRoute.targetType"
               @change="defaultRoute('targetType', ($event.target as HTMLSelectElement).value)"
             >
               <option value="AGENT">坐席工号</option>
@@ -150,7 +174,7 @@ function defaultRoute(key: keyof FlowTarget, value: string | number) {
           >
           <label
             >目标<input
-              :value="flow.defaultRoute?.target"
+              :value="inbound.defaultRoute.target"
               @change="defaultRoute('target', ($event.target as HTMLInputElement).value)"
           /></label>
           <label
@@ -158,21 +182,17 @@ function defaultRoute(key: keyof FlowTarget, value: string | number) {
               type="number"
               min="5"
               max="300"
-              :value="flow.defaultRoute?.queueSeconds"
+              :value="inbound.defaultRoute.queueSeconds"
               @change="defaultRoute('queueSeconds', ($event.target as HTMLInputElement).valueAsNumber)"
           /></label>
         </section>
         <p class="hint">每个按键只能出现一次；else 是所有未匹配按键的明确兜底分支。</p>
       </template>
-      <template v-else-if="stage === 'ROUTE'">
+      <template v-else-if="stage === 'ROUTE' && inbound">
         <label
           >默认目标类型<select
-            :value="flow.defaultRoute?.targetType"
-            @change="
-              change((f) => {
-                f.defaultRoute!.targetType = ($event.target as HTMLSelectElement).value as 'AGENT' | 'GROUP';
-              })
-            "
+            :value="inbound.defaultRoute.targetType"
+            @change="defaultRoute('targetType', ($event.target as HTMLSelectElement).value)"
           >
             <option value="AGENT">坐席工号</option>
             <option value="GROUP">技能组代码</option>
@@ -180,35 +200,32 @@ function defaultRoute(key: keyof FlowTarget, value: string | number) {
         >
         <label
           >默认目标<input
-            :value="flow.defaultRoute?.target"
-            @change="
-              change((f) => {
-                f.defaultRoute!.target = ($event.target as HTMLInputElement).value;
-              })
-            "
+            :value="inbound.defaultRoute.target"
+            @change="defaultRoute('target', ($event.target as HTMLInputElement).value)"
         /></label>
         <label
           >最长排队（秒）<input
             type="number"
             min="5"
             max="300"
-            :value="flow.defaultRoute?.queueSeconds"
+            :value="inbound.defaultRoute.queueSeconds"
             @change="
-              change((f) => {
-                f.defaultRoute!.queueSeconds = ($event.target as HTMLInputElement).valueAsNumber;
-              })
+              defaultRoute(
+                'queueSeconds',
+                ($event.target as HTMLInputElement).valueAsNumber,
+              )
             "
         /></label>
         <p class="hint">技能组按最长空闲分配；不能修改为未实现的分配算法。</p>
       </template>
-      <template v-else-if="stage === 'END'">
+      <template v-else-if="stage === 'END' && inbound">
         <label
           >未接通或菜单超时<select
-            :value="flow.timeoutAction"
+            :value="inbound.timeoutAction"
             @change="
-              change((f) => {
-                f.timeoutAction = ($event.target as HTMLSelectElement).value as 'CALLBACK' | 'HANGUP';
-              })
+              timeoutAction(
+                ($event.target as HTMLSelectElement).value as 'CALLBACK' | 'HANGUP',
+              )
             "
           >
             <option value="CALLBACK">记录漏话回拨待办并挂机</option>

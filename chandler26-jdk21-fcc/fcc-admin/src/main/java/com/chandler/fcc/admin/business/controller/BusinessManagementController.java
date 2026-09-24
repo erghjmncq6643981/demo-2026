@@ -94,16 +94,16 @@ public class BusinessManagementController {
      * 查询自动外呼任务。
      *
      * @param page 页码
-     * @param flowKey 流程编码筛选
+     * @param triggerSource 触发来源筛选
      * @return 任务摘要
      */
     @GetMapping("/dial-jobs")
     @Operation(summary = "分页查询自动外呼任务")
     public CommonResult<Object> jobs(
         @RequestParam(defaultValue = "1") int page,
-        @RequestParam(required = false) String flowKey
+        @RequestParam(required = false) String triggerSource
     ) {
-        return CommonResult.success(service.jobs(page, flowKey));
+        return CommonResult.success(service.jobs(page, triggerSource));
     }
 
     /**

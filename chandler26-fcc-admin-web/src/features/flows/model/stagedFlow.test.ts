@@ -1,5 +1,10 @@
 import { describe, expect, it } from "vitest";
-import { inboundStages, newInboundFlow, validateStagedFlow } from "./stagedFlow";
+import {
+  inboundStages,
+  newInboundFlow,
+  readStagedFlow,
+  validateStagedFlow,
+} from "./stagedFlow";
 
 describe("stagedFlow", () => {
   it("creates the same complete inbound stage catalog used by the runtime", () => {
@@ -32,5 +37,17 @@ describe("stagedFlow", () => {
     const messages = issues.map((issue) => issue.message);
     expect(messages.some((message) => message.includes("重复"))).toBe(true);
     expect(issues.some((issue) => issue.field === "target")).toBe(true);
+  });
+
+  it("rejects system notification models as editable business flows", () => {
+    expect(() =>
+      readStagedFlow(
+        JSON.stringify({
+          routeMode: "AUTO_DIAL",
+          template: "NOTIFICATION",
+          stages: ["ENTRY", "DIAL_CUSTOMER", "NOTIFY", "CONFIRM", "END"],
+        }),
+      ),
+    ).toThrow("流程类型或运行模式不受支持");
   });
 });

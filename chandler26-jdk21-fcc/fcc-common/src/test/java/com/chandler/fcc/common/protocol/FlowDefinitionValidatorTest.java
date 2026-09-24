@@ -1,5 +1,6 @@
 package com.chandler.fcc.common.protocol;
 
+import com.chandler.fcc.common.enums.FlowTemplateType;
 import org.junit.jupiter.api.Test;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
@@ -99,4 +100,35 @@ class FlowDefinitionValidatorTest {
             () -> FlowDefinitionValidator.validate(definition)
         );
     }
+
+    /**
+     * 主数据类型和版本模板不一致时必须拒绝，避免运行端错配执行器。
+     */
+    @Test
+    void rejectsDefinitionThatDoesNotMatchMasterType() {
+        assertThrows(
+            IllegalArgumentException.class,
+            () -> FlowDefinitionValidator.validate(
+                VALID_IVR.replace("\"template\":\"INBOUND\"", "\"template\":\"NOTIFICATION\""),
+                "INBOUND"
+            )
+        );
+    }
+
+    /**
+     * 首个呼入草稿允许空路由目标中途保存，但不能通过发布级校验。
+     */
+    @Test
+    void permitsIncompleteInboundDraftButRejectsPublication() {
+        String draft = StagedFlowDefinition.initialDraft(FlowTemplateType.INBOUND).toString();
+
+        var normalized = FlowDefinitionValidator.normalizeDraft(draft, "INBOUND");
+
+        assertEquals("", normalized.path("defaultRoute").path("target").asText());
+        assertThrows(
+            IllegalArgumentException.class,
+            () -> FlowDefinitionValidator.validate(draft, "INBOUND")
+        );
+    }
+
 }

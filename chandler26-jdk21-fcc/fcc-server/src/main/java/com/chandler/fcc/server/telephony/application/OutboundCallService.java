@@ -36,7 +36,6 @@ import java.util.List;
 import java.util.Map;
 import java.util.Set;
 import lombok.RequiredArgsConstructor;
-import org.springframework.beans.factory.annotation.Value;
 import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.support.TransactionTemplate;
@@ -55,6 +54,7 @@ public class OutboundCallService implements SystemFlowRuntime {
     private static final String TEMPLATE_AGENT_FIRST = "AGENT_FIRST";
     private static final String TEMPLATE_AGENT_ORIGINATED = "AGENT_ORIGINATED";
     private static final String TEMPLATE_NOTIFICATION = "NOTIFICATION";
+    private static final String FLOW_SYSTEM_NOTIFICATION = "SYSTEM_NOTIFICATION";
     private static final String DATA_TERMINAL = "terminal";
 
     private static final Set<FlowActionType> AGENT_FIRST_ACTIONS = Set.of(
@@ -98,9 +98,6 @@ public class OutboundCallService implements SystemFlowRuntime {
     private final DialAttemptGuard attemptGuard;
     private final CallRecordingService recordings;
 
-    @Value("${fcc.outbound.notification-text:}")
-    private String notificationText;
-
     /**
      * 返回本服务负责的外呼模板。
      *
@@ -132,36 +129,38 @@ public class OutboundCallService implements SystemFlowRuntime {
      *
      * @param number 被叫号码
      * @param attemptId 自动外呼尝试标识
-     * @param flowKey 已发布自动外呼流程编码
-     * @param variables 流程输入变量
+     * @param text 本次任务通知文案
+     * @param confirmDigit 客户确认按键
+     * @param timeoutSeconds 等待客户确认的秒数
      * @return 通话标识和受理状态
      * @throws ResponseStatusException 通知媒体或出局路由不可用
      */
     public Map<String, Object> startAutoDial(
         String number,
         String attemptId,
-        String flowKey,
-        Map<String, Object> variables
+        String text,
+        String confirmDigit,
+        int timeoutSeconds
     ) {
-        Map<String, Object> inputs = variables == null
-            ? Map.of()
-            : new HashMap<>(variables);
-        String text = String.valueOf(inputs.getOrDefault("text", notificationText)).trim();
-        String confirmDigit = String.valueOf(inputs.getOrDefault("confirmDigit", "1")).trim();
-        if (text.isBlank()) {
-            throw new ResponseStatusException(HttpStatus.CONFLICT, "未配置通知文案");
+        FlowConfig.FlowSnapshot flow = requireNotificationFlow();
+        String normalizedText = text == null ? "" : text.trim();
+        if (normalizedText.isBlank() || normalizedText.length() > 1000) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "通知文案不能为空且不能超过1000个字符");
         }
-        if (!confirmDigit.matches("[0-9]")) {
+        if (confirmDigit == null || !confirmDigit.matches("[0-9]")) {
             throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "确认按键只支持一位数字");
+        }
+        if (timeoutSeconds < 3 || timeoutSeconds > 60) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "确认等待时间必须为3至60秒");
         }
         var route = routes.resolve(number);
         var data = new HashMap<String, Object>();
         data.put("runtimeTemplate", TEMPLATE_NOTIFICATION);
         data.put("dialJobId", attemptId);
-        data.put("flowKey", flowKey);
-        data.put("flowVariables", inputs);
-        data.put("notificationText", text);
+        data.put("flowKey", FLOW_SYSTEM_NOTIFICATION);
+        data.put("notificationText", normalizedText);
         data.put("confirmDigit", confirmDigit);
+        data.put("notificationTimeoutSeconds", timeoutSeconds);
         data.put("guestNumber", route.number());
         data.put("guestContext", route.context());
 
@@ -176,7 +175,7 @@ public class OutboundCallService implements SystemFlowRuntime {
             .guestChannelUuid(IdUtil.getUuid())
             .data(data)
             .build();
-        pinFlow(call, flowKey);
+        pinFlow(call, flow);
         call.putData("guestChannelUuid", call.getGuestChannelUuid());
 
         flowActions.executeInternal(
@@ -524,8 +523,32 @@ public class OutboundCallService implements SystemFlowRuntime {
     private void pinFlow(CallInfoBO call, String template) {
         FlowConfig.FlowSnapshot flow = flowConfig.getPublishedFlow(null, template)
             .orElseThrow(() -> new ResponseStatusException(HttpStatus.CONFLICT, "未找到已发布流程: " + template));
+        pinFlow(call, flow);
+    }
+
+    /**
+     * 将已加载的不可变流程版本固定到通话，避免再次查询时命中其他版本。
+     *
+     * @param call 待持久化通话
+     * @param flow 已校验发布快照
+     */
+    private void pinFlow(CallInfoBO call, FlowConfig.FlowSnapshot flow) {
         call.putData("flowDefinitionId", flow.definitionId());
         call.putData("flowVersionId", flow.versionId());
+    }
+
+    /**
+     * 加载并确认系统固定通知模型可执行。
+     *
+     * @return 已发布通知流程快照
+     */
+    private FlowConfig.FlowSnapshot requireNotificationFlow() {
+        FlowConfig.FlowSnapshot flow = flowConfig.getPublishedFlow(null, FLOW_SYSTEM_NOTIFICATION)
+            .orElseThrow(() -> new ResponseStatusException(HttpStatus.CONFLICT, "系统通知模型尚未初始化"));
+        if (!TEMPLATE_NOTIFICATION.equalsIgnoreCase(flow.modelType())) {
+            throw new ResponseStatusException(HttpStatus.CONFLICT, "系统通知模型类型不正确");
+        }
+        return flow;
     }
 
     /**
@@ -587,25 +610,39 @@ public class OutboundCallService implements SystemFlowRuntime {
             call,
             FlowActionType.READ_DTMF,
             FNodeReadDTMFDTO.builder()
-                    .ctrlUuid(call.getCtrlId())
+                .ctrlUuid(call.getCtrlId())
                 .uuid(call.getGuestChannelUuid())
                 .media(
                     MediaInfo.builder()
                         .type(FNodeMediaType.TEXT)
-                        .data(call.getDataStr("notificationText", notificationText))
+                        .data(call.getDataStr("notificationText", ""))
                         .build()
                 )
-                    .minDigits(1)
-                    .maxDigits(1)
-                    .tries(1)
-                    .timeout(10_000)
-                    .digitTimeout(2_000)
-                    .terminators("#")
-                    .regex("^[" + call.getDataStr("confirmDigit", "1") + "]$")
-                    .actionAfter(FNodeDtmfPostAction.HANGUP)
-                    .build(),
+                .minDigits(1)
+                .maxDigits(1)
+                .tries(1)
+                .timeout(notificationTimeoutMillis(call))
+                .digitTimeout(2_000)
+                .terminators("#")
+                .regex("^[" + call.getDataStr("confirmDigit", "1") + "]$")
+                .actionAfter(FNodeDtmfPostAction.HANGUP)
+                .build(),
             "notification-dtmf-" + call.getCallId()
         );
+    }
+
+    /**
+     * 读取已固定到通话快照的确认等待时间。
+     *
+     * @param call 当前通知通话
+     * @return 毫秒超时时间
+     */
+    private int notificationTimeoutMillis(CallInfoBO call) {
+        Object value = call.getData().get("notificationTimeoutSeconds");
+        int seconds = value instanceof Number number
+            ? number.intValue()
+            : Integer.parseInt(value == null ? "10" : value.toString());
+        return Math.clamp(seconds, 3, 60) * 1_000;
     }
 
     /**

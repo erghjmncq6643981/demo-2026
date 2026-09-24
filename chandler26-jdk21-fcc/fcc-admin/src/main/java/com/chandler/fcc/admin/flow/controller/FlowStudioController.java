@@ -9,6 +9,7 @@ import com.chandler.fcc.admin.flow.controller.resp.FlowActionResp;
 import com.chandler.fcc.admin.flow.controller.resp.FlowExecutionResp;
 import com.chandler.fcc.admin.flow.controller.resp.FlowPublishResp;
 import com.chandler.fcc.admin.flow.controller.resp.FlowSummaryResp;
+import com.chandler.fcc.admin.flow.controller.resp.FlowTypeResp;
 import com.chandler.fcc.admin.flow.controller.resp.FlowVersionResp;
 import com.chandler.fcc.admin.flow.controller.resp.FlowValidationResp;
 import com.chandler.fcc.admin.flow.controller.resp.SystemFlowModelResp;
@@ -29,9 +30,9 @@ import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 
 /**
- * IVR Flow Model 的统一维护、发布和执行轨迹接口。
+ * 通话业务流程的统一维护、发布和执行轨迹接口。
  */
-@Tag(name = "IVR Flow Studio", description = "维护 IVR 模型、不可变版本和通话实际执行轨迹")
+@Tag(name = "Flow Studio", description = "维护通话业务模型、不可变版本和通话实际执行轨迹")
 @RestController
 @RequestMapping("/api/admin/flow-studio")
 @RequiredArgsConstructor
@@ -48,6 +49,17 @@ public class FlowStudioController {
     @GetMapping("/actions")
     public CommonResult<List<FlowActionResp>> actions() {
         return CommonResult.success(service.actions());
+    }
+
+    /**
+     * 查询管理端当前允许创建的业务流程类型。
+     *
+     * @return 可创建类型目录
+     */
+    @Operation(summary = "查询可创建流程类型")
+    @GetMapping("/types")
+    public CommonResult<List<FlowTypeResp>> types() {
+        return CommonResult.success(service.types());
     }
 
     /**
@@ -78,7 +90,7 @@ public class FlowStudioController {
      *
      * @return 流程摘要
      */
-    @Operation(summary = "查询 IVR 流程列表")
+    @Operation(summary = "查询业务流程列表")
     @GetMapping("/flows")
     public CommonResult<PageResult<FlowSummaryResp>> flows(@Valid FlowPageReq request) {
         return CommonResult.success(service.listFlows(request));
@@ -90,7 +102,7 @@ public class FlowStudioController {
      * @param request 创建参数
      * @return 新流程摘要
      */
-    @Operation(summary = "创建 IVR 流程")
+    @Operation(summary = "创建业务流程")
     @PostMapping("/flows")
     public CommonResult<FlowSummaryResp> create(@Valid @RequestBody CreateFlowReq request) {
         return CommonResult.success(service.create(request));
@@ -102,7 +114,7 @@ public class FlowStudioController {
      * @param flowKey 稳定流程代码
      * @return 流程摘要
      */
-    @Operation(summary = "查询 IVR 流程详情")
+    @Operation(summary = "查询业务流程详情")
     @GetMapping("/flows/{flowKey}")
     public CommonResult<FlowSummaryResp> flow(@PathVariable String flowKey) {
         return CommonResult.success(service.flow(flowKey));
@@ -114,7 +126,7 @@ public class FlowStudioController {
      * @param flowKey 稳定流程代码
      * @return 版本摘要
      */
-    @Operation(summary = "查询 IVR 流程版本列表")
+    @Operation(summary = "查询业务流程版本列表")
     @GetMapping("/flows/{flowKey}/versions")
     public CommonResult<PageResult<FlowVersionResp>> versions(
         @PathVariable String flowKey,
@@ -130,7 +142,7 @@ public class FlowStudioController {
      * @param versionNo 递增版本序号
      * @return 完整版本定义
      */
-    @Operation(summary = "查询 IVR 流程版本详情")
+    @Operation(summary = "查询业务流程版本详情")
     @GetMapping("/flows/{flowKey}/versions/{versionNo}")
     public CommonResult<FlowVersionResp> version(
         @PathVariable String flowKey,
@@ -140,13 +152,29 @@ public class FlowStudioController {
     }
 
     /**
+     * 从已发布或历史版本派生唯一草稿。
+     *
+     * @param flowKey 稳定流程代码
+     * @param versionNo 来源版本序号
+     * @return 已有或新建的草稿详情
+     */
+    @Operation(summary = "从历史版本派生草稿")
+    @PostMapping("/flows/{flowKey}/drafts/from-version/{versionNo}")
+    public CommonResult<FlowVersionResp> createDraftFromVersion(
+        @PathVariable String flowKey,
+        @PathVariable int versionNo
+    ) {
+        return CommonResult.success(service.createDraftFromVersion(flowKey, versionNo));
+    }
+
+    /**
      * 保存流程草稿。
      *
      * @param flowKey 稳定流程代码
      * @param request 完整流程定义
      * @return 草稿版本详情
      */
-    @Operation(summary = "保存 IVR 流程草稿")
+    @Operation(summary = "保存业务流程草稿")
     @PutMapping("/flows/{flowKey}/draft")
     public CommonResult<FlowVersionResp> saveDraft(
         @PathVariable String flowKey,
@@ -162,7 +190,7 @@ public class FlowStudioController {
      * @param request 待校验定义
      * @return 规范化定义
      */
-    @Operation(summary = "校验 IVR 流程草稿")
+    @Operation(summary = "校验业务流程草稿")
     @PostMapping("/flows/{flowKey}/validate")
     public CommonResult<FlowValidationResp> validate(
         @PathVariable String flowKey,
@@ -178,7 +206,7 @@ public class FlowStudioController {
      * @param request 发布参数
      * @return 发布与运行端激活状态
      */
-    @Operation(summary = "发布 IVR 流程草稿")
+    @Operation(summary = "发布业务流程草稿")
     @PostMapping("/flows/{flowKey}/publish")
     public CommonResult<FlowPublishResp> publish(
         @PathVariable String flowKey,

@@ -1,6 +1,28 @@
 <?xml version="1.0" encoding="UTF-8" ?>
 <!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
 <mapper namespace="com.chandler.fcc.admin.flow.infrastructure.FlowStudioMapper">
+  <select id="activeAgentWorkNos" resultType="string">
+    SELECT work_no
+    FROM fcc_agent
+    WHERE status = 'ENABLED'
+      AND deleted_at IS NULL
+      AND work_no IN
+      <foreach collection="workNos" item="workNo" open="(" separator="," close=")">
+        #{workNo}
+      </foreach>
+  </select>
+
+  <select id="activeGroupCodes" resultType="string">
+    SELECT group_code
+    FROM fcc_agent_group
+    WHERE status = 'ENABLED'
+      AND deleted_at IS NULL
+      AND group_code IN
+      <foreach collection="groupCodes" item="groupCode" open="(" separator="," close=")">
+        #{groupCode}
+      </foreach>
+  </select>
+
   <select id="callExists" resultType="int">
     SELECT COUNT(*)
     FROM fcc_call_session

@@ -58,7 +58,7 @@ import static org.junit.jupiter.api.Assertions.*;
  *
  * @author Chandler
  */
-@SpringBootTest(classes = FccServerApplication.class, properties = "fcc.outbound.notification-text=测试通知文案")
+@SpringBootTest(classes = FccServerApplication.class)
 @TestMethodOrder(MethodOrderer.OrderAnnotation.class)
 @DirtiesContext
 public class FccTelephonyFlowTest {

@@ -1,13 +1,15 @@
 package com.chandler.fcc.admin.flow.controller.req;
 
+import com.chandler.fcc.common.enums.FlowTemplateType;
 import io.swagger.v3.oas.annotations.media.Schema;
+import jakarta.validation.constraints.NotNull;
 import lombok.Data;
 
 /**
- * 创建呼入流程的请求参数，流程版本内容由后续草稿保存接口维护。
+ * 创建可维护业务流程的请求参数，流程版本内容由后续草稿保存接口维护。
  */
 @Data
-@Schema(description = "创建呼入流程请求")
+@Schema(description = "创建业务流程请求")
 public class CreateFlowReq {
 
     /**
@@ -21,4 +23,11 @@ public class CreateFlowReq {
      */
     @Schema(description = "流程业务名称，不能为空，最长128个字符")
     private String flowName;
+
+    /**
+     * 创建后不可变的流程业务类型。
+     */
+    @NotNull(message = "必须选择流程类型")
+    @Schema(description = "流程业务类型；当前仅支持呼入 IVR", example = "INBOUND")
+    private FlowTemplateType modelType;
 }

@@ -1,5 +1,7 @@
+import type { FlowTemplateType } from "../../../api/flowApi";
+
 export const stageLabels: Record<string, string> = {
-  ENTRY: "呼入入口",
+  ENTRY: "流程入口",
   MENU: "欢迎语与按键收号",
   BRANCH: "按键条件分支",
   ROUTE: "坐席与技能组排队",
@@ -14,8 +16,9 @@ export const stageLabels: Record<string, string> = {
   CLOSING: "结束语音",
   NOTIFY: "通知放音与收号",
   CONFIRM: "客户确认",
-  END: "结束与回拨处理",
+  END: "流程结束",
 };
+
 export const inboundStages = [
   "ENTRY",
   "MENU",
@@ -30,25 +33,36 @@ export const inboundStages = [
   "CLOSING",
   "END",
 ] as const;
+
 export const configurableStages = new Set(["MENU", "BRANCH", "ROUTE", "END"]);
+
 export interface FlowTarget {
   targetType: "AGENT" | "GROUP";
   target: string;
   queueSeconds: number;
 }
+
 export interface FlowBranch extends FlowTarget {
   digit: string;
 }
-export interface StagedFlow {
-  routeMode: "IVR";
-  template: string;
+
+interface BaseStagedFlow {
+  template: FlowTemplateType;
   stages: string[];
-  menu?: { enabled: boolean; prompt: string; timeoutSeconds: number };
-  branches?: FlowBranch[];
-  defaultRoute?: FlowTarget;
-  timeoutAction?: "CALLBACK" | "HANGUP";
   nodes?: FlowModelNode[];
 }
+
+export interface InboundStagedFlow extends BaseStagedFlow {
+  routeMode: "IVR";
+  template: "INBOUND";
+  menu: { enabled: boolean; prompt: string; timeoutSeconds: number };
+  branches: FlowBranch[];
+  defaultRoute: FlowTarget;
+  timeoutAction: "CALLBACK" | "HANGUP";
+}
+
+export type StagedFlow = InboundStagedFlow;
+
 export interface FlowModelNode {
   key: string;
   label: string;
@@ -59,6 +73,7 @@ export interface FlowModelNode {
   operation: string;
   fNodeMethod?: string;
 }
+
 export interface StageExecution {
   id: string;
   stepKey: string;
@@ -74,6 +89,7 @@ export interface StageExecution {
   output?: string;
   errorCode?: string;
 }
+
 export interface FlowValidationIssue {
   stage: string;
   field: string;
@@ -84,9 +100,8 @@ export interface FlowValidationIssue {
 export function canEditFlowVersion(
   system: boolean,
   publishStatus: string | undefined,
-  workingCopy: boolean,
 ): boolean {
-  return !system && (workingCopy || publishStatus === "DRAFT");
+  return !system && publishStatus === "DRAFT";
 }
 
 /** Return the Chinese status used by the version selector and workspace. */
@@ -100,23 +115,23 @@ export function flowVersionStatusLabel(status: string): string {
   );
 }
 
-/** Clone a flow and update the single default route shared by BRANCH else and ROUTE. */
+/** Return the Chinese business label for a maintainable flow type. */
+export function flowTemplateLabel(type: FlowTemplateType): string {
+  return type === "INBOUND" ? "呼入 IVR" : type;
+}
+
+/** Clone an inbound flow and update the default route shared by BRANCH and ROUTE. */
 export function updateDefaultRoute(
-  source: StagedFlow,
+  source: InboundStagedFlow,
   patch: Partial<FlowTarget>,
-): StagedFlow {
-  const copy = JSON.parse(JSON.stringify(source)) as StagedFlow;
-  copy.defaultRoute = {
-    targetType: "GROUP",
-    target: "",
-    queueSeconds: 120,
-    ...copy.defaultRoute,
-    ...patch,
-  };
+): InboundStagedFlow {
+  const copy = JSON.parse(JSON.stringify(source)) as InboundStagedFlow;
+  copy.defaultRoute = { ...copy.defaultRoute, ...patch };
   return copy;
 }
-/** 新草稿只有结构，无虚构号码、技能组或坐席。 */
-export function newInboundFlow(): StagedFlow {
+
+/** Create an inbound draft with no fictional DID, group, or agent. */
+export function newInboundFlow(): InboundStagedFlow {
   return {
     routeMode: "IVR",
     template: "INBOUND",
@@ -127,49 +142,50 @@ export function newInboundFlow(): StagedFlow {
     timeoutAction: "CALLBACK",
   };
 }
-/** 读取新系统的固定阶段 IVR 定义，不接受旧路由模型。 */
-export function readStagedFlow(value: string): StagedFlow | null {
-  if (!value.trim()) return null;
-  const root = JSON.parse(value);
-  if (root.routeMode !== "IVR") throw new Error("仅支持固定阶段 IVR 模型");
-  if (!Array.isArray(root.stages))
-    throw new Error("该版本没有阶段目录，不能推测画布");
-  return root as StagedFlow;
+
+/** Create the first draft that matches the immutable flow master-data type. */
+export function newStagedFlow(type: FlowTemplateType): StagedFlow {
+  if (type !== "INBOUND") throw new Error("当前仅支持创建呼入 IVR 流程");
+  return newInboundFlow();
 }
 
-/** 在提交服务端前给出可定位到节点和字段的维护错误。 */
+/** Read a supported staged definition without guessing legacy models. */
+export function readStagedFlow(value: string): StagedFlow | null {
+  if (!value.trim()) return null;
+  const root = JSON.parse(value) as Record<string, unknown>;
+  if (!Array.isArray(root.stages)) {
+    throw new Error("该版本没有阶段目录，不能推测画布");
+  }
+  if (root.template === "INBOUND" && root.routeMode === "IVR") {
+    return root as unknown as InboundStagedFlow;
+  }
+  throw new Error("流程类型或运行模式不受支持");
+}
+
+/** Validate editable fields before submitting the shared server-side contract. */
 export function validateStagedFlow(flow: StagedFlow): FlowValidationIssue[] {
+  return validateInboundFlow(flow);
+}
+
+function validateInboundFlow(flow: InboundStagedFlow): FlowValidationIssue[] {
   const issues: FlowValidationIssue[] = [];
   const add = (stage: string, field: string, message: string) =>
     issues.push({ stage, field, message });
-  if (flow.routeMode !== "IVR" || flow.template !== "INBOUND") {
-    add("ENTRY", "template", "仅支持呼入 IVR 固定模型");
+  validateStages(flow.stages, inboundStages, add);
+  if (!Number.isInteger(flow.menu.timeoutSeconds) || flow.menu.timeoutSeconds < 3 || flow.menu.timeoutSeconds > 60) {
+    add("MENU", "timeoutSeconds", "等待按键时间应为 3 至 60 秒");
   }
-  if (
-    flow.stages.length !== inboundStages.length ||
-    flow.stages.some((stage, index) => stage !== inboundStages[index])
-  ) {
-    add("ENTRY", "stages", "固定动作目录不完整，请重新创建草稿");
+  if (flow.menu.enabled && !flow.menu.prompt.trim()) {
+    add("MENU", "prompt", "启用菜单后必须填写导航文案或预置音频路径");
   }
-  if (!flow.menu || typeof flow.menu.enabled !== "boolean") {
-    add("MENU", "enabled", "必须明确是否启用语音菜单");
-  } else {
-    if (!Number.isInteger(flow.menu.timeoutSeconds) || flow.menu.timeoutSeconds < 3 || flow.menu.timeoutSeconds > 60) {
-      add("MENU", "timeoutSeconds", "等待按键时间应为 3 至 60 秒");
-    }
-    if (flow.menu.enabled && !flow.menu.prompt.trim()) {
-      add("MENU", "prompt", "启用菜单后必须填写导航文案或预置音频路径");
-    }
-    if (flow.menu.prompt.length > 1000) {
-      add("MENU", "prompt", "导航文案不能超过 1000 个字符");
-    }
+  if (flow.menu.prompt.length > 1000) {
+    add("MENU", "prompt", "导航文案不能超过 1000 个字符");
   }
-  const branches = flow.branches || [];
-  if (branches.length > 10 || (flow.menu?.enabled && branches.length < 1)) {
+  if (flow.branches.length > 10 || (flow.menu.enabled && flow.branches.length < 1)) {
     add("BRANCH", "branches", "启用菜单时需要 1 至 10 个按键分支");
   }
   const digits = new Set<string>();
-  branches.forEach((branch, index) => {
+  flow.branches.forEach((branch, index) => {
     if (!/^[0-9]$/.test(branch.digit)) {
       add("BRANCH", `branches.${index}.digit`, `第 ${index + 1} 个分支必须填写一位数字`);
     } else if (digits.has(branch.digit)) {
@@ -183,6 +199,19 @@ export function validateStagedFlow(flow: StagedFlow): FlowValidationIssue[] {
     add("END", "timeoutAction", "请选择超时后创建回拨待办或直接挂机");
   }
   return issues;
+}
+
+function validateStages(
+  actual: string[],
+  expected: readonly string[],
+  add: (stage: string, field: string, message: string) => void,
+) {
+  if (
+    actual.length !== expected.length ||
+    actual.some((stage, index) => stage !== expected[index])
+  ) {
+    add("ENTRY", "stages", "固定动作目录不完整，请重新创建草稿");
+  }
 }
 
 function validateTarget(
@@ -202,6 +231,7 @@ function validateTarget(
     add(stage, "queueSeconds", `${label}的排队时限应为 5 至 300 秒`);
   }
 }
+
 export const executionLabels: Record<string, string> = {
   WAITING: "等待事件",
   SUCCEEDED: "已完成",

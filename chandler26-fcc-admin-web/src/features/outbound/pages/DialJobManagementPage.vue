@@ -65,22 +65,15 @@ const statusConfig: Record<string, { label: string; class: string }> = {
       class="flex flex-wrap items-end gap-3 text-sm bg-white p-4 rounded-3xl border border-slate-100 shadow-card"
     >
       <div class="w-72">
-        <label class="block text-xs font-bold text-slate-600 mb-1.5">自动外呼流程</label>
+        <label class="block text-xs font-bold text-slate-600 mb-1.5">触发来源</label>
         <select
-          v-model="state.flowFilter.value"
-          :disabled="state.flowsLoading.value"
+          v-model="state.triggerSourceFilter.value"
           class="w-full bg-slate-50/70 border border-slate-200 rounded-xl px-3 py-2 text-slate-800 text-xs focus:outline-none focus:border-brand-500 focus:ring-1 focus:ring-brand-500/20 font-medium cursor-pointer"
         >
-          <option value="">
-            {{ state.flowsLoading.value ? "流程加载中..." : "全部流程" }}
-          </option>
-          <option
-            v-for="flow in state.flows.value"
-            :key="flow.id"
-            :value="flow.flowKey"
-          >
-            {{ flow.flowName }} · {{ flow.flowKey }}
-          </option>
+          <option value="">全部来源</option>
+          <option value="FRONTEND">管理端创建</option>
+          <option value="API" disabled>业务接口触发（暂未开放）</option>
+          <option value="MQ" disabled>业务消息触发（暂未开放）</option>
         </select>
       </div>
 
@@ -92,12 +85,6 @@ const statusConfig: Record<string, { label: string; class: string }> = {
         <span>查询</span>
       </button>
 
-      <span v-if="state.flowsError.value" class="text-xs text-rose-600 flex items-center gap-1 ml-2">
-        {{ state.flowsError.value }}
-        <button class="font-bold underline cursor-pointer" @click="state.loadFlows">
-          重试
-        </button>
-      </span>
     </div>
 
     <!-- Error Alert -->
@@ -124,8 +111,8 @@ const statusConfig: Record<string, { label: string; class: string }> = {
             >
               <th class="py-3.5 px-4">任务编号 / 尝试限制</th>
               <th class="py-3.5 px-4">被叫号码</th>
-              <th class="py-3.5 px-4">流程模型</th>
-              <th class="py-3.5 px-4">创建人</th>
+              <th class="py-3.5 px-4">任务 / 来源</th>
+              <th class="py-3.5 px-4">文案 / 业务标识</th>
               <th class="py-3.5 px-4">任务状态</th>
               <th class="py-3.5 px-4">计划时间</th>
               <th class="py-3.5 px-4 text-right">调度控制</th>
@@ -163,17 +150,20 @@ const statusConfig: Record<string, { label: string; class: string }> = {
               <td class="py-4 px-4 font-mono text-xs font-bold text-slate-800">
                 {{ row.number }}
               </td>
-              <td class="py-4 px-4">
-                <span
-                  class="px-2.5 py-0.5 rounded-lg font-mono text-xs bg-slate-100 text-slate-800 border border-slate-200"
-                >
-                  {{ row.flowKey }}
-                </span>
+              <td class="py-4 px-4 text-xs">
+                <div class="font-bold text-slate-800">语音通知</div>
+                <div class="text-slate-400">
+                  {{ row.triggerSource === "FRONTEND" ? "管理端创建" : row.triggerSource }}
+                </div>
               </td>
-              <td class="py-4 px-4">
-                <span class="text-xs font-semibold text-slate-700">
-                  {{ row.createdBy }}
-                </span>
+              <td class="py-4 px-4 max-w-xs">
+                <div class="text-xs text-slate-700 line-clamp-2" :title="row.text">
+                  {{ row.text }}
+                </div>
+                <div class="text-xs text-slate-400 font-mono mt-1" :title="row.bizId">
+                  {{ row.bizId || "无业务标识" }}
+                </div>
+                <div class="text-[11px] text-slate-400 mt-1">创建人 {{ row.createdBy }}</div>
               </td>
               <td class="py-4 px-4">
                 <span
@@ -272,32 +262,15 @@ const statusConfig: Record<string, { label: string; class: string }> = {
         class="grid grid-cols-1 gap-4 sm:grid-cols-2 p-1"
         @submit.prevent="state.create"
       >
-        <div class="sm:col-span-2">
-          <label class="block text-xs font-bold text-slate-600 mb-1.5"
-            >自动外呼流程 <span class="text-rose-500">*</span></label
-          >
-          <select
-            v-model="state.form.value.flowKey"
-            :disabled="state.flowsLoading.value"
-            class="w-full bg-slate-50/70 border border-slate-200 rounded-xl px-3 py-2 text-slate-800 text-xs focus:outline-none focus:border-brand-500 focus:ring-1 focus:ring-brand-500/20 font-medium cursor-pointer"
-          >
-            <option value="">
-              {{ state.flowsLoading.value ? "流程加载中..." : "请选择已发布流程" }}
-            </option>
-            <option
-              v-for="flow in state.flows.value"
-              :key="flow.id"
-              :value="flow.flowKey"
-            >
-              {{ flow.flowName }} · {{ flow.flowKey }}
-            </option>
-          </select>
-          <span v-if="state.flowsError.value" class="text-xs text-rose-600 flex items-center gap-1 mt-1">
-            {{ state.flowsError.value }}
-            <button class="font-bold underline cursor-pointer" @click="state.loadFlows">
-              重试
-            </button>
-          </span>
+        <div class="sm:col-span-2 grid grid-cols-2 gap-3 rounded-xl border border-slate-100 bg-slate-50 p-3 text-xs">
+          <div>
+            <span class="text-slate-400">任务类型</span>
+            <strong class="block mt-1 text-slate-800">语音通知</strong>
+          </div>
+          <div>
+            <span class="text-slate-400">触发来源</span>
+            <strong class="block mt-1 text-slate-800">管理端创建</strong>
+          </div>
         </div>
 
         <div class="sm:col-span-2">
@@ -313,12 +286,13 @@ const statusConfig: Record<string, { label: string; class: string }> = {
 
         <div class="sm:col-span-2">
           <label class="block text-xs font-bold text-slate-600 mb-1.5"
-            >播报文案 <span class="text-rose-500">*</span></label
+            >通知文案 <span class="text-rose-500">*</span></label
           >
           <textarea
-            v-model="state.form.value.variables.text"
+            v-model="state.form.value.text"
             rows="4"
-            placeholder="输入客户接通后播放的文案，服务端将其作为流程变量交给 Sidecar TTS"
+            maxlength="1000"
+            placeholder="填写本次任务接通后需要播报的文案"
             class="w-full resize-y bg-slate-50/70 border border-slate-200 rounded-xl px-3 py-2 text-slate-800 text-xs focus:outline-none focus:border-brand-500 focus:ring-1 focus:ring-brand-500/20 font-medium"
           />
         </div>
@@ -328,13 +302,26 @@ const statusConfig: Record<string, { label: string; class: string }> = {
             >确认按键</label
           >
           <select
-            v-model="state.form.value.variables.confirmDigit"
+            v-model="state.form.value.confirmDigit"
             class="w-full bg-slate-50/70 border border-slate-200 rounded-xl px-3 py-2 text-slate-800 text-xs focus:outline-none focus:border-brand-500 focus:ring-1 focus:ring-brand-500/20 font-medium cursor-pointer"
           >
             <option v-for="digit in ['0','1','2','3','4','5','6','7','8','9']" :key="digit" :value="digit">
               按 {{ digit }} 确认
             </option>
           </select>
+        </div>
+
+        <div>
+          <label class="block text-xs font-bold text-slate-600 mb-1.5"
+            >等待确认（秒）</label
+          >
+          <input
+            v-model.number="state.form.value.timeoutSeconds"
+            type="number"
+            min="3"
+            max="60"
+            class="w-full bg-slate-50/70 border border-slate-200 rounded-xl px-3 py-2 text-slate-800 text-xs focus:outline-none focus:border-brand-500 focus:ring-1 focus:ring-brand-500/20 font-medium"
+          />
         </div>
 
         <div>
@@ -351,8 +338,20 @@ const statusConfig: Record<string, { label: string; class: string }> = {
           </select>
         </div>
 
+        <div class="sm:col-span-2">
+          <label class="block text-xs font-bold text-slate-600 mb-1.5"
+            >业务标识（可选）</label
+          >
+          <input
+            v-model="state.form.value.bizId"
+            maxlength="128"
+            placeholder="例如订单号、工单号或业务侧关联号"
+            class="w-full bg-slate-50/70 border border-slate-200 rounded-xl px-3 py-2 text-slate-800 text-xs focus:outline-none focus:border-brand-500 focus:ring-1 focus:ring-brand-500/20 font-medium font-mono"
+          />
+        </div>
+
         <p class="sm:col-span-2 text-xs text-slate-400 bg-slate-50 p-3 rounded-xl border border-slate-100">
-          任务只拨打客户并执行所选流程，与坐席无关；只有流程进入“转人工”节点时才动态选择坐席。
+          任务与坐席无关：调度器直接呼叫客户，接通后使用固定 SYSTEM_NOTIFICATION 模型执行本次文案播放与按键确认。当前仅开放管理端创建，API / MQ 触发保留为后续扩展。
         </p>
 
         <div class="sm:col-span-2 flex justify-end gap-2 pt-2 border-t border-slate-100">

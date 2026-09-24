@@ -5,11 +5,11 @@ import lombok.Builder;
 import lombok.Getter;
 
 /**
- * IVR 流程列表中的轻量摘要。
+ * 业务流程列表中的轻量摘要。
  */
 @Getter
 @Builder
-@Schema(description = "IVR 流程摘要")
+@Schema(description = "业务流程摘要")
 public class FlowSummaryResp {
 
     @Schema(description = "流程数据库标识，按不透明字符串传输", example = "820000000000000001")

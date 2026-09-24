@@ -1,6 +1,14 @@
 import apiClient from "./apiClient";
 import type { PageResult } from "../shared/api/page";
 
+export type FlowTemplateType = "INBOUND";
+
+export interface FlowTypeVO {
+  code: FlowTemplateType;
+  label: string;
+  description: string;
+}
+
 export interface FlowVersionVO {
   id: string;
   version: string;
@@ -16,7 +24,7 @@ export interface FlowDefinitionVO {
   id: string;
   flowKey: string;
   flowName: string;
-  modelType: string;
+  modelType: FlowTemplateType;
   status: string;
   currentVersion?: string;
   system: boolean;
@@ -97,8 +105,15 @@ export interface FlowExecutionResp {
 }
 
 export const flowApi = {
-  create(flowKey: string, flowName: string): Promise<FlowDefinitionVO> {
-    return apiClient.post("/flow-studio/flows", { flowKey, flowName });
+  create(data: {
+    flowKey: string;
+    flowName: string;
+    modelType: FlowTemplateType;
+  }): Promise<FlowDefinitionVO> {
+    return apiClient.post("/flow-studio/flows", data);
+  },
+  types(): Promise<FlowTypeVO[]> {
+    return apiClient.get("/flow-studio/types");
   },
   list(params: {
     pageNum: number;
@@ -118,6 +133,14 @@ export const flowApi = {
   getVersion(flowKey: string, versionNo: number): Promise<FlowVersionVO> {
     return apiClient.get(
       `/flow-studio/flows/${encodeURIComponent(flowKey)}/versions/${versionNo}`,
+    );
+  },
+  createDraftFromVersion(
+    flowKey: string,
+    versionNo: number,
+  ): Promise<FlowVersionVO> {
+    return apiClient.post(
+      `/flow-studio/flows/${encodeURIComponent(flowKey)}/drafts/from-version/${versionNo}`,
     );
   },
   saveDraft(flowKey: string, data: FlowSaveDraftReq): Promise<FlowVersionVO> {
@@ -143,6 +166,9 @@ export const flowApi = {
   },
   model(template: string): Promise<SystemFlowModelVO> {
     return apiClient.get(`/flow-studio/models/${encodeURIComponent(template)}`);
+  },
+  models(): Promise<SystemFlowModelVO[]> {
+    return apiClient.get("/flow-studio/models");
   },
   execution(callId: string, after: string): Promise<FlowExecutionResp> {
     return apiClient.get(`/flow-studio/calls/${encodeURIComponent(callId)}`, {

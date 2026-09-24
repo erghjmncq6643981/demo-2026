@@ -4,11 +4,13 @@
   <insert id="create">
     INSERT INTO fcc_dial_job(
       id, agent_work_no, created_by, request_key, flow_key, job_type,
+      task_type, trigger_source, biz_id,
       status, scheduled_at, max_attempts, payload
     )
     VALUES(
       #{id}, #{owner,jdbcType=VARCHAR}, #{createdBy}, #{key},
       #{flowKey,jdbcType=VARCHAR}, #{jobType},
+      #{taskType,jdbcType=VARCHAR}, #{triggerSource,jdbcType=VARCHAR}, #{bizId,jdbcType=VARCHAR},
       'PENDING', UTC_TIMESTAMP(3), #{maxAttempts}, #{payload}
     )
   </insert>
@@ -36,10 +38,11 @@
     SELECT CAST(j.id AS CHAR) AS id,
            j.agent_work_no AS owner,
            j.job_type AS jobType,
-           j.flow_key AS flowKey,
            j.max_attempts AS maxAttempts,
            JSON_UNQUOTE(JSON_EXTRACT(j.payload, '$.number')) AS number,
-           JSON_EXTRACT(j.payload, '$.variables') AS variables
+           JSON_UNQUOTE(JSON_EXTRACT(j.payload, '$.text')) AS text,
+           JSON_UNQUOTE(JSON_EXTRACT(j.payload, '$.confirmDigit')) AS confirmDigit,
+           CAST(JSON_UNQUOTE(JSON_EXTRACT(j.payload, '$.timeoutSeconds')) AS UNSIGNED) AS timeoutSeconds
     FROM fcc_dial_job j
     WHERE j.status = 'PENDING'
       AND j.scheduled_at &lt;= UTC_TIMESTAMP(3)

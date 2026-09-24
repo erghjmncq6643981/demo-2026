@@ -28,12 +28,12 @@ public interface BusinessManagementMapper {
     /**
      * 查询外呼任务摘要。
      *
-     * @param owner 坐席筛选，可为空
+     * @param triggerSource 触发来源筛选，可为空
      * @param offset 分页偏移
      * @return 任务摘要
      */
     List<Map<String, Object>> jobs(
-        @Param("flowKey") String flowKey,
+        @Param("triggerSource") String triggerSource,
         @Param("offset") int offset
     );
 

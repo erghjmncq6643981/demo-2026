@@ -102,39 +102,45 @@ public class BusinessManagementService {
      * 分页查询自动外呼任务摘要。
      *
      * @param page 页码
-     * @param owner 坐席筛选，可为空
+     * @param triggerSource 触发来源筛选，可为空
      * @return 任务摘要
      */
-    public List<Map<String, Object>> jobs(int page, String flowKey) {
+    public List<Map<String, Object>> jobs(int page, String triggerSource) {
         identity.requireManagement();
-        return mapper.jobs(flowKey, offset(page));
+        return mapper.jobs(triggerSource, offset(page));
     }
 
     /**
      * 创建不绑定坐席的流程型自动外呼任务。
      *
      * @param number 目标号码
-     * @param flowKey 已发布流程编码
-     * @param variables 流程输入变量
+     * @param text 本次通知文案
+     * @param confirmDigit 客户确认按键
+     * @param timeoutSeconds 确认等待秒数
      * @param attempts 最大尝试次数
      * @param requestKey 业务幂等键
+     * @param bizId 可选业务关联标识
      * @return 任务标识
      */
     public String createJob(
         String number,
-        String flowKey,
-        Map<String, Object> variables,
+        String text,
+        String confirmDigit,
+        int timeoutSeconds,
         int attempts,
-        String requestKey
+        String requestKey,
+        String bizId
     ) {
         var actor = identity.requireManagement();
         return jobs.createAuto(
             actor.workNo(),
             number,
-            flowKey,
-            variables,
+            text,
+            confirmDigit,
+            timeoutSeconds,
             attempts,
-            requestKey
+            requestKey,
+            bizId
         );
     }
 
