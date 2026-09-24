@@ -1,23 +1,8 @@
-# 学习助手数据库脚本
+# 数据库初始化与迁移
 
-## 目录约定
+## 新数据库
 
-- `schema/`：当前版本的完整建表脚本，只包含 `CREATE TABLE` 和索引定义。
-- `init/00_ai_agent_seed_mysql.sql`：基础 Agent 和 Prompt 种子数据，可重复执行，不包含 API Key。
-- 根目录的 `90-99_*.sql`：已有数据库的增量迁移历史，只用于升级旧库，不参与新库初始化。
-
-## 自动迁移（推荐）
-
-当前配置默认关闭 Flyway，启用需设置 `LEARNING_FLYWAY_ENABLED=true`：
-
-- 空数据库先按下述手工初始化顺序创建完整结构；当前源码未包含 `V1__BaselineSchema`。
-- 未接入 Flyway 的存量非空数据库自动建立 `107` 基线，后续执行 `V108` 及更高版本迁移。
-- 新增存量库变更必须创建 `V109__*` 及后续 Flyway 迁移，不再新增根目录手工脚本。
-- 生产部署禁止 Flyway clean；部署前仍需备份数据库。
-
-## 手工初始化
-
-按以下顺序执行：
+按顺序执行：
 
 1. `schema/00_ai_schema_mysql.sql`
 2. `schema/10_learning_core_schema_mysql.sql`
@@ -27,57 +12,30 @@
 6. `init/00_ai_agent_seed_mysql.sql`
 7. `init/01_system_admin_seed_mysql.sql`
 
-这样新库直接得到当前代码所需的最终结构，不需要再执行 `90-99` 补丁，也不会把建表和种子数据混在一起。
+`schema` 是当前完整结构，`init` 只保存可重复执行的基础数据，不包含真实 API Key。
 
-## 历史升级说明
+## 已有数据库
 
-107 及以前的脚本属于接入 Flyway 前的历史记录。已经升级到 107 的数据库直接由 Flyway 建立基线；更旧数据库需要先按其实际版本补齐历史变更，再启动新版应用。历史顺序如下：
+Flyway 默认关闭；启用需设置 `LEARNING_FLYWAY_ENABLED=true`。应用配置以版本 107 为非空旧库基线，当前源码包含：
 
-1. `90_learning_schema_patch_mysql.sql`
-2. `91_learning_operational_patch_mysql.sql`
-3. `92_learning_base_entity_audit_patch_mysql.sql`
-4. `93_learning_article_study_mysql.sql`
-5. `94_vocabulary_scene_plan_mysql.sql`
-6. `95_ai_invocation_scene_mysql.sql`
-7. `96_learning_plan_date_and_status_mysql.sql`
-8. `97_update_prompt_template_mysql.sql`
-9. `98_vocabulary_scene_material_split_mysql.sql`
-10. `99_article_guided_reading_mysql.sql`
-11. `100_optimize_scene_prompt_template_mysql.sql`
-12. `101_engineering_governance_mysql.sql`
-13. `102_scene_material_note_mysql.sql`
-14. `103_ai_async_task_mysql.sql`
-15. `104_vocabulary_catalog_analysis_mysql.sql`
-16. `105_learning_plan_generation_lock_mysql.sql`
-17. `106_ai_model_catalog_agent_defaults_mysql.sql`
-18. `107_agent_model_config_binding_mysql.sql`
-19. Java 迁移 `V108__RecoverableAiTasksAndSceneMaterials`：可恢复任务步骤、执行尝试、材料版本和场景相关词
-20. Java 迁移 `V109__SystemLogOutbox`：系统日志可靠异步投递 Outbox
-21. Java 迁移 `V110__WordbookEntrySortIndex`：个人单词本词条列表复合排序索引，消除 Filesort
-22. Java 迁移 `V111__DropAiForeignKeys`：移除 AI 模块物理外键约束，转为代码逻辑与事务保证数据完整性
-23. Java 迁移 `V112__VocabularyMorphAlias`：创建英语词汇形态变形与别名索引表，支持名词复数与动词时态容错命中
-24. Java 迁移 `V113__PerformanceQueryIndexes`：为公共词本、学习计划日历和精读历史摘要查询补充复合索引
-25. Java 迁移 `V114__ActivityAndAiSessionIndexes`：为活动统计和管理员 AI 会话摘要补充按用户/会话的复合索引
-26. Java 迁移 `V115__AsyncTaskCalendarIndex`：为词汇大挑战日历查询异步任务状态补充复合索引
-27. Java 迁移 `V116__LearningActivityEventAndDaily`：创建学习活动原始事件与日汇总读模型，并回填历史词条加入、复习统计
-28. Java 迁移 `V117__GlobalVocabularySemanticAssets`：创建全局词汇语义资产，并从已有有效分析结果初始化
+- V113：性能查询索引。
+- V114：活动统计与 AI 会话索引。
+- V115：异步任务日历索引。
+- V116：学习活动事件和日汇总。
+- V117：全局词汇语义资产。
 
-迁移脚本都设计为可重复执行，但仍建议在执行前备份数据库并记录已执行版本。
+升级前必须备份数据库并检查 `flyway_schema_history`。如果旧库尚未达到 112，不得直接执行当前迁移，应先使用对应历史版本代码或备份脚本补齐结构。
 
-## 当前领域结构
+## 维护规则
 
-活动统计升级：已有数据库在启动新版前按顺序执行 `migration/V116__LearningActivityEventAndDaily.sql`、`migration/V117__GlobalVocabularySemanticAssets.sql`，或由已启用的 Flyway 按版本顺序执行。V117 将同一语言、标准化单词的有效语义分析沉淀为全局资产；后续词本分析先批量复用，只有缺失词调用 AI，部分结果可重试。冷批次使用数据库命名锁避免并发重复分析，锁超时后由任务重试。原始活动同步入库，后台每 5 秒批量汇总；年度查询只读取日汇总。事件写入失败会记录诊断日志，目前不具备该失败事件的持久重试能力。测试环境可设置 `LEARNING_SEMANTIC_MYSQL_TEST=true` 执行隔离表集成验证。
+- 新增结构先更新当前 `schema`，再新增下一编号迁移；禁止改写已执行迁移。
+- 迁移与种子数据必须可重复执行，不依赖本机账号或真实凭据。
+- 表、字段和索引需说明业务含义；批量数据通过批量 SQL 或分块处理。
+- 生产环境禁止 Flyway clean。
+- 数据库不可用时只能报告未验证，不能把 Mock 测试视为迁移成功。
 
-| 脚本 | 内容 |
-| --- | --- |
-| `00_ai_schema` | Agent、Prompt、会话、消息、模型调用记录、模型配置 |
-| `10_learning_core_schema` | 用户、公共词卡缓存、个人单词本、复习记录、系统日志及日志 Outbox |
-| `20_vocabulary_plan_schema` | Markdown/CSV 等词表导入、学习计划、场景单元、逐词进度、批量词卡任务 |
-| `30_article_reading_schema` | 语境精读记录、阶段进度、阅读检测成绩 |
+## 验证
 
-## 约束
-
-- API Key 只允许保存后端加密后的密文，不在初始化 SQL 中提供真实密钥。
-- 新增字段优先先更新 `schema/` 的当前完整结构，再为已执行旧库新增独立迁移文件。
-- Flyway 接管后，每个存量变更必须同时更新当前完整 `schema/` 和新增的 `db/migration/V{版本}__*.sql`。
-- 表和字段注释应说明业务含义，避免在业务代码中依赖未命名的魔法值。
+- Mapper XML 使用项目校验测试解析。
+- 数据库工作流优先在隔离库或随机测试表验证。
+- 全局词汇语义资产测试可设置 `LEARNING_SEMANTIC_MYSQL_TEST=true` 后运行对应测试。

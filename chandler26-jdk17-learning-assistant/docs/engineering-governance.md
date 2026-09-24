@@ -1,44 +1,36 @@
-# 工程治理已落地项
+# 工程治理说明
 
-本文只记录当前代码已实现且有门禁验证的治理能力。
+> 强制规则以根目录及子项目 `AGENTS.md` 为准；本文只概括当前工程基线。
 
-## 架构边界
+## 架构
 
-- 后端按 `identity`、`vocabulary`、`learning`、`reading`、`task`、`system` 业务域组织，每个域内部使用 `api/application/domain/infrastructure` 分层；AI 代码按 `agent/model/chat/prompt/gateway` 分域，供应商 HTTP 协议、请求适配和响应解析集中在 `ai/gateway`。
-- ArchUnit 禁止 Controller/API 直连 Mapper，禁止 Entity 反向依赖 Service/API/Infrastructure，禁止 Application 跨域访问其他业务域的 Mapper，并阻止重新创建根级 `controller/service/mapper` 横向目录。
-- 学习计划响应由 `LearningPlanResponseAssembler` 批量装配；选词由 `LearningPlanVocabularySelector` 负责；复习时间由 `ReviewSchedulePolicy` 负责。
-- 前端功能代码位于 `public/src/features`，按 `identity`、`vocabulary`、`learning`、`reading`、`ai`、`task`、`system` 业务域组织；共享能力位于 `public/src/shared`，入口 `app.js` 只负责 wiring。场景计划和语境精读已拆出纯业务模型、预览数据与 API 网关。
+- 前后端按业务域组织。后端域内使用 `api/application/domain/infrastructure`，前端使用 `features/<domain>`。
+- Controller 不访问 Mapper，领域层不依赖 API 或基础设施；跨域调用使用窄应用契约。
+- 单文件达到 1000 行必须评审并按职责拆分。
 
-## 数据库与事务
+## 数据与性能
 
-- Flyway 管理版本：空库执行 `V1__BaselineSchema`，存量非空库以 107 建立基线，后续迁移从 V108 开始。
-- 当前完整 schema、种子数据、历史升级脚本相互分离，执行顺序见 `src/main/resources/db/README.md`。
-- 学习计划详情一次批量加载单元、材料、词条、进度和检测记录，避免逐单元 N+1。
-- 场景完成度计算通过 `LearningReviewRecordMapper.selectPassedAssessmentTypesBatch` 一次读取当前单元的通过记录，再按词条在内存分组；禁止在核心词循环中查询数据库。
-- 同类更新使用批量 SQL；大批次在服务层分块。
-- `LearningPlanProgressQueryService` 独立承载计划进度查询、场景完成度和选词数量策略，避免学习计划编排服务继续膨胀。
-- AI 网络调用不持有数据库事务。场景材料、词卡和词本分析通过显式任务状态异步执行，支持部分成功、取消和失败项重试。
+- 禁止在循环中执行 SQL；优先联表、批量查询和分块写入。
+- 可增长列表必须分页并返回精简对象；详情按需加载。
+- AI/HTTP 调用不得位于数据库事务中；耗时非同步动作使用持久化任务或提交后事件。
+- 常用小数据可缓存，缓存失效不能破坏业务正确性。
 
-## AI 交互
+## AI
 
-- 每次调用必须声明 `AiInvocationScene`；固定动作只发送必要变量，不附带历史对话。
-- Provider Parser 先解析供应商 envelope，`AiSceneResponseCodecRegistry` 再按场景解包、归一别名和校验必需根字段，业务服务直接消费 `JsonNode`。
-- 上下文预算按模型能力计算并在安全阈值前拒绝；模型 HTTP 日志不输出完整响应正文。
-- AI 审计默认仅保存元数据、Token 和耗时。Prometheus 暴露调用次数、失败数、耗时和 Token 指标。
-- AI 线程池大小、队列、存活时间和停机等待时间均可配置，拒绝策略不会回退到请求线程执行昂贵模型任务。
+- 每次调用声明场景，只传必要上下文，不复用无关历史消息。
+- 模型能力定义请求适配器、响应解析器、上下文窗口和输出上限。
+- 输入与输出达到有效上下文 90% 前必须拆分或拒绝。
+- 结构化响应需完成语法、字段和业务不变量校验；部分成功只重试失败项。
 
-## 安全与可观测性
+## 安全与日志
 
-- Spring Security + JWT 保护业务接口，模型 API Key 使用后端加密存储。
-- `prod/pre` 启动时拒绝开发默认 JWT/API Key 密钥。
-- Actuator 暴露 `health`、`info`、`prometheus`；业务日志使用可读中文，技术细节和堆栈位于 DEBUG。
-- 后端 `Long` ID 统一序列化为字符串，前端把所有 ID 当作不透明字符串处理。
+- JWT 只在过滤器解析一次，业务代码通过 `CurrentUserContext` 获取用户。
+- 权限由 `@RequirePermission` 和统一切面校验。
+- 技术访问日志写 SLF4J；用户可见审计经日志 Outbox 异步落库。
+- 密钥、密码、JWT、完整 Prompt 和模型响应不得进入日志或前端。
 
 ## 自动门禁
 
-GitHub Actions 对每个 push 和 PR 执行：
-
-- 后端：测试、编译、依赖分析、ArchUnit 和可用时的 Testcontainers MySQL 冒烟测试。
-- 前端：模块导入检查、ESLint、Vitest、静态构建、桌面与移动端 Playwright 冒烟测试。
-- 前后端源码均执行 1000 行单文件门禁；超过阈值必须按渲染、状态、策略或持久化职责拆分后再合并。
-- 本地最低命令与提交前检查以根目录 `AGENTS.md` 为准。
+- 后端：编译、测试、ArchUnit、Mapper XML、中文文档和源码行数检查。
+- 前端：模块检查、ESLint、Vitest、构建和 Playwright。
+- 发布前检查完整变更范围和 `git diff --check`，排除生成物与无关文件。
