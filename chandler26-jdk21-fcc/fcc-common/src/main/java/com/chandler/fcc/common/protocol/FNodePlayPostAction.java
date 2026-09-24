@@ -6,6 +6,7 @@ package com.chandler.fcc.common.protocol;
 public enum FNodePlayPostAction {
 
     NONE("播放完成后继续当前话务"),
+    PARK("播放完成后驻留话道，等待下一条业务指令"),
     HANGUP("播放完成后正常挂机");
 
     private final String desc;

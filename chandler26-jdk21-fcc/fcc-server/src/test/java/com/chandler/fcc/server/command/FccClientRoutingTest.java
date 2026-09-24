@@ -2,15 +2,21 @@ package com.chandler.fcc.server.command;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.inOrder;
+import static org.mockito.Mockito.doThrow;
+import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 import com.chandler.fcc.common.dto.command.FNodeDialDTO;
 import com.chandler.fcc.common.entity.FNodeResult;
 import com.chandler.fcc.server.infrastructure.nats.FccProperties;
+import com.chandler.fcc.server.infrastructure.persistence.entity.CallCommandEntity;
+import com.chandler.fcc.server.infrastructure.persistence.service.CallPersistenceService;
 import io.nats.client.Connection;
 import io.nats.client.Message;
 import java.nio.charset.StandardCharsets;
@@ -18,6 +24,7 @@ import java.time.Duration;
 import java.util.List;
 import org.junit.jupiter.api.Test;
 import org.mockito.ArgumentCaptor;
+import org.mockito.InOrder;
 
 /**
  * 验证业务命令不携带节点参数并统一进入逻辑分发主题。
@@ -48,7 +55,8 @@ class FccClientRoutingTest {
         ).thenReturn(reply);
         FccProperties properties = new FccProperties();
         properties.setRpcTimeoutMillis(1000);
-        FccClient client = new FccClient(connection, properties, null);
+        CallPersistenceService persistence = mock(CallPersistenceService.class);
+        FccClient client = new FccClient(connection, properties, persistence);
         FNodeDialDTO command = FNodeDialDTO.builder()
             .uuid("channel-a")
             .destination(
@@ -77,5 +85,31 @@ class FccClientRoutingTest {
         );
         String wire = new String(payload.getValue(), StandardCharsets.UTF_8);
         assertFalse(wire.contains("node_id"));
+        InOrder order = inOrder(persistence, connection);
+        order.verify(persistence).recordCommand(any(CallCommandEntity.class));
+        order.verify(connection).request(eq("fs.cmd.dispatch"), any(byte[].class), any(Duration.class));
+        order.verify(persistence).recordCommandReceipt(
+            eq("dial-channel-a"), eq("node-a"), eq("ACCEPTED"), any(), eq(null), eq(null)
+        );
+    }
+
+    /**
+     * 命令意图持久化失败必须阻止远程拨号，不能只写一条调试日志。
+     *
+     * @throws Exception Mock NATS 替身配置失败
+     */
+    @Test
+    void neverSendsWhenCommandIntentCannotBePersisted() throws Exception {
+        Connection connection = mock(Connection.class);
+        CallPersistenceService persistence = mock(CallPersistenceService.class);
+        doThrow(new IllegalStateException("database unavailable"))
+            .when(persistence).recordCommand(any(CallCommandEntity.class));
+        FccClient client = new FccClient(connection, new FccProperties(), persistence);
+
+        assertThrows(
+            IllegalStateException.class,
+            () -> client.dial(FNodeDialDTO.builder().uuid("channel-b").build())
+        );
+        verify(connection, never()).request(any(), any(byte[].class), any(Duration.class));
     }
 }

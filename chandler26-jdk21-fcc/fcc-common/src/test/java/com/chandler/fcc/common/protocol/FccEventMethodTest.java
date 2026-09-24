@@ -14,6 +14,26 @@ class FccEventMethodTest {
     private final ObjectMapper objectMapper = new ObjectMapper();
 
     /**
+     * 完整收号必须进入独立指令结果主题，物理逐键仍属于 DTMF。
+     *
+     * @throws Exception JSON 契约解析失败
+     */
+    @Test
+    void recognizesCommandResultSeparatelyFromDtmf() throws Exception {
+        JsonNode fixture = objectMapper.readTree("""
+            {"method":"Event.CommandResult","params":{
+              "command_id":"binding-dtmf-9001","command_method":"FNode.ReadDTMF",
+              "command_status":"SUCCEEDED","result":{"dtmf":"901001"}}}
+            """);
+        assertEquals(
+            FccEventMethod.COMMAND_RESULT,
+            FccEventMethod.fromWireName(fixture.path("method").asText())
+        );
+        assertEquals("command", FccEventMethod.COMMAND_RESULT.getCategory());
+        assertEquals("901001", fixture.path("params").path("result").path("dtmf").asText());
+    }
+
+    /**
      * 验证当前 Sidecar 标准录音事件报文能够被控制面识别。
      *
      * @throws Exception JSON 解析失败时抛出

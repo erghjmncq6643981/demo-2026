@@ -1,5 +1,6 @@
 package com.chandler.fcc.server.flow.application.executor;
 
+import com.chandler.fcc.common.dto.command.FNodeAnswerDTO;
 import com.chandler.fcc.common.dto.command.FNodeBridgeDTO;
 import com.chandler.fcc.common.dto.command.FNodeCommandResultDTO;
 import com.chandler.fcc.common.dto.command.FNodeDialDTO;
@@ -26,6 +27,7 @@ public class FNodeFlowActionExecutor implements FlowActionExecutor {
 
     private static final Map<FNodeMethod, Class<?>> PARAMETER_TYPES = Map.ofEntries(
         Map.entry(FNodeMethod.DIAL, FNodeDialDTO.class),
+        Map.entry(FNodeMethod.ANSWER, FNodeAnswerDTO.class),
         Map.entry(FNodeMethod.CHANNEL_BRIDGE, FNodeBridgeDTO.class),
         Map.entry(FNodeMethod.READ_DTMF, FNodeReadDTMFDTO.class),
         Map.entry(FNodeMethod.PLAY, FNodePlayDTO.class),

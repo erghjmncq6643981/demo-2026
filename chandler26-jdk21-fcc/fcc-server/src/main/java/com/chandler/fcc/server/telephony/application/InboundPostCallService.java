@@ -8,6 +8,7 @@ import com.chandler.fcc.common.entity.CallInfoBO;
 import com.chandler.fcc.common.enums.FlowActionType;
 import com.chandler.fcc.common.protocol.FNodeDtmfPostAction;
 import com.chandler.fcc.common.protocol.FccEventField;
+import com.chandler.fcc.common.protocol.FccCommandResultStatus;
 import com.chandler.fcc.common.protocol.FNodeMediaType;
 import com.chandler.fcc.common.protocol.FNodePlayPostAction;
 import com.chandler.fcc.server.flow.application.FlowActionExecutionService;
@@ -22,7 +23,7 @@ import org.springframework.stereotype.Service;
  * 执行呼入通话后的预设服务评价和结束语音流程。
  *
  * <p>只有坐席先离开已接通通话时才保留客户话道进入评价；客户先挂机时直接结束。
- * 评价分数写入通话事实，结束语音由 Sidecar 原子执行“播放后挂机”。</p>
+ * 评价分数写入通话事实，收到结束语音播放结果后单独下发挂机。</p>
  */
 @Service
 @RequiredArgsConstructor
@@ -33,6 +34,7 @@ public class InboundPostCallService {
     private static final String DATA_RATING_DEADLINE = "serviceRatingDeadline";
     private static final String DATA_CLOSING_PENDING = "closingVoicePending";
     private static final String DATA_CLOSING_ACCEPTED = "closingVoiceAccepted";
+    private static final String DATA_CLOSING_HANGUP_REQUESTED = "closingVoiceHangupRequested";
     private static final int RATING_TIMEOUT_MILLIS = 10_000;
 
     private final FlowActionExecutionService actions;
@@ -94,30 +96,51 @@ public class InboundPostCallService {
     }
 
     /**
-     * 保存客户提交的评价并进入结束语音。
+     * 消费服务评价收号或结束语音播放的最终指令结果。
      *
      * @param call 当前呼入通话
-     * @param params 标准 DTMF 事件
-     * @return 当前事件已由评价流程消费时返回 {@code true}
+     * @param params Sidecar 规范指令结果参数
+     * @return 是否命中通话后处理指令
      */
-    public boolean digits(CallInfoBO call, JsonNode params) {
-        if (call.getData().containsKey(DATA_CLOSING_PENDING)) {
-            if (!call.getData().containsKey(DATA_CLOSING_ACCEPTED)) {
-                playClosingAndHangup(call);
+    public boolean commandResult(CallInfoBO call, JsonNode params) {
+        String commandId = params.path(FccEventField.COMMAND_ID.getWireName()).asText();
+        FccCommandResultStatus status = FccCommandResultStatus.fromWireValue(
+            params.path(FccEventField.COMMAND_STATUS.getWireName()).asText()
+        );
+        if (("service-rating-" + call.getCallId()).equals(commandId)) {
+            if (status == FccCommandResultStatus.SUCCEEDED) {
+                String digit = params
+                    .path(FccEventField.RESULT.getWireName())
+                    .path("dtmf")
+                    .asText();
+                if (digit.matches("[1-5]")) {
+                    persistRating(call, digit);
+                }
             }
+            playClosingAndHangup(call);
             return true;
         }
-        if (
-            !call.getData().containsKey(DATA_RATING_PENDING) ||
-            !call.getGuestChannelUuid().equals(
-                params.path(FccEventField.CHANNEL_UUID.getWireName()).asText()
-            )
-        ) {
-            return false;
-        }
-        String digit = params.path(FccEventField.DIGIT.getWireName()).asText();
-        if (!digit.matches("[1-5]")) {
+        if (("closing-voice-" + call.getCallId()).equals(commandId)) {
+            requestClosingHangup(
+                call,
+                status == FccCommandResultStatus.SUCCEEDED
+                    ? "NORMAL_CLEARING"
+                    : "NORMAL_TEMPORARY_FAILURE"
+            );
             return true;
+        }
+        return false;
+    }
+
+    /**
+     * 保存有效服务评价分值。
+     *
+     * @param call 当前呼入通话
+     * @param digit 一位评价分值
+     */
+    private void persistRating(CallInfoBO call, String digit) {
+        if (!call.getData().containsKey(DATA_RATING_PENDING)) {
+            return;
         }
         actions.executeInternal(
             call,
@@ -130,8 +153,6 @@ public class InboundPostCallService {
                 return call.getEvaluationScore();
             }
         );
-        playClosingAndHangup(call);
-        return true;
     }
 
     /**
@@ -163,7 +184,7 @@ public class InboundPostCallService {
     }
 
     /**
-     * 播放预设结束语音并由 Sidecar 在播放完成后正常挂机。
+     * 播放预设结束语音，等待 Sidecar 发布最终结果后再挂机。
      *
      * @param call 当前呼入通话
      */
@@ -183,7 +204,7 @@ public class InboundPostCallService {
                             .data(closingPromptFile)
                             .build()
                     )
-                    .actionAfter(FNodePlayPostAction.HANGUP)
+                    .actionAfter(FNodePlayPostAction.PARK)
                     .build(),
                 "closing-voice-" + call.getCallId()
             );
@@ -198,6 +219,29 @@ public class InboundPostCallService {
                 .ctrlUuid(call.getCtrlId())
                 .uuid(call.getGuestChannelUuid())
                 .cause("NORMAL_CLEARING")
+                .build(),
+            "rating-hangup-" + call.getCallId()
+        );
+    }
+
+    /**
+     * 在结束语音完成后幂等下发独立挂机指令。
+     *
+     * @param call 当前呼入通话
+     * @param cause 挂机原因
+     */
+    private void requestClosingHangup(CallInfoBO call, String cause) {
+        if (call.getData().putIfAbsent(DATA_CLOSING_HANGUP_REQUESTED, true) != null) {
+            return;
+        }
+        persistence.saveOrUpdateSession(call);
+        actions.executeFNode(
+            call,
+            FlowActionType.HANGUP_CALL,
+            FNodeHangupDTO.builder()
+                .ctrlUuid(call.getCtrlId())
+                .uuid(call.getGuestChannelUuid())
+                .cause(cause)
                 .build(),
             "rating-hangup-" + call.getCallId()
         );

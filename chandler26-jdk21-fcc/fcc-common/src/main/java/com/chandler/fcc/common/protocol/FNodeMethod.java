@@ -10,6 +10,7 @@ import lombok.Getter;
 public enum FNodeMethod {
 
     DIAL("FNode.Dial", "发起呼叫"),
+    ANSWER("FNode.Answer", "应答指定话道"),
     CHANNEL_BRIDGE("FNode.ChannelBridge", "桥接两路话道"),
     READ_DTMF("FNode.ReadDTMF", "播放提示并收取按键"),
     PLAY("FNode.Play", "在话道中播放媒体"),

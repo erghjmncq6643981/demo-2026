@@ -5,10 +5,11 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.mock;
-import static org.mockito.Mockito.times;
+import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
+import com.chandler.fcc.common.dto.command.FNodeHangupDTO;
 import com.chandler.fcc.common.dto.command.FNodePlayDTO;
 import com.chandler.fcc.common.entity.CallInfoBO;
 import com.chandler.fcc.common.enums.FlowActionType;
@@ -28,7 +29,7 @@ import org.springframework.test.util.ReflectionTestUtils;
 class InboundPostCallServiceTest {
 
     /**
-     * 有效评价必须写入通话事实，并使用播放完成后挂机的结束语音命令。
+     * 只有完整收号结果写入评价；结束语音完成结果到达后才单独挂机。
      */
     @Test
     void persistsRatingAndPlaysClosingVoiceBeforeHangup() throws Exception {
@@ -51,9 +52,9 @@ class InboundPostCallServiceTest {
 
         assertTrue(service.begin(call));
         var event = new ObjectMapper().readTree(
-            "{\"uuid\":\"customer-channel\",\"digit\":\"5\"}"
+            "{\"command_id\":\"service-rating-9001\",\"command_status\":\"SUCCEEDED\",\"result\":{\"dtmf\":\"5\"}}"
         );
-        assertTrue(service.digits(call, event));
+        assertTrue(service.commandResult(call, event));
         assertEquals(5, call.getEvaluationScore());
 
         ArgumentCaptor<FNodePlayDTO> command = ArgumentCaptor.forClass(FNodePlayDTO.class);
@@ -63,8 +64,18 @@ class InboundPostCallServiceTest {
             command.capture(),
             eq("closing-voice-9001")
         );
-        assertEquals(FNodePlayPostAction.HANGUP, command.getValue().getActionAfter());
+        assertEquals(FNodePlayPostAction.PARK, command.getValue().getActionAfter());
         assertEquals("/media/closing.wav", command.getValue().getMedia().getData());
-        verify(persistence, times(4)).saveOrUpdateSession(call);
+        verify(actions, never()).executeFNode(
+            eq(call), eq(FlowActionType.HANGUP_CALL), any(), any()
+        );
+        var playback = new ObjectMapper().readTree(
+            "{\"command_id\":\"closing-voice-9001\",\"command_status\":\"SUCCEEDED\"}"
+        );
+        assertTrue(service.commandResult(call, playback));
+        verify(actions).executeFNode(
+            eq(call), eq(FlowActionType.HANGUP_CALL),
+            any(FNodeHangupDTO.class), eq("rating-hangup-9001")
+        );
     }
 }

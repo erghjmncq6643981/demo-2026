@@ -7,6 +7,7 @@ import com.chandler.fcc.common.enums.FlowActionType;
 import com.chandler.fcc.common.protocol.FNodeDtmfPostAction;
 import com.chandler.fcc.common.protocol.FNodeMediaType;
 import com.chandler.fcc.common.protocol.FccEventField;
+import com.chandler.fcc.common.protocol.FccCommandResultStatus;
 import com.chandler.fcc.common.protocol.FlowDefinitionValidator;
 import com.chandler.fcc.server.flow.application.FlowActionExecutionService;
 import com.chandler.fcc.server.infrastructure.persistence.service.CallPersistenceService;
@@ -81,24 +82,43 @@ public class InboundMenuService {
     }
 
     /**
-     * 解析按键分支，只允许当前客户话道和已确认的事件归属驱动；重复完成事件被忽略。
+     * 使用 ReadDTMF 的最终指令结果解析菜单分支。
      *
-     * @param call 通话
-     * @param params 规范事件
-     * @return 是否命中等待菜单
+     * @param call 当前呼入通话
+     * @param params 规范指令结果参数
+     * @return 是否命中当前菜单收号指令
      */
-    public boolean digits(CallInfoBO call, JsonNode params) {
+    public boolean commandResult(CallInfoBO call, JsonNode params) {
+        String commandId = params.path(FccEventField.COMMAND_ID.getWireName()).asText();
+        if (!("ivr-menu-" + call.getCallId()).equals(commandId)) {
+            return false;
+        }
         if (
-            !call.getData().containsKey("ivrWaiting") ||
-            !call.getGuestChannelUuid().equals(
-                params.path(FccEventField.CHANNEL_UUID.getWireName()).asText()
-            ) ||
-            (call.getNodeId() != null && !call.getNodeId().equals(
-                params.path(FccEventField.NODE_ID.getWireName()).asText()
-            ))
-        ) return false;
-        String digit = params.path(FccEventField.DIGIT.getWireName()).asText();
-        if (!digit.matches("[0-9]")) return false;
+            call.getData().containsKey("ivrResolved") ||
+            call.getData().containsKey("ivrMenuFailed")
+        ) {
+            return true;
+        }
+        if (FccCommandResultStatus.fromWireValue(
+            params.path(FccEventField.COMMAND_STATUS.getWireName()).asText()
+        ) != FccCommandResultStatus.SUCCEEDED) {
+            call.getData().remove("ivrWaiting");
+            call.putData("ivrMenuFailed", true);
+            call.putData("flowBranch", "menu.command-failed");
+            persistence.saveOrUpdateSession(call);
+            return true;
+        }
+        String digit = params
+            .path(FccEventField.RESULT.getWireName())
+            .path("dtmf")
+            .asText();
+        if (!digit.matches("[0-9]")) {
+            call.getData().remove("ivrWaiting");
+            call.putData("ivrMenuFailed", true);
+            call.putData("flowBranch", "menu.no-digit");
+            persistence.saveOrUpdateSession(call);
+            return true;
+        }
         actions.executeInternal(
             call,
             FlowActionType.SELECT_DIGIT_ROUTE,

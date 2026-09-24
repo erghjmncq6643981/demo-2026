@@ -41,7 +41,9 @@ fcc:
     service-rating-prompt-file: ${FCC_SERVICE_RATING_PROMPT_FILE:}
     closing-prompt-file: ${FCC_CLOSING_PROMPT_FILE:}
   binding:
-    prompt-file: ${FCC_BINDING_PROMPT_FILE:}
+    # 提示与结果文案来自 SYSTEM_PHONE_BINDING，Java 不配置 FreeSWITCH 音频路径。
+    work-no-min-digits: ${FCC_BINDING_WORK_NO_MIN_DIGITS:2}
+    work-no-max-digits: ${FCC_BINDING_WORK_NO_MAX_DIGITS:20}
   admin:
     base-url: ${FCC_ADMIN_BASE_URL:http://127.0.0.1:8089}
   websocket:

@@ -53,7 +53,7 @@ fcc-server 统一拥有话机绑定运行流程、呼入、呼出、自动外呼
 
 弹屏链路为 FreeSWITCH → Sidecar → fcc-server 关联 Call、坐席与客户 → 业务 WebSocket → Windows 客户端执行本机通知。收件人、内容授权、关闭时机、补发规则由 fcc-server 决定；Windows API 由本机客户端调用，服务端不能直接恢复远程桌面窗口。
 
-采用固定的绑定、呼入、呼出、自动外呼模板，保持模块化单体。话机通过拨打 `0000` 进入绑定流程，Sidecar 上报已认证 SIP 分机，坐席输入工号后由 fcc-server 原子换绑。客户资料、自动外呼调度和 Windows 弹屏业务归 fcc-server；调度任务先持久化，写 Call 前在同一事务锁定派发租约。过期且无 Call 的尝试原子失败，已存在 Call 的未知结果不重拨。实施与证据见 [跨电脑部署验收](../../docs/fcc-cross-machine-acceptance.md)。
+采用固定的绑定、呼入、呼出、自动外呼模板，保持模块化单体。已认证 SIP 话机拨打 `0000` 后，FreeSWITCH 专用 dialplan 只设置 `fcc_flow_entry=PHONE_BINDING` 并驻留；Sidecar 将该入口标记和 `sip_auth_username` 规范化上报。fcc-server 在可信 `READY` 上固定发布模型并发送 `FNode.Answer`，收到真实 `Event.Channel/ANSWERED` 后才下发 TEXT 收号。`Event.DTMF` 只表示物理逐键；只有 `FNode.ReadDTMF` 对应的 `Event.CommandResult.result.dtmf` 可以触发原子换绑。绑定结果以 `FNode.Play(action_after=PARK)` 播报，收到播放完成结果后再单独 `FNode.Hangup`。Java 不配置提示音路径，仅保留工号长度约束。客户资料、自动外呼调度和 Windows 弹屏业务归 fcc-server；调度任务先持久化，写 Call 前在同一事务锁定派发租约。过期且无 Call 的尝试原子失败，已存在 Call 的未知结果不重拨。实施与证据见 [跨电脑部署验收](../../docs/fcc-cross-machine-acceptance.md)。
 
 ## 3. Maven 模块
 
@@ -132,6 +132,8 @@ fcc-server 统一拥有话机绑定运行流程、呼入、呼出、自动外呼
 8. 坐席端以业务 WebSocket和 SIP Session 对账最终状态。
 
 同步 RPC 成功不是振铃、接通、桥接或录音成功的最终证据。
+
+需要返回业务结果的异步命令使用两阶段事实：fcc-server 先提交 `fcc_call_command/CREATED`，再发布 NATS 请求；同步 JSON-RPC 只推进为 `ACCEPTED`、`FAILED` 或通信 `UNKNOWN`。绑定流程在调用 Sidecar 前持久化“已发起”步骤，收到同步受理后再记录“已受理”；ACK 丢失时，提前到达的 Channel/命令结果仍可推进流程，事件重投只复用原 `command_id` 查询或确认，不能产生第二次副作用。Sidecar 对已受理的 `FNode.ReadDTMF`、`FNode.Play` 通过 `command_id` 发布独立的 `Event.CommandResult`，Java 校验 method、node、ctrl 和 channel 后更新为最终 `SUCCESS/FAILED`。Channel 的 `ANSWERED/BRIDGE/DESTROY` 仍只来自 `Event.Channel`，二者不能互相替代。Sidecar 先将结果写入事件 Outbox 和本地命令最终结果，再允许 JetStream 发布；`FNode.CommandResult` 查询优先返回该最终结果，不重放原副作用。
 
 ### 5.1 命令路由边界
 
@@ -248,7 +250,7 @@ MySQL 是持久事实来源。Redis 只存可重建的运行态和通知。内�
 | `AGENT_FIRST` | 系统先呼坐席，再呼客户 |
 | `AGENT_ORIGINATED` | 接管已认证坐席终端主动发起的 Leg |
 | `NOTIFICATION` | 固定系统通知模型：拨打客户、播放任务文案、收号和确认 |
-| `PHONE_BINDING` | 已认证物理话机拨 `0000` 后绑定工号 |
+| `PHONE_BINDING` | 已认证物理话机经可信 `0000` dialplan 入口绑定工号 |
 
 五类模型均使用 `executionMode=FIXED_RUNTIME`。真实号码、坐席、技能组、context 和媒体目录属于环境或业务配置，不进入系统模型初始化数据。基线 SQL 中的模型数据由以下命令生成，修改资源后必须重新生成并审查差异：
 

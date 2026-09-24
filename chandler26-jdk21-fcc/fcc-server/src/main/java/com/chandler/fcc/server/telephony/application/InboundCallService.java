@@ -330,6 +330,10 @@ public class InboundCallService implements SystemFlowRuntime {
             !call.getData().containsKey("guestReady") ||
             call.getAgentChannelUuid() != null
         ) return;
+        if (call.getData().containsKey("ivrMenuFailed")) {
+            finish(call, "NO_USER_RESPONSE");
+            return;
+        }
         if (call.getData().containsKey("ivrWaiting")) {
             if (System.currentTimeMillis() > ((Number) call.getData().get("ivrDeadline")).longValue()) {
                 call.putData("flowBranch", "menu.timeout");
@@ -528,22 +532,24 @@ public class InboundCallService implements SystemFlowRuntime {
     }
 
     /**
-     * 只处理本呼入固定模板的客户按键，不回落旧路由逻辑。
+     * 使用命令最终结果推进呼入菜单或通话后评价流程。
      *
-     * @param call 通话
-     * @param params 按键事件
-     * @return 是否为本模板
+     * @param call 当前呼入通话
+     * @param params Sidecar 规范指令结果参数
+     * @return 当前结果是否属于呼入固定模型
      */
-    public boolean digits(CallInfoBO call, JsonNode params) {
-        if (!"INBOUND".equals(call.getDataStr("runtimeTemplate", ""))) return false;
+    public boolean commandResult(CallInfoBO call, JsonNode params) {
+        if (!"INBOUND".equals(call.getDataStr("runtimeTemplate", ""))) {
+            return false;
+        }
         synchronized (call) {
             if (call.getData().containsKey("terminal")) {
                 return true;
             }
-            if (postCall.digits(call, params)) {
+            if (postCall.commandResult(call, params)) {
                 return true;
             }
-            if (menu.digits(call, params)) {
+            if (menu.commandResult(call, params)) {
                 route(call);
             }
         }

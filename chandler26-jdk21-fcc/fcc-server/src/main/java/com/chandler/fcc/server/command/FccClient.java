@@ -1,5 +1,6 @@
 package com.chandler.fcc.server.command;
 
+import com.chandler.fcc.common.dto.command.FNodeAnswerDTO;
 import com.chandler.fcc.common.dto.command.FNodeBridgeDTO;
 import com.chandler.fcc.common.dto.command.FNodeCommandResultDTO;
 import com.chandler.fcc.common.dto.command.FNodeDialDTO;
@@ -18,6 +19,7 @@ import com.chandler.fcc.common.util.IdUtil;
 import com.chandler.fcc.server.infrastructure.nats.FccProperties;
 import com.chandler.fcc.server.infrastructure.persistence.entity.CallCommandEntity;
 import com.chandler.fcc.server.infrastructure.persistence.service.CallPersistenceService;
+import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.DeserializationFeature;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import io.nats.client.Connection;
@@ -25,7 +27,6 @@ import io.nats.client.Message;
 import java.nio.charset.StandardCharsets;
 import java.security.MessageDigest;
 import java.time.Duration;
-import java.time.LocalDateTime;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Component;
@@ -71,6 +72,20 @@ public class FccClient {
             dto.setUuid(uuid);
         }
         return sendRequest(FNodeMethod.DIAL, dto, "dial-" + uuid);
+    }
+
+    /**
+     * 应答指定逻辑话道。
+     *
+     * @param dto 应答指令参数
+     * @return Sidecar 受理结果；真实应答状态以 {@code Event.Channel/ANSWERED} 为准
+     */
+    public FNodeResult answer(FNodeAnswerDTO dto) {
+        return sendRequest(
+            FNodeMethod.ANSWER,
+            dto,
+            stableCommandId("answer", dto.getCtrlUuid(), dto.getUuid())
+        );
     }
 
     /**
@@ -276,7 +291,7 @@ public class FccClient {
     }
 
     /**
-     * 发送逻辑命令并记录同步应答审计。
+     * 先提交命令意图，再发送逻辑命令并记录同步受理或通信未知。
      *
      * @param method 规范 FNode 方法
      * @param params 方法参数
@@ -297,27 +312,41 @@ public class FccClient {
         byte[] payload;
         try {
             payload = objectMapper.writeValueAsBytes(request);
+        } catch (Exception invalidRequest) {
+            throw new IllegalArgumentException("无法序列化 FNode 指令", invalidRequest);
+        }
+        recordIntent(commandId, method, payload);
+        Message reply;
+        try {
             log.debug("[FCC -> NATS] subject={}, method={}, commandId={}", subject, method.getWireName(), commandId);
-            Message reply = natsConnection.request(
+            reply = natsConnection.request(
                 subject,
                 payload,
                 Duration.ofMillis(fccProperties.getRpcTimeoutMillis())
             );
-            if (reply == null) {
-                log.warn("[FCC] RPC 超时 method={}, commandId={}", method.getWireName(), commandId);
-                return unknownResult("RPC timeout");
-            }
+        } catch (InterruptedException interrupted) {
+            Thread.currentThread().interrupt();
+            recordUnknown(commandId, "RPC_INTERRUPTED");
+            return unknownResult("Interrupted");
+        } catch (Exception failure) {
+            log.warn("[FCC] RPC 通信结果未知 method={} commandId={} type={}", method.getWireName(), commandId, failure.getClass().getSimpleName());
+            recordUnknown(commandId, "RPC_TRANSPORT_ERROR");
+            return unknownResult("RPC transport outcome unknown");
+        }
+        if (reply == null) {
+            log.warn("[FCC] RPC 超时 method={} commandId={}", method.getWireName(), commandId);
+            recordUnknown(commandId, "RPC_TIMEOUT");
+            return unknownResult("RPC timeout");
+        }
+        try {
             String responsePayload = new String(reply.getData(), StandardCharsets.UTF_8);
             JsonRpcResponse response = objectMapper.readValue(responsePayload, JsonRpcResponse.class);
             FNodeResult result = toResult(response);
-            recordAudit(commandId, method, payload, responsePayload, result);
+            recordReceipt(commandId, responsePayload, result);
             return result;
-        } catch (InterruptedException interrupted) {
-            Thread.currentThread().interrupt();
-            return unknownResult("Interrupted");
-        } catch (Exception failure) {
-            log.error("[FCC] RPC 通信异常 method={}, commandId={}: {}", method.getWireName(), commandId, failure.getMessage());
-            return unknownResult(failure.getMessage());
+        } catch (JsonProcessingException invalidReply) {
+            recordUnknown(commandId, "RPC_INVALID_REPLY");
+            return unknownResult("Invalid RPC response");
         }
     }
 
@@ -342,41 +371,57 @@ public class FccClient {
     }
 
     /**
-     * 记录命令审计，节点标识只能使用 Sidecar 应答事实。
+     * 在发起 NATS 请求之前提交本地意图，失败时禁止产生远程副作用。
      *
      * @param commandId 命令标识
      * @param method FNode 方法
      * @param requestPayload 请求报文
-     * @param responsePayload 应答报文
-     * @param result 解析结果
      */
-    private void recordAudit(
-        String commandId,
-        FNodeMethod method,
-        byte[] requestPayload,
-        String responsePayload,
-        FNodeResult result
-    ) {
+    private void recordIntent(String commandId, FNodeMethod method, byte[] requestPayload) {
         if (callPersistenceService == null) {
             return;
         }
-        try {
-            LocalDateTime now = LocalDateTime.now();
-            callPersistenceService.recordCommand(
-                CallCommandEntity.builder()
-                    .commandId(commandId)
-                    .idempotencyKey(commandId)
-                    .assignedNodeId(result == null ? null : result.getNodeId())
-                    .methodName(method.getWireName())
-                    .requestPayload(new String(requestPayload, StandardCharsets.UTF_8))
-                    .responsePayload(responsePayload)
-                    .status(result != null && result.isSuccess() ? "ACCEPTED" : "FAILED")
-                    .sentAt(now)
-                    .completedAt(now)
-                    .build()
-            );
-        } catch (Exception auditFailure) {
-            log.debug("[FCC] 命令审计写入失败: {}", auditFailure.getMessage());
+        callPersistenceService.recordCommand(
+            CallCommandEntity.builder()
+                .commandId(commandId)
+                .idempotencyKey(commandId)
+                .methodName(method.getWireName())
+                .requestPayload(new String(requestPayload, StandardCharsets.UTF_8))
+                .build()
+        );
+    }
+
+    /**
+     * 持久化同步 RPC 受理或拒绝，但不能覆盖已到达的最终指令结果。
+     *
+     * @param commandId 稳定命令标识
+     * @param responsePayload 同步应答
+     * @param result 受理或拒绝结果
+     */
+    private void recordReceipt(String commandId, String responsePayload, FNodeResult result) {
+        if (callPersistenceService == null) {
+            return;
+        }
+        boolean accepted = result != null && result.isSuccess();
+        callPersistenceService.recordCommandReceipt(
+            commandId,
+            result == null ? null : result.getNodeId(),
+            accepted ? "ACCEPTED" : "FAILED",
+            responsePayload,
+            accepted || result == null ? null : String.valueOf(result.getCode()),
+            accepted || result == null ? null : result.getMessage()
+        );
+    }
+
+    /**
+     * 保留通信结果未知状态，不能把超时当成副作用执行失败。
+     *
+     * @param commandId 稳定命令标识
+     * @param reason 不包含敏感信息的未知原因
+     */
+    private void recordUnknown(String commandId, String reason) {
+        if (callPersistenceService != null) {
+            callPersistenceService.recordCommandReceipt(commandId, null, "UNKNOWN", null, reason, null);
         }
     }
 

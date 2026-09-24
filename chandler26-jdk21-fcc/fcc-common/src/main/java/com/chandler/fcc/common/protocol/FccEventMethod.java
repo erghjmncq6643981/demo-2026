@@ -10,6 +10,7 @@ import lombok.Getter;
 public enum FccEventMethod {
 
     CHANNEL("Event.Channel", "channel", "话道生命周期事件"),
+    COMMAND_RESULT("Event.CommandResult", "command", "异步指令最终结果事件"),
     DTMF("Event.DTMF", "dtmf", "话道按键事件"),
     RECORDING("Event.Recording", "record", "录音生命周期事件"),
     REGISTRATION("Event.Registration", "registration", "SIP 分机注册事件"),

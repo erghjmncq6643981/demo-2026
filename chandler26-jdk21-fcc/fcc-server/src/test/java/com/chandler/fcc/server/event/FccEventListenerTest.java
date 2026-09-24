@@ -137,6 +137,29 @@ class FccEventListenerTest {
     }
 
     /**
+     * 指令最终结果使用 command 分类的节点事件主题，不混入 DTMF。
+     *
+     * @throws Exception JSON 或事件分发异常
+     */
+    @Test
+    void acceptsCommandResultSubject() throws Exception {
+        EventInboxMapper inbox = mock(EventInboxMapper.class);
+        FccEventDispatcher dispatcher = mock(FccEventDispatcher.class);
+        FccEventListener listener = listener(inbox, dispatcher);
+        String subject = NatsSubjectFactory.event(NODE_ID, FccEventMethod.COMMAND_RESULT);
+        byte[] payload = (
+            "{\"method\":\"Event.CommandResult\",\"params\":{\"event_id\":\"" +
+            EVENT_ID + "\",\"node_id\":\"" + NODE_ID + "\"}}"
+        ).getBytes(StandardCharsets.UTF_8);
+        when(inbox.receive(eq(EVENT_ID), eq(NODE_ID), any(String.class))).thenReturn(1);
+        when(inbox.finish(EVENT_ID, EventInboxStatus.PROCESSED.getDatabaseValue(), null))
+            .thenReturn(1);
+
+        assertTrue(listener.processDurable(subject, payload));
+        verify(dispatcher).dispatch(payload);
+    }
+
+    /**
      * 构建不启动消费者线程的监听器测试对象。
      *
      * @param inbox Inbox Mapper

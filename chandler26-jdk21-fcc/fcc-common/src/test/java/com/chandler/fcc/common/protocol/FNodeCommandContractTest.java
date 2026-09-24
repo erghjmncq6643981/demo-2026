@@ -4,6 +4,7 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 
 import com.chandler.fcc.common.dto.command.FNodePlayDTO;
+import com.chandler.fcc.common.dto.command.FNodeAnswerDTO;
 import com.chandler.fcc.common.dto.command.FNodeRecordDTO;
 import com.chandler.fcc.common.dto.command.FNodeTransferDTO;
 import com.chandler.fcc.common.dto.command.MediaInfo;
@@ -17,6 +18,29 @@ import org.junit.jupiter.api.Test;
 class FNodeCommandContractTest {
 
     private final ObjectMapper objectMapper = new ObjectMapper();
+
+    /**
+     * 应答与播放驻留使用独立命令，话道应答事实仍来自 Channel 事件。
+     *
+     * @throws Exception JSON 序列化失败
+     */
+    @Test
+    void serializesBindingAnswerAndParkPlayback() throws Exception {
+        JsonNode answer = objectMapper.valueToTree(
+            FNodeAnswerDTO.builder().ctrlUuid("ctrl-9001").uuid("channel-9001").build()
+        );
+        JsonNode play = objectMapper.valueToTree(
+            FNodePlayDTO.builder()
+                .ctrlUuid("ctrl-9001")
+                .uuid("channel-9001")
+                .media(MediaInfo.builder().type(FNodeMediaType.TEXT).data("绑定成功").build())
+                .actionAfter(FNodePlayPostAction.PARK)
+                .build()
+        );
+        assertEquals("ctrl-9001", answer.path("ctrl_uuid").asText());
+        assertEquals("channel-9001", answer.path("uuid").asText());
+        assertEquals("PARK", play.path("action_after").asText());
+    }
 
     /**
      * 转接只输出业务目标与 context，不泄漏 FreeSWITCH 表达式字段。

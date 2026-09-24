@@ -13,6 +13,7 @@ import com.chandler.fcc.common.protocol.ChannelEventState;
 import com.chandler.fcc.common.protocol.FNodeDtmfPostAction;
 import com.chandler.fcc.common.protocol.FNodeMediaType;
 import com.chandler.fcc.common.protocol.FccEventField;
+import com.chandler.fcc.common.protocol.FccCommandResultStatus;
 import com.chandler.fcc.common.protocol.FccEventParameter;
 import com.chandler.fcc.common.util.IdUtil;
 import com.chandler.fcc.server.agent.domain.AgentWorkStatus;
@@ -195,31 +196,51 @@ public class OutboundCallService implements SystemFlowRuntime {
     }
 
     /**
-     * 保存通知外呼中的客户确认按键。
+     * 使用通知外呼 ReadDTMF 的最终指令结果保存客户确认。
      *
      * @param call 当前通话
-     * @param digit 客户输入的按键
-     * @return 当前事件是否属于通知外呼模板
+     * @param params Sidecar 规范指令结果参数
+     * @return 当前结果是否属于通知外呼固定模型
      */
-    public boolean digits(CallInfoBO call, String digit) {
+    public boolean commandResult(CallInfoBO call, JsonNode params) {
         if (!TEMPLATE_NOTIFICATION.equals(call.getDataStr("runtimeTemplate", ""))) {
             return false;
         }
-        if (call.getDataStr("confirmDigit", "1").equals(digit)) {
-            flowActions.executeInternal(
-                call,
-                FlowActionType.PERSIST_CONFIRMATION_AND_HANGUP,
-                () -> {
-                    call.putData("notificationConfirmed", true);
-                    persistence.saveOrUpdateSession(call);
-                    client.hangup(
-                        call.getCtrlId(),
-                        call.getGuestChannelUuid(),
-                        "NORMAL_CLEARING"
-                    );
-                    return true;
-                }
-            );
+        if (!("notification-dtmf-" + call.getCallId()).equals(
+            params.path(FccEventField.COMMAND_ID.getWireName()).asText()
+        )) {
+            return true;
+        }
+        synchronized (call) {
+            if (
+                call.getData().containsKey(DATA_TERMINAL) ||
+                call.getData().containsKey("notificationHangupRequested")
+            ) {
+                return true;
+            }
+            boolean succeeded = FccCommandResultStatus.fromWireValue(
+                params.path(FccEventField.COMMAND_STATUS.getWireName()).asText()
+            ) == FccCommandResultStatus.SUCCEEDED;
+            String digit = params.path(FccEventField.RESULT.getWireName()).path("dtmf").asText();
+            if (succeeded && call.getDataStr("confirmDigit", "1").equals(digit)) {
+                flowActions.executeInternal(
+                    call,
+                    FlowActionType.PERSIST_CONFIRMATION_AND_HANGUP,
+                    () -> {
+                        call.putData("notificationConfirmed", true);
+                        persistence.saveOrUpdateSession(call);
+                        return true;
+                    }
+                );
+            }
+            if (call.getData().putIfAbsent("notificationHangupRequested", true) == null) {
+                persistence.saveOrUpdateSession(call);
+                client.hangup(
+                    call.getCtrlId(),
+                    call.getGuestChannelUuid(),
+                    succeeded ? "NORMAL_CLEARING" : "NORMAL_TEMPORARY_FAILURE"
+                );
+            }
         }
         return true;
     }
@@ -625,7 +646,7 @@ public class OutboundCallService implements SystemFlowRuntime {
                 .digitTimeout(2_000)
                 .terminators("#")
                 .regex("^[" + call.getDataStr("confirmDigit", "1") + "]$")
-                .actionAfter(FNodeDtmfPostAction.HANGUP)
+                .actionAfter(FNodeDtmfPostAction.PARK)
                 .build(),
             "notification-dtmf-" + call.getCallId()
         );

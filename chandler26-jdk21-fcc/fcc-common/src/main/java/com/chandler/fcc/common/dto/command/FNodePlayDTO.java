@@ -53,6 +53,9 @@ public class FNodePlayDTO implements Serializable {
      * 播放完成后的受控动作。
      */
     @JsonProperty("action_after")
-    @Schema(description = "播放完成后的动作：NONE(继续当前话务) 或 HANGUP(正常挂机)", example = "HANGUP")
+    @Schema(
+        description = "播放完成后的动作：NONE(继续当前话务)、PARK(驻留等待下一条指令) 或 HANGUP(正常挂机)",
+        example = "PARK"
+    )
     private FNodePlayPostAction actionAfter;
 }

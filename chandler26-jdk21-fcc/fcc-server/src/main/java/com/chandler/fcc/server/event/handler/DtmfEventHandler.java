@@ -1,29 +1,21 @@
 package com.chandler.fcc.server.event.handler;
 
-import com.chandler.fcc.common.entity.CallInfoBO;
+import com.chandler.fcc.common.protocol.FccDtmfSource;
 import com.chandler.fcc.common.protocol.FccEventMethod;
 import com.chandler.fcc.common.protocol.FccEventField;
-import com.chandler.fcc.server.agent.application.PhoneBindingService;
-import com.chandler.fcc.server.call.CallSessionManager;
-import com.chandler.fcc.server.telephony.application.InboundCallService;
-import com.chandler.fcc.server.telephony.application.OutboundCallService;
 import com.fasterxml.jackson.databind.JsonNode;
-import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Component;
 
 /**
- * 将 DTMF 事件交给当前通话的固定运行模型处理。
+ * 校验并观察话道物理 DTMF 按键事件。
+ *
+ * <p>完整收号是 {@code FNode.ReadDTMF} 的最终指令结果，通过
+ * {@code Event.CommandResult.result.dtmf} 推进业务；本处理器不得把逐键事件当成收号结果。</p>
  */
 @Component
-@RequiredArgsConstructor
 @Slf4j
 public class DtmfEventHandler implements FccEventHandler {
-
-    private final CallSessionManager sessions;
-    private final InboundCallService inboundCalls;
-    private final PhoneBindingService phoneBinding;
-    private final OutboundCallService outboundCalls;
 
     /**
      * 判断是否为 DTMF 事件。
@@ -37,35 +29,23 @@ public class DtmfEventHandler implements FccEventHandler {
     }
 
     /**
-     * 关联通话并按呼入、话机绑定、呼出顺序交给唯一运行模型处理。
+     * 校验逐键事件契约并保留调试级可观测性。
      *
      * @param params DTMF 事件参数
      */
     @Override
     public void handle(JsonNode params) {
-        String controlId = params.path(FccEventField.CONTROL_ID.getWireName()).asText(null);
         String channelUuid = params.path(FccEventField.CHANNEL_UUID.getWireName()).asText(null);
         String digit = params.path(FccEventField.DIGIT.getWireName()).asText(null);
-        if (digit == null || digit.isBlank() || "_none_".equalsIgnoreCase(digit)) return;
-
-        CallInfoBO call = sessions
-            .getByCtrlUuid(controlId)
-            .or(() -> sessions.getByChannelUuid(channelUuid))
-            .orElse(null);
-        if (call == null) {
-            log.warn("[DTMF 事件] 未找到业务通话 ctrlId={} channelUuid={}", controlId, channelUuid);
-            return;
+        String source = params.path(FccEventField.DTMF_SOURCE.getWireName()).asText(null);
+        if (
+            channelUuid == null ||
+            digit == null ||
+            digit.isBlank() ||
+            !FccDtmfSource.KEY_PRESS.getWireValue().equals(source)
+        ) {
+            throw new IllegalArgumentException("DTMF 事件必须是带话道标识的物理按键事件");
         }
-        call.putData("flowEventId", params.path(FccEventField.EVENT_ID.getWireName()).asText());
-        call.putData(
-            "flowSourceTime",
-            params.path(FccEventField.SOURCE_TIMESTAMP.getWireName()).asLong()
-        );
-
-        if (inboundCalls.digits(call, params)) return;
-        if (phoneBinding.digits(call, digit)) return;
-        if (outboundCalls.digits(call, digit)) return;
-
-        log.warn("[DTMF 事件] 通话没有匹配固定运行模型 callId={}", call.getCallId());
+        log.debug("[DTMF 事件] 观察到物理按键 channelUuid={}", channelUuid);
     }
 }

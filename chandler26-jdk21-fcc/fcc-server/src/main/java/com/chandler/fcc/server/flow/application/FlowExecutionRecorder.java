@@ -131,8 +131,10 @@ public class FlowExecutionRecorder {
     private String stage(CallInfoBO call, String template) {
         if (call.getData().containsKey("terminal")) return "END";
         if ("PHONE_BINDING".equals(template)) {
+            if (call.getData().containsKey("bindingResultSent")) return "RESULT";
             if (call.getData().containsKey("bindingCompleted")) return "VERIFY_BINDING";
-            return call.getData().containsKey("bindingPromptSent") ? "COLLECT_CODE" : "ENTRY";
+            if (call.getData().containsKey("bindingPromptSent")) return "COLLECT_CODE";
+            return call.getData().containsKey("bindingAnswerRequested") ? "ANSWER" : "ENTRY";
         }
         if ("NOTIFICATION".equals(template)) {
             if (Boolean.TRUE.equals(call.getData().get("notificationConfirmed"))) return "CONFIRM";

@@ -23,7 +23,7 @@
       {"key":"RECORD_STOP","label":"停止录音","action":"STOP_RECORDING","transitions":[{"when":"AGENT_DESTROY_AND_CUSTOMER_ALIVE","to":"RATING"},{"when":"CUSTOMER_DESTROY","to":"END"}]},
       {"key":"RATING","label":"收取服务评价","action":"COLLECT_SERVICE_RATING","parameters":{"mediaSource":"fcc.inbound.service-rating-prompt-file","digits":"1-5","timeoutSeconds":10},"transitions":[{"when":"VALID_DIGIT","to":"RATING_SAVE"},{"when":"TIMEOUT","to":"CLOSING"},{"when":"CUSTOMER_DESTROY","to":"END"}]},
       {"key":"RATING_SAVE","label":"保存服务评价","action":"PERSIST_SERVICE_RATING","outputs":["evaluationScore"],"transitions":[{"when":"SAVED","to":"CLOSING"}]},
-      {"key":"CLOSING","label":"播放结束语音","action":"PLAY_CLOSING_VOICE","parameters":{"mediaSource":"fcc.inbound.closing-prompt-file","actionAfter":"HANGUP"},"transitions":[{"when":"DESTROY","to":"END"}]},
+      {"key":"CLOSING","label":"播放结束语音","action":"PLAY_CLOSING_VOICE","parameters":{"mediaSource":"fcc.inbound.closing-prompt-file","actionAfter":"PARK"},"transitions":[{"when":"COMMAND_RESULT_THEN_HANGUP","to":"END"}]},
       {"key":"END","label":"结束与回拨处理","action":"FINALIZE_INBOUND","parameters":{"releaseAgent":true,"hangupRemainingLeg":true,"createCallbackWhen":"UNANSWERED_AND_CALLBACK_ENABLED"},"outputs":["hangupCause","duration","billsec"],"terminal":true,"transitions":[]}
     ]
   },
@@ -63,19 +63,21 @@
     "nodes":[
       {"key":"ENTRY","label":"通知任务受理","action":"VALIDATE_NOTIFICATION_AND_ROUTE","inputs":["number","attemptId","text","confirmDigit","timeoutSeconds","triggerSource","bizId"],"transitions":[{"when":"ACCEPTED","to":"DIAL_CUSTOMER"},{"when":"REJECTED","to":"END"}]},
       {"key":"DIAL_CUSTOMER","label":"呼叫客户","action":"DIAL_CUSTOMER","parameters":{"timeoutSeconds":30},"transitions":[{"when":"CUSTOMER_READY","to":"NOTIFY"},{"when":"DESTROY","to":"END"}]},
-      {"key":"NOTIFY","label":"通知放音与收号","action":"READ_DTMF","parameters":{"minDigits":1,"maxDigits":1,"tries":1,"timeoutSource":"dialJob.timeoutSeconds","digitTimeoutMs":2000,"terminators":"#","regexSource":"dialJob.confirmDigit","actionAfter":"HANGUP"},"transitions":[{"when":"DIGIT_EQUALS_CONFIGURED_CONFIRMATION","to":"CONFIRM"},{"when":"DESTROY_WITHOUT_CONFIRMATION","to":"END","result":"UNCONFIRMED"}]},
-      {"key":"CONFIRM","label":"保存客户确认","action":"PERSIST_CONFIRMATION_AND_HANGUP","outputs":["notificationConfirmed"],"transitions":[{"when":"DESTROY","to":"END"}]},
+      {"key":"NOTIFY","label":"通知放音与收号","action":"READ_DTMF","parameters":{"minDigits":1,"maxDigits":1,"tries":1,"timeoutSource":"dialJob.timeoutSeconds","digitTimeoutMs":2000,"terminators":"#","regexSource":"dialJob.confirmDigit","actionAfter":"PARK"},"transitions":[{"when":"COMMAND_RESULT_WITH_CONFIRMATION","to":"CONFIRM"},{"when":"COMMAND_RESULT_OTHER","to":"END","result":"UNCONFIRMED"}]},
+      {"key":"CONFIRM","label":"保存客户确认并挂机","action":"PERSIST_CONFIRMATION_AND_HANGUP","outputs":["notificationConfirmed"],"transitions":[{"when":"HANGUP_THEN_DESTROY","to":"END"}]},
       {"key":"END","label":"结束通知通话","action":"FINALIZE_NOTIFICATION","outputs":["hangupCause","notificationConfirmed","duration","billsec"],"terminal":true,"transitions":[]}
     ]
   },
   "PHONE_BINDING": {
     "schemaVersion":2,"template":"PHONE_BINDING","executionMode":"FIXED_RUNTIME","entry":"ENTRY",
-    "stages":["ENTRY","COLLECT_CODE","VERIFY_BINDING","END"],
-    "parameters":{"workNoMinDigits":2,"workNoMaxDigits":20,"mediaSource":"fcc.binding.prompt-file"},
+    "stages":["ENTRY","ANSWER","COLLECT_CODE","VERIFY_BINDING","RESULT","END"],
+    "parameters":{"flowEntry":"PHONE_BINDING","requireAuthenticatedExtension":true,"workNoMinDigits":2,"workNoMaxDigits":20,"mediaType":"TEXT","promptText":"请输入您的坐席工号，输入完成后请按井号键。"},
     "nodes":[
-      {"key":"ENTRY","label":"识别绑定话机","action":"VALIDATE_BINDING_EXTENSION","inputs":["channelUuid","extension"],"transitions":[{"when":"READY","to":"COLLECT_CODE"},{"when":"INVALID_OR_DESTROY","to":"END"}]},
-      {"key":"COLLECT_CODE","label":"收取坐席工号","action":"READ_DTMF","parameters":{"minDigitsSource":"fcc.binding.work-no-min-digits","maxDigitsSource":"fcc.binding.work-no-max-digits","tries":1,"timeoutSeconds":60,"digitTimeoutMs":10000,"terminators":"#","regex":"^[0-9]+$"},"transitions":[{"when":"DIGITS_RECEIVED","to":"VERIFY_BINDING"},{"when":"DESTROY","to":"END"}]},
-      {"key":"VERIFY_BINDING","label":"校验并绑定","action":"BIND_AGENT_EXTENSION","parameters":{"matchAuthenticatedExtension":true,"lockAgentAndExtension":true,"persistBindingHistory":true},"outputs":["bindingAccepted"],"transitions":[{"when":"VALID","to":"END","result":"BOUND"},{"when":"ELSE","to":"END","result":"REJECTED"}]},
+      {"key":"ENTRY","label":"识别绑定话机","action":"VALIDATE_BINDING_EXTENSION","inputs":["channelUuid","flowEntry","authenticatedExtension"],"transitions":[{"when":"TRUSTED_READY","to":"ANSWER"},{"when":"INVALID_OR_DESTROY","to":"END"}]},
+      {"key":"ANSWER","label":"应答绑定话道","action":"ANSWER_BINDING_CHANNEL","transitions":[{"when":"CHANNEL_ANSWERED","to":"COLLECT_CODE"},{"when":"DESTROY","to":"END"}]},
+      {"key":"COLLECT_CODE","label":"收取坐席工号","action":"READ_DTMF","parameters":{"minDigitsSource":"fcc.binding.work-no-min-digits","maxDigitsSource":"fcc.binding.work-no-max-digits","tries":1,"timeoutSeconds":60,"digitTimeoutMs":10000,"terminators":"#","regex":"^[0-9]+$","actionAfter":"PARK"},"transitions":[{"when":"COMMAND_RESULT_WITH_DIGITS","to":"VERIFY_BINDING"},{"when":"COMMAND_RESULT_FAILED_OR_DESTROY","to":"END"}]},
+      {"key":"VERIFY_BINDING","label":"校验并绑定","action":"BIND_AGENT_EXTENSION","parameters":{"matchAuthenticatedExtension":true,"lockAgentAndExtension":true,"persistBindingHistory":true},"outputs":["bindingAccepted"],"transitions":[{"when":"VALID","to":"RESULT","result":"BOUND"},{"when":"ELSE","to":"RESULT","result":"REJECTED"}]},
+      {"key":"RESULT","label":"播报绑定结果","action":"PLAY_BINDING_RESULT","parameters":{"mediaType":"TEXT","successText":"话机绑定成功，再见。","failureText":"话机绑定失败，请确认工号后重试。","actionAfter":"PARK"},"transitions":[{"when":"COMMAND_RESULT_THEN_HANGUP","to":"END"}]},
       {"key":"END","label":"结束绑定通话","action":"HANGUP_BINDING_CHANNEL","terminal":true,"transitions":[]}
     ]
   }

@@ -9,9 +9,9 @@ import lombok.Getter;
 public enum FccEventParameter {
 
     AUTHENTICATED_EXTENSION("authenticated_extension", "已通过 SIP 认证的分机"),
+    FLOW_ENTRY("flow_entry", "FreeSWITCH 拨号计划确认的业务入口"),
     SIP_USER_AGENT("sip_user_agent", "话机 User-Agent"),
-    CODEC("codec", "话道读编码"),
-    DTMF_VALUE("dtmf_val", "收号应用返回值");
+    CODEC("codec", "话道读编码");
 
     private final String wireName;
     private final String desc;

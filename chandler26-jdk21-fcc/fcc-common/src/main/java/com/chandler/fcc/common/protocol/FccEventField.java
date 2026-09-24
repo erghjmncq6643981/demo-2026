@@ -10,6 +10,11 @@ public enum FccEventField {
 
     EVENT_ID("event_id", "事件唯一标识"),
     NODE_ID("node_id", "事件来源节点"),
+    COMMAND_ID("command_id", "指令唯一标识"),
+    COMMAND_METHOD("command_method", "指令方法名"),
+    COMMAND_STATUS("command_status", "指令最终状态"),
+    COMMAND_CODE("code", "指令结果代码"),
+    COMMAND_MESSAGE("message", "指令结果说明"),
     CONTROL_ID("ctrl_uuid", "控制关联标识"),
     CHANNEL_UUID("uuid", "话道唯一标识"),
     PEER_CHANNEL_UUID("peer_uuid", "对端话道唯一标识"),
@@ -22,6 +27,8 @@ public enum FccEventField {
     DURATION("duration", "通话持续秒数"),
     BILL_SECONDS("billsec", "计费秒数"),
     DIGIT("digit", "DTMF 按键"),
+    DTMF_SOURCE("source", "DTMF 事件来源"),
+    RESULT("result", "指令结构化结果"),
     SOURCE_TIMESTAMP("timestamp", "事件源时间戳"),
     PARAMETERS("params", "扩展规范参数");
 
