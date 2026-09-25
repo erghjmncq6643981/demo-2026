@@ -22,6 +22,27 @@
           AND newer.started_at > c.started_at
       )
   </update>
+  <select id="findExpiredAcwAgents" resultType="map">
+    SELECT a.work_no AS workNo, p.login_status AS loginStatus, CAST(p.agent_id AS CHAR) AS agentId
+    FROM fcc_agent_presence p
+    JOIN fcc_agent a ON a.id = p.agent_id
+    WHERE p.work_status = 'ACW'
+      AND p.active_call_id IS NULL
+      AND TIMESTAMPDIFF(SECOND, p.last_state_at, UTC_TIMESTAMP(3)) >= #{timeoutSeconds}
+  </select>
+  <update id="expireAcw">
+    UPDATE fcc_agent_presence p
+    SET p.work_status = CASE p.login_status
+          WHEN 'LOGIN' THEN 'READY'
+          WHEN 'LOGIN_BUSY' THEN 'BUSY'
+          ELSE 'UNREADY'
+        END,
+        p.last_state_at = UTC_TIMESTAMP(3),
+        p.version = p.version + 1
+    WHERE p.work_status = 'ACW'
+      AND p.active_call_id IS NULL
+      AND TIMESTAMPDIFF(SECOND, p.last_state_at, UTC_TIMESTAMP(3)) >= #{timeoutSeconds}
+  </update>
   <select id="agent" resultType="map">
     SELECT a.id, a.work_no AS workNo, b.endpoint_type AS endpointType,
            b.endpoint_value AS extension

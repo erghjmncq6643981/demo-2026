@@ -115,6 +115,7 @@ public class AuthService {
         AuthRoleEnum role = AuthRoleEnum.ofCode(user.getRoleCode());
         String loginId = user.getUsername();
 
+        StpUtil.logout(loginId);
         StpUtil.login(loginId);
         SaSession session = StpUtil.getSession();
         session.set("accountType", SUBJECT_CONSOLE);
@@ -165,6 +166,7 @@ public class AuthService {
 
         AgentEndpointBindingEntity endpoint = resolveEndpoint(agent);
 
+        StpUtil.logout(loginId);
         StpUtil.login(loginId);
         SaSession session = StpUtil.getSession();
         session.set("accountType", SUBJECT_AGENT);

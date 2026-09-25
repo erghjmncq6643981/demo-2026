@@ -216,6 +216,9 @@ public class CallPersistenceService {
             if (leg.getId() == null) {
                 leg.setId(IdUtil.nextId());
             }
+            if (leg.getNodeId() == null || leg.getNodeId().isBlank()) {
+                leg.setNodeId("telephony-pod-01");
+            }
             if (leg.getCreatedTime() == null) {
                 leg.setCreatedTime(now);
             }

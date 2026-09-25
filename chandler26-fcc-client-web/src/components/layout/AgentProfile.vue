@@ -37,9 +37,9 @@ const agentStore = useAgentStore();
         </div>
       </div>
 
-      <!-- 3. 接听终端 (标签在左侧) -> 4. 示闲 -> 5. 示忙 -> 6. 空闲 (通话状态，不显示说明) -->
+      <!-- 3. 接听方式 (标签在左侧) -> 4. 示闲 -> 5. 示忙 -> 6. 空闲 (通话状态，不显示说明) -->
       <div class="flex flex-wrap items-center gap-3 sm:gap-4">
-        <!-- 3. 接听终端 (选择框左侧显示“接听终端”) -->
+        <!-- 3. 接听方式 (选择框左侧显示“接听方式”) -->
         <EndpointSelector layout="horizontal" />
 
         <!-- 细分隔线 -->

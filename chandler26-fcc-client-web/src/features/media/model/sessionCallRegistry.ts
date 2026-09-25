@@ -52,7 +52,6 @@ export class SessionCallRegistry {
 
     const binding = this.bindings.get(this.activeSessionId);
     if (!binding) return null;
-    if (binding.callId && binding.callId !== callId) return null;
     binding.callId = callId;
     this.pendingCallId = null;
     return { ...binding };

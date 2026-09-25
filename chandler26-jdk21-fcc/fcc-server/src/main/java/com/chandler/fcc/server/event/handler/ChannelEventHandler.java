@@ -9,6 +9,7 @@ import com.chandler.fcc.common.protocol.FccEventMethod;
 import com.chandler.fcc.common.util.IdUtil;
 import com.chandler.fcc.server.agent.application.PhoneBindingService;
 import com.chandler.fcc.server.call.CallSessionManager;
+import com.chandler.fcc.server.telephony.application.CallTransferService;
 import com.chandler.fcc.server.telephony.application.InboundCallService;
 import com.chandler.fcc.server.telephony.application.OutboundCallService;
 import com.fasterxml.jackson.databind.JsonNode;
@@ -31,6 +32,7 @@ public class ChannelEventHandler implements FccEventHandler {
     private final PhoneBindingService phoneBinding;
     private final OutboundCallService outboundCalls;
     private final InboundCallService inboundCalls;
+    private final CallTransferService transferService;
 
     /**
      * 判断是否为通道生命周期事件。
@@ -90,6 +92,7 @@ public class ChannelEventHandler implements FccEventHandler {
             if (state == ChannelEventState.DESTROY) sessions.removeSession(call.getCtrlId());
             return;
         }
+        if (transferService.handleChannelEvent(call, params, state, channelUuid)) return;
         if (outboundCalls.event(call, params)) return;
         if (inboundCalls.event(call, params)) return;
 

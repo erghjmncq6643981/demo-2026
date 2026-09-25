@@ -10,7 +10,7 @@ export interface FccRuntimeConfig {
   iceServers: RTCIceServer[];
 }
 
-type BrowserLocation = Pick<Location, 'protocol' | 'host' | 'href'>;
+type BrowserLocation = Pick<Location, 'protocol' | 'host' | 'hostname' | 'href'>;
 
 function requireWebSocketProtocol(value: string, name: string): string {
   const url = new URL(value);
@@ -21,8 +21,8 @@ function requireWebSocketProtocol(value: string, name: string): string {
 }
 
 /**
- * Resolve the business WebSocket endpoint. A relative endpoint follows the page
- * origin and automatically uses WSS when the application is served over HTTPS.
+ * Resolve the business WebSocket endpoint.
+ * Direct connection to fcc-server (8085) without proxy.
  */
 export function resolveAgentWebSocketUrl(
   configuredValue: string | undefined,
@@ -33,14 +33,15 @@ export function resolveAgentWebSocketUrl(
     if (configured.startsWith('/')) {
       const browserLocation = location ?? window.location;
       const scheme = browserLocation.protocol === 'https:' ? 'wss:' : 'ws:';
-      return `${scheme}//${browserLocation.host}${configured}`;
+      return `${scheme}//${browserLocation.hostname}:8085${configured}`;
     }
     return requireWebSocketProtocol(configured, 'VITE_FCC_AGENT_WS_URL');
   }
 
   const browserLocation = location ?? window.location;
   const scheme = browserLocation.protocol === 'https:' ? 'wss:' : 'ws:';
-  return `${scheme}//${browserLocation.host}/ws/agent`;
+  const host = browserLocation.hostname || 'localhost';
+  return `${scheme}//${host}:8085/ws/agent`;
 }
 
 function parseIceServers(rawValue: string | undefined): RTCIceServer[] {
@@ -55,8 +56,8 @@ function parseIceServers(rawValue: string | undefined): RTCIceServer[] {
 /** Load and validate browser runtime configuration exposed by Vite. */
 export function loadRuntimeConfig(env: ImportMetaEnv = import.meta.env): FccRuntimeConfig {
   return {
-    agentWebSocketUrl: resolveAgentWebSocketUrl(env.VITE_FCC_AGENT_WS_URL),
-    iceServers: parseIceServers(env.VITE_FCC_ICE_SERVERS_JSON),
+    agentWebSocketUrl: resolveAgentWebSocketUrl(env?.VITE_FCC_AGENT_WS_URL),
+    iceServers: parseIceServers(env?.VITE_FCC_ICE_SERVERS_JSON),
   };
 }
 

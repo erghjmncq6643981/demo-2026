@@ -76,18 +76,26 @@ const agentStore = useAgentStore();
 const wsConnected = computed(() => wsService.isConnected.value);
 
 const endpointStateLabel = computed(() => {
-  if (agentStore.endpoint === 'SIP') return 'SIP 外部终端';
-  if (agentStore.endpoint === 'MOBILE') return '手机终端';
+  if (agentStore.endpoint === 'SIP') {
+    const ext = agentStore.boundSipExtension || agentStore.extension;
+    return ext ? `SIP话机 (${ext})` : 'SIP话机';
+  }
+  if (agentStore.endpoint === 'MOBILE') return '手机';
   switch (sipWebRtcService.registrationState.value) {
-    case 'REGISTERED': return 'SIP 已注册';
-    case 'CONNECTING': return 'SIP 注册中';
-    case 'REGISTRATION_FAILED': return 'SIP 注册失败';
-    default: return 'SIP 未注册';
+    case 'REGISTERED': return 'WebRTC 已注册';
+    case 'CONNECTING': return 'WebRTC 注册中';
+    case 'REGISTRATION_FAILED': return 'WebRTC 注册失败';
+    default: return 'WebRTC 未注册';
   }
 });
 
 const endpointStateClass = computed(() => {
-  if (agentStore.endpoint !== 'WEBRTC') return 'bg-slate-50 border-slate-200 text-slate-600';
+  if (agentStore.endpoint === 'SIP') {
+    return 'bg-emerald-50 border-emerald-200 text-emerald-700';
+  }
+  if (agentStore.endpoint === 'MOBILE') {
+    return 'bg-slate-50 border-slate-200 text-slate-600';
+  }
   if (sipWebRtcService.registrationState.value === 'REGISTERED') {
     return 'bg-emerald-50 border-emerald-200 text-emerald-700';
   }
@@ -98,7 +106,12 @@ const endpointStateClass = computed(() => {
 });
 
 const endpointDotClass = computed(() => {
-  if (agentStore.endpoint !== 'WEBRTC') return 'bg-slate-400';
+  if (agentStore.endpoint === 'SIP') {
+    return 'bg-emerald-500';
+  }
+  if (agentStore.endpoint === 'MOBILE') {
+    return 'bg-slate-400';
+  }
   if (sipWebRtcService.registrationState.value === 'REGISTERED') return 'bg-emerald-500';
   if (sipWebRtcService.registrationState.value === 'REGISTRATION_FAILED') return 'bg-rose-500';
   return 'bg-amber-500';

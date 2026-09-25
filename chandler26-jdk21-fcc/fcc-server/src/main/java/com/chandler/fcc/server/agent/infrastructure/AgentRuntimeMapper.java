@@ -22,6 +22,22 @@ public interface AgentRuntimeMapper {
     int completeAcw(@Param("owner") String owner, @Param("callId") String callId);
 
     /**
+     * 查询话后整理超过时限的坐席。
+     *
+     * @param timeoutSeconds 超时秒数
+     * @return 待置闲的坐席列表
+     */
+    List<Map<String, Object>> findExpiredAcwAgents(@Param("timeoutSeconds") int timeoutSeconds);
+
+    /**
+     * 将超过整理时限的坐席强制按登录态恢复为空闲或示忙。
+     *
+     * @param timeoutSeconds 超时秒数
+     * @return 更新数量
+     */
+    int expireAcw(@Param("timeoutSeconds") int timeoutSeconds);
+
+    /**
      * 读取启用坐席。
      *
      * @param owner 坐席工号

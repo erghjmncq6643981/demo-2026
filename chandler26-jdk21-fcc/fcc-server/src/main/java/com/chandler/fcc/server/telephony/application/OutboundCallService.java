@@ -37,7 +37,9 @@ import java.util.List;
 import java.util.Map;
 import java.util.Set;
 import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.http.HttpStatus;
+import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.support.TransactionTemplate;
 import org.springframework.web.server.ResponseStatusException;
@@ -48,6 +50,7 @@ import org.springframework.web.server.ResponseStatusException;
  * <p>本服务先持久化业务意图和坐席占用，再通过 Sidecar 发起呼叫；通道事件按稳定的
  * Call、Leg 和控制标识推进流程，不把 FreeSWITCH Channel UUID 当作业务通话标识。</p>
  */
+@Slf4j
 @Service
 @RequiredArgsConstructor
 public class OutboundCallService implements SystemFlowRuntime {
@@ -66,6 +69,9 @@ public class OutboundCallService implements SystemFlowRuntime {
         FlowActionType.START_RECORDING,
         FlowActionType.WAIT_FOR_HANGUP,
         FlowActionType.STOP_RECORDING,
+        FlowActionType.COLLECT_SERVICE_RATING,
+        FlowActionType.PERSIST_SERVICE_RATING,
+        FlowActionType.PLAY_CLOSING_VOICE,
         FlowActionType.FINALIZE_OUTBOUND
     );
     private static final Set<FlowActionType> NOTIFICATION_ACTIONS = Set.of(
@@ -82,6 +88,9 @@ public class OutboundCallService implements SystemFlowRuntime {
         FlowActionType.START_RECORDING,
         FlowActionType.WAIT_FOR_HANGUP,
         FlowActionType.STOP_RECORDING,
+        FlowActionType.COLLECT_SERVICE_RATING,
+        FlowActionType.PERSIST_SERVICE_RATING,
+        FlowActionType.PLAY_CLOSING_VOICE,
         FlowActionType.FINALIZE_OUTBOUND
     );
 
@@ -98,6 +107,7 @@ public class OutboundCallService implements SystemFlowRuntime {
     private final TransactionTemplate transactions;
     private final DialAttemptGuard attemptGuard;
     private final CallRecordingService recordings;
+    private final InboundPostCallService postCall;
 
     /**
      * 返回本服务负责的外呼模板。
@@ -203,43 +213,51 @@ public class OutboundCallService implements SystemFlowRuntime {
      * @return 当前结果是否属于通知外呼固定模型
      */
     public boolean commandResult(CallInfoBO call, JsonNode params) {
-        if (!TEMPLATE_NOTIFICATION.equals(call.getDataStr("runtimeTemplate", ""))) {
+        String template = call.getDataStr("runtimeTemplate", "");
+        if (!templates().contains(template)) {
             return false;
         }
-        if (!("notification-dtmf-" + call.getCallId()).equals(
-            params.path(FccEventField.COMMAND_ID.getWireName()).asText()
-        )) {
-            return true;
-        }
         synchronized (call) {
-            if (
-                call.getData().containsKey(DATA_TERMINAL) ||
-                call.getData().containsKey("notificationHangupRequested")
-            ) {
+            if (call.getData().containsKey(DATA_TERMINAL)) {
                 return true;
             }
-            boolean succeeded = FccCommandResultStatus.fromWireValue(
-                params.path(FccEventField.COMMAND_STATUS.getWireName()).asText()
-            ) == FccCommandResultStatus.SUCCEEDED;
-            String digit = params.path(FccEventField.RESULT.getWireName()).path("dtmf").asText();
-            if (succeeded && call.getDataStr("confirmDigit", "1").equals(digit)) {
-                flowActions.executeInternal(
-                    call,
-                    FlowActionType.PERSIST_CONFIRMATION_AND_HANGUP,
-                    () -> {
-                        call.putData("notificationConfirmed", true);
-                        persistence.saveOrUpdateSession(call);
-                        return true;
-                    }
-                );
+            if (isAgentCall(template)) {
+                if (postCall.commandResult(call, params)) {
+                    return true;
+                }
             }
-            if (call.getData().putIfAbsent("notificationHangupRequested", true) == null) {
-                persistence.saveOrUpdateSession(call);
-                client.hangup(
-                    call.getCtrlId(),
-                    call.getGuestChannelUuid(),
-                    succeeded ? "NORMAL_CLEARING" : "NORMAL_TEMPORARY_FAILURE"
-                );
+            if (TEMPLATE_NOTIFICATION.equals(template)) {
+                if (!("notification-dtmf-" + call.getCallId()).equals(
+                    params.path(FccEventField.COMMAND_ID.getWireName()).asText()
+                )) {
+                    return true;
+                }
+                if (call.getData().containsKey("notificationHangupRequested")) {
+                    return true;
+                }
+                boolean succeeded = FccCommandResultStatus.fromWireValue(
+                    params.path(FccEventField.COMMAND_STATUS.getWireName()).asText()
+                ) == FccCommandResultStatus.SUCCEEDED;
+                String digit = params.path(FccEventField.RESULT.getWireName()).path("dtmf").asText();
+                if (succeeded && call.getDataStr("confirmDigit", "1").equals(digit)) {
+                    flowActions.executeInternal(
+                        call,
+                        FlowActionType.PERSIST_CONFIRMATION_AND_HANGUP,
+                        () -> {
+                            call.putData("notificationConfirmed", true);
+                            persistence.saveOrUpdateSession(call);
+                            return true;
+                        }
+                    );
+                }
+                if (call.getData().putIfAbsent("notificationHangupRequested", true) == null) {
+                    persistence.saveOrUpdateSession(call);
+                    client.hangup(
+                        call.getCtrlId(),
+                        call.getGuestChannelUuid(),
+                        succeeded ? "NORMAL_CLEARING" : "NORMAL_TEMPORARY_FAILURE"
+                    );
+                }
             }
         }
         return true;
@@ -297,6 +315,7 @@ public class OutboundCallService implements SystemFlowRuntime {
         CallInfoBO call = CallInfoBO.builder()
             .callId(callId)
             .ctrlId(IdUtil.getCtrlId("outbound"))
+            .nodeId("telephony-pod-01")
             .modelKey(FlowModelType.OUTBOUND_TWO_WAY_CALL.name())
             .direction(DirectionType.OUTBOUND)
             .stageState(CallStageState.CALLING)
@@ -370,7 +389,14 @@ public class OutboundCallService implements SystemFlowRuntime {
             .path(FccEventField.PARAMETERS.getWireName())
             .path(FccEventParameter.AUTHENTICATED_EXTENSION.getWireName())
             .asText();
-        return !number.isBlank() && !"0000".equals(number) && !extension.isBlank();
+        if (number.isBlank() || "0000".equals(number) || extension.isBlank()) {
+            return false;
+        }
+        // 如果拨打的是系统配置的呼入 DID，必须交由呼入流程处理，非坐席主动外呼
+        if (!agents.inbound(number, "default").isEmpty()) {
+            return false;
+        }
+        return true;
     }
 
     /**
@@ -528,7 +554,24 @@ public class OutboundCallService implements SystemFlowRuntime {
             } else if (eventState == ChannelEventState.BRIDGE) {
                 markConnected(call);
             } else if (eventState == ChannelEventState.DESTROY) {
-                finish(call, template, channelUuid, params);
+                if (
+                    isAgentCall(template) &&
+                    call.getStageState() == CallStageState.CONNECTED &&
+                    channelUuid.equals(call.getAgentChannelUuid()) &&
+                    !channelUuid.equals(call.getGuestChannelUuid())
+                ) {
+                    if (Boolean.TRUE.equals(call.getData().get("transferSuccess"))) {
+                        log.info("[外呼事件] 转接后目标分机挂机，跳过服务评价并结束通话 callId={}", call.getCallId());
+                        finish(call, template, channelUuid, params);
+                    } else if (Boolean.TRUE.equals(call.getData().get("transferPending")) ||
+                        Boolean.TRUE.equals(call.getData().get("transferAborted"))) {
+                        log.info("[外呼事件] 通话处于转接中或转接异常，跳过服务评价 callId={}", call.getCallId());
+                    } else {
+                        beginPostCall(call, template, params.path(FccEventField.CAUSE.getWireName()).asText());
+                    }
+                } else {
+                    finish(call, template, channelUuid, params);
+                }
             }
         }
         return true;
@@ -589,7 +632,7 @@ public class OutboundCallService implements SystemFlowRuntime {
             CallLegEntity.builder()
                 .callId(CallPersistenceService.parseNumericId(call.getCallId()))
                 .channelUuid(channelUuid)
-                .nodeId(call.getNodeId())
+                .nodeId(call.getNodeId() != null && !call.getNodeId().isBlank() ? call.getNodeId() : "telephony-pod-01")
                 .roleType(agentLeg ? "AGENT" : "CUSTOMER")
                 .direction(agentLeg && agentOriginated ? "INBOUND" : "OUTBOUND")
                 .endpointType(
@@ -675,6 +718,9 @@ public class OutboundCallService implements SystemFlowRuntime {
         if (call.getData().putIfAbsent("agentReady", true) != null) {
             return;
         }
+        try {
+            client.nativeAPI("uuid_answer", call.getAgentChannelUuid());
+        } catch (Exception ignored) {}
         persistence.saveOrUpdateSession(call);
         dial(call, false);
     }
@@ -691,6 +737,9 @@ public class OutboundCallService implements SystemFlowRuntime {
         ) {
             return;
         }
+        try {
+            client.nativeAPI("uuid_answer", call.getGuestChannelUuid());
+        } catch (Exception ignored) {}
         persistence.saveOrUpdateSession(call);
         flowActions.executeFNode(
             call,
@@ -774,11 +823,15 @@ public class OutboundCallService implements SystemFlowRuntime {
         CallStageState previousStage = call.getStageState();
         call.putData(DATA_TERMINAL, true);
         call.setHangupCause(
-            params.path(FccEventField.CAUSE.getWireName()).asText("NORMAL_CLEARING")
+            params != null && params.has(FccEventField.CAUSE.getWireName())
+                ? params.path(FccEventField.CAUSE.getWireName()).asText("NORMAL_CLEARING")
+                : "NORMAL_CLEARING"
         );
         call.setStageState(CallStageState.NORMAL_END);
-        call.setDuration(params.path(FccEventField.DURATION.getWireName()).asInt());
-        call.setBillsec(params.path(FccEventField.BILL_SECONDS.getWireName()).asInt());
+        if (params != null) {
+            call.setDuration(params.path(FccEventField.DURATION.getWireName()).asInt());
+            call.setBillsec(params.path(FccEventField.BILL_SECONDS.getWireName()).asInt());
+        }
 
         try {
             transactions.executeWithoutResult(status -> {
@@ -793,13 +846,14 @@ public class OutboundCallService implements SystemFlowRuntime {
             throw failure;
         }
 
-        String peerUuid = destroyedChannelUuid.equals(call.getAgentChannelUuid())
+        String peerUuid = destroyedChannelUuid != null && destroyedChannelUuid.equals(call.getAgentChannelUuid())
             ? call.getGuestChannelUuid()
             : call.getAgentChannelUuid();
         if (peerUuid != null) {
             client.hangup(call.getCtrlId(), peerUuid, "NORMAL_CLEARING");
         }
-        if (isAgentCall(template)) {
+        if (isAgentCall(template) && !call.getData().containsKey("agentEndedForRating")
+            && !Boolean.TRUE.equals(call.getData().get("transferSuccess"))) {
             websocket.pushCallHangup(
                 call.getAgentWorkNo(),
                 call.getCallId(),
@@ -807,6 +861,49 @@ public class OutboundCallService implements SystemFlowRuntime {
             );
         }
         sessions.removeSession(call.getCtrlId());
+    }
+
+    /**
+     * 释放已离开的坐席，并在仍存活的客户话道上启动服务评价。
+     *
+     * @param call 已接通的外呼通话
+     * @param template 流程模板
+     * @param cause 坐席侧挂机原因
+     */
+    private void beginPostCall(CallInfoBO call, String template, String cause) {
+        recordings.stop(call);
+        if (call.getData().putIfAbsent("agentEndedForRating", true) == null) {
+            transactions.executeWithoutResult(transaction -> {
+                agents.release(call.getAgentWorkNo(), call.getCallId());
+                persistence.saveOrUpdateSession(call);
+            });
+            websocket.pushCallHangup(
+                call.getAgentWorkNo(),
+                call.getCallId(),
+                Map.of("cause", cause == null || cause.isBlank() ? "NORMAL_CLEARING" : cause)
+            );
+        }
+        if (!postCall.begin(call)) {
+            finish(call, template, call.getAgentChannelUuid(), null);
+        }
+    }
+
+    /**
+     * 定时处理外呼通话后的评价超时检查。
+     */
+    @Scheduled(fixedDelay = 2000)
+    public void sweepPostCall() {
+        for (var call : sessions.snapshot()) {
+            String template = call.getDataStr("runtimeTemplate", "");
+            if (isAgentCall(template)) {
+                try {
+                    synchronized (call) {
+                        postCall.expire(call);
+                    }
+                } catch (RuntimeException ignored) {
+                }
+            }
+        }
     }
 
     /**

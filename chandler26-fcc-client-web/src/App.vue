@@ -123,20 +123,22 @@ function handleKeyDown(e: KeyboardEvent) {
 let registrationGeneration = 0;
 async function syncWebRtcRegistration() {
   const generation = ++registrationGeneration;
-  if (agentStore.isLoggedIn && agentStore.endpoint === 'WEBRTC') {
-    const extension = agentStore.boundSipExtension || agentStore.extension;
-    if (!extension) {
-      sipWebRtcService.init('', null);
-      return;
+  if (agentStore.isLoggedIn) {
+    // 只要坐席登录，就保持软电话（WebRTC）注册在线；话机绑定或接听方式流转（软电话/话机/手机）不影响软电话本身的注册状态
+    let config = agentStore.sipConfig;
+    if (!config) {
+      config = await agentStore.loadSipConfig();
     }
-    try {
-      const result = await authApi.sipConfig();
-      if (generation !== registrationGeneration || !agentStore.isLoggedIn || agentStore.endpoint !== 'WEBRTC') return;
-      sipWebRtcService.init(result.data.extension, { ...result.data, iceServers: getRuntimeConfig().iceServers });
-    } catch (error) {
-      if (generation !== registrationGeneration) return;
+    if (generation !== registrationGeneration || !agentStore.isLoggedIn) return;
+
+    if (config) {
+      if (!sipWebRtcService.isRegistered.value && sipWebRtcService.registrationState.value !== 'CONNECTING') {
+        sipWebRtcService.init(config.extension, { ...config, iceServers: getRuntimeConfig().iceServers });
+      }
+    } else {
+      const ext = agentStore.boundSipExtension || agentStore.extension;
       toastError('无法取得本人 SIP 配置，请检查分机开通及接入配置');
-      sipWebRtcService.init(extension, null);
+      sipWebRtcService.init(ext || '', null);
     }
   } else {
     registrationGeneration++;
@@ -145,11 +147,12 @@ async function syncWebRtcRegistration() {
 }
 
 // 监听登录状态与接听方式流转
-watch(() => agentStore.isLoggedIn, (loggedIn) => {
+watch(() => agentStore.isLoggedIn, async (loggedIn) => {
   if (loggedIn) {
     wsService.connect(agentStore.workNo);
-    agentStore.loadEndpoints();
-    agentStore.refreshRuntimeState();
+    await agentStore.loadEndpoints();
+    await agentStore.loadSipConfig();
+    await agentStore.refreshRuntimeState();
     syncWebRtcRegistration();
   } else {
     registrationGeneration++;
@@ -158,7 +161,7 @@ watch(() => agentStore.isLoggedIn, (loggedIn) => {
   }
 });
 
-watch([() => agentStore.endpoint, () => agentStore.boundSipExtension], () => {
+watch(() => agentStore.endpoint, () => {
   syncWebRtcRegistration();
 });
 
@@ -168,18 +171,27 @@ onMounted(() => {
   // 仅在已登录状态下启动 WebSocket 信道与加载接听资产
   if (agentStore.isLoggedIn) {
     wsService.connect(agentStore.workNo);
-    agentStore.loadEndpoints();
-    agentStore.refreshRuntimeState();
-    syncWebRtcRegistration();
+    void (async () => {
+      await agentStore.loadEndpoints();
+      await agentStore.loadSipConfig();
+      await agentStore.refreshRuntimeState();
+      syncWebRtcRegistration();
+    })();
   }
 
   // 绑定 WebRTC 呼叫信令钩子
+  sipWebRtcService.onIncomingCall(({ callId }) => {
+    callStore.handleIncomingSipSession(callId);
+  });
+
   sipWebRtcService.onCallConnected(({ callId }) => {
-    if (callId) callStore.observeAnswered(callId);
+    const activeCallId = callId || callStore.currentCall?.callId;
+    if (activeCallId) callStore.observeAnswered(activeCallId);
   });
 
   sipWebRtcService.onCallEnded(({ callId }) => {
-    if (callId) callStore.observeEnded(callId);
+    const activeCallId = callId || callStore.currentCall?.callId;
+    if (activeCallId) callStore.observeEnded(activeCallId);
   });
 
   // 监听后端推送的真实话务事件
@@ -194,6 +206,13 @@ onMounted(() => {
       void agentStore.refreshRuntimeState();
     } else if (msg.type === 'CHANNEL_READY') {
       void agentStore.refreshRuntimeState();
+    } else if (msg.type === 'AGENT_PRESENCE_CHANGE') {
+      void agentStore.refreshRuntimeState();
+      const data = msg.data as { workStatus?: string; reason?: string } | undefined;
+      if (data?.reason === 'ACW_TIMEOUT' || data?.workStatus === 'READY') {
+        callStore.handleAcwTimeout();
+        void cdrStore.loadRecords(1);
+      }
     }
   });
 });

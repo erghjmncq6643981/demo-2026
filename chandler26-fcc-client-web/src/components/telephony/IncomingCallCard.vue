@@ -75,7 +75,7 @@
       <!-- 3. 外部终端只提供业务拒接；接听动作在实体终端完成。 -->
       <div class="p-6 pt-0 space-y-2">
         <p class="rounded-xl bg-emerald-50 px-3 py-2 text-xs font-medium text-emerald-700">
-          请直接在当前接听终端上接听，页面将等待话务事件确认。
+          请直接在对应话机或手机上接听，页面将等待话务事件确认。
         </p>
         <button
           @click="callStore.rejectCall()"

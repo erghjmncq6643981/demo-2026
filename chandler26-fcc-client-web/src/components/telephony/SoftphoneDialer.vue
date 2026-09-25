@@ -247,7 +247,18 @@
             </button>
           </div>
 
-          <!-- 3. 空闲待机状态: 发起呼叫 -->
+          <!-- 3. 外呼呼叫中: 取消呼叫 -->
+          <div v-else-if="callStore.callState === 'CALLING'">
+            <button
+              @click="callStore.hangupCall('USER_CANCEL')"
+              class="w-full py-3 bg-rose-500 hover:bg-rose-600 active:scale-95 text-white font-extrabold rounded-2xl text-xs flex items-center justify-center gap-1.5 shadow-md shadow-rose-500/30 transition"
+            >
+              <span>✕</span>
+              <span>取消呼叫</span>
+            </button>
+          </div>
+
+          <!-- 4. 空闲待机状态: 发起呼叫 -->
           <div v-else>
             <button
               @click="handleCall"
@@ -327,7 +338,13 @@ const keypad = [
   { key: '#', sub: '' },
 ];
 
-const isRinging = computed(() => callStore.callState === 'RINGING' || sipWebRtcService.sessionState.value === 'RINGING');
+const isRinging = computed(() => {
+  // 外呼场景下，坐席是主叫方，软电话会自动接听，不展示来电振铃接听控制条
+  if (callStore.currentCall?.direction === 'OUTBOUND' || callStore.callState === 'CALLING') {
+    return false;
+  }
+  return callStore.callState === 'RINGING' || sipWebRtcService.sessionState.value === 'RINGING';
+});
 const isConnected = computed(() => callStore.callState === 'CONNECTED' || sipWebRtcService.sessionState.value === 'CONNECTED');
 const mediaNeedsAttention = computed(() => ['PERMISSION_DENIED', 'DISCONNECTED', 'FAILED'].includes(
   sipWebRtcService.mediaState.value,
@@ -346,11 +363,12 @@ watch(
 const statusTitle = computed(() => {
   if (isRinging.value) return '来电振铃中...';
   if (isConnected.value) return '通话接通中 (WebRTC)';
+  if (callStore.callState === 'CALLING') return '外呼呼叫中...';
   if (callStore.callState === 'ACW') return '话后整理';
-  if (sipWebRtcService.registrationState.value === 'REGISTERED') return '软话机 · 在线已注册 (WebRTC)';
-  if (sipWebRtcService.registrationState.value === 'CONNECTING') return '软话机 · 正在连接软交换...';
-  if (sipWebRtcService.registrationState.value === 'REGISTRATION_FAILED') return '软话机 · SIP 注册失败';
-  return '软话机 · 未注册';
+  if (sipWebRtcService.registrationState.value === 'REGISTERED') return 'WebRTC软电话 · 在线已注册';
+  if (sipWebRtcService.registrationState.value === 'CONNECTING') return 'WebRTC软电话 · 正在连接软交换...';
+  if (sipWebRtcService.registrationState.value === 'REGISTRATION_FAILED') return 'WebRTC软电话 · SIP 注册失败';
+  return 'WebRTC软电话 · 未注册';
 });
 
 const statusDotClass = computed(() => {
@@ -407,7 +425,7 @@ async function handleCall() {
 
   try {
     if (agentStore.endpoint !== 'WEBRTC') {
-      throw new Error('当前接听方式不是 WebRTC，请使用已绑定的终端发起呼叫');
+      throw new Error('当前接听方式不是 WebRTC软电话，请切换接听方式后再使用软电话发起呼叫');
     }
     if (sipWebRtcService.registrationState.value !== 'REGISTERED') {
       throw new Error('软电话尚未完成 SIP 注册，暂时无法外呼');

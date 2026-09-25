@@ -1,7 +1,9 @@
 package com.chandler.fcc.server.websocket.config;
 
 import com.chandler.fcc.server.websocket.handler.AgentWebSocketHandler;
+import java.util.ArrayList;
 import java.util.Arrays;
+import java.util.List;
 import lombok.RequiredArgsConstructor;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.context.annotation.Configuration;
@@ -11,7 +13,7 @@ import org.springframework.web.socket.config.annotation.WebSocketHandlerRegistry
 
 /**
  * 话务服务端 WebSocket 注册装配配置
- * 开放 /ws/agent 终端，支持全域名跨域，保障 Mac 本机与 Parallels Desktop Windows 虚拟机跨网段互通
+ * 开放 /ws/agent 终端，支持配置的源及本地常用端口跨域
  *
  * @author Chandler
  * @version 1.0.0
@@ -31,14 +33,23 @@ public class WebSocketConfig implements WebSocketConfigurer {
     @Override
     public void registerWebSocketHandlers(WebSocketHandlerRegistry registry) {
         var registration = registry.addHandler(agentWebSocketHandler, "/ws/agent").addInterceptors(handshake);
-        if (!allowedOrigins.isBlank()) {
-            String[] origins = Arrays.stream(allowedOrigins.split(","))
+        
+        List<String> origins = new ArrayList<>();
+        // 默认放行本地前端常用开发端口与局域网
+        origins.add("http://localhost:8888");
+        origins.add("http://127.0.0.1:8888");
+        origins.add("http://localhost:8000");
+        origins.add("http://127.0.0.1:8000");
+        origins.add("http://192.168.3.132:8888");
+        origins.add("http://192.168.3.132:8000");
+
+        if (allowedOrigins != null && !allowedOrigins.isBlank()) {
+            Arrays.stream(allowedOrigins.split(","))
                 .map(String::trim)
-                .toArray(String[]::new);
-            if (Arrays.asList(origins).contains("*")) {
-                throw new IllegalArgumentException("WebSocket Origin 不允许通配符");
-            }
-            registration.setAllowedOrigins(origins);
+                .filter(origin -> !origin.isEmpty() && !"*".equals(origin) && !"\"*\"".equals(origin))
+                .forEach(origins::add);
         }
+        
+        registration.setAllowedOrigins(origins.toArray(String[]::new));
     }
 }

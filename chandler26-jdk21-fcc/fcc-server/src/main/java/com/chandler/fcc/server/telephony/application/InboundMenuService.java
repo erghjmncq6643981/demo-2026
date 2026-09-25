@@ -53,7 +53,12 @@ public class InboundMenuService {
         var menu = definition(call).path("menu");
         call.putData("ivrWaiting", true);
         call.putData("flowBranch", "menu.enabled=true");
-        call.putData("ivrDeadline", System.currentTimeMillis() + menu.path("timeoutSeconds").asLong() * 1000);
+        long waitSeconds = menu.path("timeoutSeconds").asLong(3);
+        if (waitSeconds <= 0) waitSeconds = 3;
+        int maxTries = menu.path("maxTries").asInt(3);
+        if (maxTries <= 0) maxTries = 3;
+        // 3次放音(每次约8s)+3次按键等待(每次3s)+网络与TTS缓冲，Watchdog 时限设为 65 秒，避免提前掐断
+        call.putData("ivrDeadline", System.currentTimeMillis() + Math.max(65_000L, (maxTries * 12 + 30) * 1000L));
         String command = "ivr-menu-" + call.getCallId();
         call.putData("flowCommandId", command);
         persistence.saveOrUpdateSession(call);
@@ -65,11 +70,11 @@ public class InboundMenuService {
                     .uuid(call.getGuestChannelUuid())
                     .minDigits(1)
                     .maxDigits(1)
-                    .tries(1)
-                    .timeout(menu.path("timeoutSeconds").asInt() * 1_000)
+                    .tries(maxTries)
+                    .timeout((int) (waitSeconds * 1_000))
                     .digitTimeout(1000)
                     .terminators("#")
-                    .regex("^[0-9]$")
+                    .regex("[0-9]")
                     .media(MediaInfo.builder()
                         .type(mediaType(menu.path("prompt").asText()))
                         .data(menu.path("prompt").asText())

@@ -73,7 +73,7 @@
           {{ callStore.isMuted ? '🎙️ 取消静音' : '🔇 静音' }}
         </button>
         <span v-else class="px-3 py-2 text-slate-300 border border-white/10 rounded-2xl">
-          静音由接听终端控制
+          静音由话机控制
         </span>
 
         <button

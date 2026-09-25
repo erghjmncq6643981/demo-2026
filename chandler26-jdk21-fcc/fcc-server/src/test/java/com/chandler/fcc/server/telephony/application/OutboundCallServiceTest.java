@@ -104,7 +104,8 @@ class OutboundCallServiceTest {
             mock(AgentWebSocketService.class),
             transactions,
             mock(DialAttemptGuard.class),
-            mock(CallRecordingService.class)
+            mock(CallRecordingService.class),
+            mock(InboundPostCallService.class)
         );
     }
 

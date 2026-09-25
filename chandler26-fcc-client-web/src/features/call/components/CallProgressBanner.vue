@@ -5,10 +5,13 @@
     role="status"
   >
     <div class="min-w-0">
-      <div class="text-sm font-extrabold text-indigo-900">外呼指令已受理，等待话务事件确认</div>
+      <div class="text-sm font-extrabold text-indigo-900 flex items-center gap-2">
+        <span class="inline-block w-2 h-2 rounded-full bg-indigo-600 animate-ping"></span>
+        <span>{{ endpointCallingNotice }}</span>
+      </div>
       <div class="mt-1 text-xs text-indigo-700 flex flex-wrap gap-x-3 gap-y-1">
-        <span class="font-mono break-all">被叫: {{ callStore.currentCall?.callerNumber || '未提供' }}</span>
-        <span>接听终端: {{ endpointLabel }}</span>
+        <span class="font-mono break-all">被叫号码: {{ callStore.currentCall?.callerNumber || '未提供' }}</span>
+        <span>接听方式: {{ endpointLabel }}</span>
         <span v-if="callStore.controlMessage">{{ callStore.controlMessage }}</span>
       </div>
     </div>
@@ -30,8 +33,14 @@ const agentStore = useAgentStore();
 const callStore = useCallStore();
 
 const endpointLabel = computed(() => {
-  if (agentStore.endpoint === 'WEBRTC') return 'WebRTC 软话机';
-  if (agentStore.endpoint === 'SIP') return 'SIP 话机';
+  if (agentStore.endpoint === 'WEBRTC') return 'WebRTC软电话';
+  if (agentStore.endpoint === 'SIP') return 'SIP话机';
   return '手机';
+});
+
+const endpointCallingNotice = computed(() => {
+  if (agentStore.endpoint === 'WEBRTC') return '外呼发起中，正在自动应答并建立软电话通话...';
+  if (agentStore.endpoint === 'SIP') return '外呼已发起，请接听桌上 SIP 话机振铃...';
+  return '外呼已发起，请留意接听手机来电...';
 });
 </script>

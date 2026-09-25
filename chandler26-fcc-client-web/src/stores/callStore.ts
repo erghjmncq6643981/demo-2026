@@ -69,26 +69,56 @@ export const useCallStore = defineStore('call', () => {
     controlMessage.value = '';
     isMuted.value = false;
     if (event.type === 'INCOMING') audioService.startRingtone();
+    if (payload.direction === 'OUTBOUND' && useAgentStore().endpoint === 'WEBRTC') {
+      if (sipWebRtcService.sessionState.value === 'RINGING') {
+        void answerCall();
+      }
+    }
+  }
+
+  function handleIncomingSipSession(callId?: string) {
+    const isOutbound = callState.value === 'CALLING'
+      || currentCall.value?.direction === 'OUTBOUND'
+      || Boolean(callId && currentCall.value?.callId === callId);
+    if (isOutbound && useAgentStore().endpoint === 'WEBRTC') {
+      void answerCall();
+    }
+  }
+
+  function resetCall() {
+    audioService.stopRingtone();
+    stopCallTimer();
+    lifecycle.value = initialCallLifecycle();
+    currentCall.value = null;
+    durationSeconds.value = 0;
+    isHeld.value = false;
+    isMuted.value = false;
+    holdRequested.value = false;
+    controlMessage.value = '';
+    showAcwDrawer.value = false;
+    sipWebRtcService.hangup();
   }
 
   function startOutbound(callId: string, calleeNumber?: string) {
     sipWebRtcService.bindBusinessCall(callId);
-    if (currentCall.value?.callId === callId && callState.value === 'CALLING') {
-      currentCall.value = {
-        ...currentCall.value,
-        direction: 'OUTBOUND',
-        callerNumber: currentCall.value.callerNumber || calleeNumber,
-      };
-      return;
+    if (!applyLifecycle({ type: 'OUTBOUND_STARTED', callId })) {
+      if (lifecycle.value.state === 'CALLING') {
+        lifecycle.value = { state: 'CALLING', callId };
+      }
     }
-    if (!applyLifecycle({ type: 'OUTBOUND_STARTED', callId })) return;
     currentCall.value = {
       callId,
       direction: 'OUTBOUND',
-      callerNumber: calleeNumber,
+      callerNumber: calleeNumber || currentCall.value?.callerNumber,
     };
     controlMessage.value = '';
     isMuted.value = false;
+    if (useAgentStore().endpoint === 'WEBRTC') {
+      const ctx = sipWebRtcService.getActiveContext();
+      if (ctx && ctx.session.direction === 'incoming') {
+        void answerCall();
+      }
+    }
   }
 
   async function answerCall() {
@@ -117,6 +147,10 @@ export const useCallStore = defineStore('call', () => {
   async function hangupCall(reason?: string) {
     const callId = currentCall.value?.callId;
     if (!callId || callState.value === 'ACW' || callState.value === 'ENDING' || hangupRequestKey) return;
+    if (callId === 'outbound-pending') {
+      resetCall();
+      return;
+    }
     hangupRequestKey = callId;
     try {
       const workNo = getWorkNo();
@@ -197,6 +231,17 @@ export const useCallStore = defineStore('call', () => {
     }
   }
 
+  function handleAcwTimeout() {
+    showAcwDrawer.value = false;
+    applyLifecycle({ type: 'ACW_COMPLETED' });
+    currentCall.value = null;
+    durationSeconds.value = 0;
+    isHeld.value = false;
+    isMuted.value = false;
+    holdRequested.value = false;
+    controlMessage.value = '';
+  }
+
   return {
     callState,
     currentCall,
@@ -209,12 +254,15 @@ export const useCallStore = defineStore('call', () => {
     showAcwDrawer,
     triggerIncoming,
     startOutbound,
+    resetCall,
+    handleIncomingSipSession,
     answerCall,
     observeAnswered,
     rejectCall,
     hangupCall,
     observeEnded,
     closeAcw,
+    handleAcwTimeout,
     toggleHold,
     toggleMute,
     sendDtmf,

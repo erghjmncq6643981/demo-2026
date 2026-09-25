@@ -69,7 +69,7 @@ sa-token:
   timeout: 86400
   active-timeout: -1
   is-concurrent: true
-  is-share: true
+  is-share: false
   token-style: uuid
   is-log: false
   is-read-head: true

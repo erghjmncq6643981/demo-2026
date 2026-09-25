@@ -341,9 +341,9 @@ public class PhoneBindingService implements SystemFlowRuntime {
                 )
                 .minDigits(minWorkNoDigits)
                 .maxDigits(maxWorkNoDigits)
-                .tries(1)
-                .timeout(60_000)
-                .digitTimeout(10_000)
+                .tries(call.getData().get("bindingTries") instanceof Number n ? n.intValue() : 3)
+                .timeout(call.getData().get("bindingTimeout") instanceof Number n ? n.intValue() : 4000)
+                .digitTimeout(call.getData().get("bindingDigitTimeout") instanceof Number n ? n.intValue() : 4000)
                 .terminators("#")
                 .regex("^[0-9]+$")
                 .actionAfter(FNodeDtmfPostAction.PARK)
@@ -470,10 +470,13 @@ public class PhoneBindingService implements SystemFlowRuntime {
             JsonNode parameters = definition.path("parameters");
             String promptText = parameters.path("promptText").asText().trim();
             JsonNode resultParameters = null;
+            JsonNode collectParameters = null;
             for (JsonNode node : definition.path("nodes")) {
-                if ("RESULT".equals(node.path("key").asText())) {
+                String nodeKey = node.path("key").asText();
+                if ("RESULT".equals(nodeKey)) {
                     resultParameters = node.path("parameters");
-                    break;
+                } else if ("COLLECT_CODE".equals(nodeKey)) {
+                    collectParameters = node.path("parameters");
                 }
             }
             String successText = resultParameters == null
@@ -488,6 +491,28 @@ public class PhoneBindingService implements SystemFlowRuntime {
             call.putData(DATA_PROMPT_TEXT, promptText);
             call.putData(DATA_SUCCESS_TEXT, successText);
             call.putData(DATA_FAILURE_TEXT, failureText);
+
+            int tries = 3;
+            int timeout = 4000;
+            int digitTimeout = 4000;
+            if (collectParameters != null) {
+                if (collectParameters.has("tries")) {
+                    tries = collectParameters.path("tries").asInt(3);
+                }
+                if (collectParameters.has("timeoutSeconds")) {
+                    timeout = collectParameters.path("timeoutSeconds").asInt(4) * 1000;
+                } else if (collectParameters.has("timeout")) {
+                    timeout = collectParameters.path("timeout").asInt(4000);
+                }
+                if (collectParameters.has("digitTimeoutMs")) {
+                    digitTimeout = collectParameters.path("digitTimeoutMs").asInt(4000);
+                } else if (collectParameters.has("digitTimeout")) {
+                    digitTimeout = collectParameters.path("digitTimeout").asInt(4000);
+                }
+            }
+            call.putData("bindingTries", tries);
+            call.putData("bindingTimeout", timeout);
+            call.putData("bindingDigitTimeout", digitTimeout);
             return true;
         } catch (Exception invalidDefinition) {
             return false;

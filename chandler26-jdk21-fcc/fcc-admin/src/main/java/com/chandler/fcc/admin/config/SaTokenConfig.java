@@ -1,5 +1,6 @@
 package com.chandler.fcc.admin.config;
 
+import cn.dev33.satoken.context.SaHolder;
 import cn.dev33.satoken.interceptor.SaInterceptor;
 import cn.dev33.satoken.stp.StpUtil;
 import com.chandler.fcc.admin.service.AuthService;
@@ -27,6 +28,10 @@ public class SaTokenConfig implements WebMvcConfigurer {
     @Override
     public void addInterceptors(InterceptorRegistry registry) {
         registry.addInterceptor(new SaInterceptor(handle -> {
+                    // 放行所有 preflight OPTIONS 预检请求，避免跨域预检被鉴权阻断
+                    if ("OPTIONS".equalsIgnoreCase(SaHolder.getRequest().getMethod())) {
+                        return;
+                    }
                     StpUtil.checkLogin();
                     authService.revalidateCurrentSession();
                 }))

@@ -1,15 +1,21 @@
 package com.chandler.fcc.server.call.application;
 
+import com.chandler.fcc.common.dto.WsMessageDTO;
+import com.chandler.fcc.common.enums.WsMessageTypeEnum;
 import com.chandler.fcc.server.agent.infrastructure.AgentRuntimeMapper;
 import com.chandler.fcc.server.call.infrastructure.AfterCallMapper;
 import com.chandler.fcc.server.telephony.application.AgentIdentityService;
+import com.chandler.fcc.server.websocket.service.AgentWebSocketService;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import java.time.Instant;
+import java.util.List;
 import java.util.Map;
 import java.util.Set;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.http.HttpStatus;
+import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.support.TransactionTemplate;
 import org.springframework.web.server.ResponseStatusException;
@@ -27,8 +33,12 @@ public class AfterCallService {
     private final AfterCallMapper mapper;
     private final AgentRuntimeMapper agents;
     private final AgentIdentityService identity;
+    private final AgentWebSocketService websocket;
     private final TransactionTemplate transactions;
     private final ObjectMapper objectMapper;
+
+    @Value("${fcc.agent.acw-timeout-seconds:30}")
+    private int acwTimeoutSeconds;
 
     /**
      * 保存当前坐席已结束通话的小结，重复请求保留首次结果。
@@ -108,6 +118,32 @@ public class AfterCallService {
             );
         } catch (Exception failure) {
             throw new IllegalStateException("话后小结序列化失败", failure);
+        }
+    }
+
+    /**
+     * 定期巡检超期未处理的 ACW 坐席，自动置闲并广播态势通知。
+     */
+    @Scheduled(fixedDelay = 5000)
+    public void reapAcwTimeouts() {
+        if (acwTimeoutSeconds <= 0) return;
+        List<Map<String, Object>> expired = agents.findExpiredAcwAgents(acwTimeoutSeconds);
+        if (expired == null || expired.isEmpty()) return;
+        int count = agents.expireAcw(acwTimeoutSeconds);
+        if (count > 0) {
+            log.info("[话后整理] 超时自动置闲: 清理了 {} 个超期 ACW 坐席 (阈值 {}s)", count, acwTimeoutSeconds);
+            for (Map<String, Object> agent : expired) {
+                String workNo = (String) agent.get("workNo");
+                websocket.sendToWorkNo(
+                    workNo,
+                    WsMessageDTO.of(
+                        WsMessageTypeEnum.AGENT_PRESENCE_CHANGE.getCode(),
+                        workNo,
+                        null,
+                        Map.of("workStatus", "READY", "reason", "ACW_TIMEOUT")
+                    )
+                );
+            }
         }
     }
 }

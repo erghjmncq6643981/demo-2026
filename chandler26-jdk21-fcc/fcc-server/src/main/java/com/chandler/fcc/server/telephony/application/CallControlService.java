@@ -4,7 +4,10 @@ import com.chandler.fcc.common.dto.command.FNodeHangupDTO;
 import com.chandler.fcc.common.dto.command.FNodeTransferDTO;
 import com.chandler.fcc.common.entity.CallInfoBO;
 import com.chandler.fcc.common.entity.FNodeResult;
+import com.chandler.fcc.common.enums.CallStageState;
+import com.chandler.fcc.common.enums.DirectionType;
 import com.chandler.fcc.common.enums.FlowActionType;
+import com.chandler.fcc.common.enums.FlowModelType;
 import com.chandler.fcc.server.call.CallSessionManager;
 import com.chandler.fcc.server.command.FccClient;
 import com.chandler.fcc.server.flow.application.FlowActionExecutionService;
@@ -12,6 +15,7 @@ import java.util.LinkedHashSet;
 import java.util.Map;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
 import org.springframework.web.server.ResponseStatusException;
@@ -30,6 +34,9 @@ public class CallControlService {
     private final FccClient client;
     private final FlowActionExecutionService actions;
     private final AgentIdentityService identity;
+
+    @Autowired(required = false)
+    private CallTransferService transferService;
 
     /**
      * 取得当前坐席拥有的明确通话，禁止回落到全局最近会话。
@@ -59,7 +66,10 @@ public class CallControlService {
     }
 
     /**
-     * 下发双方挂机命令，保留会话直至真实结束事件到达。
+     * 下发挂机命令，保留会话直至真实结束事件到达。
+     *
+     * <p>呼入人工客服中坐席主动挂机时仅挂断坐席侧话道，保留客户侧话道以进入服务评价；
+     * 其他场景或未接通时按既有逻辑挂断。</p>
      *
      * @param call 已授权会话
      * @return 指令受理响应
@@ -67,11 +77,18 @@ public class CallControlService {
      */
     public Map<String, Object> hangup(CallInfoBO call) {
         var channels = new LinkedHashSet<String>();
-        if (call.getGuestChannelUuid() != null) {
-            channels.add(channel(call.getGuestChannelUuid()));
-        }
-        if (call.getAgentChannelUuid() != null) {
+        boolean agentInConnectedCall = call.getStageState() == CallStageState.CONNECTED
+            && call.getAgentChannelUuid() != null
+            && call.getGuestChannelUuid() != null;
+        if (agentInConnectedCall) {
             channels.add(channel(call.getAgentChannelUuid()));
+        } else {
+            if (call.getGuestChannelUuid() != null) {
+                channels.add(channel(call.getGuestChannelUuid()));
+            }
+            if (call.getAgentChannelUuid() != null) {
+                channels.add(channel(call.getAgentChannelUuid()));
+            }
         }
         if (channels.isEmpty()) {
             throw new ResponseStatusException(HttpStatus.CONFLICT, "话道尚未确认");
@@ -137,6 +154,9 @@ public class CallControlService {
     public Map<String, Object> transfer(CallInfoBO call, String target) {
         if (target == null || !target.matches("[+0-9]{1,32}")) {
             throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "无效转接号码");
+        }
+        if (transferService != null) {
+            return transferService.initiateTransfer(call, target);
         }
         actions.executeFNode(
             call,

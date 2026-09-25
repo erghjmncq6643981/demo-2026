@@ -1,6 +1,6 @@
 import type { AnswerEndpointType } from '../../../types/telephony';
 
-/** 坐席可选择的已验证接听终端。 */
+/** 坐席可选择的已验证接听方式。 */
 export interface EndpointOption {
   key: string;
   type: AnswerEndpointType;
@@ -25,7 +25,7 @@ export function buildEndpointOptions(facts: EndpointFacts): EndpointOption[] {
         key: endpointKey('WEBRTC', webrtc),
         type: 'WEBRTC',
         value: webrtc,
-        label: 'WebRTC 软话机',
+        label: 'WebRTC软电话',
         detail: `工号分机 ${webrtc}`,
       }]
     : [];
@@ -35,7 +35,7 @@ export function buildEndpointOptions(facts: EndpointFacts): EndpointOption[] {
       key: endpointKey('SIP', extension),
       type: 'SIP',
       value: extension,
-      label: 'SIP 话机',
+      label: 'SIP话机',
       detail: `分机 ${extension}`,
     });
   });
@@ -45,7 +45,7 @@ export function buildEndpointOptions(facts: EndpointFacts): EndpointOption[] {
       key: endpointKey('MOBILE', facts.mobilePhone),
       type: 'MOBILE',
       value: facts.mobilePhone,
-      label: '手机接听',
+      label: '手机',
       detail: '能力尚未开放',
       disabled: true,
     });

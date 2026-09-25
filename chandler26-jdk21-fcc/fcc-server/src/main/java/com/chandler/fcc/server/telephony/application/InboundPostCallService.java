@@ -35,7 +35,9 @@ public class InboundPostCallService {
     private static final String DATA_CLOSING_PENDING = "closingVoicePending";
     private static final String DATA_CLOSING_ACCEPTED = "closingVoiceAccepted";
     private static final String DATA_CLOSING_HANGUP_REQUESTED = "closingVoiceHangupRequested";
-    private static final int RATING_TIMEOUT_MILLIS = 10_000;
+    private static final int RATING_WAIT_TIMEOUT_MILLIS = 3_000; // 间隔 3s
+    private static final int RATING_MAX_TRIES = 2; // 最多重复 2 次
+    private static final int RATING_WATCHDOG_MILLIS = 60_000; // 后端防挂死 Watchdog 60s
 
     private final FlowActionExecutionService actions;
     private final CallPersistenceService persistence;
@@ -60,7 +62,7 @@ public class InboundPostCallService {
         if (call.getData().putIfAbsent(DATA_RATING_PENDING, true) != null) {
             return true;
         }
-        call.putData(DATA_RATING_DEADLINE, System.currentTimeMillis() + RATING_TIMEOUT_MILLIS);
+        call.putData(DATA_RATING_DEADLINE, System.currentTimeMillis() + RATING_WATCHDOG_MILLIS);
         persistence.saveOrUpdateSession(call);
         try {
             actions.executeFNode(
@@ -71,17 +73,17 @@ public class InboundPostCallService {
                     .uuid(call.getGuestChannelUuid())
                     .media(
                         MediaInfo.builder()
-                            .type(FNodeMediaType.FILE)
+                            .type(mediaType(ratingPromptFile))
                             .data(ratingPromptFile)
                             .build()
                     )
                     .minDigits(1)
                     .maxDigits(1)
-                    .tries(1)
-                    .timeout(RATING_TIMEOUT_MILLIS)
+                    .tries(RATING_MAX_TRIES)
+                    .timeout(RATING_WAIT_TIMEOUT_MILLIS)
                     .digitTimeout(1_000)
                     .terminators("#")
-                    .regex("^[1-5]$")
+                    .regex("[1-5]")
                     .actionAfter(FNodeDtmfPostAction.PARK)
                     .build(),
                 "service-rating-" + call.getCallId()
@@ -200,7 +202,7 @@ public class InboundPostCallService {
                     .uuid(call.getGuestChannelUuid())
                     .media(
                         MediaInfo.builder()
-                            .type(FNodeMediaType.FILE)
+                            .type(mediaType(closingPromptFile))
                             .data(closingPromptFile)
                             .build()
                     )
@@ -245,5 +247,11 @@ public class InboundPostCallService {
                 .build(),
             "rating-hangup-" + call.getCallId()
         );
+    }
+
+    private FNodeMediaType mediaType(String prompt) {
+        return prompt != null && prompt.startsWith("/")
+            ? FNodeMediaType.FILE
+            : FNodeMediaType.TEXT;
     }
 }

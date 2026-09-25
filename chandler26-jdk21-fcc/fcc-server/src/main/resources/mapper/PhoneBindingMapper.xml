@@ -52,7 +52,7 @@
   <update id="clearExtensions">
     UPDATE fcc_extension
     SET agent_work_no = NULL, agent_name = NULL
-    WHERE agent_work_no = #{owner} OR extension = #{extension}
+    WHERE (agent_work_no = #{owner} AND endpoint_type = 'SIP') OR extension = #{extension}
   </update>
   <update id="bindExtension">
     UPDATE fcc_extension e

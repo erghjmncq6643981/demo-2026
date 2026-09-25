@@ -41,7 +41,7 @@ async function change(event: Event) {
     endpointKey(selected.type, selected.value) === currentKey.value
   ) return;
   if (callBlocksSwitch.value) {
-    toastError('当前通话尚未结束，不能切换接听终端');
+    toastError('当前通话尚未结束，不能切换接听方式');
     return;
   }
   try {
@@ -55,17 +55,17 @@ async function change(event: Event) {
 <template>
   <!-- Horizontal layout (default): label on the left -->
   <div v-if="props.layout === 'horizontal'" class="flex items-center gap-2.5">
-    <span class="text-xs font-bold text-slate-600 shrink-0 select-none">接听终端</span>
+    <span class="text-xs font-bold text-slate-600 shrink-0 select-none">接听方式</span>
     <div class="relative flex items-center">
       <select
         :value="currentKey"
         :disabled="disabled"
-        aria-label="切换接听终端"
+        aria-label="切换接听方式"
         class="h-9 bg-slate-50 hover:bg-slate-100/80 focus:bg-white border border-slate-200/90 rounded-xl px-3 py-1.5 text-xs font-bold text-slate-800 focus:outline-none focus:ring-2 focus:ring-brand-500/20 focus:border-brand-500 transition shadow-2xs cursor-pointer disabled:bg-slate-100 disabled:text-slate-400 disabled:cursor-not-allowed max-w-[280px]"
         @change="change"
       >
-        <option v-if="agentStore.endpointsLoading" :value="currentKey">正在加载终端…</option>
-        <option v-else-if="!options.length" :value="currentKey">没有可用接听终端</option>
+        <option v-if="agentStore.endpointsLoading" :value="currentKey">正在加载接听方式…</option>
+        <option v-else-if="!options.length" :value="currentKey">没有可用接听方式</option>
         <option
           v-for="option in options"
           :key="option.key"
@@ -91,7 +91,7 @@ async function change(event: Event) {
   <!-- Vertical layout: heading on top -->
   <div v-else class="min-w-full">
     <div class="flex items-center justify-between mb-1.5 text-slate-600 text-xs font-extrabold">
-      <span>接听终端</span>
+      <span>接听方式</span>
       <button
         v-if="agentStore.endpointError"
         type="button"
@@ -106,12 +106,12 @@ async function change(event: Event) {
       <select
         :value="currentKey"
         :disabled="disabled"
-        aria-label="切换接听终端"
+        aria-label="切换接听方式"
         class="w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-2 text-xs font-bold text-slate-800 focus:outline-none focus:ring-2 focus:ring-brand-500/20 focus:border-brand-500"
         @change="change"
       >
-        <option v-if="agentStore.endpointsLoading" :value="currentKey">正在加载终端…</option>
-        <option v-else-if="!options.length" :value="currentKey">没有可用接听终端</option>
+        <option v-if="agentStore.endpointsLoading" :value="currentKey">正在加载接听方式…</option>
+        <option v-else-if="!options.length" :value="currentKey">没有可用接听方式</option>
         <option
           v-for="option in options"
           :key="option.key"

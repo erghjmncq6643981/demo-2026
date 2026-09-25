@@ -10,7 +10,7 @@ spring:
     driver-class-name: com.mysql.cj.jdbc.Driver
     url: jdbc:mysql://${MYSQL_HOST:127.0.0.1}:${MYSQL_PORT:3306}/${MYSQL_DATABASE:chandler26_fcc}?useUnicode=true&characterEncoding=utf-8&serverTimezone=UTC&useSSL=false&allowPublicKeyRetrieval=true
     username: ${MYSQL_USERNAME:fcc}
-    password: ${MYSQL_PASSWORD:}
+    password: ${MYSQL_PASSWORD:123456}
   data:
     redis:
       host: ${REDIS_HOST:127.0.0.1}
@@ -28,6 +28,8 @@ mybatis-plus:
       id-type: input
 
 fcc:
+  agent:
+    acw-timeout-seconds: ${FCC_ACW_TIMEOUT_SECONDS:30}
   outbound:
     enabled: ${FCC_OUTBOUND_ENABLED:false}
     max-in-flight: ${FCC_OUTBOUND_MAX_IN_FLIGHT:5}
@@ -37,9 +39,9 @@ fcc:
     timezone: ${FCC_OUTBOUND_TIMEZONE:Asia/Shanghai}
     # Java 只发送业务文案；Sidecar 使用配置的 TTS provider 合成共享音频。
   inbound:
-    # 服务评价和结束语音为预设共享音频，必须同时配置才启用评价流程。
-    service-rating-prompt-file: ${FCC_SERVICE_RATING_PROMPT_FILE:}
-    closing-prompt-file: ${FCC_CLOSING_PROMPT_FILE:}
+    # 服务评价和结束语音为预设共享音频或 TTS 文本，必须同时配置才启用评价流程。
+    service-rating-prompt-file: ${FCC_SERVICE_RATING_PROMPT_FILE:为了不断提升我们的服务质量，请对本次服务进行评价：非常满意请按1，满意请按2，基本满意请按3，不满意请按4，非常不满意请按5。}
+    closing-prompt-file: ${FCC_CLOSING_PROMPT_FILE:非常感谢您的评价，祝您生活愉快，再见！}
   binding:
     # 提示与结果文案来自 SYSTEM_PHONE_BINDING，Java 不配置 FreeSWITCH 音频路径。
     work-no-min-digits: ${FCC_BINDING_WORK_NO_MIN_DIGITS:2}

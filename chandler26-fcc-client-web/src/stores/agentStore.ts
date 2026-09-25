@@ -25,6 +25,10 @@ export const useAgentStore = defineStore('agent', () => {
   const extension = ref(localStorage.getItem('fcc_agent_extension') || '');
   const serviceGroup = ref('');
 
+  // FreeSWITCH WebRTC 接入配置（从 Server 仅拉取一次并持有）
+  const sipConfig = ref<{ extension: string; wsUrl: string; domain: string; password: string } | null>(null);
+  const sipConfigLoading = ref(false);
+
   // 三端具体配置
   const webrtcWorkNo = ref(localStorage.getItem('fcc_webrtc_workno') || '');
   const boundSipExtension = ref(localStorage.getItem('fcc_bound_sip_extension') || '');
@@ -99,10 +103,27 @@ export const useAgentStore = defineStore('agent', () => {
       const response = await authApi.endpoints();
       if (response?.data) applyEndpointData(response.data);
     } catch (err) {
-      endpointError.value = errorText(err, '接听终端加载失败');
+      endpointError.value = errorText(err, '接听方式加载失败');
     } finally {
       endpointsLoading.value = false;
     }
+  }
+
+  async function loadSipConfig(force = false) {
+    if (!token.value || (sipConfig.value && !force)) return sipConfig.value;
+    sipConfigLoading.value = true;
+    try {
+      const res = await authApi.sipConfig();
+      if (res?.data) {
+        sipConfig.value = res.data;
+        return res.data;
+      }
+    } catch (err) {
+      console.warn('获取本人 SIP 配置失败:', err);
+    } finally {
+      sipConfigLoading.value = false;
+    }
+    return null;
   }
 
   async function switchEndpoint(targetType: AnswerEndpointType, targetValue?: string) {
@@ -113,10 +134,10 @@ export const useAgentStore = defineStore('agent', () => {
     try {
       const response = await authApi.switchEndpoint({ endpointType: targetType, endpointValue: targetValue });
       if (response?.data) applyEndpointData(response.data);
-      toastSuccess('接听终端已切换');
+      toastSuccess('接听方式已切换');
       return response?.data;
     } catch (cause) {
-      endpointError.value = errorText(cause, '接听终端切换失败');
+      endpointError.value = errorText(cause, '接听方式切换失败');
       throw cause;
     } finally {
       endpointSwitching.value = false;
@@ -124,6 +145,9 @@ export const useAgentStore = defineStore('agent', () => {
   }
 
   async function login(workNumber: string, pass: string) {
+    localStorage.removeItem('fcc_agent_satoken');
+    token.value = null;
+
     const res = await authApi.login({
       username: workNumber,
       password: pass,
@@ -148,6 +172,7 @@ export const useAgentStore = defineStore('agent', () => {
       localStorage.setItem('fcc_agent_role', data.role);
 
       await loadEndpoints();
+      await loadSipConfig();
       await refreshRuntimeState();
       return data;
     } else {
@@ -164,6 +189,7 @@ export const useAgentStore = defineStore('agent', () => {
       // ignore
     } finally {
       token.value = null;
+      sipConfig.value = null;
       loginStatus.value = 'LOGOUT';
       workStatus.value = 'UNREADY';
       runtimeCallId.value = '';
@@ -179,6 +205,16 @@ export const useAgentStore = defineStore('agent', () => {
     }
   }
 
+  if (typeof window !== 'undefined') {
+    window.addEventListener('fcc:auth-expired', () => {
+      token.value = null;
+      sipConfig.value = null;
+      loginStatus.value = 'LOGOUT';
+      workStatus.value = 'UNREADY';
+      runtimeCallId.value = '';
+    });
+  }
+
   return {
     token,
     workNo,
@@ -192,6 +228,8 @@ export const useAgentStore = defineStore('agent', () => {
     endpoint,
     extension,
     serviceGroup,
+    sipConfig,
+    sipConfigLoading,
     webrtcWorkNo,
     boundSipExtension,
     boundMobile,
@@ -204,6 +242,7 @@ export const useAgentStore = defineStore('agent', () => {
     setLoginStatus,
     setEndpoint,
     loadEndpoints,
+    loadSipConfig,
     refreshRuntimeState,
     switchEndpoint,
     login,

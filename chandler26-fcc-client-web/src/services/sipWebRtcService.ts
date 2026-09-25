@@ -289,19 +289,6 @@ class SipWebRtcService {
     this.mediaState.value = 'NEGOTIATING';
     this.mediaMessage.value = '正在协商通话媒体';
 
-    if (direction === 'incoming') {
-      this.sessionState.value = 'RINGING';
-      const caller = String(session.remote_identity?.uri?.user || '外部来电');
-      this.incomingCaller.value = caller;
-      this.onIncomingCallCallback?.({
-        sessionId,
-        callId: registration.binding?.callId ?? undefined,
-        caller,
-      });
-    } else {
-      this.sessionState.value = 'CALLING';
-    }
-
     this.listenSession(context, 'peerconnection', (event: any) => {
       this.attachPeerConnection(sessionId, context, event.peerconnection as RTCPeerConnection);
     });
@@ -321,6 +308,19 @@ class SipWebRtcService {
     this.listenSession(context, 'failed', (event: any) => {
       this.handleTerminalSession(sessionId, String(event?.cause || 'FAILED'));
     });
+
+    if (direction === 'incoming') {
+      this.sessionState.value = 'RINGING';
+      const caller = String(session.remote_identity?.uri?.user || '外部来电');
+      this.incomingCaller.value = caller;
+      this.onIncomingCallCallback?.({
+        sessionId,
+        callId: registration.binding?.callId ?? undefined,
+        caller,
+      });
+    } else {
+      this.sessionState.value = 'CALLING';
+    }
   }
 
   private handleConfirmed(sessionId: string, context: SessionContext): void {
@@ -329,9 +329,10 @@ class SipWebRtcService {
     this.sessionState.value = 'CONNECTED';
     this.mediaState.value = 'CONNECTED';
     this.mediaMessage.value = '通话媒体已连接';
-    if (binding.callId && context.connectedNotifiedCallId !== binding.callId) {
-      context.connectedNotifiedCallId = binding.callId;
-      this.onCallConnectedCallback?.({ sessionId, callId: binding.callId });
+    const effectiveCallId = binding.callId || undefined;
+    if (context.connectedNotifiedCallId !== (effectiveCallId || sessionId)) {
+      context.connectedNotifiedCallId = effectiveCallId || sessionId;
+      this.onCallConnectedCallback?.({ sessionId, callId: effectiveCallId });
     }
   }
 
@@ -444,9 +445,16 @@ class SipWebRtcService {
     }
   }
 
-  private getActiveContext(): SessionContext | null {
+  public getActiveContext(): SessionContext | null {
     const active = this.registry.getActive();
-    return active ? this.sessions.get(active.sessionId) ?? null : null;
+    if (active) {
+      const ctx = this.sessions.get(active.sessionId);
+      if (ctx) return ctx;
+    }
+    if (this.sessions.size === 1) {
+      return this.sessions.values().next().value ?? null;
+    }
+    return null;
   }
 
   private resolveSessionId(session: any): string {
