@@ -138,8 +138,9 @@ class CallTransferServiceTest {
         verify(client).nativeAPI("uuid_break", "uuid-a-agent all");
         verify(client).nativeAPI("uuid_break", "uuid-b-guest all");
 
-        // 验证恢复 hangup_after_bridge
-        verify(client).nativeAPI("uuid_setvar", "uuid-b-guest hangup_after_bridge true");
+        // 验证设置 B 在 C 挂断后 park 等待服务评价，C 随 B 挂机
+        verify(client, times(2)).nativeAPI("uuid_setvar", "uuid-b-guest hangup_after_bridge false");
+        verify(client, times(2)).nativeAPI("uuid_setvar", "uuid-b-guest park_after_bridge true");
         verify(client).nativeAPI("uuid_setvar", uuidC + " hangup_after_bridge true");
 
         // 验证桥接 B 与 C

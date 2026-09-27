@@ -262,8 +262,9 @@ public class CallTransferService {
             client.nativeAPI("uuid_break", uuidA + " all");
             client.nativeAPI("uuid_break", uuidB + " all");
 
-            // 2. 恢复 B 和 C 的 hangup_after_bridge
-            client.nativeAPI("uuid_setvar", uuidB + " hangup_after_bridge true");
+            // 2. 保持客户话道 B 在 C 挂机后不被 FreeSWITCH 自动销毁，驻留等待服务评价；目标 C 随 B 挂机而挂断
+            client.nativeAPI("uuid_setvar", uuidB + " hangup_after_bridge false");
+            client.nativeAPI("uuid_setvar", uuidB + " park_after_bridge true");
             client.nativeAPI("uuid_setvar", uuidC + " hangup_after_bridge true");
 
             // 3. 桥接 B 与 C

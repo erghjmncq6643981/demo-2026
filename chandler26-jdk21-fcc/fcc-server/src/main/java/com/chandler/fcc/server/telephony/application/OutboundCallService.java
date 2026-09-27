@@ -560,10 +560,7 @@ public class OutboundCallService implements SystemFlowRuntime {
                     channelUuid.equals(call.getAgentChannelUuid()) &&
                     !channelUuid.equals(call.getGuestChannelUuid())
                 ) {
-                    if (Boolean.TRUE.equals(call.getData().get("transferSuccess"))) {
-                        log.info("[外呼事件] 转接后目标分机挂机，跳过服务评价并结束通话 callId={}", call.getCallId());
-                        finish(call, template, channelUuid, params);
-                    } else if (Boolean.TRUE.equals(call.getData().get("transferPending")) ||
+                    if (Boolean.TRUE.equals(call.getData().get("transferPending")) ||
                         Boolean.TRUE.equals(call.getData().get("transferAborted"))) {
                         log.info("[外呼事件] 通话处于转接中或转接异常，跳过服务评价 callId={}", call.getCallId());
                     } else {
@@ -877,11 +874,13 @@ public class OutboundCallService implements SystemFlowRuntime {
                 agents.release(call.getAgentWorkNo(), call.getCallId());
                 persistence.saveOrUpdateSession(call);
             });
-            websocket.pushCallHangup(
-                call.getAgentWorkNo(),
-                call.getCallId(),
-                Map.of("cause", cause == null || cause.isBlank() ? "NORMAL_CLEARING" : cause)
-            );
+            if (call.getAgentWorkNo() != null && !Boolean.TRUE.equals(call.getData().get("transferSuccess"))) {
+                websocket.pushCallHangup(
+                    call.getAgentWorkNo(),
+                    call.getCallId(),
+                    Map.of("cause", cause == null || cause.isBlank() ? "NORMAL_CLEARING" : cause)
+                );
+            }
         }
         if (!postCall.begin(call)) {
             finish(call, template, call.getAgentChannelUuid(), null);

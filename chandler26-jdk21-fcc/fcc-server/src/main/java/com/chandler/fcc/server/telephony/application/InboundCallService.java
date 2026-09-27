@@ -201,12 +201,9 @@ public class InboundCallService implements SystemFlowRuntime {
                     uuid.equals(call.getAgentChannelUuid()) &&
                     !uuid.equals(call.getGuestChannelUuid())
                 ) {
-                    if (Boolean.TRUE.equals(call.getData().get("transferSuccess"))) {
-                        log.info("[呼入事件] 转接后目标分机挂机，跳过服务评价并结束通话 callId={}", call.getCallId());
-                        finish(call, params.path(FccEventField.CAUSE.getWireName()).asText("NORMAL_CLEARING"));
-                    } else if (Boolean.TRUE.equals(call.getData().get("transferPending")) ||
+                    if (Boolean.TRUE.equals(call.getData().get("transferPending")) ||
                         Boolean.TRUE.equals(call.getData().get("transferAborted"))) {
-                        log.info("[呼入事件] 通话处于转接中或已转接，跳过服务评价 callId={}", call.getCallId());
+                        log.info("[呼入事件] 通话处于转接中或转接异常，跳过服务评价 callId={}", call.getCallId());
                     } else {
                         beginPostCall(call, params.path(FccEventField.CAUSE.getWireName()).asText());
                     }
@@ -531,11 +528,13 @@ public class InboundCallService implements SystemFlowRuntime {
                 release(call);
                 persistence.saveOrUpdateSession(call);
             });
-            websocket.pushCallHangup(
-                call.getAgentWorkNo(),
-                call.getCallId(),
-                Map.of("cause", cause == null || cause.isBlank() ? "NORMAL_CLEARING" : cause)
-            );
+            if (call.getAgentWorkNo() != null && !Boolean.TRUE.equals(call.getData().get("transferSuccess"))) {
+                websocket.pushCallHangup(
+                    call.getAgentWorkNo(),
+                    call.getCallId(),
+                    Map.of("cause", cause == null || cause.isBlank() ? "NORMAL_CLEARING" : cause)
+                );
+            }
         }
         if (!postCall.begin(call)) {
             finish(call, cause == null || cause.isBlank() ? "NORMAL_CLEARING" : cause);
