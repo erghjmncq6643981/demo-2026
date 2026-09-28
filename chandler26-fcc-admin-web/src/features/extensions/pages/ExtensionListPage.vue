@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { computed, onMounted, reactive, ref } from 'vue';
-import { Plus, RefreshCw, Search, Trash2, X, PhoneCall, Radio, Laptop, ShieldAlert } from 'lucide-vue-next';
+import { Plus, RefreshCw, Search, Trash2, X, PhoneCall, Radio, Laptop, ShieldAlert, Eye, EyeOff, Copy, Key } from 'lucide-vue-next';
 import { extensionApi, type ExtensionVO } from '../api/extensionApi';
 import { confirmAction, errorText, toastError, toastSuccess, toastWarning } from '../../../utils/feedback';
 
@@ -15,6 +15,53 @@ const query = reactive({ extension: '', endpointType: '', onlineStatus: '' });
 
 const showCreate = ref(false);
 const createForm = reactive({ extension: '', password: '', endpointType: 'SIP' });
+
+const revealedPasswords = ref<Record<string, boolean>>({});
+const showEditPassword = ref(false);
+const editPasswordForm = reactive({ extension: '', password: '', showPassword: false });
+
+function toggleRevealPassword(ext: string) {
+  revealedPasswords.value[ext] = !revealedPasswords.value[ext];
+}
+
+async function copyPassword(row: ExtensionVO) {
+  if (!row.password) {
+    toastWarning(`分机 ${row.extension} 暂无可用明文密码`);
+    return;
+  }
+  try {
+    await navigator.clipboard.writeText(row.password);
+    toastSuccess(`分机 ${row.extension} 注册密码已复制到剪贴板`);
+  } catch {
+    toastError('复制密码失败，请手动选取复制');
+  }
+}
+
+function openEditPassword(row: ExtensionVO) {
+  editPasswordForm.extension = row.extension;
+  editPasswordForm.password = row.password || '';
+  editPasswordForm.showPassword = false;
+  showEditPassword.value = true;
+}
+
+async function submitUpdatePassword(): Promise<void> {
+  const pwd = editPasswordForm.password.trim();
+  if (!pwd) {
+    toastWarning('新注册密码不能为空');
+    return;
+  }
+  mutating.value = true;
+  try {
+    await extensionApi.updatePassword(editPasswordForm.extension, pwd);
+    toastSuccess(`分机 ${editPasswordForm.extension} 密码已更新并同步生效！`);
+    showEditPassword.value = false;
+    await loadExtensions();
+  } catch (err: any) {
+    toastError(`修改密码失败: ${errorText(err)}`);
+  } finally {
+    mutating.value = false;
+  }
+}
 
 const totalPages = computed(() => Math.max(1, Math.ceil(total.value / pageSize.value)));
 
@@ -217,6 +264,7 @@ onMounted(loadExtensions);
             <tr class="border-b border-slate-100 text-xs uppercase tracking-wider text-slate-400 font-bold">
               <th class="py-3.5 px-4">分机号</th>
               <th class="py-3.5 px-4">终端类型</th>
+              <th class="py-3.5 px-4">SIP 鉴权密码</th>
               <th class="py-3.5 px-4">注册状态</th>
               <th class="py-3.5 px-4">绑定坐席</th>
               <th class="py-3.5 px-4">信令注册地址</th>
@@ -225,13 +273,13 @@ onMounted(loadExtensions);
           </thead>
           <tbody class="divide-y divide-slate-100 text-sm text-slate-700">
             <tr v-if="loading && rows.length === 0">
-              <td colspan="6" class="py-12 text-center text-slate-400">
+              <td colspan="7" class="py-12 text-center text-slate-400">
                 <RefreshCw class="w-6 h-6 animate-spin mx-auto mb-2 text-brand-500" />
                 正在加载分机列表...
               </td>
             </tr>
             <tr v-else-if="rows.length === 0">
-              <td colspan="6" class="py-12 text-center text-slate-400 font-medium">
+              <td colspan="7" class="py-12 text-center text-slate-400 font-medium">
                 暂无匹配的分机档案
               </td>
             </tr>
@@ -248,6 +296,31 @@ onMounted(loadExtensions);
                   <Radio v-else class="w-3.5 h-3.5" />
                   {{ row.endpointType }}
                 </span>
+              </td>
+              <td class="py-4 px-4 font-mono text-xs">
+                <div v-if="row.password" class="inline-flex items-center gap-1.5 bg-slate-100/90 hover:bg-slate-200/70 px-2.5 py-1 rounded-lg border border-slate-200/80 transition-all">
+                  <span class="font-bold text-slate-800 tracking-wider font-mono">
+                    {{ revealedPasswords[row.extension] ? row.password : '••••••••' }}
+                  </span>
+                  <button
+                    type="button"
+                    @click="toggleRevealPassword(row.extension)"
+                    class="text-slate-400 hover:text-slate-700 p-0.5 rounded transition cursor-pointer"
+                    :title="revealedPasswords[row.extension] ? '隐藏密码' : '查看分机密码'"
+                  >
+                    <EyeOff v-if="revealedPasswords[row.extension]" class="w-3.5 h-3.5" />
+                    <Eye v-else class="w-3.5 h-3.5" />
+                  </button>
+                  <button
+                    type="button"
+                    @click="copyPassword(row)"
+                    class="text-slate-400 hover:text-brand-600 p-0.5 rounded transition cursor-pointer"
+                    title="复制分机密码"
+                  >
+                    <Copy class="w-3.5 h-3.5" />
+                  </button>
+                </div>
+                <span v-else class="text-xs text-slate-300 font-sans">未设置</span>
               </td>
               <td class="py-4 px-4">
                 <span
@@ -272,7 +345,14 @@ onMounted(loadExtensions);
                 {{ row.registeredContact || row.registeredIp || '-' }}
               </td>
               <td class="py-4 px-4 text-right">
-                <div class="flex items-center justify-end gap-2">
+                <div class="flex items-center justify-end gap-1.5">
+                  <button
+                    @click="openEditPassword(row)"
+                    class="p-1.5 text-amber-600 hover:text-amber-700 hover:bg-amber-50 rounded-xl transition cursor-pointer"
+                    title="修改分机密码"
+                  >
+                    <Key class="w-4 h-4" />
+                  </button>
                   <button
                     @click="removeExtension(row)"
                     class="p-1.5 text-rose-500 hover:text-rose-700 hover:bg-rose-50 rounded-xl transition cursor-pointer"
@@ -385,6 +465,73 @@ onMounted(loadExtensions);
             class="px-5 py-2.5 bg-brand-500 hover:bg-brand-600 disabled:opacity-50 text-white rounded-xl font-bold shadow-xs transition cursor-pointer text-xs"
           >
             {{ mutating ? '提交中...' : '确认创建' }}
+          </button>
+        </div>
+      </form>
+    </div>
+
+    <!-- Edit Extension Password Modal -->
+    <div v-if="showEditPassword" class="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/50 backdrop-blur-xs p-4">
+      <form class="w-full max-w-md bg-white border border-slate-100 rounded-3xl p-6 shadow-popover space-y-4 animate-in fade-in zoom-in-95 duration-150" @submit.prevent="submitUpdatePassword">
+        <div class="flex items-center justify-between border-b border-slate-100 pb-3">
+          <h3 class="text-base font-black text-slate-900 flex items-center gap-2">
+            <Key class="w-5 h-5 text-amber-600" />
+            修改分机密码 ({{ editPasswordForm.extension }})
+          </h3>
+          <button type="button" @click="showEditPassword = false" class="text-slate-400 hover:text-slate-600 text-lg font-bold cursor-pointer">&times;</button>
+        </div>
+
+        <div class="space-y-3.5 text-xs">
+          <div>
+            <label class="block text-slate-700 font-bold mb-1">分机号</label>
+            <input
+              :value="editPasswordForm.extension"
+              disabled
+              class="w-full px-3.5 py-2.5 bg-slate-100 border border-slate-200 rounded-xl text-slate-500 font-mono font-medium cursor-not-allowed"
+            />
+          </div>
+
+          <div>
+            <label class="block text-slate-700 font-bold mb-1">新 SIP 注册密码 *</label>
+            <div class="relative">
+              <input
+                v-model="editPasswordForm.password"
+                :type="editPasswordForm.showPassword ? 'text' : 'password'"
+                autocomplete="new-password"
+                placeholder="输入新的 SIP 鉴权密码"
+                class="w-full px-3.5 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-slate-900 font-mono placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-amber-500 font-medium pr-10"
+              />
+              <button
+                type="button"
+                @click="editPasswordForm.showPassword = !editPasswordForm.showPassword"
+                class="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600 cursor-pointer"
+                :title="editPasswordForm.showPassword ? '隐藏明文' : '显示明文'"
+              >
+                <EyeOff v-if="editPasswordForm.showPassword" class="w-4 h-4" />
+                <Eye v-else class="w-4 h-4" />
+              </button>
+            </div>
+          </div>
+
+          <div class="p-2.5 rounded-xl bg-amber-50/80 border border-amber-200/80 text-[11px] text-amber-800">
+            ⚠️ 提示：修改密码后将加密保存并同步生效至 FreeSWITCH，物理 SIP 话机需要同步更新配置的密码方可保持正常注册。
+          </div>
+        </div>
+
+        <div class="flex items-center justify-end space-x-3 pt-3 border-t border-slate-100">
+          <button
+            type="button"
+            @click="showEditPassword = false"
+            class="px-4 py-2 text-slate-600 hover:text-slate-800 font-bold cursor-pointer transition text-xs"
+          >
+            取消
+          </button>
+          <button
+            type="submit"
+            :disabled="mutating"
+            class="px-5 py-2.5 bg-amber-600 hover:bg-amber-700 disabled:opacity-50 text-white rounded-xl font-bold shadow-xs transition cursor-pointer text-xs"
+          >
+            {{ mutating ? '保存中...' : '确认修改' }}
           </button>
         </div>
       </form>

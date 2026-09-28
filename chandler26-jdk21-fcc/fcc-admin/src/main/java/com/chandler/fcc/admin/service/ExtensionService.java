@@ -264,9 +264,20 @@ public class ExtensionService {
             }
         }
 
+        // 3. 解密分机注册密码 (供话机档案配置与管理人员查验维护)
+        String password = null;
+        if (entity.getCredentialSecret() != null && entity.getCredentialSecret().length > 0) {
+            try {
+                password = credentialCipher.decrypt(entity.getCredentialSecret());
+            } catch (Exception e) {
+                log.warn("[ExtensionService] 解密分机 {} 密码失败: {}", ext, e.getMessage());
+            }
+        }
+
         return ExtensionVO.builder()
                 .id(entity.getId())
                 .extension(entity.getExtension())
+                .password(password)
                 .endpointType(entity.getEndpointType())
                 .status(entity.getStatus())
                 .onlineStatus(onlineStatus)
@@ -276,5 +287,39 @@ public class ExtensionService {
                 .boundAgentWorkNo(boundWorkNo)
                 .createdAt(entity.getCreatedAt())
                 .build();
+    }
+
+    /**
+     * 更新分机密码并同步至 FreeSWITCH
+     *
+     * @param extension 分机号
+     * @param newPassword 新的明文密码
+     */
+    @Transactional(rollbackFor = Exception.class)
+    public void updatePassword(String extension, String newPassword) {
+        String ext = extension.trim();
+        String pwd = newPassword.trim();
+        LambdaQueryWrapper<ExtensionEntity> wrapper = new LambdaQueryWrapper<ExtensionEntity>()
+                .isNull(ExtensionEntity::getDeletedAt)
+                .eq(ExtensionEntity::getExtension, ext);
+        ExtensionEntity entity = extensionMapper.selectOne(wrapper);
+        if (entity == null) {
+            throw new IllegalArgumentException("分机不存在: " + ext);
+        }
+
+        byte[] encryptedSecret = credentialCipher.encrypt(pwd);
+        entity.setCredentialSecret(encryptedSecret);
+        entity.setUpdatedAt(LocalDateTime.now());
+        extensionMapper.updateById(entity);
+
+        // 同步下发至 Go Sidecar (写 XML 并 reloadxml)
+        try {
+            sidecarAdminClient.createExtension(ext, pwd);
+            log.info("[ExtensionService] Go Sidecar 同步更新分机密码成功: ext={}", ext);
+        } catch (Exception e) {
+            log.warn("[ExtensionService] Go Sidecar 更新分机密码异常: ext={}, error={}", ext, e.getMessage());
+        }
+
+        log.info("[ExtensionService] 成功更新分机密码: ext={}", ext);
     }
 }

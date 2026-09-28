@@ -32,6 +32,9 @@ public class ExtensionVO implements Serializable {
     @Schema(description = "分机号码", example = "1001")
     private String extension;
 
+    @Schema(description = "分机注册密码 (明文解密，便于话机配置维护)", example = "123456")
+    private String password;
+
     @Schema(description = "终端协议类型 (SIP, WEBRTC)", example = "SIP")
     private String endpointType;
 

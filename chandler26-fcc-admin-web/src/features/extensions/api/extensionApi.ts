@@ -4,6 +4,7 @@ import type { PageResult } from '../../../shared/api/page';
 export interface ExtensionVO {
   id: string;
   extension: string;
+  password?: string;
   endpointType: string;
   status: string;
   onlineStatus: string;
@@ -38,5 +39,8 @@ export const extensionApi = {
   },
   delete(id: string): Promise<void> {
     return apiClient.delete(`/extensions/${id}`);
+  },
+  updatePassword(extension: string, password: string): Promise<void> {
+    return apiClient.put(`/extensions/${extension}/password`, { password });
   },
 };

@@ -76,4 +76,24 @@ public class ExtensionController {
         extensionService.deleteExtension(id);
         return CommonResult.success();
     }
+
+    /**
+     * 修改分机注册密码并同步至 FreeSWITCH
+     *
+     * @param extension 分机号码
+     * @param body 请求体中的 password
+     * @return 操作成功响应
+     */
+    @Operation(summary = "修改分机注册密码并同步下发至FreeSWITCH")
+    @PutMapping("/{extension}/password")
+    public CommonResult<Void> updatePassword(
+            @PathVariable("extension") String extension,
+            @RequestBody java.util.Map<String, String> body) {
+        String newPassword = body != null ? body.get("password") : null;
+        if (newPassword == null || newPassword.trim().isEmpty()) {
+            throw new IllegalArgumentException("分机注册密码不能为空");
+        }
+        extensionService.updatePassword(extension, newPassword.trim());
+        return CommonResult.success();
+    }
 }
