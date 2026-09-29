@@ -17,6 +17,7 @@ import com.chandler.fcc.common.entity.CallInfoBO;
 import com.chandler.fcc.common.enums.FlowActionType;
 import com.chandler.fcc.common.protocol.ChannelEventState;
 import com.chandler.fcc.server.agent.infrastructure.AgentRuntimeMapper;
+import com.chandler.fcc.server.agent.infrastructure.data.AgentRuntimeStateData;
 import com.chandler.fcc.server.call.CallSessionManager;
 import com.chandler.fcc.server.command.FccClient;
 import com.chandler.fcc.server.flow.application.FlowActionExecutionService;
@@ -105,7 +106,8 @@ class OutboundCallServiceTest {
             transactions,
             mock(DialAttemptGuard.class),
             mock(CallRecordingService.class),
-            mock(InboundPostCallService.class)
+            mock(InboundPostCallService.class),
+            new CallAdmissionService(agents)
         );
     }
 
@@ -150,6 +152,9 @@ class OutboundCallServiceTest {
         when(agents.agentByEndpoint("1001")).thenReturn(
             Map.of("workNo", "901001", "endpointType", "SIP", "extension", "1001")
         );
+        AgentRuntimeStateData presence = new AgentRuntimeStateData();
+        presence.setLoginStatus("LOGIN");
+        when(agents.presence("901001")).thenReturn(presence);
         when(agents.reserveOriginated(eq("901001"), any())).thenReturn(1);
         when(routes.resolve("13800000000")).thenReturn(
             new OutboundRoutePolicy.Route("13800000000", "mobile", "4000000000")
@@ -197,6 +202,120 @@ class OutboundCallServiceTest {
             .getFirst();
         assertEquals("13800000000", destination.getDialString());
         assertEquals("mobile", destination.getContext());
+    }
+
+    /**
+     * 坐席离线退出(LOGOUT)时发起呼叫必须被准入拦截挂机，防止工位盗打。
+     */
+    @Test
+    void rejectsOfflineAgentOriginatedCall() {
+        when(agents.agentByEndpoint("1001")).thenReturn(
+            Map.of("workNo", "901001", "endpointType", "SIP", "extension", "1001")
+        );
+        AgentRuntimeStateData presence = new AgentRuntimeStateData();
+        presence.setLoginStatus("LOGOUT");
+        when(agents.presence("901001")).thenReturn(presence);
+
+        ObjectNode start = channelEvent("START", "agent-channel", "13800000000");
+        start.put("direction", "inbound");
+        start.put("context", "default");
+        start.putObject("params").put("authenticated_extension", "1001");
+
+        assertNull(
+            service.createAgentOriginated(
+                start,
+                "node-a",
+                ChannelEventState.START,
+                "agent-channel",
+                "ctrl-offline"
+            )
+        );
+        verify(client).hangup("ctrl-offline", "agent-channel", "CALL_REJECTED");
+        verify(persistence).recordRejectedCall(
+            eq("ctrl-offline"),
+            eq("1001"),
+            eq("13800000000"),
+            any(),
+            eq("AGENT_OFFLINE"),
+            any()
+        );
+        verify(routes, never()).resolve(any());
+    }
+
+    /**
+     * 拨打国际长途号码(00开头)必须被防盗打风控拦截挂机。
+     */
+    @Test
+    void rejectsInternationalDestinationAgentOriginatedCall() {
+        when(agents.agentByEndpoint("1001")).thenReturn(
+            Map.of("workNo", "901001", "endpointType", "SIP", "extension", "1001")
+        );
+        AgentRuntimeStateData presence = new AgentRuntimeStateData();
+        presence.setLoginStatus("LOGIN");
+        when(agents.presence("901001")).thenReturn(presence);
+
+        ObjectNode start = channelEvent("START", "agent-channel", "0085212345678");
+        start.put("direction", "inbound");
+        start.put("context", "default");
+        start.putObject("params").put("authenticated_extension", "1001");
+
+        assertNull(
+            service.createAgentOriginated(
+                start,
+                "node-a",
+                ChannelEventState.START,
+                "agent-channel",
+                "ctrl-intl"
+            )
+        );
+        verify(client).hangup("ctrl-intl", "agent-channel", "CALL_REJECTED");
+        verify(persistence).recordRejectedCall(
+            eq("ctrl-intl"),
+            eq("1001"),
+            eq("0085212345678"),
+            eq("901001"),
+            eq("FORBIDDEN_INTERNATIONAL"),
+            any()
+        );
+        verify(routes, never()).resolve(any());
+    }
+
+    /**
+     * 拨打高危声讯/特服号码(168/400等)必须被防盗打风控拦截挂机。
+     */
+    @Test
+    void rejectsPremiumServiceDestinationAgentOriginatedCall() {
+        when(agents.agentByEndpoint("1001")).thenReturn(
+            Map.of("workNo", "901001", "endpointType", "SIP", "extension", "1001")
+        );
+        AgentRuntimeStateData presence = new AgentRuntimeStateData();
+        presence.setLoginStatus("LOGIN_BUSY");
+        when(agents.presence("901001")).thenReturn(presence);
+
+        ObjectNode start = channelEvent("START", "agent-channel", "16888888");
+        start.put("direction", "inbound");
+        start.put("context", "default");
+        start.putObject("params").put("authenticated_extension", "1001");
+
+        assertNull(
+            service.createAgentOriginated(
+                start,
+                "node-a",
+                ChannelEventState.START,
+                "agent-channel",
+                "ctrl-premium"
+            )
+        );
+        verify(client).hangup("ctrl-premium", "agent-channel", "CALL_REJECTED");
+        verify(persistence).recordRejectedCall(
+            eq("ctrl-premium"),
+            eq("1001"),
+            eq("16888888"),
+            eq("901001"),
+            eq("FORBIDDEN_PREMIUM_PREFIX"),
+            any()
+        );
+        verify(routes, never()).resolve(any());
     }
 
     /**
@@ -252,6 +371,9 @@ class OutboundCallServiceTest {
         when(agents.agentByEndpoint("1001")).thenReturn(
             Map.of("workNo", "901001", "endpointType", "SIP", "extension", "1001")
         );
+        AgentRuntimeStateData presence = new AgentRuntimeStateData();
+        presence.setLoginStatus("LOGIN");
+        when(agents.presence("901001")).thenReturn(presence);
         when(agents.reserveOriginated(eq("901001"), any())).thenReturn(0);
         when(routes.resolve("13800000000")).thenReturn(
             new OutboundRoutePolicy.Route("13800000000", "mobile", "4000000000")

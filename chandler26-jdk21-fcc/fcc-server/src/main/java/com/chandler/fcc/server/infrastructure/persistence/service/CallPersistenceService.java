@@ -15,6 +15,7 @@ import java.time.LocalDateTime;
 import java.time.ZoneOffset;
 import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
 import java.util.Objects;
 import java.util.Optional;
 import lombok.RequiredArgsConstructor;
@@ -230,6 +231,65 @@ public class CallPersistenceService {
             );
             return existing;
         }
+    }
+
+    /**
+     * 持久化记录被安全风控或准入策略拦截的通话审计记录。
+     *
+     * @param ctrlId 控制标识
+     * @param callerNumber 主叫号码/分机
+     * @param destinationNumber 目标号码
+     * @param workNo 关联坐席工号，可为空
+     * @param reasonCode 拦截原因码
+     * @param reasonMessage 拦截原因描述
+     * @return 已落盘的会话实体
+     */
+    @Transactional(rollbackFor = Exception.class)
+    public CallSessionEntity recordRejectedCall(
+        String ctrlId,
+        String callerNumber,
+        String destinationNumber,
+        String workNo,
+        String reasonCode,
+        String reasonMessage
+    ) {
+        Long numericCallId = parseNumericId(IdUtil.getCallId());
+        LocalDateTime now = LocalDateTime.now(ZoneOffset.UTC);
+        CallSessionEntity entity = CallSessionEntity.builder()
+            .id(numericCallId)
+            .bizId("blocked-" + numericCallId)
+            .ctrlId(ctrlId != null && !ctrlId.isBlank() ? ctrlId : IdUtil.getCtrlId("rejected"))
+            .modelType("OUTBOUND_TWO_WAY_CALL")
+            .flowCode("AGENT_ORIGINATED")
+            .direction("OUTBOUND")
+            .callerNumber(callerNumber != null ? callerNumber : "")
+            .destinationNumber(destinationNumber != null ? destinationNumber : "")
+            .status(CallStageState.ERROR_END.name())
+            .result(reasonCode)
+            .hangupCause(reasonMessage)
+            .startedAt(now)
+            .endedAt(now)
+            .ringDurationMs(0L)
+            .talkDurationMs(0L)
+            .totalDurationMs(0L)
+            .primaryWorkNo(workNo)
+            .agentWorkNo(workNo)
+            .version(0L)
+            .createdAt(now)
+            .updatedAt(now)
+            .build();
+
+        try {
+            entity.setAttributes(objectMapper.writeValueAsString(Map.of(
+                "rejected", true,
+                "reasonCode", reasonCode,
+                "reasonMessage", reasonMessage
+            )));
+        } catch (Exception ignored) {}
+
+        callSessionMapper.insert(entity);
+        log.info("🛡️ [安全准入审计] 拦截话单落盘成功 callId={}, ctrlId={}, reason={}", numericCallId, entity.getCtrlId(), reasonCode);
+        return entity;
     }
 
     /**

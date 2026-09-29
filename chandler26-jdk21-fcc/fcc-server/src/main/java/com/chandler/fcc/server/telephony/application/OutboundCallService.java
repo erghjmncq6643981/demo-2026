@@ -108,6 +108,7 @@ public class OutboundCallService implements SystemFlowRuntime {
     private final DialAttemptGuard attemptGuard;
     private final CallRecordingService recordings;
     private final InboundPostCallService postCall;
+    private final CallAdmissionService admissionService;
 
     /**
      * 返回本服务负责的外呼模板。
@@ -163,6 +164,10 @@ public class OutboundCallService implements SystemFlowRuntime {
         }
         if (timeoutSeconds < 3 || timeoutSeconds > 60) {
             throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "确认等待时间必须为3至60秒");
+        }
+        var riskDecision = admissionService.checkDestinationRisk(number);
+        if (!riskDecision.admitted()) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, riskDecision.reasonMessage());
         }
         var route = routes.resolve(number);
         var data = new HashMap<String, Object>();
@@ -298,6 +303,11 @@ public class OutboundCallService implements SystemFlowRuntime {
             throw new ResponseStatusException(HttpStatus.CONFLICT, "坐席当前接听终端未绑定或未启用");
         }
 
+        var riskDecision = admissionService.checkDestinationRisk(number);
+        if (!riskDecision.admitted()) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, riskDecision.reasonMessage());
+        }
+
         var route = routes.resolve(number);
         String callId = IdUtil.getCallId();
         String extension = agent.get("extension").toString();
@@ -427,8 +437,22 @@ public class OutboundCallService implements SystemFlowRuntime {
             .path(FccEventField.PARAMETERS.getWireName())
             .path(FccEventParameter.AUTHENTICATED_EXTENSION.getWireName())
             .asText();
-        Map<String, Object> agent = agents.agentByEndpoint(extension);
-        if (agent == null || agent.get("workNo") == null) {
+        // 1. 坐席归属与在岗登录态强校验 (防未登录工位盗打)
+        var agentDecision = admissionService.checkAgentAdmission(extension);
+        if (!agentDecision.admitted()) {
+            log.warn("🛡️ [准入拦截] 坐席准入拒绝 extension={}, reason={}", extension, agentDecision.reasonMessage());
+            persistence.recordRejectedCall(controlId, extension, number, null, agentDecision.reasonCode(), agentDecision.reasonMessage());
+            client.hangup(controlId, channelUuid, "CALL_REJECTED");
+            return null;
+        }
+        Map<String, Object> agent = agentDecision.agentData();
+        String owner = agentDecision.workNo();
+
+        // 2. 目标号码防盗打风控过滤 (防国际长途与高危号段)
+        var riskDecision = admissionService.checkDestinationRisk(number);
+        if (!riskDecision.admitted()) {
+            log.warn("🛡️ [防盗打拦截] 号码风控拦截 number={}, reason={}", number, riskDecision.reasonMessage());
+            persistence.recordRejectedCall(controlId, extension, number, owner, riskDecision.reasonCode(), riskDecision.reasonMessage());
             client.hangup(controlId, channelUuid, "CALL_REJECTED");
             return null;
         }
@@ -440,7 +464,6 @@ public class OutboundCallService implements SystemFlowRuntime {
             client.hangup(controlId, channelUuid, "UNALLOCATED_NUMBER");
             return null;
         }
-        String owner = agent.get("workNo").toString();
         var data = new HashMap<String, Object>();
         data.put("runtimeTemplate", TEMPLATE_AGENT_ORIGINATED);
         data.put("primaryWorkNo", owner);
