@@ -22,6 +22,7 @@ vi.mock('../../../services/sipWebRtcService', () => ({
     bindBusinessCall: mocks.sipBind,
     releasePendingBusinessCall: mocks.sipRelease,
     sendDtmf: mocks.sipDtmf,
+    getActiveContext: vi.fn(),
   },
 }));
 vi.mock('../../../services/audioService', () => ({ audioService: { startRingtone: vi.fn(), stopRingtone: vi.fn() } }));

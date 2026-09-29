@@ -222,6 +222,12 @@ public class PhoneBindingService implements SystemFlowRuntime {
         );
         call.putData(DATA_COMPLETED, Boolean.TRUE);
         call.putData("bindingAccepted", bound);
+        if (workNo != null && !workNo.isBlank()) {
+            call.putData("workNo", workNo);
+            call.putData("bindingWorkNo", workNo);
+            call.putData("dtmf", workNo);
+            call.putData("flowBranch", "workNo=" + workNo);
+        }
         persistence.saveOrUpdateSession(call);
         playBindingResult(call, bound);
         if (bound) {

@@ -977,6 +977,16 @@ const {
           v-if="selectedCdr.rawId"
           class="flex-1 min-h-0"
           :call-id="selectedCdr.rawId"
+          :cdr="selectedCdr"
+          @play-audio="
+            playAudio(
+              selectedCdr.callerName,
+              selectedCdr.callerPhone,
+              selectedCdr.audioDuration || '',
+              selectedCdr.recordingUrl,
+              selectedCdr.rawId
+            )
+          "
         />
 
         <!-- 弹窗底部操作栏 -->

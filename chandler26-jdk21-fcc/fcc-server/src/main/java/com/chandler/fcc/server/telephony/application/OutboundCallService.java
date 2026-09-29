@@ -315,7 +315,6 @@ public class OutboundCallService implements SystemFlowRuntime {
         CallInfoBO call = CallInfoBO.builder()
             .callId(callId)
             .ctrlId(IdUtil.getCtrlId("outbound"))
-            .nodeId("telephony-pod-01")
             .modelKey(FlowModelType.OUTBOUND_TWO_WAY_CALL.name())
             .direction(DirectionType.OUTBOUND)
             .stageState(CallStageState.CALLING)
@@ -542,12 +541,15 @@ public class OutboundCallService implements SystemFlowRuntime {
             if (TEMPLATE_NOTIFICATION.equals(template) && eventState == ChannelEventState.READY) {
                 startNotificationPrompt(call);
             } else if (
-                eventState == ChannelEventState.READY &&
+                (eventState == ChannelEventState.READY || eventState == ChannelEventState.ANSWERED) &&
                 channelUuid.equals(call.getAgentChannelUuid())
             ) {
-                startCustomerLeg(call);
+                boolean answered = params.path("answered").asBoolean(eventState == ChannelEventState.ANSWERED);
+                if (answered || TEMPLATE_AGENT_ORIGINATED.equals(template)) {
+                    startCustomerLeg(call);
+                }
             } else if (
-                eventState == ChannelEventState.READY &&
+                (eventState == ChannelEventState.READY || eventState == ChannelEventState.ANSWERED) &&
                 channelUuid.equals(call.getGuestChannelUuid())
             ) {
                 bridgeAgentAndCustomer(call);
@@ -629,7 +631,7 @@ public class OutboundCallService implements SystemFlowRuntime {
             CallLegEntity.builder()
                 .callId(CallPersistenceService.parseNumericId(call.getCallId()))
                 .channelUuid(channelUuid)
-                .nodeId(call.getNodeId() != null && !call.getNodeId().isBlank() ? call.getNodeId() : "telephony-pod-01")
+                .nodeId(call.getNodeId() != null && !call.getNodeId().isBlank() ? call.getNodeId() : null)
                 .roleType(agentLeg ? "AGENT" : "CUSTOMER")
                 .direction(agentLeg && agentOriginated ? "INBOUND" : "OUTBOUND")
                 .endpointType(

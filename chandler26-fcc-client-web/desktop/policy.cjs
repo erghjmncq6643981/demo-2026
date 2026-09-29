@@ -1,21 +1,51 @@
 'use strict';
 
-/** Only explicitly configured HTTPS deployments or loopback development are trusted. */
+function isLocalOrPrivateHost(hostname) {
+  if (['localhost', '127.0.0.1', '[::1]'].includes(hostname)) return true;
+  if (hostname === 'fcc.local' || hostname.endsWith('.local') || hostname.endsWith('.test')) return true;
+  if (/^10\.\d{1,3}\.\d{1,3}\.\d{1,3}$/.test(hostname)) return true;
+  if (/^192\.168\.\d{1,3}\.\d{1,3}$/.test(hostname)) return true;
+  const match172 = /^172\.(\d{1,3})\.\d{1,3}\.\d{1,3}$/.exec(hostname);
+  if (match172) {
+    const second = parseInt(match172[1], 10);
+    if (second >= 16 && second <= 31) return true;
+  }
+  return false;
+}
+
+/** Only explicitly configured HTTPS deployments or loopback/LAN development are trusted. */
 function deploymentUrl(value) {
   const url = new URL(value);
   if (url.username || url.password || url.hash || url.search) throw new Error('服务地址不得包含凭据或查询参数');
-  if (url.protocol !== 'https:' && !(url.protocol === 'http:' && ['localhost', '127.0.0.1', '[::1]'].includes(url.hostname))) {
-    throw new Error('服务地址必须使用 HTTPS（本机开发除外）');
+  if (url.protocol !== 'https:' && !(url.protocol === 'http:' && isLocalOrPrivateHost(url.hostname))) {
+    throw new Error('服务地址必须使用 HTTPS（本机开发或局域网除外）');
   }
   return url;
 }
 
 /** WebSocket destination is pinned to the deployment; renderer cannot redirect tokens. */
 function socketUrl(deployment, requested) {
-  const expected = new URL('/ws/agent', deployment);
-  expected.protocol = expected.protocol === 'https:' ? 'wss:' : 'ws:';
-  if (new URL(requested).href !== expected.href) throw new Error('业务连接地址必须属于当前部署');
-  return expected.href;
+  const reqUrl = new URL(requested);
+  if (reqUrl.protocol !== 'ws:' && reqUrl.protocol !== 'wss:') {
+    throw new Error('业务连接必须使用 WebSocket 协议');
+  }
+  if (!reqUrl.pathname.endsWith('/ws/agent')) {
+    throw new Error('业务连接地址必须为 /ws/agent');
+  }
+  if (deployment) {
+    const expected = new URL('/ws/agent', deployment);
+    expected.protocol = expected.protocol === 'https:' ? 'wss:' : 'ws:';
+    if (reqUrl.href === expected.href) return expected.href;
+
+    if (isLocalOrPrivateHost(reqUrl.hostname) && isLocalOrPrivateHost(deployment.hostname)) {
+      return reqUrl.href;
+    }
+    throw new Error('业务连接地址必须属于当前部署');
+  }
+  if (!isLocalOrPrivateHost(reqUrl.hostname)) {
+    throw new Error('业务连接地址必须属于受信任的局域网或域名');
+  }
+  return reqUrl.href;
 }
 
 /** Derive a bounded ringing reminder from authoritative server events. */

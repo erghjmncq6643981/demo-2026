@@ -15,11 +15,13 @@ import java.time.LocalDateTime;
 import java.time.ZoneOffset;
 import java.util.List;
 import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
 
 /**
  * 解析标准事件信封并将其分发给唯一的类型处理器。
  */
+@Slf4j
 @Service
 @RequiredArgsConstructor
 public class FccEventDispatcher {
@@ -68,10 +70,11 @@ public class FccEventDispatcher {
                 relatedCallId(params, callIdBeforeHandling)
             );
         } catch (RuntimeException failure) {
+            log.error("[事件分发异常] eventId={} method={} error={}", eventId, wireMethod, failure.getMessage(), failure);
             persistence.finishEvent(
                 eventId,
                 EVENT_FAILED,
-                failure.getClass().getSimpleName(),
+                failure.getMessage() != null ? failure.getClass().getSimpleName() + ": " + failure.getMessage() : failure.getClass().getSimpleName(),
                 relatedCallId(params, callIdBeforeHandling)
             );
             throw failure;

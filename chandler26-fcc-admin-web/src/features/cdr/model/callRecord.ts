@@ -5,12 +5,15 @@ export interface CallRecord {
   callerName: string; // 主叫姓名
   callerPhone: string; // 主叫号码
   carrier: string; // 运营商事实，后端未提供时留空
+  callee: string; // 被叫号码 / 接入号
+  didNumber?: string; // 归属 DID 号码
   agentName: string; // 坐席姓名
   agentWorkNo: string; // 坐席工号
   direction: "INBOUND" | "OUTBOUND" | "INTERNAL"; // 方向: 呼入 / 呼出 / 内部
   startTime: string; // 通话开始时间
   endTime: string; // 通话结束时间
   ringDuration: string; // 响铃时长
+  talkDurationMs?: number; // 通话时长（毫秒）
   audioDuration?: string; // 录音（显示时长）
   recordingUrl?: string; // 真实流式录音地址
   rawId?: string; // 后端数据库 ID（不透明字符串）
@@ -18,6 +21,7 @@ export interface CallRecord {
   modelType: string; // 业务通话模型
   flowCode?: string; // 实际绑定的流程编码
   satisfactionScore?: number; // 满意度评分 (1-5)
+  hangupCause?: string; // 挂机原因
 }
 
 /** Map backend facts without inventing measurements or customer data. */
@@ -41,6 +45,8 @@ export function toCallRecord(item: CallCdrVO): CallRecord {
     callerName: item.callerName || "",
     callerPhone: item.caller,
     carrier: item.carrier || "",
+    callee: item.callee || item.didNumber || "",
+    didNumber: item.didNumber || item.callee || "",
     agentName:
       item.agentName ||
       (item.agentWorkNo ? `坐席 ${item.agentWorkNo}` : "未分配"),
@@ -49,6 +55,7 @@ export function toCallRecord(item: CallCdrVO): CallRecord {
     startTime: item.initiatedAt || item.answeredAt || "-",
     endTime: item.endedAt || "-",
     ringDuration: ringSec == null ? "-" : `${ringSec}秒`,
+    talkDurationMs: item.talkDurationMs,
     audioDuration: audioDuration,
     recordingUrl: item.recordingUrl,
     rawId: item.id,
@@ -56,5 +63,6 @@ export function toCallRecord(item: CallCdrVO): CallRecord {
     modelType: item.modelType,
     flowCode: item.flowCode,
     satisfactionScore: item.evaluationScore,
+    hangupCause: item.hangupCause,
   };
 }

@@ -56,33 +56,22 @@ else {
   app.whenReady().then(() => {
     const localHtmlPath = path.join(__dirname, '../dist/index.html');
     const hasLocalBundle = fs.existsSync(localHtmlPath);
+    const configPath = path.join(app.getPath('userData'), 'deployment.json');
+    let saved;
+    try { saved = JSON.parse(fs.readFileSync(configPath, 'utf8')).url; } catch {}
 
-    // Only use remote deployment if explicitly provided via --server= or FCC_DESKTOP_URL
-    const serverArg = process.argv.find(arg => arg.startsWith('--server='))?.slice(9);
-    const remoteTarget = serverArg || process.env.FCC_DESKTOP_URL;
+    const remoteTarget = process.argv.find(arg => arg.startsWith('--server='))?.slice(9) || process.env.FCC_DESKTOP_URL || saved;
     if (remoteTarget) {
       try { deployment = deploymentUrl(remoteTarget); } catch {}
     }
 
-    Menu.setApplicationMenu(null);
-    const appIcon = path.join(__dirname, 'icon.png');
-    const trayIconPath = path.join(__dirname, 'tray-icon.png');
-
     if (!deployment && !hasLocalBundle) {
-      window = new BrowserWindow({
-        width: 580,
-        height: 420,
-        icon: appIcon,
-        autoHideMenuBar: true,
-        webPreferences: { preload: path.join(__dirname, 'setup-preload.cjs'), contextIsolation: true, sandbox: false, nodeIntegration: false }
-      });
-      window.setMenu(null);
+      window = new BrowserWindow({ width: 580, height: 420, webPreferences: { preload: path.join(__dirname, 'setup-preload.cjs'), contextIsolation: true, sandbox: true, nodeIntegration: false } });
       window.webContents.setWindowOpenHandler(() => ({ action: 'deny' }));
       window.webContents.on('will-navigate', event => event.preventDefault());
       ipcMain.handle('fcc:configure', (event, value) => {
         if (event.sender !== window.webContents || event.senderFrame !== window.webContents.mainFrame) throw new Error('非法配置请求');
         const url = deploymentUrl(value).href;
-        const configPath = path.join(app.getPath('userData'), 'deployment.json');
         fs.mkdirSync(app.getPath('userData'), { recursive: true });
         fs.writeFileSync(configPath, JSON.stringify({ url }), { mode: 0o600 });
         app.relaunch({ args: process.argv.slice(1).filter(arg => !arg.startsWith('--server=')).concat(`--server=${url}`) });
@@ -92,40 +81,12 @@ else {
       return;
     }
 
-    window = new BrowserWindow({
-      width: 1380,
-      height: 900,
-      minWidth: 1000,
-      minHeight: 680,
-      icon: appIcon,
-      autoHideMenuBar: true,
-      webPreferences: {
-        preload: path.join(__dirname, 'preload.cjs'),
-        contextIsolation: true,
-        sandbox: false,
-        webSecurity: false,
-        nodeIntegration: false,
-        backgroundThrottling: false
-      }
-    });
-    window.setMenu(null);
+    window = new BrowserWindow({ width: 1380, height: 900, minWidth: 1000, minHeight: 680, webPreferences: { preload: path.join(__dirname, 'preload.cjs'), contextIsolation: true, sandbox: true, nodeIntegration: false, backgroundThrottling: false } });
     window.on('close', () => {
       quitting = true;
       realtime.disconnect();
       reset();
       app.quit();
-    });
-    window.webContents.on('did-fail-load', (event, errorCode, errorDescription, validatedURL) => {
-      console.error('页面加载失败:', validatedURL, errorCode, errorDescription);
-      dialog.showErrorBox('页面加载失败', `无法加载页面: ${validatedURL}\n错误: ${errorDescription} (${errorCode})`);
-    });
-    window.webContents.on('before-input-event', (event, input) => {
-      if (input.key === 'F12' || (input.control && input.shift && input.key.toLowerCase() === 'i')) {
-        window.webContents.toggleDevTools();
-      }
-    });
-    window.webContents.on('console-message', (event, level, message, line, sourceId) => {
-      console.log(`[WebContents] ${message} (${sourceId}:${line})`);
     });
     window.webContents.setWindowOpenHandler(() => ({ action: 'deny' }));
     window.webContents.on('will-navigate', (event, url) => {
@@ -143,10 +104,8 @@ else {
       const url = contents.getURL();
       return (url.startsWith('file://') || (deployment && url.startsWith(deployment.origin))) && permission === 'media';
     });
-    const trayIcon = fs.existsSync(trayIconPath)
-      ? nativeImage.createFromPath(trayIconPath)
-      : nativeImage.createFromDataURL('data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVQIHWP4z8DwHwAFgAI/ScLbtAAAAABJRU5ErkJggg==');
-    tray = new Tray(trayIcon);
+    const icon = nativeImage.createFromDataURL('data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVQIHWP4z8DwHwAFgAI/ScLbtAAAAABJRU5ErkJggg==');
+    tray = new Tray(icon);
     tray.setToolTip('FCC 坐席工作台');
     const startArgs = deployment ? [`--server=${deployment.href}`] : [];
     tray.setContextMenu(Menu.buildFromTemplate([

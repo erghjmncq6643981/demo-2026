@@ -31,17 +31,23 @@ export function resolveAgentWebSocketUrl(
   const configured = configuredValue?.trim();
   if (configured) {
     if (configured.startsWith('/')) {
-      const browserLocation = location ?? window.location;
-      const scheme = browserLocation.protocol === 'https:' ? 'wss:' : 'ws:';
-      return `${scheme}//${browserLocation.hostname}:8085${configured}`;
+      const browserLocation = location ?? (typeof window !== 'undefined' ? window.location : undefined);
+      const scheme = browserLocation?.protocol === 'https:' ? 'wss:' : 'ws:';
+      const locHost = browserLocation?.hostname || (browserLocation?.host ? browserLocation.host.split(':')[0] : '');
+      const host = (locHost && !['localhost', '127.0.0.1'].includes(locHost)) ? locHost : 'fcc.local';
+      const port = scheme === 'wss:' ? '' : ':8085';
+      return `${scheme}//${host}${port}${configured}`;
     }
     return requireWebSocketProtocol(configured, 'VITE_FCC_AGENT_WS_URL');
   }
 
-  const browserLocation = location ?? window.location;
-  const scheme = browserLocation.protocol === 'https:' ? 'wss:' : 'ws:';
-  const host = browserLocation.hostname || 'localhost';
-  return `${scheme}//${host}:8085/ws/agent`;
+  const browserLocation = location ?? (typeof window !== 'undefined' ? window.location : undefined);
+  const scheme = browserLocation?.protocol === 'https:' ? 'wss:' : 'ws:';
+  const customHost = typeof localStorage !== 'undefined' ? localStorage.getItem('fcc_backend_host') : null;
+  const locHost = browserLocation?.hostname || (browserLocation?.host ? browserLocation.host.split(':')[0] : '');
+  const host = customHost || ((locHost && !['localhost', '127.0.0.1'].includes(locHost)) ? locHost : 'fcc.local');
+  const port = scheme === 'wss:' ? '' : ':8085';
+  return `${scheme}//${host}${port}/ws/agent`;
 }
 
 function parseIceServers(rawValue: string | undefined): RTCIceServer[] {

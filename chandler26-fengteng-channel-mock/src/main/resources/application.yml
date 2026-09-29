@@ -1,0 +1,4 @@
+server:
+  port: ${PORT:17858}
+mock:
+  asset-count: ${ASSET_COUNT:3}

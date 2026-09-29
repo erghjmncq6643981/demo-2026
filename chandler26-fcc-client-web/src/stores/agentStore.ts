@@ -205,7 +205,7 @@ export const useAgentStore = defineStore('agent', () => {
     }
   }
 
-  if (typeof window !== 'undefined') {
+  if (typeof window !== 'undefined' && typeof window.addEventListener === 'function') {
     window.addEventListener('fcc:auth-expired', () => {
       token.value = null;
       sipConfig.value = null;

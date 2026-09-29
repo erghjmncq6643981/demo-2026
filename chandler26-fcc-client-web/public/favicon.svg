@@ -1,0 +1,72 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="512" height="512" viewBox="0 0 512 512">
+  <defs>
+    <!-- Background Gradient (Deep Indigo to Electric Blue) -->
+    <linearGradient id="bg" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#312E81"/>
+      <stop offset="45%" stop-color="#4338CA"/>
+      <stop offset="80%" stop-color="#4F46E5"/>
+      <stop offset="100%" stop-color="#2563EB"/>
+    </linearGradient>
+
+    <!-- Headset Gradient -->
+    <linearGradient id="headband" x1="0%" y1="0%" x2="0%" y2="100%">
+      <stop offset="0%" stop-color="#FFFFFF"/>
+      <stop offset="60%" stop-color="#EEF2FF"/>
+      <stop offset="100%" stop-color="#C7D2FE"/>
+    </linearGradient>
+
+    <!-- Wave/Audio Gradient -->
+    <linearGradient id="wave" x1="0%" y1="100%" x2="0%" y2="0%">
+      <stop offset="0%" stop-color="#38BDF8"/>
+      <stop offset="100%" stop-color="#818CF8"/>
+    </linearGradient>
+
+    <!-- Drop Shadow for Inner Icon elements -->
+    <filter id="shadow" x="-20%" y="-20%" width="140%" height="140%">
+      <feDropShadow dx="0" dy="8" stdDeviation="10" flood-color="#0F172A" flood-opacity="0.4"/>
+    </filter>
+  </defs>
+
+  <!-- Squircle Base: No outer stroke, no white edge, pure clean corners -->
+  <rect x="16" y="16" width="480" height="480" rx="116" fill="url(#bg)"/>
+
+  <!-- Headset and Soundwaves -->
+  <g filter="url(#shadow)">
+    <!-- Headband Arch -->
+    <path d="M 140 256 A 116 116 0 0 1 372 256" 
+          fill="none" 
+          stroke="url(#headband)" 
+          stroke-width="32" 
+          stroke-linecap="round"/>
+
+    <!-- Left Ear Cup -->
+    <rect x="122" y="230" width="34" height="106" rx="17" fill="url(#headband)"/>
+    <rect x="110" y="246" width="22" height="74" rx="11" fill="#1E1B4B" opacity="0.35"/>
+
+    <!-- Right Ear Cup -->
+    <rect x="356" y="230" width="34" height="106" rx="17" fill="url(#headband)"/>
+    <rect x="380" y="246" width="22" height="74" rx="11" fill="#1E1B4B" opacity="0.35"/>
+
+    <!-- Microphone Boom -->
+    <path d="M 372 312 Q 378 404 296 406" 
+          fill="none" 
+          stroke="url(#headband)" 
+          stroke-width="14" 
+          stroke-linecap="round"/>
+    
+    <!-- Microphone Tip / Capsule -->
+    <rect x="268" y="394" width="34" height="24" rx="10" fill="#38BDF8"/>
+    <circle cx="276" cy="406" r="3.5" fill="#FFFFFF"/>
+
+    <!-- Active Soundwave Audio Bars in Center -->
+    <rect x="206" y="248" width="12" height="42" rx="6" fill="url(#wave)"/>
+    <rect x="231" y="222" width="12" height="94" rx="6" fill="#FFFFFF"/>
+    <rect x="256" y="206" width="12" height="126" rx="6" fill="#38BDF8"/>
+    <rect x="281" y="228" width="12" height="82" rx="6" fill="#FFFFFF"/>
+    <rect x="306" y="254" width="12" height="30" rx="6" fill="url(#wave)"/>
+
+    <!-- Live Status Dot (Online Green Emerald) -->
+    <circle cx="373" cy="240" r="10" fill="#10B981"/>
+    <circle cx="373" cy="240" r="5" fill="#ECFDF5"/>
+  </g>
+</svg>

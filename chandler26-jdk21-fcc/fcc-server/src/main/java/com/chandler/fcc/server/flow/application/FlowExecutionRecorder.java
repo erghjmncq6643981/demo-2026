@@ -96,7 +96,7 @@ public class FlowExecutionRecorder {
             String previous = String.valueOf(existing.get("step"));
             row.put(
                 "previousStatus",
-                "END".equals(step) && !Set.of("CONNECTED", "CONFIRM").contains(previous)
+                "END".equals(step) && !Set.of("CONNECTED", "CONFIRM", "RATING", "RATING_SAVE", "CLOSING", "RECORD_STOP").contains(previous)
                     ? "INTERRUPTED"
                     : "SUCCEEDED"
             );
@@ -107,9 +107,23 @@ public class FlowExecutionRecorder {
                 "groupCode",
                 "notificationConfirmed",
                 "flowSourceTime",
-                "flowCommandId"
+                "flowCommandId",
+                "bindingExtension",
+                "bindingWorkNo",
+                "workNo",
+                "dtmf",
+                "bindingAccepted",
+                "bindingPromptText",
+                "bindingSuccessText",
+                "bindingFailureText",
+                "evaluationScore",
+                "guestNumber",
+                "agentExt",
+                "recordingPath",
+                "runtimeTemplate"
             ))
                 if (call.getData().containsKey(key)) facts.put(key, call.getData().get(key));
+            if (call.getEvaluationScore() != null) facts.put("evaluationScore", call.getEvaluationScore());
             if (call.getHangupCause() != null) facts.put("cause", call.getHangupCause());
             row.put("input", json.writeValueAsString(facts));
             row.put("output", row.get("input"));
@@ -140,6 +154,10 @@ public class FlowExecutionRecorder {
             if (Boolean.TRUE.equals(call.getData().get("notificationConfirmed"))) return "CONFIRM";
             return call.getData().containsKey("notificationStarted") ? "NOTIFY" : "DIAL_CUSTOMER";
         }
+        if (call.getData().containsKey("closingPending")) return "CLOSING";
+        if (call.getEvaluationScore() != null) return "RATING_SAVE";
+        if (call.getData().containsKey("ratingPending")) return "RATING";
+        if (call.getData().containsKey("agentEndedForRating")) return "RECORD_STOP";
         if (call.getStageState() == CallStageState.CONNECTED) return "CONNECTED";
         if (call.getData().containsKey("bridgeRequested")) return "BRIDGE";
         if ("AGENT_FIRST".equals(template)) return call.getData().containsKey("agentReady")

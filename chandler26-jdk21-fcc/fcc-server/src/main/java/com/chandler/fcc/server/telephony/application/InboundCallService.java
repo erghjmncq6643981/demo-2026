@@ -159,6 +159,7 @@ public class InboundCallService implements SystemFlowRuntime {
             if (eventState == ChannelEventState.READY && uuid.equals(call.getGuestChannelUuid())) {
                 call.putData("guestReady", true);
                 if (menu.ready(call)) return true;
+                if (call.getData().containsKey("ivrResolved")) return true;
                 call.putData("flowBranch", "menu.enabled=false");
                 persistence.saveOrUpdateSession(call);
                 route(call);

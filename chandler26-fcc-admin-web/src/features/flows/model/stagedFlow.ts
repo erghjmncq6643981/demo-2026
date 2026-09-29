@@ -2,6 +2,10 @@ import type { FlowTemplateType } from "../../../api/flowApi";
 
 export const stageLabels: Record<string, string> = {
   ENTRY: "流程入口",
+  ANSWER: "话道应答",
+  COLLECT_CODE: "收取坐席工号",
+  VERIFY_BINDING: "校验并绑定",
+  RESULT: "播报绑定结果",
   MENU: "欢迎语与按键收号",
   BRANCH: "按键条件分支",
   ROUTE: "坐席与技能组排队",

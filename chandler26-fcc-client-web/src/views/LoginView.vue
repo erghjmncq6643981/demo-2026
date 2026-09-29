@@ -52,45 +52,42 @@ const handleLogin = async () => {
         
         <!-- 顶部 Logo 与系统名 -->
         <div class="flex items-center gap-3">
-          <div class="w-10 h-10 rounded-xl bg-gradient-to-tr from-indigo-600 to-indigo-500 flex items-center justify-center text-white shadow-md shadow-indigo-500/30">
+          <div class="w-10 h-10 rounded-2xl bg-gradient-to-tr from-indigo-600 via-indigo-500 to-sky-500 flex items-center justify-center text-white shadow-lg shadow-indigo-500/25 border border-indigo-400/20">
             <Headphones class="w-5 h-5" />
           </div>
           <div>
-            <div class="text-base font-bold tracking-tight text-white">FCC 智能呼叫中心</div>
-            <div class="text-xs text-slate-400 font-medium">坐席工作台</div>
+            <div class="text-base font-bold tracking-tight text-white leading-tight">FCC 智能呼叫中心</div>
+            <div class="text-[11px] text-slate-400 font-medium">坐席工作台</div>
           </div>
         </div>
 
-        <!-- 中部标语与要点 -->
-        <div class="my-8">
-          <h1 class="text-2xl sm:text-3xl font-bold tracking-tight text-white mb-3 leading-snug">
-            坐席日常工作<br />
-            从这里开始
+        <!-- 中部标语与要点（极简版，去除冗长说明） -->
+        <div class="my-auto py-8">
+          <h1 class="text-2xl sm:text-3xl font-black tracking-tight text-white leading-tight mb-3">
+            智能话务协同<br />
+            <span class="text-transparent bg-clip-text bg-gradient-to-r from-indigo-400 via-sky-300 to-blue-400">
+              专业生产工作台
+            </span>
           </h1>
-          <p class="text-xs sm:text-sm text-slate-400 mb-6 leading-relaxed">
-            登录后处理来电、人工外呼和回拨待办。请先使用实体话机拨打 0000 完成 DTMF 绑定，再切换为就绪状态。
+          <p class="text-xs sm:text-sm text-slate-400 leading-relaxed font-normal">
+            实时呼叫处理 · 客户摘要弹屏 · 智能话后流转
           </p>
 
-          <div class="space-y-2.5 text-xs sm:text-sm text-slate-300">
-            <div class="flex items-center gap-2.5">
-              <span class="w-1.5 h-1.5 rounded-full bg-indigo-400"></span>
-              <span>来电提醒与授权客户摘要</span>
-            </div>
-            <div class="flex items-center gap-2.5">
-              <span class="w-1.5 h-1.5 rounded-full bg-indigo-400"></span>
-              <span>实体话机 DTMF 绑定与坐席状态</span>
-            </div>
-            <div class="flex items-center gap-2.5">
-              <span class="w-1.5 h-1.5 rounded-full bg-indigo-400"></span>
-              <span>人工外呼、回拨与话后处理</span>
-            </div>
+          <div class="mt-6 flex flex-wrap items-center gap-2">
+            <span class="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-indigo-500/10 border border-indigo-500/25 text-[11px] font-medium text-indigo-300">
+              <span class="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse"></span>
+              系统服务就绪
+            </span>
+            <span class="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-slate-800/80 border border-slate-700/60 text-[11px] font-medium text-slate-300">
+              双模式 WebRTC / 实体话机
+            </span>
           </div>
         </div>
 
         <!-- 底部版本与内核状态 -->
-        <div class="text-xs text-slate-500 flex items-center justify-between font-mono">
-          <span>FCC 坐席工作台</span>
-          <span>v2.0</span>
+        <div class="text-[11px] text-slate-500 flex items-center justify-between font-mono">
+          <span>FCC Production Console</span>
+          <span class="px-2 py-0.5 rounded bg-slate-800/80 border border-slate-700/50 text-slate-400">v2.0.0</span>
         </div>
       </div>
 
