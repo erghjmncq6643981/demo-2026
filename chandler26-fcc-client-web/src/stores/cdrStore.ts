@@ -10,19 +10,34 @@ export const useCdrStore = defineStore('cdr', () => {
   const pageSize = ref(10);
   const isLoading = ref(false);
   const searchCaller = ref('');
+  const searchNumber = ref('');
   const searchDirection = ref('');
+  const searchStatus = ref('');
+  const dateRange = ref<[string, string] | null>(null);
+  const startTime = ref('');
+  const endTime = ref('');
   const pageInboundCount = ref(0);
   const pageOutboundCount = ref(0);
 
-  async function loadRecords(page: number = 1) {
+  async function loadRecords(page: number = 1, size?: number) {
     isLoading.value = true;
     pageNum.value = page;
+    if (size) {
+      pageSize.value = size;
+    }
     try {
+      const numQuery = (searchNumber.value || searchCaller.value || '').trim();
+      const sTime = startTime.value || (dateRange.value?.[0]) || '';
+      const eTime = endTime.value || (dateRange.value?.[1]) || '';
+
       const params: CdrQueryParams = {
         pageNum: pageNum.value,
         pageSize: pageSize.value,
-        caller: searchCaller.value || undefined,
+        number: numQuery || undefined,
         direction: searchDirection.value || undefined,
+        status: searchStatus.value || undefined,
+        startTime: sTime || undefined,
+        endTime: eTime || undefined,
       };
       const res = await fetchCdrs(params);
       records.value = res.list || [];
@@ -48,6 +63,18 @@ export const useCdrStore = defineStore('cdr', () => {
     }
   }
 
+  function resetFilters() {
+    searchNumber.value = '';
+    searchCaller.value = '';
+    searchDirection.value = '';
+    searchStatus.value = '';
+    dateRange.value = null;
+    startTime.value = '';
+    endTime.value = '';
+    pageNum.value = 1;
+    return loadRecords(1);
+  }
+
   return {
     records,
     total,
@@ -55,9 +82,15 @@ export const useCdrStore = defineStore('cdr', () => {
     pageSize,
     isLoading,
     searchCaller,
+    searchNumber,
     searchDirection,
+    searchStatus,
+    dateRange,
+    startTime,
+    endTime,
     pageInboundCount,
     pageOutboundCount,
     loadRecords,
+    resetFilters,
   };
 });

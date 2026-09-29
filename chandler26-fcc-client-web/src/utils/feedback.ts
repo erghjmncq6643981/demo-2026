@@ -16,6 +16,7 @@
 import { reactive } from 'vue';
 
 export type FeedbackType = 'success' | 'warning' | 'error' | 'info';
+export type ConfirmIconType = 'logout' | 'danger' | 'warning' | 'info' | 'question';
 
 interface ToastItem {
   id: number;
@@ -30,6 +31,7 @@ interface ConfirmState {
   confirmText: string;
   cancelText: string;
   danger: boolean;
+  iconType?: ConfirmIconType;
   resolve: ((value: boolean) => void) | null;
 }
 
@@ -46,6 +48,7 @@ export const feedbackState = reactive<{
     confirmText: '确认',
     cancelText: '取消',
     danger: false,
+    iconType: 'info',
     resolve: null,
   },
 });
@@ -72,6 +75,7 @@ export interface ConfirmOptions {
   confirmText?: string;
   cancelText?: string;
   danger?: boolean;
+  iconType?: ConfirmIconType;
 }
 
 /** 品牌化二次确认框，返回 Promise<boolean> */
@@ -82,6 +86,7 @@ export function confirmAction(message: string, options: ConfirmOptions = {}): Pr
     feedbackState.confirm.confirmText = options.confirmText ?? '确认';
     feedbackState.confirm.cancelText = options.cancelText ?? '取消';
     feedbackState.confirm.danger = options.danger ?? false;
+    feedbackState.confirm.iconType = options.iconType ?? (options.danger ? 'danger' : 'info');
     feedbackState.confirm.resolve = resolve;
     feedbackState.confirm.visible = true;
   });

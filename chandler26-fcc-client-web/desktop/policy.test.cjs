@@ -1,6 +1,11 @@
 const { test } = require('node:test');
 const assert = require('node:assert/strict');
 const { deploymentUrl, socketUrl, ringingEvent } = require('./policy.cjs');
+const bundledDeployment = require('./deployment.json');
+test('desktop installer contains the FCC workspace domain', () => {
+  const url = deploymentUrl(bundledDeployment.url);
+  assert.equal(url.href, 'http://fcc.local:8888/');
+});
 test('reject insecure remote deployment and credential-bearing URLs', () => {
   for (const url of ['http://example.com', 'https://user:password@example.com', 'file:///tmp/a', 'https://example.com?token=x']) assert.throws(() => deploymentUrl(url));
   assert.equal(deploymentUrl('http://127.0.0.1:8888').host, '127.0.0.1:8888');

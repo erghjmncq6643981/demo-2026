@@ -17,7 +17,7 @@
         <div class="flex items-center gap-1.5">
           <input
             v-model="searchPhone"
-            @keyup.enter="loadTasks"
+            @keyup.enter="onSearch"
             type="text"
             placeholder="输入客户手机号检索..."
             class="w-40 sm:w-48 bg-slate-50 border border-slate-200 rounded-xl px-3 py-1.5 text-slate-800 font-mono text-xs focus:outline-none focus:border-brand-500 focus:bg-white transition"
@@ -26,7 +26,7 @@
 
 
         <button
-          @click="loadTasks"
+          @click="onSearch"
           class="px-4 py-1.5 bg-brand-500 hover:bg-brand-600 active:scale-95 text-white font-extrabold rounded-xl shadow-pill transition cursor-pointer"
         >
           查询
@@ -81,7 +81,7 @@
 
             <!-- 漏话时间 -->
             <td class="py-3.5 px-3 font-mono text-slate-600">
-              {{ item.time }}
+              {{ formatDateTime(item.time) }}
             </td>
 
             <!-- 等待时长 -->
@@ -148,26 +148,21 @@
       </div>
     </div>
 
-    <!-- 底部统计与分页 -->
-    <div class="pt-3 border-t border-slate-100 flex items-center justify-between text-xs text-slate-500">
-      <span>共 {{ total }} 条待跟进任务记录</span>
-      <div class="flex items-center gap-1.5 font-mono">
-        <button
-          @click="page > 1 && (page--, loadTasks())"
-          :disabled="page <= 1"
-          class="w-7 h-7 rounded-xl border border-slate-200 flex items-center justify-center disabled:opacity-30 hover:bg-slate-50 cursor-pointer"
-        >
-          &lt;
-        </button>
-        <span class="px-2 font-bold text-slate-800">{{ page }}</span>
-        <button
-          @click="page * 10 < total && (page++, loadTasks())"
-          :disabled="page * 10 >= total"
-          class="w-7 h-7 rounded-xl border border-slate-200 flex items-center justify-center disabled:opacity-30 hover:bg-slate-50 cursor-pointer"
-        >
-          &gt;
-        </button>
-      </div>
+    <!-- 底部统计与分页: 统一规格 10条/页 < ... p-2 p-1 p p+1 p+2 ....> -->
+    <div class="pt-3 border-t border-slate-100 flex flex-col sm:flex-row items-center justify-between gap-3 text-xs text-slate-500 shrink-0">
+      <span class="text-xs text-slate-600 font-medium">
+        共 <strong class="text-slate-800 font-semibold font-mono">{{ total }}</strong> 条待跟进任务记录
+        <span v-if="isLoading" class="text-slate-400 font-normal ml-1">· 正在查询…</span>
+      </span>
+      <FccPagination
+        v-if="total > 0"
+        v-model:current-page="page"
+        v-model:page-size="pageSize"
+        :total="total"
+        :page-sizes="[10, 20, 50, 100]"
+        @change="handlePageChange"
+      />
+      <span v-else class="text-slate-400 text-xs font-mono">第 0 / 0 页</span>
     </div>
   </div>
 </template>
@@ -176,10 +171,14 @@
 import { ref, computed, onMounted } from 'vue';
 import { callbackApi, type CallbackTaskVO } from '../../api/callbackApi';
 import { toast, toastError } from '../../utils/feedback';
+import { formatDateTime } from '../../utils/date';
+import FccPagination from '../common/FccPagination.vue';
+
 const callingId = ref('');
 
 const searchPhone = ref('');
 const page = ref(1);
+const pageSize = ref(10);
 const total = ref(0);
 const isLoading = ref(false);
 
@@ -193,12 +192,18 @@ onMounted(() => {
   loadTasks();
 });
 
-async function loadTasks() {
+async function loadTasks(newPage?: number, newSize?: number) {
+  if (newPage) {
+    page.value = newPage;
+  }
+  if (newSize) {
+    pageSize.value = newSize;
+  }
   isLoading.value = true;
   try {
     const res = await callbackApi.list({
       pageNum: page.value,
-      pageSize: 10,
+      pageSize: pageSize.value,
       customerNumber: searchPhone.value.trim() || undefined,
     });
     if (res && res.list) {
@@ -217,10 +222,19 @@ async function loadTasks() {
   }
 }
 
+function handlePageChange(newPage: number, newSize: number) {
+  loadTasks(newPage, newSize);
+}
+
+function onSearch() {
+  page.value = 1;
+  loadTasks();
+}
+
 function resetFilter() {
   searchPhone.value = '';
   page.value = 1;
-  loadTasks();
+  loadTasks(1);
 }
 
 async function handleTriggerCall(item: CallbackTaskVO) {

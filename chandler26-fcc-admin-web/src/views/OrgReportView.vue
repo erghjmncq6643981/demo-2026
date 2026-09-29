@@ -3,11 +3,18 @@ import { ref, computed, onMounted, onUnmounted } from 'vue';
 import OrgTreeItem, { type OrgNode } from './OrgTreeItem.vue';
 import { agentApi, type AgentGroupVO, type AgentVO } from '../api/agentApi';
 import { cdrApi, type CallCdrVO } from '../api/cdrApi';
+import {
+  ChevronLeft,
+  ChevronRight,
+  RefreshCw,
+  ChevronDown,
+} from 'lucide-vue-next';
 
 // ==================== 1. 统计周期与组织架构树选择器 ====================
-const timeType = ref('day');
-const todayStr = new Date().toISOString().split('T')[0];
-const selectedDate = ref(todayStr);
+type PeriodType = 'day' | 'week' | 'month';
+
+const periodType = ref<PeriodType>('day');
+const currentDate = ref<Date>(new Date());
 const updateTime = ref('刚刚');
 const searchTreeQuery = ref('');
 const showTreeSelect = ref(false);
@@ -21,6 +28,76 @@ const rawAgents = ref<AgentVO[]>([]);
 const selectedNodeId = ref('');
 const selectedNodeName = ref('');
 const selectedNodePath = ref('');
+
+const formatLocalYmd = (d: Date): string => {
+  const y = d.getFullYear();
+  const m = String(d.getMonth() + 1).padStart(2, '0');
+  const day = String(d.getDate()).padStart(2, '0');
+  return `${y}-${m}-${day}`;
+};
+
+const dateRange = computed(() => {
+  const d = currentDate.value instanceof Date ? currentDate.value : new Date(currentDate.value);
+  if (periodType.value === 'day') {
+    const ymd = formatLocalYmd(d);
+    return {
+      startTime: `${ymd}T00:00:00`,
+      endTime: `${ymd}T23:59:59`,
+      label: ymd,
+    };
+  } else if (periodType.value === 'week') {
+    const dayOffset = (d.getDay() + 6) % 7;
+    const mon = new Date(d.getFullYear(), d.getMonth(), d.getDate() - dayOffset);
+    const sun = new Date(mon.getFullYear(), mon.getMonth(), mon.getDate() + 6);
+    const startYmd = formatLocalYmd(mon);
+    const endYmd = formatLocalYmd(sun);
+    return {
+      startTime: `${startYmd}T00:00:00`,
+      endTime: `${endYmd}T23:59:59`,
+      label: `${startYmd} ~ ${endYmd}`,
+    };
+  } else {
+    const y = d.getFullYear();
+    const m = d.getMonth();
+    const firstDay = new Date(y, m, 1);
+    const lastDay = new Date(y, m + 1, 0);
+    const startYmd = formatLocalYmd(firstDay);
+    const endYmd = formatLocalYmd(lastDay);
+    return {
+      startTime: `${startYmd}T00:00:00`,
+      endTime: `${endYmd}T23:59:59`,
+      label: `${startYmd} ~ ${endYmd}`,
+    };
+  }
+});
+
+const setPeriodType = (type: PeriodType) => {
+  if (periodType.value === type) return;
+  periodType.value = type;
+  loadAllData();
+};
+
+const shiftDate = (step: number) => {
+  const d = new Date(currentDate.value);
+  if (periodType.value === 'day') {
+    d.setDate(d.getDate() + step);
+  } else if (periodType.value === 'week') {
+    d.setDate(d.getDate() + step * 7);
+  } else if (periodType.value === 'month') {
+    d.setMonth(d.getMonth() + step);
+  }
+  currentDate.value = d;
+  loadAllData();
+};
+
+const resetToCurrentPeriod = () => {
+  currentDate.value = new Date();
+  loadAllData();
+};
+
+const handleDateChange = () => {
+  loadAllData();
+};
 
 const handleSelectTreeNode = (node: OrgNode) => {
   selectedNodeId.value = node.id;
@@ -92,10 +169,28 @@ const loadAllData = async () => {
 
     // 2. 加载真实坐席列表
     const agentsRes = await agentApi.list({ pageNum: 1, pageSize: 200 });
-    rawAgents.value = agentsRes?.list || [];
+    let agents = agentsRes?.list || [];
 
-    // 3. 加载真实话单数据
-    const cdrRes = await cdrApi.list({ pageNum: 1, pageSize: 1000 });
+    // 若选中的是非根节点，按技能组成员过滤
+    const root = (groups || []).find(g => !g.parentId || g.groupType === 'COMPANY') || (groups || [])[0];
+    if (selectedNodeId.value && root && selectedNodeId.value !== root.id) {
+      try {
+        const memRes = await agentApi.listGroupMembers(selectedNodeId.value, { pageNum: 1, pageSize: 200 });
+        const memberAgentIds = new Set((memRes?.list || []).map(m => m.agentId));
+        agents = agents.filter(a => memberAgentIds.has(a.id));
+      } catch (e) {
+        console.warn('获取组内成员失败:', e);
+      }
+    }
+    rawAgents.value = agents;
+
+    // 3. 加载真实话单数据 (按统计周期时间范围过滤)
+    const cdrRes = await cdrApi.list({
+      pageNum: 1,
+      pageSize: 2000,
+      startTime: dateRange.value.startTime,
+      endTime: dateRange.value.endTime,
+    });
     rawCdrs.value = cdrRes?.list || [];
 
     // 4. 汇总各坐席真实效能
@@ -138,9 +233,11 @@ const buildOrgTree = (groups: AgentGroupVO[]) => {
       children,
     }
   ];
-  selectedNodeName.value = root.groupName;
-  selectedNodePath.value = root.groupName;
-  selectedNodeId.value = root.id;
+  if (!selectedNodeId.value) {
+    selectedNodeName.value = root.groupName;
+    selectedNodePath.value = root.groupName;
+    selectedNodeId.value = root.id;
+  }
 };
 
 const buildAgentMetrics = () => {
@@ -224,51 +321,130 @@ const filteredAgents = computed(() => {
     <div class="bg-white rounded-3xl border border-slate-200/80 shadow-xs p-6 space-y-6">
       
       <!-- ======================================================================= -->
-      <!-- 1. 顶部筛选条 (组织节点为完整的组织架构树选择器，与客服组织架构完全一致) -->
+      <!-- 1. 顶部筛选条 (统一高质感时间导航胶囊与组织节点选择器) -->
       <!-- ======================================================================= -->
       <div class="flex flex-wrap items-center justify-between pb-4 border-b border-slate-100 gap-4">
         <div class="flex items-center gap-3.5 text-xs flex-wrap">
           <!-- 统计周期 -->
-          <div class="flex items-center gap-1.5">
-            <span class="font-bold text-slate-700">统计周期:</span>
-            <select
-              v-model="timeType"
-              class="bg-slate-50 border border-slate-200 rounded-xl px-3 py-1.5 text-slate-800 font-bold outline-none cursor-pointer focus:border-[#1677ff]"
-            >
-              <option value="day">日报</option>
-              <option value="week">周报</option>
-              <option value="month">月报</option>
-            </select>
-          </div>
-
-          <!-- 日期选择器 -->
-          <input
-            type="date"
-            v-model="selectedDate"
-            class="bg-slate-50 border border-slate-200 rounded-xl px-3 py-1.5 text-slate-800 font-mono outline-none focus:border-[#1677ff]"
-          />
-
-          <!-- 组织节点 (组织架构树下拉选择器，1:1 复用客服组织架构) -->
-          <div class="relative tree-select-container">
-            <div class="flex items-center gap-1.5">
-              <span class="font-bold text-slate-700">组织节点:</span>
+          <div class="flex items-center gap-2">
+            <span class="font-bold text-slate-700 shrink-0">统计周期:</span>
+            <!-- 日 / 周 / 月 维度切换胶囊 -->
+            <div class="flex items-center bg-slate-100 p-1 rounded-xl border border-slate-200/80 shadow-2xs h-10 shrink-0">
               <button
-                type="button"
-                @click="showTreeSelect = !showTreeSelect"
-                class="bg-slate-50 border border-slate-200 hover:border-[#1677ff] rounded-xl px-3.5 py-1.5 text-slate-800 font-bold outline-none flex items-center gap-2 cursor-pointer shadow-2xs transition min-w-[200px] justify-between"
+                v-for="item in [
+                  { key: 'day', label: '日报' },
+                  { key: 'week', label: '周报' },
+                  { key: 'month', label: '月报' },
+                ]"
+                :key="item.key"
+                @click="setPeriodType(item.key as PeriodType)"
+                class="px-3.5 py-1.5 rounded-lg text-xs font-bold transition-all cursor-pointer"
+                :class="
+                  periodType === item.key
+                    ? 'bg-white text-[#1677ff] shadow-xs font-black'
+                    : 'text-slate-500 hover:text-slate-900'
+                "
               >
-                <div class="flex items-center gap-1.5 truncate">
-                  <span class="text-blue-500">🏢</span>
-                  <span class="truncate">{{ selectedNodeName }}</span>
-                </div>
-                <span class="text-slate-400 text-[10px] transform transition-transform" :class="showTreeSelect ? 'rotate-180' : ''">▼</span>
+                {{ item.label }}
               </button>
             </div>
+          </div>
+
+          <!-- 一体化时间选择器胶囊 (大字体、紧凑贴合、消除内部过宽留白) -->
+          <div class="flex items-center bg-white border border-slate-200 hover:border-slate-300 rounded-xl px-2 h-10 shadow-2xs transition-all gap-1 shrink-0">
+            <!-- 快捷上一周期 -->
+            <button
+              @click="shiftDate(-1)"
+              class="w-7 h-7 flex items-center justify-center rounded-lg text-slate-400 hover:text-[#1677ff] hover:bg-slate-100 transition cursor-pointer"
+              title="上一周期"
+            >
+              <ChevronLeft class="w-4 h-4" />
+            </button>
+
+            <!-- 嵌入式日历展示 (17px 醒目等宽大字号，紧密居中) -->
+            <div class="flex items-center">
+              <!-- 按日选择 -->
+              <el-date-picker
+                v-if="periodType === 'day'"
+                v-model="currentDate"
+                type="date"
+                :clearable="false"
+                size="default"
+                class="seamless-date-picker !w-[150px]"
+                @change="handleDateChange"
+              />
+
+              <!-- 按周选择 -->
+              <el-date-picker
+                v-else-if="periodType === 'week'"
+                v-model="currentDate"
+                type="week"
+                format="YYYY 第 ww 周"
+                :clearable="false"
+                size="default"
+                class="seamless-date-picker !w-[172px]"
+                @change="handleDateChange"
+              />
+
+              <!-- 按月选择 -->
+              <el-date-picker
+                v-else-if="periodType === 'month'"
+                v-model="currentDate"
+                type="month"
+                format="YYYY-MM"
+                :clearable="false"
+                size="default"
+                class="seamless-date-picker !w-[124px]"
+                @change="handleDateChange"
+              />
+            </div>
+
+            <!-- 快捷下一周期 -->
+            <button
+              @click="shiftDate(1)"
+              class="w-7 h-7 flex items-center justify-center rounded-lg text-slate-400 hover:text-[#1677ff] hover:bg-slate-100 transition cursor-pointer"
+              title="下一周期"
+            >
+              <ChevronRight class="w-4 h-4" />
+            </button>
+
+            <!-- 竖线分割 -->
+            <div class="h-4 w-px bg-slate-200 mx-1"></div>
+
+            <!-- 快捷今天/本周/本月跳转 -->
+            <button
+              @click="resetToCurrentPeriod"
+              class="px-2.5 py-1 rounded-lg text-xs font-bold text-slate-600 hover:text-[#1677ff] hover:bg-blue-50 transition cursor-pointer"
+            >
+              {{
+                periodType === "day"
+                  ? "今天"
+                  : periodType === "week"
+                    ? "本周"
+                    : "本月"
+              }}
+            </button>
+          </div>
+
+          <!-- 组织节点 (组织架构树下拉选择器，1:1 复用客服组织架构) -->
+          <div class="relative tree-select-container flex items-center gap-2">
+            <span class="font-bold text-slate-700 shrink-0">组织节点:</span>
+            <button
+              type="button"
+              @click="showTreeSelect = !showTreeSelect"
+              class="bg-white border border-slate-200 hover:border-[#1677ff] rounded-xl px-3.5 h-10 text-slate-800 font-bold outline-none flex items-center gap-2 cursor-pointer shadow-2xs transition min-w-[200px] justify-between"
+            >
+              <div class="flex items-center gap-1.5 truncate">
+                <span class="text-blue-500">🏢</span>
+                <span class="truncate">{{ selectedNodeName }}</span>
+              </div>
+              <ChevronDown class="w-3.5 h-3.5 text-slate-400 transition-transform" :class="showTreeSelect ? 'rotate-180' : ''" />
+            </button>
 
             <!-- 弹出层：完整组织架构树 (支持搜索、展开/折叠、微图标、人员微标) -->
             <div
               v-if="showTreeSelect"
-              class="absolute left-16 top-9 mt-1 z-50 bg-white border border-slate-200 rounded-2xl shadow-2xl p-3 w-80 max-h-96 overflow-y-auto space-y-2 backdrop-blur-md animate-in fade-in zoom-in-95 duration-100"
+              class="absolute left-[70px] top-11 z-50 bg-white border border-slate-200 rounded-2xl shadow-2xl p-3 w-80 max-h-96 overflow-y-auto space-y-2 backdrop-blur-md animate-in fade-in zoom-in-95 duration-100"
             >
               <div class="flex items-center justify-between pb-2 border-b border-slate-100 px-1">
                 <span class="font-bold text-xs text-slate-800 flex items-center gap-1">
@@ -284,9 +460,9 @@ const filteredAgents = computed(() => {
                   v-model="searchTreeQuery"
                   type="text"
                   placeholder="搜索部门或技能组..."
-                  class="w-full bg-[#f8fafc] border border-slate-200 rounded-lg pl-6 pr-2 py-1 text-xs text-slate-700 focus:outline-none focus:border-[#1677ff]"
+                  class="w-full bg-[#f8fafc] border border-slate-200 rounded-lg pl-6 pr-2 py-1.5 text-xs text-slate-700 focus:outline-none focus:border-[#1677ff]"
                 />
-                <span class="absolute left-2 top-1.5 text-slate-400 text-xs">🔍</span>
+                <span class="absolute left-2 top-2 text-slate-400 text-xs">🔍</span>
               </div>
 
               <!-- 树节点 -->
@@ -307,14 +483,14 @@ const filteredAgents = computed(() => {
           <button
             @click="handleQuery"
             :disabled="isLoading"
-            class="px-5 py-1.5 bg-[#1677ff] hover:bg-blue-600 text-white rounded-xl font-bold shadow-xs transition cursor-pointer flex items-center gap-1.5"
+            class="px-5 h-10 bg-[#1677ff] hover:bg-blue-600 active:scale-95 text-white rounded-xl font-bold shadow-xs transition cursor-pointer flex items-center gap-1.5 text-xs"
           >
-            <span :class="isLoading ? 'animate-spin' : ''">🔄</span>
+            <RefreshCw class="w-3.5 h-3.5" :class="isLoading ? 'animate-spin' : ''" />
             <span>{{ isLoading ? '查询中...' : '查询' }}</span>
           </button>
         </div>
 
-        <div class="text-xs text-slate-400 font-medium">
+        <div class="text-xs text-slate-400 font-medium shrink-0">
           数据最后更新: <span class="font-mono text-slate-600 font-bold">{{ updateTime }}</span>
         </div>
       </div>
@@ -326,16 +502,12 @@ const filteredAgents = computed(() => {
         <div class="flex items-center justify-between mb-3">
           <div class="flex items-center gap-3">
             <h3 class="font-black text-base text-slate-900 flex items-center gap-2">
-              <span>{{ selectedNodeName }} 通话效能汇总</span>
+              <span>通话效能汇总</span>
             </h3>
             <span class="text-xs font-semibold px-2.5 py-0.5 rounded-full bg-blue-50 text-[#1677ff] font-mono">
               {{ selectedNodePath }}
             </span>
-            <span class="px-2 py-0.5 rounded-full bg-emerald-50 text-emerald-600 text-[11px] font-bold border border-emerald-100">
-              真实实测环境
-            </span>
           </div>
-          <span class="text-xs text-slate-400 font-medium">包含该节点下全量坐席真实话务统计</span>
         </div>
 
         <table class="w-full text-xs text-left border border-slate-200 rounded-2xl overflow-hidden shadow-2xs">
@@ -376,21 +548,13 @@ const filteredAgents = computed(() => {
       </div>
 
       <!-- ======================================================================= -->
-      <!-- 4. 🌟 坐席 24h 工时与通话效能看板 (真实坐席数据直连) -->
+      <!-- 4. 坐席 24h 工时与通话效能看板 -->
       <!-- ======================================================================= -->
       <div class="pt-6 border-t border-slate-100 space-y-4">
         <!-- 顶栏：标题、甘特图图例与搜索 -->
         <div class="flex flex-wrap items-center justify-between gap-4">
           <div>
-            <div class="flex items-center gap-2">
-              <h4 class="text-sm font-black text-slate-900">坐席 24h 工时状态与通话直观效能</h4>
-              <span class="px-2 py-0.5 rounded-full bg-emerald-50 text-emerald-700 font-mono text-xs font-bold">
-                数据库在籍 {{ filteredAgents.length }} 位成员
-              </span>
-            </div>
-            <p class="text-xs text-slate-400 mt-0.5 font-medium">
-              甘特图局部展现工时流向，表格全量透视接听数量、接听成功率、呼出数量、呼出成功率等核心指标
-            </p>
+            <h4 class="text-sm font-black text-slate-900">坐席 24h 效能</h4>
           </div>
 
           <!-- 甘特图图例与搜索 -->
@@ -415,27 +579,27 @@ const filteredAgents = computed(() => {
           </div>
         </div>
 
-        <!-- 8 大关键数据 + 紧凑甘特图时序表格 -->
-        <div class="border border-slate-200 rounded-2xl overflow-hidden shadow-2xs">
-          <table class="w-full text-xs text-center">
+        <!-- 8 大关键数据 + 紧凑甘特图时序表格 (支持左右滑动) -->
+        <div class="border border-slate-200 rounded-2xl overflow-x-auto shadow-2xs">
+          <table class="w-full min-w-[1080px] text-xs text-center border-collapse">
             <!-- 分组表头 -->
             <thead class="bg-[#f8fafc] text-slate-700 border-b border-slate-200 font-bold">
-              <tr class="border-b border-slate-200/60 text-[11px] text-slate-500">
-                <th colspan="2" class="py-2 px-3 text-left border-r border-slate-200">坐席基本信息</th>
-                <th class="py-2 px-3 border-r border-slate-200 bg-slate-100/50">24h 工时状态 (甘特图时序)</th>
-                <th colspan="4" class="py-2 px-3 border-r border-slate-200 bg-blue-50/50 text-[#1677ff]">
+              <tr class="border-b border-slate-200 text-xs text-slate-700 font-bold bg-slate-50/80">
+                <th colspan="2" class="py-3 px-4 text-left border-r border-slate-200 font-bold text-slate-700">坐席基本信息</th>
+                <th class="py-3 px-4 border-r border-slate-200 bg-slate-100/60 font-bold text-slate-700">24h 工时状态 (甘特图时序)</th>
+                <th colspan="4" class="py-3 px-4 border-r border-slate-200 bg-blue-50/60 text-[#1677ff] font-bold">
                   📞 呼入接听效能指标
                 </th>
-                <th colspan="4" class="py-2 px-3 border-r border-slate-200 bg-emerald-50/50 text-emerald-700">
+                <th colspan="4" class="py-3 px-4 border-r border-slate-200 bg-emerald-50/60 text-emerald-700 font-bold">
                   📱 外呼呼出效能指标
                 </th>
-                <th class="py-2 px-3 text-right">综合效能</th>
+                <th class="py-3 px-4 text-right font-bold text-slate-700">综合效能</th>
               </tr>
-              <tr>
-                <th class="py-2.5 px-3 text-left w-24">坐席姓名</th>
-                <th class="py-2.5 px-3 w-20 border-r border-slate-200">工号</th>
-                <th class="py-2.5 px-3 w-60 border-r border-slate-200">
-                  <div class="flex items-center justify-between text-[10px] text-slate-400 font-mono">
+              <tr class="text-slate-600 font-bold">
+                <th class="py-2.5 px-4 text-left w-28">坐席姓名</th>
+                <th class="py-2.5 px-3 w-24 border-r border-slate-200 font-mono">工号</th>
+                <th class="py-2.5 px-4 min-w-[260px] border-r border-slate-200">
+                  <div class="flex items-center justify-between text-[11px] text-slate-400 font-mono">
                     <span>09:00</span>
                     <span>13:00</span>
                     <span>18:00</span>
@@ -452,25 +616,19 @@ const filteredAgents = computed(() => {
                 <th class="py-2.5 px-3 bg-emerald-50/30 text-emerald-600">呼出成功率</th>
                 <th class="py-2.5 px-3 bg-emerald-50/30 border-r border-slate-200 text-slate-800">呼出总时长</th>
                 <!-- 综合 -->
-                <th class="py-2.5 px-3 text-right w-24">状态/效能</th>
+                <th class="py-2.5 px-4 text-right w-24">状态/效能</th>
               </tr>
             </thead>
 
             <tbody class="divide-y divide-slate-100 bg-white">
               <tr v-for="agent in filteredAgents" :key="agent.id" class="hover:bg-blue-50/20 transition-colors">
-                <!-- 姓名 -->
-                <td class="py-3 px-3 text-left font-bold text-slate-900">
-                  <div class="flex items-center gap-2">
-                    <div class="w-6 h-6 rounded-full bg-gradient-to-tr from-blue-500 to-indigo-500 text-white font-bold flex items-center justify-center text-[10px]">
+                <!-- 姓名 (已移除主管标签，高度与头像更宽裕) -->
+                <td class="py-3 px-4 text-left font-bold text-slate-900 whitespace-nowrap">
+                  <div class="flex items-center gap-2.5">
+                    <div class="w-7 h-7 rounded-full bg-gradient-to-tr from-blue-500 to-indigo-500 text-white font-bold flex items-center justify-center text-xs flex-shrink-0">
                       {{ agent.name.slice(0, 1) }}
                     </div>
-                    <span>{{ agent.name }}</span>
-                    <span
-                      v-if="agent.role === '组长' || agent.role === '主管'"
-                      class="text-[9px] px-1 py-0.2 rounded bg-purple-100 text-purple-700 font-bold"
-                    >
-                      {{ agent.role }}
-                    </span>
+                    <span class="text-xs">{{ agent.name }}</span>
                   </div>
                 </td>
 
@@ -572,3 +730,39 @@ const filteredAgents = computed(() => {
     </div>
   </div>
 </template>
+
+<style scoped>
+:deep(.seamless-date-picker.el-date-editor) {
+  --el-date-editor-width: auto;
+}
+:deep(.seamless-date-picker .el-input__wrapper) {
+  background: transparent !important;
+  box-shadow: none !important;
+  padding: 0 4px !important;
+  height: 36px !important;
+  cursor: pointer !important;
+  transition: all 0.15s ease-in-out;
+}
+:deep(.seamless-date-picker .el-input__wrapper:hover),
+:deep(.seamless-date-picker .el-input__wrapper.is-focus) {
+  box-shadow: none !important;
+}
+:deep(.seamless-date-picker .el-input__inner) {
+  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace !important;
+  font-size: 17px !important;
+  font-weight: 800 !important;
+  color: #0f172a !important;
+  text-align: center !important;
+  cursor: pointer !important;
+  padding: 0 !important;
+  letter-spacing: 0.02em !important;
+}
+:deep(.seamless-date-picker .el-input__prefix) {
+  color: #1677ff !important;
+  margin-right: 4px !important;
+}
+:deep(.seamless-date-picker .el-input__prefix .el-icon) {
+  font-size: 18px !important;
+}
+</style>
+

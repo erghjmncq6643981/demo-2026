@@ -146,11 +146,15 @@ async function removeExtension(row: ExtensionVO): Promise<void> {
   }
 }
 
-async function changePage(delta: number): Promise<void> {
-  const next = Math.min(totalPages.value, Math.max(1, pageNum.value + delta));
-  if (next === pageNum.value) return;
-  pageNum.value = next;
-  await loadExtensions();
+function handlePageChange(page: number): void {
+  pageNum.value = page;
+  void loadExtensions();
+}
+
+function handleSizeChange(size: number): void {
+  pageSize.value = size;
+  pageNum.value = 1;
+  void loadExtensions();
 }
 
 onMounted(loadExtensions);
@@ -368,25 +372,18 @@ onMounted(loadExtensions);
       </div>
 
       <!-- Pagination Footer -->
-      <div class="flex items-center justify-between text-xs text-slate-500 pt-4 border-t border-slate-100 mt-2">
-        <span>共 {{ total }} 条分机档案</span>
-        <div class="flex items-center gap-2">
-          <button
-            class="px-3 py-1.5 border border-slate-200 bg-white rounded-xl hover:bg-slate-50 disabled:opacity-40 cursor-pointer font-medium"
-            :disabled="pageNum <= 1"
-            @click="changePage(-1)"
-          >
-            上一页
-          </button>
-          <span class="font-mono text-slate-600">{{ pageNum }} / {{ totalPages }}</span>
-          <button
-            class="px-3 py-1.5 border border-slate-200 bg-white rounded-xl hover:bg-slate-50 disabled:opacity-40 cursor-pointer font-medium"
-            :disabled="pageNum >= totalPages"
-            @click="changePage(1)"
-          >
-            下一页
-          </button>
-        </div>
+      <div class="mt-5 flex flex-col sm:flex-row items-center justify-between gap-3 text-xs text-slate-500 pt-4 border-t border-slate-100">
+        <span class="font-medium">
+          共 <strong class="text-slate-800">{{ total }}</strong> 条分机档案
+        </span>
+        <FccPagination
+          v-model:current-page="pageNum"
+          v-model:page-size="pageSize"
+          :total="total"
+          :page-sizes="[10, 20, 50, 100]"
+          @current-change="handlePageChange"
+          @size-change="handleSizeChange"
+        />
       </div>
     </div>
 

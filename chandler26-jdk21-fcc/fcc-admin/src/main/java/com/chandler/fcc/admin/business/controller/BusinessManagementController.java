@@ -101,9 +101,14 @@ public class BusinessManagementController {
     @Operation(summary = "分页查询自动外呼任务")
     public CommonResult<Object> jobs(
         @RequestParam(defaultValue = "1") int page,
-        @RequestParam(required = false) String triggerSource
+        @RequestParam(defaultValue = "10") int pageSize,
+        @RequestParam(required = false) String number,
+        @RequestParam(required = false) String triggerSource,
+        @RequestParam(required = false) String status,
+        @RequestParam(required = false) String startTime,
+        @RequestParam(required = false) String endTime
     ) {
-        return CommonResult.success(service.jobs(page, triggerSource));
+        return CommonResult.success(service.jobs(page, pageSize, number, triggerSource, status, startTime, endTime));
     }
 
     /**

@@ -16,7 +16,7 @@
 6. **创建首个管理员**：首次启动 `fcc-admin` 时显式设置 `FCC_BOOTSTRAP_ADMIN_ENABLED=true` 及操作者选择的用户名、显示名和 8–64 位密码。成功登录后立即移除全部 `FCC_BOOTSTRAP_ADMIN_*` 变量并重启；日志和验收材料不得记录密码。
 7. **配置业务数据**：创建坐席、组、分机、终端、DID、外呼号码/context，创建并发布流程。确认每个呼入流程至少绑定一个启用 DID。
 8. **部署前端**：分别路由 `/api/admin`、`/api/telephony`、`/ws/agent` 和 Sidecar 运维入口；WebSocket 代理必须支持 Upgrade。业务工作台和运维台保持独立访问控制。
-9. **部署 Windows 测试客户端**：配置可信 HTTPS 工作台地址。未签名安装包只能用于受控测试，不能描述为正式可信发布。
+9. **部署 Windows 测试客户端**：构建前核对 `chandler26-fcc-client-web/desktop/deployment.json` 中的工作台地址；当前测试包使用 `http://fcc.local:8888`，虚拟机需将 `fcc.local` 映射至 FCC 主机并能访问 `8888/8089/8085`。更换地址须重新打包，登录者不配置服务地址。正式部署应提供可信 HTTPS 工作台地址。未签名安装包只能用于受控测试，不能描述为正式可信发布。
 
 当前多节点 Coordinator 的 ownership、跨节点 Bridge 和聚合快照尚未完成真实验收。在完成前只部署一个 dispatch ingress 和一个活跃 `fcc-server`，不要让多个 Sidecar 同时竞争 `fs.cmd.dispatch`。
 

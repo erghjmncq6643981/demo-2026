@@ -26,6 +26,7 @@ export interface SaveCustomerReq {
 export const customerManagementApi = {
   list(params: {
     page: number;
+    pageSize?: number;
     owner?: string;
     phone?: string;
   }): Promise<CustomerSummary[]> {

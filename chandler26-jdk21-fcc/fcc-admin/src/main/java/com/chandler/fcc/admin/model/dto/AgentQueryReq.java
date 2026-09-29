@@ -37,6 +37,15 @@ public class AgentQueryReq implements Serializable {
     @Schema(description = "坐席状态 (ENABLED, DISABLED)", example = "ENABLED")
     private String status;
 
+    @Schema(description = "登录状态 (ONLINE / OFFLINE)", example = "ONLINE")
+    private String loginStatus;
+
+    @Schema(description = "更新起始时间 (yyyy-MM-dd HH:mm:ss)")
+    private String startTime;
+
+    @Schema(description = "更新截止时间 (yyyy-MM-dd HH:mm:ss)")
+    private String endTime;
+
     @Schema(description = "页码 (默认 1)", example = "1")
     @Builder.Default
     private long pageNum = 1;

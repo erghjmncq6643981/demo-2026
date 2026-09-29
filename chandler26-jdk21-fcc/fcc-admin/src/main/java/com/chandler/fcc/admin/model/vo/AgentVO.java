@@ -41,8 +41,26 @@ public class AgentVO implements Serializable {
     @Schema(description = "角色代码 (AGENT_ADMIN / SUPERVISOR / AGENT_MEMBER)", example = "AGENT_MEMBER")
     private String roleCode;
 
+    @Schema(description = "角色中文名称", example = "班长主管")
+    private String roleName;
+
     @Schema(description = "状态 (ENABLED, DISABLED)", example = "ENABLED")
     private String status;
+
+    @Schema(description = "登录状态 (ONLINE / OFFLINE)", example = "ONLINE")
+    private String loginStatus;
+
+    @Schema(description = "登录状态中文", example = "在线")
+    private String loginStatusDesc;
+
+    @Schema(description = "通话状态代码", example = "IDLE")
+    private String callStatus;
+
+    @Schema(description = "通话状态中文", example = "空闲")
+    private String callStatusDesc;
+
+    @Schema(description = "是否已登录", example = "true")
+    private Boolean isLoggedIn;
 
     @Schema(description = "是否为主管/班长席 (由角色代码推导)", example = "false")
     private Boolean isSupervisor;

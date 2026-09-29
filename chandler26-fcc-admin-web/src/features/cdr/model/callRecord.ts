@@ -1,4 +1,5 @@
 import type { CallCdrVO } from "../../../api/cdrApi";
+import { formatDateTime } from "../../../utils/date";
 
 export interface CallRecord {
   id: string; // 通话ID (Call ID)
@@ -52,8 +53,8 @@ export function toCallRecord(item: CallCdrVO): CallRecord {
       (item.agentWorkNo ? `坐席 ${item.agentWorkNo}` : "未分配"),
     agentWorkNo: item.agentWorkNo || "-",
     direction: (item.direction as any) || "INBOUND",
-    startTime: item.initiatedAt || item.answeredAt || "-",
-    endTime: item.endedAt || "-",
+    startTime: formatDateTime(item.initiatedAt || item.answeredAt),
+    endTime: formatDateTime(item.endedAt),
     ringDuration: ringSec == null ? "-" : `${ringSec}秒`,
     talkDurationMs: item.talkDurationMs,
     audioDuration: audioDuration,

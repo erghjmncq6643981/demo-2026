@@ -621,20 +621,6 @@ export function useGroupManagement() {
     }
   };
 
-  // 彻底删除坐席档案
-  const handleDeleteMemberAccount = async (mem: AgentGroupMemberVO) => {
-    const ok = await confirmAction(`确认彻底注销并删除坐席【${mem.agentName} (${mem.workNo})】的档案吗？`, { title: '删除坐席档案', danger: true, confirmText: '确认删除' });
-    if (!ok) {
-      return;
-    }
-    try {
-      await agentApi.delete(mem.agentId);
-      toast(`坐席档案【${mem.agentName}】已删除！`, 'success');
-      await loadMembers(selectedNodeId.value);
-    } catch (err: any) {
-      toast('删除失败: ' + (err.message || '系统繁忙'), 'error');
-    }
-  };
 
   // 策略描述计算
   const strategyDesc = computed(() => {
@@ -732,7 +718,6 @@ export function useGroupManagement() {
     handleOpenEditMember,
     handleConfirmEditMember,
     handleUnbindMember,
-    handleDeleteMemberAccount,
     strategyDesc
   };
 }

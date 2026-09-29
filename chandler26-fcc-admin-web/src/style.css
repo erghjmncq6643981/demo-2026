@@ -119,3 +119,217 @@
   background-color: #BE123C;
   border-color: #BE123C;
 }
+
+/* ==========================================================================
+   全局分页统一风格 (Element Plus el-pagination 样式对齐)
+   ========================================================================== */
+.el-pagination {
+  --el-pagination-font-size: 0.75rem;
+  --el-pagination-bg-color: #ffffff;
+  --el-pagination-text-color: #475569;
+  --el-pagination-border-radius: 12px;
+  --el-pagination-button-color: #475569;
+  --el-pagination-button-bg-color: #ffffff;
+  --el-pagination-button-disabled-color: #cbd5e1;
+  --el-pagination-button-disabled-bg-color: #ffffff;
+  --el-pagination-hover-color: #4f46e5;
+  font-family: inherit;
+}
+
+.el-pagination.is-background .el-pager li:not(.is-disabled).is-active {
+  background-color: #4f46e5 !important;
+  color: #ffffff !important;
+  font-weight: 700 !important;
+  border-radius: 12px !important;
+  box-shadow: 0 1px 3px 0 rgba(79, 70, 229, 0.25) !important;
+}
+
+.el-pagination.is-background .el-pager li:not(.is-disabled) {
+  border-radius: 12px !important;
+  border: 1px solid #e2e8f0 !important;
+  background-color: #ffffff !important;
+  color: #334155 !important;
+  font-family: 'JetBrains Mono', Menlo, monospace !important;
+  font-weight: 500 !important;
+  transition: all 0.15s ease !important;
+}
+
+.el-pagination.is-background .el-pager li:not(.is-disabled):hover {
+  background-color: #f8fafd !important;
+  color: #4f46e5 !important;
+  border-color: #cbd5e1 !important;
+}
+
+.el-pagination.is-background .btn-prev,
+.el-pagination.is-background .btn-next {
+  border-radius: 12px !important;
+  border: 1px solid #e2e8f0 !important;
+  background-color: #ffffff !important;
+  color: #475569 !important;
+  transition: all 0.15s ease !important;
+}
+
+.el-pagination.is-background .btn-prev:not(:disabled):hover,
+.el-pagination.is-background .btn-next:not(:disabled):hover {
+  background-color: #f8fafd !important;
+  color: #0f172a !important;
+  border-color: #cbd5e1 !important;
+}
+
+.el-pagination .el-select .el-input__wrapper {
+  border-radius: 12px !important;
+  border: 1px solid #e2e8f0 !important;
+  box-shadow: none !important;
+}
+
+.el-pagination .el-select .el-input__wrapper.is-focus {
+  border-color: #4f46e5 !important;
+  box-shadow: 0 0 0 2px rgba(79, 70, 229, 0.2) !important;
+}
+
+/* ==========================================================================
+   全局统一日期/时间选择器外观 (FccDateRangePicker & el-date-picker)
+   ========================================================================== */
+.fcc-date-picker-wrap .el-date-editor--datetimerange.el-input__wrapper,
+.fcc-date-picker-wrap .el-date-editor--daterange.el-input__wrapper,
+.el-date-editor--datetimerange.el-input__wrapper,
+.el-date-editor--daterange.el-input__wrapper {
+  border-radius: 12px !important;
+  background-color: rgba(248, 250, 253, 0.7) !important;
+  border: 1px solid #e2e8f0 !important;
+  box-shadow: none !important;
+  height: 38px !important;
+  padding: 0 12px !important;
+  transition: all 0.15s ease-in-out !important;
+}
+
+.fcc-date-picker-wrap .el-date-editor--datetimerange.el-input__wrapper:hover,
+.fcc-date-picker-wrap .el-date-editor--daterange.el-input__wrapper:hover,
+.el-date-editor--datetimerange.el-input__wrapper:hover,
+.el-date-editor--daterange.el-input__wrapper:hover {
+  background-color: #ffffff !important;
+  border-color: #cbd5e1 !important;
+}
+
+.fcc-date-picker-wrap .el-date-editor--datetimerange.el-input__wrapper.is-focus,
+.fcc-date-picker-wrap .el-date-editor--daterange.el-input__wrapper.is-focus,
+.el-date-editor--datetimerange.el-input__wrapper.is-focus,
+.el-date-editor--daterange.el-input__wrapper.is-focus {
+  background-color: #ffffff !important;
+  border-color: #4f46e5 !important;
+  box-shadow: 0 0 0 2px rgba(79, 70, 229, 0.2) !important;
+}
+
+.fcc-date-picker-wrap .el-range-input,
+.el-date-editor .el-range-input {
+  font-family: 'JetBrains Mono', Menlo, Consolas, monospace !important;
+  font-size: 0.75rem !important;
+  color: #1e293b !important;
+  font-weight: 500 !important;
+  background: transparent !important;
+}
+
+.fcc-date-picker-wrap .el-range-separator,
+.el-date-editor .el-range-separator {
+  color: #94a3b8 !important;
+  font-size: 0.75rem !important;
+  font-weight: 700 !important;
+  padding: 0 4px !important;
+}
+
+.fcc-date-picker-wrap .el-range__icon,
+.el-date-editor .el-range__icon {
+  color: #94a3b8 !important;
+  font-size: 0.875rem !important;
+}
+
+.fcc-date-picker-wrap .el-range__close-icon,
+.el-date-editor .el-range__close-icon {
+  color: #94a3b8 !important;
+  cursor: pointer;
+}
+.fcc-date-picker-wrap .el-range__close-icon:hover,
+.el-date-editor .el-range__close-icon:hover {
+  color: #475569 !important;
+}
+
+/* ==========================================================================
+   全局日期范围弹出层外观 (fcc-date-picker-popper)
+   ========================================================================== */
+.el-picker__popper.fcc-date-picker-popper {
+  border-radius: 20px !important;
+  border: 1px solid #f1f5f9 !important;
+  box-shadow: 0 20px 40px -8px rgba(0, 0, 0, 0.12), 0 4px 12px -2px rgba(0, 0, 0, 0.05), 0 0 0 1px rgba(0, 0, 0, 0.04) !important;
+  overflow: hidden;
+}
+
+.fcc-date-picker-popper .el-picker-panel {
+  border-radius: 20px !important;
+  border: none !important;
+  background-color: #ffffff !important;
+}
+
+.fcc-date-picker-popper .el-picker-panel__sidebar {
+  background-color: #f8fafd !important;
+  border-right: 1px solid #f1f5f9 !important;
+  padding: 12px 6px !important;
+}
+
+.fcc-date-picker-popper .el-picker-panel__shortcut {
+  font-size: 0.75rem !important;
+  font-weight: 600 !important;
+  color: #475569 !important;
+  border-radius: 8px !important;
+  padding: 6px 12px !important;
+  margin-bottom: 2px !important;
+  transition: all 0.15s ease !important;
+}
+
+.fcc-date-picker-popper .el-picker-panel__shortcut:hover {
+  background-color: #eef2ff !important;
+  color: #4f46e5 !important;
+}
+
+/* 激活选中的日期 */
+.fcc-date-picker-popper .el-date-table td.current:not(.disabled) span,
+.fcc-date-picker-popper .el-date-table td.start-date span,
+.fcc-date-picker-popper .el-date-table td.end-date span {
+  background-color: #4f46e5 !important;
+  color: #ffffff !important;
+  border-radius: 8px !important;
+  font-weight: 700 !important;
+}
+
+/* 区间选中底色 */
+.fcc-date-picker-popper .el-date-table td.in-range .el-date-table-cell {
+  background-color: rgba(79, 70, 229, 0.08) !important;
+}
+.fcc-date-picker-popper .el-date-table td.in-range:hover .el-date-table-cell {
+  background-color: rgba(79, 70, 229, 0.14) !important;
+}
+
+/* 今天标记 */
+.fcc-date-picker-popper .el-date-table td.today span {
+  color: #4f46e5 !important;
+  font-weight: 700 !important;
+}
+
+/* 底部操作栏确认按钮 */
+.fcc-date-picker-popper .el-picker-panel__footer .el-button--primary {
+  background-color: #4f46e5 !important;
+  border-color: #4f46e5 !important;
+  border-radius: 10px !important;
+  font-weight: 700 !important;
+  font-size: 0.75rem !important;
+  padding: 6px 16px !important;
+}
+.fcc-date-picker-popper .el-picker-panel__footer .el-button--primary:hover {
+  background-color: #4338ca !important;
+  border-color: #4338ca !important;
+}
+
+/* 时间列高亮选中 */
+.fcc-date-picker-popper .el-time-spinner__item.is-active:not(.is-disabled) {
+  color: #4f46e5 !important;
+  font-weight: 700 !important;
+}

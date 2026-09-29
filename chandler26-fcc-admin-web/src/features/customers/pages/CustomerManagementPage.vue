@@ -198,25 +198,19 @@ const state = useCustomerManagement();
 
       <!-- Pagination Footer -->
       <div
-        class="mt-5 flex items-center justify-between text-xs text-slate-500 pt-3 border-t border-slate-100"
+        class="mt-5 flex flex-col sm:flex-row items-center justify-between gap-3 text-xs text-slate-500 pt-4 border-t border-slate-100"
       >
-        <span class="font-medium">第 {{ state.page.value }} 页</span>
-        <div class="flex items-center gap-2">
-          <button
-            class="px-3 py-1.5 rounded-xl border border-slate-200 bg-white hover:bg-slate-50 text-slate-700 disabled:opacity-40 disabled:cursor-not-allowed font-bold transition cursor-pointer"
-            :disabled="state.page.value === 1"
-            @click="state.previous"
-          >
-            上一页
-          </button>
-          <button
-            class="px-3 py-1.5 rounded-xl border border-slate-200 bg-white hover:bg-slate-50 text-slate-700 disabled:opacity-40 disabled:cursor-not-allowed font-bold transition cursor-pointer"
-            :disabled="!state.hasNext.value"
-            @click="state.next"
-          >
-            下一页
-          </button>
-        </div>
+        <span class="font-medium">
+          共 <strong class="text-slate-800">{{ state.total.value }}</strong> 条客户资料
+        </span>
+        <FccPagination
+          v-model:current-page="state.page.value"
+          v-model:page-size="state.pageSize.value"
+          :total="state.total.value"
+          :page-sizes="[10, 20, 50, 100]"
+          @current-change="state.onPageChange"
+          @size-change="state.onSizeChange"
+        />
       </div>
     </div>
 

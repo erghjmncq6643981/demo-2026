@@ -9,22 +9,66 @@
     ORDER BY id DESC LIMIT 50 OFFSET #{offset}
   </select>
   <select id="jobs" resultType="map">
-    SELECT CAST(id AS CHAR) AS id,
-           flow_key AS flowKey,
-           task_type AS taskType,
-           trigger_source AS triggerSource,
-           biz_id AS bizId,
-           created_by AS createdBy,
-           status,
-           max_attempts AS maxAttempts,
-           JSON_UNQUOTE(JSON_EXTRACT(payload, '$.number')) AS number,
-           JSON_UNQUOTE(JSON_EXTRACT(payload, '$.text')) AS text,
-           scheduled_at AS scheduledAt
+    SELECT CAST(j.id AS CHAR) AS id,
+           j.flow_key AS flowKey,
+           j.task_type AS taskType,
+           j.trigger_source AS triggerSource,
+           j.biz_id AS bizId,
+           j.created_by AS createdBy,
+           j.status,
+           j.max_attempts AS maxAttempts,
+           JSON_UNQUOTE(JSON_EXTRACT(j.payload, '$.number')) AS number,
+           JSON_UNQUOTE(JSON_EXTRACT(j.payload, '$.text')) AS text,
+           (
+             SELECT COALESCE(cs.talk_duration_ms, IF(cs.answered_at IS NOT NULL AND cs.ended_at IS NOT NULL, TIMESTAMPDIFF(SECOND, cs.answered_at, cs.ended_at) * 1000, NULL))
+             FROM fcc_dial_attempt da
+             LEFT JOIN fcc_call_session cs ON (da.call_id = cs.id OR cs.biz_id = CAST(da.id AS CHAR))
+             WHERE da.dial_job_id = j.id
+             ORDER BY da.attempt_no DESC
+             LIMIT 1
+           ) AS talkDurationMs,
+           j.scheduled_at AS scheduledAt,
+           j.updated_at AS updatedAt,
+           j.created_at AS createdAt
+    FROM fcc_dial_job j
+    WHERE j.job_type = 'AUTO_FLOW'
+    <if test="number != null and number != ''">
+      AND JSON_UNQUOTE(JSON_EXTRACT(j.payload, '$.number')) LIKE CONCAT('%', #{number}, '%')
+    </if>
+    <if test="triggerSource != null and triggerSource != ''">
+      AND j.trigger_source = #{triggerSource}
+    </if>
+    <if test="status != null and status != ''">
+      AND j.status = #{status}
+    </if>
+    <if test="startTime != null">
+      AND j.updated_at &gt;= #{startTime}
+    </if>
+    <if test="endTime != null">
+      AND j.updated_at &lt;= #{endTime}
+    </if>
+    ORDER BY j.id DESC
+    LIMIT #{limit} OFFSET #{offset}
+  </select>
+  <select id="jobsCount" resultType="long">
+    SELECT COUNT(*)
     FROM fcc_dial_job
     WHERE job_type = 'AUTO_FLOW'
-    <if test="triggerSource != null and triggerSource != ''">AND trigger_source = #{triggerSource}</if>
-    ORDER BY id DESC
-    LIMIT 50 OFFSET #{offset}
+    <if test="number != null and number != ''">
+      AND JSON_UNQUOTE(JSON_EXTRACT(payload, '$.number')) LIKE CONCAT('%', #{number}, '%')
+    </if>
+    <if test="triggerSource != null and triggerSource != ''">
+      AND trigger_source = #{triggerSource}
+    </if>
+    <if test="status != null and status != ''">
+      AND status = #{status}
+    </if>
+    <if test="startTime != null">
+      AND updated_at &gt;= #{startTime}
+    </if>
+    <if test="endTime != null">
+      AND updated_at &lt;= #{endTime}
+    </if>
   </select>
   <select id="customerOwner" resultType="string">
     SELECT owner_work_no FROM fcc_customer WHERE id=#{id}

@@ -105,7 +105,7 @@ onUnmounted(() => {
       <!-- 菜单 5: 组织效能报表 -->
       <OrgReportView v-else-if="activeTab === 'orgreport'" />
 
-      <!-- 菜单 6/7/8: 系统运维 (分机管理 / 系统变量 / 客户端管理) -->
+      <!-- 菜单 6/7/8: 系统运维 (分机管理 / 系统配置 / 客户端管理) -->
       <ExtensionManageView
         v-else-if="
           activeTab === 'extensions' ||

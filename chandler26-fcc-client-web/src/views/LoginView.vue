@@ -1,7 +1,7 @@
 <script setup lang="ts">
-import { ref } from 'vue';
+import { ref, onMounted, watch, computed } from 'vue';
 import { useAgentStore } from '../stores/agentStore';
-import { Headphones, Lock, User, AlertCircle, ArrowRight, Eye, EyeOff } from 'lucide-vue-next';
+import { Headphones, Lock, User, AlertCircle, ArrowRight, Eye, EyeOff, Check } from 'lucide-vue-next';
 
 const agentStore = useAgentStore();
 
@@ -10,6 +10,62 @@ const password = ref('');
 const showPassword = ref(false);
 const submitting = ref(false);
 const errorMsg = ref('');
+const rememberPassword = ref(true);
+
+const STORAGE_REMEMBER_KEY = 'fcc_remember_login_credential';
+const STORAGE_WORKNO_KEY = 'fcc_saved_workno';
+const STORAGE_PASSWORD_KEY = 'fcc_saved_password';
+
+function encodeCredential(str: string): string {
+  try {
+    return btoa(encodeURIComponent(str));
+  } catch {
+    return str;
+  }
+}
+
+function decodeCredential(str: string | null): string {
+  if (!str) return '';
+  try {
+    return decodeURIComponent(atob(str));
+  } catch {
+    return str;
+  }
+}
+
+const hasSavedCredentials = computed(() => {
+  return (
+    rememberPassword.value &&
+    Boolean(workNo.value.trim()) &&
+    Boolean(password.value)
+  );
+});
+
+onMounted(() => {
+  const savedRemember = localStorage.getItem(STORAGE_REMEMBER_KEY);
+  if (savedRemember !== null) {
+    rememberPassword.value = savedRemember === 'true';
+  }
+
+  const savedWorkNo = localStorage.getItem(STORAGE_WORKNO_KEY);
+  if (savedWorkNo) {
+    workNo.value = savedWorkNo;
+  }
+
+  if (rememberPassword.value) {
+    const savedPassword = decodeCredential(localStorage.getItem(STORAGE_PASSWORD_KEY));
+    if (savedPassword) {
+      password.value = savedPassword;
+    }
+  }
+});
+
+watch(rememberPassword, (val) => {
+  localStorage.setItem(STORAGE_REMEMBER_KEY, String(val));
+  if (!val) {
+    localStorage.removeItem(STORAGE_PASSWORD_KEY);
+  }
+});
 
 const handleLogin = async () => {
   if (!workNo.value.trim()) {
@@ -26,6 +82,14 @@ const handleLogin = async () => {
 
   try {
     await agentStore.login(workNo.value.trim(), password.value);
+    localStorage.setItem(STORAGE_REMEMBER_KEY, String(rememberPassword.value));
+    if (rememberPassword.value) {
+      localStorage.setItem(STORAGE_WORKNO_KEY, workNo.value.trim());
+      localStorage.setItem(STORAGE_PASSWORD_KEY, encodeCredential(password.value));
+    } else {
+      localStorage.removeItem(STORAGE_PASSWORD_KEY);
+      localStorage.setItem(STORAGE_WORKNO_KEY, workNo.value.trim());
+    }
   } catch (err: any) {
     errorMsg.value = err.message || '登录失败，请检查工号与密码';
   } finally {
@@ -166,8 +230,34 @@ const handleLogin = async () => {
               </div>
             </div>
 
+            <!-- 记住密码与登录就绪状态 -->
+            <div class="flex items-center justify-between pt-1 pb-0.5 text-xs select-none">
+              <label class="inline-flex items-center gap-2 cursor-pointer group">
+                <input
+                  v-model="rememberPassword"
+                  type="checkbox"
+                  class="sr-only peer"
+                />
+                <div
+                  class="w-4 h-4 rounded-md border border-slate-300 bg-white peer-checked:bg-indigo-600 peer-checked:border-indigo-600 peer-focus-visible:ring-2 peer-focus-visible:ring-indigo-500/20 transition-all flex items-center justify-center text-white shadow-2xs group-hover:border-slate-400"
+                >
+                  <Check v-if="rememberPassword" class="w-3 h-3 stroke-[3]" />
+                </div>
+                <span class="text-slate-600 group-hover:text-slate-900 font-medium transition-colors">
+                  记住密码
+                </span>
+              </label>
+
+              <span
+                v-if="hasSavedCredentials"
+                class="text-[11px] text-indigo-600 font-medium bg-indigo-50/80 px-2 py-0.5 rounded-full border border-indigo-100/60 transition-all"
+              >
+                已保存凭据 · 可直接登录
+              </span>
+            </div>
+
             <!-- 高级质感登录按钮 -->
-            <div class="pt-3">
+            <div class="pt-2">
               <button
                 type="submit"
                 :disabled="submitting"

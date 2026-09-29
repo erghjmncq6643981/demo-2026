@@ -38,6 +38,7 @@
     SELECT CAST(j.id AS CHAR) AS id,
            j.agent_work_no AS owner,
            j.job_type AS jobType,
+           j.task_type AS taskType,
            j.max_attempts AS maxAttempts,
            JSON_UNQUOTE(JSON_EXTRACT(j.payload, '$.number')) AS number,
            JSON_UNQUOTE(JSON_EXTRACT(j.payload, '$.text')) AS text,
@@ -46,6 +47,12 @@
     FROM fcc_dial_job j
     WHERE j.status = 'PENDING'
       AND j.scheduled_at &lt;= UTC_TIMESTAMP(3)
+      AND NOT EXISTS (
+        SELECT 1
+        FROM fcc_dial_attempt da
+        WHERE da.status = 'RUNNING'
+          AND da.destination_number = JSON_UNQUOTE(JSON_EXTRACT(j.payload, '$.number'))
+      )
       AND (
         j.job_type = 'AUTO_FLOW'
         OR (
@@ -120,7 +127,12 @@
   <sql id="successfulCall">
     (
       (j.job_type = 'AUTO_FLOW'
-        AND JSON_UNQUOTE(JSON_EXTRACT(c.attributes, '$.notificationConfirmed')) = 'true')
+        AND (
+          (j.task_type = 'NOTIFY' AND c.answered_at IS NOT NULL)
+          OR (j.task_type = 'SURVEY' AND JSON_UNQUOTE(JSON_EXTRACT(c.attributes, '$.notificationConfirmed')) = 'true')
+          OR (j.task_type IS NULL AND JSON_UNQUOTE(JSON_EXTRACT(c.attributes, '$.notificationConfirmed')) = 'true')
+        )
+      )
       OR (j.job_type = 'AGENT_CALLBACK' AND c.answered_at IS NOT NULL)
     )
   </sql>

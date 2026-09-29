@@ -15,6 +15,10 @@ import lombok.Data;
 @Schema(description = "管理员创建自动外呼任务请求")
 public class CreateDialJobReq {
 
+    /** 任务类型：NOTIFY(通知类型), SURVEY(问卷类型)。 */
+    @Schema(description = "自动外呼业务类型：NOTIFY(通知类型), SURVEY(问卷类型)", example = "NOTIFY")
+    private String taskType = "NOTIFY";
+
     /**
      * 本次任务的被叫号码。
      */
@@ -28,16 +32,16 @@ public class CreateDialJobReq {
     @Schema(description = "本次任务独立的通知文案，由 Sidecar 转为语音", example = "您的服务即将到期，请按1确认")
     private String text;
 
-    /** 客户确认使用的单个按键。 */
-    @Pattern(regexp = "[0-9]", message = "确认按键必须是一位数字")
-    @Schema(description = "客户确认按键，默认1", example = "1")
+    /** 客户确认使用的单个按键（问卷类型生效）。 */
+    @Pattern(regexp = "^[0-9]?$", message = "确认按键必须是一位数字")
+    @Schema(description = "客户确认按键，问卷类型使用，默认1", example = "1")
     private String confirmDigit = "1";
 
-    /** 等待客户按键的秒数。 */
+    /** 等待客户按键的秒数（问卷类型生效）。 */
     @Min(value = 3, message = "确认等待时间不能小于3秒")
     @Max(value = 60, message = "确认等待时间不能大于60秒")
     @Schema(description = "等待客户确认按键的秒数，范围3至60", example = "10")
-    private int timeoutSeconds = 10;
+    private Integer timeoutSeconds = 10;
 
     /** 可选业务关联标识。 */
     @Size(max = 128, message = "业务标识不能超过128个字符")

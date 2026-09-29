@@ -6,10 +6,10 @@
   "main": "desktop/main.cjs",
   "description": "FCC Production Agent Console (Vue 3 + Vite + TypeScript + Pinia)",
   "scripts": {
-    "dev": "vite --host 0.0.0.0 --port 8888",
-    "build": "vue-tsc -b && vite build",
+    "dev": "vite --config vite.config.ts --host 0.0.0.0 --port 8888",
+    "build": "vue-tsc -b && vite build --config vite.config.ts",
     "test": "vitest run src",
-    "preview": "vite preview --host 0.0.0.0 --port 8888",
+    "preview": "vite preview --config vite.config.ts --host 0.0.0.0 --port 8888",
     "desktop:dev": "electron .",
     "desktop:test": "node --test desktop/*.test.cjs",
     "desktop:build": "npm run build && electron-builder --win nsis portable --x64"
@@ -30,6 +30,9 @@
     },
     "files": [
       "desktop/**",
+      "!desktop/setup.html",
+      "!desktop/setup.cjs",
+      "!desktop/setup-preload.cjs",
       "dist/**",
       "package.json"
     ],

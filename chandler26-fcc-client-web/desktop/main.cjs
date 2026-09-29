@@ -54,43 +54,20 @@ else {
   app.on('second-instance', reveal);
   app.on('before-quit', () => { quitting = true; realtime.disconnect(); reset(); });
   app.whenReady().then(() => {
-    const localHtmlPath = path.join(__dirname, '../dist/index.html');
-    const hasLocalBundle = fs.existsSync(localHtmlPath);
-
-    // Only use remote deployment if explicitly provided via --server= or FCC_DESKTOP_URL
+    // Packaged clients always use the validated workspace URL shipped with the installer.
     const serverArg = process.argv.find(arg => arg.startsWith('--server='))?.slice(9);
-    const remoteTarget = serverArg || process.env.FCC_DESKTOP_URL;
-    if (remoteTarget) {
-      try { deployment = deploymentUrl(remoteTarget); } catch {}
+    try {
+      const bundledTarget = JSON.parse(fs.readFileSync(path.join(__dirname, 'deployment.json'), 'utf8')).url;
+      deployment = deploymentUrl(app.isPackaged ? bundledTarget : (serverArg || process.env.FCC_DESKTOP_URL || bundledTarget));
+    } catch (error) {
+      dialog.showErrorBox('工作台配置错误', '安装包中的工作台地址无效，请联系管理员重新提供客户端。');
+      app.quit();
+      return;
     }
 
     Menu.setApplicationMenu(null);
     const appIcon = path.join(__dirname, 'icon.png');
     const trayIconPath = path.join(__dirname, 'tray-icon.png');
-
-    if (!deployment && !hasLocalBundle) {
-      window = new BrowserWindow({
-        width: 580,
-        height: 420,
-        icon: appIcon,
-        autoHideMenuBar: true,
-        webPreferences: { preload: path.join(__dirname, 'setup-preload.cjs'), contextIsolation: true, sandbox: false, nodeIntegration: false }
-      });
-      window.setMenu(null);
-      window.webContents.setWindowOpenHandler(() => ({ action: 'deny' }));
-      window.webContents.on('will-navigate', event => event.preventDefault());
-      ipcMain.handle('fcc:configure', (event, value) => {
-        if (event.sender !== window.webContents || event.senderFrame !== window.webContents.mainFrame) throw new Error('非法配置请求');
-        const url = deploymentUrl(value).href;
-        const configPath = path.join(app.getPath('userData'), 'deployment.json');
-        fs.mkdirSync(app.getPath('userData'), { recursive: true });
-        fs.writeFileSync(configPath, JSON.stringify({ url }), { mode: 0o600 });
-        app.relaunch({ args: process.argv.slice(1).filter(arg => !arg.startsWith('--server=')).concat(`--server=${url}`) });
-        app.quit();
-      });
-      window.loadFile(path.join(__dirname, 'setup.html'));
-      return;
-    }
 
     window = new BrowserWindow({
       width: 1380,
@@ -103,7 +80,6 @@ else {
         preload: path.join(__dirname, 'preload.cjs'),
         contextIsolation: true,
         sandbox: false,
-        webSecurity: false,
         nodeIntegration: false,
         backgroundThrottling: false
       }
@@ -148,7 +124,7 @@ else {
       : nativeImage.createFromDataURL('data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVQIHWP4z8DwHwAFgAI/ScLbtAAAAABJRU5ErkJggg==');
     tray = new Tray(trayIcon);
     tray.setToolTip('FCC 坐席工作台');
-    const startArgs = deployment ? [`--server=${deployment.href}`] : [];
+    const startArgs = app.isPackaged ? [] : [`--server=${deployment.href}`];
     tray.setContextMenu(Menu.buildFromTemplate([
       { label: '打开工作台', click: reveal },
       { label: '开机启动', type: 'checkbox', checked: app.getLoginItemSettings().openAtLogin, click: item => app.setLoginItemSettings({ openAtLogin: item.checked, args: startArgs }) },
@@ -159,7 +135,9 @@ else {
       trusted(event);
       if (typeof config?.token !== 'string' || !config.token || config.token.length > 8192) throw new Error('登录身份无效');
       reset();
-      const origin = deployment ? deployment.origin : 'http://fcc.local';
+      const origin = deployment
+        ? deployment.origin
+        : (config?.url ? new URL(config.url.replace(/^ws/, 'http')).origin : 'http://fcc.local');
       realtime.connect(socketUrl(deployment, config.url), config.token, origin);
     });
     ipcMain.handle('fcc:disconnect', event => { trusted(event); realtime.disconnect(); reset(); });
@@ -168,10 +146,6 @@ else {
       if (!['HEARTBEAT_PING'].includes(message?.type)) throw new Error('不支持的桌面消息');
       realtime.send({ type: message.type, timestamp: Date.now() });
     });
-    if (deployment) {
-      window.loadURL(deployment.href);
-    } else {
-      window.loadFile(localHtmlPath);
-    }
+    window.loadURL(deployment.href);
   });
 }

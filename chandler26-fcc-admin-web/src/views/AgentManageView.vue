@@ -1,13 +1,48 @@
 <script setup lang="ts">
 import { ref, onMounted } from 'vue';
 import { agentApi, type AgentVO, type AccountCredentialVO } from '../api/agentApi';
-import { Users, UserPlus, Link2, RefreshCw, CheckCircle, AlertCircle, Award, PhoneCall, KeyRound, Copy, Check, ShieldCheck, Pencil } from 'lucide-vue-next';
+import {
+  Users,
+  UserPlus,
+  RefreshCw,
+  CheckCircle,
+  AlertCircle,
+  Award,
+  PhoneCall,
+  KeyRound,
+  Copy,
+  Check,
+  Pencil,
+  Search,
+  RotateCcw,
+  LogOut,
+  Trash2,
+} from 'lucide-vue-next';
+import { confirmAction, toastSuccess, toastError } from '../utils/feedback';
 
 const agents = ref<AgentVO[]>([]);
 const availableSipExtensions = ref<string[]>([]);
 const loading = ref(false);
 const total = ref(0);
 const successNotice = ref('');
+
+// Pagination & Filters
+const pageNum = ref(1);
+const pageSize = ref(10);
+const searchAgentName = ref('');
+const searchPhoneNumber = ref('');
+const searchLoginStatus = ref('');
+const dateRange = ref<[string, string] | null>(null);
+
+const callStatusConfig: Record<string, { label: string; class: string }> = {
+  READY: { label: '空闲', class: 'bg-emerald-50 text-emerald-700 border-emerald-200' },
+  BUSY: { label: '示忙', class: 'bg-amber-50 text-amber-700 border-amber-200' },
+  RINGING: { label: '振铃中', class: 'bg-purple-50 text-purple-700 border-purple-200 animate-pulse' },
+  CALLING: { label: '呼叫中', class: 'bg-blue-50 text-blue-700 border-blue-200' },
+  TALKING: { label: '通话中', class: 'bg-rose-50 text-rose-700 border-rose-200' },
+  ACW: { label: '话后整理', class: 'bg-orange-50 text-orange-700 border-orange-200' },
+  REST: { label: '小休', class: 'bg-slate-100 text-slate-600 border-slate-200' },
+};
 
 // Modals
 const isCreateModalOpen = ref(false);
@@ -57,13 +92,89 @@ const currentAgentForBinding = ref<AgentVO | null>(null);
 const loadData = async () => {
   loading.value = true;
   try {
-    const agentsRes = await agentApi.list({ pageNum: 1, pageSize: 50 });
+    const agentsRes = await agentApi.list({
+      pageNum: pageNum.value,
+      pageSize: pageSize.value,
+      agentName: searchAgentName.value.trim() || undefined,
+      phoneNumber: searchPhoneNumber.value.trim() || undefined,
+      loginStatus: searchLoginStatus.value || undefined,
+      startTime: dateRange.value?.[0] || undefined,
+      endTime: dateRange.value?.[1] || undefined,
+    });
     agents.value = agentsRes.list || [];
     total.value = agentsRes.total || 0;
   } catch (err: any) {
     console.error('Failed to load agents:', err);
+    toastError(err.message || '加载坐席人员失败');
   } finally {
     loading.value = false;
+  }
+};
+
+const handleSearch = () => {
+  pageNum.value = 1;
+  void loadData();
+};
+
+const handleReset = () => {
+  searchAgentName.value = '';
+  searchPhoneNumber.value = '';
+  searchLoginStatus.value = '';
+  dateRange.value = null;
+  pageNum.value = 1;
+  void loadData();
+};
+
+const handlePageChange = (newPage: number) => {
+  pageNum.value = newPage;
+  void loadData();
+};
+
+const handleSizeChange = (newSize: number) => {
+  pageSize.value = newSize;
+  pageNum.value = 1;
+  void loadData();
+};
+
+const handleForceLogout = async (ag: AgentVO) => {
+  const name = ag.agentName || ag.realName || ag.workNo;
+  const accepted = await confirmAction(
+    `确定要强制将坐席「${name}」（工号：${ag.workNo}）下线吗？下线后其工作台将被强制退出。`,
+    {
+      title: '强制坐席下线',
+      confirmText: '强制下线',
+      danger: true,
+    }
+  );
+  if (!accepted) return;
+  try {
+    await agentApi.logout(ag.id);
+    toastSuccess(`坐席「${name}」已成功强制下线`);
+    await loadData();
+  } catch (err: any) {
+    console.error('Failed to logout agent:', err);
+    toastError(err.message || '强制下线失败');
+  }
+};
+
+const handleDeleteAgent = async (ag: AgentVO) => {
+  const name = ag.agentName || ag.realName || ag.workNo;
+  const accepted = await confirmAction(
+    `确认彻底注销并删除坐席【${name}】（工号：${ag.workNo}）的档案吗？此操作不可逆！`,
+    {
+      title: '删除坐席档案',
+      confirmText: '确认删除',
+      danger: true,
+    }
+  );
+  if (!accepted) return;
+  try {
+    await agentApi.delete(ag.id);
+    toastSuccess(`坐席【${name}】档案已成功删除`);
+    await loadData();
+  } catch (err: any) {
+    console.error('Failed to delete agent:', err);
+    toastError(err.message || '删除坐席失败');
   }
 };
 
@@ -259,11 +370,8 @@ onMounted(() => {
       <div>
         <h2 class="text-base font-black text-slate-900 flex items-center gap-2">
           <Users class="w-5 h-5 text-brand-600" />
-          坐席人员管理
+          坐席管理
         </h2>
-        <p class="text-xs text-slate-400 mt-0.5">
-            管理坐席资料和已经验证的接听终端；物理 SIP 绑定由话机拨 0000 完成
-        </p>
       </div>
 
       <div class="flex items-center space-x-3">
@@ -286,34 +394,107 @@ onMounted(() => {
       </div>
     </div>
 
+    <!-- Filter Card -->
+    <div
+      class="flex flex-wrap items-end gap-3 text-sm bg-white p-4 rounded-3xl border border-slate-100 shadow-card"
+    >
+      <!-- 姓名 -->
+      <div class="w-40">
+        <label class="block text-xs font-bold text-slate-600 mb-1.5">姓名</label>
+        <input
+          v-model="searchAgentName"
+          placeholder="输入姓名"
+          class="w-full bg-slate-50/70 border border-slate-200 rounded-xl px-3 py-2 text-slate-800 text-xs focus:outline-none focus:border-brand-500 focus:ring-1 focus:ring-brand-500/20 font-medium"
+          @keyup.enter="handleSearch"
+        />
+      </div>
+
+      <!-- 手机号码 -->
+      <div class="w-44">
+        <label class="block text-xs font-bold text-slate-600 mb-1.5">手机号码</label>
+        <input
+          v-model="searchPhoneNumber"
+          placeholder="输入手机号"
+          class="w-full bg-slate-50/70 border border-slate-200 rounded-xl px-3 py-2 text-slate-800 text-xs focus:outline-none focus:border-brand-500 focus:ring-1 focus:ring-brand-500/20 font-medium font-mono"
+          @keyup.enter="handleSearch"
+        />
+      </div>
+
+      <!-- 登录状态 -->
+      <div class="w-36">
+        <label class="block text-xs font-bold text-slate-600 mb-1.5">登录状态</label>
+        <select
+          v-model="searchLoginStatus"
+          class="w-full bg-slate-50/70 border border-slate-200 rounded-xl px-3 py-2 text-slate-800 text-xs focus:outline-none focus:border-brand-500 focus:ring-1 focus:ring-brand-500/20 font-medium cursor-pointer"
+        >
+          <option value="">全部状态</option>
+          <option value="ONLINE">在线</option>
+          <option value="OFFLINE">离线</option>
+        </select>
+      </div>
+
+      <!-- 时间选择框（开始时间-结束时间） -->
+      <div class="w-[370px]">
+        <label class="block text-xs font-bold text-slate-600 mb-1.5">时间范围</label>
+        <FccDateRangePicker
+          v-model="dateRange"
+          start-placeholder="开始时间"
+          end-placeholder="结束时间"
+          @change="handleSearch"
+        />
+      </div>
+
+      <div class="flex items-center gap-2">
+        <button
+          class="px-4 py-2 bg-brand-500 hover:bg-brand-600 text-white rounded-xl text-xs font-bold flex items-center gap-1.5 shadow-xs transition cursor-pointer"
+          @click="handleSearch"
+        >
+          <Search class="w-3.5 h-3.5" />
+          <span>查询</span>
+        </button>
+
+        <button
+          class="px-3.5 py-2 bg-slate-100 hover:bg-slate-200 text-slate-600 rounded-xl text-xs font-bold flex items-center gap-1.5 transition cursor-pointer border border-slate-200"
+          @click="handleReset"
+        >
+          <RotateCcw class="w-3.5 h-3.5" />
+          <span>重置</span>
+        </button>
+      </div>
+    </div>
+
     <!-- Agent Table -->
     <div class="bg-white border border-slate-100 rounded-3xl overflow-hidden shadow-card p-6">
       <div class="overflow-x-auto">
-        <table class="w-full text-left border-collapse text-sm">
+        <table class="min-w-[1000px] w-full text-left border-collapse text-sm">
           <thead>
             <tr class="border-b border-slate-100 text-xs uppercase tracking-wider text-slate-400 font-bold">
-              <th class="py-3.5 px-4">坐席姓名与工号</th>
-              <th class="py-3.5 px-4">系统权限角色</th>
-              <th class="py-3.5 px-4">当前接听终端</th>
-              <th class="py-3.5 px-4">账号状态</th>
-              <th class="py-3.5 px-4">坐席业务状态</th>
-              <th class="py-3.5 px-4 text-right">操作管理</th>
+              <!-- 顺序：姓名、工号、角色（只展示中文，枚举值不需要展示）、手机号码、接听方式、登录状态、通话状态、操作 -->
+              <th class="py-3.5 px-4 whitespace-nowrap">姓名</th>
+              <th class="py-3.5 px-4 whitespace-nowrap">工号</th>
+              <th class="py-3.5 px-4 whitespace-nowrap">角色</th>
+              <th class="py-3.5 px-4 whitespace-nowrap">手机号码</th>
+              <th class="py-3.5 px-4 whitespace-nowrap">接听方式</th>
+              <th class="py-3.5 px-4 whitespace-nowrap">登录状态</th>
+              <th class="py-3.5 px-4 whitespace-nowrap">通话状态</th>
+              <th class="py-3.5 px-4 text-right whitespace-nowrap">操作</th>
             </tr>
           </thead>
           <tbody class="divide-y divide-slate-100 text-sm text-slate-700">
             <tr v-if="loading && agents.length === 0">
-              <td colspan="6" class="py-12 text-center text-slate-400">
+              <td colspan="8" class="py-12 text-center text-slate-400">
                 <RefreshCw class="w-6 h-6 animate-spin mx-auto mb-2 text-brand-500" />
                 正在加载坐席人员档案...
               </td>
             </tr>
             <tr v-else-if="agents.length === 0">
-              <td colspan="6" class="py-12 text-center text-slate-400 font-medium">
-                暂无坐席档案，请使用“录入坐席”创建首个坐席
+              <td colspan="8" class="py-12 text-center text-slate-400 font-medium">
+                暂无符合条件的坐席人员档案
               </td>
             </tr>
             <tr v-for="ag in agents" :key="ag.id" class="hover:bg-slate-50/80 transition-colors">
-              <td class="py-4 px-4">
+              <!-- 1. 姓名 -->
+              <td class="py-4 px-4 whitespace-nowrap">
                 <div class="flex items-center space-x-3">
                   <div
                     class="w-9 h-9 rounded-full flex items-center justify-center text-xs font-bold"
@@ -321,83 +502,145 @@ onMounted(() => {
                   >
                     {{ (ag.agentName || ag.realName || '').slice(0, 1) }}
                   </div>
-                  <div>
-                    <div class="font-bold text-slate-900 flex items-center gap-1.5 text-sm">
-                      <span>{{ ag.agentName || ag.realName }}</span>
-                      <Award v-if="ag.roleCode === 'SUPERVISOR' || ag.isSupervisor" class="w-4 h-4 text-amber-500" />
-                    </div>
-                    <div class="font-mono text-xs text-slate-400">{{ ag.workNo }}</div>
+                  <div class="font-bold text-slate-900 flex items-center gap-1.5 text-sm">
+                    <span>{{ ag.agentName || ag.realName }}</span>
+                    <Award v-if="ag.roleCode === 'SUPERVISOR' || ag.isSupervisor" class="w-4 h-4 text-amber-500" title="班长主管" />
                   </div>
                 </div>
               </td>
-              <td class="py-4 px-4">
+
+              <!-- 2. 工号 -->
+              <td class="py-4 px-4 font-mono text-xs font-bold text-slate-800 whitespace-nowrap">
+                {{ ag.workNo }}
+              </td>
+
+              <!-- 3. 角色 (只展示中文，枚举值不需要展示) -->
+              <td class="py-4 px-4 whitespace-nowrap">
                 <span
-                  class="px-2.5 py-0.5 rounded-full text-xs font-bold"
+                  class="px-2.5 py-0.5 rounded-full text-xs font-bold border"
                   :class="(ag.roleCode === 'SUPERVISOR' || ag.isSupervisor) ? 'bg-amber-50 text-amber-700 border border-amber-200' : 'bg-indigo-50 text-brand-600 border border-brand-200'"
                 >
-                  {{ (ag.roleCode === 'SUPERVISOR' || ag.isSupervisor) ? 'SUPERVISOR 班长主管' : 'AGENT 标准坐席' }}
+                  {{ ag.roleName || ((ag.roleCode === 'SUPERVISOR' || ag.isSupervisor) ? '班长主管' : '标准坐席') }}
                 </span>
               </td>
-              <td class="py-4 px-4">
-                <div class="flex flex-col gap-1">
-                  <div class="flex items-center space-x-2">
-                    <span class="px-2.5 py-0.5 rounded-lg font-mono text-xs bg-slate-100 text-slate-800 border border-slate-200 flex items-center gap-1">
-                      <PhoneCall class="w-3.5 h-3.5 text-brand-600" />
-                      {{ ag.currentExtension || ag.workNo }}
-                    </span>
-                    <span
-                      class="text-xs font-mono px-2 py-0.5 rounded-md font-bold"
-                      :class="ag.boundEndpointType === 'WEBRTC' ? 'text-purple-700 bg-purple-50 border border-purple-200' : ag.boundEndpointType === 'SIP' ? 'text-blue-700 bg-blue-50 border border-blue-200' : 'text-emerald-700 bg-emerald-50 border border-emerald-200'"
-                    >
-                      {{ ag.boundEndpointType === 'WEBRTC' ? '💻 软电话' : ag.boundEndpointType === 'SIP' ? '☎️ SIP话机' : '📱 随行手机' }}
-                    </span>
-                  </div>
-                  <div class="text-xs text-slate-400 font-mono">
-                    工号: {{ ag.workNo }} · 手机: {{ ag.phoneNumber || '未设' }}
-                  </div>
+
+              <!-- 4. 手机号码 -->
+              <td class="py-4 px-4 font-mono text-xs text-slate-600 whitespace-nowrap">
+                {{ ag.phoneNumber || '-' }}
+              </td>
+
+              <!-- 5. 接听方式 -->
+              <td class="py-4 px-4 whitespace-nowrap">
+                <div class="flex items-center space-x-2">
+                  <span
+                    class="text-xs font-mono px-2 py-0.5 rounded-md font-bold"
+                    :class="ag.boundEndpointType === 'WEBRTC' ? 'text-purple-700 bg-purple-50 border border-purple-200' : ag.boundEndpointType === 'SIP' ? 'text-blue-700 bg-blue-50 border border-blue-200' : 'text-emerald-700 bg-emerald-50 border border-emerald-200'"
+                  >
+                    {{ ag.boundEndpointType === 'WEBRTC' ? '💻 软电话' : ag.boundEndpointType === 'SIP' ? '☎️ SIP话机' : ag.boundEndpointType === 'MOBILE' ? '📱 随行手机' : '未配置' }}
+                  </span>
+                  <span v-if="ag.currentExtension || ag.workNo" class="px-2 py-0.5 rounded-lg font-mono text-xs bg-slate-100 text-slate-700 border border-slate-200 flex items-center gap-1">
+                    <PhoneCall class="w-3 h-3 text-brand-600" />
+                    {{ ag.currentExtension || ag.workNo }}
+                  </span>
                 </div>
               </td>
-              <td class="py-4 px-4">
-                <span class="inline-flex items-center gap-1.5 text-xs font-bold text-emerald-600">
-                  <span class="w-2 h-2 rounded-full bg-emerald-500"></span>
-                  {{ ag.status === 'ENABLED' ? '在职生效' : '停用' }}
+
+              <!-- 6. 登录状态 -->
+              <td class="py-4 px-4 whitespace-nowrap">
+                <span
+                  v-if="ag.isLoggedIn || ag.loginStatus === 'ONLINE'"
+                  class="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-xs font-bold bg-emerald-50 text-emerald-700 border border-emerald-200"
+                >
+                  <span class="w-2 h-2 rounded-full bg-emerald-500 animate-pulse"></span>
+                  在线
+                </span>
+                <span
+                  v-else
+                  class="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-xs font-bold bg-slate-100 text-slate-500 border border-slate-200"
+                >
+                  <span class="w-2 h-2 rounded-full bg-slate-400"></span>
+                  离线
                 </span>
               </td>
-              <td class="py-4 px-4">
-                <span class="px-2.5 py-0.5 rounded-full text-xs font-mono font-bold bg-slate-100 text-slate-700 border border-slate-200">
-                  {{ ag.state || 'OFFLINE' }}
+
+              <!-- 7. 通话状态 -->
+              <td class="py-4 px-4 whitespace-nowrap">
+                <span
+                  v-if="!(ag.isLoggedIn || ag.loginStatus === 'ONLINE')"
+                  class="text-xs text-slate-400 font-mono"
+                >
+                  -
+                </span>
+                <span
+                  v-else
+                  class="px-2.5 py-0.5 rounded-full text-xs font-bold border"
+                  :class="callStatusConfig[ag.callStatus || 'READY']?.class || 'bg-slate-100 text-slate-700 border-slate-200'"
+                >
+                  {{ ag.callStatusDesc || callStatusConfig[ag.callStatus || 'READY']?.label || '空闲' }}
                 </span>
               </td>
-              <td class="py-4 px-4 text-right">
+
+              <!-- 8. 操作 (编辑、重置密码、下线[已登录显示]) -->
+              <td class="py-4 px-4 text-right whitespace-nowrap">
                 <div class="flex items-center justify-end gap-2">
                   <button
                     @click="openEditModal(ag)"
                     class="px-2.5 py-1.5 bg-slate-100 hover:bg-slate-200 text-slate-700 border border-slate-200 rounded-xl text-xs font-bold flex items-center gap-1 transition cursor-pointer"
-                    title="修改坐席基础资料"
+                    title="修改坐席资料"
                   >
                     <Pencil class="w-3.5 h-3.5 text-slate-500" />
                     <span>编辑</span>
                   </button>
+
                   <button
                     @click="openResetPasswordModal(ag)"
                     class="px-2.5 py-1.5 bg-slate-100 hover:bg-slate-200 text-slate-700 border border-slate-200 rounded-xl text-xs font-bold flex items-center gap-1 transition cursor-pointer"
-                    title="重置坐席登录口令"
+                    title="重置登录口令"
                   >
                     <KeyRound class="w-3.5 h-3.5 text-slate-500" />
-                    <span>重置口令</span>
+                    <span>重置密码</span>
                   </button>
+
                   <button
-                    @click="openBindingModal(ag)"
-                    class="px-3 py-1.5 bg-indigo-50 hover:bg-indigo-100 text-brand-600 border border-brand-200 rounded-xl text-xs font-bold flex items-center gap-1 transition cursor-pointer"
+                    v-if="ag.isLoggedIn || ag.loginStatus === 'ONLINE'"
+                    @click="handleForceLogout(ag)"
+                    class="px-2.5 py-1.5 bg-amber-50 hover:bg-amber-100 text-amber-700 border border-amber-200 rounded-xl text-xs font-bold flex items-center gap-1 transition cursor-pointer"
+                    title="强制下线"
                   >
-                    <Link2 class="w-3.5 h-3.5" />
-                    <span>切换终端</span>
+                    <LogOut class="w-3.5 h-3.5 text-amber-600" />
+                    <span>下线</span>
+                  </button>
+
+                  <button
+                    @click="handleDeleteAgent(ag)"
+                    class="px-2.5 py-1.5 bg-rose-50 hover:bg-rose-100 text-rose-700 border border-rose-200 rounded-xl text-xs font-bold flex items-center gap-1 transition cursor-pointer"
+                    title="彻底注销并删除坐席档案"
+                  >
+                    <Trash2 class="w-3.5 h-3.5 text-rose-600" />
+                    <span>删除</span>
                   </button>
                 </div>
               </td>
             </tr>
           </tbody>
         </table>
+      </div>
+
+      <!-- Pagination Footer -->
+      <div
+        class="mt-5 flex flex-col sm:flex-row items-center justify-between gap-3 text-xs text-slate-500 pt-4 border-t border-slate-100"
+      >
+        <span class="font-medium">
+          共 <strong class="text-slate-800">{{ total }}</strong> 个坐席
+        </span>
+        <FccPagination
+          v-model:current-page="pageNum"
+          v-model:page-size="pageSize"
+          :page-sizes="[10, 20, 50, 100]"
+          :total="total"
+          @size-change="handleSizeChange"
+          @current-change="handlePageChange"
+        />
       </div>
     </div>
 

@@ -19,8 +19,10 @@ import com.chandler.fcc.admin.model.vo.AgentVO;
 import com.chandler.fcc.common.util.IdUtil;
 import com.chandler.fcc.common.util.PasswordHasher;
 import jakarta.annotation.PostConstruct;
+import cn.dev33.satoken.stp.StpUtil;
 import java.nio.charset.StandardCharsets;
 import java.time.LocalDateTime;
+import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.stream.Collectors;
@@ -266,26 +268,46 @@ public class AgentService {
      * @return 坐席展示视图分页容器
      */
     public PageResult<AgentVO> queryAgents(AgentQueryReq req) {
-        Page<AgentEntity> page = new Page<>(req.getPageNum(), req.getPageSize());
-        LambdaQueryWrapper<AgentEntity> wrapper = new LambdaQueryWrapper<AgentEntity>()
-                .isNull(AgentEntity::getDeletedAt)
-                .eq(req.getWorkNo() != null && !req.getWorkNo().isBlank(), AgentEntity::getWorkNo, req.getWorkNo())
-                .like(req.getAgentName() != null && !req.getAgentName().isBlank(), AgentEntity::getAgentName, req.getAgentName())
-                .like(req.getPhoneNumber() != null && !req.getPhoneNumber().isBlank(), AgentEntity::getPhoneNumber, req.getPhoneNumber())
-                .eq(req.getRoleCode() != null && !req.getRoleCode().isBlank(), AgentEntity::getRoleCode, req.getRoleCode())
-                .eq(req.getStatus() != null && !req.getStatus().isBlank(), AgentEntity::getStatus, req.getStatus())
-                .orderByDesc(AgentEntity::getCreatedAt);
+        long pageNum = req.getPageNum() <= 0 ? 1 : req.getPageNum();
+        long pageSize = req.getPageSize() <= 0 ? 20 : req.getPageSize();
+        long offset = (pageNum - 1) * pageSize;
 
-        Page<AgentEntity> entityPage = agentMapper.selectPage(page, wrapper);
+        LocalDateTime startLocal = parseDateTime(req.getStartTime(), false);
+        LocalDateTime endLocal = parseDateTime(req.getEndTime(), true);
 
-        List<AgentVO> voList = entityPage.getRecords().stream()
-                .map(this::convertToVO)
+        String agentName = trimToNull(req.getAgentName());
+        String phoneNumber = trimToNull(req.getPhoneNumber());
+        String workNo = trimToNull(req.getWorkNo());
+        String roleCode = trimToNull(req.getRoleCode());
+        String status = trimToNull(req.getStatus());
+        String loginStatus = trimToNull(req.getLoginStatus());
+
+        List<AgentEntity> records = agentMapper.selectAgentPage(
+                agentName, phoneNumber, workNo, roleCode, status, loginStatus, startLocal, endLocal, pageSize, offset
+        );
+        long total = agentMapper.countAgentPage(
+                agentName, phoneNumber, workNo, roleCode, status, loginStatus, startLocal, endLocal
+        );
+
+        List<Long> agentIds = records.stream().map(AgentEntity::getId).toList();
+        Map<String, Map<String, Object>> presenceMap = new HashMap<>();
+        if (!agentIds.isEmpty()) {
+            List<Map<String, Object>> presences = agentMapper.selectPresencesByAgentIds(agentIds);
+            for (Map<String, Object> p : presences) {
+                if (p.get("agentId") != null) {
+                    presenceMap.put(String.valueOf(p.get("agentId")), p);
+                }
+            }
+        }
+
+        List<AgentVO> voList = records.stream()
+                .map(entity -> convertToVO(entity, presenceMap.get(String.valueOf(entity.getId()))))
                 .toList();
 
         return PageResult.<AgentVO>builder()
-                .pageNum(entityPage.getCurrent())
-                .pageSize(entityPage.getSize())
-                .total(entityPage.getTotal())
+                .pageNum(pageNum)
+                .pageSize(pageSize)
+                .total(total)
                 .list(voList)
                 .build();
     }
@@ -775,9 +797,9 @@ public class AgentService {
     }
 
     /**
-     * 实体转 VO
+     * 实体转 VO (结合实时 presence 与 Sa-Token 登录状态)
      */
-    private AgentVO convertToVO(AgentEntity entity) {
+    private AgentVO convertToVO(AgentEntity entity, Map<String, Object> presence) {
         AuthRoleEnum authRole = AgentRoleEnum.toAuthRole(entity.getRoleCode());
         boolean isSupervisor = authRole == AuthRoleEnum.SUPERVISOR;
 
@@ -792,13 +814,59 @@ public class AgentService {
         }
         String currentExt = bindings.isEmpty() ? null : bindings.getFirst().getEndpointValue();
 
+        // 登录状态与通话状态计算
+        boolean saLogin = StpUtil.isLogin(entity.getWorkNo());
+        String pLoginStatus = presence != null ? (String) presence.get("loginStatus") : null;
+        boolean loggedIn = saLogin || "LOGIN".equals(pLoginStatus) || "LOGIN_BUSY".equals(pLoginStatus);
+
+        String callStatus = "IDLE";
+        String callStatusDesc = "-";
+        if (loggedIn) {
+            callStatusDesc = "空闲";
+            if (presence != null) {
+                String workStatus = (String) presence.get("workStatus");
+                Object activeCallId = presence.get("activeCallId");
+                if (activeCallId != null || "TALKING".equals(workStatus) || "ANSWERED".equals(workStatus)) {
+                    callStatus = "TALKING";
+                    callStatusDesc = "通话中";
+                } else if ("RINGING".equals(workStatus)) {
+                    callStatus = "RINGING";
+                    callStatusDesc = "振铃中";
+                } else if ("CALLING".equals(workStatus)) {
+                    callStatus = "CALLING";
+                    callStatusDesc = "呼叫中";
+                } else if ("ACW".equals(workStatus)) {
+                    callStatus = "ACW";
+                    callStatusDesc = "话后整理";
+                } else if ("BUSY".equals(workStatus)) {
+                    callStatus = "BUSY";
+                    callStatusDesc = "示忙";
+                } else if ("REST".equals(workStatus)) {
+                    callStatus = "REST";
+                    callStatusDesc = "小休";
+                } else {
+                    callStatus = "READY";
+                    callStatusDesc = "空闲";
+                }
+            } else {
+                callStatus = "READY";
+                callStatusDesc = "空闲";
+            }
+        }
+
         return AgentVO.builder()
                 .id(entity.getId())
                 .workNo(entity.getWorkNo())
                 .agentName(entity.getAgentName())
                 .phoneNumber(entity.getPhoneNumber())
                 .roleCode(entity.getRoleCode())
+                .roleName(isSupervisor ? "班长主管" : "标准坐席")
                 .status(entity.getStatus())
+                .loginStatus(loggedIn ? "ONLINE" : "OFFLINE")
+                .loginStatusDesc(loggedIn ? "在线" : "离线")
+                .callStatus(callStatus)
+                .callStatusDesc(callStatusDesc)
+                .isLoggedIn(loggedIn)
                 .isSupervisor(isSupervisor)
                 .passwordConfigured(entity.getPasswordHash() != null && !entity.getPasswordHash().isBlank())
                 .lastLoginAt(entity.getLastLoginAt())
@@ -810,4 +878,49 @@ public class AgentService {
                 .build();
     }
 
+    private AgentVO convertToVO(AgentEntity entity) {
+        return convertToVO(entity, null);
+    }
+
+    /**
+     * 管理员强制下线坐席
+     *
+     * @param id 坐席主键 ID
+     */
+    @Transactional(rollbackFor = Exception.class)
+    public void forceLogout(Long id) {
+        AgentEntity agent = agentMapper.selectById(id);
+        if (agent == null) {
+            throw new IllegalArgumentException("坐席不存在");
+        }
+        StpUtil.logout(agent.getWorkNo());
+        agentMapper.markLogout(agent.getWorkNo());
+        log.info("[AgentService] 管理员强制下线坐席: id={}, workNo={}", id, agent.getWorkNo());
+    }
+
+    private String trimToNull(String text) {
+        if (text == null || text.isBlank()) return null;
+        return text.trim();
+    }
+
+    private LocalDateTime parseDateTime(String text, boolean endOfDay) {
+        if (text == null || text.isBlank()) return null;
+        try {
+            text = text.trim();
+            String normalized = text.replace(' ', 'T');
+            if (normalized.length() == 10) {
+                normalized += endOfDay ? "T23:59:59.999" : "T00:00:00.000";
+            }
+            if (normalized.length() == 19) {
+                return LocalDateTime.parse(normalized);
+            }
+            if (normalized.contains("+") || normalized.endsWith("Z")) {
+                return java.time.OffsetDateTime.parse(normalized).toLocalDateTime();
+            }
+            return LocalDateTime.parse(normalized);
+        } catch (Exception e) {
+            log.warn("无法解析查询时间: {}", text);
+            return null;
+        }
+    }
 }

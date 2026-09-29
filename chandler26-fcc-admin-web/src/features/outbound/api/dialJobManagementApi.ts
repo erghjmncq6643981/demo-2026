@@ -7,7 +7,7 @@ export type DialJobAction = "PAUSE" | "RESUME" | "CANCEL";
 export interface DialJobSummary {
   id: string;
   flowKey: string;
-  taskType: "NOTIFY";
+  taskType: "NOTIFY" | "SURVEY";
   triggerSource: "FRONTEND" | "API" | "MQ";
   bizId?: string;
   createdBy: string;
@@ -16,6 +16,7 @@ export interface DialJobSummary {
   number: string;
   text: string;
   scheduledAt?: string;
+  talkDurationMs?: number | null;
 }
 
 export interface DialAttempt {
@@ -30,17 +31,35 @@ export interface DialAttempt {
 }
 
 export interface CreateDialJobReq {
+  taskType: "NOTIFY" | "SURVEY";
   number: string;
   text: string;
-  confirmDigit: string;
-  timeoutSeconds: number;
+  confirmDigit?: string;
+  timeoutSeconds?: number;
   bizId?: string;
   maxAttempts: number;
   requestKey: string;
 }
 
+export interface DialJobQueryReq {
+  page: number;
+  pageSize?: number;
+  number?: string;
+  triggerSource?: string;
+  status?: string;
+  startTime?: string;
+  endTime?: string;
+}
+
+export interface DialJobPageResult {
+  list: DialJobSummary[];
+  total: number;
+  page?: number;
+  pageSize?: number;
+}
+
 export const dialJobManagementApi = {
-  list(params: { page: number; triggerSource?: string }): Promise<DialJobSummary[]> {
+  list(params: DialJobQueryReq): Promise<DialJobPageResult | DialJobSummary[]> {
     return apiClient.get("/dial-jobs", { baseURL: managementBaseUrl, params });
   },
   create(data: CreateDialJobReq): Promise<string> {

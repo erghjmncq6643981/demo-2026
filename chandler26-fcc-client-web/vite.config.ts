@@ -14,5 +14,16 @@ export default defineConfig({
   server: {
     host: '0.0.0.0',
     port: 8888,
+    allowedHosts: ['fcc.local'],
+    proxy: {
+      '/api/admin': {
+        target: 'http://127.0.0.1:8089',
+        changeOrigin: true,
+      },
+      '/api/telephony': {
+        target: 'http://127.0.0.1:8085',
+        changeOrigin: true,
+      },
+    },
   },
 });

@@ -245,7 +245,7 @@ const {
             <input
               v-model="filterAgentName"
               type="text"
-              placeholder="舒欣 / 陈松"
+              placeholder=""
               class="w-full bg-white border border-slate-200 rounded-xl px-3 py-2 text-slate-800 text-xs focus:outline-none focus:border-[#1677ff] focus:ring-1 focus:ring-[#1677ff]/20 font-medium shadow-2xs"
             />
           </div>
@@ -300,29 +300,22 @@ const {
             <input
               v-model="filterCallId"
               type="text"
-              placeholder="CALL-..."
+              placeholder=""
               class="w-full bg-white border border-slate-200 rounded-xl px-3 py-2 text-slate-800 font-mono text-xs focus:outline-none focus:border-[#1677ff] focus:ring-1 focus:ring-[#1677ff]/20 shadow-2xs"
             />
           </div>
 
-          <!-- 6. 通话时间 (Element Plus 专业级日期时间范围选择器) -->
-          <div class="shrink-0">
+          <!-- 6. 通话时间范围 -->
+          <div class="w-[370px] shrink-0">
             <label class="block text-xs font-extrabold text-slate-700 mb-1.5"
-              >通话时间范围</label
+              >时间范围</label
             >
-            <div class="custom-datepicker-wrap">
-              <el-date-picker
-                v-model="filterDateRange"
-                type="datetimerange"
-                :shortcuts="dateShortcuts"
-                range-separator="至"
-                start-placeholder="开始时间"
-                end-placeholder="结束时间"
-                value-format="YYYY-MM-DD HH:mm:ss"
-                size="default"
-                @change="handleDateRangeChange"
-              />
-            </div>
+            <FccDateRangePicker
+              v-model="filterDateRange"
+              start-placeholder="开始时间"
+              end-placeholder="结束时间"
+              @change="handleDateRangeChange"
+            />
           </div>
 
           <!-- 操作按钮组：重置 + 明亮的查询按钮 -->
@@ -563,25 +556,21 @@ const {
 
         <!-- 底部分页 (通话记录)：总数与分页均由数据库 COUNT + LIMIT 驱动 -->
         <div
-          class="pt-4 border-t border-slate-100 flex items-center justify-between text-xs text-slate-500 shrink-0"
+          class="pt-4 border-t border-slate-100 flex flex-col sm:flex-row items-center justify-between gap-3 text-xs text-slate-500 shrink-0"
         >
           <span class="text-xs text-slate-600 font-medium">
-            共 {{ cdrTotal }} 条通话记录数据
+            共 <strong class="text-slate-800">{{ cdrTotal }}</strong> 条通话记录数据
             <span v-if="cdrLoading" class="text-slate-400 font-normal"
               >· 正在查询…</span
             >
           </span>
-          <div v-if="cdrTotal > 0">
-            <el-pagination
-              v-model:current-page="cdrPageNum"
-              v-model:page-size="cdrPageSize"
-              :total="cdrTotal"
-              :page-sizes="[10, 20, 50]"
-              layout="sizes, prev, pager, next"
-              size="small"
-              background
-            />
-          </div>
+          <FccPagination
+            v-if="cdrTotal > 0"
+            v-model:current-page="cdrPageNum"
+            v-model:page-size="cdrPageSize"
+            :total="cdrTotal"
+            :page-sizes="[10, 20, 50, 100]"
+          />
           <span v-else class="text-slate-400 text-xs font-mono"
             >第 0 / 0 页</span
           >
@@ -781,22 +770,18 @@ const {
 
         <!-- 底部分页 (未接待回拨) -->
         <div
-          class="pt-4 border-t border-slate-100 flex items-center justify-between text-xs text-slate-500 shrink-0"
+          class="pt-4 border-t border-slate-100 flex flex-col sm:flex-row items-center justify-between gap-3 text-xs text-slate-500 shrink-0"
         >
           <span class="text-xs text-slate-600 font-medium"
-            >共 {{ filteredCallbackRecords.length }} 条漏话回访任务</span
+            >共 <strong class="text-slate-800">{{ filteredCallbackRecords.length }}</strong> 条漏话回访任务</span
           >
-          <div v-if="filteredCallbackRecords.length > 0">
-            <el-pagination
-              v-model:current-page="cbPageNum"
-              v-model:page-size="cbPageSize"
-              :total="filteredCallbackRecords.length"
-              :page-sizes="[10, 20, 50]"
-              layout="sizes, prev, pager, next"
-              size="small"
-              background
-            />
-          </div>
+          <FccPagination
+            v-if="filteredCallbackRecords.length > 0"
+            v-model:current-page="cbPageNum"
+            v-model:page-size="cbPageSize"
+            :total="filteredCallbackRecords.length"
+            :page-sizes="[10, 20, 50, 100]"
+          />
           <span v-else class="text-slate-400 text-xs font-mono"
             >第 0 / 0 页</span
           >
@@ -1029,31 +1014,3 @@ const {
     </div>
   </div>
 </template>
-
-<style scoped>
-:deep(.el-date-editor--datetimerange.el-input__wrapper) {
-  border-radius: 0.75rem !important;
-  box-shadow: 0 0 0 1px #e2e8f0 inset !important;
-  padding: 4px 12px !important;
-  height: 38px !important;
-  background-color: #ffffff !important;
-  transition: all 0.2s ease;
-}
-:deep(.el-date-editor--datetimerange.el-input__wrapper:hover) {
-  box-shadow: 0 0 0 1px #cbd5e1 inset !important;
-}
-:deep(.el-date-editor--datetimerange.el-input__wrapper.is-focus) {
-  box-shadow: 0 0 0 1.5px #1677ff inset !important;
-}
-:deep(.el-range-input) {
-  font-family:
-    ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace !important;
-  font-size: 12px !important;
-  color: #1e293b !important;
-}
-:deep(.el-range-separator) {
-  font-size: 12px !important;
-  color: #94a3b8 !important;
-  font-weight: 700 !important;
-}
-</style>

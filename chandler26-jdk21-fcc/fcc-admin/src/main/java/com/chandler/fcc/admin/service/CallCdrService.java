@@ -178,7 +178,27 @@ public class CallCdrService {
     wrapper.eq(direction != null, CallSessionEntity::getDirection, direction);
 
     String status = trimToNull(req.getStatus());
-    wrapper.eq(status != null, CallSessionEntity::getStatus, status);
+    if ("ANSWERED".equalsIgnoreCase(status)) {
+      wrapper.and(w ->
+        w.isNotNull(CallSessionEntity::getAnsweredAt)
+          .or().gt(CallSessionEntity::getTalkDurationMs, 0)
+          .or().gt(CallSessionEntity::getAudioDurationSec, 0)
+          .or().eq(CallSessionEntity::getStatus, "ANSWERED")
+          .or().eq(CallSessionEntity::getStatus, "COMPLETED")
+          .or().eq(CallSessionEntity::getResult, "ANSWER")
+      );
+    } else if ("NO_ANSWER".equalsIgnoreCase(status) || "MISSED".equalsIgnoreCase(status)) {
+      wrapper.and(w ->
+        w.isNull(CallSessionEntity::getAnsweredAt)
+          .and(w2 -> w2.isNull(CallSessionEntity::getTalkDurationMs).or().le(CallSessionEntity::getTalkDurationMs, 0))
+          .and(w3 -> w3.isNull(CallSessionEntity::getAudioDurationSec).or().le(CallSessionEntity::getAudioDurationSec, 0))
+          .ne(CallSessionEntity::getStatus, "ANSWERED")
+          .ne(CallSessionEntity::getStatus, "COMPLETED")
+          .and(w4 -> w4.isNull(CallSessionEntity::getResult).or().ne(CallSessionEntity::getResult, "ANSWER"))
+      );
+    } else if (status != null) {
+      wrapper.eq(CallSessionEntity::getStatus, status);
+    }
 
     String hangupCause = trimToNull(req.getHangupCause());
     wrapper.eq(

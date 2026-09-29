@@ -2,7 +2,7 @@
 
 FCC agent desktop built with Vue 3, TypeScript, Pinia, JsSIP, Tailwind CSS, and Vite.
 
-A Windows Electron test shell is available. Build it with `npm run desktop:build` and verify its focused tests with `npm run desktop:test`. First launch asks for the hosted HTTPS workspace URL. The main process owns the authenticated business socket, tray notifications and received/shown/activated receipts. Signing, automatic updates and real Windows notification acceptance are not verified.
+A Windows Electron test shell is available. Build it with `npm run desktop:build` and verify its focused tests with `npm run desktop:test`. The installer contains the workspace URL in `desktop/deployment.json`; this build uses `http://fcc.local:8888`. The Windows VM must map `fcc.local` to the FCC host and reach ports `8888`, `8089`, and `8085`. The login API then uses `http://fcc.local:8089`. To deploy to another address, update the bundled configuration and rebuild; the login user does not configure the service. HTTPS deployments route `/api/admin` and `/api/telephony` through the same origin. The main process owns the authenticated business socket, tray notifications and received/shown/activated receipts. Signing, automatic updates and real Windows notification acceptance are not verified.
 
 Customer records, phone binding, automatic outbound, callback scheduling and after-call summaries use fcc-server. Callback actions enqueue a durable progressive job; they do not separately originate in the browser. Summaries persist before completing ACW. See [cross-machine deployment and acceptance](../docs/fcc-cross-machine-acceptance.md).
 

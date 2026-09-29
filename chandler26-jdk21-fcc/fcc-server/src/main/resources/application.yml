@@ -31,7 +31,7 @@ fcc:
   agent:
     acw-timeout-seconds: ${FCC_ACW_TIMEOUT_SECONDS:30}
   outbound:
-    enabled: ${FCC_OUTBOUND_ENABLED:false}
+    enabled: ${FCC_OUTBOUND_ENABLED:true}
     max-in-flight: ${FCC_OUTBOUND_MAX_IN_FLIGHT:5}
     poll-millis: ${FCC_OUTBOUND_POLL_MILLIS:2000}
     start-hour: ${FCC_OUTBOUND_START_HOUR:9}

@@ -77,21 +77,37 @@ public class BusinessManagementService {
      *
      * @param page 页码
      * @param triggerSource 触发来源筛选
-     * @return 任务摘要数组
+     * @return 任务列表和分页数据
      */
-    public Object jobs(int page, String triggerSource) {
+    public Object jobs(
+        int page,
+        int pageSize,
+        String number,
+        String triggerSource,
+        String status,
+        String startTime,
+        String endTime
+    ) {
         checkPermission();
-        return client.exchange(
-            "GET",
-            INTERNAL_BASE + "/dial-jobs",
-            Map.of(
-                "page",
-                page,
-                "triggerSource",
-                triggerSource == null ? "" : triggerSource
-            ),
-            null
-        );
+        Map<String, Object> query = new LinkedHashMap<>();
+        query.put("page", page);
+        query.put("pageSize", pageSize);
+        if (number != null && !number.isBlank()) {
+            query.put("number", number);
+        }
+        if (triggerSource != null && !triggerSource.isBlank()) {
+            query.put("triggerSource", triggerSource);
+        }
+        if (status != null && !status.isBlank()) {
+            query.put("status", status);
+        }
+        if (startTime != null && !startTime.isBlank()) {
+            query.put("startTime", startTime);
+        }
+        if (endTime != null && !endTime.isBlank()) {
+            query.put("endTime", endTime);
+        }
+        return client.exchange("GET", INTERNAL_BASE + "/dial-jobs", query, null);
     }
 
     /**

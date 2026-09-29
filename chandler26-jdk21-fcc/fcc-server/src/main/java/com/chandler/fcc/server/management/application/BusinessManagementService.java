@@ -102,12 +102,84 @@ public class BusinessManagementService {
      * 分页查询自动外呼任务摘要。
      *
      * @param page 页码
-     * @param triggerSource 触发来源筛选，可为空
-     * @return 任务摘要
+     * @param pageSize 每页条数
+     * @param number 被叫号码筛选
+     * @param triggerSource 触发来源筛选
+     * @param status 任务状态筛选
+     * @param startTime 更新起始时间
+     * @param endTime 更新截止时间
+     * @return 包含 list 与 total 的分页结构
      */
-    public List<Map<String, Object>> jobs(int page, String triggerSource) {
+    public Map<String, Object> jobs(
+        int page,
+        int pageSize,
+        String number,
+        String triggerSource,
+        String status,
+        String startTime,
+        String endTime
+    ) {
         identity.requireManagement();
-        return mapper.jobs(triggerSource, offset(page));
+        int validPage = Math.max(page, 1);
+        int validSize = (pageSize <= 0 || pageSize > 100) ? 10 : pageSize;
+        int offset = (validPage - 1) * validSize;
+
+        java.time.LocalDateTime startLocal = parseDateTime(startTime, false);
+        java.time.LocalDateTime endLocal = parseDateTime(endTime, true);
+
+        List<Map<String, Object>> list = mapper.jobs(
+            trimToNull(number),
+            trimToNull(triggerSource),
+            trimToNull(status),
+            startLocal,
+            endLocal,
+            validSize,
+            offset
+        );
+        long total = mapper.jobsCount(
+            trimToNull(number),
+            trimToNull(triggerSource),
+            trimToNull(status),
+            startLocal,
+            endLocal
+        );
+
+        Map<String, Object> result = new java.util.LinkedHashMap<>();
+        result.put("list", list);
+        result.put("total", total);
+        result.put("pageNum", validPage);
+        result.put("pageSize", validSize);
+        return result;
+    }
+
+    public Map<String, Object> jobs(int page, String triggerSource) {
+        return jobs(page, 10, null, triggerSource, null, null, null);
+    }
+
+    private String trimToNull(String text) {
+        if (text == null || text.isBlank()) return null;
+        return text.trim();
+    }
+
+    private java.time.LocalDateTime parseDateTime(String text, boolean endOfDay) {
+        if (text == null || text.isBlank()) return null;
+        try {
+            text = text.trim();
+            String normalized = text.replace(' ', 'T');
+            if (normalized.length() == 10) {
+                normalized += endOfDay ? "T23:59:59.999" : "T00:00:00.000";
+            }
+            if (normalized.length() == 19) {
+                return java.time.LocalDateTime.parse(normalized);
+            }
+            if (normalized.contains("+") || normalized.endsWith("Z")) {
+                return java.time.OffsetDateTime.parse(normalized).toLocalDateTime();
+            }
+            return java.time.LocalDateTime.parse(normalized);
+        } catch (Exception e) {
+            log.warn("无法解析查询时间: {}", text);
+            return null;
+        }
     }
 
     /**
@@ -125,8 +197,9 @@ public class BusinessManagementService {
     public String createJob(
         String number,
         String text,
+        String taskType,
         String confirmDigit,
-        int timeoutSeconds,
+        Integer timeoutSeconds,
         int attempts,
         String requestKey,
         String bizId
@@ -136,6 +209,28 @@ public class BusinessManagementService {
             actor.workNo(),
             number,
             text,
+            taskType,
+            confirmDigit,
+            timeoutSeconds,
+            attempts,
+            requestKey,
+            bizId
+        );
+    }
+
+    public String createJob(
+        String number,
+        String text,
+        String confirmDigit,
+        int timeoutSeconds,
+        int attempts,
+        String requestKey,
+        String bizId
+    ) {
+        return createJob(
+            number,
+            text,
+            null,
             confirmDigit,
             timeoutSeconds,
             attempts,

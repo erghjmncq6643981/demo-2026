@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import type { AgentGroupMemberVO } from '../../../api/agentApi';
+import { formatDateTime } from '../../../utils/date';
 
 const props = defineProps<{
   rows: AgentGroupMemberVO[];
@@ -21,7 +22,6 @@ const emit = defineEmits<{
   edit: [member: AgentGroupMemberVO];
   resetPassword: [member: AgentGroupMemberVO];
   unbind: [member: AgentGroupMemberVO];
-  deleteAccount: [member: AgentGroupMemberVO];
   retry: [];
   changePage: [page: number];
   changePageSize: [pageSize: number];
@@ -155,14 +155,13 @@ function handlePageSizeChange(event: Event) {
                 {{ member.roleCode === 'SUPERVISOR' ? '主管' : '坐席' }}
               </td>
               <td class="py-3 px-4 font-mono text-slate-400 text-[11px] whitespace-nowrap">
-                {{ member.createdAt ? member.createdAt.replace('T', ' ').slice(0, 19) : '-' }}
+                {{ formatDateTime(member.createdAt) }}
               </td>
               <td class="py-3 px-4 text-right whitespace-nowrap">
                 <div class="inline-flex items-center gap-1.5">
                   <button type="button" class="text-[#1677ff] hover:bg-blue-50 px-2 py-1 rounded font-bold" @click="emit('edit', member)">修改</button>
                   <button type="button" class="text-indigo-600 hover:bg-indigo-50 px-2 py-1 rounded font-bold" @click="emit('resetPassword', member)">重置口令</button>
                   <button type="button" class="text-amber-600 hover:bg-amber-50 px-2 py-1 rounded font-bold" @click="emit('unbind', member)">解绑</button>
-                  <button type="button" class="text-rose-600 hover:bg-rose-50 px-2 py-1 rounded font-bold" @click="emit('deleteAccount', member)">删除</button>
                 </div>
               </td>
             </tr>
@@ -177,43 +176,19 @@ function handlePageSizeChange(event: Event) {
       </table>
     </div>
 
-    <div class="flex items-center justify-between text-xs text-slate-500 pt-2">
-      <span>共 {{ total }} 名坐席，第 {{ page }} / {{ totalPages }} 页</span>
-      <div class="flex items-center gap-3">
-        <div class="flex items-center gap-1">
-          <button
-            type="button"
-            :disabled="page <= 1 || loading"
-            class="w-6 h-6 border border-slate-200 rounded disabled:opacity-30"
-            @click="emit('changePage', page - 1)"
-          >&lt;</button>
-          <button
-            v-for="pageOption in pageOptions"
-            :key="pageOption"
-            type="button"
-            class="w-6 h-6 rounded text-xs font-bold"
-            :class="page === pageOption ? 'bg-[#1677ff] text-white' : 'border border-slate-200 hover:bg-slate-50 text-slate-700'"
-            @click="emit('changePage', pageOption)"
-          >
-            {{ pageOption }}
-          </button>
-          <button
-            type="button"
-            :disabled="page >= totalPages || loading"
-            class="w-6 h-6 border border-slate-200 rounded disabled:opacity-30"
-            @click="emit('changePage', page + 1)"
-          >&gt;</button>
-        </div>
-        <select
-          :value="pageSize"
-          class="border border-slate-200 rounded px-2 py-0.5 text-xs text-slate-600 bg-white"
-          @change="handlePageSizeChange"
-        >
-          <option :value="10">10 条/页</option>
-          <option :value="20">20 条/页</option>
-          <option :value="50">50 条/页</option>
-        </select>
-      </div>
+    <div class="mt-4 flex flex-col sm:flex-row items-center justify-between gap-3 text-xs text-slate-500 pt-3 border-t border-slate-100">
+      <span class="font-medium">
+        共 <strong class="text-slate-800">{{ total }}</strong> 名坐席
+      </span>
+      <FccPagination
+        :current-page="page"
+        :page-size="pageSize"
+        :total="total"
+        :page-sizes="[10, 20, 50]"
+        :disabled="loading"
+        @current-change="emit('changePage', $event)"
+        @size-change="emit('changePageSize', $event)"
+      />
     </div>
   </div>
 </template>

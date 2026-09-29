@@ -28,13 +28,34 @@ public interface BusinessManagementMapper {
     /**
      * 查询外呼任务摘要。
      *
+     * @param number 被叫号码筛选，可为空
      * @param triggerSource 触发来源筛选，可为空
+     * @param status 任务状态筛选，可为空
+     * @param startTime 更新起始时间，可为空
+     * @param endTime 更新截止时间，可为空
+     * @param limit 每页数量
      * @param offset 分页偏移
      * @return 任务摘要
      */
     List<Map<String, Object>> jobs(
+        @Param("number") String number,
         @Param("triggerSource") String triggerSource,
+        @Param("status") String status,
+        @Param("startTime") java.time.LocalDateTime startTime,
+        @Param("endTime") java.time.LocalDateTime endTime,
+        @Param("limit") int limit,
         @Param("offset") int offset
+    );
+
+    /**
+     * 统计满足条件的外呼任务总数。
+     */
+    long jobsCount(
+        @Param("number") String number,
+        @Param("triggerSource") String triggerSource,
+        @Param("status") String status,
+        @Param("startTime") java.time.LocalDateTime startTime,
+        @Param("endTime") java.time.LocalDateTime endTime
     );
 
     /**

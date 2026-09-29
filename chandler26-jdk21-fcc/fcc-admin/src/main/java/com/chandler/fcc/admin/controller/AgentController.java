@@ -102,6 +102,19 @@ public class AgentController {
     }
 
     /**
+     * 强制下线坐席
+     *
+     * @param id 坐席主键 ID
+     * @return 操作成功响应
+     */
+    @Operation(summary = "强制下线坐席")
+    @PostMapping("/{id}/logout")
+    public CommonResult<Void> forceLogoutAgent(@PathVariable("id") Long id) {
+        agentService.forceLogout(id);
+        return CommonResult.success();
+    }
+
+    /**
      * 删除坐席 (软删除)
      *
      * @param id 坐席 ID

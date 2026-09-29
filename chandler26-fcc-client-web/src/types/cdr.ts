@@ -39,6 +39,7 @@ export interface CdrQueryParams {
   pageSize?: number;
   caller?: string;
   callee?: string;
+  number?: string;
   direction?: string;
   agentWorkNo?: string;
   status?: string;

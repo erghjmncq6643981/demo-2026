@@ -30,4 +30,83 @@
     WHERE a.work_no = #{workNo}
       AND a.deleted_at IS NULL
   </update>
+
+  <select id="selectAgentPage" resultType="com.chandler.fcc.admin.infrastructure.persistence.entity.AgentEntity">
+    SELECT a.*
+    FROM fcc_agent a
+    LEFT JOIN fcc_agent_presence p ON p.agent_id = a.id
+    WHERE a.deleted_at IS NULL
+    <if test="agentName != null and agentName != ''">
+      AND a.agent_name LIKE CONCAT('%', #{agentName}, '%')
+    </if>
+    <if test="phoneNumber != null and phoneNumber != ''">
+      AND a.phone_number LIKE CONCAT('%', #{phoneNumber}, '%')
+    </if>
+    <if test="workNo != null and workNo != ''">
+      AND a.work_no = #{workNo}
+    </if>
+    <if test="roleCode != null and roleCode != ''">
+      AND a.role_code = #{roleCode}
+    </if>
+    <if test="status != null and status != ''">
+      AND a.status = #{status}
+    </if>
+    <if test="startTime != null">
+      AND a.updated_at &gt;= #{startTime}
+    </if>
+    <if test="endTime != null">
+      AND a.updated_at &lt;= #{endTime}
+    </if>
+    <if test="loginStatus == 'ONLINE'">
+      AND p.login_status IN ('LOGIN', 'LOGIN_BUSY')
+    </if>
+    <if test="loginStatus == 'OFFLINE'">
+      AND (p.login_status IS NULL OR p.login_status = 'LOGOUT')
+    </if>
+    ORDER BY a.created_at DESC
+    LIMIT #{limit} OFFSET #{offset}
+  </select>
+
+  <select id="countAgentPage" resultType="long">
+    SELECT COUNT(*)
+    FROM fcc_agent a
+    LEFT JOIN fcc_agent_presence p ON p.agent_id = a.id
+    WHERE a.deleted_at IS NULL
+    <if test="agentName != null and agentName != ''">
+      AND a.agent_name LIKE CONCAT('%', #{agentName}, '%')
+    </if>
+    <if test="phoneNumber != null and phoneNumber != ''">
+      AND a.phone_number LIKE CONCAT('%', #{phoneNumber}, '%')
+    </if>
+    <if test="workNo != null and workNo != ''">
+      AND a.work_no = #{workNo}
+    </if>
+    <if test="roleCode != null and roleCode != ''">
+      AND a.role_code = #{roleCode}
+    </if>
+    <if test="status != null and status != ''">
+      AND a.status = #{status}
+    </if>
+    <if test="startTime != null">
+      AND a.updated_at &gt;= #{startTime}
+    </if>
+    <if test="endTime != null">
+      AND a.updated_at &lt;= #{endTime}
+    </if>
+    <if test="loginStatus == 'ONLINE'">
+      AND p.login_status IN ('LOGIN', 'LOGIN_BUSY')
+    </if>
+    <if test="loginStatus == 'OFFLINE'">
+      AND (p.login_status IS NULL OR p.login_status = 'LOGOUT')
+    </if>
+  </select>
+
+  <select id="selectPresencesByAgentIds" resultType="map">
+    SELECT CAST(agent_id AS CHAR) AS agentId, login_status AS loginStatus, work_status AS workStatus, CAST(active_call_id AS CHAR) AS activeCallId
+    FROM fcc_agent_presence
+    WHERE agent_id IN
+    <foreach collection="agentIds" item="id" open="(" separator="," close=")">
+      #{id}
+    </foreach>
+  </select>
 </mapper>

@@ -35,12 +35,19 @@ public class WebSocketConfig implements WebSocketConfigurer {
         var registration = registry.addHandler(agentWebSocketHandler, "/ws/agent").addInterceptors(handshake);
         
         List<String> origins = new ArrayList<>();
-        // 默认放行本地前端常用开发端口与局域网
         origins.add("http://localhost:8888");
         origins.add("http://127.0.0.1:8888");
+        origins.add("http://localhost:8085");
+        origins.add("http://127.0.0.1:8085");
         origins.add("http://localhost:8000");
         origins.add("http://127.0.0.1:8000");
+        origins.add("http://fcc.local");
+        origins.add("http://fcc.local:8888");
+        origins.add("http://fcc.local:8085");
+        origins.add("http://fcc.local:8000");
+        origins.add("https://fcc.local");
         origins.add("http://192.168.3.132:8888");
+        origins.add("http://192.168.3.132:8085");
         origins.add("http://192.168.3.132:8000");
 
         if (allowedOrigins != null && !allowedOrigins.isBlank()) {
@@ -51,5 +58,6 @@ public class WebSocketConfig implements WebSocketConfigurer {
         }
         
         registration.setAllowedOrigins(origins.toArray(String[]::new));
+        registration.setAllowedOriginPatterns("*");
     }
 }

@@ -48,13 +48,17 @@
         <span class="hidden sm:inline">{{ wsConnected ? 'WS在线' : 'WS离线' }}</span>
       </button>
 
-      <!-- 退出登录 -->
+      <!-- 分隔线 -->
+      <div class="h-4 w-[1px] bg-slate-200 mx-0.5"></div>
+
+      <!-- 退出登录 (高辨识度胶囊操作项) -->
       <button
         @click="handleLogout"
-        class="px-2.5 py-1 text-slate-400 hover:text-rose-600 hover:bg-rose-50 rounded-lg text-xs font-medium transition cursor-pointer"
-        title="退出登录"
+        class="flex items-center gap-1.5 px-3 py-1 bg-slate-50 hover:bg-rose-50 active:scale-95 text-slate-600 hover:text-rose-600 border border-slate-200 hover:border-rose-200 font-bold rounded-full text-xs transition-all shadow-2xs cursor-pointer group"
+        title="安全退出当前坐席工作台"
       >
-        退出
+        <LogOut class="w-3.5 h-3.5 text-slate-400 group-hover:text-rose-500 transition-colors" />
+        <span>退出登录</span>
       </button>
     </div>
   </header>
@@ -66,6 +70,7 @@ import { useAgentStore } from '../../stores/agentStore';
 import { wsService } from '../../services/websocketService';
 import { sipWebRtcService } from '../../services/sipWebRtcService';
 import { confirmAction } from '../../utils/feedback';
+import { LogOut } from 'lucide-vue-next';
 
 defineEmits<{
   (e: 'openWsDiagnostics'): void;
@@ -118,7 +123,13 @@ const endpointDotClass = computed(() => {
 });
 
 async function handleLogout() {
-  const ok = await confirmAction('确认注销当前坐席登录状态吗？', { title: '退出登录', confirmText: '退出登录' });
+  const ok = await confirmAction('确认注销当前坐席登录状态吗？', {
+    title: '退出登录',
+    confirmText: '退出登录',
+    cancelText: '取消',
+    danger: true,
+    iconType: 'logout',
+  });
   if (ok) {
     await agentStore.logout();
   }

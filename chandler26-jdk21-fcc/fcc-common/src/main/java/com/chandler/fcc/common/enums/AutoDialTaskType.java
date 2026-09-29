@@ -8,7 +8,8 @@ import lombok.Getter;
 @Getter
 public enum AutoDialTaskType {
 
-    NOTIFY("语音通知");
+    NOTIFY("通知类型"),
+    SURVEY("问卷类型");
 
     private final String desc;
 

@@ -1,17 +1,16 @@
 import axios from 'axios';
 
 export function resolveBackendHost(): string {
-  const custom = typeof localStorage !== 'undefined' ? localStorage.getItem('fcc_backend_host') : null;
-  if (custom) return custom;
-  if (typeof window !== 'undefined' && window.location?.hostname && !['localhost', '127.0.0.1', ''].includes(window.location.hostname)) {
+  if (typeof window !== 'undefined' && ['http:', 'https:'].includes(window.location.protocol) && window.location.hostname) {
     return window.location.hostname;
   }
-  return 'fcc.local';
+  return 'localhost';
 }
 
 const initialHost = resolveBackendHost();
-export const adminApi = axios.create({ baseURL: `http://${initialHost}:8089/api/admin`, timeout: 8000 });
-export const telephonyApi = axios.create({ baseURL: `http://${initialHost}:8085/api/telephony`, timeout: 8000 });
+const hostedOverHttps = typeof window !== 'undefined' && window.location.protocol === 'https:';
+export const adminApi = axios.create({ baseURL: hostedOverHttps ? '/api/admin' : `http://${initialHost}:8089/api/admin`, timeout: 8000 });
+export const telephonyApi = axios.create({ baseURL: hostedOverHttps ? '/api/telephony' : `http://${initialHost}:8085/api/telephony`, timeout: 8000 });
 
 function isUnauthorized(status?: number, data?: any): boolean {
   if (status === 401) return true;
@@ -40,12 +39,6 @@ function handleUnauthorized() {
 // their config includes authorization headers and sensitive response payloads.
 for (const client of [adminApi, telephonyApi]) {
   client.interceptors.request.use(config => {
-    const host = resolveBackendHost();
-    if (config.baseURL?.includes('localhost') || config.baseURL?.includes('fcc.local')) {
-      const port = config.baseURL.includes(':8089') ? 8089 : 8085;
-      const path = config.baseURL.includes(':8089') ? '/api/admin' : '/api/telephony';
-      config.baseURL = `http://${host}:${port}${path}`;
-    }
     if (config.url?.endsWith('/auth/login')) {
       delete config.headers['satoken'];
       return config;

@@ -97,6 +97,7 @@ class DialJobServiceTest {
             eq("13800000000"),
             anyString(),
             eq("本次通知"),
+            anyString(),
             eq("1"),
             eq(10)
         )).thenReturn(Map.of("callId", "300"));
@@ -107,6 +108,7 @@ class DialJobServiceTest {
             eq("13800000000"),
             anyString(),
             eq("本次通知"),
+            anyString(),
             eq("1"),
             eq(10)
         );
@@ -126,7 +128,7 @@ class DialJobServiceTest {
         service.dispatch();
 
         verify(calls).startFor(eq("901001"), eq("13800000000"), anyString());
-        verify(calls, never()).startAutoDial(anyString(), anyString(), anyString(), anyString(), anyInt());
+        verify(calls, never()).startAutoDial(anyString(), anyString(), anyString(), anyString(), any(), any());
         verify(mapper).attach(anyString(), eq("301"));
     }
 
@@ -152,6 +154,31 @@ class DialJobServiceTest {
         org.junit.jupiter.api.Assertions.assertEquals("NOTIFY", row.getValue().get("taskType"));
         org.junit.jupiter.api.Assertions.assertEquals("FRONTEND", row.getValue().get("triggerSource"));
         org.junit.jupiter.api.Assertions.assertEquals("ORDER_1", row.getValue().get("bizId"));
+    }
+
+    /** 管理员创建自动外呼问卷任务时，记录 SURVEY 任务类型。 */
+    @Test
+    void createsFrontendSurveyTaskWithSystemModel() {
+        when(mapper.create(anyMap())).thenReturn(1);
+
+        service.createAuto(
+            "admin",
+            "13800000000",
+            "问卷调查文案",
+            "SURVEY",
+            "2",
+            15,
+            1,
+            "request-survey-1234",
+            "SURVEY_ORDER_1"
+        );
+
+        org.mockito.ArgumentCaptor<Map<String, Object>> row = org.mockito.ArgumentCaptor.forClass(Map.class);
+        verify(mapper).create(row.capture());
+        org.junit.jupiter.api.Assertions.assertEquals("SYSTEM_NOTIFICATION", row.getValue().get("flowKey"));
+        org.junit.jupiter.api.Assertions.assertEquals("SURVEY", row.getValue().get("taskType"));
+        org.junit.jupiter.api.Assertions.assertEquals("FRONTEND", row.getValue().get("triggerSource"));
+        org.junit.jupiter.api.Assertions.assertEquals("SURVEY_ORDER_1", row.getValue().get("bizId"));
     }
 
     /** 自动外呼文案必须由本次任务明确提供，不能依赖可编辑流程默认值。 */

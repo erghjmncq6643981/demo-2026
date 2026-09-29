@@ -29,11 +29,17 @@ export function useDialJobManagement() {
   const controllingId = ref("");
   const error = ref("");
   const page = ref(1);
-  const triggerSourceFilter = ref("");
+  const pageSize = ref(10);
+  const total = ref(0);
+  const searchNumber = ref("");
+  const searchTriggerSource = ref("");
+  const searchStatus = ref("");
+  const dateRange = ref<[string, string] | null>(null);
   const createVisible = ref(false);
   const attemptsVisible = ref(false);
   const selectedJob = ref<DialJobSummary | null>(null);
   const form = ref<CreateDialJobReq>({
+    taskType: "NOTIFY",
     number: "",
     text: "",
     confirmDigit: "1",
@@ -42,7 +48,7 @@ export function useDialJobManagement() {
     maxAttempts: 1,
     requestKey: createRequestKey(),
   });
-  const hasNext = computed(() => rows.value.length === 50);
+  const hasNext = computed(() => page.value * pageSize.value < total.value);
 
   async function load() {
     loading.value = true;
@@ -50,11 +56,26 @@ export function useDialJobManagement() {
     try {
       const result = await dialJobManagementApi.list({
         page: page.value,
-        triggerSource: triggerSourceFilter.value || undefined,
+        pageSize: pageSize.value,
+        number: searchNumber.value.trim() || undefined,
+        triggerSource: searchTriggerSource.value || undefined,
+        status: searchStatus.value || undefined,
+        startTime: dateRange.value?.[0] || undefined,
+        endTime: dateRange.value?.[1] || undefined,
       });
-      rows.value = Array.isArray(result) ? result : [];
+      if (Array.isArray(result)) {
+        rows.value = result;
+        total.value = result.length;
+      } else if (result && typeof result === "object") {
+        rows.value = Array.isArray(result.list) ? result.list : [];
+        total.value = typeof result.total === "number" ? result.total : rows.value.length;
+      } else {
+        rows.value = [];
+        total.value = 0;
+      }
     } catch (cause) {
       rows.value = [];
+      total.value = 0;
       error.value = errorText(cause, "自动外呼任务加载失败");
     } finally {
       loading.value = false;
@@ -66,8 +87,29 @@ export function useDialJobManagement() {
     void load();
   }
 
+  function reset() {
+    searchNumber.value = "";
+    searchTriggerSource.value = "";
+    searchStatus.value = "";
+    dateRange.value = null;
+    page.value = 1;
+    void load();
+  }
+
+  function handlePageChange(newPage: number) {
+    page.value = newPage;
+    void load();
+  }
+
+  function handleSizeChange(newSize: number) {
+    pageSize.value = newSize;
+    page.value = 1;
+    void load();
+  }
+
   function openCreate() {
     form.value = {
+      taskType: "NOTIFY",
       number: "",
       text: "",
       confirmDigit: "1",
@@ -82,18 +124,25 @@ export function useDialJobManagement() {
   async function create() {
     const text = form.value.text.trim();
     if (!form.value.number.trim() || !text) {
-      error.value = "被叫号码和通知文案不能为空";
+      error.value = "被叫号码和文案不能为空";
       return;
     }
     saving.value = true;
     error.value = "";
     try {
-      await dialJobManagementApi.create({
-        ...form.value,
+      const payload: CreateDialJobReq = {
+        taskType: form.value.taskType,
         number: form.value.number.trim(),
         text,
+        maxAttempts: 1,
+        requestKey: form.value.requestKey,
         bizId: form.value.bizId?.trim() || undefined,
-      });
+      };
+      if (form.value.taskType === "SURVEY") {
+        payload.confirmDigit = form.value.confirmDigit || "1";
+        payload.timeoutSeconds = form.value.timeoutSeconds || 10;
+      }
+      await dialJobManagementApi.create(payload);
       createVisible.value = false;
       toastSuccess("自动外呼任务已进入持久调度队列");
       await load();
@@ -172,7 +221,12 @@ export function useDialJobManagement() {
     controllingId,
     error,
     page,
-    triggerSourceFilter,
+    pageSize,
+    total,
+    searchNumber,
+    searchTriggerSource,
+    searchStatus,
+    dateRange,
     createVisible,
     attemptsVisible,
     selectedJob,
@@ -180,6 +234,9 @@ export function useDialJobManagement() {
     hasNext,
     load,
     search,
+    reset,
+    handlePageChange,
+    handleSizeChange,
     openCreate,
     create,
     showAttempts,

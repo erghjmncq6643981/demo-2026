@@ -51,9 +51,17 @@ public class CallCdrQueryReq implements Serializable {
     private String hangupCause;
 
     @Schema(description = "查询起始时间 (initiatedAt >= startTime)")
+    @org.springframework.format.annotation.DateTimeFormat(
+        pattern = "yyyy-MM-dd'T'HH:mm:ss",
+        fallbackPatterns = {"yyyy-MM-dd HH:mm:ss", "yyyy-MM-dd'T'HH:mm", "yyyy-MM-dd"}
+    )
     private LocalDateTime startTime;
 
     @Schema(description = "查询结束时间 (initiatedAt <= endTime)")
+    @org.springframework.format.annotation.DateTimeFormat(
+        pattern = "yyyy-MM-dd'T'HH:mm:ss",
+        fallbackPatterns = {"yyyy-MM-dd HH:mm:ss", "yyyy-MM-dd'T'HH:mm", "yyyy-MM-dd"}
+    )
     private LocalDateTime endTime;
 
     @Schema(description = "页码 (默认 1)", example = "1")

@@ -2,9 +2,11 @@ package com.chandler.fcc.server.telephony.application;
 
 import com.chandler.fcc.common.dto.command.FNodeBridgeDTO;
 import com.chandler.fcc.common.dto.command.FNodeDialDTO;
+import com.chandler.fcc.common.dto.command.FNodePlayDTO;
 import com.chandler.fcc.common.dto.command.FNodeReadDTMFDTO;
 import com.chandler.fcc.common.dto.command.MediaInfo;
 import com.chandler.fcc.common.entity.CallInfoBO;
+import com.chandler.fcc.common.enums.AutoDialTaskType;
 import com.chandler.fcc.common.enums.CallStageState;
 import com.chandler.fcc.common.enums.DirectionType;
 import com.chandler.fcc.common.enums.FlowActionType;
@@ -12,6 +14,7 @@ import com.chandler.fcc.common.enums.FlowModelType;
 import com.chandler.fcc.common.protocol.ChannelEventState;
 import com.chandler.fcc.common.protocol.FNodeDtmfPostAction;
 import com.chandler.fcc.common.protocol.FNodeMediaType;
+import com.chandler.fcc.common.protocol.FNodePlayPostAction;
 import com.chandler.fcc.common.protocol.FccEventField;
 import com.chandler.fcc.common.protocol.FccCommandResultStatus;
 import com.chandler.fcc.common.protocol.FccEventParameter;
@@ -77,6 +80,7 @@ public class OutboundCallService implements SystemFlowRuntime {
     private static final Set<FlowActionType> NOTIFICATION_ACTIONS = Set.of(
         FlowActionType.VALIDATE_NOTIFICATION_AND_ROUTE,
         FlowActionType.DIAL_CUSTOMER,
+        FlowActionType.PLAY_MEDIA,
         FlowActionType.READ_DTMF,
         FlowActionType.PERSIST_CONFIRMATION_AND_HANGUP,
         FlowActionType.FINALIZE_NOTIFICATION
@@ -142,8 +146,9 @@ public class OutboundCallService implements SystemFlowRuntime {
      * @param number 被叫号码
      * @param attemptId 自动外呼尝试标识
      * @param text 本次任务通知文案
-     * @param confirmDigit 客户确认按键
-     * @param timeoutSeconds 等待客户确认的秒数
+     * @param taskType 任务类型 (NOTIFY 或 SURVEY)
+     * @param confirmDigit 客户确认按键 (SURVEY 生效)
+     * @param timeoutSeconds 等待客户确认的秒数 (SURVEY 生效)
      * @return 通话标识和受理状态
      * @throws ResponseStatusException 通知媒体或出局路由不可用
      */
@@ -151,19 +156,26 @@ public class OutboundCallService implements SystemFlowRuntime {
         String number,
         String attemptId,
         String text,
+        String taskType,
         String confirmDigit,
-        int timeoutSeconds
+        Integer timeoutSeconds
     ) {
         FlowConfig.FlowSnapshot flow = requireNotificationFlow();
         String normalizedText = text == null ? "" : text.trim();
         if (normalizedText.isBlank() || normalizedText.length() > 1000) {
             throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "通知文案不能为空且不能超过1000个字符");
         }
-        if (confirmDigit == null || !confirmDigit.matches("[0-9]")) {
-            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "确认按键只支持一位数字");
-        }
-        if (timeoutSeconds < 3 || timeoutSeconds > 60) {
-            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "确认等待时间必须为3至60秒");
+        String normalizedTaskType = (taskType == null || taskType.isBlank())
+            ? AutoDialTaskType.NOTIFY.name()
+            : taskType.trim().toUpperCase();
+
+        if (AutoDialTaskType.SURVEY.name().equals(normalizedTaskType)) {
+            if (confirmDigit == null || !confirmDigit.matches("[0-9]")) {
+                throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "确认按键只支持一位数字");
+            }
+            if (timeoutSeconds == null || timeoutSeconds < 3 || timeoutSeconds > 60) {
+                throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "确认等待时间必须为3至60秒");
+            }
         }
         var riskDecision = admissionService.checkDestinationRisk(number);
         if (!riskDecision.admitted()) {
@@ -174,9 +186,12 @@ public class OutboundCallService implements SystemFlowRuntime {
         data.put("runtimeTemplate", TEMPLATE_NOTIFICATION);
         data.put("dialJobId", attemptId);
         data.put("flowKey", FLOW_SYSTEM_NOTIFICATION);
+        data.put("taskType", normalizedTaskType);
         data.put("notificationText", normalizedText);
-        data.put("confirmDigit", confirmDigit);
-        data.put("notificationTimeoutSeconds", timeoutSeconds);
+        if (AutoDialTaskType.SURVEY.name().equals(normalizedTaskType)) {
+            data.put("confirmDigit", confirmDigit);
+            data.put("notificationTimeoutSeconds", timeoutSeconds == null ? 10 : timeoutSeconds);
+        }
         data.put("guestNumber", route.number());
         data.put("guestContext", route.context());
 
@@ -211,6 +226,26 @@ public class OutboundCallService implements SystemFlowRuntime {
     }
 
     /**
+     * 兼容旧接口的自动外呼调用（默认问卷/带确认按键）。
+     */
+    public Map<String, Object> startAutoDial(
+        String number,
+        String attemptId,
+        String text,
+        String confirmDigit,
+        int timeoutSeconds
+    ) {
+        return startAutoDial(
+            number,
+            attemptId,
+            text,
+            AutoDialTaskType.SURVEY.name(),
+            confirmDigit,
+            timeoutSeconds
+        );
+    }
+
+    /**
      * 使用通知外呼 ReadDTMF 的最终指令结果保存客户确认。
      *
      * @param call 当前通话
@@ -232,9 +267,19 @@ public class OutboundCallService implements SystemFlowRuntime {
                 }
             }
             if (TEMPLATE_NOTIFICATION.equals(template)) {
-                if (!("notification-dtmf-" + call.getCallId()).equals(
-                    params.path(FccEventField.COMMAND_ID.getWireName()).asText()
-                )) {
+                String cmdId = params.path(FccEventField.COMMAND_ID.getWireName()).asText();
+                if (("notification-play-" + call.getCallId()).equals(cmdId)) {
+                    if (call.getData().putIfAbsent("notificationHangupRequested", true) == null) {
+                        persistence.saveOrUpdateSession(call);
+                        client.hangup(
+                            call.getCtrlId(),
+                            call.getGuestChannelUuid(),
+                            "NORMAL_CLEARING"
+                        );
+                    }
+                    return true;
+                }
+                if (!("notification-dtmf-" + call.getCallId()).equals(cmdId)) {
                     return true;
                 }
                 if (call.getData().containsKey("notificationHangupRequested")) {
@@ -561,7 +606,8 @@ public class OutboundCallService implements SystemFlowRuntime {
                 params.path(FccEventField.CAUSE.getWireName()).asText(null)
             );
             updateAgentWorkStatus(call, eventState, channelUuid);
-            if (TEMPLATE_NOTIFICATION.equals(template) && eventState == ChannelEventState.READY) {
+            boolean answeredExplicitlyFalse = params.has("answered") && !params.path("answered").asBoolean();
+            if (TEMPLATE_NOTIFICATION.equals(template) && (eventState == ChannelEventState.ANSWERED || (eventState == ChannelEventState.READY && !answeredExplicitlyFalse))) {
                 startNotificationPrompt(call);
             } else if (
                 (eventState == ChannelEventState.READY || eventState == ChannelEventState.ANSWERED) &&
@@ -682,7 +728,7 @@ public class OutboundCallService implements SystemFlowRuntime {
     }
 
     /**
-     * 向通知外呼客户播放媒体并收取确认按键。
+     * 向通知外呼客户播放媒体，问卷类型收取确认按键，通知类型播放完成后直接结束。
      *
      * @param call 当前通知通话
      */
@@ -692,29 +738,49 @@ public class OutboundCallService implements SystemFlowRuntime {
         }
         call.setStageState(CallStageState.CONNECTED);
         persistence.saveOrUpdateSession(call);
-        flowActions.executeFNode(
-            call,
-            FlowActionType.READ_DTMF,
-            FNodeReadDTMFDTO.builder()
-                .ctrlUuid(call.getCtrlId())
-                .uuid(call.getGuestChannelUuid())
-                .media(
-                    MediaInfo.builder()
-                        .type(FNodeMediaType.TEXT)
-                        .data(call.getDataStr("notificationText", ""))
-                        .build()
-                )
-                .minDigits(1)
-                .maxDigits(1)
-                .tries(1)
-                .timeout(notificationTimeoutMillis(call))
-                .digitTimeout(2_000)
-                .terminators("#")
-                .regex("^[" + call.getDataStr("confirmDigit", "1") + "]$")
-                .actionAfter(FNodeDtmfPostAction.PARK)
-                .build(),
-            "notification-dtmf-" + call.getCallId()
-        );
+        String taskType = call.getDataStr("taskType", AutoDialTaskType.NOTIFY.name());
+        if (AutoDialTaskType.SURVEY.name().equalsIgnoreCase(taskType)) {
+            flowActions.executeFNode(
+                call,
+                FlowActionType.READ_DTMF,
+                FNodeReadDTMFDTO.builder()
+                    .ctrlUuid(call.getCtrlId())
+                    .uuid(call.getGuestChannelUuid())
+                    .media(
+                        MediaInfo.builder()
+                            .type(FNodeMediaType.TEXT)
+                            .data(call.getDataStr("notificationText", ""))
+                            .build()
+                    )
+                    .minDigits(1)
+                    .maxDigits(1)
+                    .tries(1)
+                    .timeout(notificationTimeoutMillis(call))
+                    .digitTimeout(2_000)
+                    .terminators("#")
+                    .regex("^[" + call.getDataStr("confirmDigit", "1") + "]$")
+                    .actionAfter(FNodeDtmfPostAction.PARK)
+                    .build(),
+                "notification-dtmf-" + call.getCallId()
+            );
+        } else {
+            flowActions.executeFNode(
+                call,
+                FlowActionType.PLAY_MEDIA,
+                FNodePlayDTO.builder()
+                    .ctrlUuid(call.getCtrlId())
+                    .uuid(call.getGuestChannelUuid())
+                    .media(
+                        MediaInfo.builder()
+                            .type(FNodeMediaType.TEXT)
+                            .data(call.getDataStr("notificationText", ""))
+                            .build()
+                    )
+                    .actionAfter(FNodePlayPostAction.PARK)
+                    .build(),
+                "notification-play-" + call.getCallId()
+            );
+        }
     }
 
     /**

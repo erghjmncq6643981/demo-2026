@@ -3,6 +3,7 @@ import { onMounted, reactive, ref } from 'vue';
 import { Plus, RefreshCw, X, MonitorSmartphone, Laptop, Apple, Terminal, Globe, ShieldCheck, Download, Check } from 'lucide-vue-next';
 import { clientFleetApi, type ClientHardwareRecordVO, type ClientVersionVO } from '../api/clientFleetApi';
 import { errorText, toastError, toastSuccess, toastWarning } from '../../../utils/feedback';
+import { formatDateTime } from '../../../utils/date';
 
 const versions = ref<ClientVersionVO[]>([]);
 const hardware = ref<ClientHardwareRecordVO[]>([]);
@@ -203,7 +204,7 @@ onMounted(loadFleet);
                   </a>
                 </td>
                 <td class="py-3.5 px-4 font-mono text-xs text-slate-400">
-                  {{ row.releasedAt ? row.releasedAt.replace('T', ' ').slice(0, 19) : '-' }}
+                  {{ formatDateTime(row.releasedAt) }}
                 </td>
               </tr>
             </tbody>
@@ -256,7 +257,7 @@ onMounted(loadFleet);
                   {{ row.macAddr || '-' }}
                 </td>
                 <td class="py-3.5 px-4 font-mono text-xs text-slate-400">
-                  {{ row.loginTime ? row.loginTime.replace('T', ' ').slice(0, 19) : '-' }}
+                  {{ formatDateTime(row.loginTime) }}
                 </td>
               </tr>
             </tbody>

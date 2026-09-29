@@ -263,7 +263,11 @@ public class FccTelephonyFlowTest {
                 .guestChannelUuid(guestUuid)
                 .nodeId("test-node")
                 .agentWorkNo("901001")
-                .data(new HashMap<>(Map.of("runtimeTemplate", "NOTIFICATION")))
+                .data(new HashMap<>(Map.of(
+                        "runtimeTemplate", "NOTIFICATION",
+                        "taskType", "SURVEY",
+                        "confirmDigit", "1"
+                )))
                 .build();
 
         saveFixture(callInfo);
@@ -297,6 +301,7 @@ public class FccTelephonyFlowTest {
     @Order(4)
     @DisplayName("测试 FNode JSON-RPC 2.0 控制客户端指令发送与审计记录")
     void testFccClientRpcCommandsAndAudit() {
+        callCommandMapper.delete(null);
         String ctrlUuid = IdUtil.getCtrlId("fcc-rpc-test");
         String testUuid = "test-chan-uuid";
 
@@ -508,7 +513,8 @@ public class FccTelephonyFlowTest {
                 "ctrl_uuid", ctrlUuid != null ? ctrlUuid : "",
                 "uuid", uuid,
                 "digit", digit,
-                "duration_ms", durationMs
+                "duration_ms", durationMs,
+                "dtmf_source", "KEY_PRESS"
         );
         Map<String, Object> event = Map.of(
                 "method", "Event.DTMF",

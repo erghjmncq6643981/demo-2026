@@ -9,17 +9,24 @@ export interface AgentVO {
   avatarUrl?: string;
   role?: string;
   roleCode?: string;
+  roleName?: string;
   isSupervisor?: boolean;
   phone?: string;
   phoneNumber?: string;
   email?: string;
   status: string;
   state?: string;
+  loginStatus?: 'ONLINE' | 'OFFLINE';
+  loginStatusDesc?: string;
+  callStatus?: string;
+  callStatusDesc?: string;
+  isLoggedIn?: boolean;
   boundExtension?: string;
   currentExtension?: string;
   boundEndpointType?: string;
   groupNames?: string[];
   createdAt?: string;
+  updatedAt?: string;
 }
 
 export interface AccountCredentialVO {
@@ -131,12 +138,28 @@ export interface AgentCreateAndBindGroupReq {
   priority?: number;
 }
 
+export interface AgentQueryReq {
+  pageNum?: number;
+  pageSize?: number;
+  workNo?: string;
+  agentName?: string;
+  phoneNumber?: string;
+  loginStatus?: string;
+  status?: string;
+  roleCode?: string;
+  startTime?: string;
+  endTime?: string;
+}
+
 export const agentApi = {
-  list(params?: { pageNum?: number; pageSize?: number; workNo?: string; realName?: string; status?: string; role?: string }): Promise<PageResult<AgentVO>> {
+  list(params?: AgentQueryReq): Promise<PageResult<AgentVO>> {
     return apiClient.get('/agents', { params });
   },
   get(id: string): Promise<AgentVO> {
     return apiClient.get(`/agents/${id}`);
+  },
+  logout(id: string | number): Promise<void> {
+    return apiClient.post(`/agents/${id}/logout`);
   },
   create(data: AgentCreateReq): Promise<AccountCredentialVO> {
     return apiClient.post('/agents', data);

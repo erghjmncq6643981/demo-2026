@@ -90,7 +90,6 @@ const {
   handleOpenEditMember,
   handleConfirmEditMember,
   handleUnbindMember,
-  handleDeleteMemberAccount,
   strategyDesc
 } = useGroupManagement();
 </script>
@@ -328,7 +327,6 @@ const {
         @edit="handleOpenEditMember"
         @reset-password="openResetPasswordModal"
         @unbind="handleUnbindMember"
-        @delete-account="handleDeleteMemberAccount"
         @retry="retryMembers"
         @change-page="changeMemberPage"
         @change-page-size="changeMemberPageSize"

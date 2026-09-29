@@ -27,26 +27,42 @@ export function useCustomerManagement() {
   const saving = ref(false);
   const error = ref("");
   const page = ref(1);
+  const pageSize = ref(10);
+  const backendTotal = ref(0);
+  const total = computed(() => backendTotal.value);
   const ownerFilter = ref("");
   const phoneFilter = ref("");
   const dialogVisible = ref(false);
   const detailLoading = ref(false);
   const form = ref(emptyForm());
   const editing = computed(() => Boolean(form.value.id));
-  const hasNext = computed(() => rows.value.length === 50);
+  const hasNext = computed(() => rows.value.length === pageSize.value);
 
   async function load() {
     loading.value = true;
     error.value = "";
     try {
-      const result = await customerManagementApi.list({
+      const result: any = await customerManagementApi.list({
         page: page.value,
+        pageSize: pageSize.value,
         owner: ownerFilter.value || undefined,
         phone: phoneFilter.value.trim() || undefined,
       });
-      rows.value = Array.isArray(result) ? result : [];
+      if (Array.isArray(result)) {
+        rows.value = result;
+        const currentCount = result.length;
+        const base = (page.value - 1) * pageSize.value;
+        backendTotal.value = base + currentCount + (currentCount >= pageSize.value ? pageSize.value : 0);
+      } else if (result && Array.isArray(result.list)) {
+        rows.value = result.list;
+        backendTotal.value = result.total ?? result.list.length;
+      } else {
+        rows.value = [];
+        backendTotal.value = 0;
+      }
     } catch (cause) {
       rows.value = [];
+      backendTotal.value = 0;
       error.value = errorText(cause, "客户资料加载失败");
     } finally {
       loading.value = false;
@@ -154,6 +170,17 @@ export function useCustomerManagement() {
     }
   }
 
+  function onPageChange(newPage: number) {
+    page.value = newPage;
+    void load();
+  }
+
+  function onSizeChange(newSize: number) {
+    pageSize.value = newSize;
+    page.value = 1;
+    void load();
+  }
+
   onMounted(() => {
     void Promise.all([load(), loadAgents()]);
   });
@@ -167,6 +194,8 @@ export function useCustomerManagement() {
     saving,
     error,
     page,
+    pageSize,
+    total,
     ownerFilter,
     phoneFilter,
     dialogVisible,
@@ -183,5 +212,7 @@ export function useCustomerManagement() {
     save,
     previous,
     next,
+    onPageChange,
+    onSizeChange,
   };
 }

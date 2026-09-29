@@ -6,10 +6,13 @@ import {
   Play,
   Plus,
   RefreshCw,
+  RotateCcw,
   Search,
   X,
 } from "lucide-vue-next";
 import { useDialJobManagement } from "../composables/useDialJobManagement";
+import type { DialJobSummary } from "../api/dialJobManagementApi";
+import { formatDateTime } from "../../../utils/date";
 
 const state = useDialJobManagement();
 const statusConfig: Record<string, { label: string; class: string }> = {
@@ -19,6 +22,23 @@ const statusConfig: Record<string, { label: string; class: string }> = {
   SUCCEEDED: { label: "已完成", class: "bg-emerald-50 text-emerald-700 border-emerald-200" },
   FAILED: { label: "失败", class: "bg-rose-50 text-rose-700 border-rose-200" },
   CANCELLED: { label: "已取消", class: "bg-slate-100 text-slate-400 border-slate-200" },
+};
+
+const formatTalkDuration = (row: DialJobSummary): string => {
+  if (row.talkDurationMs != null && row.talkDurationMs > 0) {
+    const sec = Math.round(row.talkDurationMs / 1000);
+    if (sec < 60) return `${sec} 秒`;
+    const m = Math.floor(sec / 60);
+    const s = sec % 60;
+    return s > 0 ? `${m} 分 ${s} 秒` : `${m} 分钟`;
+  }
+  if (row.status === "RUNNING") {
+    return "通话中...";
+  }
+  if (row.status === "SUCCEEDED" || row.status === "FAILED") {
+    return row.talkDurationMs === 0 ? "0 秒" : "-";
+  }
+  return "-";
 };
 </script>
 
@@ -64,27 +84,76 @@ const statusConfig: Record<string, { label: string; class: string }> = {
     <div
       class="flex flex-wrap items-end gap-3 text-sm bg-white p-4 rounded-3xl border border-slate-100 shadow-card"
     >
-      <div class="w-72">
-        <label class="block text-xs font-bold text-slate-600 mb-1.5">触发来源</label>
+      <!-- 被叫号码 -->
+      <div class="w-40">
+        <label class="block text-xs font-bold text-slate-600 mb-1.5">被叫号码</label>
+        <input
+          v-model="state.searchNumber.value"
+          placeholder="输入被叫号码"
+          class="w-full bg-slate-50/70 border border-slate-200 rounded-xl px-3 py-2 text-slate-800 text-xs focus:outline-none focus:border-brand-500 focus:ring-1 focus:ring-brand-500/20 font-medium font-mono"
+          @keyup.enter="state.search"
+        />
+      </div>
+
+      <!-- 任务来源 -->
+      <div class="w-40">
+        <label class="block text-xs font-bold text-slate-600 mb-1.5">任务来源</label>
         <select
-          v-model="state.triggerSourceFilter.value"
+          v-model="state.searchTriggerSource.value"
           class="w-full bg-slate-50/70 border border-slate-200 rounded-xl px-3 py-2 text-slate-800 text-xs focus:outline-none focus:border-brand-500 focus:ring-1 focus:ring-brand-500/20 font-medium cursor-pointer"
         >
           <option value="">全部来源</option>
           <option value="FRONTEND">管理端创建</option>
-          <option value="API" disabled>业务接口触发（暂未开放）</option>
-          <option value="MQ" disabled>业务消息触发（暂未开放）</option>
+          <option value="API">业务接口触发</option>
+          <option value="MQ">业务消息触发</option>
         </select>
       </div>
 
-      <button
-        class="px-4 py-2 bg-brand-500 hover:bg-brand-600 text-white rounded-xl text-xs font-bold flex items-center gap-1.5 shadow-xs transition cursor-pointer"
-        @click="state.search"
-      >
-        <Search class="w-3.5 h-3.5" />
-        <span>查询</span>
-      </button>
+      <!-- 任务状态 -->
+      <div class="w-36">
+        <label class="block text-xs font-bold text-slate-600 mb-1.5">任务状态</label>
+        <select
+          v-model="state.searchStatus.value"
+          class="w-full bg-slate-50/70 border border-slate-200 rounded-xl px-3 py-2 text-slate-800 text-xs focus:outline-none focus:border-brand-500 focus:ring-1 focus:ring-brand-500/20 font-medium cursor-pointer"
+        >
+          <option value="">全部状态</option>
+          <option value="PENDING">待调度</option>
+          <option value="RUNNING">执行中</option>
+          <option value="PAUSED">已暂停</option>
+          <option value="SUCCEEDED">已完成</option>
+          <option value="FAILED">失败</option>
+          <option value="CANCELLED">已取消</option>
+        </select>
+      </div>
 
+      <!-- 时间选择框（开始时间-结束时间） -->
+      <div class="w-[370px]">
+        <label class="block text-xs font-bold text-slate-600 mb-1.5">时间范围</label>
+        <FccDateRangePicker
+          v-model="state.dateRange.value"
+          start-placeholder="开始时间"
+          end-placeholder="结束时间"
+          @change="state.search"
+        />
+      </div>
+
+      <div class="flex items-center gap-2">
+        <button
+          class="px-4 py-2 bg-brand-500 hover:bg-brand-600 text-white rounded-xl text-xs font-bold flex items-center gap-1.5 shadow-xs transition cursor-pointer"
+          @click="state.search"
+        >
+          <Search class="w-3.5 h-3.5" />
+          <span>查询</span>
+        </button>
+
+        <button
+          class="px-3.5 py-2 bg-slate-100 hover:bg-slate-200 text-slate-600 rounded-xl text-xs font-bold flex items-center gap-1.5 transition cursor-pointer border border-slate-200"
+          @click="state.reset"
+        >
+          <RotateCcw class="w-3.5 h-3.5" />
+          <span>重置</span>
+        </button>
+      </div>
     </div>
 
     <!-- Error Alert -->
@@ -104,23 +173,27 @@ const statusConfig: Record<string, { label: string; class: string }> = {
       class="bg-white border border-slate-100 rounded-3xl overflow-hidden shadow-card p-6"
     >
       <div class="overflow-x-auto">
-        <table class="w-full text-left border-collapse text-sm">
+        <table class="min-w-[1100px] w-full text-left border-collapse text-sm">
           <thead>
             <tr
               class="border-b border-slate-100 text-xs uppercase tracking-wider text-slate-400 font-bold"
             >
-              <th class="py-3.5 px-4">任务编号 / 尝试限制</th>
-              <th class="py-3.5 px-4">被叫号码</th>
-              <th class="py-3.5 px-4">任务 / 来源</th>
-              <th class="py-3.5 px-4">文案 / 业务标识</th>
-              <th class="py-3.5 px-4">任务状态</th>
-              <th class="py-3.5 px-4">计划时间</th>
-              <th class="py-3.5 px-4 text-right">调度控制</th>
+              <!-- 列顺序：任务编号、被叫号码、任务来源、任务类型、业务标识、文案、触发时间、耗时、任务状态、操作 -->
+              <th class="py-3.5 px-4 whitespace-nowrap">任务编号</th>
+              <th class="py-3.5 px-4 whitespace-nowrap">被叫号码</th>
+              <th class="py-3.5 px-4 whitespace-nowrap">任务来源</th>
+              <th class="py-3.5 px-4 whitespace-nowrap">任务类型</th>
+              <th class="py-3.5 px-4 whitespace-nowrap">业务标识</th>
+              <th class="py-3.5 px-4 min-w-[200px]">文案</th>
+              <th class="py-3.5 px-4 whitespace-nowrap">触发时间</th>
+              <th class="py-3.5 px-4 whitespace-nowrap">耗时</th>
+              <th class="py-3.5 px-4 whitespace-nowrap">任务状态</th>
+              <th class="py-3.5 px-4 text-right whitespace-nowrap">操作</th>
             </tr>
           </thead>
           <tbody class="divide-y divide-slate-100 text-sm text-slate-700">
             <tr v-if="state.loading.value">
-              <td colspan="7" class="py-12 text-center text-slate-400">
+              <td colspan="10" class="py-12 text-center text-slate-400">
                 <RefreshCw
                   class="w-6 h-6 animate-spin mx-auto mb-2 text-brand-500"
                 />
@@ -128,7 +201,7 @@ const statusConfig: Record<string, { label: string; class: string }> = {
               </td>
             </tr>
             <tr v-else-if="state.rows.value.length === 0">
-              <td colspan="7" class="py-12 text-center text-slate-400 font-medium">
+              <td colspan="10" class="py-12 text-center text-slate-400 font-medium">
                 <PhoneOutgoing class="w-8 h-8 mx-auto mb-2 text-slate-300" />
                 暂无自动外呼任务
               </td>
@@ -139,33 +212,69 @@ const statusConfig: Record<string, { label: string; class: string }> = {
               :key="row.id"
               class="hover:bg-slate-50/80 transition-colors"
             >
-              <td class="py-4 px-4">
+              <!-- 1. 任务编号 -->
+              <td class="py-4 px-4 whitespace-nowrap">
                 <div class="font-mono font-bold text-slate-900" :title="row.id">
                   {{ row.id }}
                 </div>
-                <div class="text-xs text-slate-400 font-medium">
+                <div class="text-[11px] text-slate-400 font-medium">
                   最多 {{ row.maxAttempts }} 次尝试
                 </div>
               </td>
-              <td class="py-4 px-4 font-mono text-xs font-bold text-slate-800">
+              <!-- 2. 被叫号码 -->
+              <td class="py-4 px-4 font-mono text-xs font-bold text-slate-800 whitespace-nowrap">
                 {{ row.number }}
               </td>
-              <td class="py-4 px-4 text-xs">
-                <div class="font-bold text-slate-800">语音通知</div>
-                <div class="text-slate-400">
-                  {{ row.triggerSource === "FRONTEND" ? "管理端创建" : row.triggerSource }}
-                </div>
+              <!-- 3. 任务来源 -->
+              <td class="py-4 px-4 text-xs whitespace-nowrap">
+                <span class="text-slate-700">
+                  {{
+                    row.triggerSource === "FRONTEND"
+                      ? "管理端创建"
+                      : row.triggerSource === "API"
+                      ? "业务接口触发"
+                      : row.triggerSource === "MQ"
+                      ? "业务消息触发"
+                      : row.triggerSource
+                  }}
+                </span>
+                <div class="text-[11px] text-slate-400">创建人 {{ row.createdBy }}</div>
               </td>
+              <!-- 4. 任务类型 -->
+              <td class="py-4 px-4 text-xs whitespace-nowrap">
+                <span
+                  class="px-2 py-0.5 rounded-md font-bold text-[11px] border"
+                  :class="row.taskType === 'SURVEY' ? 'bg-indigo-50 text-indigo-700 border-indigo-200' : 'bg-cyan-50 text-cyan-700 border-cyan-200'"
+                >
+                  {{ row.taskType === "SURVEY" ? "问卷类型" : "通知类型" }}
+                </span>
+              </td>
+              <!-- 5. 业务标识 -->
+              <td class="py-4 px-4 text-xs whitespace-nowrap">
+                <span class="font-mono text-slate-600" :title="row.bizId">
+                  {{ row.bizId || "-" }}
+                </span>
+              </td>
+              <!-- 6. 文案 -->
               <td class="py-4 px-4 max-w-xs">
                 <div class="text-xs text-slate-700 line-clamp-2" :title="row.text">
                   {{ row.text }}
                 </div>
-                <div class="text-xs text-slate-400 font-mono mt-1" :title="row.bizId">
-                  {{ row.bizId || "无业务标识" }}
-                </div>
-                <div class="text-[11px] text-slate-400 mt-1">创建人 {{ row.createdBy }}</div>
               </td>
-              <td class="py-4 px-4">
+              <!-- 7. 触发时间 -->
+              <td class="py-4 px-4 font-mono text-xs text-slate-600 whitespace-nowrap">
+                {{ formatDateTime(row.scheduledAt) }}
+              </td>
+              <!-- 8. 耗时 (通话接通后持续时间) -->
+              <td class="py-4 px-4 font-mono text-xs whitespace-nowrap">
+                <span
+                  :class="row.talkDurationMs && row.talkDurationMs > 0 ? 'text-slate-800 font-bold' : 'text-slate-400'"
+                >
+                  {{ formatTalkDuration(row) }}
+                </span>
+              </td>
+              <!-- 9. 任务状态 -->
+              <td class="py-4 px-4 whitespace-nowrap">
                 <span
                   class="px-2.5 py-0.5 rounded-full text-xs font-bold border"
                   :class="statusConfig[row.status]?.class || 'bg-slate-100 text-slate-700 border-slate-200'"
@@ -173,10 +282,8 @@ const statusConfig: Record<string, { label: string; class: string }> = {
                   {{ statusConfig[row.status]?.label || row.status }}
                 </span>
               </td>
-              <td class="py-4 px-4 font-mono text-xs text-slate-500">
-                {{ row.scheduledAt || "-" }}
-              </td>
-              <td class="py-4 px-4 text-right">
+              <!-- 9. 操作 -->
+              <td class="py-4 px-4 text-right whitespace-nowrap">
                 <div class="inline-flex items-center gap-1.5">
                   <button
                     title="查看尝试记录"
@@ -228,25 +335,19 @@ const statusConfig: Record<string, { label: string; class: string }> = {
 
       <!-- Pagination Footer -->
       <div
-        class="mt-5 flex items-center justify-between text-xs text-slate-500 pt-3 border-t border-slate-100"
+        class="mt-5 flex flex-col sm:flex-row items-center justify-between gap-3 text-xs text-slate-500 pt-4 border-t border-slate-100"
       >
-        <span class="font-medium">第 {{ state.page.value }} 页</span>
-        <div class="flex items-center gap-2">
-          <button
-            class="px-3 py-1.5 rounded-xl border border-slate-200 bg-white hover:bg-slate-50 text-slate-700 disabled:opacity-40 disabled:cursor-not-allowed font-bold transition cursor-pointer"
-            :disabled="state.page.value === 1"
-            @click="state.previous"
-          >
-            上一页
-          </button>
-          <button
-            class="px-3 py-1.5 rounded-xl border border-slate-200 bg-white hover:bg-slate-50 text-slate-700 disabled:opacity-40 disabled:cursor-not-allowed font-bold transition cursor-pointer"
-            :disabled="!state.hasNext.value"
-            @click="state.next"
-          >
-            下一页
-          </button>
-        </div>
+        <span class="font-medium">
+          共 <strong class="text-slate-800">{{ state.total.value }}</strong> 个任务
+        </span>
+        <FccPagination
+          v-model:current-page="state.page.value"
+          v-model:page-size="state.pageSize.value"
+          :page-sizes="[10, 20, 50, 100]"
+          :total="state.total.value"
+          @size-change="state.handleSizeChange"
+          @current-change="state.handlePageChange"
+        />
       </div>
     </div>
 
@@ -262,15 +363,17 @@ const statusConfig: Record<string, { label: string; class: string }> = {
         class="grid grid-cols-1 gap-4 sm:grid-cols-2 p-1"
         @submit.prevent="state.create"
       >
-        <div class="sm:col-span-2 grid grid-cols-2 gap-3 rounded-xl border border-slate-100 bg-slate-50 p-3 text-xs">
-          <div>
-            <span class="text-slate-400">任务类型</span>
-            <strong class="block mt-1 text-slate-800">语音通知</strong>
-          </div>
-          <div>
-            <span class="text-slate-400">触发来源</span>
-            <strong class="block mt-1 text-slate-800">管理端创建</strong>
-          </div>
+        <div class="sm:col-span-2">
+          <label class="block text-xs font-bold text-slate-600 mb-1.5"
+            >任务类型 <span class="text-rose-500">*</span></label
+          >
+          <select
+            v-model="state.form.value.taskType"
+            class="w-full bg-slate-50/70 border border-slate-200 rounded-xl px-3 py-2 text-slate-800 text-xs focus:outline-none focus:border-brand-500 focus:ring-1 focus:ring-brand-500/20 font-medium cursor-pointer"
+          >
+            <option value="NOTIFY">通知类型（仅播报文案，不监听按键）</option>
+            <option value="SURVEY">问卷类型（播报文案，监听按键）</option>
+          </select>
         </div>
 
         <div class="sm:col-span-2">
@@ -286,18 +389,18 @@ const statusConfig: Record<string, { label: string; class: string }> = {
 
         <div class="sm:col-span-2">
           <label class="block text-xs font-bold text-slate-600 mb-1.5"
-            >通知文案 <span class="text-rose-500">*</span></label
+            >{{ state.form.value.taskType === 'SURVEY' ? '问卷文案' : '通知文案' }} <span class="text-rose-500">*</span></label
           >
           <textarea
             v-model="state.form.value.text"
             rows="4"
             maxlength="1000"
-            placeholder="填写本次任务接通后需要播报的文案"
+            :placeholder="state.form.value.taskType === 'SURVEY' ? '填写问卷接通后播放的问题与按键指引文案' : '填写本次任务接通后需要播报的文案'"
             class="w-full resize-y bg-slate-50/70 border border-slate-200 rounded-xl px-3 py-2 text-slate-800 text-xs focus:outline-none focus:border-brand-500 focus:ring-1 focus:ring-brand-500/20 font-medium"
           />
         </div>
 
-        <div>
+        <div v-if="state.form.value.taskType === 'SURVEY'">
           <label class="block text-xs font-bold text-slate-600 mb-1.5"
             >确认按键</label
           >
@@ -311,7 +414,7 @@ const statusConfig: Record<string, { label: string; class: string }> = {
           </select>
         </div>
 
-        <div>
+        <div v-if="state.form.value.taskType === 'SURVEY'">
           <label class="block text-xs font-bold text-slate-600 mb-1.5"
             >等待确认（秒）</label
           >
@@ -322,20 +425,6 @@ const statusConfig: Record<string, { label: string; class: string }> = {
             max="60"
             class="w-full bg-slate-50/70 border border-slate-200 rounded-xl px-3 py-2 text-slate-800 text-xs focus:outline-none focus:border-brand-500 focus:ring-1 focus:ring-brand-500/20 font-medium"
           />
-        </div>
-
-        <div>
-          <label class="block text-xs font-bold text-slate-600 mb-1.5"
-            >最多尝试次数</label
-          >
-          <select
-            v-model="state.form.value.maxAttempts"
-            class="w-full bg-slate-50/70 border border-slate-200 rounded-xl px-3 py-2 text-slate-800 text-xs focus:outline-none focus:border-brand-500 focus:ring-1 focus:ring-brand-500/20 font-medium cursor-pointer"
-          >
-            <option :value="1">1 次</option>
-            <option :value="2">2 次</option>
-            <option :value="3">3 次</option>
-          </select>
         </div>
 
         <div class="sm:col-span-2">
@@ -349,10 +438,6 @@ const statusConfig: Record<string, { label: string; class: string }> = {
             class="w-full bg-slate-50/70 border border-slate-200 rounded-xl px-3 py-2 text-slate-800 text-xs focus:outline-none focus:border-brand-500 focus:ring-1 focus:ring-brand-500/20 font-medium font-mono"
           />
         </div>
-
-        <p class="sm:col-span-2 text-xs text-slate-400 bg-slate-50 p-3 rounded-xl border border-slate-100">
-          任务与坐席无关：调度器直接呼叫客户，接通后使用固定 SYSTEM_NOTIFICATION 模型执行本次文案播放与按键确认。当前仅开放管理端创建，API / MQ 触发保留为后续扩展。
-        </p>
 
         <div class="sm:col-span-2 flex justify-end gap-2 pt-2 border-t border-slate-100">
           <button
@@ -419,7 +504,7 @@ const statusConfig: Record<string, { label: string; class: string }> = {
           </div>
 
           <div class="text-xs text-slate-400 font-mono flex items-center justify-between pt-1 border-t border-slate-200/60">
-            <span>{{ attempt.startedAt || "-" }} → {{ attempt.endedAt || "未结束" }}</span>
+            <span>{{ formatDateTime(attempt.startedAt) }} → {{ formatDateTime(attempt.endedAt) }}</span>
             <span v-if="attempt.failureReason" class="text-rose-500 font-sans font-bold">
               {{ attempt.failureReason }}
             </span>

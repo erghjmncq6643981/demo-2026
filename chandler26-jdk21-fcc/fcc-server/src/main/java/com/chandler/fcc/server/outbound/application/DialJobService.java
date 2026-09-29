@@ -39,14 +39,14 @@ public class DialJobService {
     private static final String TYPE_AGENT_CALLBACK = "AGENT_CALLBACK";
     private static final String SYSTEM_NOTIFICATION = "SYSTEM_NOTIFICATION";
     private static final String STATUS_FAILED = "FAILED";
-    private static final int MAX_DAILY_NUMBER_ATTEMPTS = 3;
+    private static final int MAX_DAILY_NUMBER_ATTEMPTS = 20;
 
     private final DialJobMapper mapper;
     private final TransactionTemplate transactions;
     private final OutboundCallService calls;
     private final ObjectMapper objectMapper;
 
-    @Value("${fcc.outbound.enabled:false}")
+    @Value("${fcc.outbound.enabled:true}")
     private boolean enabled;
 
     @Value("${fcc.outbound.max-in-flight:5}")
@@ -64,9 +64,77 @@ public class DialJobService {
     /**
      * 创建与坐席无关的流程型自动外呼任务。
      *
-     * <p>任务只拨打客户号码，接通后使用固定通知模型播放本次任务文案并收取确认按键。</p>
+     * <p>任务只拨打客户号码，支持通知类型与问卷类型。</p>
      *
      * @param createdBy 创建人账号，仅用于审计
+     * @param number 目标号码
+     * @param text 本次通知文案
+     * @param taskType 任务类型 (NOTIFY 或 SURVEY)
+     * @param confirmDigit 确认按键 (SURVEY 生效)
+     * @param timeoutSeconds 确认等待秒数 (SURVEY 生效)
+     * @param maxAttempts 最大尝试次数
+     * @param requestKey 业务幂等键
+     * @param bizId 可选业务关联标识
+     * @return 任务标识
+     */
+    public String createAuto(
+        String createdBy,
+        String number,
+        String text,
+        String taskType,
+        String confirmDigit,
+        Integer timeoutSeconds,
+        int maxAttempts,
+        String requestKey,
+        String bizId
+    ) {
+        String normalizedTaskType = (taskType == null || taskType.isBlank())
+            ? AutoDialTaskType.NOTIFY.name()
+            : taskType.trim().toUpperCase();
+        if (!AutoDialTaskType.NOTIFY.name().equals(normalizedTaskType) &&
+            !AutoDialTaskType.SURVEY.name().equals(normalizedTaskType)) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "不支持的任务类型: " + taskType);
+        }
+
+        Map<String, Object> payload = new LinkedHashMap<>();
+        payload.put("number", PhoneNumber.normalize(number));
+
+        if (AutoDialTaskType.SURVEY.name().equals(normalizedTaskType)) {
+            int actualTimeout = timeoutSeconds == null ? 10 : timeoutSeconds;
+            String actualDigit = (confirmDigit == null || confirmDigit.isBlank()) ? "1" : confirmDigit.trim();
+            String notificationText = validateNotification(text, actualDigit, actualTimeout);
+            payload.put("text", notificationText);
+            payload.put("confirmDigit", actualDigit);
+            payload.put("timeoutSeconds", actualTimeout);
+        } else {
+            String notificationText = validateNotifyOnly(text);
+            payload.put("text", notificationText);
+            if (confirmDigit != null && !confirmDigit.isBlank()) {
+                payload.put("confirmDigit", confirmDigit.trim());
+            }
+            if (timeoutSeconds != null) {
+                payload.put("timeoutSeconds", timeoutSeconds);
+            }
+        }
+
+        return createJob(
+            null,
+            createdBy,
+            SYSTEM_NOTIFICATION,
+            TYPE_AUTO_FLOW,
+            normalizedTaskType,
+            AutoDialTriggerSource.FRONTEND.name(),
+            normalizeBizId(bizId),
+            maxAttempts,
+            requestKey,
+            payload
+        );
+    }
+
+    /**
+     * 创建与坐席无关的流程型自动外呼任务（兼容问卷/带按键确认接口）。
+     *
+     * @param createdBy 创建人账号
      * @param number 目标号码
      * @param text 本次通知文案
      * @param confirmDigit 确认按键
@@ -86,23 +154,16 @@ public class DialJobService {
         String requestKey,
         String bizId
     ) {
-        String notificationText = validateNotification(text, confirmDigit, timeoutSeconds);
-        Map<String, Object> payload = new LinkedHashMap<>();
-        payload.put("number", PhoneNumber.normalize(number));
-        payload.put("text", notificationText);
-        payload.put("confirmDigit", confirmDigit);
-        payload.put("timeoutSeconds", timeoutSeconds);
-        return createJob(
-            null,
+        return createAuto(
             createdBy,
-            SYSTEM_NOTIFICATION,
-            TYPE_AUTO_FLOW,
+            number,
+            text,
             AutoDialTaskType.NOTIFY.name(),
-            AutoDialTriggerSource.FRONTEND.name(),
-            normalizeBizId(bizId),
+            confirmDigit,
+            timeoutSeconds,
             maxAttempts,
             requestKey,
-            payload
+            bizId
         );
     }
 
@@ -261,8 +322,9 @@ public class DialJobService {
                     job.get("number").toString(),
                     attemptId,
                     job.get("text").toString(),
-                    job.get("confirmDigit").toString(),
-                    ((Number) job.get("timeoutSeconds")).intValue()
+                    job.get("taskType") == null ? AutoDialTaskType.NOTIFY.name() : job.get("taskType").toString(),
+                    job.get("confirmDigit") == null ? null : job.get("confirmDigit").toString(),
+                    job.get("timeoutSeconds") == null ? null : ((Number) job.get("timeoutSeconds")).intValue()
                 )
                 : calls.startFor(
                     job.get("owner").toString(),
@@ -363,15 +425,26 @@ public class DialJobService {
      * @return 去除首尾空白后的通知文案
      */
     private String validateNotification(String text, String confirmDigit, int timeoutSeconds) {
-        String normalized = text == null ? "" : text.trim();
-        if (normalized.isEmpty() || normalized.length() > 1000) {
-            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "通知文案不能为空且不能超过1000个字符");
-        }
+        String normalized = validateNotifyOnly(text);
         if (confirmDigit == null || !confirmDigit.matches("[0-9]")) {
             throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "确认按键必须是一位数字");
         }
         if (timeoutSeconds < 3 || timeoutSeconds > 60) {
             throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "确认等待时间必须为3至60秒");
+        }
+        return normalized;
+    }
+
+    /**
+     * 校验并规范化通知类型所需的文案。
+     *
+     * @param text 通知文案
+     * @return 去除首尾空白后的通知文案
+     */
+    private String validateNotifyOnly(String text) {
+        String normalized = text == null ? "" : text.trim();
+        if (normalized.isEmpty() || normalized.length() > 1000) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "通知文案不能为空且不能超过1000个字符");
         }
         return normalized;
     }

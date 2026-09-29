@@ -29,14 +29,19 @@ const emit = defineEmits<{ (event: "select", tab: string): void }>();
 
       <!-- 业务导航菜单 -->
       <div class="space-y-4">
+        <!-- 分组 1: 话务与监控 -->
         <div>
           <div
-            class="text-[11px] font-bold text-slate-400 uppercase tracking-wider px-2 mb-2"
+            class="flex items-center gap-2 px-2.5 py-1.5 mb-2.5 rounded-xl bg-slate-100/80 border border-slate-200/60 shadow-2xs"
           >
-            话务与监控
+            <div class="w-1.5 h-3.5 bg-brand-600 rounded-full shrink-0"></div>
+            <span class="text-xs font-black text-slate-800 tracking-wider">
+              话务与监控
+            </span>
           </div>
+
           <div class="space-y-1 font-bold">
-            <!-- 菜单 1: 通话与回拨记录 (整合通话记录与未接待回拨) -->
+            <!-- 1. 通话与回拨记录 -->
             <button
               @click="emit('select', 'routes')"
               class="w-full flex items-center justify-between px-3 py-2 rounded-xl transition-all cursor-pointer text-xs"
@@ -77,12 +82,12 @@ const emit = defineEmits<{ (event: "select", tab: string): void }>();
               ></span>
             </button>
 
+            <!-- 2. 监控大盘 (原 系统监控大盘) -->
             <button
-              v-if="canManageBusiness"
-              @click="emit('select', 'customers')"
+              @click="emit('select', 'running')"
               class="w-full flex items-center justify-between px-3 py-2 rounded-xl transition-all cursor-pointer text-xs"
               :class="
-                activeTab === 'customers'
+                activeTab === 'running'
                   ? 'bg-brand-50 text-brand-600 shadow-xs'
                   : 'text-slate-600 hover:text-slate-900 hover:bg-slate-50'
               "
@@ -90,6 +95,11 @@ const emit = defineEmits<{ (event: "select", tab: string): void }>();
               <div class="flex items-center gap-2.5">
                 <svg
                   class="w-4 h-4 shrink-0"
+                  :class="
+                    activeTab === 'running'
+                      ? 'text-brand-500'
+                      : 'text-slate-400'
+                  "
                   fill="none"
                   stroke="currentColor"
                   viewBox="0 0 24 24"
@@ -98,19 +108,20 @@ const emit = defineEmits<{ (event: "select", tab: string): void }>();
                     stroke-linecap="round"
                     stroke-linejoin="round"
                     stroke-width="2"
-                    d="M16 21v-2a4 4 0 00-4-4H6a4 4 0 00-4 4v2m7-10a4 4 0 100-8 4 4 0 000 8zm13 10v-2a4 4 0 00-3-3.87m-2-11.96a4 4 0 010 7.75"
+                    d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z"
                   />
                 </svg>
-                <span>客户资料</span>
+                <span>监控大盘</span>
               </div>
               <span
-                class="w-1.5 h-1.5 rounded-full"
+                class="w-1.5 h-1.5 rounded-full shrink-0"
                 :class="
-                  activeTab === 'customers' ? 'bg-brand-500' : 'bg-transparent'
+                  activeTab === 'running' ? 'bg-brand-500' : 'bg-transparent'
                 "
               ></span>
             </button>
 
+            <!-- 3. 自动外呼 -->
             <button
               v-if="canManageBusiness"
               @click="emit('select', 'dial-jobs')"
@@ -124,6 +135,11 @@ const emit = defineEmits<{ (event: "select", tab: string): void }>();
               <div class="flex items-center gap-2.5">
                 <svg
                   class="w-4 h-4 shrink-0"
+                  :class="
+                    activeTab === 'dial-jobs'
+                      ? 'text-brand-500'
+                      : 'text-slate-400'
+                  "
                   fill="none"
                   stroke="currentColor"
                   viewBox="0 0 24 24"
@@ -138,14 +154,14 @@ const emit = defineEmits<{ (event: "select", tab: string): void }>();
                 <span>自动外呼</span>
               </div>
               <span
-                class="w-1.5 h-1.5 rounded-full"
+                class="w-1.5 h-1.5 rounded-full shrink-0"
                 :class="
                   activeTab === 'dial-jobs' ? 'bg-brand-500' : 'bg-transparent'
                 "
               ></span>
             </button>
 
-            <!-- 菜单 2: 客服组管理 -->
+            <!-- 4. 客服组管理 -->
             <button
               @click="emit('select', 'groups')"
               class="w-full flex items-center justify-between px-3 py-2 rounded-xl transition-all cursor-pointer text-xs"
@@ -182,7 +198,7 @@ const emit = defineEmits<{ (event: "select", tab: string): void }>();
               ></span>
             </button>
 
-            <!-- 菜单: 坐席人员 -->
+            <!-- 5. 坐席管理 (原 坐席人员) -->
             <button
               @click="emit('select', 'agents')"
               class="w-full flex items-center justify-between px-3 py-2 rounded-xl transition-all cursor-pointer text-xs"
@@ -209,7 +225,7 @@ const emit = defineEmits<{ (event: "select", tab: string): void }>();
                     d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z"
                   />
                 </svg>
-                <span>坐席人员</span>
+                <span>坐席管理</span>
               </div>
               <span
                 class="w-1.5 h-1.5 rounded-full shrink-0"
@@ -219,7 +235,7 @@ const emit = defineEmits<{ (event: "select", tab: string): void }>();
               ></span>
             </button>
 
-            <!-- 菜单 3: 组织效能报表 (紧随客服组管理下方) -->
+            <!-- 6. 组织效能报表 -->
             <button
               @click="emit('select', 'orgreport')"
               class="w-full flex items-center justify-between px-3 py-2 rounded-xl transition-all cursor-pointer text-xs"
@@ -258,7 +274,7 @@ const emit = defineEmits<{ (event: "select", tab: string): void }>();
               ></span>
             </button>
 
-            <!-- 菜单 4: IVR 流程 (改名: IVR流程) -->
+            <!-- 7. IVR流程 -->
             <button
               @click="emit('select', 'flows')"
               class="w-full flex items-center justify-between px-3 py-2 rounded-xl transition-all cursor-pointer text-xs"
@@ -285,7 +301,7 @@ const emit = defineEmits<{ (event: "select", tab: string): void }>();
                     d="M13 10V3L4 14h7v7l9-11h-7z"
                   />
                 </svg>
-                <span>IVR 流程</span>
+                <span>IVR流程</span>
               </div>
               <span
                 class="w-1.5 h-1.5 rounded-full shrink-0"
@@ -294,13 +310,27 @@ const emit = defineEmits<{ (event: "select", tab: string): void }>();
                 "
               ></span>
             </button>
+          </div>
+        </div>
 
-            <!-- 菜单 5: 系统监控大盘 -->
+        <!-- 分组 2: 系统运维 -->
+        <div class="pt-4 border-t border-slate-100 mt-4">
+          <div
+            class="flex items-center gap-2 px-2.5 py-1.5 mb-2.5 rounded-xl bg-slate-100/80 border border-slate-200/60 shadow-2xs"
+          >
+            <div class="w-1.5 h-3.5 bg-emerald-600 rounded-full shrink-0"></div>
+            <span class="text-xs font-black text-slate-800 tracking-wider">
+              系统运维
+            </span>
+          </div>
+
+          <div class="space-y-1 font-bold">
+            <!-- 1. 客户端管理 -->
             <button
-              @click="emit('select', 'running')"
+              @click="emit('select', 'clients')"
               class="w-full flex items-center justify-between px-3 py-2 rounded-xl transition-all cursor-pointer text-xs"
               :class="
-                activeTab === 'running'
+                activeTab === 'clients'
                   ? 'bg-brand-50 text-brand-600 shadow-xs'
                   : 'text-slate-600 hover:text-slate-900 hover:bg-slate-50'
               "
@@ -309,7 +339,7 @@ const emit = defineEmits<{ (event: "select", tab: string): void }>();
                 <svg
                   class="w-4 h-4 shrink-0"
                   :class="
-                    activeTab === 'running'
+                    activeTab === 'clients'
                       ? 'text-brand-500'
                       : 'text-slate-400'
                   "
@@ -321,29 +351,20 @@ const emit = defineEmits<{ (event: "select", tab: string): void }>();
                     stroke-linecap="round"
                     stroke-linejoin="round"
                     stroke-width="2"
-                    d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z"
+                    d="M9.75 17L9 20l-1 1h8l-1-1-.75-3M3 13h18M5 17h14a2 2 0 002-2V5a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z"
                   />
                 </svg>
-                <span>系统监控大盘</span>
+                <span>客户端管理</span>
               </div>
               <span
                 class="w-1.5 h-1.5 rounded-full shrink-0"
                 :class="
-                  activeTab === 'running' ? 'bg-brand-500' : 'bg-transparent'
+                  activeTab === 'clients' ? 'bg-brand-500' : 'bg-transparent'
                 "
               ></span>
             </button>
-          </div>
-        </div>
 
-        <div>
-          <div
-            class="text-[11px] font-bold text-slate-400 uppercase tracking-wider px-2 mb-2"
-          >
-            系统运维
-          </div>
-          <div class="space-y-1 font-bold">
-            <!-- 菜单 6: 分机管理 -->
+            <!-- 2. 分机管理 -->
             <button
               @click="emit('select', 'extensions')"
               class="w-full flex items-center justify-between px-3 py-2 rounded-xl transition-all cursor-pointer text-xs"
@@ -382,7 +403,7 @@ const emit = defineEmits<{ (event: "select", tab: string): void }>();
               ></span>
             </button>
 
-            <!-- 菜单 7: 系统变量 (业务配置) -->
+            <!-- 3. 系统配置 -->
             <button
               @click="emit('select', 'sysvars')"
               class="w-full flex items-center justify-between px-3 py-2 rounded-xl transition-all cursor-pointer text-xs"
@@ -411,51 +432,12 @@ const emit = defineEmits<{ (event: "select", tab: string): void }>();
                     d="M12 6V4m0 2a2 2 0 100 4m0-4a2 2 0 110 4m-6 8a2 2 0 100-4m0 4a2 2 0 110-4m0 4v2m0-6V4m6 6v10m6-2a2 2 0 100-4m0 4a2 2 0 110-4m0 4v2m0-6V4"
                   />
                 </svg>
-                <span>系统变量 (业务配置)</span>
+                <span>系统配置</span>
               </div>
               <span
                 class="w-1.5 h-1.5 rounded-full shrink-0"
                 :class="
                   activeTab === 'sysvars' ? 'bg-brand-500' : 'bg-transparent'
-                "
-              ></span>
-            </button>
-
-            <!-- 菜单 8: 客户端管理 -->
-            <button
-              @click="emit('select', 'clients')"
-              class="w-full flex items-center justify-between px-3 py-2 rounded-xl transition-all cursor-pointer text-xs"
-              :class="
-                activeTab === 'clients'
-                  ? 'bg-brand-50 text-brand-600 shadow-xs'
-                  : 'text-slate-600 hover:text-slate-900 hover:bg-slate-50'
-              "
-            >
-              <div class="flex items-center gap-2.5">
-                <svg
-                  class="w-4 h-4 shrink-0"
-                  :class="
-                    activeTab === 'clients'
-                      ? 'text-brand-500'
-                      : 'text-slate-400'
-                  "
-                  fill="none"
-                  stroke="currentColor"
-                  viewBox="0 0 24 24"
-                >
-                  <path
-                    stroke-linecap="round"
-                    stroke-linejoin="round"
-                    stroke-width="2"
-                    d="M9.75 17L9 20l-1 1h8l-1-1-.75-3M3 13h18M5 17h14a2 2 0 002-2V5a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z"
-                  />
-                </svg>
-                <span>客户端管理</span>
-              </div>
-              <span
-                class="w-1.5 h-1.5 rounded-full shrink-0"
-                :class="
-                  activeTab === 'clients' ? 'bg-brand-500' : 'bg-transparent'
                 "
               ></span>
             </button>

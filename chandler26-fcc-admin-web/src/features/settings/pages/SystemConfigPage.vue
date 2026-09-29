@@ -102,7 +102,7 @@ onMounted(loadConfigs);
       <div>
         <h2 class="text-base font-black text-slate-900 flex items-center gap-2">
           <Sliders class="w-5 h-5 text-brand-600" />
-          系统变量 (业务配置)
+          系统配置
         </h2>
         <p class="text-xs text-slate-400 mt-0.5">
           实时管理后端微服务、Web 控制台与工作台客户端的运行时业务参数

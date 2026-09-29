@@ -128,9 +128,14 @@ public class InternalBusinessController {
     @GetMapping("/dial-jobs")
     public ManagementResp<?> jobs(
         @RequestParam(defaultValue = "1") int page,
-        @RequestParam(required = false) String triggerSource
+        @RequestParam(defaultValue = "10") int pageSize,
+        @RequestParam(required = false) String number,
+        @RequestParam(required = false) String triggerSource,
+        @RequestParam(required = false) String status,
+        @RequestParam(required = false) String startTime,
+        @RequestParam(required = false) String endTime
     ) {
-        return ok(service.jobs(page, triggerSource));
+        return ok(service.jobs(page, pageSize, number, triggerSource, status, startTime, endTime));
     }
 
     /**
@@ -145,6 +150,7 @@ public class InternalBusinessController {
             service.createJob(
                 request.getNumber(),
                 request.getText(),
+                request.getTaskType(),
                 request.getConfirmDigit(),
                 request.getTimeoutSeconds(),
                 request.getMaxAttempts(),

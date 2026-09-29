@@ -1,26 +1,28 @@
 <template>
   <div class="flex-1 flex flex-col bg-white rounded-3xl border border-slate-200/80 shadow-card p-4 sm:p-6 min-h-0">
     
-    <!-- 筛选与控制栏 -->
+    <!-- 筛选与控制栏: 号码检索、方向、时间范围、状态 -->
     <div class="flex flex-wrap items-center justify-between pb-4 border-b border-slate-100 mb-2 text-xs gap-3">
       <div class="flex flex-wrap items-center gap-2.5">
+        <!-- 1. 号码检索 -->
         <div class="flex items-center gap-1.5">
-          <label class="font-bold text-slate-700">号码检索:</label>
+          <label class="font-bold text-slate-700 whitespace-nowrap">号码检索:</label>
           <input
-            v-model="cdrStore.searchCaller"
+            v-model="cdrStore.searchNumber"
             @keyup.enter="search"
             type="text"
-            placeholder="输入主叫号码..."
-            class="w-40 sm:w-48 bg-slate-50 border border-slate-200 rounded-xl px-3 py-1.5 text-slate-800 font-mono text-xs focus:outline-none focus:border-brand-500 focus:bg-white transition"
+            placeholder="主叫或被叫号码..."
+            class="w-36 sm:w-40 bg-slate-50 border border-slate-200 rounded-xl px-3 py-1.5 text-slate-800 font-mono text-xs focus:outline-none focus:border-brand-500 focus:bg-white transition"
           />
         </div>
 
+        <!-- 2. 方向 -->
         <div class="flex items-center gap-1.5">
-          <label class="font-bold text-slate-700">方向:</label>
+          <label class="font-bold text-slate-700 whitespace-nowrap">方向:</label>
           <select
             v-model="cdrStore.searchDirection"
             @change="search"
-            class="bg-slate-50 border border-slate-200 rounded-xl px-3 py-1.5 text-slate-800 text-xs focus:outline-none"
+            class="bg-slate-50 border border-slate-200 rounded-xl px-3 py-1.5 text-slate-800 text-xs focus:outline-none cursor-pointer"
           >
             <option value="">全部方向</option>
             <option value="INBOUND">呼入 (Inbound)</option>
@@ -28,6 +30,30 @@
           </select>
         </div>
 
+        <!-- 3. 时间范围 -->
+        <div class="flex items-center gap-1.5">
+          <label class="font-bold text-slate-700 whitespace-nowrap">时间范围:</label>
+          <FccDateRangePicker
+            v-model="cdrStore.dateRange"
+            @change="search"
+          />
+        </div>
+
+        <!-- 4. 状态 -->
+        <div class="flex items-center gap-1.5">
+          <label class="font-bold text-slate-700 whitespace-nowrap">状态:</label>
+          <select
+            v-model="cdrStore.searchStatus"
+            @change="search"
+            class="bg-slate-50 border border-slate-200 rounded-xl px-3 py-1.5 text-slate-800 text-xs focus:outline-none cursor-pointer"
+          >
+            <option value="">全部状态</option>
+            <option value="ANSWERED">已接听</option>
+            <option value="NO_ANSWER">未接听</option>
+          </select>
+        </div>
+
+        <!-- 操作按钮组 -->
         <button
           @click="search"
           class="px-4 py-1.5 bg-brand-500 hover:bg-brand-600 active:scale-95 text-white font-extrabold rounded-xl shadow-pill transition cursor-pointer"
@@ -110,10 +136,11 @@
               {{ formatDateTime(record.endedAt) }}
             </td>
 
-            <!-- 6. 录音（时长）: 去除“试听”文字，仅保留播放图标与时长 -->
+            <!-- 6. 录音（时长）: 有录音文件时显示播放按钮，无录音文件时不显示播放按钮 -->
             <td class="py-3.5 px-3">
               <div class="flex items-center gap-2">
                 <button
+                  v-if="record.recordingUrl"
                   @click="playRecordAudio(record)"
                   class="flex items-center gap-1 text-brand-600 hover:text-brand-800 font-bold bg-brand-50 hover:bg-brand-100 px-2 py-0.5 rounded-lg border border-brand-200 text-xs transition cursor-pointer shadow-2xs"
                   title="播放录音"
@@ -123,6 +150,14 @@
                     {{ formatDurationMs(record.talkDurationMs) }}
                   </span>
                 </button>
+                <span
+                  v-else-if="record.talkDurationMs && record.talkDurationMs > 0"
+                  class="font-mono text-slate-400 text-[11px]"
+                  title="该通话无可用录音文件"
+                >
+                  {{ formatDurationMs(record.talkDurationMs) }}
+                </span>
+                <span v-else class="text-slate-300 text-xs">-</span>
               </div>
             </td>
 
@@ -184,26 +219,21 @@
       </div>
     </div>
 
-    <!-- 分页器 -->
-    <div class="pt-3 border-t border-slate-100 flex items-center justify-between text-xs text-slate-500">
-      <span>共 {{ cdrStore.total }} 条真实话单记录</span>
-      <div class="flex items-center gap-1.5 font-mono">
-        <button
-          @click="prevPage"
-          :disabled="cdrStore.pageNum <= 1"
-          class="w-7 h-7 rounded-xl border border-slate-200 flex items-center justify-center disabled:opacity-30 hover:bg-slate-50 cursor-pointer"
-        >
-          &lt;
-        </button>
-        <span class="px-2 font-bold text-slate-800">{{ cdrStore.pageNum }}</span>
-        <button
-          @click="nextPage"
-          :disabled="cdrStore.pageNum * cdrStore.pageSize >= cdrStore.total"
-          class="w-7 h-7 rounded-xl border border-slate-200 flex items-center justify-center disabled:opacity-30 hover:bg-slate-50 cursor-pointer"
-        >
-          &gt;
-        </button>
-      </div>
+    <!-- 分页器: 统一规格 10条/页 < ... p-2 p-1 p p+1 p+2 ....> -->
+    <div class="pt-3 border-t border-slate-100 flex flex-col sm:flex-row items-center justify-between gap-3 text-xs text-slate-500 shrink-0">
+      <span class="text-xs text-slate-600 font-medium">
+        共 <strong class="text-slate-800 font-semibold font-mono">{{ cdrStore.total }}</strong> 条真实话单记录
+        <span v-if="cdrStore.isLoading" class="text-slate-400 font-normal ml-1">· 正在查询…</span>
+      </span>
+      <FccPagination
+        v-if="cdrStore.total > 0"
+        v-model:current-page="cdrStore.pageNum"
+        v-model:page-size="cdrStore.pageSize"
+        :total="cdrStore.total"
+        :page-sizes="[10, 20, 50, 100]"
+        @change="onPaginationChange"
+      />
+      <span v-else class="text-slate-400 text-xs font-mono">第 0 / 0 页</span>
     </div>
 
     <!-- 录音试听播放器模态框 -->
@@ -288,6 +318,7 @@
           :src="currentAudioUrl"
           @timeupdate="onAudioTimeUpdate"
           @ended="onAudioEnded"
+          @error="onAudioError"
           class="hidden"
         ></audio>
 
@@ -316,6 +347,11 @@
 import { ref, computed, nextTick, onMounted, onUnmounted } from 'vue';
 import { useCdrStore } from '../../stores/cdrStore';
 import type { CallCdrItem } from '../../types/cdr';
+import { formatDateTime } from '../../utils/date';
+import { resolveBackendHost } from '../../api/apiClient';
+import { toast } from '../../utils/feedback';
+import FccPagination from '../common/FccPagination.vue';
+import FccDateRangePicker from '../common/FccDateRangePicker.vue';
 
 defineEmits<{ (e: 'outbound', phone: string): void }>();
 
@@ -329,8 +365,14 @@ const playbackRate = ref(1.0);
 
 const currentAudioUrl = computed(() => {
   if (!currentAudioRecord.value) return '';
-  const id = currentAudioRecord.value.id;
-  return `/api/admin/recordings/${id}/stream`;
+  const url = currentAudioRecord.value.recordingUrl || (currentAudioRecord.value.id ? `/api/admin/recordings/${currentAudioRecord.value.id}/stream` : '');
+  if (!url) return '';
+  if (url.startsWith('http://') || url.startsWith('https://')) {
+    return url;
+  }
+  const host = resolveBackendHost();
+  const normalizedPath = url.startsWith('/') ? url : `/${url}`;
+  return `http://${host}:8089${normalizedPath}`;
 });
 
 const playProgressPercent = computed(() => {
@@ -354,27 +396,14 @@ function search() {
 }
 
 function resetSearch() {
-  cdrStore.searchCaller = '';
-  cdrStore.searchDirection = '';
-  cdrStore.loadRecords(1);
+  cdrStore.resetFilters();
 }
 
-function prevPage() {
-  if (cdrStore.pageNum > 1) {
-    cdrStore.loadRecords(cdrStore.pageNum - 1);
-  }
+function onPaginationChange(page: number, size: number) {
+  cdrStore.loadRecords(page, size);
 }
 
-function nextPage() {
-  if (cdrStore.pageNum * cdrStore.pageSize < cdrStore.total) {
-    cdrStore.loadRecords(cdrStore.pageNum + 1);
-  }
-}
 
-function formatDateTime(dt?: string): string {
-  if (!dt) return '-';
-  return dt.replace('T', ' ').substring(0, 19);
-}
 
 function formatDurationMs(ms?: number): string {
   if (!ms || ms <= 0) return '00:00';
@@ -389,6 +418,10 @@ function formatSeconds(totalSec: number): string {
 }
 
 function playRecordAudio(record: CallCdrItem) {
+  if (!record.recordingUrl) {
+    toast('该通话没有可复播的录音', 'warning');
+    return;
+  }
   currentAudioRecord.value = record;
   currentPlaySec.value = 0;
   isPlaying.value = true;
@@ -398,9 +431,17 @@ function playRecordAudio(record: CallCdrItem) {
       audioPlayerRef.value.playbackRate = playbackRate.value;
       audioPlayerRef.value.play().catch((e) => {
         console.warn('Audio play auto-start error:', e);
+        isPlaying.value = false;
+        toast('录音播放失败，请检查服务状态', 'error');
       });
     }
   });
+}
+
+function onAudioError(e: Event) {
+  console.warn('Audio element error:', e);
+  isPlaying.value = false;
+  toast('录音文件无法加载或已被清理', 'warning');
 }
 
 function togglePlay() {
