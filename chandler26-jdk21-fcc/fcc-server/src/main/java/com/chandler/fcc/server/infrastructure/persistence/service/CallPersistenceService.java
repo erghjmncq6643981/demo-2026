@@ -47,8 +47,42 @@ public class CallPersistenceService {
     private final CallBridgeMapper callBridgeMapper;
     private final CallBridgeMemberMapper callBridgeMemberMapper;
     private final FlowExecutionRecorder flowRecorder;
+    private final com.chandler.fcc.server.flow.FlowConfig flowConfig;
 
     private final ObjectMapper objectMapper = new ObjectMapper();
+
+    /**
+     * 解析通话绑定的流程编码 (flowKey)，优先从快照配置获取，兜底按模板类型推导
+     */
+    private String resolveFlowCode(CallInfoBO callInfo) {
+        String flowKey = callInfo.getDataStr("flowKey", null);
+        String template = callInfo.getDataStr("runtimeTemplate", "");
+        if (flowKey == null && !template.isBlank() && flowConfig != null) {
+            try {
+                var published = flowConfig.getPublishedFlow(callInfo.getDataStr("flowVersionId", null), template);
+                if (published.isPresent()) {
+                    flowKey = published.get().flowKey();
+                }
+            } catch (Exception ignored) {}
+        }
+        if (flowKey == null) {
+            if ("AGENT_FIRST".equals(template) || "OUTBOUND_TWO_WAY_CALL".equals(callInfo.getModelKey())) {
+                flowKey = "SYSTEM_AGENT_FIRST";
+            } else if ("AGENT_ORIGINATED".equals(template)) {
+                flowKey = "SYSTEM_AGENT_ORIGINATED";
+            } else if ("PHONE_BINDING".equals(template) || "PHONE_BINDING".equals(callInfo.getModelKey())) {
+                flowKey = "SYSTEM_PHONE_BINDING";
+            } else if ("NOTIFICATION".equals(template) || "AUTO_DIAL_NOTIFICATION".equals(callInfo.getModelKey())) {
+                flowKey = "SYSTEM_NOTIFICATION";
+            } else if ("INBOUND".equals(template) || "INBOUND_CUSTOMER_SERVICE".equals(callInfo.getModelKey())) {
+                flowKey = "INBOUND_IVR";
+            }
+        }
+        if (flowKey != null) {
+            callInfo.putData("flowKey", flowKey);
+        }
+        return flowKey;
+    }
 
     /**
      * 保存或更新通话会话聚合根
@@ -71,6 +105,7 @@ public class CallPersistenceService {
         );
 
         LocalDateTime now = LocalDateTime.now(ZoneOffset.UTC);
+        String flowCode = resolveFlowCode(callInfo);
 
         if (existing == null) {
             CallSessionEntity entity = CallSessionEntity.builder()
@@ -78,6 +113,7 @@ public class CallPersistenceService {
                 .bizId(callInfo.getDataStr("dialJobId", callInfo.getCallId()))
                 .ctrlId(callInfo.getCtrlId())
                 .modelType(callInfo.getModelKey() != null ? callInfo.getModelKey() : "UNKNOWN")
+                .flowCode(flowCode)
                 .direction(callInfo.getDirection() != null ? callInfo.getDirection().name() : "OUTBOUND")
                 .callerNumber(callInfo.getCallerNumber() != null ? callInfo.getCallerNumber() : "")
                 .destinationNumber(
@@ -111,6 +147,9 @@ public class CallPersistenceService {
             );
             return entity;
         } else {
+            if (existing.getFlowCode() == null && flowCode != null) {
+                existing.setFlowCode(flowCode);
+            }
             if (callInfo.getStageState() != null) {
                 // 如果通话已经挂机结束，绝不倒退回 CALLING / RINGING 状态
                 if (existing.getEndedAt() == null || callInfo.getStageState() == CallStageState.NORMAL_END) {

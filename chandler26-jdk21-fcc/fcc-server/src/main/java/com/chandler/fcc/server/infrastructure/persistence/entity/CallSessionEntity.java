@@ -40,6 +40,11 @@ public class CallSessionEntity extends BaseEntity {
     private String modelType;
 
     /**
+     * 流程编码 (如 SYSTEM_AGENT_FIRST / INBOUND_IVR)
+     */
+    private String flowCode;
+
+    /**
      * 呼叫方向 (INBOUND / OUTBOUND / INTERNAL)
      */
     private String direction;

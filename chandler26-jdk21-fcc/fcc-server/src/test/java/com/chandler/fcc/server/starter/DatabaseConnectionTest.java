@@ -64,4 +64,36 @@ class DatabaseConnectionTest {
             assertTrue(tables.contains("fcc_extension"), "必须包含 fcc_extension 表");
         }
     }
+
+    @Test
+    @DisplayName("回填历史通话会话的 flow_code 字段并验证")
+    void testBackfillFlowCode() throws Exception {
+        assertNotNull(dataSource);
+        try (Connection conn = dataSource.getConnection();
+             var stmt = conn.createStatement()) {
+            // 1. 通过关联 fcc_flow_instance 和 fcc_flow_definition 权威回填
+            int updated = stmt.executeUpdate(
+                "UPDATE fcc_call_session s " +
+                "JOIN fcc_flow_instance i ON s.id = i.call_id " +
+                "JOIN fcc_flow_definition d ON d.id = i.flow_definition_id " +
+                "SET s.flow_code = d.flow_key " +
+                "WHERE s.flow_code IS NULL"
+            );
+            System.out.println("JOIN 更新 fcc_call_session.flow_code 条数: " + updated);
+
+            // 2. 兜底更新
+            stmt.executeUpdate("UPDATE fcc_call_session SET flow_code = 'SYSTEM_AGENT_FIRST' WHERE model_type = 'OUTBOUND_TWO_WAY_CALL' AND flow_code IS NULL");
+            stmt.executeUpdate("UPDATE fcc_call_session SET flow_code = 'SYSTEM_PHONE_BINDING' WHERE model_type = 'PHONE_BINDING' AND flow_code IS NULL");
+            stmt.executeUpdate("UPDATE fcc_call_session SET flow_code = 'SYSTEM_NOTIFICATION' WHERE model_type = 'AUTO_DIAL_NOTIFICATION' AND flow_code IS NULL");
+            stmt.executeUpdate("UPDATE fcc_call_session SET flow_code = 'INBOUND_IVR' WHERE (model_type = 'INBOUND_CUSTOMER_SERVICE' OR direction = 'INBOUND') AND flow_code IS NULL");
+
+            // 3. 验证是否有未回填 flow_code 的记录
+            try (ResultSet rs = stmt.executeQuery("SELECT count(*) FROM fcc_call_session WHERE flow_code IS NULL")) {
+                assertTrue(rs.next());
+                int nullCount = rs.getInt(1);
+                System.out.println("剩余 flow_code 为空的记录数: " + nullCount);
+                assertEquals(0, nullCount, "所有历史通话记录的 flow_code 必须全部回填完成");
+            }
+        }
+    }
 }

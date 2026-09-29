@@ -74,6 +74,8 @@ const allFacts = computed(() => {
 
 // 核心：精准识别当前通话绑定的流程模型类型 (不可被 INBOUND 假定覆盖)
 const isOutbound = computed(() => {
+  const fCode = String(props.cdr?.flowCode || '').toUpperCase();
+  if (fCode.includes('AGENT_FIRST') || fCode.includes('AGENT_ORIGINATED') || fCode.includes('OUTBOUND')) return true;
   const dir = String(props.cdr?.direction || '').toUpperCase();
   if (dir === 'OUTBOUND') return true;
   const idStr = String(props.cdr?.id || props.callId || '');
@@ -91,15 +93,20 @@ const isOutbound = computed(() => {
 });
 
 const currentTemplate = computed<'INBOUND' | 'PHONE_BINDING' | 'NOTIFICATION' | 'AGENT_FIRST' | 'AGENT_ORIGINATED' | string>(() => {
-  if ((flow.value as any)?.template === 'PHONE_BINDING' || allFacts.value.runtimeTemplate === 'PHONE_BINDING' || props.cdr?.modelType === 'PHONE_BINDING') {
+  const fCode = String(props.cdr?.flowCode || '').toUpperCase();
+  if (fCode === 'SYSTEM_PHONE_BINDING' || (flow.value as any)?.template === 'PHONE_BINDING' || allFacts.value.runtimeTemplate === 'PHONE_BINDING' || props.cdr?.modelType === 'PHONE_BINDING') {
     return 'PHONE_BINDING';
   }
+  if (fCode === 'SYSTEM_AGENT_ORIGINATED') return 'AGENT_ORIGINATED';
+  if (fCode === 'SYSTEM_AGENT_FIRST') return 'AGENT_FIRST';
+  if (fCode === 'SYSTEM_NOTIFICATION') return 'NOTIFICATION';
   if (isOutbound.value) {
     if ((flow.value as any)?.template === 'AGENT_ORIGINATED' || allFacts.value.runtimeTemplate === 'AGENT_ORIGINATED') {
       return 'AGENT_ORIGINATED';
     }
     return (flow.value as any)?.template || allFacts.value.runtimeTemplate || 'AGENT_FIRST';
   }
+  if (fCode === 'INBOUND_IVR') return 'INBOUND';
   if ((flow.value as any)?.template) return (flow.value as any).template;
   if (allFacts.value.runtimeTemplate) return allFacts.value.runtimeTemplate;
   if (props.cdr?.modelType) {
