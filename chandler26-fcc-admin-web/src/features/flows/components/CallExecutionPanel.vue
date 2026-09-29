@@ -73,30 +73,40 @@ const allFacts = computed(() => {
 });
 
 // 核心：精准识别当前通话绑定的流程模型类型 (不可被 INBOUND 假定覆盖)
+const isOutbound = computed(() => {
+  const dir = String(props.cdr?.direction || '').toUpperCase();
+  if (dir === 'OUTBOUND') return true;
+  const idStr = String(props.cdr?.id || props.callId || '');
+  if (idStr.startsWith('outbound-')) return true;
+  const mType = String(props.cdr?.modelType || '').toUpperCase();
+  if (mType.includes('OUTBOUND')) return true;
+  const tpl = String((flow.value as any)?.template || allFacts.value.runtimeTemplate || '').toUpperCase();
+  if (tpl === 'AGENT_FIRST' || tpl === 'AGENT_ORIGINATED' || tpl.includes('OUTBOUND')) return true;
+  const ver = String(version.value || '').toUpperCase();
+  if (ver.includes('AGENT_FIRST') || ver.includes('OUTBOUND')) return true;
+  if (executions.value.some((e) => e.stepKey === 'DIAL_AGENT' || e.stepKey === 'DIAL_CUSTOMER' || e.actionType === 'DIAL_AGENT' || e.actionType === 'DIAL_CUSTOMER')) {
+    return true;
+  }
+  return false;
+});
+
 const currentTemplate = computed<'INBOUND' | 'PHONE_BINDING' | 'NOTIFICATION' | 'AGENT_FIRST' | 'AGENT_ORIGINATED' | string>(() => {
-  if (flow.value?.template) return flow.value.template;
+  if ((flow.value as any)?.template === 'PHONE_BINDING' || allFacts.value.runtimeTemplate === 'PHONE_BINDING' || props.cdr?.modelType === 'PHONE_BINDING') {
+    return 'PHONE_BINDING';
+  }
+  if (isOutbound.value) {
+    if ((flow.value as any)?.template === 'AGENT_ORIGINATED' || allFacts.value.runtimeTemplate === 'AGENT_ORIGINATED') {
+      return 'AGENT_ORIGINATED';
+    }
+    return (flow.value as any)?.template || allFacts.value.runtimeTemplate || 'AGENT_FIRST';
+  }
+  if ((flow.value as any)?.template) return (flow.value as any).template;
   if (allFacts.value.runtimeTemplate) return allFacts.value.runtimeTemplate;
   if (props.cdr?.modelType) {
-    if (props.cdr.modelType === 'OUTBOUND_TWO_WAY_CALL') {
-      return allFacts.value.runtimeTemplate || 'AGENT_FIRST';
-    }
     if (props.cdr.modelType === 'AUTO_DIAL_NOTIFICATION') return 'NOTIFICATION';
     return props.cdr.modelType;
   }
-  if (props.cdr?.direction === 'OUTBOUND') {
-    return allFacts.value.runtimeTemplate || 'AGENT_FIRST';
-  }
   return 'INBOUND';
-});
-
-const isOutbound = computed(() => {
-  const tpl = currentTemplate.value;
-  return (
-    tpl === 'AGENT_FIRST' ||
-    tpl === 'AGENT_ORIGINATED' ||
-    tpl === 'OUTBOUND_TWO_WAY_CALL' ||
-    props.cdr?.direction === 'OUTBOUND'
-  );
 });
 
 // ==================== 1. 话机绑定模型 (PHONE_BINDING) 事实提取 ====================
@@ -563,13 +573,13 @@ const journeyCards = computed<JourneyCardItem[]>(() => {
 
 // 默认选中第一个或最核心阶段
 watch(
-  journeyCards,
-  (cards) => {
+  [journeyCards, isOutbound, currentTemplate],
+  ([cards, outbound, tpl]) => {
     if (!cards.length) return;
     if (!selected.value || !cards.some((c) => c.key === selected.value)) {
-      if (currentTemplate.value === 'PHONE_BINDING') {
+      if (tpl === 'PHONE_BINDING') {
         selected.value = 'COLLECT_CODE';
-      } else if (isOutbound.value) {
+      } else if (outbound) {
         selected.value = 'CONNECTED';
       } else {
         selected.value = 'MENU';
