@@ -19,6 +19,7 @@ export const stageLabels: Record<string, string> = {
   RATING_SAVE: "保存评价",
   CLOSING: "结束语音",
   NOTIFY: "通知放音与收号",
+  PLAY_ONLY: "纯通知播放",
   CONFIRM: "客户确认",
   END: "流程结束",
 };

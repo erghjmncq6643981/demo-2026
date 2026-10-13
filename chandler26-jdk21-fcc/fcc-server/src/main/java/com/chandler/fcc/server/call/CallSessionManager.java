@@ -160,6 +160,7 @@ public class CallSessionManager {
             return;
         }
         CallInfoBO info = ctrlSessions.remove(ctrlId);
+        channelToCtrl.entrySet().removeIf(entry -> ctrlId.equals(entry.getValue()));
         if (info != null) {
             if (info.getCallId() != null) {
                 callToCtrl.remove(info.getCallId());

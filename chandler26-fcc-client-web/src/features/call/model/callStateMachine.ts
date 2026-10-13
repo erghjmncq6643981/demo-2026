@@ -23,8 +23,7 @@ function eventBelongsToActiveCall(current: CallLifecycle, callId?: string): bool
 }
 
 /**
- * Apply one monotonic call lifecycle event. Terminal ACW state ignores delayed
- * transport notifications until the agent explicitly completes ACW.
+ * End media occupancy immediately. Optional summaries are not a call state.
  */
 export function reduceCallLifecycle(
   current: CallLifecycle,
@@ -48,15 +47,15 @@ export function reduceCallLifecycle(
     case 'RINGING':
       if (event.type === 'ANSWERED') return { ...current, state: 'CONNECTED', callId: event.callId ?? current.callId };
       if (event.type === 'HANGUP_REQUESTED') return { ...current, state: 'ENDING' };
-      if (event.type === 'ENDED') return { ...current, state: 'ACW' };
+      if (event.type === 'ENDED') return INITIAL_LIFECYCLE;
       if (event.type === 'REJECTED') return INITIAL_LIFECYCLE;
       return current;
     case 'CONNECTED':
       if (event.type === 'HANGUP_REQUESTED') return { ...current, state: 'ENDING' };
-      if (event.type === 'ENDED') return { ...current, state: 'ACW' };
+      if (event.type === 'ENDED') return INITIAL_LIFECYCLE;
       return current;
     case 'ENDING':
-      if (event.type === 'ENDED') return { ...current, state: 'ACW' };
+      if (event.type === 'ENDED') return INITIAL_LIFECYCLE;
       return current;
     case 'ACW':
       return current;

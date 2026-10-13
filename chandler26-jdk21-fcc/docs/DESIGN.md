@@ -75,7 +75,7 @@ fcc-server 统一拥有话机绑定运行流程、呼入、呼出、自动外呼
 
 - `command`：NATS `FNode.*` 请求/应答；
 - `event`：订阅 `fs.event.>` 并驱动 Channel、DTMF、注册和录音事件；
-- `call`：内存会话索引；
+- `call`：内存会话索引、结束事实处理和过期通话对账；后两者当前处于工作区实现与验证阶段，见第 10.1 节；
 - `flow`：阶段处理、动作执行和流程配置；
 - `management`：承接 fcc-admin 的受控客户与自动外呼管理命令/查询，不向坐席客户端开放维护入口；
 - `customer`、`outbound`：客户事实、自动外呼任务、调度、逐次尝试和结果对账；
@@ -147,7 +147,9 @@ Sidecar 的 dispatch ingress 在单节点部署中可直接调用本地 Dispatch
 
 ### 5.2 人工外呼与坐席可用性
 
-终端绑定、终端注册事实与坐席业务状态相互独立。坐席业务状态只采用两个维度：`login_status` 保存 `LOGIN/LOGOUT/LOGIN_BUSY`，`work_status` 保存 `READY/UNREADY/BUSY/CALLING/RINGING/ANSWERED/ACW`。`LOGIN + READY` 表示示闲，`LOGIN_BUSY + BUSY` 表示示忙但仍允许主动外呼，`LOGOUT + UNREADY` 表示退出；人工通话按真实话道事件进入 `CALLING/RINGING/ANSWERED`，挂机后进入 `ACW`，话后完成再按 `login_status` 恢复 `READY/BUSY/UNREADY`。呼入只原子选择 `LOGIN + READY`，人工外呼允许 `LOGIN + READY` 或 `LOGIN_BUSY + BUSY`。系统发起 Dial 不要求 SIP/WebRTC 注册在线投影同步，避免把注册事件延迟误判为终端不可用；终端是否真实可达由 Sidecar 命令应答和后续 Channel 事件判定。
+终端绑定、终端注册事实与坐席业务状态相互独立。坐席业务状态只采用两个维度：`login_status` 保存 `LOGIN/LOGOUT/LOGIN_BUSY`，`work_status` 保存 `READY/UNREADY/BUSY/CALLING/RINGING/ANSWERED/ACW`。`LOGIN + READY` 表示示闲，`LOGIN_BUSY + BUSY` 表示示忙但仍允许主动外呼，`LOGOUT + UNREADY` 表示退出；人工通话按真实话道事件进入 `CALLING/RINGING/ANSWERED`。呼入只原子选择 `LOGIN + READY`，人工外呼允许 `LOGIN + READY` 或 `LOGIN_BUSY + BUSY`。系统发起 Dial 不要求 SIP/WebRTC 注册在线投影同步，避免把注册事件延迟误判为终端不可用；终端是否真实可达由 Sidecar 命令应答和后续 Channel 事件判定。
+
+产品规则为：坐席参与结束后立即按 `login_status` 恢复 `READY/BUSY/UNREADY`，不强制 ACW。客户端结束当前通话后退出媒体占用，小结独立保留、可稍后填写；保存旧小结不改变坐席状态或新通话。同步挂断受理不是结束证据，多 Leg 场景仍需确认没有其他有效参与。生命周期、当前偏差与验收条件见 [通话结束与坐席释放决策](CALL-LIFECYCLE-DECISION.md)。
 
 人工外呼有两个固定模型：
 
@@ -267,7 +269,7 @@ node tools/generate-system-models.mjs
 可编辑业务流程按创建类型使用不同契约：
 
 - `INBOUND` 使用 `routeMode=IVR`，固定阶段为 `ENTRY -> MENU -> BRANCH -> ROUTE -> BRIDGE -> RECORD_START -> CONNECTED -> RECORD_STOP -> RATING -> RATING_SAVE -> CLOSING -> END`。编辑者可修改菜单媒体、收号超时、单键 if/else 分支、坐席/技能组目标、排队时限和未接通处理；发布前必须至少绑定一个启用 DID，并批量校验全部坐席工号和技能组代码真实存在且启用。技能组运行路由当前只选择该组直接成员，不把管理页面的组织子树展示语义误当成路由语义。
-- `NOTIFICATION` 是只读系统模型，固定阶段为 `ENTRY -> DIAL_CUSTOMER -> NOTIFY -> CONFIRM -> END`。通知文案、确认按键和等待时间来自本次 `fcc_dial_job`，不进入 Flow Studio 草稿，也没有管理员发布通知流程的步骤。
+- `NOTIFICATION` 是只读系统模型：客户就绪后，`NOTIFY` 任务进入 `PLAY_ONLY` 播放，`SURVEY` 任务进入 `NOTIFY` 收号，再按确认结果进入 `CONFIRM` 或 `END`。通知文案、确认按键和等待时间来自本次 `fcc_dial_job`，不进入 Flow Studio 草稿，也没有管理员发布通知流程的步骤。资源中的分支说明与既有运行代码对齐，不新增 Channel 事件或 Sidecar 协议。存量数据库目录升级和历史快照规则见 [通知模型目录升级](upgrades/NOTIFICATION-MODEL.md)。
 
 录音、评价、结束语音和通知阶段使用系统固定动作，不允许画布替换成任意脚本。不接受旧 `DID_DIRECT`、`AUTO_DIAL_NOTIFICATION` 等兼容别名，也不接受任意 Java 类/方法、脚本、表达式或动态 URL。
 
@@ -331,6 +333,18 @@ node tools/generate-system-models.mjs
 - 坐席终端主动外呼已有模型、事件识别和 Leg 接管代码；真实默认 context 拨号计划、号码转换、重复/乱序/先挂机等场景尚未完成 FreeSWITCH 联调。
 
 挂机/转接已校验本人 callId、话道 UUID 和底层响应，并分别进入 `HANGUP_CALL`/`TRANSFER_CALL` 公共动作；返回 ACCEPTED 而非最终状态，错误/超时不再伪造成功。保持和通话中 DTMF 目前仍通过受控 NativeAPI，班长四类干预均明确返回 501，前端禁用。保持媒体完成态和完整转接生命周期仍需联调。
+
+### 10.1 通话结束与坐席释放评估
+
+采用“Call、Leg、坐席参与分别结束”的设计方向，不复制参考项目的旧表和旧协议。普通两方通话中，唯一坐席服务 Leg 结束可以结束该坐席参与，客户 Call 可继续评价或结束语音；多 Leg 场景必须先检查该坐席是否仍有有效参与。通话资源释放、是否进入 `ACW`、恢复示闲或示忙是不同决策。
+
+当前工作区新增了源 `DESTROY` 事实持久化、按 Leg 释放以及每日过期通话对账代码；不将这些代码的存在等同部署验收通过。日终对账默认北京时间 01:00 扫描开始时间超过 24 小时的候选通话，每页 100 条；过期只表示需要检查，结束必须依据持久结束事实或可靠的完整话道快照。快照超时、无响应和节点不可达不能作为话道不存在的证据，多节点聚合未验收前不能扩展为多节点安全保证。
+
+释放 SQL 已统一检查同坐席同 Call 的其他未结束 AGENT Leg；归属不明的活跃 Leg 保守阻止释放。源结束与 Leg 写入共用 Call 行锁。普通 AGENT Leg 已增加幂等参与同步与 leg_id 唯一约束，但转接目标身份、参与角色、历史回填、多节点对账与重连通知补偿仍有缺口。客户端只接受关联当前 callId 的结束/参与释放，不以普通 READY/BUSY 通知清除通话；可选小结不影响下一通。完整话务端到端尚未验收。完整决策见 [通话结束与坐席释放决策](CALL-LIFECYCLE-DECISION.md)，当前恢复、参与、UNKNOWN 修复、监控聚合与转接重启的实现/缺口和升级顺序见 [运行可靠性整改](RUNTIME-RELIABILITY.md)。
+
+### 10.2 工程治理
+
+外呼编排、命令审计、坐席组管理及前端工作台/报表的职责拆分已在工作区落地，未改变 REST、NATS/Sidecar 协议或数据库结构。现有复杂页面采用已评审行数预算，禁止继续膨胀；新文件按默认预算检查。职责地图、验证记录和未解决业务缺陷见 [工程治理交付记录](ENGINEERING-GOVERNANCE.md)。结构重构不代表异常恢复或真实话务验收完成。
 
 ## 11. 安全与运维
 

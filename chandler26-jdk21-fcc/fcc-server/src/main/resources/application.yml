@@ -28,8 +28,12 @@ mybatis-plus:
       id-type: input
 
 fcc:
-  agent:
-    acw-timeout-seconds: ${FCC_ACW_TIMEOUT_SECONDS:30}
+  call-cleanup:
+    enabled: ${FCC_CALL_CLEANUP_ENABLED:true}
+    cron: ${FCC_CALL_CLEANUP_CRON:0 0 1 * * *}
+    timezone: ${FCC_CALL_CLEANUP_TIMEZONE:Asia/Shanghai}
+    expire-hours: ${FCC_CALL_CLEANUP_EXPIRE_HOURS:24}
+    page-size: ${FCC_CALL_CLEANUP_PAGE_SIZE:100}
   outbound:
     enabled: ${FCC_OUTBOUND_ENABLED:true}
     max-in-flight: ${FCC_OUTBOUND_MAX_IN_FLIGHT:5}
@@ -78,5 +82,3 @@ logging:
   level:
     com.chandler.fcc: DEBUG
     org.springframework: INFO
-
-

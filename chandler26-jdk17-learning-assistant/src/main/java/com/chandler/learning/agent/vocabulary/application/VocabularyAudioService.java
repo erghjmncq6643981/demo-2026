@@ -12,6 +12,7 @@ import org.springframework.beans.factory.annotation.Value;
 import org.springframework.core.io.FileSystemResource;
 import org.springframework.core.io.Resource;
 import org.springframework.stereotype.Service;
+import org.springframework.util.DigestUtils;
 import org.springframework.util.StringUtils;
 
 import java.io.IOException;
@@ -200,6 +201,97 @@ public class VocabularyAudioService {
             }
         }
         return null;
+    }
+
+    /**
+     * 解析并获取例句的发音音频资源（支持服务端缓存落盘）。
+     *
+     * @param rawSentence 例句文本
+     * @param voiceType   口音类型（us 或 uk）
+     * @return 音频 Resource，获取失败返回 null
+     */
+    public Resource resolveSentenceAudioResource(String rawSentence, String voiceType) {
+        if (!StringUtils.hasText(rawSentence)) {
+            return null;
+        }
+        String cleanText = rawSentence.replaceAll("\\{[^}]+\\}", "")
+                .replaceAll("`([^`]+)`", "$1")
+                .replaceAll("\\*{1,2}(.*?)\\*{1,2}", "$1")
+                .trim();
+        if (cleanText.isEmpty()) {
+            return null;
+        }
+        String type = VocabularyAudioConstants.VOICE_TYPE_UK.equalsIgnoreCase(voiceType)
+                ? VocabularyAudioConstants.VOICE_TYPE_UK
+                : VocabularyAudioConstants.VOICE_TYPE_US;
+
+        Path dir = Paths.get(storagePath, "sentences", type);
+        try {
+            if (!Files.exists(dir)) {
+                Files.createDirectories(dir);
+            }
+        } catch (IOException ex) {
+            log.error("创建例句音频本地存储目录失败 path={}: {}", dir, ex.getMessage());
+            return null;
+        }
+
+        String hash = DigestUtils.md5DigestAsHex(cleanText.getBytes(StandardCharsets.UTF_8));
+        Path targetFile = dir.resolve(hash + VocabularyAudioConstants.DEFAULT_AUDIO_EXTENSION);
+        if (Files.exists(targetFile)) {
+            try {
+                if (Files.size(targetFile) >= VocabularyAudioConstants.MIN_VALID_AUDIO_BYTES) {
+                    return new FileSystemResource(targetFile);
+                }
+            } catch (IOException ignored) {
+            }
+        }
+
+        String lockKey = "sentence:" + type + ":" + hash;
+        Object lock = downloadLocks.computeIfAbsent(lockKey, k -> new Object());
+        synchronized (lock) {
+            try {
+                if (Files.exists(targetFile) && Files.size(targetFile) >= VocabularyAudioConstants.MIN_VALID_AUDIO_BYTES) {
+                    return new FileSystemResource(targetFile);
+                }
+                boolean downloaded = downloadSentenceAudio(cleanText, type, targetFile);
+                if (downloaded && Files.exists(targetFile)) {
+                    return new FileSystemResource(targetFile);
+                }
+            } catch (Exception ex) {
+                log.debug("获取例句发音音频异常 text={} type={}: {}", cleanText, type, ex.getMessage());
+            } finally {
+                downloadLocks.remove(lockKey);
+            }
+        }
+        return null;
+    }
+
+    private boolean downloadSentenceAudio(String text, String voiceType, Path targetFile) {
+        String lan = VocabularyAudioConstants.VOICE_TYPE_UK.equalsIgnoreCase(voiceType) ? "uk" : "en";
+        String encodedText = URLEncoder.encode(text, StandardCharsets.UTF_8);
+        String url = String.format("https://fanyi.baidu.com/gettts?lan=%s&text=%s&spd=3&source=web", lan, encodedText);
+        try {
+            HttpRequest request = HttpRequest.newBuilder()
+                    .uri(URI.create(url))
+                    .timeout(Duration.ofSeconds(VocabularyAudioConstants.DOWNLOAD_TIMEOUT_SECONDS))
+                    .header("User-Agent", "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/128.0.0.0 Safari/537.36")
+                    .header("Referer", "https://fanyi.baidu.com/")
+                    .header("Accept", "*/*")
+                    .GET()
+                    .build();
+
+            HttpResponse<byte[]> response = httpClient().send(request, HttpResponse.BodyHandlers.ofByteArray());
+            if (response.statusCode() == 200 && response.body() != null && response.body().length >= VocabularyAudioConstants.MIN_VALID_AUDIO_BYTES) {
+                Path tmpFile = targetFile.resolveSibling(targetFile.getFileName().toString() + ".tmp." + System.currentTimeMillis());
+                Files.write(tmpFile, response.body());
+                Files.move(tmpFile, targetFile, StandardCopyOption.ATOMIC_MOVE, StandardCopyOption.REPLACE_EXISTING);
+                log.info("例句发音音频已成功下载并持久化至本地: {} ({} bytes)", targetFile.toAbsolutePath(), response.body().length);
+                return true;
+            }
+        } catch (Exception ex) {
+            log.debug("从音源下载例句音频重试 url={} error={}", url, ex.getMessage());
+        }
+        return false;
     }
 
     /**

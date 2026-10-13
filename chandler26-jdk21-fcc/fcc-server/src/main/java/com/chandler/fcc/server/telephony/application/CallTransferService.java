@@ -2,24 +2,29 @@ package com.chandler.fcc.server.telephony.application;
 
 import com.chandler.fcc.common.dto.command.FNodeDialDTO;
 import com.chandler.fcc.common.entity.CallInfoBO;
+import com.chandler.fcc.common.entity.FNodeResult;
 import com.chandler.fcc.common.enums.CallStageState;
 import com.chandler.fcc.common.protocol.ChannelEventState;
 import com.chandler.fcc.common.protocol.FccEventField;
 import com.chandler.fcc.common.util.IdUtil;
 import com.chandler.fcc.server.agent.infrastructure.AgentRuntimeMapper;
 import com.chandler.fcc.server.call.CallSessionManager;
+import com.chandler.fcc.server.call.application.ChannelSnapshotReader;
 import com.chandler.fcc.server.command.FccClient;
 import com.chandler.fcc.server.infrastructure.persistence.service.CallPersistenceService;
 import com.chandler.fcc.server.websocket.service.AgentWebSocketService;
 import com.fasterxml.jackson.databind.JsonNode;
+import jakarta.annotation.PreDestroy;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
+import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.web.server.ResponseStatusException;
 
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 import java.util.concurrent.Executors;
 import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.TimeUnit;
@@ -51,12 +56,19 @@ public class CallTransferService {
     private final CallPersistenceService persistence;
     private final AgentWebSocketService websocket;
     private final AgentRuntimeMapper agents;
+    private final ChannelSnapshotReader snapshots;
 
     private final ScheduledExecutorService scheduler = Executors.newSingleThreadScheduledExecutor(r -> {
         Thread t = new Thread(r, "fcc-transfer-watchdog");
         t.setDaemon(true);
         return t;
     });
+
+    /** 服务销毁时停止进程内转接看门狗，避免关闭后继续执行媒体控制。 */
+    @PreDestroy
+    public void stopWatchdog() {
+        scheduler.shutdownNow();
+    }
 
     /**
      * 发起咨询转接
@@ -87,11 +99,14 @@ public class CallTransferService {
             String uuidC = IdUtil.getUuid();
             call.putData("transferPending", true);
             call.putData("transferSuccess", false);
+            call.putData("transferControlUnconfirmed", false);
             call.putData("transferTarget", target);
             call.putData("transferChannelUuid", uuidC);
             call.putData("transferAgentUuid", uuidA);
             call.putData("transferGuestUuid", uuidB);
             call.putData("transferStartTime", System.currentTimeMillis());
+            call.putData("transferDeadline", System.currentTimeMillis() + 31000L);
+            call.putData("transferPhase", "PREPARING");
 
             sessions.bindChannel(uuidC, call.getCtrlId());
             persistence.saveOrUpdateSession(call);
@@ -141,22 +156,17 @@ public class CallTransferService {
                             .build()
                     )
                     .build();
-                client.dial(dialDto);
+                requireAccepted(client.dial(dialDto));
+                call.putData("transferPhase", "WAITING");
+                persistence.saveOrUpdateSession(call);
 
                 // 6. 启动 31 秒安全超时兜底定时器
                 scheduler.schedule(() -> handleTransferTimeout(call.getCallId()), 31, TimeUnit.SECONDS);
 
             } catch (Exception e) {
                 log.error("❌ [发起转接失败] 恢复 A 与 B 桥接 callId={}", call.getCallId(), e);
-                client.nativeAPI("uuid_break", uuidA + " all");
-                client.nativeAPI("uuid_break", uuidB + " all");
-                client.nativeAPI("uuid_setvar", uuidA + " hangup_after_bridge true");
-                client.nativeAPI("uuid_setvar", uuidB + " hangup_after_bridge true");
-                client.channelBridge(call.getCtrlId(), uuidA, uuidB);
-                call.getData().remove("transferPending");
-                call.getData().remove("transferChannelUuid");
-                persistence.saveOrUpdateSession(call);
-                throw new ResponseStatusException(HttpStatus.INTERNAL_SERVER_ERROR, "发起转接失败: " + e.getMessage());
+                markTransferUnknown(call, "PREPARATION_UNCONFIRMED");
+                throw new ResponseStatusException(HttpStatus.CONFLICT, "转接指令结果未确认，保留话道等待事件或对账");
             }
 
             return Map.of(
@@ -249,8 +259,12 @@ public class CallTransferService {
             if (!Boolean.TRUE.equals(call.getData().get("transferPending"))) {
                 return;
             }
-            call.putData("transferPending", false);
-            call.putData("transferSuccess", true);
+            if (controlInFlight(call)) {
+                markTransferUnknown(call, "ANSWER_CONTROL_REQUIRES_RECONCILIATION");
+                return;
+            }
+            call.putData("transferPhase", "ANSWER_REQUESTED");
+            persistence.saveOrUpdateSession(call);
             String uuidA = (String) call.getData().get("transferAgentUuid");
             String uuidB = (String) call.getData().get("transferGuestUuid");
             String target = (String) call.getData().get("transferTarget");
@@ -258,6 +272,7 @@ public class CallTransferService {
             log.info("🎉 [转接成功] 目标分机 {} 已应答！停止回铃放音，桥接客户 B({}) 与目标 C({})，释放原坐席 A({})",
                 target, uuidB, uuidC, uuidA);
 
+            try {
             // 1. 停止 A 和 B 的回铃放音
             client.nativeAPI("uuid_break", uuidA + " all");
             client.nativeAPI("uuid_break", uuidB + " all");
@@ -268,10 +283,10 @@ public class CallTransferService {
             client.nativeAPI("uuid_setvar", uuidC + " hangup_after_bridge true");
 
             // 3. 桥接 B 与 C
-            client.channelBridge(call.getCtrlId(), uuidB, uuidC);
+            requireAccepted(client.channelBridge(call.getCtrlId(), uuidB, uuidC));
 
             // 4. 释放原坐席 A 并将其置为 ACW 话后整理
-            client.hangup(call.getCtrlId(), uuidA, "NORMAL_CLEARING");
+            requireAccepted(client.hangup(call.getCtrlId(), uuidA, "NORMAL_CLEARING"));
             if (call.getAgentWorkNo() != null && call.getCallId() != null) {
                 try {
                     agents.release(call.getAgentWorkNo(), call.getCallId());
@@ -287,8 +302,16 @@ public class CallTransferService {
 
             // 5. 更新通话上下文中的坐席话道为 C
             call.setAgentChannelUuid(uuidC);
+            call.putData("transferPending", false);
+            call.putData("transferSuccess", true);
+            call.putData("transferPhase", "BRIDGE_COMMAND_ACCEPTED");
             call.getData().remove("transferChannelUuid");
             persistence.saveOrUpdateSession(call);
+            } catch (RuntimeException failure) {
+                call.putData("transferControlUnconfirmed", true);
+                markTransferUnknown(call, "ANSWER_CONTROL_UNCONFIRMED");
+                throw failure;
+            }
         }
     }
 
@@ -301,8 +324,12 @@ public class CallTransferService {
             if (!Boolean.TRUE.equals(call.getData().get("transferPending"))) {
                 return;
             }
-            call.putData("transferPending", false);
-            call.putData("transferFailed", true);
+            if (controlInFlight(call)) {
+                markTransferUnknown(call, "FALLBACK_CONTROL_REQUIRES_RECONCILIATION");
+                return;
+            }
+            call.putData("transferPhase", "FALLBACK_REQUESTED");
+            persistence.saveOrUpdateSession(call);
             String uuidA = (String) call.getData().get("transferAgentUuid");
             String uuidB = (String) call.getData().get("transferGuestUuid");
             String uuidC = (String) call.getData().get("transferChannelUuid");
@@ -311,6 +338,7 @@ public class CallTransferService {
             log.warn("⚠️ [转接未接听回退] 目标分机 {} 未接听 ({})，停止回铃，自动重新桥接坐席 A({}) 与客户 B({})",
                 target, cause, uuidA, uuidB);
 
+            try {
             // 1. 停止 A 和 B 的回铃放音
             client.nativeAPI("uuid_break", uuidA + " all");
             client.nativeAPI("uuid_break", uuidB + " all");
@@ -327,10 +355,13 @@ public class CallTransferService {
             client.nativeAPI("uuid_setvar", uuidB + " hangup_after_bridge true");
 
             // 4. 重新桥接 A 与 B
-            client.channelBridge(call.getCtrlId(), uuidA, uuidB);
+            requireAccepted(client.channelBridge(call.getCtrlId(), uuidA, uuidB));
 
             // 5. 清理转接标识
             call.getData().remove("transferChannelUuid");
+            call.putData("transferPending", false);
+            call.putData("transferFailed", true);
+            call.putData("transferPhase", "FALLBACK_COMMAND_ACCEPTED");
             call.putData("transferFailedReason", cause);
             persistence.saveOrUpdateSession(call);
 
@@ -344,6 +375,11 @@ public class CallTransferService {
                     "message", "目标分机 " + target + " 超时未接听，已恢复与客户通话"
                 )
             );
+            } catch (RuntimeException failure) {
+                call.putData("transferControlUnconfirmed", true);
+                markTransferUnknown(call, "FALLBACK_CONTROL_UNCONFIRMED");
+                throw failure;
+            }
         }
     }
 
@@ -420,13 +456,88 @@ public class CallTransferService {
      * 31秒看门狗超时检查
      */
     private void handleTransferTimeout(String callId) {
-        sessions.getByCallId(callId).ifPresent(call -> {
-            synchronized (call) {
-                if (Boolean.TRUE.equals(call.getData().get("transferPending"))) {
-                    log.warn("⏰ [转接看门狗] 30s超时未收到目标应答，触发自动回退 callId={}", callId);
-                    handleTransferFailure(call, "TIMEOUT_30S");
-                }
+        Set<String> channels = snapshots.read();
+        sessions.getByCallId(callId).ifPresent(call -> reconcileTimeout(call, channels));
+    }
+
+    /** 从恢复后的持久截止时间重建超时检查，不重新拨号；快照只读取一次。 */
+    @Scheduled(fixedDelayString = "${fcc.transfer.recovery-check-ms:5000}")
+    public void recoverExpiredTransfers() {
+        long now = System.currentTimeMillis();
+        List<CallInfoBO> expired = sessions.snapshot().stream()
+            .filter(call -> Boolean.TRUE.equals(call.getData().get("transferPending")))
+            .filter(call -> transferDeadline(call) <= now).toList();
+        if (expired.isEmpty()) return;
+        Set<String> channels = snapshots.read();
+        for (CallInfoBO call : expired) {
+            try { reconcileTimeout(call, channels); }
+            catch (RuntimeException failure) {
+                log.error("[转接对账] 单通恢复未完成，继续检查其他通话 callId={} type={}",
+                    call.getCallId(),failure.getClass().getSimpleName());
             }
-        });
+        }
+    }
+
+    /** @param call 转接上下文 @return 持久截止毫秒，旧记录使用原始发起时间，缺失时禁止推断超时 */
+    private long transferDeadline(CallInfoBO call) {
+        Object deadline = call.getData().get("transferDeadline");
+        if (deadline instanceof Number value) return value.longValue();
+        Object start = call.getData().get("transferStartTime");
+        return start instanceof Number value ? value.longValue() + 31000L : Long.MAX_VALUE;
+    }
+
+    /**
+     * 仅在完整快照确认 C 不存在且 A/B 均存在时回退；存活的 C 可能已接听，不能按超时误拆。
+     * @param call 转接上下文
+     * @param channels 完整话道集合，不可用时为 null
+     */
+    private void reconcileTimeout(CallInfoBO call, Set<String> channels) {
+        synchronized (call) {
+            if (!Boolean.TRUE.equals(call.getData().get("transferPending"))) return;
+            if (Boolean.TRUE.equals(call.getData().get("transferControlUnconfirmed"))
+                || Set.of("ANSWER_REQUESTED", "FALLBACK_REQUESTED").contains(
+                    String.valueOf(call.getData().get("transferPhase")))) {
+                call.putData("transferControlUnconfirmed", true);
+                markTransferUnknown(call, "RESTART_DURING_CONTROL");
+                return;
+            }
+            if (channels == null) {
+                markTransferUnknown(call, "SNAPSHOT_UNAVAILABLE");
+                return;
+            }
+            String target = (String) call.getData().get("transferChannelUuid");
+            String original = (String) call.getData().get("transferAgentUuid");
+            String guest = (String) call.getData().get("transferGuestUuid");
+            if (target == null || original == null || guest == null || channels.contains(target)
+                || !channels.contains(original) || !channels.contains(guest)) {
+                markTransferUnknown(call, "CHANNEL_OUTCOME_UNCONFIRMED");
+                return;
+            }
+            handleTransferFailure(call, "TARGET_ABSENT_AFTER_DEADLINE");
+        }
+    }
+
+    /** @param call 转接上下文 @param reason 脱敏结果分类；只标记未知，不伪造结束或释放坐席 */
+    private void markTransferUnknown(CallInfoBO call, String reason) {
+        if ("UNKNOWN".equals(call.getData().get("transferPhase"))
+            && reason.equals(call.getData().get("transferUnknownReason"))) return;
+        call.putData("transferPhase", "UNKNOWN");
+        call.putData("transferUnknownReason", reason);
+        persistence.saveOrUpdateSession(call);
+        log.warn("[转接对账] 媒体结果未知，保留参与事实 callId={} reason={}", call.getCallId(), reason);
+    }
+
+    /** @param result Sidecar 同步应答 @throws IllegalStateException 拒绝或未知应答，不能报告媒体成功 */
+    private void requireAccepted(FNodeResult result) {
+        if (result == null || !result.isSuccess()) throw new IllegalStateException("转接命令未确认受理");
+    }
+
+    /** @param call 转接上下文 @return 是否存在已发出但结果未确认的控制阶段，禁止盲目重放 */
+    private boolean controlInFlight(CallInfoBO call) {
+        boolean unresolved = Boolean.TRUE.equals(call.getData().get("transferControlUnconfirmed"))
+            || Set.of("ANSWER_REQUESTED", "FALLBACK_REQUESTED").contains(
+                String.valueOf(call.getData().get("transferPhase")));
+        if (unresolved) call.putData("transferControlUnconfirmed", true);
+        return unresolved;
     }
 }

@@ -13,29 +13,20 @@ import org.apache.ibatis.annotations.Param;
 public interface AgentRuntimeMapper {
 
     /**
-     * 完成本人最新已结束通话的整理态，不覆盖后续占用。
-     *
-     * @param owner 坐席工号
-     * @param callId 通话标识
-     * @return 更新数量
+     * 持久记录隔离的通话恢复失败，不保存原始载荷或异常消息。
+     * @param callId 原业务通话标识
+     * @param error 脱敏错误分类
+     * @return 写入数量
      */
-    int completeAcw(@Param("owner") String owner, @Param("callId") String callId);
+    int recordRecoveryIssue(@Param("callId") long callId, @Param("error") String error);
 
     /**
-     * 查询话后整理超过时限的坐席。
-     *
-     * @param timeoutSeconds 超时秒数
-     * @return 待置闲的坐席列表
-     */
-    List<Map<String, Object>> findExpiredAcwAgents(@Param("timeoutSeconds") int timeoutSeconds);
-
-    /**
-     * 将超过整理时限的坐席强制按登录态恢复为空闲或示忙。
-     *
-     * @param timeoutSeconds 超时秒数
+     * 根据本次恢复成功关闭原隔离记录，不删除历史。
+     * @param callId 原业务通话标识
      * @return 更新数量
      */
-    int expireAcw(@Param("timeoutSeconds") int timeoutSeconds);
+    int resolveRecoveryIssue(@Param("callId") long callId);
+
 
     /**
      * 读取启用坐席。
@@ -119,6 +110,22 @@ public interface AgentRuntimeMapper {
      * @return 更新数量
      */
     int release(@Param("owner") String owner, @Param("callId") String callId);
+
+    /**
+     * 按独立坐席 Leg 结束事实释放其归属坐席，不能影响相同 Call 的其他坐席。
+     * @param callId 原通话主键
+     * @param channelUuid 已结束的坐席话道
+     * @return 实际释放数量
+     */
+    int releaseEndedLeg(@Param("callId") Long callId, @Param("channelUuid") String channelUuid);
+
+    /**
+     * 查询已结束 Leg 的坐席当前空闲态，用于提交后通知。
+     * @param callId 原通话主键
+     * @param channelUuid 已结束话道
+     * @return 没有被新通话占用的坐席状态摘要
+     */
+    List<Map<String, Object>> releasedLegAgents(@Param("callId") Long callId, @Param("channelUuid") String channelUuid);
 
     /**
      * 读取当前坐席状态。

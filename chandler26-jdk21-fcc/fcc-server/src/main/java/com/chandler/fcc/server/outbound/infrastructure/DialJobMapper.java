@@ -75,6 +75,13 @@ public interface DialJobMapper {
     List<Map<String, Object>> running();
 
     /**
+     * 批量查找指定已结束通话的运行中尝试。
+     * @param callIds 通话主键列表
+     * @return 待对账尝试标识
+     */
+    List<String> attemptsForCalls(@Param("callIds") List<Long> callIds);
+
+    /**
      * 查询已经创建通话但尚未回填尝试关联的任务。
      *
      * @return 尝试标识和通话标识

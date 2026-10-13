@@ -323,7 +323,8 @@ export function normalizeExamples(parsed) {
 }
 
 export function firstExample(parsed) {
-  return Array.isArray(parsed?.examples) && parsed.examples.length > 0 ? parsed.examples[0].sentence : ''
+  const list = normalizeExamples(parsed)
+  return list.length > 0 ? (list[0].sentence || '') : ''
 }
 
 export function previewParsed(term = 'abandon') {

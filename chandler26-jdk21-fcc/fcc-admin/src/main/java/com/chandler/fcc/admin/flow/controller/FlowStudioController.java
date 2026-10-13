@@ -1,6 +1,7 @@
 package com.chandler.fcc.admin.flow.controller;
 
 import com.chandler.fcc.admin.flow.application.FlowStudioService;
+import com.chandler.fcc.admin.flow.application.query.FlowExecutionQueryService;
 import com.chandler.fcc.admin.flow.controller.req.CreateFlowReq;
 import com.chandler.fcc.admin.flow.controller.req.FlowPageReq;
 import com.chandler.fcc.admin.flow.controller.req.PublishFlowReq;
@@ -39,6 +40,7 @@ import org.springframework.web.bind.annotation.RestController;
 public class FlowStudioController {
 
     private final FlowStudioService service;
+    private final FlowExecutionQueryService executionQuery;
 
     /**
      * 查询公共动作和三类执行器目录。
@@ -228,6 +230,6 @@ public class FlowStudioController {
         @PathVariable String callId,
         @RequestParam(defaultValue = "0") String after
     ) {
-        return CommonResult.success(service.execution(callId, after));
+        return CommonResult.success(executionQuery.execution(callId, after));
     }
 }

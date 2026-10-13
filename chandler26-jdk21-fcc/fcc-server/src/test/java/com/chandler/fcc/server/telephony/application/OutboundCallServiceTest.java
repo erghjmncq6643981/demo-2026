@@ -15,6 +15,7 @@ import static org.mockito.Mockito.when;
 import com.chandler.fcc.common.dto.command.FNodeDialDTO;
 import com.chandler.fcc.common.entity.CallInfoBO;
 import com.chandler.fcc.common.enums.FlowActionType;
+import com.chandler.fcc.common.enums.CallStageState;
 import com.chandler.fcc.common.protocol.ChannelEventState;
 import com.chandler.fcc.server.agent.infrastructure.AgentRuntimeMapper;
 import com.chandler.fcc.server.agent.infrastructure.data.AgentRuntimeStateData;
@@ -33,6 +34,7 @@ import com.chandler.fcc.server.websocket.service.ScreenPopService;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.node.ObjectNode;
 import java.util.Map;
+import java.util.HashMap;
 import java.util.Optional;
 import java.util.function.Consumer;
 import org.junit.jupiter.api.BeforeEach;
@@ -56,6 +58,7 @@ class OutboundCallServiceTest {
     private final ObjectMapper json = new ObjectMapper();
     private final FccClient client = mock(FccClient.class);
     private final FlowConfig flowConfig = mock(FlowConfig.class);
+    private final InboundPostCallService postCall = mock(InboundPostCallService.class);
     private FlowConfig.FlowSnapshot snapshot;
 
     private OutboundCallService service;
@@ -92,6 +95,8 @@ class OutboundCallServiceTest {
             return null;
         }).when(transactions).executeWithoutResult(any());
 
+        AgentWebSocketService websocket = mock(AgentWebSocketService.class);
+        CallRecordingService recordings = mock(CallRecordingService.class);
         service = new OutboundCallService(
             mock(AgentIdentityService.class),
             agents,
@@ -102,11 +107,13 @@ class OutboundCallServiceTest {
             flowActions,
             flowConfig,
             screenPop,
-            mock(AgentWebSocketService.class),
             transactions,
             mock(DialAttemptGuard.class),
-            mock(CallRecordingService.class),
-            mock(InboundPostCallService.class),
+            postCall,
+            new OutboundMediaCoordinator(agents, persistence, client, flowActions, recordings, websocket),
+            new OutboundLifecycleCoordinator(agents, sessions, persistence, client, flowActions,
+                transactions, recordings, postCall, websocket),
+            new OutboundNotificationService(persistence, client, flowActions),
             new CallAdmissionService(agents)
         );
     }
@@ -395,6 +402,54 @@ class OutboundCallServiceTest {
         );
         verify(client).hangup("ctrl-a", "agent-channel", "USER_BUSY");
         verify(sessions, never()).registerSession(any());
+    }
+
+    /** 客户先挂的终态副作用不能被重复或迟到事件重新执行。 */
+    @Test
+    void preservesTerminalEffectsAcrossDuplicateAndLateEvents() {
+        CallInfoBO call = activeCall();
+        service.event(call, channelEvent("DESTROY", "guest-channel", "1002"));
+        service.event(call, channelEvent("DESTROY", "guest-channel", "1002"));
+        service.event(call, channelEvent("RINGING", "agent-channel", "1002"));
+        assertEquals(CallStageState.NORMAL_END, call.getStageState());
+        verify(client).hangup("ctrl-test", "agent-channel", "NORMAL_CLEARING");
+        verify(sessions).removeSession("ctrl-test");
+    }
+
+    /** 坐席先离开时客户评价仍可继续，拆分不改变原客户生命周期。 */
+    @Test
+    void preservesCustomerRatingAfterAgentLeaves() {
+        CallInfoBO call = activeCall();
+        when(postCall.begin(call)).thenReturn(true);
+        service.event(call, channelEvent("DESTROY", "agent-channel", "1002"));
+        assertEquals(CallStageState.CONNECTED, call.getStageState());
+        assertTrue(Boolean.TRUE.equals(call.getData().get("agentEndedForRating")));
+        verify(postCall).begin(call);
+        verify(sessions, never()).removeSession(any());
+        verify(client, never()).hangup(any(), any(), any());
+    }
+
+    /** 不属于当前双方的话道事件不能推进外呼或结束原通话。 */
+    @Test
+    void ignoresUnrelatedChannelAndMapsUnknownRecoveryExplicitly() {
+        CallInfoBO call = activeCall();
+        service.event(call, channelEvent("DESTROY", "other-channel", "1002"));
+        assertEquals(CallStageState.CONNECTED, call.getStageState());
+        ObjectNode end = channelEvent("DESTROY", "guest-channel", "1002");
+        end.put("cause", "RECOVERY_UNKNOWN");
+        service.event(call, end);
+        assertEquals(CallStageState.ERROR_END, call.getStageState());
+    }
+
+    /**
+     * 构造已连接的双话道外呼特征测试上下文。
+     * @return 含独立话道身份的通话
+     */
+    private CallInfoBO activeCall() {
+        return CallInfoBO.builder().callId("9001").ctrlId("ctrl-test")
+            .agentWorkNo("agent-test").agentChannelUuid("agent-channel").guestChannelUuid("guest-channel")
+            .stageState(CallStageState.CONNECTED).data(new HashMap<>(Map.of("runtimeTemplate", "AGENT_FIRST")))
+            .build();
     }
 
     /**

@@ -11,6 +11,8 @@ import static org.mockito.Mockito.when;
 
 import cn.dev33.satoken.stp.StpUtil;
 import com.chandler.fcc.admin.flow.application.FlowStudioService;
+import com.chandler.fcc.admin.flow.application.policy.FlowPublicationPolicy;
+import com.chandler.fcc.admin.flow.application.coordinator.FlowRuntimeNotifier;
 import com.chandler.fcc.admin.flow.controller.req.CreateFlowReq;
 import com.chandler.fcc.admin.flow.infrastructure.FlowStudioMapper;
 import com.chandler.fcc.admin.infrastructure.persistence.entity.FlowDefinitionEntity;
@@ -39,10 +41,8 @@ class FlowCreationBoundaryTest {
         FlowStudioService service = new FlowStudioService(
             flows,
             versions,
-            mock(DidNumberMapper.class),
-            mock(FlowStudioMapper.class),
-            mock(StringRedisTemplate.class),
-            new ObjectMapper()
+            new FlowPublicationPolicy(mock(DidNumberMapper.class), mock(FlowStudioMapper.class)),
+            new FlowRuntimeNotifier(mock(StringRedisTemplate.class), new ObjectMapper())
         );
         CreateFlowReq request = new CreateFlowReq();
         request.setFlowKey("SERVICE_INBOUND");
@@ -91,10 +91,8 @@ class FlowCreationBoundaryTest {
         FlowStudioService service = new FlowStudioService(
             flows,
             versions,
-            mock(DidNumberMapper.class),
-            mock(FlowStudioMapper.class),
-            mock(StringRedisTemplate.class),
-            new ObjectMapper()
+            new FlowPublicationPolicy(mock(DidNumberMapper.class), mock(FlowStudioMapper.class)),
+            new FlowRuntimeNotifier(mock(StringRedisTemplate.class), new ObjectMapper())
         );
         FlowDefinitionEntity flow = FlowDefinitionEntity.builder()
             .id(1L)
@@ -154,10 +152,8 @@ class FlowCreationBoundaryTest {
         FlowStudioService service = new FlowStudioService(
             flows,
             versions,
-            mock(DidNumberMapper.class),
-            mock(FlowStudioMapper.class),
-            mock(StringRedisTemplate.class),
-            new ObjectMapper()
+            new FlowPublicationPolicy(mock(DidNumberMapper.class), mock(FlowStudioMapper.class)),
+            new FlowRuntimeNotifier(mock(StringRedisTemplate.class), new ObjectMapper())
         );
         when(flows.selectOne(any())).thenReturn(
             FlowDefinitionEntity.builder()

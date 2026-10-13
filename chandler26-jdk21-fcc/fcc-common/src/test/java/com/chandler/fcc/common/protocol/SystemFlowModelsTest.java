@@ -5,12 +5,28 @@ import static org.junit.jupiter.api.Assertions.*;
 import com.chandler.fcc.common.enums.FlowActionType;
 import java.util.HashSet;
 import java.util.List;
+import java.util.Set;
 import org.junit.jupiter.api.Test;
 
 /**
  * 验证完整模型的动作覆盖、分支引用和入口可达性，防止再次只初始化阶段目录。
  */
 class SystemFlowModelsTest {
+
+    /** 通知与问卷分别进入播放、收号路径，不能让纯通知阶段成为孤立节点。 */
+    @Test
+    void notificationModelSeparatesPlaybackFromSurvey() {
+        var model = SystemFlowModels.get("NOTIFICATION");
+        assertTrue(model.path("nodes").size() > 0);
+        for (var node : model.path("nodes")) {
+            if (!"DIAL_CUSTOMER".equals(node.path("key").asText())) continue;
+            var successors = new HashSet<String>();
+            node.path("transitions").forEach(edge -> successors.add(edge.path("to").asText()));
+            assertEquals(Set.of("NOTIFY", "PLAY_ONLY", "END"), successors);
+        }
+        assertEquals(FlowActionType.PLAY_MEDIA, SystemFlowModels.action("NOTIFICATION", "PLAY_ONLY"));
+        assertEquals(FlowActionType.READ_DTMF, SystemFlowModels.action("NOTIFICATION", "NOTIFY"));
+    }
 
     /**
      * 每一个标准 FNode 方法都必须能够从公共动作目录反查，避免新增命令后运行端没有动作语义。

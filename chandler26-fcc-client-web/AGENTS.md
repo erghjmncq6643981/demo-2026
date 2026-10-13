@@ -27,6 +27,13 @@ The parent `AGENTS.md` also applies.
 - Endpoint changes cannot strand an active call. Disable, defer, or explicitly coordinate the switch while a call is ringing or connected.
 - Hostnames, ports, SIP domains, WebSocket schemes, credentials, and ICE servers come from validated runtime configuration. Do not add hardcoded LAN addresses, demo passwords, or unconditional `ws://` URLs.
 
+## Desktop Packaging And Deployment (桌面客户端打包与部署规则)
+
+- **域名写到安装包规则（强绑定机制）**：构建桌面客户端安装包前，必须核对并将目标工作台服务地址/域名写入安装包预置配置文件（`desktop/deployment.json`），直接打入安装包内（如当前测试包统一使用 `http://fcc.local:8888`，由内网/虚拟机 DNS 或 hosts 映射至 FCC 主机）。
+- **登录者严禁配置服务地址**：客户端启动与运行期间，直接加载安装包内置的工作台地址，严禁让最终坐席或登录者在 UI 界面手动输入、修改或自适应猜测后端服务地址，避免因配置不一致或操作失误导致请求与登录失败。
+- **环境更换严格重新打包**：若工作台域名、IP 或协议发生变更，必须在构建前更新安装包预置配置（`desktop/deployment.json`）并重新打包，不得依赖客户端运行期动态输入或本地缓存机制。
+- **运行期通信一致性**：运行期 API 基础地址（`adminApi`、`telephonyApi`）、WebSocket 连接（`/ws/agent`）以及 SIP/WebRTC 传输，必须基于当前受信任的工作台域名保持严格一致，不得绕过预置部署配置引入散落的硬编码或冲突的本地配置。
+
 ## Interaction
 
 - Cover logged-out, connecting, ready, ringing, dialing, connected, held, reconnecting, failed, ACW, and idle states without overlapping controls.

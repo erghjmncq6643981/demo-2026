@@ -24,7 +24,7 @@ import { createWordbookTransferFeature } from '/src/features/vocabulary/transfer
 import { createWordbookArticleFeature } from '/src/features/reading/article.js'
 import { createScenePlanFeature } from '/src/features/learning/scene-plan/scene-plan.js'
 import { createProfileFeature } from '/src/features/identity/profile.js'
-import { createSpeechFeature } from '/src/features/learning/speech/speech.js'
+import { createSpeechFeature } from '/src/features/learning/speech/speech.js?v=20260930-02'
 import { createStudyFeature } from '/src/features/learning/study/study.js'
 import { createReviewFeature } from '/src/features/learning/review/review.js'
 import { createSystemManagementFeature } from '/src/features/system/system-management.js'
@@ -102,6 +102,7 @@ const {
   speak,
   preloadAudio,
   speakSentence,
+  stopSpeaking,
   currentVoiceType,
   loadSpeechPreferences,
   saveSpeechPreferences,
@@ -503,7 +504,7 @@ bindAppEvents({
   openQuickLookup: studyFacade.openQuickLookup,
   closeQuickLookup: studyFacade.closeQuickLookup,
 })
-exposeDebugGlobals({ state, renderRecord: studyFacade.renderRecord, renderReviewCompleteModal, speak, setView, setProfileTab })
+exposeDebugGlobals({ state, renderRecord: studyFacade.renderRecord, renderReviewCompleteModal, speak, speakSentence, stopSpeaking, setView, setProfileTab })
 
 updateAuthView()
 syncSidebarState()

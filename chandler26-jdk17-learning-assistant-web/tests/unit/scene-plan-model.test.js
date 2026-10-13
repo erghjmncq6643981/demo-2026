@@ -2,7 +2,8 @@ import { describe, expect, it } from 'vitest'
 import { localDateKey, number } from '../../public/src/features/learning/scene-plan/model.js'
 import { createUnitList } from '../../public/src/features/learning/scene-plan/unit-list.js'
 import { parsePreviewMarkdown, suggestedSplitCorrection } from '../../public/src/features/learning/scene-plan/markdown-parser.js'
-import { calendarDates, startOfWeek } from '../../public/src/features/learning/scene-plan/calendar-model.js'
+import { calendarDates, startOfWeek, isPlanEnded, resolvePlanEndDate, resolvePlanAnchorDate } from '../../public/src/features/learning/scene-plan/calendar-model.js'
+import { createCalendarView } from '../../public/src/features/learning/scene-plan/calendar-view.js'
 import { isWordComplete, nextAssessment, pendingChallengeWords, pendingChallengeCount } from '../../public/src/features/learning/scene-plan/challenge-model.js'
 
 describe('scene plan model', () => {
@@ -125,5 +126,90 @@ describe('学习日历规则', () => {
     expect(plan.units[0].relatedWords[0].term).toBe('fruit')
     expect(plan.units[0].learningText).toBe('This is an apple.')
     expect(plan.units[0].coreWordCount).toBe(1)
+  })
+
+  it('判断计划是否已结束（completed 或 cancelled）', () => {
+    expect(isPlanEnded({ status: 'completed' })).toBe(true)
+    expect(isPlanEnded({ status: 'cancelled' })).toBe(true)
+    expect(isPlanEnded({ status: 'active' })).toBe(false)
+    expect(isPlanEnded({ status: 'paused' })).toBe(false)
+    expect(isPlanEnded({ status: 'not_started' })).toBe(false)
+    expect(isPlanEnded(null)).toBe(false)
+  })
+
+  it('解析已结束计划的最后一天（优先取单元中最大日期，其次 endTime）', () => {
+    const planWithUnits = {
+      status: 'completed',
+      startTime: '2026-08-01T09:00:00',
+      endTime: '2026-08-31T23:59:59',
+      units: [
+        { id: 1, recommendedDate: '2026-08-10' },
+        { id: 2, recommendedDate: '2026-08-25' },
+        { id: 3, recommendedDate: '2026-08-18' },
+      ],
+    }
+    expect(resolvePlanEndDate(planWithUnits)).toBe('2026-08-25')
+
+    const planNoUnits = {
+      status: 'completed',
+      startTime: '2026-08-01T09:00:00',
+      endTime: '2026-08-31T23:59:59',
+      units: [],
+    }
+    expect(resolvePlanEndDate(planNoUnits)).toBe('2026-08-31')
+  })
+
+  it('已结束计划的锚点日期固定为最后一天，不随自然日变化', () => {
+    const completedPlan = {
+      status: 'completed',
+      startTime: '2026-08-01T09:00:00',
+      endTime: '2026-08-20T22:00:00',
+      units: [{ id: 1, recommendedDate: '2026-08-20' }],
+    }
+    // 无论当前是哪一天，已完成计划的锚点始终是 2026-08-20
+    expect(resolvePlanAnchorDate(completedPlan)).toBe('2026-08-20')
+
+    const cancelledPlan = {
+      status: 'cancelled',
+      endTime: '2026-07-15T12:00:00',
+      units: [],
+    }
+    expect(resolvePlanAnchorDate(cancelledPlan)).toBe('2026-07-15')
+  })
+
+  it('进行中的计划在计划期内默认锚定为今天', () => {
+    const today = localDateKey()
+    const activePlan = {
+      status: 'active',
+      startTime: '2020-01-01T00:00:00',
+      endTime: '2030-12-31T23:59:59',
+    }
+    expect(resolvePlanAnchorDate(activePlan)).toBe(today)
+  })
+
+  it('日历视图重置时，已完成计划重置到最后一天而非自然日', () => {
+    const completedPlan = {
+      status: 'completed',
+      endTime: '2026-08-25T18:00:00',
+      units: [{ id: 1, recommendedDate: '2026-08-25' }],
+    }
+    const state = {
+      currentLearningPlan: completedPlan,
+      sceneCalendarRange: 'week',
+      sceneCalendarCursorDate: null,
+      sceneCalendarData: null,
+    }
+    let rendered = false
+    let refreshed = false
+    const view = createCalendarView({
+      state,
+      render: () => { rendered = true },
+      refresh: () => { refreshed = true },
+    })
+
+    view.reset()
+    expect(state.sceneCalendarCursorDate).toBe('2026-08-25')
+    expect(rendered).toBe(true)
+    expect(refreshed).toBe(true)
   })
 })

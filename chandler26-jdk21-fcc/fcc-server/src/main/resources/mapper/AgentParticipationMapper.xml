@@ -1,0 +1,37 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.chandler.fcc.server.agent.infrastructure.AgentParticipationMapper">
+  <select id="lockCall" resultType="long">
+    SELECT id FROM fcc_call_session WHERE id=#{callId} FOR UPDATE
+  </select>
+  <insert id="synchronizeLeg">
+    INSERT INTO fcc_agent_service_session(id,call_id,leg_id,agent_id,sequence_no,service_role,
+      agent_name_snapshot,work_no_snapshot,endpoint_snapshot,status,ringing_at,answered_at,ended_at,result)
+    SELECT #{participationId},l.call_id,l.id,a.id,
+      COALESCE((SELECT sequence_no FROM fcc_agent_service_session existing WHERE existing.leg_id=l.id),
+        (SELECT COALESCE(MAX(sequence_no),0)+1 FROM fcc_agent_service_session numbered WHERE numbered.call_id=l.call_id)),
+      'PRIMARY',a.agent_name,a.work_no,l.endpoint_id,
+      CASE WHEN l.state='DESTROY' AND l.ended_at IS NOT NULL THEN 'ENDED'
+        WHEN l.answered_at IS NOT NULL THEN 'ANSWERED' ELSE 'RINGING' END,
+      l.ringing_at,l.answered_at,l.ended_at,l.hangup_cause
+    FROM fcc_call_leg l JOIN fcc_agent a
+      ON a.work_no=JSON_UNQUOTE(JSON_EXTRACT(l.metadata,'$.agentWorkNo'))
+    WHERE l.id=#{legId} AND l.role_type='AGENT'
+    ON DUPLICATE KEY UPDATE
+      ringing_at=COALESCE(fcc_agent_service_session.ringing_at,VALUES(ringing_at)),
+      answered_at=COALESCE(fcc_agent_service_session.answered_at,VALUES(answered_at)),
+      ended_at=COALESCE(fcc_agent_service_session.ended_at,VALUES(ended_at)),
+      status=CASE WHEN fcc_agent_service_session.ended_at IS NOT NULL THEN 'ENDED'
+        WHEN fcc_agent_service_session.answered_at IS NOT NULL THEN 'ANSWERED' ELSE VALUES(status) END,
+      result=COALESCE(fcc_agent_service_session.result,VALUES(result)),
+      version=fcc_agent_service_session.version+1,updated_at=UTC_TIMESTAMP(3)
+  </insert>
+  <update id="synchronizeEnded">
+    UPDATE fcc_agent_service_session s JOIN fcc_call_leg l ON l.id=s.leg_id
+    SET s.status='ENDED',s.ended_at=COALESCE(s.ended_at,l.ended_at),
+      s.result=COALESCE(s.result,l.hangup_cause),s.version=s.version+1,s.updated_at=UTC_TIMESTAMP(3)
+    WHERE s.call_id IN <foreach collection="callIds" item="callId" open="(" separator="," close=")">#{callId}</foreach>
+      AND l.state='DESTROY' AND l.ended_at IS NOT NULL
+      AND (s.status!='ENDED' OR s.ended_at IS NULL)
+  </update>
+</mapper>

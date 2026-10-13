@@ -7,6 +7,7 @@ import static org.mockito.Mockito.verify;
 
 import com.chandler.fcc.common.protocol.FccEventMethod;
 import com.chandler.fcc.server.call.CallSessionManager;
+import com.chandler.fcc.server.call.application.CallFinalizationService;
 import com.chandler.fcc.server.event.handler.FccEventHandler;
 import com.chandler.fcc.server.infrastructure.persistence.entity.CallEventEntity;
 import com.chandler.fcc.server.infrastructure.persistence.service.CallPersistenceService;
@@ -36,7 +37,8 @@ class FccEventDispatcherTest {
             new ObjectMapper(),
             List.of(handler),
             mock(CallSessionManager.class),
-            persistence
+            persistence,
+            mock(CallFinalizationService.class)
         );
         String payload = "{\"method\":\"Event.Channel\",\"params\":{" +
             "\"event_id\":\"" + EVENT_ID + "\",\"node_id\":\"node-a\"," +

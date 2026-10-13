@@ -77,3 +77,34 @@ export function calendarDaySummary(plan, date) {
     pendingCount: units.reduce((sum, unit) => sum + pendingChallengeCount(unit), 0),
   }
 }
+
+export function isPlanEnded(plan) {
+  return plan?.status === 'completed' || plan?.status === 'cancelled'
+}
+
+export function resolvePlanEndDate(plan) {
+  if (!plan) return localDateKey()
+  const unitDates = asArray(plan.units)
+    .map((unit) => unitDateKey(unit))
+    .filter(Boolean)
+  if (unitDates.length > 0) {
+    unitDates.sort()
+    return unitDates[unitDates.length - 1]
+  }
+  if (plan.endTime) return plan.endTime.split('T')[0]
+  if (plan.startTime) return plan.startTime.split('T')[0]
+  return localDateKey()
+}
+
+export function resolvePlanAnchorDate(plan) {
+  if (!plan) return localDateKey()
+  if (isPlanEnded(plan)) {
+    return resolvePlanEndDate(plan)
+  }
+  const today = localDateKey()
+  const start = plan.startTime ? plan.startTime.split('T')[0] : null
+  const end = plan.endTime ? plan.endTime.split('T')[0] : null
+  if (start && today < start) return start
+  if (end && today > end) return end
+  return today
+}

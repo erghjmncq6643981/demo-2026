@@ -9,6 +9,7 @@ import com.chandler.fcc.common.protocol.FccEventMethod;
 import com.chandler.fcc.common.util.IdUtil;
 import com.chandler.fcc.server.agent.application.PhoneBindingService;
 import com.chandler.fcc.server.call.CallSessionManager;
+import com.chandler.fcc.server.call.application.CallFinalizationService;
 import com.chandler.fcc.server.telephony.application.CallTransferService;
 import com.chandler.fcc.server.telephony.application.InboundCallService;
 import com.chandler.fcc.server.telephony.application.OutboundCallService;
@@ -33,6 +34,7 @@ public class ChannelEventHandler implements FccEventHandler {
     private final OutboundCallService outboundCalls;
     private final InboundCallService inboundCalls;
     private final CallTransferService transferService;
+    private final CallFinalizationService finalization;
 
     /**
      * 判断是否为通道生命周期事件。
@@ -66,6 +68,14 @@ public class ChannelEventHandler implements FccEventHandler {
             .or(() -> sessions.getByChannelUuid(channelUuid))
             .orElse(null);
         if (call == null) {
+            if (state == ChannelEventState.DESTROY) {
+                CallInfoBO persisted = finalization.resolveCall(controlId, channelUuid, nodeId);
+                if (persisted != null) {
+                    finalization.recordChannelEnd(persisted.getCallId(), params);
+                    finalization.cleanupEndedCall(Long.valueOf(persisted.getCallId()));
+                    return;
+                }
+            }
             if (outboundCalls.isAgentOriginatedEntry(params, state)) {
                 call = outboundCalls.createAgentOriginated(
                     params,
@@ -87,6 +97,7 @@ public class ChannelEventHandler implements FccEventHandler {
 
         call.putData("flowEventId", params.path(FccEventField.EVENT_ID.getWireName()).asText());
         call.putData("flowSourceTime", params.path(FccEventField.SOURCE_TIMESTAMP.getWireName()).asLong());
+        if (state == ChannelEventState.DESTROY) finalization.recordChannelEnd(call.getCallId(), params);
 
         if (phoneBinding.channel(call, params)) {
             if (state == ChannelEventState.DESTROY) sessions.removeSession(call.getCtrlId());

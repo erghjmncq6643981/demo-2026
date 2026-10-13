@@ -2,12 +2,32 @@ package com.chandler.fcc.server.event.infrastructure;
 
 import org.apache.ibatis.annotations.Mapper;
 import org.apache.ibatis.annotations.Param;
+import java.util.List;
+import com.chandler.fcc.server.event.controller.resp.EventRecoveryIssueResp;
 
 /**
  * 持久事件收件箱端口，业务副作用发生前先保存原始事实。
  */
 @Mapper
 public interface EventInboxMapper {
+
+    /** @param offset 分页起点 @return 未知事件脱敏摘要，最多五十条 */
+    List<EventRecoveryIssueResp> recoveryIssues(@Param("offset") int offset);
+
+    /** @param id 事件标识 @return 已验证过来源的原始信封 */
+    String recoveryPayload(@Param("id") String id);
+
+    /** @param id 事件标识 @param token 唯一租约令牌 @param actor 操作者工号 @return 原子领取数量，最多十次，过期租约可重新领取 */
+    int claimRecovery(@Param("id") String id, @Param("token") String token, @Param("actor") String actor);
+
+    /** @param id 事件标识 @param token 当前租约令牌 @param status 修复结果 @param error 脱敏分类 @return 条件更新数量，过期执行者不得覆盖新结果 */
+    int finishRecovery(@Param("id") String id, @Param("token") String token, @Param("status") String status, @Param("error") String error);
+
+    /** @param id 事件标识 @param token 本次动作标识 @param actor 操作者 @return 持久审计写入数量；成功后才允许修复事实 */
+    int recordRecoveryAudit(@Param("id") String id, @Param("token") String token, @Param("actor") String actor);
+
+    /** @param token 本次动作标识 @param status 动作结果 @param error 脱敏分类 @return 审计结果更新数量 */
+    int finishRecoveryAudit(@Param("token") String token, @Param("status") String status, @Param("error") String error);
 
     /**
      * 按唯一源事件标识领取首次到达的事件。

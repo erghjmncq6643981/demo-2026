@@ -431,6 +431,59 @@ elements.entryStatusModal?.querySelectorAll('[data-status-choice]')?.forEach((bu
 })
 elements.speakWordBtn?.addEventListener('click', () => speak(state.currentRecord?.normalizedTerm || elements.termInput?.value))
 elements.speakSentenceBtn?.addEventListener('click', () => speakSentence(firstExample(state.currentRecord?.parsed)))
+
+function updateSentencePlayButtons(sentence, isPlaying) {
+  const cleanSentence = String(sentence || '')
+    .replace(/\{[^}]+\}/g, '')
+    .replace(/`([^`]+)`/g, '$1')
+    .replace(/\*{1,2}(.*?)\*{1,2}/g, '$1')
+    .trim()
+    .toLowerCase()
+
+  if (elements.speakSentenceBtn) {
+    if (isPlaying) {
+      elements.speakSentenceBtn.textContent = '⏸ 停止例句'
+      elements.speakSentenceBtn.classList.add('playing')
+      elements.speakSentenceBtn.title = '停止朗读例句 (再次点击停止)'
+    } else {
+      elements.speakSentenceBtn.textContent = '朗读例句'
+      elements.speakSentenceBtn.classList.remove('playing')
+      elements.speakSentenceBtn.title = '朗读当前词卡第一条例句'
+    }
+  }
+
+  const query = '[data-sentence-index], [data-modal-sentence], [data-forgotten-sentence], [data-focus-sentence], [data-quick-sentence]'
+  document.querySelectorAll(query).forEach((button) => {
+    const btnText = (
+      button.getAttribute('data-sentence-text') ||
+      button.parentElement?.querySelector('.sentence')?.textContent ||
+      ''
+    )
+      .replace(/\{[^}]+\}/g, '')
+      .replace(/`([^`]+)`/g, '$1')
+      .replace(/\*{1,2}(.*?)\*{1,2}/g, '$1')
+      .trim()
+      .toLowerCase()
+
+    const isMatch = isPlaying && cleanSentence && btnText && (btnText.includes(cleanSentence) || cleanSentence.includes(btnText))
+    if (isMatch) {
+      button.textContent = '⏸'
+      button.classList.add('playing')
+      button.title = '停止朗读 (再次点击停止)'
+    } else {
+      button.textContent = '▶'
+      button.classList.remove('playing')
+      button.title = '播放例句'
+    }
+  })
+}
+
+if (typeof window !== 'undefined') {
+  window.addEventListener('learning:sentence-play-state', (event) => {
+    const { sentence, playing } = event.detail || {}
+    updateSentencePlayButtons(sentence, playing)
+  })
+}
 elements.openStudyNoteDrawerBtn?.addEventListener('click', () => openStudyNoteDrawer?.(false))
 elements.closeStudyNoteDrawerBtn?.addEventListener('click', () => closeStudyNoteDrawer?.())
 elements.studyNoteDrawerBackdrop?.addEventListener('click', () => closeStudyNoteDrawer?.())
@@ -546,7 +599,7 @@ elements.aiSessionDetailModal?.addEventListener('click', (event) => { if (event.
   })
 }
 
-export function exposeDebugGlobals({ state, renderRecord, renderReviewCompleteModal, speak, setView, setProfileTab }) {
+export function exposeDebugGlobals({ state, renderRecord, renderReviewCompleteModal, speak, speakSentence, stopSpeaking, setView, setProfileTab }) {
   window.renderRecord = renderRecord
-  window.learningAssistant = { renderRecord, renderReviewCompleteModal, speak, setView, setProfileTab, state }
+  window.learningAssistant = { renderRecord, renderReviewCompleteModal, speak, speakSentence, stopSpeaking, setView, setProfileTab, state }
 }

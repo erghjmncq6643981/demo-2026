@@ -32,6 +32,7 @@ The parent `AGENTS.md` also applies.
 - Do not place tokens, passwords, SIP secrets, recording signed URLs, or personal data in logs, fixtures, screenshots, or persistent browser storage beyond the established authentication contract.
 - Recording playback and download always use authorized backend endpoints. Never expose server filesystem paths.
 - Flow publication UI must distinguish saved draft, published version, runtime reload notification, and verified runtime activation; do not collapse them into one success claim.
+- **服务域名与打包部署规范**：构建或发布前端应用/客户端安装包时，后端服务地址与工作台域名必须在打包前核对并固化写入构建配置中，严禁在运行期让最终用户手动输入或依赖本地不可靠缓存，环境迁移必须更新配置重新打包。
 
 ## Verification
 

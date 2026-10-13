@@ -58,14 +58,14 @@ const badgeStyle = computed(() => {
   <div class="flex items-center gap-2">
     <span v-if="!props.hideLabel" class="text-xs font-bold text-slate-600 select-none">通话状态</span>
     <button
-      v-if="callStore.callState === 'ACW'"
+      v-if="callStore.callState === 'IDLE' && callStore.summaryCall"
       type="button"
       class="h-8 px-3.5 rounded-xl border border-indigo-200 bg-indigo-50 hover:bg-indigo-100 text-brand-700 text-xs font-bold font-mono inline-flex items-center gap-1.5 shadow-2xs transition cursor-pointer select-none"
       title="点击继续填写话后小结"
-      @click="callStore.showAcwDrawer = true"
+      @click="callStore.showSummaryDrawer = true"
     >
       <span class="w-2 h-2 rounded-full bg-brand-500 animate-pulse" />
-      <span>{{ label }} · 继续填写</span>
+      <span>{{ label }} · 待填小结 {{ callStore.summaryCalls.length }}</span>
     </button>
     <div
       v-else

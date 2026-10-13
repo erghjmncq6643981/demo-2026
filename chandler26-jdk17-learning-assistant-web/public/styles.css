@@ -5141,6 +5141,32 @@ input[type="range"] {
   font-weight: 600;
 }
 
+.example-item .icon-button.playing,
+[data-sentence-index].playing,
+[data-modal-sentence].playing,
+[data-forgotten-sentence].playing,
+[data-focus-sentence].playing,
+[data-quick-sentence].playing,
+#speakSentenceBtn.playing {
+  background: rgba(16, 185, 129, 0.2) !important;
+  border-color: rgba(52, 211, 153, 0.7) !important;
+  color: #10b981 !important;
+  font-weight: 700 !important;
+  box-shadow: 0 0 8px rgba(16, 185, 129, 0.35);
+  animation: pulse-speaking 1.2s infinite ease-in-out;
+}
+
+@keyframes pulse-speaking {
+  0%, 100% {
+    transform: scale(1);
+    box-shadow: 0 0 6px rgba(16, 185, 129, 0.3);
+  }
+  50% {
+    transform: scale(1.08);
+    box-shadow: 0 0 12px rgba(16, 185, 129, 0.6);
+  }
+}
+
 .scene-tts-rate-btn {
   min-width: 48px;
   font-variant-numeric: tabular-nums;
@@ -7464,6 +7490,7 @@ input.sr-only:disabled + .file-upload-trigger {
 .scene-calendar-day.completed-day {
   border-color: rgba(125, 211, 168, 0.45);
   background: rgba(125, 211, 168, 0.06);
+  opacity: 1;
 }
 
 .scene-calendar-day.completed-day strong {

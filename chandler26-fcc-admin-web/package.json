@@ -5,6 +5,8 @@
   "private": true,
   "description": "FCC Production Management Console (Vue 3 + Vite + TypeScript + Pinia)",
   "scripts": {
+    "governance": "node ../chandler26-jdk21-fcc/tools/check-engineering-governance.mjs",
+    "check": "npm run governance && npm run test && npm run build",
     "dev": "vite --host 0.0.0.0 --port 8000",
     "build": "vue-tsc -b && vite build",
     "test": "vitest run src",

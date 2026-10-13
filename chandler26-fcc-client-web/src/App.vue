@@ -74,7 +74,7 @@
 </template>
 
 <script setup lang="ts">
-import { ref, watch, onMounted, onUnmounted } from 'vue';
+import { ref, onMounted, onUnmounted } from 'vue';
 import HeaderBar from './components/layout/HeaderBar.vue';
 import AgentProfile from './components/layout/AgentProfile.vue';
 import CallProgressBanner from './features/call/components/CallProgressBanner.vue';
@@ -94,12 +94,7 @@ import FeedbackHost from './components/layout/FeedbackHost.vue';
 import { useAgentStore } from './stores/agentStore';
 import { useCallStore } from './stores/callStore';
 import { useCdrStore } from './stores/cdrStore';
-import { wsService } from './services/websocketService';
-import { sipWebRtcService } from './services/sipWebRtcService';
-import { getRuntimeConfig } from './shared/config/runtimeConfig';
-import { authApi } from './api/authApi';
-import { toastError } from './utils/feedback';
-import type { IncomingScreenPopPayload, WsMessage } from './types/telephony';
+import { useAgentRuntime } from './features/realtime/coordinators/useAgentRuntime';
 
 // 核心规则：未接待回拨记录的优先级最高，首屏默认展示 callback
 const activeTab = ref<'callback' | 'records' | 'agents'>('callback');
@@ -111,7 +106,7 @@ const agentStore = useAgentStore();
 const callStore = useCallStore();
 const cdrStore = useCdrStore();
 
-let unsubscribeWs: (() => void) | null = null;
+useAgentRuntime();
 
 function handleKeyDown(e: KeyboardEvent) {
   if (e.key === 'F2') {
@@ -119,111 +114,8 @@ function handleKeyDown(e: KeyboardEvent) {
     activeTab.value = activeTab.value === 'agents' ? 'callback' : 'agents';
   }
 }
-
-let registrationGeneration = 0;
-async function syncWebRtcRegistration() {
-  const generation = ++registrationGeneration;
-  if (agentStore.isLoggedIn) {
-    // 只要坐席登录，就保持软电话（WebRTC）注册在线；话机绑定或接听方式流转（软电话/话机/手机）不影响软电话本身的注册状态
-    let config = agentStore.sipConfig;
-    if (!config) {
-      config = await agentStore.loadSipConfig();
-    }
-    if (generation !== registrationGeneration || !agentStore.isLoggedIn) return;
-
-    if (config) {
-      if (!sipWebRtcService.isRegistered.value && sipWebRtcService.registrationState.value !== 'CONNECTING') {
-        sipWebRtcService.init(config.extension, { ...config, iceServers: getRuntimeConfig().iceServers });
-      }
-    } else {
-      const ext = agentStore.boundSipExtension || agentStore.extension;
-      toastError('无法取得本人 SIP 配置，请检查分机开通及接入配置');
-      sipWebRtcService.init(ext || '', null);
-    }
-  } else {
-    registrationGeneration++;
-    sipWebRtcService.destroy();
-  }
-}
-
-// 监听登录状态与接听方式流转
-watch(() => agentStore.isLoggedIn, async (loggedIn) => {
-  if (loggedIn) {
-    wsService.connect(agentStore.workNo);
-    await agentStore.loadEndpoints();
-    await agentStore.loadSipConfig();
-    await agentStore.refreshRuntimeState();
-    syncWebRtcRegistration();
-  } else {
-    registrationGeneration++;
-    wsService.disconnect();
-    sipWebRtcService.destroy();
-  }
-});
-
-watch(() => agentStore.endpoint, () => {
-  syncWebRtcRegistration();
-});
-
-onMounted(() => {
-  window.addEventListener('keydown', handleKeyDown);
-
-  // 仅在已登录状态下启动 WebSocket 信道与加载接听资产
-  if (agentStore.isLoggedIn) {
-    wsService.connect(agentStore.workNo);
-    void (async () => {
-      await agentStore.loadEndpoints();
-      await agentStore.loadSipConfig();
-      await agentStore.refreshRuntimeState();
-      syncWebRtcRegistration();
-    })();
-  }
-
-  // 绑定 WebRTC 呼叫信令钩子
-  sipWebRtcService.onIncomingCall(({ callId }) => {
-    callStore.handleIncomingSipSession(callId);
-  });
-
-  sipWebRtcService.onCallConnected(({ callId }) => {
-    const activeCallId = callId || callStore.currentCall?.callId;
-    if (activeCallId) callStore.observeAnswered(activeCallId);
-  });
-
-  sipWebRtcService.onCallEnded(({ callId }) => {
-    const activeCallId = callId || callStore.currentCall?.callId;
-    if (activeCallId) callStore.observeEnded(activeCallId);
-  });
-
-  // 监听后端推送的真实话务事件
-  unsubscribeWs = wsService.subscribe((msg: WsMessage) => {
-    if (msg.type === 'SCREEN_POP' && msg.data) {
-      void agentStore.refreshRuntimeState();
-      callStore.triggerIncoming(msg.data as IncomingScreenPopPayload);
-    } else if (msg.type === 'CALL_ANSWERED') {
-      callStore.observeAnswered(msg.callId);
-    } else if (msg.type === 'CALL_HANGUP') {
-      callStore.observeEnded(msg.callId);
-      void agentStore.refreshRuntimeState();
-    } else if (msg.type === 'CHANNEL_READY') {
-      void agentStore.refreshRuntimeState();
-    } else if (msg.type === 'AGENT_PRESENCE_CHANGE') {
-      void agentStore.refreshRuntimeState();
-      const data = msg.data as { workStatus?: string; reason?: string } | undefined;
-      if (data?.reason === 'ACW_TIMEOUT' || data?.workStatus === 'READY') {
-        callStore.handleAcwTimeout();
-        void cdrStore.loadRecords(1);
-      }
-    }
-  });
-});
-
-onUnmounted(() => {
-  registrationGeneration++;
-  window.removeEventListener('keydown', handleKeyDown);
-  if (unsubscribeWs) unsubscribeWs();
-  wsService.disconnect();
-  sipWebRtcService.destroy();
-});
+onMounted(() => window.addEventListener('keydown', handleKeyDown));
+onUnmounted(() => window.removeEventListener('keydown', handleKeyDown));
 
 function handleToggleSoftphone() {
   if (softphoneDialerRef.value) {

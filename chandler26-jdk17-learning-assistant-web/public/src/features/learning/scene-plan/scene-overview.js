@@ -202,9 +202,14 @@ export function createSceneOverview({
     const planStartKey = plan.startTime ? plan.startTime.split('T')[0] : null
     const planEndKey = plan.endTime ? plan.endTime.split('T')[0] : null
     if (planStartKey || planEndKey) {
-      dates = dates.filter((date) => (!planStartKey || dateKey(date) >= planStartKey) && (!planEndKey || dateKey(date) <= planEndKey))
+      dates = dates.filter((date) => {
+        const k = dateKey(date)
+        const hasUnits = asArray(plan.units).some((unit) => (unit.recommendedDate || unit.generatedTime?.split('T')[0]) === k)
+        const inPlanRange = (!planStartKey || k >= planStartKey) && (!planEndKey || k <= planEndKey)
+        return hasUnits || inPlanRange
+      })
     } else {
-      dates = dates.filter((date) => asArray(plan.units).some((unit) => unit.recommendedDate === dateKey(date) || unit.generatedTime?.split('T')[0] === dateKey(date)))
+      dates = dates.filter((date) => asArray(plan.units).some((unit) => (unit.recommendedDate || unit.generatedTime?.split('T')[0]) === dateKey(date)))
     }
     if (!dates.length) {
       elements.sceneOverviewUnitsContainer.classList.add('hidden')

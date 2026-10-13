@@ -1,13 +1,13 @@
 package com.chandler.fcc.server.call;
 
 import com.chandler.fcc.common.entity.CallInfoBO;
-import com.chandler.fcc.server.command.FccClient;
+import com.chandler.fcc.server.call.application.ChannelSnapshotReader;
+import com.chandler.fcc.server.agent.application.PhoneBindingService;
 import com.chandler.fcc.server.telephony.application.InboundCallService;
 import com.chandler.fcc.server.telephony.application.OutboundCallService;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import java.util.HashSet;
 import java.util.List;
-import java.util.Map;
 import java.util.Set;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -29,11 +29,13 @@ public class CallSnapshotReconciler {
         "INBOUND",
         "AGENT_FIRST",
         "AGENT_ORIGINATED",
-        "NOTIFICATION"
+        "NOTIFICATION",
+        "PHONE_BINDING"
     );
 
     private final CallSessionManager sessions;
-    private final FccClient client;
+    private final ChannelSnapshotReader snapshots;
+    private final PhoneBindingService phoneBinding;
     private final InboundCallService inbound;
     private final OutboundCallService outbound;
     private final ChannelAbsenceTracker absence = new ChannelAbsenceTracker();
@@ -45,8 +47,15 @@ public class CallSnapshotReconciler {
     @Scheduled(fixedDelay = 15000)
     public void reconcile() {
         Set<String> activeIds = new HashSet<>();
-        Set<String> channels = loadSnapshot();
-        for (CallInfoBO call : sessions.snapshot()) {
+        List<CallInfoBO> calls = sessions.snapshot().stream()
+            .filter(call -> isRecoverable(call) && !isTerminal(call)).toList();
+        // 没有待对账会话时不产生持续的快照 RPC 与 UNKNOWN 审计。
+        if (calls.isEmpty()) {
+            absence.retain(Set.of());
+            return;
+        }
+        Set<String> channels = snapshots.read();
+        for (CallInfoBO call : calls) {
             activeIds.add(call.getCallId());
             if (!isRecoverable(call) || isTerminal(call)) {
                 continue;
@@ -103,7 +112,9 @@ public class CallSnapshotReconciler {
                 .put("cause", "RECOVERY_UNKNOWN");
             try {
                 call.putData("recoveryEvidence", "COMPLETE_SNAPSHOTS_ABSENT_120_SECONDS");
-                if (!outbound.event(call, event)) {
+                if (phoneBinding.channel(call, event)) {
+                    sessions.removeSession(call.getCtrlId());
+                } else if (!outbound.event(call, event)) {
                     inbound.event(call, event);
                 }
                 log.warn(
@@ -117,33 +128,4 @@ public class CallSnapshotReconciler {
         }
     }
 
-    /**
-     * 只接受成功、完整、类型正确的聚合快照；错误不等同空节点。
-     *
-     * @return 完整 UUID 集合；查询失败返回 {@code null}
-     */
-    private Set<String> loadSnapshot() {
-        try {
-            var result = client.channelSnapshot();
-            if (
-                result == null ||
-                !result.isSuccess() ||
-                !(result.getData() instanceof Map<?, ?> data) ||
-                !Boolean.TRUE.equals(data.get("complete")) ||
-                !(data.get("channel_uuids") instanceof List<?> rows)
-            ) {
-                return null;
-            }
-            Set<String> channels = new HashSet<>();
-            for (Object row : rows) {
-                if (!(row instanceof String uuid) || uuid.isBlank() || !channels.add(uuid)) {
-                    return null;
-                }
-            }
-            return channels;
-        } catch (RuntimeException failure) {
-            log.debug("[通话恢复] 聚合话道快照查询失败: {}", failure.getMessage());
-            return null;
-        }
-    }
 }

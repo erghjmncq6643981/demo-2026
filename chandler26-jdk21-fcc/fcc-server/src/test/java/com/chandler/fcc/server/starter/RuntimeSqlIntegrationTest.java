@@ -142,7 +142,6 @@ class RuntimeSqlIntegrationTest {
             "INSERT INTO fcc_call_session(id,ctrl_id,model_type,direction,status,started_at,ended_at,primary_work_no) "
                 + "VALUES(900009,'busy-call','OUTBOUND_TWO_WAY_CALL','OUTBOUND','NORMAL_END',UTC_TIMESTAMP(3),UTC_TIMESTAMP(3),'test-agent')"
         );
-        assertEquals(1, runtime.completeAcw("test-agent", "900009"));
         assertEquals("BUSY", runtime.presence("test-agent").getWorkStatus());
         runtime.setLoginStatus("test-agent", "LOGOUT");
         assertEquals("UNREADY", runtime.presence("test-agent").getWorkStatus());
@@ -154,7 +153,7 @@ class RuntimeSqlIntegrationTest {
         assertEquals(0, runtime.release("test-agent", "900011"));
         assertEquals(1, runtime.release("test-agent", "900010"));
         assertEquals("LOGIN", runtime.presence("test-agent").getLoginStatus());
-        assertEquals("ACW", runtime.presence("test-agent").getWorkStatus());
+        assertEquals("READY", runtime.presence("test-agent").getWorkStatus());
     }
 
     /**

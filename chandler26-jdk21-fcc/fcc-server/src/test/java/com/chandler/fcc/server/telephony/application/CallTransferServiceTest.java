@@ -7,11 +7,13 @@ import com.chandler.fcc.common.enums.CallStageState;
 import com.chandler.fcc.common.protocol.ChannelEventState;
 import com.chandler.fcc.server.agent.infrastructure.AgentRuntimeMapper;
 import com.chandler.fcc.server.call.CallSessionManager;
+import com.chandler.fcc.server.call.application.ChannelSnapshotReader;
 import com.chandler.fcc.server.command.FccClient;
 import com.chandler.fcc.server.infrastructure.persistence.service.CallPersistenceService;
 import com.chandler.fcc.server.websocket.service.AgentWebSocketService;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.mockito.ArgumentCaptor;
@@ -19,6 +21,8 @@ import org.mockito.ArgumentCaptor;
 import java.util.HashMap;
 import java.util.Map;
 import java.util.Optional;
+import java.util.List;
+import java.util.Set;
 
 import static org.junit.jupiter.api.Assertions.*;
 import static org.mockito.ArgumentMatchers.*;
@@ -32,6 +36,7 @@ class CallTransferServiceTest {
     private AgentWebSocketService websocket;
     private AgentRuntimeMapper agents;
     private CallTransferService transferService;
+    private ChannelSnapshotReader snapshots;
     private final ObjectMapper objectMapper = new ObjectMapper();
 
     @BeforeEach
@@ -47,7 +52,63 @@ class CallTransferServiceTest {
         when(client.channelBridge(anyString(), anyString(), anyString())).thenReturn(FNodeResult.builder().code(200).build());
         when(client.hangup(anyString(), anyString(), anyString())).thenReturn(FNodeResult.builder().code(200).build());
 
-        transferService = new CallTransferService(sessions, client, persistence, websocket, agents);
+        snapshots = mock(ChannelSnapshotReader.class);
+        transferService = new CallTransferService(sessions, client, persistence, websocket, agents, snapshots);
+    }
+
+    /** 测试退出时关闭看门狗，不留下后台任务。 */
+    @AfterEach void stopWatchdog() { transferService.stopWatchdog(); }
+
+    /** 控制阶段重启或桥接拒绝都不能重放动作，不能提前清除 pending。 */
+    @Test void controlInterruptionDoesNotReplayOrFakeFallbackSuccess() {
+        var call=CallInfoBO.builder().callId("123").ctrlId("ctrl").agentWorkNo("operator")
+            .data(new HashMap<>()).build();
+        call.putData("transferPending",true); call.putData("transferDeadline",1L);
+        call.putData("transferChannelUuid","C"); call.putData("transferAgentUuid","A"); call.putData("transferGuestUuid","B");
+        call.putData("transferTarget","test-extension");
+        when(sessions.snapshot()).thenReturn(List.of(call)); when(snapshots.read()).thenReturn(Set.of("A","B"));
+        when(client.channelBridge("ctrl","A","B")).thenReturn(FNodeResult.builder().code(500).build());
+        assertDoesNotThrow(transferService::recoverExpiredTransfers);
+        assertEquals(true,call.getData().get("transferPending"));
+        assertEquals("UNKNOWN",call.getData().get("transferPhase"));
+        transferService.recoverExpiredTransfers();
+        verify(client,times(1)).channelBridge("ctrl","A","B");
+        verify(websocket,never()).pushCallAnswered(anyString(),anyString(),any());
+        call.putData("transferControlUnconfirmed",false); call.putData("transferPhase","ANSWER_REQUESTED");
+        transferService.recoverExpiredTransfers();
+        verify(client,times(1)).channelBridge("ctrl","A","B");
+    }
+
+    /** 重启后保留原截止时间；C 仍存在或快照不可用时不能按超时拆除它。 */
+    @Test void recoveredTimeoutPreservesUnknownLiveTarget() {
+        var call=CallInfoBO.builder().callId("123").ctrlId("ctrl").agentWorkNo("operator")
+            .data(new HashMap<>()).build();
+        call.putData("transferPending",true); call.putData("transferDeadline",1L);
+        call.putData("transferChannelUuid","C"); call.putData("transferAgentUuid","A"); call.putData("transferGuestUuid","B");
+        when(sessions.snapshot()).thenReturn(List.of(call));
+        when(snapshots.read()).thenReturn(Set.of("A","B","C"));
+        transferService.recoverExpiredTransfers();
+        assertEquals("UNKNOWN",call.getData().get("transferPhase"));
+        assertEquals(true,call.getData().get("transferPending"));
+        verifyNoInteractions(client);
+        when(snapshots.read()).thenReturn(null);
+        transferService.recoverExpiredTransfers();
+        verifyNoInteractions(client);
+    }
+
+    /** 重启前已经过期且完整快照证明目标不存在时，恢复检查才允许回退。 */
+    @Test void recoveredTimeoutFallsBackOnlyWithCompleteAbsenceEvidence() {
+        var call=CallInfoBO.builder().callId("123").ctrlId("ctrl").agentWorkNo("operator")
+            .data(new HashMap<>()).build();
+        call.putData("transferPending",true); call.putData("transferStartTime",1L);
+        call.putData("transferChannelUuid","C"); call.putData("transferAgentUuid","A"); call.putData("transferGuestUuid","B");
+        call.putData("transferTarget","test-extension");
+        when(sessions.snapshot()).thenReturn(List.of(call)); when(snapshots.read()).thenReturn(Set.of("A","B"));
+        transferService.recoverExpiredTransfers();
+        assertEquals(false,call.getData().get("transferPending"));
+        verify(client).channelBridge("ctrl","A","B");
+        transferService.recoverExpiredTransfers();
+        verify(client,times(1)).channelBridge("ctrl","A","B");
     }
 
     @Test

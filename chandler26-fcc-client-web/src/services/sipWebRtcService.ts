@@ -5,6 +5,7 @@ import {
   type SipSessionDirection,
 } from '../features/media/model/sessionCallRegistry';
 import { BrowserAudioManager } from '../features/media/services/browserAudioManager';
+import { OwnedCallback } from '../features/media/model/ownedCallback';
 import type { SipRuntimeConfig } from '../shared/config/runtimeConfig';
 
 export type SipRegistrationState =
@@ -69,9 +70,9 @@ class SipWebRtcService {
   public mediaMessage = ref('尚未检查音频设备');
   public incomingCaller = ref('');
 
-  private onIncomingCallCallback?: (event: SipIncomingCallEvent) => void;
-  private onCallConnectedCallback?: (event: SipCallLifecycleEvent) => void;
-  private onCallEndedCallback?: (event: SipCallLifecycleEvent) => void;
+  private readonly incomingCallback = new OwnedCallback<SipIncomingCallEvent>();
+  private readonly connectedCallback = new OwnedCallback<SipCallLifecycleEvent>();
+  private readonly endedCallback = new OwnedCallback<SipCallLifecycleEvent>();
 
   /** Register and initialize the WebRTC SIP client for the current agent. */
   public init(extension: string, runtimeConfig: SipRuntimeConfig | null): void {
@@ -148,7 +149,7 @@ class SipWebRtcService {
     const context = this.sessions.get(binding.sessionId);
     if (context && context.connectedNotifiedCallId !== callId) {
       context.connectedNotifiedCallId = callId;
-      this.onCallConnectedCallback?.({ sessionId: binding.sessionId, callId });
+      this.connectedCallback.emit({ sessionId: binding.sessionId, callId });
     }
   }
 
@@ -227,16 +228,16 @@ class SipWebRtcService {
     }
   }
 
-  public onIncomingCall(callback: (event: SipIncomingCallEvent) => void): void {
-    this.onIncomingCallCallback = callback;
+  public onIncomingCall(callback: (event: SipIncomingCallEvent) => void): () => void {
+    return this.incomingCallback.subscribe(callback);
   }
 
-  public onCallConnected(callback: (event: SipCallLifecycleEvent) => void): void {
-    this.onCallConnectedCallback = callback;
+  public onCallConnected(callback: (event: SipCallLifecycleEvent) => void): () => void {
+    return this.connectedCallback.subscribe(callback);
   }
 
-  public onCallEnded(callback: (event: SipCallLifecycleEvent) => void): void {
-    this.onCallEndedCallback = callback;
+  public onCallEnded(callback: (event: SipCallLifecycleEvent) => void): () => void {
+    return this.endedCallback.subscribe(callback);
   }
 
   /** Tear down registration, sessions, media tracks, audio elements, and listeners. */
@@ -313,7 +314,7 @@ class SipWebRtcService {
       this.sessionState.value = 'RINGING';
       const caller = String(session.remote_identity?.uri?.user || '外部来电');
       this.incomingCaller.value = caller;
-      this.onIncomingCallCallback?.({
+      this.incomingCallback.emit({
         sessionId,
         callId: registration.binding?.callId ?? undefined,
         caller,
@@ -332,7 +333,7 @@ class SipWebRtcService {
     const effectiveCallId = binding.callId || undefined;
     if (context.connectedNotifiedCallId !== (effectiveCallId || sessionId)) {
       context.connectedNotifiedCallId = effectiveCallId || sessionId;
-      this.onCallConnectedCallback?.({ sessionId, callId: effectiveCallId });
+      this.connectedCallback.emit({ sessionId, callId: effectiveCallId });
     }
   }
 
@@ -340,7 +341,7 @@ class SipWebRtcService {
     const result = this.registry.finish(sessionId);
     if (!result.binding) return;
     this.cleanupSession(sessionId, result.wasActive);
-    this.onCallEndedCallback?.({
+    this.endedCallback.emit({
       sessionId,
       callId: result.binding.callId ?? undefined,
       cause,

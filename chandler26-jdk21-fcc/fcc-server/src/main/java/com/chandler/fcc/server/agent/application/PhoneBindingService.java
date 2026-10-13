@@ -7,6 +7,8 @@ import com.chandler.fcc.common.dto.command.FNodeReadDTMFDTO;
 import com.chandler.fcc.common.dto.command.MediaInfo;
 import com.chandler.fcc.common.entity.CallInfoBO;
 import com.chandler.fcc.common.enums.FlowActionType;
+import com.chandler.fcc.common.enums.CallStageState;
+import com.chandler.fcc.server.call.application.CallEndTime;
 import com.chandler.fcc.common.protocol.ChannelEventState;
 import com.chandler.fcc.common.protocol.FNodeDtmfPostAction;
 import com.chandler.fcc.common.protocol.FNodeMediaType;
@@ -116,6 +118,7 @@ public class PhoneBindingService implements SystemFlowRuntime {
             ChannelEventState state = ChannelEventState.fromWireValue(
                 params.path(FccEventField.STATE.getWireName()).asText()
             );
+            if (Boolean.TRUE.equals(call.getData().get("terminal"))) return true;
             if (state == ChannelEventState.READY) {
                 if (!call.getData().containsKey(DATA_INITIALIZED)) {
                     flowActions.executeInternal(
@@ -136,8 +139,22 @@ public class PhoneBindingService implements SystemFlowRuntime {
                 state == ChannelEventState.DESTROY &&
                 call.getData().containsKey(DATA_INITIALIZED)
             ) {
+                CallStageState previous = call.getStageState();
+                String cause = params.path(FccEventField.CAUSE.getWireName()).asText("NORMAL_CLEARING");
                 call.putData("terminal", Boolean.TRUE);
-                persistence.saveOrUpdateSession(call);
+                call.putData("callEndedAt", CallEndTime.epochMillis(params));
+                call.setStageState("RECOVERY_UNKNOWN".equals(cause) ? CallStageState.ERROR_END : CallStageState.NORMAL_END);
+                call.setHangupCause(cause);
+                if (params.has("duration")) call.setDuration(params.path("duration").asInt());
+                if (params.has("billsec")) call.setBillsec(params.path("billsec").asInt());
+                try {
+                    persistence.saveOrUpdateSession(call);
+                } catch (RuntimeException failure) {
+                    call.getData().remove("terminal");
+                    call.getData().remove("callEndedAt");
+                    call.setStageState(previous);
+                    throw failure;
+                }
             }
         }
         return true;
@@ -285,6 +302,7 @@ public class PhoneBindingService implements SystemFlowRuntime {
         call.putData(DATA_INITIALIZED, Boolean.TRUE);
         call.setModelKey("PHONE_BINDING");
         call.putData("runtimeTemplate", TEMPLATE);
+        call.putData("guestChannelUuid", call.getGuestChannelUuid());
         call.putData("flowDefinitionId", flow.definitionId());
         call.putData("flowVersionId", flow.versionId());
         persistence.saveOrUpdateSession(call);

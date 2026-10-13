@@ -200,6 +200,16 @@ public class P0P1CoreFeaturesTest {
         .build();
     flowMapper.insert(fixture);
     LocalDateTime now = LocalDateTime.now();
+    agentMapper.insert(
+      AgentEntity.builder()
+        .id(IdUtil.nextId())
+        .workNo("901001")
+        .agentName("测试坐席")
+        .status("ENABLED")
+        .createdAt(now)
+        .updatedAt(now)
+        .build()
+    );
     didNumberMapper.insert(
       DidNumberEntity.builder()
         .id(IdUtil.nextId())

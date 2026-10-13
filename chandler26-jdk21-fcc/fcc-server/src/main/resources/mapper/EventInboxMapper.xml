@@ -1,6 +1,33 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
 <mapper namespace="com.chandler.fcc.server.event.infrastructure.EventInboxMapper">
+  <select id="recoveryIssues" resultType="com.chandler.fcc.server.event.controller.resp.EventRecoveryIssueResp">
+    SELECT event_id AS eventId,node_id AS nodeId,status,attempt_count AS attemptCount,
+      recovery_attempt_count AS recoveryAttemptCount,recovery_actor AS recoveryActor,last_error AS lastError,updated_at AS updatedAt
+    FROM fcc_event_inbox WHERE status IN ('UNKNOWN','RECOVERING') ORDER BY updated_at,event_id LIMIT 50 OFFSET #{offset}
+  </select>
+  <select id="recoveryPayload" resultType="string">
+    SELECT payload FROM fcc_event_inbox WHERE event_id=#{id} AND status='RECOVERING'
+  </select>
+  <update id="claimRecovery">
+    UPDATE fcc_event_inbox SET status='RECOVERING',recovery_token=#{token},recovery_actor=#{actor},
+      recovery_attempt_count=recovery_attempt_count+1,updated_at=UTC_TIMESTAMP(3)
+    WHERE event_id=#{id} AND recovery_attempt_count&lt;10
+      AND (status='UNKNOWN' OR (status='RECOVERING' AND updated_at&lt;UTC_TIMESTAMP(3)-INTERVAL 5 MINUTE))
+  </update>
+  <update id="finishRecovery">
+    UPDATE fcc_event_inbox SET status=#{status},last_error=#{error},updated_at=UTC_TIMESTAMP(3)
+    WHERE event_id=#{id} AND status='RECOVERING' AND recovery_token=#{token}
+  </update>
+  <insert id="recordRecoveryAudit">
+    INSERT INTO fcc_event_recovery_action(action_id,event_id,actor,status)
+    SELECT #{token},event_id,#{actor},'RUNNING' FROM fcc_event_inbox
+    WHERE event_id=#{id} AND recovery_token=#{token} AND status='RECOVERING'
+  </insert>
+  <update id="finishRecoveryAudit">
+    UPDATE fcc_event_recovery_action SET status=#{status},last_error=#{error},finished_at=UTC_TIMESTAMP(3)
+    WHERE action_id=#{token} AND status='RUNNING'
+  </update>
   <insert id="receive">
     INSERT IGNORE INTO fcc_event_inbox(
       event_id,

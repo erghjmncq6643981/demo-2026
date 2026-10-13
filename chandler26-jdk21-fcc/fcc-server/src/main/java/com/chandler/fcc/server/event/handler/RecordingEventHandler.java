@@ -5,6 +5,7 @@ import com.chandler.fcc.common.protocol.FccEventMethod;
 import com.chandler.fcc.common.protocol.FccEventField;
 import com.chandler.fcc.common.recording.RecordingPathLayout;
 import com.chandler.fcc.server.call.CallSessionManager;
+import com.chandler.fcc.server.call.application.CallFinalizationService;
 import com.chandler.fcc.server.infrastructure.persistence.entity.CallRecordingEntity;
 import com.chandler.fcc.server.infrastructure.persistence.service.CallPersistenceService;
 import com.chandler.fcc.server.recording.RecordingPathResolver;
@@ -28,6 +29,7 @@ public class RecordingEventHandler implements FccEventHandler {
     private final CallSessionManager sessions;
     private final CallPersistenceService persistence;
     private final RecordingPathResolver pathResolver;
+    private final CallFinalizationService finalization;
 
     /**
      * 判断是否为录音生命周期事件。
@@ -53,6 +55,10 @@ public class RecordingEventHandler implements FccEventHandler {
             .getByCtrlUuid(controlId)
             .or(() -> sessions.getByChannelUuid(channelUuid))
             .orElse(null);
+        if (call == null) {
+            call = finalization.resolveCall(controlId, channelUuid,
+                params.path(FccEventField.NODE_ID.getWireName()).asText(null));
+        }
         if (call == null) {
             log.warn("[录音事件] 无法定位业务通话 ctrlId={} channelUuid={}", controlId, channelUuid);
             return;

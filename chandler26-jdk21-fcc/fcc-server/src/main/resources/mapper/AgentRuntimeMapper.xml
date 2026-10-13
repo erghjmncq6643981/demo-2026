@@ -1,47 +1,15 @@
 <?xml version="1.0" encoding="UTF-8" ?>
 <!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
 <mapper namespace="com.chandler.fcc.server.agent.infrastructure.AgentRuntimeMapper">
-  <update id="completeAcw">
-    UPDATE fcc_agent_presence p
-    JOIN fcc_agent a ON a.id = p.agent_id
-    JOIN fcc_call_session c ON c.id = #{callId} AND c.primary_work_no = a.work_no
-    SET p.work_status = CASE p.login_status
-          WHEN 'LOGIN' THEN 'READY'
-          WHEN 'LOGIN_BUSY' THEN 'BUSY'
-          ELSE 'UNREADY'
-        END,
-        p.last_state_at = UTC_TIMESTAMP(3), p.version = p.version + 1
-    WHERE a.work_no = #{owner}
-      AND p.work_status = 'ACW'
-      AND p.active_call_id IS NULL
-      AND c.ended_at IS NOT NULL
-      AND NOT EXISTS (
-        SELECT 1 FROM fcc_call_session newer
-        WHERE newer.primary_work_no = #{owner}
-          AND newer.id != c.id
-          AND newer.started_at > c.started_at
-      )
-  </update>
-  <select id="findExpiredAcwAgents" resultType="map">
-    SELECT a.work_no AS workNo, p.login_status AS loginStatus, CAST(p.agent_id AS CHAR) AS agentId
-    FROM fcc_agent_presence p
-    JOIN fcc_agent a ON a.id = p.agent_id
-    WHERE p.work_status = 'ACW'
-      AND p.active_call_id IS NULL
-      AND TIMESTAMPDIFF(SECOND, p.last_state_at, UTC_TIMESTAMP(3)) >= #{timeoutSeconds}
-  </select>
-  <update id="expireAcw">
-    UPDATE fcc_agent_presence p
-    SET p.work_status = CASE p.login_status
-          WHEN 'LOGIN' THEN 'READY'
-          WHEN 'LOGIN_BUSY' THEN 'BUSY'
-          ELSE 'UNREADY'
-        END,
-        p.last_state_at = UTC_TIMESTAMP(3),
-        p.version = p.version + 1
-    WHERE p.work_status = 'ACW'
-      AND p.active_call_id IS NULL
-      AND TIMESTAMPDIFF(SECOND, p.last_state_at, UTC_TIMESTAMP(3)) >= #{timeoutSeconds}
+  <insert id="recordRecoveryIssue">
+    INSERT INTO fcc_call_recovery_issue(call_id,status,attempt_count,last_error)
+    VALUES(#{callId},'OPEN',1,#{error})
+    ON DUPLICATE KEY UPDATE status='OPEN',attempt_count=attempt_count+1,
+      last_error=#{error},resolved_at=NULL,updated_at=UTC_TIMESTAMP(3)
+  </insert>
+  <update id="resolveRecoveryIssue">
+    UPDATE fcc_call_recovery_issue SET status='RESOLVED',resolved_at=UTC_TIMESTAMP(3),updated_at=UTC_TIMESTAMP(3)
+    WHERE call_id=#{callId} AND status='OPEN'
   </update>
   <select id="agent" resultType="map">
     SELECT a.id, a.work_no AS workNo, b.endpoint_type AS endpointType,
@@ -141,13 +109,57 @@
       AND p.active_call_id = #{callId}
       AND #{status} IN ('CALLING', 'RINGING', 'ANSWERED')
   </update>
+  <!-- Shared conservative guard: unknown ownership also prevents premature release. -->
+  <sql id="noLiveAgentParticipation">
+    NOT EXISTS (
+      SELECT 1 FROM fcc_call_leg live
+      WHERE live.call_id = p.active_call_id AND live.role_type = 'AGENT'
+        AND (live.state != 'DESTROY' OR live.ended_at IS NULL)
+        AND (
+          JSON_UNQUOTE(JSON_EXTRACT(live.metadata, '$.agentWorkNo')) = a.work_no
+          OR EXISTS (SELECT 1 FROM fcc_agent_service_session participation
+                     WHERE participation.leg_id = live.id AND participation.agent_id = a.id)
+          OR (JSON_EXTRACT(live.metadata, '$.agentWorkNo') IS NULL
+              AND NOT EXISTS (SELECT 1 FROM fcc_agent_service_session known_owner WHERE known_owner.leg_id = live.id))
+        )
+    )
+  </sql>
   <update id="release">
     UPDATE fcc_agent_presence p
     JOIN fcc_agent a ON a.id = p.agent_id
-    SET p.work_status = 'ACW', p.active_call_id = NULL,
+    SET p.work_status = CASE p.login_status WHEN 'LOGIN' THEN 'READY'
+          WHEN 'LOGIN_BUSY' THEN 'BUSY' ELSE 'UNREADY' END, p.active_call_id = NULL,
         p.last_state_at = UTC_TIMESTAMP(3), p.version = p.version + 1
     WHERE a.work_no = #{owner} AND p.active_call_id = #{callId}
+      AND <include refid="noLiveAgentParticipation"/>
   </update>
+  <sql id="endedLegOwner">
+    (a.work_no = JSON_UNQUOTE(JSON_EXTRACT(l.metadata, '$.agentWorkNo'))
+      OR EXISTS (SELECT 1 FROM fcc_agent_service_session s WHERE s.leg_id = l.id AND s.agent_id = a.id)
+      OR (JSON_EXTRACT(l.metadata, '$.agentWorkNo') IS NULL
+          AND JSON_UNQUOTE(JSON_EXTRACT(c.attributes, '$.agentChannelUuid')) = l.channel_uuid
+          AND c.primary_work_no = a.work_no))
+  </sql>
+  <update id="releaseEndedLeg">
+    UPDATE fcc_agent_presence p JOIN fcc_agent a ON a.id = p.agent_id
+    JOIN fcc_call_session c ON c.id = p.active_call_id
+    JOIN fcc_call_leg l ON l.call_id = c.id
+    SET p.work_status = CASE p.login_status WHEN 'LOGIN' THEN 'READY'
+          WHEN 'LOGIN_BUSY' THEN 'BUSY' ELSE 'UNREADY' END,
+        p.active_call_id = NULL, p.last_state_at = UTC_TIMESTAMP(3), p.version = p.version + 1
+    WHERE c.id = #{callId} AND l.channel_uuid = #{channelUuid}
+      AND l.role_type = 'AGENT' AND l.state = 'DESTROY' AND l.ended_at IS NOT NULL
+      AND <include refid="endedLegOwner"/>
+      AND <include refid="noLiveAgentParticipation"/>
+  </update>
+  <select id="releasedLegAgents" resultType="map">
+    SELECT DISTINCT a.work_no AS workNo, p.work_status AS workStatus
+    FROM fcc_call_leg l JOIN fcc_call_session c ON c.id = l.call_id
+    JOIN fcc_agent a JOIN fcc_agent_presence p ON p.agent_id = a.id
+    WHERE c.id = #{callId} AND l.channel_uuid = #{channelUuid} AND l.role_type = 'AGENT'
+      AND l.state = 'DESTROY' AND l.ended_at IS NOT NULL AND p.active_call_id IS NULL
+      AND <include refid="endedLegOwner"/>
+  </select>
   <select id="presence" resultType="com.chandler.fcc.server.agent.infrastructure.data.AgentRuntimeStateData">
     SELECT p.login_status AS loginStatus,
            p.work_status AS workStatus,

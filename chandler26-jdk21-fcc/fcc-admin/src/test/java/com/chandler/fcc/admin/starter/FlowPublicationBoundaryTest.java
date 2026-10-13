@@ -2,6 +2,8 @@ package com.chandler.fcc.admin.starter;
 
 import cn.dev33.satoken.stp.StpUtil;
 import com.chandler.fcc.admin.flow.application.FlowStudioService;
+import com.chandler.fcc.admin.flow.application.policy.FlowPublicationPolicy;
+import com.chandler.fcc.admin.flow.application.coordinator.FlowRuntimeNotifier;
 import com.chandler.fcc.admin.flow.controller.req.PublishFlowReq;
 import com.chandler.fcc.admin.flow.infrastructure.FlowStudioMapper;
 import com.chandler.fcc.admin.infrastructure.persistence.mapper.DidNumberMapper;
@@ -12,7 +14,6 @@ import com.chandler.fcc.admin.infrastructure.persistence.entity.FlowDefinitionVe
 import com.fasterxml.jackson.databind.ObjectMapper;
 import org.junit.jupiter.api.Test;
 import org.springframework.data.redis.core.StringRedisTemplate;
-import org.springframework.test.util.ReflectionTestUtils;
 import org.springframework.transaction.support.TransactionSynchronizationManager;
 import java.util.List;
 import static org.mockito.Mockito.*;
@@ -36,9 +37,8 @@ class FlowPublicationBoundaryTest {
         var didNumbers = mock(DidNumberMapper.class);
         var redis = mock(StringRedisTemplate.class);
         var executions = mock(FlowStudioMapper.class);
-        var service = new FlowStudioService(flows, versions, didNumbers, executions, redis, new ObjectMapper());
-        ReflectionTestUtils.setField(service, "fccServerBaseUrl", "");
-        ReflectionTestUtils.setField(service, "reloadToken", "");
+        var service = new FlowStudioService(flows, versions,
+            new FlowPublicationPolicy(didNumbers, executions), new FlowRuntimeNotifier(redis, new ObjectMapper()));
         when(flows.selectOne(any())).thenReturn(FlowDefinitionEntity.builder()
             .id(1L).flowKey("test-flow").modelType("INBOUND").build());
         when(didNumbers.selectCount(any())).thenReturn(1L);
@@ -66,7 +66,8 @@ class FlowPublicationBoundaryTest {
         var didNumbers = mock(DidNumberMapper.class);
         var redis = mock(StringRedisTemplate.class);
         var executions = mock(FlowStudioMapper.class);
-        var service = new FlowStudioService(flows, versions, didNumbers, executions, redis, new ObjectMapper());
+        var service = new FlowStudioService(flows, versions,
+            new FlowPublicationPolicy(didNumbers, executions), new FlowRuntimeNotifier(redis, new ObjectMapper()));
         when(flows.selectOne(any())).thenReturn(FlowDefinitionEntity.builder()
             .id(1L).flowKey("test-flow").modelType("INBOUND").build());
         when(didNumbers.selectCount(any())).thenReturn(0L);
@@ -86,7 +87,8 @@ class FlowPublicationBoundaryTest {
         var didNumbers = mock(DidNumberMapper.class);
         var redis = mock(StringRedisTemplate.class);
         var executions = mock(FlowStudioMapper.class);
-        var service = new FlowStudioService(flows, versions, didNumbers, executions, redis, new ObjectMapper());
+        var service = new FlowStudioService(flows, versions,
+            new FlowPublicationPolicy(didNumbers, executions), new FlowRuntimeNotifier(redis, new ObjectMapper()));
         when(flows.selectOne(any())).thenReturn(FlowDefinitionEntity.builder()
             .id(1L).flowKey("test-flow").modelType("INBOUND").build());
         when(didNumbers.selectCount(any())).thenReturn(1L);

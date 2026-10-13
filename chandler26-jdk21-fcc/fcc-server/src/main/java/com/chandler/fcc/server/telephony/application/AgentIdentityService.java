@@ -98,6 +98,15 @@ public class AgentIdentityService {
         return new Principal(profile.getLoginId());
     }
 
+    /** @return 显式拥有话务异常修复权限的管理主体，坐席令牌不可使用 */
+    public Principal requireRuntimeManagement() {
+        var attributes=(ServletRequestAttributes)RequestContextHolder.getRequestAttributes();
+        IdentityProfile profile=authenticateProfile(attributes==null?null:attributes.getRequest().getHeader("satoken"),ACCOUNT_CONSOLE);
+        if(!profile.getPermissions().contains("telephony:recover") && !profile.getPermissions().contains("*"))
+            throw new ResponseStatusException(HttpStatus.FORBIDDEN,"缺少话务异常修复权限");
+        return new Principal(profile.getLoginId());
+    }
+
     /**
      * 按账户类型在线验证，不允许坐席令牌冒用管理入口。
      *

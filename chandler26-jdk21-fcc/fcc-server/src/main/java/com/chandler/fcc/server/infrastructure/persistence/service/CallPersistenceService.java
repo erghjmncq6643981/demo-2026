@@ -1,23 +1,30 @@
 package com.chandler.fcc.server.infrastructure.persistence.service;
 
+import com.chandler.fcc.server.agent.infrastructure.AgentParticipationMapper;
+
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import com.baomidou.mybatisplus.core.conditions.update.LambdaUpdateWrapper;
 import com.chandler.fcc.common.entity.CallInfoBO;
 import com.chandler.fcc.common.enums.CallStageState;
 import com.chandler.fcc.common.util.IdUtil;
 import com.chandler.fcc.server.call.LegStatePolicy;
+import com.chandler.fcc.server.flow.FlowConfig;
+import com.chandler.fcc.server.command.infrastructure.persistence.CommandAuditPersistence;
+import com.chandler.fcc.server.call.application.CallFinalizationService;
 import com.chandler.fcc.server.infrastructure.persistence.entity.*;
 import com.chandler.fcc.server.infrastructure.persistence.mapper.*;
 import com.chandler.fcc.server.flow.application.FlowExecutionRecorder;
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import java.time.LocalDateTime;
+import java.time.Instant;
 import java.time.ZoneOffset;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
 import java.util.Optional;
+import java.util.Set;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
@@ -43,12 +50,14 @@ public class CallPersistenceService {
     private final CallSessionMapper callSessionMapper;
     private final CallLegMapper callLegMapper;
     private final CallEventMapper callEventMapper;
-    private final CallCommandMapper callCommandMapper;
+    private final CommandAuditPersistence commands;
     private final CallRecordingMapper callRecordingMapper;
     private final CallBridgeMapper callBridgeMapper;
     private final CallBridgeMemberMapper callBridgeMemberMapper;
     private final FlowExecutionRecorder flowRecorder;
-    private final com.chandler.fcc.server.flow.FlowConfig flowConfig;
+    private final CallFinalizationService finalization;
+    private final FlowConfig flowConfig;
+    private final AgentParticipationMapper participation;
 
     private final ObjectMapper objectMapper = new ObjectMapper();
 
@@ -139,8 +148,13 @@ public class CallPersistenceService {
                 }
             } catch (Exception ignored) {}
 
+            if (callInfo.getStageState() != null && callInfo.getStageState().isTerminal()) {
+                entity.setEndedAt(endedAt(callInfo, now));
+                entity.setHangupCause(callInfo.getHangupCause());
+            }
             callSessionMapper.insert(entity);
             flowRecorder.record(callInfo);
+            if (entity.getEndedAt() != null) finalization.cleanupEndedCall(entity.getId());
             log.info(
                 "💾 [持久化] 成功新建通话会话记录: id={}, ctrlId={}",
                 entity.getId(),
@@ -148,6 +162,19 @@ public class CallPersistenceService {
             );
             return entity;
         } else {
+            // 数据库终态具有优先权，日终修复后迟到的振铃/接听事件不能复活通话。
+            if (Set.of("NORMAL_END", "ERROR_END").contains(existing.getStatus())
+                && (callInfo.getStageState() == null || !callInfo.getStageState().isTerminal())) {
+                callInfo.setStageState(CallStageState.valueOf(existing.getStatus()));
+                callInfo.putData("terminal", Boolean.TRUE);
+                return existing;
+            }
+            if (Set.of("NORMAL_END", "ERROR_END").contains(existing.getStatus())) {
+                callInfo.setStageState(CallStageState.valueOf(existing.getStatus()));
+                if (existing.getResult() != null && !"RECOVERY_UNKNOWN".equals(existing.getResult())) {
+                    callInfo.setHangupCause(existing.getResult());
+                }
+            }
             if (existing.getFlowCode() == null && flowCode != null) {
                 existing.setFlowCode(flowCode);
             }
@@ -192,7 +219,8 @@ public class CallPersistenceService {
                 callInfo.getStageState() == CallStageState.NORMAL_END
             ) {
                 if (existing.getEndedAt() == null) {
-                    existing.setEndedAt(now);
+                    LocalDateTime end = endedAt(callInfo, now);
+                    existing.setEndedAt(end.isBefore(existing.getStartedAt()) ? existing.getStartedAt() : end);
                 }
                 // 终态如实保留生命周期状态，不覆盖成接听结果：
                 // status 表达"通话如何结束"（NORMAL_END / ERROR_END），result 表达挂机结果码
@@ -216,14 +244,18 @@ public class CallPersistenceService {
                     if (existing.getAttributes() != null) {
                         var saved = objectMapper.readTree(existing.getAttributes()).get("afterCall");
                         if (saved != null) attributes.put("afterCall", saved);
+                        var repair = objectMapper.readTree(existing.getAttributes()).get("endRepair");
+                        if (repair != null) attributes.put("endRepair", repair);
                     }
                     existing.setAttributes(objectMapper.writeValueAsString(attributes));
                 }
             } catch (Exception ignored) {}
 
             existing.setUpdatedAt(now);
+            existing.setVersion(existing.getVersion() + 1);
             callSessionMapper.updateById(existing);
             flowRecorder.record(callInfo);
+            if (existing.getEndedAt() != null) finalization.cleanupEndedCall(existing.getId());
             log.debug(
                 "💾 [持久化] 成功更新通话会话记录: id={}, status={}",
                 existing.getId(),
@@ -231,6 +263,18 @@ public class CallPersistenceService {
             );
             return existing;
         }
+    }
+
+    /**
+     * 将业务收尾携带的源结束时间转换为 UTC，缺失时保留当前处理时间。
+     * @param call 当前通话
+     * @param fallback 无源结束时间时的 UTC 时间
+     * @return 持久化结束时间
+     */
+    private LocalDateTime endedAt(CallInfoBO call, LocalDateTime fallback) {
+        Object value = call.getData().get("callEndedAt");
+        return value instanceof Number millis && millis.longValue() > 0
+            ? LocalDateTime.ofInstant(Instant.ofEpochMilli(millis.longValue()), ZoneOffset.UTC) : fallback;
     }
 
     /**
@@ -303,6 +347,9 @@ public class CallPersistenceService {
         if (leg == null || leg.getChannelUuid() == null) {
             return null;
         }
+        if (leg.getCallId() == null || participation.lockCall(leg.getCallId()) == null) {
+            throw new IllegalArgumentException("话道必须关联已存在的业务通话");
+        }
 
         CallLegEntity existing = callLegMapper.selectOne(
             new LambdaQueryWrapper<CallLegEntity>()
@@ -325,6 +372,7 @@ public class CallPersistenceService {
             leg.setUpdatedAt(now);
             leg.setVersion(0L);
             callLegMapper.insert(leg);
+            participation.synchronizeLeg(leg.getId(), IdUtil.nextId());
             log.info(
                 "💾 [持久化] 成功新建话道 Leg: id={}, uuid={}, role={}",
                 leg.getId(),
@@ -333,6 +381,10 @@ public class CallPersistenceService {
             );
             return leg;
         } else {
+            if (!leg.getCallId().equals(existing.getCallId())) {
+                throw new IllegalArgumentException("话道不能迁移到另一业务通话");
+            }
+            if (existing.getMetadata() == null && leg.getMetadata() != null) existing.setMetadata(leg.getMetadata());
             if (LegStatePolicy.accepts(existing.getState(), leg.getState())) existing.setState(leg.getState());
             if (leg.getAnsweredAt() != null && existing.getAnsweredAt() == null) existing.setAnsweredAt(
                 leg.getAnsweredAt()
@@ -359,6 +411,7 @@ public class CallPersistenceService {
             }
             existing.setUpdatedAt(now);
             callLegMapper.updateById(existing);
+            participation.synchronizeLeg(existing.getId(), IdUtil.nextId());
             return existing;
         }
     }
@@ -443,36 +496,8 @@ public class CallPersistenceService {
      * @param command 待发送的指令意图
      * @throws IllegalStateException 稳定标识被不同请求复用
      */
-    @Transactional(propagation = Propagation.REQUIRES_NEW, rollbackFor = Exception.class)
     public void recordCommand(CallCommandEntity command) {
-        if (command == null || command.getCommandId() == null || command.getCommandId().isBlank()) {
-            throw new IllegalArgumentException("命令意图和 command_id 不能为空");
-        }
-        CallCommandEntity existing = findCommand(command.getCommandId());
-        if (existing != null) {
-            verifySameCommand(existing, command);
-            return;
-        }
-        if (command.getId() == null) {
-            command.setId(IdUtil.nextId());
-        }
-        if (command.getIdempotencyKey() == null) {
-            command.setIdempotencyKey(command.getCommandId());
-        }
-        if (command.getCreatedAt() == null) {
-            command.setCreatedAt(LocalDateTime.now(ZoneOffset.UTC));
-        }
-        command.setStatus("CREATED");
-        try {
-            callCommandMapper.insert(command);
-        } catch (DataIntegrityViolationException duplicate) {
-            existing = findCommand(command.getCommandId());
-            if (existing == null) {
-                throw duplicate;
-            }
-            verifySameCommand(existing, command);
-        }
-        log.debug("[指令意图] method={} commandId={}", command.getMethodName(), command.getCommandId());
+        commands.recordCommand(command);
     }
 
     /**
@@ -486,7 +511,6 @@ public class CallPersistenceService {
      * @param errorMessage 不包含敏感信息的错误说明，可为空
      * @return 更新行数；最终结果已先到达时返回零
      */
-    @Transactional(rollbackFor = Exception.class)
     public int recordCommandReceipt(
         String commandId,
         String nodeId,
@@ -495,52 +519,7 @@ public class CallPersistenceService {
         String errorCode,
         String errorMessage
     ) {
-        LambdaUpdateWrapper<CallCommandEntity> update = new LambdaUpdateWrapper<CallCommandEntity>()
-            .eq(CallCommandEntity::getCommandId, commandId)
-            .in(CallCommandEntity::getStatus, "CREATED", "SENT", "ACCEPTED", "UNKNOWN")
-            .set(CallCommandEntity::getStatus, status)
-            .set(CallCommandEntity::getErrorCode, errorCode)
-            .set(CallCommandEntity::getErrorMessage, errorMessage)
-            .set(CallCommandEntity::getSentAt, LocalDateTime.now(ZoneOffset.UTC));
-        if (nodeId != null) {
-            update.set(CallCommandEntity::getAssignedNodeId, nodeId);
-        }
-        if (responsePayload != null) {
-            update.set(CallCommandEntity::getResponsePayload, responsePayload);
-        }
-        if ("FAILED".equals(status)) {
-            update.set(CallCommandEntity::getCompletedAt, LocalDateTime.now(ZoneOffset.UTC));
-        }
-        return callCommandMapper.update(null, update);
-    }
-
-    /**
-     * 根据唯一命令标识读取本地审计。
-     *
-     * @param commandId 稳定命令标识
-     * @return 审计记录，尚未插入时为空
-     */
-    private CallCommandEntity findCommand(String commandId) {
-        return callCommandMapper.selectOne(
-            new LambdaQueryWrapper<CallCommandEntity>()
-                .eq(CallCommandEntity::getCommandId, commandId)
-        );
-    }
-
-    /**
-     * 拒绝同一命令标识对应不同副作用，避免幂等重试变成另一条命令。
-     *
-     * @param existing 已持久化命令
-     * @param incoming 本次重试命令
-     * @throws IllegalStateException 方法或请求内容不同
-     */
-    private void verifySameCommand(CallCommandEntity existing, CallCommandEntity incoming) {
-        if (
-            !Objects.equals(existing.getMethodName(), incoming.getMethodName()) ||
-            !Objects.equals(existing.getRequestPayload(), incoming.getRequestPayload())
-        ) {
-            throw new IllegalStateException("稳定 command_id 被不同指令请求复用");
-        }
+        return commands.recordCommandReceipt(commandId, nodeId, status, responsePayload, errorCode, errorMessage);
     }
 
     /**
@@ -560,7 +539,6 @@ public class CallPersistenceService {
      * @param responsePayload Sidecar 发布的规范结果载荷
      * @return 实际更新的指令记录数量
      */
-    @Transactional(rollbackFor = Exception.class)
     public int completeCommand(
         String commandId,
         String methodName,
@@ -572,75 +550,7 @@ public class CallPersistenceService {
         String message,
         String responsePayload
     ) {
-        if (commandId == null || commandId.isBlank()) {
-            throw new IllegalArgumentException("完成指令审计时 command_id 不能为空");
-        }
-        CallCommandEntity command = findCommand(commandId);
-        if (command == null) {
-            return 0;
-        }
-        if (!Objects.equals(command.getMethodName(), methodName)) {
-            throw new IllegalArgumentException("指令结果方法与原命令不符");
-        }
-        verifyCommandCorrelation(command, controlId, channelUuid);
-        if (
-            command.getAssignedNodeId() != null &&
-            !Objects.equals(command.getAssignedNodeId(), assignedNodeId)
-        ) {
-            throw new IllegalArgumentException("指令结果来源节点与受理节点不符");
-        }
-        int updated = callCommandMapper.update(
-            null,
-            new LambdaUpdateWrapper<CallCommandEntity>()
-                .eq(CallCommandEntity::getCommandId, commandId)
-                .eq(CallCommandEntity::getMethodName, methodName)
-                .notIn(CallCommandEntity::getStatus, "SUCCESS", "FAILED")
-                .set(CallCommandEntity::getAssignedNodeId, assignedNodeId)
-                .set(CallCommandEntity::getStatus, status)
-                .set(CallCommandEntity::getErrorCode, errorCode)
-                .set(CallCommandEntity::getErrorMessage, message)
-                .set(CallCommandEntity::getResponsePayload, responsePayload)
-                .set(CallCommandEntity::getCompletedAt, LocalDateTime.now(ZoneOffset.UTC))
-        );
-        if (updated > 0) {
-            return updated;
-        }
-        CallCommandEntity existing = findCommand(commandId);
-        if (existing == null || (!"SUCCESS".equals(existing.getStatus()) && !"FAILED".equals(existing.getStatus()))) {
-            return 0;
-        }
-        if (!Objects.equals(existing.getStatus(), status)) {
-            throw new IllegalArgumentException("同一指令收到互相冲突的最终状态");
-        }
-        return 1;
-    }
-
-    /**
-     * 校验最终结果携带的控制和话道身份与原始 wire 请求一致。
-     *
-     * @param command 已持久化原命令
-     * @param controlId 结果控制标识
-     * @param channelUuid 结果话道标识
-     * @throws IllegalArgumentException 请求载荷损坏或关联身份不一致
-     */
-    private void verifyCommandCorrelation(
-        CallCommandEntity command,
-        String controlId,
-        String channelUuid
-    ) {
-        try {
-            var params = objectMapper.readTree(command.getRequestPayload()).path("params");
-            String expectedControlId = params.path("ctrl_uuid").asText(null);
-            String expectedChannelUuid = params.path("uuid").asText(null);
-            if (
-                !Objects.equals(expectedControlId, controlId) ||
-                !Objects.equals(expectedChannelUuid, channelUuid)
-            ) {
-                throw new IllegalArgumentException("指令结果控制或话道身份与原命令不符");
-            }
-        } catch (JsonProcessingException invalidPayload) {
-            throw new IllegalArgumentException("原命令审计载荷损坏", invalidPayload);
-        }
+        return commands.completeCommand(commandId, methodName, assignedNodeId, controlId, channelUuid, status, errorCode, message, responsePayload);
     }
 
     /**
@@ -717,7 +627,9 @@ public class CallPersistenceService {
         if (incoming.getLegId() != null) existing.setLegId(incoming.getLegId());
         if (incoming.getBridgeId() != null) existing.setBridgeId(incoming.getBridgeId());
         if (incoming.getNodeId() != null) existing.setNodeId(incoming.getNodeId());
-        if (incoming.getStatus() != null) existing.setStatus(incoming.getStatus());
+        if (incoming.getStatus() != null && !"COMPLETED".equals(existing.getStatus())) {
+            existing.setStatus(incoming.getStatus());
+        }
         if (incoming.getStorageType() != null) existing.setStorageType(incoming.getStorageType());
         if (incoming.getObjectKey() != null && !incoming.getObjectKey().isBlank()) {
             existing.setObjectKey(incoming.getObjectKey());

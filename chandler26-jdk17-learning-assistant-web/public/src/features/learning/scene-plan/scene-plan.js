@@ -7,6 +7,8 @@ import {
   calendarTitle as resolveCalendarTitle,
   dateFromKey,
   formatCalendarDate,
+  isPlanEnded,
+  resolvePlanAnchorDate,
   unitDateKey,
   unitStatusLabel,
   unitsForDate,
@@ -194,6 +196,7 @@ export function createScenePlanFeature(ctx) {
     state.sceneCardJob = null
     state.sceneNote = { content: '', updateTime: null, unitId: null }
     state.sceneNoteMode = 'edit'
+    state.sceneCalendarCursorDate = null
     sceneStudy?.resetAssessment()
     renderSceneView()
   }
@@ -221,7 +224,8 @@ export function createScenePlanFeature(ctx) {
     if (!planId) return
     try {
       const previousPlanId = state.currentLearningPlan?.id
-      const shouldKeepStage = options.keepStage ?? (sameId(planId, previousPlanId) && Boolean(state.sceneChallengeStage && state.sceneChallengeStage !== 'overview'))
+      const planChanged = !sameId(planId, previousPlanId)
+      const shouldKeepStage = options.keepStage ?? (!planChanged && Boolean(state.sceneChallengeStage && state.sceneChallengeStage !== 'overview'))
       const plan = state.preview ? asArray(state.learningPlans).find((item) => sameId(item.id, planId)) : await api.getPlan(planId)
       if (!plan) return
       state.currentLearningPlan = plan
@@ -230,7 +234,9 @@ export function createScenePlanFeature(ctx) {
       state.currentSceneWordId = (coreWords.find((word) => !isWordComplete(word)) || coreWords[0])?.id || null
       state.sceneChallengeStage = shouldKeepStage ? state.sceneChallengeStage : 'overview'
       sceneStudy?.resetAssessment()
-      if (!state.sceneCalendarCursorDate) state.sceneCalendarCursorDate = localDateKey()
+      if (planChanged || isPlanEnded(plan) || !state.sceneCalendarCursorDate) {
+        state.sceneCalendarCursorDate = resolvePlanAnchorDate(plan)
+      }
       planWorkflow?.renderPlanList()
       await loadCalendarData(plan)
       if (shouldKeepStage) {
@@ -248,6 +254,7 @@ export function createScenePlanFeature(ctx) {
   function changeSelectedPlan(planId) {
     if (!planId || sameId(planId, state.currentLearningPlan?.id)) return Promise.resolve()
     if (elements.scenePlanSelect) elements.scenePlanSelect.value = String(planId)
+    state.sceneCalendarCursorDate = null
     return selectPlan(planId)
   }
 
@@ -302,10 +309,11 @@ export function createScenePlanFeature(ctx) {
     sceneOverview?.renderCalendar(plan)
     sceneStudy?.applyStage(state.sceneChallengeStage || 'overview')
     if (!plan || !unit) {
-      if (elements.sceneUnitEyebrow) elements.sceneUnitEyebrow.textContent = plan ? 'Ready for next scene' : 'Current Scene'
-      if (elements.sceneUnitTitle) elements.sceneUnitTitle.textContent = plan ? '可以生成下一个场景' : '选择一个学习计划'
-      if (elements.sceneUnitSummary) elements.sceneUnitSummary.textContent = plan?.learningPurpose || '当前场景会显示在这里'
-      if (elements.sceneLearningText) { elements.sceneLearningText.className = 'scene-learning-text empty'; elements.sceneLearningText.textContent = plan ? '当前没有进行中的场景' : '暂无场景材料' }
+      const isCompleted = plan?.status === 'completed'
+      if (elements.sceneUnitEyebrow) elements.sceneUnitEyebrow.textContent = isCompleted ? 'Plan Completed' : (plan ? 'Ready for next scene' : 'Current Scene')
+      if (elements.sceneUnitTitle) elements.sceneUnitTitle.textContent = isCompleted ? '计划已圆满完成' : (plan ? '可以生成下一个场景' : '选择一个学习计划')
+      if (elements.sceneUnitSummary) elements.sceneUnitSummary.textContent = isCompleted ? '所有核心词汇与场景挑战已全部学完，可在日历中回顾历史场景。' : (plan?.learningPurpose || '当前场景会显示在这里')
+      if (elements.sceneLearningText) { elements.sceneLearningText.className = 'scene-learning-text empty'; elements.sceneLearningText.textContent = isCompleted ? '已完成所有场景学习' : (plan ? '当前没有进行中的场景' : '暂无场景材料') }
       if (elements.sceneTranslation) elements.sceneTranslation.innerHTML = '<p>暂无译文</p>'
       sceneStudy?.renderCoreWords([])
       sceneStudy?.renderRelatedWords(null)

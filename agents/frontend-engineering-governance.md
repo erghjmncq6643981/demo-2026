@@ -16,6 +16,7 @@ Use this review when a change touches Vue pages/components, API adapters, Pinia 
 - Confirm destructive actions use an application confirmation flow and present a readable business outcome.
 - Check timers, WebSockets, media sessions, subscriptions, and DOM listeners for one-owner lifecycle and complete cleanup.
 - Inspect mobile-sensitive widths, long Chinese text, UUIDs, URLs, table density, fixed controls, and modal focus behavior.
+- For client/desktop deployment and packaging: verify that target server domains/workspace URLs are bundled directly into the installation package (e.g. `desktop/deployment.json`). End-users/agents must never configure backend service addresses in the UI. Domain or environment changes strictly require updating the bundle configuration and rebuilding the installer package.
 - Reject new generated output, duplicate build config, committed `dist`, coverage, `*.tsbuildinfo`, local recordings, and placeholder data presented as live.
 
 ## Size Governance

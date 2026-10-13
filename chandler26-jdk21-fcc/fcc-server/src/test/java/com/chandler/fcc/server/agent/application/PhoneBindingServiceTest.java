@@ -12,6 +12,7 @@ import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
 
 import com.chandler.fcc.common.dto.command.FNodeAnswerDTO;
@@ -20,6 +21,7 @@ import com.chandler.fcc.common.dto.command.FNodePlayDTO;
 import com.chandler.fcc.common.dto.command.FNodeReadDTMFDTO;
 import com.chandler.fcc.common.entity.CallInfoBO;
 import com.chandler.fcc.common.enums.FlowActionType;
+import com.chandler.fcc.common.enums.CallStageState;
 import com.chandler.fcc.common.protocol.FNodeMediaType;
 import com.chandler.fcc.common.protocol.FNodePlayPostAction;
 import com.chandler.fcc.server.agent.infrastructure.PhoneBindingMapper;
@@ -104,6 +106,36 @@ class PhoneBindingServiceTest {
         verify(persistence, never()).saveOrUpdateSession(any());
         verify(actions, never()).executeFNode(any(), any(), any(), any());
         assertFalse(call.getData().containsKey("bindingInitialized"));
+    }
+
+    /** 源 DESTROY 必须保存终态、源时间；重复和迟到 READY 不能重启绑定。 */
+    @Test
+    void finishesBindingOnDestroyAndIgnoresRedelivery() {
+        CallInfoBO call = bindingCall();
+        call.putData("bindingInitialized", true);
+        var end = channelEvent("DESTROY", null, null).put("cause", "NORMAL_CLEARING")
+            .put("end_epoch", 1790982000L).put("duration", 15).put("billsec", 12);
+        service.channel(call, end);
+        service.channel(call, end);
+        service.channel(call, channelEvent("READY", "PHONE_BINDING", "1001"));
+        assertEquals(CallStageState.NORMAL_END, call.getStageState());
+        assertEquals(1790982000000L, call.getData().get("callEndedAt"));
+        assertEquals(15, call.getDuration());
+        verify(persistence, times(1)).saveOrUpdateSession(call);
+        verifyNoInteractions(mapper);
+    }
+
+    /** 保存失败应撤销内存终态，允许结束事件重新投递。 */
+    @Test
+    void retriesBindingEndAfterPersistenceFailure() {
+        CallInfoBO call = bindingCall();
+        call.putData("bindingInitialized", true);
+        when(persistence.saveOrUpdateSession(call)).thenThrow(new IllegalStateException("database unavailable"))
+            .thenReturn(null);
+        assertThrows(IllegalStateException.class, () -> service.channel(call, channelEvent("DESTROY", null, null)));
+        assertFalse(call.getData().containsKey("terminal"));
+        service.channel(call, channelEvent("DESTROY", null, null));
+        assertEquals(CallStageState.NORMAL_END, call.getStageState());
     }
 
     /**

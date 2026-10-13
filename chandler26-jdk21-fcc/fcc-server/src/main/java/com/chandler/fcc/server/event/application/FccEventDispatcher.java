@@ -3,6 +3,7 @@ package com.chandler.fcc.server.event.application;
 import com.chandler.fcc.common.protocol.FccEventMethod;
 import com.chandler.fcc.common.protocol.FccEventField;
 import com.chandler.fcc.server.call.CallSessionManager;
+import com.chandler.fcc.server.call.application.CallFinalizationService;
 import com.chandler.fcc.server.event.handler.FccEventHandler;
 import com.chandler.fcc.server.infrastructure.persistence.entity.CallEventEntity;
 import com.chandler.fcc.server.infrastructure.persistence.service.CallPersistenceService;
@@ -34,6 +35,7 @@ public class FccEventDispatcher {
     private final List<FccEventHandler> handlers;
     private final CallSessionManager sessions;
     private final CallPersistenceService persistence;
+    private final CallFinalizationService finalization;
 
     /**
      * 解析并分发原始事件字节。
@@ -121,11 +123,15 @@ public class FccEventDispatcher {
     private Long relatedCallId(JsonNode params) {
         String controlId = params.path(FccEventField.CONTROL_ID.getWireName()).asText(null);
         String channelUuid = params.path(FccEventField.CHANNEL_UUID.getWireName()).asText(null);
-        return sessions
+        Long activeCall = sessions
             .getByCtrlUuid(controlId)
             .or(() -> sessions.getByChannelUuid(channelUuid))
             .map(call -> Long.valueOf(call.getCallId()))
             .orElse(null);
+        if (activeCall != null) return activeCall;
+        var stored = finalization.resolveCall(controlId, channelUuid,
+            params.path(FccEventField.NODE_ID.getWireName()).asText(null));
+        return stored == null ? null : Long.valueOf(stored.getCallId());
     }
 
     /**

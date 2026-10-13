@@ -97,4 +97,16 @@ class AgentIdentityServiceTest {
         request.addHeader("satoken", token);
         RequestContextHolder.setRequestAttributes(new ServletRequestAttributes(request));
     }
+
+    /** 修复权限与普通 CDR 查询权限分离，坐席身份不能冒用运维入口。 */
+    @Test void runtimeRecoveryRequiresConsolePermission() {
+        var port=mock(IdentityProfilePort.class); var service=new AgentIdentityService(port);
+        bindToken("operator-token");
+        when(port.authenticate("operator-token")).thenReturn(new IdentityProfile("operator","CONSOLE",List.of("cdr:view")));
+        assertEquals(HttpStatus.FORBIDDEN,assertThrows(ResponseStatusException.class,service::requireRuntimeManagement).getStatusCode());
+        when(port.authenticate("operator-token")).thenReturn(new IdentityProfile("operator","CONSOLE",List.of("telephony:recover")));
+        assertEquals("operator",service.requireRuntimeManagement().workNo());
+        when(port.authenticate("operator-token")).thenReturn(new IdentityProfile("operator","AGENT",List.of("telephony:recover")));
+        assertEquals(HttpStatus.UNAUTHORIZED,assertThrows(ResponseStatusException.class,service::requireRuntimeManagement).getStatusCode());
+    }
 }

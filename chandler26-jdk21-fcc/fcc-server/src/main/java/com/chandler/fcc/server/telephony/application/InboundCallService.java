@@ -1,5 +1,7 @@
 package com.chandler.fcc.server.telephony.application;
 
+import com.chandler.fcc.server.call.application.CallEndTime;
+
 import com.chandler.fcc.common.dto.command.FNodeBridgeDTO;
 import com.chandler.fcc.common.dto.command.FNodeDialDTO;
 import com.chandler.fcc.common.entity.CallInfoBO;
@@ -23,6 +25,7 @@ import com.chandler.fcc.server.websocket.service.AgentWebSocketService;
 import com.chandler.fcc.server.websocket.service.ScreenPopService;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.fasterxml.jackson.databind.node.JsonNodeFactory;
 import java.time.LocalDateTime;
 import java.time.ZoneOffset;
 import java.util.ArrayList;
@@ -139,6 +142,8 @@ public class InboundCallService implements SystemFlowRuntime {
                             : "CARRIER"
                     )
                     .endpointId(uuid.equals(call.getAgentChannelUuid()) ? call.getAgentExt() : null)
+                    .metadata(uuid.equals(call.getAgentChannelUuid())
+                        ? JsonNodeFactory.instance.objectNode().put("agentWorkNo", call.getAgentWorkNo()).toString() : null)
                     .callerNumber(call.getCallerNumber())
                     .destinationNumber(call.getDestinationNumber())
                     .routingContext(
@@ -209,6 +214,7 @@ public class InboundCallService implements SystemFlowRuntime {
                         beginPostCall(call, params.path(FccEventField.CAUSE.getWireName()).asText());
                     }
                 } else if (uuid.equals(call.getGuestChannelUuid())) {
+                    call.putData("callEndedAt", CallEndTime.epochMillis(params));
                     finish(
                         call,
                         params.path(FccEventField.CAUSE.getWireName()).asText("NORMAL_CLEARING")
@@ -447,7 +453,7 @@ public class InboundCallService implements SystemFlowRuntime {
         recordings.stop(call);
         boolean answered = call.getStageState() == CallStageState.CONNECTED;
         var previousStage = call.getStageState();
-        call.setStageState(CallStageState.NORMAL_END);
+        call.setStageState("RECOVERY_UNKNOWN".equals(cause) ? CallStageState.ERROR_END : CallStageState.NORMAL_END);
         call.setHangupCause(cause);
         try {
             transactions.executeWithoutResult(transaction -> {

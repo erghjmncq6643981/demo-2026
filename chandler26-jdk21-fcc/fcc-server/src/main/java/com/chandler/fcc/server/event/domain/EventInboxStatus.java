@@ -12,7 +12,9 @@ public enum EventInboxStatus {
     PROCESSING("PROCESSING", "事件已领取并正在处理"),
     PROCESSED("PROCESSED", "事件已处理完成"),
     FAILED("FAILED", "事件处理失败，可在次数范围内重试"),
-    UNKNOWN("UNKNOWN", "事件副作用不确定，需要人工或对账任务处理");
+    UNKNOWN("UNKNOWN", "事件副作用不确定，需要人工或对账任务处理"),
+    RECOVERING("RECOVERING", "已领取未知事件的受控事实修复"),
+    RECONCILED("RECONCILED", "真实结束事实已修复，不代表整个业务流程成功");
 
     private final String databaseValue;
     private final String desc;

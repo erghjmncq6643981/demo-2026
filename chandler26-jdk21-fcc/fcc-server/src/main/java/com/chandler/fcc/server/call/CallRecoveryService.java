@@ -12,6 +12,7 @@ import java.util.Map;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
+import org.springframework.scheduling.annotation.Scheduled;
 
 /**
  * 在消费事件之前分页恢复已持久化的固定模板会话，不自动重拨。
@@ -31,7 +32,7 @@ public class CallRecoveryService {
      * <p>节点归属不是恢复命令的前置条件；后续事件会补齐运行事实，逻辑命令由
      * Sidecar 根据话道 UUID 选择节点。</p>
      *
-     * @throws IllegalStateException 持久化上下文损坏或无法构造业务会话
+     * @throws RuntimeException 分页查询数据库不可用；单条损坏会话被隔离
      */
     public void restore() {
         long after = 0;
@@ -42,9 +43,25 @@ public class CallRecoveryService {
             }
             for (Map<String, Object> row : rows) {
                 after = ((Number) row.get("id")).longValue();
-                restoreRow(after, row);
+                try {
+                    if (restoreRow(after, row)) mapper.resolveRecoveryIssue(after);
+                } catch (RuntimeException failure) {
+                    log.error("[通话恢复] 隔离损坏会话，继续恢复后续通话 callId={} type={}",
+                        after, failure.getClass().getSimpleName());
+                    try { mapper.recordRecoveryIssue(after, failure.getClass().getSimpleName()); }
+                    catch (RuntimeException auditFailure) {
+                        log.error("[通话恢复] 隔离审计写入失败 callId={} type={}",
+                            after, auditFailure.getClass().getSimpleName());
+                    }
+                }
             }
         }
+    }
+
+    /** 定期重读持久事实；配置修复后可恢复，绝不自动重拨或伪造结束。 */
+    @Scheduled(fixedDelayString = "${fcc.call.recovery-retry-ms:300000}", initialDelayString = "${fcc.call.recovery-retry-ms:300000}")
+    public void retryRecovery() {
+        restore();
     }
 
     /**
@@ -52,16 +69,16 @@ public class CallRecoveryService {
      *
      * @param callId 数据库业务通话 ID
      * @param row 会话摘要行
+     * @return 已恢复或已存在；非固定模板返回 false，不关闭异常记录
      * @throws IllegalStateException 持久上下文损坏
      */
-    private void restoreRow(long callId, Map<String, Object> row) {
+    private boolean restoreRow(long callId, Map<String, Object> row) {
         Object ctrlIdValue = row.get("ctrlId");
-        if (ctrlIdValue == null || sessions.getByCtrlUuid(ctrlIdValue.toString()).isPresent()) {
-            return;
-        }
+        if (ctrlIdValue == null) throw new IllegalStateException("缺少控制标识");
+        if (sessions.getByCtrlUuid(ctrlIdValue.toString()).isPresent()) return true;
         Object attributes = row.get("attributes");
         if (attributes == null) {
-            return;
+            return false;
         }
         try {
             Map<String, Object> data = json.readValue(
@@ -69,7 +86,7 @@ public class CallRecoveryService {
                 new TypeReference<HashMap<String, Object>>() {}
             );
             if (!data.containsKey("runtimeTemplate")) {
-                return;
+                return false;
             }
             CallInfoBO call = CallInfoBO.builder()
                 .callId(String.valueOf(callId))
@@ -89,6 +106,11 @@ public class CallRecoveryService {
                 throw new IllegalStateException("缺少客户话道归属");
             }
             sessions.registerSession(call);
+            Object transferChannel = data.get("transferChannelUuid");
+            if (transferChannel instanceof String channel && !channel.isBlank()) {
+                sessions.bindChannel(channel, call.getCtrlId());
+            }
+            return true;
         } catch (Exception failure) {
             throw new IllegalStateException("无法恢复通话 " + callId, failure);
         }

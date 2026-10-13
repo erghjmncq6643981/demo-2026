@@ -70,7 +70,7 @@ public class TelephonyCallController {
      * @return 控制结果
      */
     @PostMapping("/hangup")
-    @Operation(summary = "挂断通话", description = "挂断当前通话并进入话后整理")
+    @Operation(summary = "挂断通话", description = "请求挂断当前通话；坐席参与结束后恢复示闲或示忙，小结可稍后填写")
     public Map<String, Object> hangup(@RequestBody CallHangupReq request) {
         return controls.hangup(controls.requireCall(request.getWorkNo(), request.getCallId()));
     }

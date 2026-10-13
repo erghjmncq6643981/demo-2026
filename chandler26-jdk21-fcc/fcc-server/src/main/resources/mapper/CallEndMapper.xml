@@ -1,0 +1,138 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.chandler.fcc.server.call.infrastructure.persistence.mapper.CallEndMapper">
+  <sql id="ids"><foreach collection="ids" item="id" open="(" separator="," close=")">#{id}</foreach></sql>
+  <sql id="summary">
+    c.id, c.ctrl_id, c.status, c.result, c.started_at, c.ended_at, c.version,
+    NULLIF(JSON_UNQUOTE(JSON_EXTRACT(c.attributes, '$.guestChannelUuid')), 'null') AS guest_channel_uuid,
+    NULLIF(JSON_UNQUOTE(JSON_EXTRACT(c.attributes, '$.agentChannelUuid')), 'null') AS agent_channel_uuid
+  </sql>
+  <select id="candidates" resultType="com.chandler.fcc.server.call.infrastructure.persistence.data.CallCleanupCandidate">
+    SELECT <include refid="summary"/> FROM fcc_call_session c
+    WHERE c.id &gt; #{after} AND c.started_at &lt; #{cutoff}
+      AND (
+        c.status NOT IN ('NORMAL_END', 'ERROR_END') OR c.ended_at IS NULL
+        OR EXISTS (SELECT 1 FROM fcc_call_leg l WHERE l.call_id = c.id AND (l.ended_at IS NULL OR l.state != 'DESTROY'))
+        OR EXISTS (SELECT 1 FROM fcc_call_bridge b WHERE b.call_id = c.id AND b.ended_at IS NULL)
+        OR EXISTS (SELECT 1 FROM fcc_flow_instance f WHERE f.call_id = c.id AND (f.status != 'ENDED' OR f.ended_at IS NULL))
+        OR EXISTS (SELECT 1 FROM fcc_flow_step_execution s WHERE s.call_id = c.id AND s.status IN ('WAITING', 'RUNNING', 'ACCEPTED', 'UNKNOWN'))
+        OR EXISTS (SELECT 1 FROM fcc_agent_presence p WHERE p.active_call_id = c.id)
+        OR EXISTS (SELECT 1 FROM fcc_call_recording r WHERE r.call_id = c.id AND r.status IN ('REQUESTED', 'RECORDING'))
+        OR EXISTS (SELECT 1 FROM fcc_dial_attempt a WHERE a.call_id = c.id AND a.status = 'RUNNING')
+      )
+    ORDER BY c.id LIMIT #{limit}
+  </select>
+  <select id="lockCalls" resultType="com.chandler.fcc.server.call.infrastructure.persistence.data.CallCleanupCandidate" useCache="false" flushCache="true">
+    SELECT <include refid="summary"/> FROM fcc_call_session c
+    WHERE c.id IN <include refid="ids"/> ORDER BY c.id FOR UPDATE
+  </select>
+  <select id="channelFacts" resultType="com.chandler.fcc.server.call.infrastructure.persistence.data.CallChannelFact">
+    SELECT call_id, channel_uuid, ended_at, hangup_cause AS cause
+    FROM fcc_call_leg WHERE call_id IN <include refid="ids"/>
+    UNION ALL
+    SELECT call_id, channel_uuid,
+           CASE WHEN COALESCE(JSON_EXTRACT(normalized_payload, '$.end_epoch') + 0, 0) &gt; 0
+                THEN TIMESTAMPADD(SECOND, JSON_EXTRACT(normalized_payload, '$.end_epoch') + 0, '1970-01-01 00:00:00')
+                ELSE event_time END AS ended_at,
+           JSON_UNQUOTE(JSON_EXTRACT(normalized_payload, '$.cause')) AS cause
+    FROM fcc_call_event
+    WHERE call_id IN <include refid="ids"/> AND event_type = 'Event.Channel'
+      AND JSON_UNQUOTE(JSON_EXTRACT(normalized_payload, '$.state')) = 'DESTROY'
+      AND channel_uuid IS NOT NULL
+  </select>
+  <select id="resolveChannel" resultType="com.chandler.fcc.server.call.infrastructure.persistence.data.CallCleanupCandidate">
+    SELECT <include refid="summary"/> FROM fcc_call_session c
+    WHERE EXISTS (SELECT 1 FROM fcc_call_leg l WHERE l.call_id = c.id
+                    AND l.channel_uuid = #{channelUuid} AND l.node_id = #{nodeId})
+       OR (c.ctrl_id = #{ctrlId} AND
+           (JSON_UNQUOTE(JSON_EXTRACT(c.attributes, '$.guestChannelUuid')) = #{channelUuid}
+            OR JSON_UNQUOTE(JSON_EXTRACT(c.attributes, '$.agentChannelUuid')) = #{channelUuid}))
+    ORDER BY c.id LIMIT 1
+  </select>
+  <update id="recordLegEnd">
+    UPDATE fcc_call_leg SET state = 'DESTROY',
+      ended_at = COALESCE(ended_at, GREATEST(created_time, #{endedAt})),
+      hangup_cause = COALESCE(hangup_cause, #{cause}),
+      version = version + 1, updated_at = UTC_TIMESTAMP(3)
+    WHERE call_id = #{callId} AND channel_uuid = #{channelUuid} AND node_id = #{nodeId}
+      AND (state != 'DESTROY' OR ended_at IS NULL OR hangup_cause IS NULL)
+  </update>
+  <update id="completeCalls">
+    UPDATE fcc_call_session c JOIN (
+      <foreach collection="decisions" item="d" separator=" UNION ALL ">
+        SELECT #{d.callId} AS call_id, #{d.version} AS expected_version, #{d.endedAt} AS end_time,
+               #{d.cause} AS cause, #{d.evidence} AS evidence
+      </foreach>
+    ) d ON d.call_id = c.id
+    SET c.result = CASE WHEN c.status IN ('NORMAL_END', 'ERROR_END') THEN COALESCE(c.result, d.cause) ELSE d.cause END,
+        c.hangup_cause = CASE WHEN c.status IN ('NORMAL_END', 'ERROR_END') THEN COALESCE(c.hangup_cause, d.cause) ELSE d.cause END,
+        c.status = CASE WHEN c.status IN ('NORMAL_END', 'ERROR_END') THEN c.status
+                        WHEN d.cause = 'RECOVERY_UNKNOWN' THEN 'ERROR_END' ELSE 'NORMAL_END' END,
+        c.ended_at = COALESCE(c.ended_at, d.end_time),
+        c.attributes = JSON_SET(COALESCE(c.attributes, JSON_OBJECT()), '$.terminal', TRUE,
+          '$.endRepair', JSON_OBJECT('evidence', d.evidence, 'checkedAt', UTC_TIMESTAMP(3))),
+        c.updated_at = UTC_TIMESTAMP(3), c.version = c.version + 1
+    WHERE c.version = d.expected_version
+  </update>
+  <update id="closeLegs">
+    UPDATE fcc_call_leg l JOIN fcc_call_session c ON c.id = l.call_id
+    LEFT JOIN (
+      SELECT call_id, channel_uuid, MAX(event_time) AS ended_at
+      FROM fcc_call_event
+      WHERE call_id IN <include refid="ids"/> AND event_type = 'Event.Channel'
+        AND JSON_UNQUOTE(JSON_EXTRACT(normalized_payload, '$.state')) = 'DESTROY'
+      GROUP BY call_id, channel_uuid
+    ) e ON e.call_id = l.call_id AND e.channel_uuid = l.channel_uuid
+    SET l.state = 'DESTROY', l.ended_at = COALESCE(l.ended_at, e.ended_at, c.ended_at),
+        l.hangup_cause = COALESCE(l.hangup_cause, CASE WHEN e.ended_at IS NOT NULL THEN c.result ELSE 'RECOVERY_UNKNOWN' END),
+        l.version = l.version + 1, l.updated_at = UTC_TIMESTAMP(3)
+    WHERE c.id IN <include refid="ids"/> AND c.ended_at IS NOT NULL
+      AND (l.ended_at IS NULL OR l.state != 'DESTROY')
+      AND (e.ended_at IS NOT NULL OR #{channelsAbsent} = TRUE)
+  </update>
+  <update id="closeBridgeMembers">
+    UPDATE fcc_call_bridge_member m JOIN fcc_call_bridge b ON b.id = m.bridge_id
+    JOIN fcc_call_session c ON c.id = b.call_id
+    SET m.left_at = GREATEST(m.joined_at, c.ended_at)
+    WHERE c.id IN <include refid="ids"/> AND c.ended_at IS NOT NULL AND m.left_at IS NULL
+  </update>
+  <update id="closeBridges">
+    UPDATE fcc_call_bridge b JOIN fcc_call_session c ON c.id = b.call_id
+    SET b.ended_at = GREATEST(b.started_at, c.ended_at)
+    WHERE c.id IN <include refid="ids"/> AND c.ended_at IS NOT NULL AND b.ended_at IS NULL
+  </update>
+  <update id="closeSteps">
+    UPDATE fcc_flow_step_execution s JOIN fcc_call_session c ON c.id = s.call_id
+    SET s.status = 'INTERRUPTED', s.ended_at = GREATEST(s.started_at, c.ended_at),
+        s.duration_ms = GREATEST(0, TIMESTAMPDIFF(MICROSECOND, s.started_at, c.ended_at) DIV 1000),
+        s.error_code = COALESCE(s.error_code, 'CALL_ENDED'),
+        s.error_message = COALESCE(s.error_message, '通话已结束，步骤没有可确认的最终完成结果')
+    WHERE c.id IN <include refid="ids"/> AND c.ended_at IS NOT NULL
+      AND s.status IN ('WAITING', 'RUNNING', 'ACCEPTED', 'UNKNOWN')
+  </update>
+  <update id="closeFlows">
+    UPDATE fcc_flow_instance f JOIN fcc_call_session c ON c.id = f.call_id
+    SET f.status = 'ENDED', f.current_step_key = 'END',
+        f.ended_at = COALESCE(f.ended_at, GREATEST(f.started_at, c.ended_at)),
+        f.version = f.version + 1, f.updated_at = UTC_TIMESTAMP(3)
+    WHERE c.id IN <include refid="ids"/> AND c.ended_at IS NOT NULL
+      AND (f.status != 'ENDED' OR f.ended_at IS NULL)
+  </update>
+  <update id="releaseAgents">
+    UPDATE fcc_agent_presence p JOIN fcc_call_session c ON c.id = p.active_call_id
+    JOIN fcc_agent a ON a.id = p.agent_id
+    SET p.active_call_id = NULL,
+        p.work_status = CASE p.login_status WHEN 'LOGIN' THEN 'READY'
+          WHEN 'LOGIN_BUSY' THEN 'BUSY' ELSE 'UNREADY' END,
+        p.last_state_at = UTC_TIMESTAMP(3), p.version = p.version + 1
+    WHERE c.id IN <include refid="ids"/> AND c.ended_at IS NOT NULL
+      AND c.status IN ('NORMAL_END', 'ERROR_END')
+      AND <include refid="com.chandler.fcc.server.agent.infrastructure.AgentRuntimeMapper.noLiveAgentParticipation"/>
+  </update>
+  <update id="markRecordingsUnknown">
+    UPDATE fcc_call_recording r JOIN fcc_call_session c ON c.id = r.call_id
+    SET r.status = 'UNKNOWN', r.updated_at = UTC_TIMESTAMP(3)
+    WHERE c.id IN <include refid="ids"/> AND c.ended_at IS NOT NULL
+      AND r.status IN ('REQUESTED', 'RECORDING')
+  </update>
+</mapper>

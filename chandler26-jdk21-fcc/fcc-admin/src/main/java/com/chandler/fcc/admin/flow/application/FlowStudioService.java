@@ -1,5 +1,8 @@
 package com.chandler.fcc.admin.flow.application;
 
+import static com.chandler.fcc.admin.flow.application.assembler.FlowResponseAssembler.formatVersion;
+import static com.chandler.fcc.admin.flow.application.assembler.FlowResponseAssembler.summary;
+
 import cn.dev33.satoken.stp.StpUtil;
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
@@ -8,22 +11,17 @@ import com.chandler.fcc.admin.flow.controller.req.FlowPageReq;
 import com.chandler.fcc.admin.flow.controller.req.PublishFlowReq;
 import com.chandler.fcc.admin.flow.controller.req.SaveFlowDraftReq;
 import com.chandler.fcc.admin.flow.controller.resp.FlowActionResp;
-import com.chandler.fcc.admin.flow.controller.resp.FlowExecutionInstanceResp;
-import com.chandler.fcc.admin.flow.controller.resp.FlowExecutionResp;
-import com.chandler.fcc.admin.flow.controller.resp.FlowExecutionStepResp;
 import com.chandler.fcc.admin.flow.controller.resp.FlowPublishResp;
 import com.chandler.fcc.admin.flow.controller.resp.FlowSummaryResp;
 import com.chandler.fcc.admin.flow.controller.resp.FlowTypeResp;
 import com.chandler.fcc.admin.flow.controller.resp.FlowVersionResp;
 import com.chandler.fcc.admin.flow.controller.resp.FlowValidationResp;
 import com.chandler.fcc.admin.flow.controller.resp.SystemFlowModelResp;
-import com.chandler.fcc.admin.flow.infrastructure.FlowStudioMapper;
-import com.chandler.fcc.admin.flow.infrastructure.data.FlowExecutionInstanceData;
-import com.chandler.fcc.admin.flow.infrastructure.data.FlowExecutionStepData;
-import com.chandler.fcc.admin.infrastructure.persistence.entity.DidNumberEntity;
+import com.chandler.fcc.admin.flow.application.assembler.FlowResponseAssembler;
+import com.chandler.fcc.admin.flow.application.coordinator.FlowRuntimeNotifier;
+import com.chandler.fcc.admin.flow.application.policy.FlowPublicationPolicy;
 import com.chandler.fcc.admin.infrastructure.persistence.entity.FlowDefinitionEntity;
 import com.chandler.fcc.admin.infrastructure.persistence.entity.FlowDefinitionVersionEntity;
-import com.chandler.fcc.admin.infrastructure.persistence.mapper.DidNumberMapper;
 import com.chandler.fcc.admin.infrastructure.persistence.mapper.FlowDefinitionMapper;
 import com.chandler.fcc.admin.infrastructure.persistence.mapper.FlowDefinitionVersionMapper;
 import com.chandler.fcc.admin.model.PageResult;
@@ -34,24 +32,13 @@ import com.chandler.fcc.common.protocol.StagedFlowDefinition;
 import com.chandler.fcc.common.protocol.SystemFlowModels;
 import com.chandler.fcc.common.util.IdUtil;
 import com.fasterxml.jackson.databind.JsonNode;
-import com.fasterxml.jackson.databind.ObjectMapper;
-import java.net.URI;
-import java.net.URLEncoder;
-import java.net.http.HttpClient;
-import java.net.http.HttpRequest;
-import java.net.http.HttpResponse;
 import java.nio.charset.StandardCharsets;
 import java.security.MessageDigest;
-import java.time.Duration;
 import java.time.LocalDateTime;
-import java.util.HashSet;
 import java.util.HexFormat;
 import java.util.List;
-import java.util.Set;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
-import org.springframework.beans.factory.annotation.Value;
-import org.springframework.data.redis.core.StringRedisTemplate;
 import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -60,7 +47,7 @@ import org.springframework.transaction.support.TransactionSynchronizationManager
 import org.springframework.web.server.ResponseStatusException;
 
 /**
- * Flow Studio 的模型目录、流程版本维护和执行轨迹应用服务。
+ * Flow Studio 的模型目录、草稿维护及发布事务应用服务。
  *
  * <p>系统模型与动作目录来自 fcc-common；可编辑流程只保存受公共验证器支持的参数，
  * 发布事务提交后才通知运行端加载，新版本不会改变正在执行的通话快照。</p>
@@ -71,21 +58,11 @@ import org.springframework.web.server.ResponseStatusException;
 public class FlowStudioService {
 
     private static final String SYSTEM_PREFIX = "SYSTEM_";
-    private static final String FLOW_PUBLISH_CHANNEL = "fcc:flow:publish";
 
     private final FlowDefinitionMapper flowMapper;
     private final FlowDefinitionVersionMapper versionMapper;
-    private final DidNumberMapper didNumberMapper;
-    private final FlowStudioMapper executionMapper;
-    private final StringRedisTemplate redisTemplate;
-    private final ObjectMapper objectMapper;
-    private volatile HttpClient httpClient;
-
-    @Value("${fcc.server.base-url:}")
-    private String fccServerBaseUrl;
-
-    @Value("${fcc.flow.reload-token:}")
-    private String reloadToken;
+    private final FlowPublicationPolicy publicationPolicy;
+    private final FlowRuntimeNotifier runtimeNotifier;
 
     /**
      * 返回管理画布使用的公共动作和执行器目录。
@@ -177,7 +154,7 @@ public class FlowStudioService {
             .pageNum(page.getCurrent())
             .pageSize(page.getSize())
             .total(page.getTotal())
-            .list(page.getRecords().stream().map(this::summary).toList())
+            .list(page.getRecords().stream().map(FlowResponseAssembler::summary).toList())
             .build();
     }
 
@@ -267,7 +244,7 @@ public class FlowStudioService {
             .pageNum(page.getCurrent())
             .pageSize(page.getSize())
             .total(page.getTotal())
-            .list(page.getRecords().stream().map(version -> version(version, false)).toList())
+            .list(page.getRecords().stream().map(version -> FlowResponseAssembler.version(version, false)).toList())
             .build();
     }
 
@@ -292,7 +269,7 @@ public class FlowStudioService {
         if (entity == null) {
             throw new ResponseStatusException(HttpStatus.NOT_FOUND, "流程版本不存在");
         }
-        return version(entity, true);
+        return FlowResponseAssembler.version(entity, true);
     }
 
     /**
@@ -328,7 +305,7 @@ public class FlowStudioService {
                 flowKey,
                 formatVersion(existing.getVersionNo())
             );
-            return version(existing, true);
+            return FlowResponseAssembler.version(existing, true);
         }
 
         FlowDefinitionVersionEntity source = versionMapper.selectOne(
@@ -372,7 +349,7 @@ public class FlowStudioService {
             formatVersion(source.getVersionNo()),
             formatVersion(draft.getVersionNo())
         );
-        return version(draft, true);
+        return FlowResponseAssembler.version(draft, true);
     }
 
     /**
@@ -428,7 +405,7 @@ public class FlowStudioService {
         flow.setUpdatedAt(now);
         flowMapper.updateById(flow);
         log.info("[流程管理] 保存草稿 flowKey={}, version={}", flowKey, formatVersion(draft.getVersionNo()));
-        return version(draft, true);
+        return FlowResponseAssembler.version(draft, true);
     }
 
     /**
@@ -464,7 +441,7 @@ public class FlowStudioService {
         StpUtil.checkPermission("flow:write");
         FlowDefinitionEntity flow = requireFlow(flowKey, true);
         rejectSystemFlow(flowKey);
-        requireInboundDidBinding(flow);
+        publicationPolicy.requireInboundDidBinding(flow);
         List<FlowDefinitionVersionEntity> drafts = versionMapper.selectList(
             new LambdaQueryWrapper<FlowDefinitionVersionEntity>()
                 .eq(FlowDefinitionVersionEntity::getFlowDefinitionId, flow.getId())
@@ -481,7 +458,7 @@ public class FlowStudioService {
             draft.getDefinitionJson(),
             flow.getModelType()
         );
-        requireInboundRouteTargets(flow, normalized);
+        publicationPolicy.requireInboundRouteTargets(flow, normalized);
         versionMapper.selectList(
             new LambdaQueryWrapper<FlowDefinitionVersionEntity>()
                 .eq(FlowDefinitionVersionEntity::getFlowDefinitionId, flow.getId())
@@ -504,7 +481,7 @@ public class FlowStudioService {
              */
             @Override
             public void afterCommit() {
-                notifyRuntime(flowKey);
+                runtimeNotifier.notifyRuntime(flowKey);
             }
         });
         String version = formatVersion(draft.getVersionNo());
@@ -513,183 +490,6 @@ public class FlowStudioService {
             .version(version)
             .publishStatus("PUBLISHED")
             .runtimeActivationStatus("PENDING")
-            .build();
-    }
-
-    /**
-     * 校验呼入流程至少有一个启用的 DID 入口。
-     *
-     * @param flow 待发布流程主数据
-     * @throws ResponseStatusException 呼入流程没有任何可达入口
-     */
-    private void requireInboundDidBinding(FlowDefinitionEntity flow) {
-        if (!"INBOUND".equals(flow.getModelType())) {
-            return;
-        }
-        Long count = didNumberMapper.selectCount(
-            new LambdaQueryWrapper<DidNumberEntity>()
-                .eq(DidNumberEntity::getRouteKey, flow.getFlowKey())
-                .eq(DidNumberEntity::getStatus, "ENABLED")
-                .isNull(DidNumberEntity::getDeletedAt)
-        );
-        if (count == null || count == 0) {
-            throw new ResponseStatusException(HttpStatus.CONFLICT, "请先绑定至少一个被叫号码再发布流程");
-        }
-    }
-
-    /**
-     * 批量校验呼入流程引用的坐席和技能组真实存在且启用。
-     *
-     * @param flow 待发布流程主数据
-     * @param definition 已通过公共协议校验的流程定义
-     * @throws ResponseStatusException 任一路由目标不存在或已停用
-     */
-    private void requireInboundRouteTargets(
-        FlowDefinitionEntity flow,
-        JsonNode definition
-    ) {
-        if (!FlowTemplateType.INBOUND.name().equals(flow.getModelType())) {
-            return;
-        }
-        Set<String> agentWorkNos = new HashSet<>();
-        Set<String> groupCodes = new HashSet<>();
-        collectRouteTarget(definition.path("defaultRoute"), agentWorkNos, groupCodes);
-        definition.path("branches").forEach(
-            branch -> collectRouteTarget(branch, agentWorkNos, groupCodes)
-        );
-
-        Set<String> activeAgents = activeAgentWorkNos(agentWorkNos);
-        Set<String> activeGroups = activeGroupCodes(groupCodes);
-        agentWorkNos.removeAll(activeAgents);
-        groupCodes.removeAll(activeGroups);
-        if (!agentWorkNos.isEmpty() || !groupCodes.isEmpty()) {
-            String agents = agentWorkNos.isEmpty() ? "" : "坐席 " + String.join(", ", agentWorkNos);
-            String groups = groupCodes.isEmpty() ? "" : "技能组 " + String.join(", ", groupCodes);
-            String separator = agents.isEmpty() || groups.isEmpty() ? "" : "；";
-            throw new ResponseStatusException(
-                HttpStatus.CONFLICT,
-                "流程引用了不存在或已停用的路由目标：" + agents + separator + groups
-            );
-        }
-    }
-
-    /**
-     * 批量查询仍处于启用状态的坐席工号。
-     *
-     * @param agentWorkNos 流程引用的坐席工号
-     * @return 启用的坐席工号集合
-     */
-    private Set<String> activeAgentWorkNos(Set<String> agentWorkNos) {
-        if (agentWorkNos.isEmpty()) {
-            return Set.of();
-        }
-        return Set.copyOf(
-            executionMapper.activeAgentWorkNos(agentWorkNos.stream().sorted().toList())
-        );
-    }
-
-    /**
-     * 批量查询仍处于启用状态的技能组代码。
-     *
-     * @param groupCodes 流程引用的技能组代码
-     * @return 启用的技能组代码集合
-     */
-    private Set<String> activeGroupCodes(Set<String> groupCodes) {
-        if (groupCodes.isEmpty()) {
-            return Set.of();
-        }
-        return Set.copyOf(
-            executionMapper.activeGroupCodes(groupCodes.stream().sorted().toList())
-        );
-    }
-
-    /**
-     * 按类型收集一个已校验路由目标。
-     *
-     * @param route 路由节点
-     * @param agentWorkNos 坐席工号集合
-     * @param groupCodes 技能组代码集合
-     */
-    private void collectRouteTarget(
-        JsonNode route,
-        Set<String> agentWorkNos,
-        Set<String> groupCodes
-    ) {
-        String target = route.path("target").asText();
-        if ("AGENT".equals(route.path("targetType").asText())) {
-            agentWorkNos.add(target);
-        } else {
-            groupCodes.add(target);
-        }
-    }
-
-    /**
-     * 读取一通电话固定的模型快照和按游标分页的动作事实。
-     *
-     * @param callId 业务通话标识
-     * @param after 上一页末尾记录标识
-     * @return 执行轨迹
-     */
-    public FlowExecutionResp execution(String callId, String after) {
-        StpUtil.checkPermission("flow:view");
-        if (!callId.matches("[1-9][0-9]{0,18}") || !after.matches("[0-9]{1,19}")) {
-            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "标识不合法");
-        }
-        if (executionMapper.callExists(callId) == 0) {
-            throw new ResponseStatusException(HttpStatus.NOT_FOUND, "通话不存在");
-        }
-        var instance = executionMapper.instance(callId);
-        var steps = executionMapper.steps(callId, after);
-        FlowExecutionResp response = new FlowExecutionResp();
-        response.setInstance(executionInstance(instance));
-        response.setSteps(steps.stream().map(this::executionStep).toList());
-        response.setNextCursor(steps.size() == 100 ? steps.getLast().getId() : "");
-        return response;
-    }
-
-    /**
-     * 将持久化投影转换为自解释的流程实例响应。
-     *
-     * @param data 数据库投影，无流程实例时为空
-     * @return 流程实例响应
-     */
-    private FlowExecutionInstanceResp executionInstance(FlowExecutionInstanceData data) {
-        if (data == null) {
-            return FlowExecutionInstanceResp.builder().build();
-        }
-        return FlowExecutionInstanceResp.builder()
-            .id(data.getId())
-            .callId(data.getCallId())
-            .versionId(data.getVersionId())
-            .status(data.getStatus())
-            .currentStep(data.getCurrentStep())
-            .snapshot(data.getSnapshot())
-            .startedAt(data.getStartedAt())
-            .endedAt(data.getEndedAt())
-            .build();
-    }
-
-    /**
-     * 将持久化投影转换为自解释的阶段执行响应。
-     *
-     * @param data 阶段执行数据库投影
-     * @return 阶段执行响应
-     */
-    private FlowExecutionStepResp executionStep(FlowExecutionStepData data) {
-        return FlowExecutionStepResp.builder()
-            .id(data.getId())
-            .stepKey(data.getStepKey())
-            .actionType(data.getActionType())
-            .attemptNo(data.getAttemptNo())
-            .status(data.getStatus())
-            .commandId(data.getCommandId())
-            .eventId(data.getEventId())
-            .input(data.getInput())
-            .output(data.getOutput())
-            .errorCode(data.getErrorCode())
-            .startedAt(data.getStartedAt())
-            .endedAt(data.getEndedAt())
-            .durationMs(data.getDurationMs())
             .build();
     }
 
@@ -732,45 +532,6 @@ public class FlowStudioService {
     }
 
     /**
-     * 将主数据转换为轻量摘要。
-     *
-     * @param entity 流程实体
-     * @return 流程摘要
-     */
-    private FlowSummaryResp summary(FlowDefinitionEntity entity) {
-        Integer current = entity.getCurrentVersion();
-        return FlowSummaryResp.builder()
-            .id(entity.getId().toString())
-            .flowKey(entity.getFlowKey())
-            .flowName(entity.getFlowName())
-            .modelType(entity.getModelType())
-            .status(entity.getStatus())
-            .currentVersion(current == null || current < 1 ? null : formatVersion(current))
-            .system(entity.getFlowKey().startsWith(SYSTEM_PREFIX))
-            .build();
-    }
-
-    /**
-     * 将版本实体转换为摘要或详情。
-     *
-     * @param entity 版本实体
-     * @param includeDefinition 是否返回完整定义
-     * @return 版本响应
-     */
-    private FlowVersionResp version(FlowDefinitionVersionEntity entity, boolean includeDefinition) {
-        return FlowVersionResp.builder()
-            .id(entity.getId().toString())
-            .version(formatVersion(entity.getVersionNo()))
-            .versionNo(entity.getVersionNo())
-            .publishStatus(entity.getPublishStatus())
-            .definitionJson(includeDefinition ? entity.getDefinitionJson() : null)
-            .publishedAt(entity.getPublishedAt())
-            .createdBy(entity.getCreatedBy())
-            .createdAt(entity.getCreatedAt())
-            .build();
-    }
-
-    /**
      * 拒绝修改随应用发布的系统模型。
      *
      * @param flowKey 稳定流程代码
@@ -803,85 +564,6 @@ public class FlowStudioService {
             return HexFormat.of().formatHex(digest.digest(source.getBytes(StandardCharsets.UTF_8)));
         } catch (Exception failure) {
             throw new IllegalStateException("无法计算流程定义校验和", failure);
-        }
-    }
-
-    /**
-     * 将数据库版本序号格式化为公开版本号。
-     *
-     * @param versionNo 数据库递增版本序号
-     * @return 公开版本号
-     */
-    private String formatVersion(Integer versionNo) {
-        if (versionNo == null || versionNo < 1) {
-            throw new IllegalArgumentException("版本序号不合法");
-        }
-        return "v1." + (versionNo - 1) + ".0";
-    }
-
-    /**
-     * 发布提交后广播变更并异步请求运行端重载。
-     *
-     * @param flowKey 稳定流程代码
-     */
-    private void notifyRuntime(String flowKey) {
-        try {
-            redisTemplate.convertAndSend(FLOW_PUBLISH_CHANNEL, flowKey);
-        } catch (Exception failure) {
-            log.warn("[流程发布] Redis 广播未确认 flowKey={}", flowKey);
-        }
-        if (fccServerBaseUrl == null || fccServerBaseUrl.isBlank() || reloadToken.isBlank()) {
-            log.warn("[流程发布] 未配置运行端重载地址 flowKey={}", flowKey);
-            return;
-        }
-        try {
-            String baseUrl = fccServerBaseUrl.replaceAll("/+$", "");
-            String encoded = URLEncoder.encode(flowKey, StandardCharsets.UTF_8);
-            HttpRequest request = HttpRequest.newBuilder()
-                .uri(URI.create(baseUrl + "/api/telephony/call/flow/reload?flowKey=" + encoded))
-                .header("X-FCC-Reload-Token", reloadToken)
-                .timeout(Duration.ofMillis(1500))
-                .POST(HttpRequest.BodyPublishers.noBody())
-                .build();
-            httpClient().sendAsync(request, HttpResponse.BodyHandlers.ofString()).whenComplete((response, failure) -> {
-                if (failure != null || response.statusCode() != 200) {
-                    log.warn("[流程发布] 运行端重载未确认 flowKey={}", flowKey);
-                    return;
-                }
-                try {
-                    boolean reloaded = objectMapper.readTree(response.body())
-                        .path("data")
-                        .path("reloaded")
-                        .asBoolean(false);
-                    if (reloaded) {
-                        log.info("[流程发布] 运行端已确认重载 flowKey={}", flowKey);
-                    } else {
-                        log.warn("[流程发布] 运行端未确认激活 flowKey={}", flowKey);
-                    }
-                } catch (Exception invalidResponse) {
-                    log.warn("[流程发布] 运行端响应无法解析 flowKey={}", flowKey);
-                }
-            });
-        } catch (Exception failure) {
-            log.warn("[流程发布] 运行端通知未发出 flowKey={}", flowKey);
-        }
-    }
-
-    /**
-     * 在首次发布通知时才创建 HTTP 客户端，避免未使用运行端通知时影响服务启动。
-     *
-     * @return 可复用的 HTTP 客户端
-     */
-    private HttpClient httpClient() {
-        HttpClient current = httpClient;
-        if (current != null) {
-            return current;
-        }
-        synchronized (this) {
-            if (httpClient == null) {
-                httpClient = HttpClient.newHttpClient();
-            }
-            return httpClient;
         }
     }
 }

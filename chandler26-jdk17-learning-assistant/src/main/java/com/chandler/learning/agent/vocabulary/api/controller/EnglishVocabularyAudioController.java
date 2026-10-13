@@ -13,6 +13,7 @@ import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.RequestMapping;
+import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 
 import java.util.concurrent.TimeUnit;
@@ -47,6 +48,27 @@ public class EnglishVocabularyAudioController {
                 .contentType(MediaType.parseMediaType("audio/mpeg"))
                 .header(HttpHeaders.CONTENT_DISPOSITION,
                         ContentDisposition.inline().filename(term + ".mp3").build().toString())
+                .body(audioResource);
+    }
+
+    /**
+     * 获取例句发音音频文件流（支持 30 天 HTTP 缓存）。
+     *
+     * @param text 例句文本
+     * @param type 口音（us: 美音, uk: 英音）
+     */
+    @GetMapping(value = "/sentence", produces = "audio/mpeg")
+    @Operation(summary = "获取例句发音音频流")
+    public ResponseEntity<Resource> getSentenceAudio(@RequestParam("text") String text,
+                                                     @RequestParam(value = "type", defaultValue = "us") String type) {
+        Resource audioResource = vocabularyAudioService.resolveSentenceAudioResource(text, type);
+        if (audioResource == null || !audioResource.exists()) {
+            return ResponseEntity.notFound().build();
+        }
+
+        return ResponseEntity.ok()
+                .cacheControl(CacheControl.maxAge(30, TimeUnit.DAYS).cachePublic())
+                .contentType(MediaType.parseMediaType("audio/mpeg"))
                 .body(audioResource);
     }
 }

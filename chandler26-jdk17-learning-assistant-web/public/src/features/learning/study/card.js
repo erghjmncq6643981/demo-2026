@@ -516,7 +516,7 @@ export function createStudyCardFeature(ctx) {
       .map(
         (item, index) => `
           <div class="example-item">
-            <button class="icon-button" type="button" data-sentence-index="${index}" title="播放例句">▶</button>
+            <button class="icon-button sentence-play-btn" type="button" data-sentence-index="${index}" data-sentence-text="${escapeHtml(item.sentence || '')}" title="播放例句">▶</button>
             <p class="sentence">${escapeHtml(item.sentence || '')}</p>
             <p class="translation">${escapeHtml(item.translation || '')}</p>
           </div>

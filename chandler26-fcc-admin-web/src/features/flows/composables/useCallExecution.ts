@@ -1,4 +1,4 @@
-import { onBeforeUnmount, ref, watch, type Ref } from "vue";
+import { onScopeDispose, ref, watch, type Ref } from "vue";
 import { flowApi } from "../../../api/flowApi";
 import { errorText } from "../../../utils/feedback";
 import { type StagedFlow, type StageExecution } from "../model/stagedFlow";
@@ -20,6 +20,8 @@ export function useCallExecution(callId: Ref<string>) {
       flow.value = null;
       executions.value = [];
       cursor.value = "";
+      status.value = "";
+      version.value = "";
     }
     try {
       const data = await flowApi.execution(
@@ -44,7 +46,7 @@ export function useCallExecution(callId: Ref<string>) {
     }
   }
   watch(callId, () => load(), { immediate: true });
-  onBeforeUnmount(() => {
+  onScopeDispose(() => {
     generation++;
   });
   return { flow, executions, error, loading, cursor, status, version, load };

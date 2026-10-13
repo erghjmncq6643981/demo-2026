@@ -124,8 +124,16 @@
     LIMIT 100
   </select>
 
+  <select id="attemptsForCalls" resultType="string">
+    SELECT CAST(a.id AS CHAR)
+    FROM fcc_dial_attempt a JOIN fcc_call_session c ON c.biz_id = CAST(a.id AS CHAR)
+    WHERE a.status = 'RUNNING' AND c.ended_at IS NOT NULL AND c.id IN
+    <foreach collection="callIds" item="id" open="(" separator="," close=")">#{id}</foreach>
+  </select>
+
   <sql id="successfulCall">
     (
+      COALESCE(c.result, '') != 'RECOVERY_UNKNOWN' AND (
       (j.job_type = 'AUTO_FLOW'
         AND (
           (j.task_type = 'NOTIFY' AND c.answered_at IS NOT NULL)
@@ -134,6 +142,7 @@
         )
       )
       OR (j.job_type = 'AGENT_CALLBACK' AND c.answered_at IS NOT NULL)
+      )
     )
   </sql>
 

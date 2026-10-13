@@ -1,0 +1,19 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.chandler.fcc.admin.monitoring.infrastructure.MonitoringMapper">
+  <select id="aggregate" resultType="com.chandler.fcc.admin.monitoring.controller.resp.MonitoringBucketResp">
+    SELECT initiated_at,direction,automatic,COUNT(*) AS total,SUM(answered) AS connected,
+      COALESCE(SUM(talk_duration_ms),0) AS talk_duration_ms
+    FROM (
+      SELECT DATE_FORMAT(DATE_ADD(c.started_at,INTERVAL 8 HOUR),
+        <choose><when test="hourly">'%Y-%m-%dT%H:00:00'</when><otherwise>'%Y-%m-%dT00:00:00'</otherwise></choose>) AS initiated_at,
+        c.direction,
+        EXISTS(SELECT 1 FROM fcc_dial_attempt a JOIN fcc_dial_job j ON j.id=a.dial_job_id
+          WHERE a.call_id=c.id AND j.job_type='AUTO_FLOW') AS automatic,
+        CASE WHEN c.answered_at IS NOT NULL OR c.talk_duration_ms&gt;0 OR c.audio_duration_sec&gt;0
+          OR c.status IN ('ANSWERED','COMPLETED') OR c.result='ANSWER' THEN 1 ELSE 0 END AS answered,
+        c.talk_duration_ms
+      FROM fcc_call_session c WHERE c.started_at&gt;=#{start} AND c.started_at&lt;#{end}
+    ) facts GROUP BY initiated_at,direction,automatic ORDER BY initiated_at,direction,automatic
+  </select>
+</mapper>
