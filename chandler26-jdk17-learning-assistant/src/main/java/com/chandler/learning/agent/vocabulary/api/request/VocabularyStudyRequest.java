@@ -26,4 +26,7 @@ public class VocabularyStudyRequest {
 
     @Schema(description = "是否强制重新调用 AI")
     private Boolean forceRefresh = false;
+
+    @Schema(description = "用户 ID")
+    private Long userId;
 }

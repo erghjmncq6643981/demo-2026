@@ -72,7 +72,7 @@ public class LearningPlanCalendarService {
                 .collect(Collectors.groupingBy(LearningPlanUnit::getRecommendedDate,
                         LinkedHashMap::new, Collectors.toList()));
         Map<Long, LearningPlanUnitResponse> summariesByUnit = responseAssembler
-                .toUnitSummaryResponses(units)
+                .toUnitSummaryResponses(units, plan.getId())
                 .stream()
                 .collect(Collectors.toMap(LearningPlanUnitResponse::getId, response -> response));
         Set<LocalDate> generatingDates = aiAsyncTaskService.findActiveGeneratingDatesForPlan(userId, plan.getId());

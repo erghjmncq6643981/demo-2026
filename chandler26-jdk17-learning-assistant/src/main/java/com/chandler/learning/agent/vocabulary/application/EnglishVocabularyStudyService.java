@@ -239,6 +239,14 @@ public class EnglishVocabularyStudyService {
 
     private final Map<String, CompletableFuture<VocabularyStudyResponse>> inFlightLookups = new ConcurrentHashMap<>();
 
+    /** 为指定用户生成或读取学习材料。 */
+    public VocabularyStudyResponse study(Long userId, VocabularyStudyRequest request) {
+        if (request != null && userId != null) {
+            request.setUserId(userId);
+        }
+        return study(request);
+    }
+
     /** 生成或读取学习材料。 */
     public VocabularyStudyResponse study(VocabularyStudyRequest request) {
         String rawTerm = request.getTerm() == null ? "" : request.getTerm().trim();
@@ -264,7 +272,7 @@ public class EnglishVocabularyStudyService {
                 vocabularyInsightService.syncInsights(existing);
             } catch (Exception ignored) {
             }
-            systemLogService.record(null, SystemLogType.CACHE, "读取词汇缓存", normalizedTerm);
+            systemLogService.record(request.getUserId(), SystemLogType.CACHE, "读取词汇缓存", normalizedTerm);
             log.debug("词汇缓存命中 term={} recordId={} lookupCount={} queriedTerm={}",
                     normalizedTerm,
                     existing.getId(),
@@ -528,6 +536,7 @@ public class EnglishVocabularyStudyService {
         variables.put("term", normalizedTerm);
 
         AgentChatRequest chatRequest = new AgentChatRequest();
+        chatRequest.setUserId(request.getUserId());
         chatRequest.setInvocationScene(AiInvocationScene.VOCABULARY_CARD_SINGLE);
         chatRequest.setAgentCode(resolveAgentCode(request));
         chatRequest.setTemplateCode(resolveTemplateCode(request));

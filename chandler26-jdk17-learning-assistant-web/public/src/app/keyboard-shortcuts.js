@@ -194,6 +194,20 @@ export function bindKeyboardShortcuts(ctx) {
         editCurrentNote?.()
         return
       }
+      if (!isTyping) {
+        if (code === 'ArrowLeft' || key === 'ArrowLeft') {
+          event.preventDefault()
+          event.stopPropagation()
+          elements.wordbookCardPrevBtn?.click()
+          return
+        }
+        if (code === 'ArrowRight' || key === 'ArrowRight') {
+          event.preventDefault()
+          event.stopPropagation()
+          elements.wordbookCardNextBtn?.click()
+          return
+        }
+      }
     }
 
     if (hasOpenModal) {

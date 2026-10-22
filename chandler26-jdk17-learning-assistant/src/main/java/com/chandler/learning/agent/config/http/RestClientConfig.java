@@ -26,16 +26,14 @@ public class RestClientConfig {
                                      @Value("${learning.ai.http.proxy.enabled:false}") boolean proxyEnabled,
                                      @Value("${learning.ai.http.proxy.host:127.0.0.1}") String proxyHost,
                                      @Value("${learning.ai.http.proxy.port:7890}") int proxyPort) {
+        SimpleClientHttpRequestFactory factory = new SimpleClientHttpRequestFactory();
+        factory.setConnectTimeout((int) connectTimeout.toMillis());
+        factory.setReadTimeout((int) readTimeout.toMillis());
         if (proxyEnabled && StringUtils.hasText(proxyHost) && proxyPort > 0) {
-            SimpleClientHttpRequestFactory factory = new SimpleClientHttpRequestFactory();
-            factory.setConnectTimeout((int) connectTimeout.toMillis());
-            factory.setReadTimeout((int) readTimeout.toMillis());
             factory.setProxy(new Proxy(Proxy.Type.HTTP, new InetSocketAddress(proxyHost, proxyPort)));
-            return new RestTemplate(factory);
+        } else {
+            factory.setProxy(Proxy.NO_PROXY);
         }
-        return builder
-                .setConnectTimeout(connectTimeout)
-                .setReadTimeout(readTimeout)
-                .build();
+        return new RestTemplate(factory);
     }
 }

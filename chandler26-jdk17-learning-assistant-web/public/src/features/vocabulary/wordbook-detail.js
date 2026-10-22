@@ -24,10 +24,68 @@ export function createWordbookDetailFeature(ctx) {
     sameId,
   } = ctx
 
+  function updateOuterCardControls(entry) {
+    if (!elements.wordbookCardModal) return
+    const entries = Array.isArray(state.wordbookEntries) ? state.wordbookEntries : []
+    const currentIndex = entry ? entries.findIndex((item) => sameId(item.id, entry.id)) : -1
+    const hasEntry = Boolean(entry && currentIndex >= 0)
+    const totalCount = Number(state.wordbookTotal ?? entries.length)
+    const pageSize = Number(state.wordbookPageSize || 30)
+    const maxPage = Math.max(1, Math.ceil(totalCount / pageSize))
+    const currentPage = Number(state.wordbookPage || 1)
+
+    if (elements.wordbookCardProgress) {
+      if (hasEntry && entries.length > 0) {
+        const overallIndex = (currentPage - 1) * pageSize + (currentIndex + 1)
+        const progressText = totalCount > entries.length
+          ? `${overallIndex} / ${totalCount}`
+          : `${currentIndex + 1} / ${entries.length}`
+        elements.wordbookCardProgress.textContent = progressText
+        elements.wordbookCardProgress.title = `第 ${currentPage} / ${maxPage} 页（当前页第 ${currentIndex + 1} / ${entries.length} 词，共 ${totalCount} 词）`
+        elements.wordbookCardProgress.classList.remove('hidden')
+      } else {
+        elements.wordbookCardProgress.textContent = '0 / 0'
+        elements.wordbookCardProgress.title = ''
+        elements.wordbookCardProgress.classList.add('hidden')
+      }
+    }
+    if (elements.wordbookCardPrevBtn) {
+      elements.wordbookCardPrevBtn.disabled = !hasEntry || (currentIndex <= 0 && currentPage <= 1)
+    }
+    if (elements.wordbookCardNextBtn) {
+      elements.wordbookCardNextBtn.disabled = !hasEntry || (currentIndex >= entries.length - 1 && currentPage >= maxPage)
+    }
+    if (elements.wordbookCardGenerateBtn) {
+      if (!entry) {
+        elements.wordbookCardGenerateBtn.disabled = true
+        elements.wordbookCardGenerateBtn.textContent = 'AI 生成词卡'
+        elements.wordbookCardGenerateBtn.title = '选择单词后生成词卡'
+        elements.wordbookCardGenerateBtn.dataset.generateCard = ''
+      } else {
+        const parsed = entry.parsed || {}
+        let defs = normalizeDefinitions(parsed)
+        if (!defs.length && entry.meaningText) {
+          defs = [{ pos: 'meaning', cn: entry.meaningText }]
+        }
+        const exs = normalizeExamples(parsed)
+        const isCardReady = entry.cardStatus === 'ready' || (defs.length > 0 && exs.length > 0)
+        const isGenerating = entry.cardStatus === 'generating'
+        elements.wordbookCardGenerateBtn.dataset.generateCard = String(entry.id || '')
+        elements.wordbookCardGenerateBtn.textContent = isGenerating ? '生成中...' : (isCardReady ? '重新生成词卡' : 'AI 生成词卡')
+        elements.wordbookCardGenerateBtn.title = isCardReady ? '重新通过 AI 生成更丰富的例句、记忆法与关联词' : '通过 AI 生成例句、记忆法、搭配与关联词'
+        elements.wordbookCardGenerateBtn.disabled = isGenerating
+      }
+    }
+  }
+
   function renderWordbookFocus(entry) {
     if (!entry) {
       elements.wordbookFocus.className = 'empty'
       elements.wordbookFocus.textContent = '选择单词后查看详情和笔记'
+      if (elements.wordbookCardModalTitle) {
+        elements.wordbookCardModalTitle.textContent = '单词卡片'
+      }
+      updateOuterCardControls(null)
       return
     }
     const parsed = entry.parsed || {}
@@ -44,11 +102,11 @@ export function createWordbookDetailFeature(ctx) {
       parsed?.phonetic?.uk && { type: 'uk', label: 'UK', text: parsed.phonetic.uk },
       parsed?.phonetic?.us && { type: 'us', label: 'US', text: parsed.phonetic.us },
     ].filter(Boolean)
-    const isCardReady = entry.cardStatus === 'ready' || (definitions.length > 0 && examples.length > 0)
     const term = entry.term || entry.normalizedTerm || ''
     if (elements.wordbookCardModalTitle) {
       elements.wordbookCardModalTitle.textContent = `单词卡片 · ${term}`
     }
+    updateOuterCardControls(entry)
     elements.wordbookFocus.className = 'wordbook-focus-card'
     elements.wordbookFocus.innerHTML = `
       <div class="wordbook-focus-head">
@@ -71,10 +129,6 @@ export function createWordbookDetailFeature(ctx) {
                 : '<span>暂无音标</span>'
             }
           </div>
-        </div>
-        <div class="inline-actions">
-          <button class="primary-button compact-primary" type="button" data-generate-card="${escapeHtml(entry.id)}" title="${isCardReady ? '重新通过 AI 生成更丰富的例句、记忆法与关联词' : '通过 AI 生成例句、记忆法、搭配与关联词'}">${isCardReady ? '重新生成词卡' : 'AI 生成词卡'}</button>
-          <button class="secondary-button compact" type="button" data-open-review="${escapeHtml(entry.id)}">去复习</button>
         </div>
       </div>
       <div class="mini-definition-list focus-section">
@@ -158,40 +212,7 @@ export function createWordbookDetailFeature(ctx) {
         <button class="secondary-button compact" type="button" data-status-open="${escapeHtml(entry.id)}">熟练度标记</button>
       </div>
     `
-    elements.wordbookFocus.querySelector('[data-open-review]')?.addEventListener('click', () => openEntryInReview(entry))
     elements.wordbookFocus.querySelector('[data-status-open]')?.addEventListener('click', () => openEntryStatusModal(entry.id))
-    elements.wordbookFocus.querySelector('[data-generate-card]')?.addEventListener('click', async (e) => {
-      const button = e.currentTarget
-      const entryId = button.dataset.generateCard
-      if (!entryId) return
-      if (typeof setButtonLoading === 'function') setButtonLoading(button, true, '生成中...')
-      else button.disabled = true
-      try {
-        if (state.preview) {
-          if (typeof toast === 'function') toast('设计预览：模拟生成词卡完成')
-          return
-        }
-        await request(`/api/v1/learning/wordbook-entries/${encodeURIComponent(entryId)}/generate-card/async?forceRefresh=true`, {
-          method: 'POST',
-        })
-        const current = state.wordbookEntries.find((item) => sameId(item.id, entryId))
-        if (current) {
-          const updated = { ...current, cardStatus: 'generating', cardErrorMessage: null }
-          const idx = state.wordbookEntries.findIndex((item) => sameId(item.id, entryId))
-          if (idx >= 0) {
-            state.wordbookEntries[idx] = updated
-          }
-          state.selectedEntry = updated
-          renderWordbookFocus(updated)
-          if (typeof toast === 'function') toast(`单词「${updated.term || updated.normalizedTerm}」词卡任务已提交，可在任务中心查看进度`)
-        }
-      } catch (err) {
-        if (typeof toast === 'function') toast(`生成词卡失败：${err.message}`)
-      } finally {
-        if (typeof setButtonLoading === 'function') setButtonLoading(button, false)
-        else button.disabled = false
-      }
-    })
     elements.wordbookFocus.querySelector('[data-edit-focus-note]')?.addEventListener('click', () => {
       state.currentNoteEntry = entry
       editCurrentNote()
@@ -208,6 +229,47 @@ export function createWordbookDetailFeature(ctx) {
     bindStudyTermCards(elements.wordbookFocus, '[data-focus-related]', (term) => ctx.confirmStudyTerm(term, '单词'))
     bindStudyTermCards(elements.wordbookFocus, '[data-collocation-term]', (term) => ctx.confirmStudyTerm(term, '词组'))
     bindInlineAudio(elements.wordbookFocus, speak)
+  }
+
+  async function generateCurrentWordbookCard(target) {
+    const entry = target && typeof target === 'object' ? target : (state.selectedEntry || null)
+    const entryId = typeof target === 'string' ? target : entry?.id
+    if (!entryId) return
+    const button = elements.wordbookCardGenerateBtn
+    if (button) {
+      if (typeof setButtonLoading === 'function') setButtonLoading(button, true, '生成中...')
+      else button.disabled = true
+    }
+    try {
+      if (state.preview) {
+        if (typeof toast === 'function') toast('设计预览：模拟生成词卡完成')
+        return
+      }
+      await request(`/api/v1/learning/wordbook-entries/${encodeURIComponent(entryId)}/generate-card/async?forceRefresh=true`, {
+        method: 'POST',
+      })
+      const current = state.wordbookEntries?.find((item) => sameId(item.id, entryId))
+      const updated = { ...(current || entry || {}), cardStatus: 'generating', cardErrorMessage: null }
+      const idx = state.wordbookEntries?.findIndex((item) => sameId(item.id, entryId)) ?? -1
+      if (idx >= 0 && Array.isArray(state.wordbookEntries)) {
+        state.wordbookEntries[idx] = updated
+      }
+      if (sameId(state.selectedEntry?.id, entryId)) {
+        state.selectedEntry = updated
+        renderWordbookFocus(updated)
+      }
+      if (typeof toast === 'function') toast(`单词「${updated.term || updated.normalizedTerm}」词卡任务已提交，可在任务中心查看进度`)
+    } catch (err) {
+      if (typeof toast === 'function') toast(`生成词卡失败：${err.message}`)
+    } finally {
+      if (button) {
+        if (typeof setButtonLoading === 'function') setButtonLoading(button, false)
+        else button.disabled = false
+      }
+      if (sameId(state.selectedEntry?.id, entryId)) {
+        updateOuterCardControls(state.selectedEntry)
+      }
+    }
   }
 
   function renderCollocationMiniItem(item) {
@@ -234,6 +296,8 @@ export function createWordbookDetailFeature(ctx) {
 
   return {
     renderWordbookFocus,
+    generateCurrentWordbookCard,
+    updateOuterCardControls,
     renderCollocationMiniItem,
     toggleFocusTags,
     visibilityIcon,

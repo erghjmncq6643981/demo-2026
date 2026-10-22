@@ -1446,12 +1446,26 @@
     </section>
     <section class="modal-backdrop hidden" id="wordbookCardModal" aria-modal="true" role="dialog" aria-labelledby="wordbookCardModalTitle">
       <div class="config-modal wordbook-card-modal" data-modal-scroll>
-        <div class="panel-heading">
-          <div>
+        <div class="panel-heading wordbook-card-modal-header">
+          <div class="wordbook-card-header-main">
             <p class="eyebrow" id="wordbookCardModalEyebrow">Word Card</p>
-            <h3 id="wordbookCardModalTitle">单词卡片</h3>
+            <div class="wordbook-card-title-row">
+              <h3 id="wordbookCardModalTitle">单词卡片</h3>
+              <span class="badge wordbook-card-progress hidden" id="wordbookCardProgress" aria-live="polite">0 / 0</span>
+            </div>
           </div>
-          <button class="icon-button" id="closeWordbookCardModalBtn" type="button" title="关闭" aria-label="关闭">×</button>
+          <div class="wordbook-card-header-actions">
+            <div class="button-group wordbook-card-nav-group" role="group" aria-label="卡片切换">
+              <button class="secondary-button compact" id="wordbookCardPrevBtn" type="button" title="快捷键：← 方向键" aria-label="上一个单词">
+                <span class="button-icon">←</span> 上一个
+              </button>
+              <button class="secondary-button compact" id="wordbookCardNextBtn" type="button" title="快捷键：→ 方向键" aria-label="下一个单词">
+                下一个 <span class="button-icon">→</span>
+              </button>
+            </div>
+            <button class="primary-button compact-primary" id="wordbookCardGenerateBtn" type="button" title="通过 AI 生成例句、记忆法、搭配与关联词">AI 生成词卡</button>
+            <button class="icon-button" id="closeWordbookCardModalBtn" type="button" title="关闭" aria-label="关闭">×</button>
+          </div>
         </div>
         <div id="wordbookFocus" class="wordbook-focus-container">
           <div class="empty">选择单词后查看详情和笔记</div>

@@ -454,7 +454,25 @@ public class WordbookService {
 
     /** 按需读取单个词条的完整词卡和个人学习快照。 */
     public WordbookEntryResponse detailEntry(Long userId, Long entryId) {
-        return responseAssembler.toEntryResponse(requireEntry(userId, entryId));
+        LearningWordbookEntry entry = requireEntry(userId, entryId);
+        EnglishVocabularyStudyRecord vocabulary = findVocabulary(entry.getNormalizedTerm());
+        boolean changed = false;
+        if (vocabulary != null && responseAssembler.refreshSnapshotIfVocabularyChanged(entry, vocabulary, LocalDateTime.now())) {
+            changed = true;
+        } else if (!VocabularyCardConstants.STATUS_READY.equals(entry.getCardStatus())
+                && responseAssembler.hasExamples(entry.getSnapshotParsedJson())) {
+            entry.setCardStatus(VocabularyCardConstants.STATUS_READY);
+            if (entry.getCardGeneratedTime() == null) {
+                entry.setCardGeneratedTime(entry.getSnapshotTime() != null ? entry.getSnapshotTime() : LocalDateTime.now());
+            }
+            entry.setUpdateTime(LocalDateTime.now());
+            changed = true;
+        }
+        if (changed) {
+            entryMapper.updateById(entry);
+            invalidateWordbookCache(userId);
+        }
+        return responseAssembler.toEntryResponse(entry);
     }
 
     /** 查询当前已到期的复习词汇。 */
@@ -709,13 +727,22 @@ public class WordbookService {
      * 为单词本词条生成或刷新 AI 词卡。
      */
     public WordbookEntryResponse generateCard(Long userId, Long entryId, boolean forceRefresh) {
+        return generateCard(userId, entryId, forceRefresh, null);
+    }
+
+    /**
+     * 为单词本词条生成或刷新指定模型配置的 AI 词卡。
+     */
+    public WordbookEntryResponse generateCard(Long userId, Long entryId, boolean forceRefresh, Long modelConfigId) {
         LearningWordbookEntry entry = requireEntry(userId, entryId);
         VocabularyStudyRequest studyRequest = new VocabularyStudyRequest();
+        studyRequest.setUserId(userId);
         studyRequest.setTerm(entry.getTerm());
         studyRequest.setAgentCode(AiScenarioConstants.VOCABULARY_AGENT_CODE);
         studyRequest.setTemplateCode(AiScenarioConstants.VOCABULARY_TEMPLATE_CODE);
+        studyRequest.setModelConfigId(modelConfigId);
         studyRequest.setForceRefresh(forceRefresh);
-        VocabularyStudyResponse studyResponse = vocabularyStudyService.study(studyRequest);
+        VocabularyStudyResponse studyResponse = vocabularyStudyService.study(userId, studyRequest);
 
         EnglishVocabularyStudyRecord vocabulary = vocabularyMapper.selectById(studyResponse.getId());
         if (vocabulary != null) {
@@ -759,7 +786,12 @@ public class WordbookService {
 
     /** 由异步任务处理器执行实际 AI 词卡生成。 */
     public WordbookEntryResponse generateCardNow(Long userId, Long entryId, boolean forceRefresh) {
-        return generateCard(userId, entryId, forceRefresh);
+        return generateCard(userId, entryId, forceRefresh, null);
+    }
+
+    /** 由异步任务处理器执行实际 AI 词卡生成（支持指定模型配置）。 */
+    public WordbookEntryResponse generateCardNow(Long userId, Long entryId, boolean forceRefresh, Long modelConfigId) {
+        return generateCard(userId, entryId, forceRefresh, modelConfigId);
     }
 
     /** 异步词卡任务失败时记录词条级状态，便于前端显示失败并支持再次提交。 */

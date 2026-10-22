@@ -39,6 +39,8 @@ export function bindAppEvents(ctx) {
     loadWordbookEntries,
     searchWordbookEntries,
     changeWordbookPage,
+    navigateWordbookCard,
+    generateCurrentWordbookCard,
     changeArticleWordbook,
     loadSceneData,
     changeSceneWordbook,
@@ -242,6 +244,9 @@ elements.closeWordbookModalBtn?.addEventListener('click', closeWordbookModal)
 elements.wordbookModal?.addEventListener('click', (event) => {
   if (event.target === elements.wordbookModal) closeWordbookModal()
 })
+elements.wordbookCardPrevBtn?.addEventListener('click', () => navigateWordbookCard?.(-1))
+elements.wordbookCardNextBtn?.addEventListener('click', () => navigateWordbookCard?.(1))
+elements.wordbookCardGenerateBtn?.addEventListener('click', () => generateCurrentWordbookCard?.())
 elements.closeWordbookCardModalBtn?.addEventListener('click', () => hideModal(elements.wordbookCardModal))
 elements.wordbookCardModal?.addEventListener('click', (event) => {
   if (event.target === elements.wordbookCardModal) hideModal(elements.wordbookCardModal)

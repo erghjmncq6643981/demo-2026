@@ -386,6 +386,7 @@ export function createWordbookProfileFeature(ctx) {
       state.selectedEntry = detail
       renderWordbookFocus(detail)
       ctx.renderNotes(detail)
+      renderWordbookEntries()
       return detail
     } catch (error) {
       logEvent('error', '词卡详情加载失败', error.message)
@@ -513,6 +514,13 @@ export function createWordbookProfileFeature(ctx) {
     return values.some((value) => String(value || '').trim().toLowerCase().includes(keyword))
   }
 
+  function updateActiveEntryRow(entryId) {
+    if (!elements.wordbookEntryList) return
+    elements.wordbookEntryList.querySelectorAll('.wordbook-row').forEach((row) => {
+      row.classList.toggle('active', sameId(row.getAttribute('data-entry-id'), entryId))
+    })
+  }
+
   function selectWordbookEntry(entry, options = {}) {
     if (!entry) {
       renderWordbookFocus(null)
@@ -521,7 +529,94 @@ export function createWordbookProfileFeature(ctx) {
     state.selectedEntry = entry
     renderWordbookFocus(entry)
     ctx.renderNotes(entry)
-    if (!options.silent) renderWordbookEntries()
+    if (!options.silent) {
+      renderWordbookEntries()
+    } else {
+      updateActiveEntryRow(entry.id)
+    }
+  }
+
+  let isNavigatingCard = false
+
+  async function navigateWordbookCard(delta) {
+    if (isNavigatingCard) return
+    const entries = Array.isArray(state.wordbookEntries) ? state.wordbookEntries : []
+    if (!entries.length) return
+    const currentIndex = entries.findIndex((item) => sameId(item.id, state.selectedEntry?.id))
+    const baseIndex = currentIndex >= 0 ? currentIndex : 0
+    const targetIndex = baseIndex + delta
+
+    // Within current page
+    if (targetIndex >= 0 && targetIndex < entries.length) {
+      const nextEntry = entries[targetIndex]
+      selectWordbookEntry(nextEntry, { silent: true })
+      if (elements.wordbookFocus) {
+        elements.wordbookFocus.scrollTop = 0
+      }
+      const hasParsedDetail = nextEntry.parsed && typeof nextEntry.parsed === 'object' && Object.keys(nextEntry.parsed).length > 0
+      if (!state.preview && !hasParsedDetail) {
+        loadWordbookEntryDetail(nextEntry)
+      }
+      return
+    }
+
+    // Cross-page navigation
+    const totalCount = Number(state.wordbookTotal ?? entries.length)
+    const pageSize = Number(state.wordbookPageSize || 30)
+    const maxPage = Math.max(1, Math.ceil(totalCount / pageSize))
+    const currentPage = Number(state.wordbookPage || 1)
+
+    // Forward cross-page (targetIndex >= entries.length)
+    if (delta > 0 && targetIndex >= entries.length && currentPage < maxPage) {
+      isNavigatingCard = true
+      if (elements.wordbookCardNextBtn) elements.wordbookCardNextBtn.disabled = true
+      try {
+        state.wordbookPage = currentPage + 1
+        await loadWordbookEntries()
+        const newEntries = Array.isArray(state.wordbookEntries) ? state.wordbookEntries : []
+        if (newEntries.length > 0) {
+          const nextEntry = newEntries[0]
+          selectWordbookEntry(nextEntry, { silent: true })
+          if (elements.wordbookFocus) {
+            elements.wordbookFocus.scrollTop = 0
+          }
+          const hasParsedDetail = nextEntry.parsed && typeof nextEntry.parsed === 'object' && Object.keys(nextEntry.parsed).length > 0
+          if (!state.preview && !hasParsedDetail) {
+            loadWordbookEntryDetail(nextEntry)
+          }
+        }
+      } finally {
+        isNavigatingCard = false
+        detailFeature.updateOuterCardControls(state.selectedEntry)
+      }
+      return
+    }
+
+    // Backward cross-page (targetIndex < 0)
+    if (delta < 0 && targetIndex < 0 && currentPage > 1) {
+      isNavigatingCard = true
+      if (elements.wordbookCardPrevBtn) elements.wordbookCardPrevBtn.disabled = true
+      try {
+        state.wordbookPage = currentPage - 1
+        await loadWordbookEntries()
+        const newEntries = Array.isArray(state.wordbookEntries) ? state.wordbookEntries : []
+        if (newEntries.length > 0) {
+          const prevEntry = newEntries[newEntries.length - 1]
+          selectWordbookEntry(prevEntry, { silent: true })
+          if (elements.wordbookFocus) {
+            elements.wordbookFocus.scrollTop = 0
+          }
+          const hasParsedDetail = prevEntry.parsed && typeof prevEntry.parsed === 'object' && Object.keys(prevEntry.parsed).length > 0
+          if (!state.preview && !hasParsedDetail) {
+            loadWordbookEntryDetail(prevEntry)
+          }
+        }
+      } finally {
+        isNavigatingCard = false
+        detailFeature.updateOuterCardControls(state.selectedEntry)
+      }
+      return
+    }
   }
 
   function currentWordbookName(wordbookId = state.currentWordbookId) {
@@ -556,6 +651,7 @@ export function createWordbookProfileFeature(ctx) {
     loadWordbookEntryDetail,
     renderWordbookEntries,
     selectWordbookEntry,
+    navigateWordbookCard,
     ...detailFeature,
     openEntryStatusModal,
     closeEntryStatusModal,

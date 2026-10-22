@@ -8,6 +8,7 @@ import com.chandler.learning.agent.vocabulary.api.response.WordbookEntryResponse
 import com.chandler.learning.agent.vocabulary.api.response.WordbookEntrySummaryResponse;
 import com.chandler.learning.agent.vocabulary.api.response.WordbookResponse;
 import com.chandler.learning.agent.vocabulary.domain.bo.WordbookEntrySummaryItem;
+import com.chandler.learning.agent.vocabulary.domain.constant.VocabularyCardConstants;
 import com.chandler.learning.agent.vocabulary.domain.entity.EnglishVocabularyStudyRecord;
 import com.chandler.learning.agent.vocabulary.domain.entity.LearningWordbook;
 import com.chandler.learning.agent.vocabulary.domain.entity.LearningWordbookEntry;
@@ -87,7 +88,7 @@ public class WordbookResponseAssembler {
         response.setSnapshotModelName(entry.getSnapshotModelName());
         response.setSnapshotSessionId(entry.getSnapshotSessionId());
         response.setSnapshotTime(entry.getSnapshotTime());
-        response.setCardStatus(entry.getCardStatus());
+        response.setCardStatus(resolveCardStatus(entry));
         response.setCardErrorMessage(entry.getCardErrorMessage());
         response.setCardGeneratedTime(entry.getCardGeneratedTime());
         response.setTags(readEntryTags(entry));
@@ -110,7 +111,7 @@ public class WordbookResponseAssembler {
         response.setReviewCount(entry.getReviewCount());
         response.setCorrectCount(entry.getCorrectCount());
         response.setWrongCount(entry.getWrongCount());
-        response.setCardStatus(entry.getCardStatus());
+        response.setCardStatus(resolveCardStatus(entry));
         response.setCreateTime(entry.getCreateTime());
         populateSummaryCardInfo(response, entry);
         return response;
@@ -236,7 +237,10 @@ public class WordbookResponseAssembler {
         if (vocabulary == null) {
             return false;
         }
-        boolean snapshotMissing = !StringUtils.hasText(entry.getSnapshotParsedJson());
+        boolean snapshotMissing = !StringUtils.hasText(entry.getSnapshotParsedJson())
+                || isBasicCard(entry.getSnapshotParsedJson())
+                || (!VocabularyCardConstants.STATUS_READY.equals(entry.getCardStatus())
+                        && StringUtils.hasText(vocabulary.getParsedJson()));
         boolean sessionChanged = vocabulary.getSessionId() != null
                 && !vocabulary.getSessionId().equals(entry.getSnapshotSessionId());
         boolean vocabularyNewer = vocabulary.getUpdateTime() != null
@@ -247,6 +251,51 @@ public class WordbookResponseAssembler {
         applyVocabularySnapshot(entry, vocabulary, now);
         entry.refreshVocabularyIdentity(vocabulary, now);
         return true;
+    }
+
+    /** 解析词条真实的词卡就绪状态，已包含完整例句快照或词库记录的词条确保呈现已就绪。 */
+    public String resolveCardStatus(LearningWordbookEntry entry) {
+        if (entry == null) {
+            return VocabularyCardConstants.STATUS_MISSING;
+        }
+        if (VocabularyCardConstants.STATUS_READY.equals(entry.getCardStatus())) {
+            return VocabularyCardConstants.STATUS_READY;
+        }
+        String json = readEntryParsed(entry);
+        if (StringUtils.hasText(json) && hasExamples(json)) {
+            return VocabularyCardConstants.STATUS_READY;
+        }
+        return entry.getCardStatus();
+    }
+
+    /** 判断词卡 JSON 中是否已生成有效例句。 */
+    public boolean hasExamples(String json) {
+        if (!StringUtils.hasText(json)) {
+            return false;
+        }
+        try {
+            JsonNode root = objectMapper.readTree(json);
+            if (root == null || root.isNull()) {
+                return false;
+            }
+            JsonNode examples = root.get("examples");
+            return examples != null && examples.isArray() && !examples.isEmpty();
+        } catch (Exception ignored) {
+            return false;
+        }
+    }
+
+    /** 判断快照是否仅为词表导入的基础释义骨架。 */
+    public boolean isBasicCard(String json) {
+        if (!StringUtils.hasText(json)) {
+            return false;
+        }
+        try {
+            JsonNode root = objectMapper.readTree(json);
+            return root != null && root.path("importedBasicCard").asBoolean(false);
+        } catch (Exception ignored) {
+            return false;
+        }
     }
 
     /** 根据公共词表词条构建基础词卡快照。 */

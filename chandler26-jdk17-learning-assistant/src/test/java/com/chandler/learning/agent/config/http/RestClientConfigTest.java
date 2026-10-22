@@ -20,17 +20,16 @@ class RestClientConfigTest {
     private final Duration readTimeout = Duration.ofSeconds(300);
 
     @Test
-    @DisplayName("代理开关关闭时，使用默认 RestTemplateBuilder 直连，不配置代理")
+    @DisplayName("代理开关关闭时，显式配置 NO_PROXY 直连，防止系统级代理污染")
     void returnsDirectRestTemplateWhenProxyDisabled() {
         RestTemplate restTemplate = config.restTemplate(
                 builder, connectTimeout, readTimeout, false, "127.0.0.1", 7897);
 
         assertThat(restTemplate).isNotNull();
-        // 验证没有包装成带代理的 SimpleClientHttpRequestFactory
-        if (restTemplate.getRequestFactory() instanceof SimpleClientHttpRequestFactory factory) {
-            Proxy proxy = extractProxy(factory);
-            assertThat(proxy).isNull();
-        }
+        assertThat(restTemplate.getRequestFactory()).isInstanceOf(SimpleClientHttpRequestFactory.class);
+        SimpleClientHttpRequestFactory factory = (SimpleClientHttpRequestFactory) restTemplate.getRequestFactory();
+        Proxy proxy = extractProxy(factory);
+        assertThat(proxy).isEqualTo(Proxy.NO_PROXY);
     }
 
     @Test
@@ -49,15 +48,17 @@ class RestClientConfigTest {
     }
 
     @Test
-    @DisplayName("代理开关开启但主机名为空或端口非正数时，安全降级为直连 RestTemplate")
+    @DisplayName("代理开关开启但主机名为空或端口非正数时，安全降级为直连 RestTemplate 并显式配置 NO_PROXY")
     void fallsBackToDirectWhenProxyHostOrPortInvalid() {
         RestTemplate emptyHost = config.restTemplate(
                 builder, connectTimeout, readTimeout, true, "", 7897);
         assertThat(emptyHost).isNotNull();
+        assertThat(extractProxy((SimpleClientHttpRequestFactory) emptyHost.getRequestFactory())).isEqualTo(Proxy.NO_PROXY);
 
         RestTemplate zeroPort = config.restTemplate(
                 builder, connectTimeout, readTimeout, true, "127.0.0.1", 0);
         assertThat(zeroPort).isNotNull();
+        assertThat(extractProxy((SimpleClientHttpRequestFactory) zeroPort.getRequestFactory())).isEqualTo(Proxy.NO_PROXY);
     }
 
     private Proxy extractProxy(SimpleClientHttpRequestFactory factory) {

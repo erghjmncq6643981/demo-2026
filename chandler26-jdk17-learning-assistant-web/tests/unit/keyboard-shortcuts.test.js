@@ -39,6 +39,8 @@ describe('keyboard-shortcuts Escape handling for all modals', () => {
       </section>
       <section class="modal-backdrop hidden" id="wordbookCardModal">
         <div class="panel-heading">
+          <button id="wordbookCardPrevBtn">Prev</button>
+          <button id="wordbookCardNextBtn">Next</button>
           <button id="closeWordbookCardModalBtn" class="icon-button">×</button>
         </div>
         <div id="wordbookFocus"></div>
@@ -68,6 +70,8 @@ describe('keyboard-shortcuts Escape handling for all modals', () => {
       scenePlanModal: document.getElementById('scenePlanModal'),
       adminUserModal: document.getElementById('adminUserModal'),
       wordbookCardModal: document.getElementById('wordbookCardModal'),
+      wordbookCardPrevBtn: document.getElementById('wordbookCardPrevBtn'),
+      wordbookCardNextBtn: document.getElementById('wordbookCardNextBtn'),
       wordbookFocus: document.getElementById('wordbookFocus'),
       studyNoteDrawer: document.getElementById('studyNoteDrawer'),
       reviewNoteModal: document.getElementById('reviewNoteModal'),
@@ -226,5 +230,33 @@ describe('keyboard-shortcuts Escape handling for all modals', () => {
     document.dispatchEvent(event)
 
     expect(ctx.handleSceneChallengeKeydown).toHaveBeenCalled()
+  })
+
+  it('triggers previous / next word navigation on ArrowLeft / ArrowRight when word card modal is open', () => {
+    elements.wordbookCardModal.classList.remove('hidden')
+    const prevSpy = vi.spyOn(elements.wordbookCardPrevBtn, 'click')
+    const nextSpy = vi.spyOn(elements.wordbookCardNextBtn, 'click')
+
+    const leftEvent = new KeyboardEvent('keydown', { key: 'ArrowLeft', code: 'ArrowLeft', bubbles: true })
+    document.dispatchEvent(leftEvent)
+    expect(prevSpy).toHaveBeenCalledTimes(1)
+    expect(nextSpy).not.toHaveBeenCalled()
+
+    const rightEvent = new KeyboardEvent('keydown', { key: 'ArrowRight', code: 'ArrowRight', bubbles: true })
+    document.dispatchEvent(rightEvent)
+    expect(nextSpy).toHaveBeenCalledTimes(1)
+  })
+
+  it('does not trigger card navigation on Arrow keys when typing in an input', () => {
+    elements.wordbookCardModal.classList.remove('hidden')
+    const prevSpy = vi.spyOn(elements.wordbookCardPrevBtn, 'click')
+    const input = document.createElement('input')
+    document.body.appendChild(input)
+    input.focus()
+
+    const leftEvent = new KeyboardEvent('keydown', { key: 'ArrowLeft', code: 'ArrowLeft', bubbles: true })
+    input.dispatchEvent(leftEvent)
+    expect(prevSpy).not.toHaveBeenCalled()
+    input.remove()
   })
 })

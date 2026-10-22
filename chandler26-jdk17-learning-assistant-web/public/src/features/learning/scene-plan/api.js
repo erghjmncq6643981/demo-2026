@@ -17,7 +17,7 @@ export function createScenePlanApi(request) {
       `/api/v1/learning/plans/${id(planId)}/calendar?from=${id(from)}&to=${id(to)}`,
     ),
     getUnit: (planId, unitId) => requests.latest(
-      'scene-unit-detail',
+      `scene-unit-detail-${unitId}`,
       `/api/v1/learning/plans/${id(planId)}/units/${id(unitId)}`,
     ),
     getNote: (planId, unitId) => requests.latest(

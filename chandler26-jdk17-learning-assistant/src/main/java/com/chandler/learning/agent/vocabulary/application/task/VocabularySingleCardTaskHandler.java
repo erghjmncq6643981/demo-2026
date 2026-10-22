@@ -45,7 +45,7 @@ public class VocabularySingleCardTaskHandler implements AiTaskHandler {
         Long modelConfigId = AiTaskPayload.longValue(payload, "modelConfigId");
         try {
             executionService.execute(task.getId(), "generate_card", task.getOperatorUserId(), modelConfigId,
-                    () -> wordbookService.generateCardNow(task.getOwnerUserId(), entryId, forceRefresh));
+                    () -> wordbookService.generateCardNow(task.getOwnerUserId(), entryId, forceRefresh, modelConfigId));
         } catch (RuntimeException ex) {
             wordbookService.markCardGenerationFailed(task.getOwnerUserId(), entryId, ex.getMessage());
             throw ex;

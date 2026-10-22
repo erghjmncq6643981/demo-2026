@@ -61,7 +61,11 @@
             e.review_count AS reviewCount,
             e.correct_count AS correctCount,
             e.wrong_count AS wrongCount,
-            e.card_status AS cardStatus,
+            CASE
+                WHEN e.card_status = 'ready' THEN 'ready'
+                WHEN JSON_LENGTH(JSON_EXTRACT(e.snapshot_parsed_json, '$.examples')) > 0 THEN 'ready'
+                ELSE e.card_status
+            END AS cardStatus,
             e.create_time AS createTime
         FROM learning_wordbook_entry e
         WHERE e.user_id = #{userId}
@@ -77,7 +81,7 @@
         <if test="dueOnly">
           AND e.next_review_time &lt;= #{now}
         </if>
-        ORDER BY e.next_review_time ASC, e.create_time DESC
+        ORDER BY e.next_review_time ASC, e.create_time DESC, e.id ASC
     </select>
 
     <select id="selectDueSummary"
@@ -108,14 +112,18 @@
             e.review_count AS reviewCount,
             e.correct_count AS correctCount,
             e.wrong_count AS wrongCount,
-            e.card_status AS cardStatus,
+            CASE
+                WHEN e.card_status = 'ready' THEN 'ready'
+                WHEN JSON_LENGTH(JSON_EXTRACT(e.snapshot_parsed_json, '$.examples')) > 0 THEN 'ready'
+                ELSE e.card_status
+            END AS cardStatus,
             e.create_time AS createTime
         FROM learning_wordbook_entry e
         WHERE e.user_id = #{userId}
           AND e.wordbook_id = #{wordbookId}
           AND e.deleted = 0
           AND e.next_review_time &lt;= #{now}
-        ORDER BY e.next_review_time ASC, e.create_time DESC
+        ORDER BY e.next_review_time ASC, e.create_time DESC, e.id ASC
         LIMIT #{limit}
     </select>
 
@@ -147,14 +155,18 @@
             e.review_count AS reviewCount,
             e.correct_count AS correctCount,
             e.wrong_count AS wrongCount,
-            e.card_status AS cardStatus,
+            CASE
+                WHEN e.card_status = 'ready' THEN 'ready'
+                WHEN JSON_LENGTH(JSON_EXTRACT(e.snapshot_parsed_json, '$.examples')) > 0 THEN 'ready'
+                ELSE e.card_status
+            END AS cardStatus,
             e.create_time AS createTime
         FROM learning_wordbook_entry e
         WHERE e.user_id = #{userId}
           AND e.wordbook_id = #{wordbookId}
           AND e.deleted = 0
         ORDER BY e.last_review_time ASC, e.mastery_score ASC,
-                 e.next_review_time ASC, e.create_time DESC
+                 e.next_review_time ASC, e.create_time DESC, e.id ASC
         LIMIT #{limit}
     </select>
 
@@ -224,6 +236,7 @@
             catalog_entry_id = COALESCE(VALUES(catalog_entry_id), catalog_entry_id),
             card_status = CASE
                 WHEN card_status = 'ready' THEN card_status
+                WHEN JSON_LENGTH(JSON_EXTRACT(snapshot_parsed_json, '$.examples')) > 0 THEN 'ready'
                 WHEN VALUES(card_status) = 'missing' THEN VALUES(card_status)
                 ELSE card_status
             END,

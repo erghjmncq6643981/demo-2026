@@ -1,6 +1,7 @@
 import { hideModal, showModal } from '/src/shared/modal.js'
 import { asArray, localDateKey, number } from '/src/features/learning/scene-plan/model.js'
 import { pendingChallengeCount, isWordComplete } from '/src/features/learning/scene-plan/challenge-model.js'
+import { isRequestAbort } from '/src/shared/latest-request.js'
 
 export function createSceneOverview({
   state,
@@ -87,31 +88,43 @@ export function createSceneOverview({
                 : ''
               const meaning = word.contextMeaning || word.meaning || '暂无释义'
               return `<div class="scene-vocabulary-preview-word ${complete ? 'completed' : ''}"><span class="scene-vocabulary-preview-index">${index + 1}</span><div class="scene-vocabulary-preview-word-content"><div class="scene-vocabulary-preview-topline"><strong title="${escapeHtml(word.term)}">${escapeHtml(word.term)}</strong>${phonetic ? `<small title="${escapeHtml(phonetic)}">${escapeHtml(phonetic)}</small>` : ''}</div><p class="scene-vocabulary-preview-meaning" title="${escapeHtml(meaning)}">${escapeHtml(meaning)}</p></div></div>`
-            }).join('')}</div>` : '<div class="empty">加载中...</div>'}
+            }).join('')}</div>` : `<div class="empty">${loadingDetails ? '加载中...' : '暂无词汇'}</div>`}
           </section>`
         }).join('')
         : '暂无词汇'
     }
 
-    renderModal()
-    showModal(elements.sceneVocabularyPreviewModal)
+    let loadingDetails = false
+    const unitsNeedDetail = selectedUnits.filter((u) => {
+      const hasCoreWords = asArray(u.words).some((w) => w.tier === 'core')
+      const hasSummaryWords = asArray(u.pendingChallengeWords).length > 0
+      return !hasCoreWords && !hasSummaryWords
+    })
 
-    // 日历摘要明确返回空数组时表示该单元没有待挑战词（例如已全部完成），
-    // 不应因为“没有词面”再次拉取包含文章和词卡的大对象。
-    const unitsNeedDetail = selectedUnits.filter((u) =>
-      !asArray(u.words).length && !Array.isArray(u.pendingChallengeWords))
     if (unitsNeedDetail.length > 0 && !state.preview && api?.getUnit) {
+      loadingDetails = true
+      renderModal()
+      showModal(elements.sceneVocabularyPreviewModal)
       try {
         await Promise.all(unitsNeedDetail.map(async (u) => {
-          const detail = await api.getUnit(plan.id, u.id)
-          if (detail) {
-            Object.assign(u, detail)
+          try {
+            const detail = await api.getUnit(plan.id, u.id)
+            if (detail) {
+              Object.assign(u, detail)
+            }
+          } catch (err) {
+            if (!isRequestAbort(err)) {
+              logEvent('error', `加载场景词汇详情失败：${u.id}`, err?.message)
+            }
           }
         }))
+      } finally {
+        loadingDetails = false
         renderModal()
-      } catch (err) {
-        logEvent('error', '加载场景词汇详情失败', err?.message)
       }
+    } else {
+      renderModal()
+      showModal(elements.sceneVocabularyPreviewModal)
     }
   }
 

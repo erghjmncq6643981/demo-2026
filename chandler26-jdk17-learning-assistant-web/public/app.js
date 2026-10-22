@@ -377,6 +377,8 @@ bindAppEvents({
   loadWordbookEntries: profile.loadWordbookEntries,
   searchWordbookEntries: profile.searchWordbookEntries,
   changeWordbookPage: profile.changeWordbookPage,
+  navigateWordbookCard: profile.navigateWordbookCard,
+  generateCurrentWordbookCard: profile.generateCurrentWordbookCard,
   changeArticleWordbook: article.changeArticleWordbook,
   changeArticleWordPage: article.changeArticleWordPage,
   loadArticleWords: article.loadArticleWords,

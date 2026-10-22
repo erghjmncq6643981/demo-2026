@@ -22,7 +22,11 @@ import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 
+import com.chandler.learning.agent.learning.api.response.LearningPlanUnitResponse;
+import com.chandler.learning.agent.learning.domain.bo.LearningPlanUnitWordSummaryItem;
+import com.chandler.learning.agent.learning.domain.bo.LearningAssessmentPassBO;
 import java.util.List;
+import java.util.Set;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.any;
@@ -80,6 +84,42 @@ class LearningPlanResponseAssemblerTest {
         verify(unitMapper).selectUnitsWithMaterial(10L, null);
         verify(unitEntryMapper).selectEntriesWithProgress(any(), any());
         verify(reviewRecordMapper).selectList(any(Wrapper.class));
+    }
+
+    @Test
+    void assemblesUnitSummaryResponsesWithWords() {
+        LearningPlanUnit unit = new LearningPlanUnit();
+        unit.setId(101L);
+        unit.setPlanId(10L);
+        unit.setUnitNo(1);
+        unit.setTitle("Scene 1");
+        unit.setCoreWordCount(1);
+        unit.setCompletedCoreCount(0);
+
+        LearningPlanUnitWordSummaryItem wordItem = new LearningPlanUnitWordSummaryItem();
+        wordItem.setId(1001L);
+        wordItem.setUnitId(101L);
+        wordItem.setWordbookEntryId(2001L);
+        wordItem.setTerm("declutter");
+        wordItem.setPhonetic("/diːˈklʌtər/");
+        wordItem.setMeaning("清理");
+        wordItem.setTier("core");
+        wordItem.setMasteryRequirement("spelling");
+
+        when(unitEntryMapper.selectWordSummaries(10L, List.of(101L))).thenReturn(List.of(wordItem));
+        when(reviewRecordMapper.selectPassedAssessmentTypesByUnits(List.of(101L), List.of(2001L)))
+                .thenReturn(List.of());
+
+        LearningPlanResponseAssembler assembler = new LearningPlanResponseAssembler(
+                unitMapper, unitEntryMapper, materialMapper, relatedWordMapper,
+                progressService, reviewRecordMapper);
+
+        List<LearningPlanUnitResponse> summaries = assembler.toUnitSummaryResponses(List.of(unit), 10L);
+
+        assertThat(summaries).hasSize(1);
+        assertThat(summaries.get(0).getPendingChallengeWords()).hasSize(1);
+        assertThat(summaries.get(0).getPendingChallengeWords().get(0).getTerm()).isEqualTo("declutter");
+        assertThat(summaries.get(0).getPendingChallengeWords().get(0).getCompleted()).isFalse();
     }
 
     private LearningPlanUnitItem unitItem(Long id, Long planId, int unitNo,

@@ -1,5 +1,7 @@
 package com.chandler.learning.agent.vocabulary.api.controller;
 
+import com.chandler.learning.agent.identity.domain.entity.LearningUser;
+import com.chandler.learning.agent.security.CurrentUserContext;
 import com.chandler.learning.agent.vocabulary.api.request.VocabularyStudyRequest;
 import com.chandler.learning.agent.vocabulary.api.response.VocabularyStudyResponse;
 import com.chandler.learning.agent.vocabulary.api.response.VocabularyBestMatchResponse;
@@ -23,12 +25,14 @@ import java.util.List;
 public class EnglishVocabularyStudyController {
 
     private final EnglishVocabularyStudyService vocabularyStudyService;
+    private final CurrentUserContext currentUserContext;
 
     /** 查询或生成词汇学习结果。 */
     @PostMapping("/study")
     @Operation(summary = "查询或生成词汇学习结果")
     public VocabularyStudyResponse study(@Valid @RequestBody VocabularyStudyRequest request) {
-        return vocabularyStudyService.study(request);
+        LearningUser user = currentUserContext.requireUser();
+        return vocabularyStudyService.study(user.getId(), request);
     }
 
     /**

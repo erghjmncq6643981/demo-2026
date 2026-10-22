@@ -64,7 +64,7 @@ public class VocabularyAudioService {
                 client = httpClient;
                 if (client == null) {
                     client = HttpClient.newBuilder()
-                            .proxy(ProxySelector.getDefault())
+                            .proxy(HttpClient.Builder.NO_PROXY)
                             .followRedirects(HttpClient.Redirect.ALWAYS)
                             .connectTimeout(Duration.ofSeconds(VocabularyAudioConstants.DOWNLOAD_TIMEOUT_SECONDS))
                             .build();
