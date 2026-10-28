@@ -1,0 +1,50 @@
+        <aside class="sidebar">
+          <div class="brand-block">
+            <p class="eyebrow">English Agent</p>
+            <h1>学习助手</h1>
+          </div>
+
+          <nav class="nav-menu" aria-label="主功能">
+            <button class="nav-item active" type="button" data-view="profileView">
+              <span>个人信息</span>
+              <small>账户、词本与设置</small>
+            </button>
+            <button class="nav-item" type="button" data-view="scenePlanView">
+              <span>词汇大挑战</span>
+              <small>计划、日历与词汇挑战</small>
+            </button>
+            <button class="nav-item" type="button" data-view="studyView">
+              <span>卡片学习</span>
+              <small>查词与 AI 卡片</small>
+            </button>
+            <button class="nav-item" type="button" data-view="articleStudyView">
+              <span>语境精读</span>
+              <small>选词生成阅读材料</small>
+            </button>
+            <button class="nav-item" type="button" data-view="wordbookView">
+              <span>单词本</span>
+              <small>词表与掌握状态</small>
+            </button>
+            <button class="nav-item" type="button" data-view="reviewView">
+              <span>复习</span>
+              <small>艾宾浩斯计划</small>
+            </button>
+            <button class="nav-item admin-only hidden" type="button" data-view="systemAdminView">
+              <span>系统管理</span>
+              <small>用户、词本与 AI 治理</small>
+            </button>
+          </nav>
+
+          <div class="sidebar-footer">
+            <div class="user-card">
+              <span class="avatar" id="userAvatar">U</span>
+              <div>
+                <strong id="userBadge">未登录</strong>
+                <small id="connectionStatus">后端未检测</small>
+              </div>
+            </div>
+            <button class="secondary-button" id="logoutBtn" type="button">退出登录</button>
+          </div>
+        </aside>
+        <button class="sidebar-backdrop" id="sidebarBackdrop" type="button" aria-label="隐藏导航"></button>
+

@@ -1,5 +1,6 @@
 import { hideModal, showModal } from '/src/shared/modal.js'
 import { escapeHtml, formatDateTime } from '/src/shared/text.js'
+import { canAccessSystemAdmin } from '/src/shared/permissions.js'
 
 const PREVIEW_LENGTH = 320
 const RAW_PREVIEW_LENGTH = 2400
@@ -53,7 +54,7 @@ export function createAiSessionAdminFeature(ctx) {
   const payloadStore = new Map()
 
   function isAdmin() {
-    return state.preview || state.user?.roleCode === 'ADMIN'
+    return canAccessSystemAdmin(state)
   }
 
   async function loadAiSessions() {

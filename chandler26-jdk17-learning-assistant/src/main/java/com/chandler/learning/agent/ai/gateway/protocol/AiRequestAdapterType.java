@@ -9,7 +9,9 @@ import lombok.Getter;
 public enum AiRequestAdapterType {
 
     DEEPSEEK_CHAT("deepseek_chat"),
-    KIMI_CHAT("kimi_chat");
+    KIMI_CHAT("kimi_chat"),
+    QWEN_CHAT("qwen_chat"),
+    GLM_CHAT("glm_chat");
 
     private final String code;
 

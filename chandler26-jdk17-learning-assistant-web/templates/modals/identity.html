@@ -1,0 +1,76 @@
+    <section class="modal-backdrop hidden" id="accountModal" aria-modal="true" role="dialog">
+      <div class="config-modal account-modal">
+        <div class="panel-heading">
+          <div>
+            <p class="eyebrow">Account</p>
+            <h3>修改账户</h3>
+          </div>
+          <button class="icon-button" id="closeAccountModalBtn" type="button" title="关闭">×</button>
+        </div>
+        <nav class="account-tabs" aria-label="账户设置">
+          <button class="account-tab active" type="button" data-account-tab="accountBasicPanel">基本资料</button>
+          <button class="account-tab" type="button" data-account-tab="accountSecurityPanel">安全设置</button>
+        </nav>
+        <div class="account-tab-panels">
+          <section class="account-tab-panel active" id="accountBasicPanel">
+            <div class="model-form-grid account-basic-grid">
+              <label>昵称<input id="accountNicknameInput" placeholder="显示昵称" /></label>
+              <label>账户<input id="accountUsernameInput" disabled /></label>
+            </div>
+            <div class="modal-actions">
+              <button class="primary-button compact-primary" id="saveAccountProfileBtn" type="button">更新资料</button>
+            </div>
+          </section>
+          <section class="account-tab-panel" id="accountSecurityPanel">
+            <div class="account-security-list">
+              <div class="account-security-row" data-security-mode="password">
+                <div class="account-security-row-copy">
+                  <strong>密码</strong>
+                  <span class="account-security-row-value account-security-row-value-muted" id="accountPasswordValue">未展示</span>
+                </div>
+                <button class="icon-action-button" id="editAccountPasswordBtn" type="button" title="修改密码" aria-label="修改密码">✎</button>
+              </div>
+              <div class="account-security-editor-panel hidden" data-security-panel="password">
+                <div class="model-form-grid account-security-password-grid">
+                  <label>当前密码<input id="accountCurrentPasswordInput" type="password" placeholder="修改密码时必填" autocomplete="current-password" /></label>
+                  <label class="account-password-field">
+                    新密码
+                    <input id="accountNewPasswordInput" type="password" placeholder="至少 6 位" autocomplete="new-password" />
+                    <span class="password-strength" id="accountPasswordStrength">密码强度：未输入</span>
+                  </label>
+                  <label>确认新密码<input id="accountConfirmPasswordInput" type="password" placeholder="再次输入新密码" autocomplete="new-password" /></label>
+                </div>
+              </div>
+              <div class="account-security-row" data-security-mode="phone">
+                <div class="account-security-row-copy">
+                  <strong>手机号码</strong>
+                  <span class="account-security-row-value" id="accountPhoneValue">未绑定</span>
+                </div>
+                <button class="icon-action-button" id="editAccountPhoneBtn" type="button" title="修改手机号码" aria-label="修改手机号码">✎</button>
+              </div>
+              <div class="account-security-editor-panel hidden" data-security-panel="phone">
+                <div class="model-form-grid account-security-single-grid">
+                  <label class="account-security-single-field">手机号码<input id="accountPhoneInput" inputmode="tel" placeholder="例如：13800138000" /></label>
+                </div>
+              </div>
+              <div class="account-security-row" data-security-mode="email">
+                <div class="account-security-row-copy">
+                  <strong>邮箱</strong>
+                  <span class="account-security-row-value" id="accountEmailValue">未绑定</span>
+                </div>
+                <button class="icon-action-button" id="editAccountEmailBtn" type="button" title="修改联系邮箱" aria-label="修改联系邮箱">✎</button>
+              </div>
+              <div class="account-security-editor-panel hidden" data-security-panel="email">
+                <div class="model-form-grid account-security-single-grid">
+                  <label class="account-security-single-field">联系邮箱<input id="accountEmailInput" type="email" placeholder="例如：name@example.com" /></label>
+                </div>
+              </div>
+            </div>
+            <div class="modal-actions account-security-actions" id="accountSecurityActions">
+              <button class="secondary-button compact" id="cancelAccountSecurityBtn" type="button">取消</button>
+              <button class="primary-button compact-primary" id="saveAccountSecurityBtn" type="button">保存安全设置</button>
+            </div>
+          </section>
+        </div>
+      </div>
+    </section>

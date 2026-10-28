@@ -1,0 +1,19 @@
+<Slide style={{ width: 1280, height: 720, background: '#FFFFFF', position: 'relative', fontFamily: '微软雅黑' }}>
+    <Box style={{ position: 'absolute', top: 0, left: 0, width: 1280, height: 6, background: '#1E4FA8' }} />
+
+    <Box style={{ position: 'absolute', left: 96, top: 268, width: 6, height: 116, background: '#1E4FA8' }} />
+
+    <Text style={{ position: 'absolute', left: 128, top: 262, width: 1000, fontSize: 44, fontWeight: 'bold', color: '#1A2230' }}>
+        请各位老师批评指正
+    </Text>
+
+    <Text style={{ position: 'absolute', left: 128, top: 340, width: 900, fontSize: 20, color: '#4A5568', lineHeight: 1.5 }}>
+        基于大模型的英语学习助手 · 系统设计与实现
+    </Text>
+
+    <Box style={{ position: 'absolute', left: 128, top: 430, width: 640, height: 1, background: '#D6DCE5' }} />
+
+    <Text style={{ position: 'absolute', left: 128, top: 452, width: 900, fontSize: 18, color: '#4A5568' }}>
+        答辩人 钱丁君　·　学号 234A0776　·　指导教师 刘福岩　·　2026 年 10 月
+    </Text>
+</Slide>

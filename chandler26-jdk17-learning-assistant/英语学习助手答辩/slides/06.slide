@@ -1,0 +1,115 @@
+<Slide style={{ width: 1280, height: 720, background: '#FFFFFF', position: 'relative', fontFamily: '微软雅黑', padding: '72px 60px 60px 60px' }}>
+    <Box style={{ position: 'absolute', top: 0, left: 0, width: 1280, height: 56, background: '#1E4FA8', flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingLeft: 60, paddingRight: 60 }}>
+        <Text style={{ fontSize: 32, fontWeight: 'bold', color: '#FFFFFF' }}>AI 网关：供应商不进业务代码</Text>
+        <Text style={{ fontSize: 16, color: 'rgba(255,255,255,0.72)' }}>05 · AI Gateway</Text>
+    </Box>
+
+    <Box style={{ flexDirection: 'column', width: 1160, height: 588, justifyContent: 'space-between' }}>
+        <Box style={{ flexDirection: 'column', gap: 24 }}>
+            <Box style={{ flexDirection: 'row', alignItems: 'stretch' }}>
+                <Box style={{ width: 208, border: '1px solid #D6DCE5', padding: '12px 14px', flexDirection: 'column', gap: 4 }}>
+                    <Text style={{ fontSize: 15, fontWeight: 'bold', color: '#1E4FA8' }}>① 场景声明</Text>
+                    <Text style={{ fontSize: 13, color: '#4A5568', lineHeight: 1.45 }}>枚举写清：是否必须 JSON、必需根字段、允许变量</Text>
+                </Box>
+                <Box style={{ width: 30, alignItems: 'center', justifyContent: 'center' }}>
+                    <Text style={{ fontSize: 18, color: '#3D7BD9' }}>→</Text>
+                </Box>
+                <Box style={{ width: 208, border: '1px solid #D6DCE5', padding: '12px 14px', flexDirection: 'column', gap: 4 }}>
+                    <Text style={{ fontSize: 15, fontWeight: 'bold', color: '#1E4FA8' }}>② 请求适配</Text>
+                    <Text style={{ fontSize: 13, color: '#4A5568', lineHeight: 1.45 }}>按供应商与协议拼 messages、temperature、max_tokens</Text>
+                </Box>
+                <Box style={{ width: 30, alignItems: 'center', justifyContent: 'center' }}>
+                    <Text style={{ fontSize: 18, color: '#3D7BD9' }}>→</Text>
+                </Box>
+                <Box style={{ width: 208, border: '1px solid #D6DCE5', padding: '12px 14px', flexDirection: 'column', gap: 4 }}>
+                    <Text style={{ fontSize: 15, fontWeight: 'bold', color: '#1E4FA8' }}>③ 上下文预算</Text>
+                    <Text style={{ fontSize: 13, color: '#4A5568', lineHeight: 1.45 }}>按真实窗口与输出上限估算，逼近 90% 就拆分或拒绝</Text>
+                </Box>
+                <Box style={{ width: 30, alignItems: 'center', justifyContent: 'center' }}>
+                    <Text style={{ fontSize: 18, color: '#3D7BD9' }}>→</Text>
+                </Box>
+                <Box style={{ width: 208, border: '1px solid #1E4FA8', padding: '12px 14px', flexDirection: 'column', gap: 4, background: '#F7F9FC' }}>
+                    <Text style={{ fontSize: 15, fontWeight: 'bold', color: '#1E4FA8' }}>④ 模型供应商</Text>
+                    <Text style={{ fontSize: 13, color: '#4A5568', lineHeight: 1.45 }}>DeepSeek、Kimi，统一走 OpenAI 兼容协议</Text>
+                </Box>
+                <Box style={{ width: 30, alignItems: 'center', justifyContent: 'center' }}>
+                    <Text style={{ fontSize: 18, color: '#3D7BD9' }}>→</Text>
+                </Box>
+                <Box style={{ width: 208, border: '1px solid #D6DCE5', padding: '12px 14px', flexDirection: 'column', gap: 4 }}>
+                    <Text style={{ fontSize: 15, fontWeight: 'bold', color: '#1E4FA8' }}>⑤ 解析与编解码</Text>
+                    <Text style={{ fontSize: 13, color: '#4A5568', lineHeight: 1.45 }}>直读 JSON，失败剥代码块；别名归一化 + 根字段校验</Text>
+                </Box>
+            </Box>
+
+            <Box style={{ flexDirection: 'row', gap: 40 }}>
+                <Box style={{ width: 680, flexDirection: 'column' }}>
+                    <Text style={{ fontSize: 14, color: '#8B97A8', letterSpacing: 1 }}>三处实现要点</Text>
+                    <Box style={{ flexDirection: 'column', gap: 0, marginTop: 14 }}>
+                        <Box style={{ flexDirection: 'row', gap: 14, paddingBottom: 14, borderBottom: '1px solid #E5E7EB' }}>
+                            <Text style={{ fontSize: 16, fontWeight: 'bold', color: '#3D7BD9', width: 26 }}>01</Text>
+                            <Box style={{ flexDirection: 'column', gap: 4, width: 640 }}>
+                                <Text style={{ fontSize: 19, fontWeight: 'bold', color: '#1A2230' }}>模型能力存库，不写死在代码里</Text>
+                                <Text style={{ fontSize: 17, color: '#4A5568', lineHeight: 1.5 }}>
+                                    ai_model_config 存协议、上下文窗口、最大输出、适配器与密钥密文，换模型只改一条配置。
+                                </Text>
+                            </Box>
+                        </Box>
+                        <Box style={{ flexDirection: 'row', gap: 14, paddingTop: 14, paddingBottom: 14, borderBottom: '1px solid #E5E7EB' }}>
+                            <Text style={{ fontSize: 16, fontWeight: 'bold', color: '#3D7BD9', width: 26 }}>02</Text>
+                            <Box style={{ flexDirection: 'column', gap: 4, width: 640 }}>
+                                <Text style={{ fontSize: 19, fontWeight: 'bold', color: '#1A2230' }}>固定动作不带长期历史</Text>
+                                <Text style={{ fontSize: 17, color: '#4A5568', lineHeight: 1.5 }}>
+                                    学习计划可以跑几个月，但每次词卡或场景生成只送当前任务数据，确需连续上下文才复用会话。
+                                </Text>
+                            </Box>
+                        </Box>
+                        <Box style={{ flexDirection: 'row', gap: 14, paddingTop: 14 }}>
+                            <Text style={{ fontSize: 16, fontWeight: 'bold', color: '#3D7BD9', width: 26 }}>03</Text>
+                            <Box style={{ flexDirection: 'column', gap: 4, width: 640 }}>
+                                <Text style={{ fontSize: 19, fontWeight: 'bold', color: '#1A2230' }}>缺字段定点重试，不整单重跑</Text>
+                                <Text style={{ fontSize: 17, color: '#4A5568', lineHeight: 1.5 }}>
+                                    语法合法但缺必需字段时，追加纠正要求重试最多 2 次；网络、配额、内容安全类失败不进重试。
+                                </Text>
+                            </Box>
+                        </Box>
+                    </Box>
+                </Box>
+
+                <Box style={{ width: 440, flexDirection: 'column', border: '1px solid #D6DCE5', padding: '18px 22px', gap: 10 }}>
+                    <Text style={{ fontSize: 14, color: '#8B97A8', letterSpacing: 1 }}>响应处理：四类结果的落点</Text>
+                    <Box style={{ flexDirection: 'row', gap: 10 }}>
+                        <Text style={{ fontSize: 17, color: '#1A2230', width: 150, fontWeight: 'bold' }}>JSON 不合法</Text>
+                        <Text style={{ fontSize: 16, color: '#4A5568', width: 226 }}>剥 Markdown 代码块，受限清洗后重解一次</Text>
+                    </Box>
+                    <Box style={{ flexDirection: 'row', gap: 10 }}>
+                        <Text style={{ fontSize: 17, color: '#1A2230', width: 150, fontWeight: 'bold' }}>缺必需字段</Text>
+                        <Text style={{ fontSize: 16, color: '#4A5568', width: 226 }}>定点重试 ≤ 2 次，仍失败则标记该条目</Text>
+                    </Box>
+                    <Box style={{ flexDirection: 'row', gap: 10 }}>
+                        <Text style={{ fontSize: 17, color: '#1A2230', width: 150, fontWeight: 'bold' }}>部分条目有效</Text>
+                        <Text style={{ fontSize: 16, color: '#4A5568', width: 226 }}>已验证的立即落库，缺失的下批再补</Text>
+                    </Box>
+                    <Box style={{ flexDirection: 'row', gap: 10 }}>
+                        <Text style={{ fontSize: 17, color: '#D9534F', width: 150, fontWeight: 'bold' }}>网络 / 配额 / 安全</Text>
+                        <Text style={{ fontSize: 16, color: '#4A5568', width: 226 }}>直接失败，交给任务层重试或人工处理</Text>
+                    </Box>
+                    <Text style={{ fontSize: 15, color: '#8B97A8', lineHeight: 1.5, marginTop: 4 }}>
+                        审计只存元数据、Token 与耗时；API Key、完整 Prompt 与完整响应不入日志。
+                    </Text>
+                </Box>
+            </Box>
+        </Box>
+
+        <Box style={{ flexDirection: 'row', background: '#F7F9FC', alignItems: 'center', padding: '14px 22px', gap: 14 }}>
+            <Box style={{ width: 3, height: 30, background: '#1E4FA8' }} />
+            <Text style={{ fontSize: 18, color: '#1A2230' }}>
+                业务代码里没有「如果是 A 供应商就怎样」的分支——换模型只改一条配置。
+            </Text>
+        </Box>
+    </Box>
+
+    <Box style={{ position: 'absolute', top: 670, left: 60, width: 1160, flexDirection: 'row', justifyContent: 'space-between' }}>
+        <Text style={{ fontSize: 14, color: '#8B97A8' }}>基于大模型的英语学习助手 · 毕业答辩</Text>
+        <Text style={{ fontSize: 14, color: '#8B97A8' }}>06 / 11</Text>
+    </Box>
+</Slide>

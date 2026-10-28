@@ -1,6 +1,6 @@
 import { showModal } from '/src/shared/modal.js'
 import { escapeHtml, formatDateTime } from '/src/shared/text.js'
-import { cardStatusLabel, statusLabel } from '/src/shared/vocabulary.js'
+import { cardStatusLabel, formatPhoneticDisplay, statusLabel } from '/src/shared/vocabulary.js'
 
 /** 单词本词条列表、分页和行级交互。完整词卡由详情模块按需加载。 */
 export function createWordbookEntryListFeature({
@@ -22,8 +22,16 @@ export function createWordbookEntryListFeature({
     let visibleEntries = entries
     if (state.preview) {
       const filter = elements.wordStatusFilter?.value || ''
+      const cardFilter = elements.wordCardStatusFilter?.value || ''
       const keyword = String(elements.wordPrefixInput?.value || '').trim().toLowerCase()
       if (filter) visibleEntries = visibleEntries.filter((entry) => (entry.status || 'vague') === filter)
+      if (cardFilter) {
+        if (cardFilter === 'need_card') {
+          visibleEntries = visibleEntries.filter((entry) => ['missing', 'not_required', 'failed'].includes(entry.cardStatus || 'missing'))
+        } else {
+          visibleEntries = visibleEntries.filter((entry) => (entry.cardStatus || 'missing') === cardFilter)
+        }
+      }
       if (keyword) visibleEntries = visibleEntries.filter((entry) => entryMatchesKeyword(entry, keyword))
     }
 
@@ -35,6 +43,10 @@ export function createWordbookEntryListFeature({
       elements.wordbookPageInfo.textContent = `第 ${currentPage} / ${maxPage} 页`
       if (elements.wordbookPrevBtn) elements.wordbookPrevBtn.disabled = currentPage <= 1
       if (elements.wordbookNextBtn) elements.wordbookNextBtn.disabled = currentPage >= maxPage
+      if (elements.wordbookJumpPageInput) {
+        elements.wordbookJumpPageInput.max = String(maxPage)
+        elements.wordbookJumpPageInput.placeholder = String(currentPage)
+      }
     }
 
     if (!visibleEntries.length) {
@@ -59,10 +71,12 @@ export function createWordbookEntryListFeature({
   }
 
   function renderRow(entry, selectedEntry) {
-    const parsed = entry.parsed || {}
-    const phonetic = parsed.phonetic?.uk
-      ? `UK /${parsed.phonetic.uk}/`
-      : parsed.phonetic?.us ? `US /${parsed.phonetic.us}/` : entry.phonetic ? `/${entry.phonetic}/` : '-'
+    let parsed = entry.parsed
+    if (typeof parsed === 'string') {
+      try { parsed = JSON.parse(parsed) } catch { parsed = {} }
+    }
+    parsed = parsed || {}
+    const phonetic = formatPhoneticDisplay(parsed, entry.phonetic)
     const definitions = typeof normalizeDefinitions === 'function' ? normalizeDefinitions(parsed) : []
     const meaningSummary = definitions.length
       ? definitions.map((definition) => {
@@ -76,7 +90,7 @@ export function createWordbookEntryListFeature({
     const isClickable = ['missing', 'not_required', 'failed'].includes(cardCode)
     const cardTitle = cardCode === 'missing' ? '未生成 AI 完整词卡，点击二次确认触发生成'
       : cardCode === 'failed' ? 'AI 词卡生成失败，点击二次确认重新生成'
-        : cardCode === 'not_required' ? '基础静态词条，点击二次确认生成 AI 深度词卡'
+        : cardCode === 'not_required' ? '大纲基础静态词条（仅含基础释义），点击二次确认生成 AI 深度完整词卡'
           : cardCode === 'ready' ? 'AI 完整词卡已就绪' : '词卡生成中...'
     const stateCode = entry.status || 'vague'
     const nextReview = entry.nextReviewTime ? formatDateTime(entry.nextReviewTime) : '-'

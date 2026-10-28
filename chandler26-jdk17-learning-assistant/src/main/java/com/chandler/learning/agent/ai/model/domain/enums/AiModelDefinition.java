@@ -26,7 +26,11 @@ public enum AiModelDefinition {
     KIMI_K2_6(AiProvider.KIMI, "kimi-k2.6", "Kimi K2.6",
             262_144, 32_768, AiRequestAdapterType.KIMI_CHAT, AiResponseParserType.KIMI_JSON),
     KIMI_K2_5(AiProvider.KIMI, "kimi-k2.5", "Kimi K2.5",
-            262_144, 32_768, AiRequestAdapterType.KIMI_CHAT, AiResponseParserType.KIMI_JSON);
+            262_144, 32_768, AiRequestAdapterType.KIMI_CHAT, AiResponseParserType.KIMI_JSON),
+    QWEN_3_8_FLASH(AiProvider.QWEN, "qwen3.8-flash", "Qwen 3.8 Flash",
+            1_048_576, 8_192, AiRequestAdapterType.QWEN_CHAT, AiResponseParserType.STRICT_JSON),
+    GLM_5_3_FLASH(AiProvider.GLM, "GLM-5.3-Flash", "GLM 5.3 Flash",
+            131_072, 8_192, AiRequestAdapterType.GLM_CHAT, AiResponseParserType.STRICT_JSON);
 
     private final AiProvider provider;
     private final String apiModelId;
@@ -71,7 +75,12 @@ public enum AiModelDefinition {
         if (!StringUtils.hasText(providerCode) || !StringUtils.hasText(apiModelId)) {
             return false;
         }
-        return Arrays.stream(values()).anyMatch(model -> model.provider.getCode().equalsIgnoreCase(providerCode.trim())
-                && model.apiModelId.equalsIgnoreCase(apiModelId.trim()));
+        try {
+            AiProvider provider = AiProvider.of(providerCode);
+            return Arrays.stream(values()).anyMatch(model -> model.provider == provider
+                    && model.apiModelId.equalsIgnoreCase(apiModelId.trim()));
+        } catch (LearningAssistantException ex) {
+            return false;
+        }
     }
 }

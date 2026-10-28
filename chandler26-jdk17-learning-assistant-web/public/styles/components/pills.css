@@ -1,0 +1,49 @@
+.login-word-row span,
+.mini-pill,
+.status-pill {
+  padding: 7px 10px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: rgba(255, 255, 255, 0.04);
+  color: var(--muted);
+  font-size: 12px;
+  font-weight: 700;
+}
+
+.status-pill.ok,
+.mini-pill.ok {
+  border-color: rgba(125, 211, 168, 0.45);
+  color: var(--green);
+}
+
+.status-pill.bad {
+  border-color: rgba(251, 113, 133, 0.45);
+  color: var(--danger);
+}
+
+.tag-chip {
+  background: rgba(129, 140, 248, 0.13);
+}
+
+.status-pill.status-vague {
+  background: rgba(234, 179, 8, 0.15);
+  color: #facc15;
+  border: 1px solid rgba(234, 179, 8, 0.3);
+}
+
+.status-pill.status-forgotten {
+  background: rgba(239, 68, 68, 0.15);
+  color: #f87171;
+  border: 1px solid rgba(239, 68, 68, 0.3);
+}
+
+.wordbook-table-footer {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 10px 16px;
+  border-top: 1px solid var(--line);
+  font-size: 13px;
+  color: var(--text-secondary);
+  background: var(--bg-panel-solid, #1f2937);
+}

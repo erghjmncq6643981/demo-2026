@@ -1,0 +1,76 @@
+.login-panel,
+.panel {
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  background: rgba(31, 41, 55, 0.88);
+  box-shadow: var(--shadow);
+  backdrop-filter: blur(18px);
+}
+
+.panel {
+  padding: 18px;
+}
+
+.panel-heading {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 16px;
+  margin-bottom: 16px;
+}
+
+.compact-heading {
+  align-items: center;
+  margin-bottom: 10px;
+}
+
+.panel-heading h2,
+.panel-heading h3,
+.panel-heading h4 {
+  margin: 4px 0 0;
+}
+
+.panel-heading h3 {
+  font-size: 16px;
+}
+
+.eyebrow {
+  margin: 0;
+  color: var(--accent);
+  font-size: 12px;
+  font-weight: 800;
+  letter-spacing: 0;
+  text-transform: uppercase;
+}
+
+.build-version {
+  margin: 16px 0 0;
+  color: var(--muted);
+  font-size: 12px;
+}
+
+.panel-description {
+  margin: 0 0 12px;
+  color: var(--muted);
+  line-height: 1.65;
+}
+
+.panel-subtitle {
+  margin: 16px 0 10px;
+  color: var(--muted);
+  font-size: 12px;
+  font-weight: 800;
+  text-transform: uppercase;
+}
+
+.compact-subtitle {
+  margin: 0;
+  font-weight: 900;
+}
+
+.speech-settings {
+  display: grid;
+  gap: 10px;
+  padding-top: 12px;
+  border-top: 1px solid var(--line);
+}

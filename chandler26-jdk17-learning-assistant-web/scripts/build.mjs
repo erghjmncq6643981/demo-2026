@@ -1,7 +1,10 @@
 import { cp, mkdir, rm, stat } from 'node:fs/promises'
 import { dirname, join, resolve } from 'node:path'
 import { fileURLToPath } from 'node:url'
-import './check-modules.mjs'
+import { buildHtml } from './build-html.mjs'
+
+await buildHtml()
+await import('./check-modules.mjs')
 
 if (process.exitCode) process.exit(process.exitCode)
 

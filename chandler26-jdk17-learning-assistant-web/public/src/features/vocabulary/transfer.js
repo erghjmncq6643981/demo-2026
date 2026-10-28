@@ -16,7 +16,7 @@ export function createWordbookTransferFeature(ctx) {
           <div>
           <strong>${ctx.escapeHtml(wordbook.name)}</strong>
           <span>${ctx.escapeHtml(wordbook.description || (wordbook.isDefault ? '默认单词本' : '自定义单词本'))}</span>
-          <small>${wordbook.entryCount || 0} 个单词 · ${wordbook.dueCount || 0} 个待复习</small>
+          <small>${wordbook.entryCount || 0} 个单词</small>
           </div>
           <div class="transfer-actions">
             <button class="primary-button compact-primary transfer-action-button" type="button" data-transfer-copy="${ctx.escapeHtml(wordbook.id)}">复制</button>

@@ -221,7 +221,7 @@ export function cardStatusLabel(status) {
       queued: '排队中',
       missing: '未生成',
       failed: '生成失败',
-      not_required: '无需生成',
+      not_required: '基础词条',
     }[status] || '未生成'
   )
 }
@@ -249,6 +249,45 @@ export function logTypeLabel(type) {
       wordbook: '单词本',
     }[type] || '系统'
   )
+}
+
+export function cleanPhonetic(raw) {
+  if (!raw) return ''
+  let s = String(raw).trim()
+  while (s.startsWith('/') && s.endsWith('/') && s.length >= 2) {
+    s = s.slice(1, -1).trim()
+  }
+  return s
+}
+
+export function formatPhoneticDisplay(parsed, entryPhonetic) {
+  let pObj = parsed
+  if (typeof pObj === 'string') {
+    try { pObj = JSON.parse(pObj) } catch { pObj = {} }
+  }
+  const uk = pObj?.phonetic?.uk || pObj?.['phonetic.uk'] || pObj?.phonetic_uk || pObj?.phoneticUk
+  const us = pObj?.phonetic?.us || pObj?.['phonetic.us'] || pObj?.phonetic_us || pObj?.phoneticUs
+  const strPhonetic = typeof pObj?.phonetic === 'string' ? pObj.phonetic : null
+
+  if (uk) {
+    const c = cleanPhonetic(uk)
+    return c ? `UK /${c}/` : '-'
+  }
+  if (us) {
+    const c = cleanPhonetic(us)
+    return c ? `US /${c}/` : '-'
+  }
+  if (strPhonetic) {
+    const c = cleanPhonetic(strPhonetic)
+    if (!c) return '-'
+    return c.startsWith('[') && c.endsWith(']') ? c : `/${c}/`
+  }
+  if (entryPhonetic) {
+    const c = cleanPhonetic(entryPhonetic)
+    if (!c) return '-'
+    return c.startsWith('[') && c.endsWith(']') ? c : `/${c}/`
+  }
+  return '-'
 }
 
 export function normalizeDefinitions(parsed) {
@@ -328,6 +367,79 @@ export function firstExample(parsed) {
 }
 
 export function previewParsed(term = 'abandon') {
+  const isVigor = String(term).toLowerCase() === 'vigor'
+  if (isVigor) {
+    return {
+      term: 'vigor',
+      is_valid: true,
+      language: 'en',
+      phonetic: {
+        uk: '/ˈvɪɡə(r)/',
+        us: '/ˈvɪɡər/',
+      },
+      definitions: [
+        {
+          part_of_speech: 'noun',
+          meaning: '体力，精力，活力',
+          english: 'Strength, energy, or enthusiasm.',
+        },
+        {
+          part_of_speech: 'noun',
+          meaning: '（动植物的）强壮，茁壮',
+          english: 'Good health and physical strength in plants or animals.',
+        },
+      ],
+      cognitive_image: {
+        title: '生命力与行动能量的蓬勃迸发',
+        description: 'vigor 描绘出一种由内而外涌动的强健精力与生命元气，如同草木在初夏肆意疯长，或运动员全情投入时的力量感与热烈投入。常用于强调身体强健或行动决断的果敢力度。',
+        usage_note: '与 energy 相比，vigor 更偏向内在生命力的强健与不可阻挡；与 strength 相比，侧重动态活力而非静态力气。',
+      },
+      examples: [
+        {
+          sentence: 'He began working with renewed vigor and enthusiasm.',
+          translation: '他带着重新焕发的生机与热情投入了工作。',
+        },
+        {
+          sentence: 'The young plants grew with great vigor under the warm sun.',
+          translation: '幼苗在温暖的阳光下茁壮成长。',
+        },
+      ],
+      collocations: [
+        { phrase: 'with vigor', meaning: '精力充沛地；起劲地' },
+        { phrase: 'renewed vigor', meaning: '重焕生机；再接再厉' },
+        { phrase: 'youthful vigor', meaning: '青春活力' },
+        { phrase: 'intellectual vigor', meaning: '思维活跃；求知旺盛' },
+      ],
+      synonyms: [
+        { word: 'vitality', part_of_speech: 'noun', meaning: '生命力，活力' },
+        { word: 'energy', part_of_speech: 'noun', meaning: '精力，能量' },
+      ],
+      antonyms: [
+        { word: 'lethargy', part_of_speech: 'noun', meaning: '无精打采，倦怠' },
+        { word: 'weakness', part_of_speech: 'noun', meaning: '虚弱，软弱' },
+      ],
+      word_family: [
+        { word: 'vigorous', part_of_speech: 'adjective', meaning: '充满活力的，强有力的' },
+        { word: 'vigorously', part_of_speech: 'adverb', meaning: '精力充沛地，大力地' },
+        { word: 'invigorate', part_of_speech: 'verb', meaning: '使生气勃勃，激励' },
+      ],
+      etymology: {
+        origin: '拉丁语 vigor（生机，活力），源自 vigere（保持活跃生机）。',
+        formula: 'vig (生命活力) + -or (状态名词后缀) = 充沛的活力',
+        components: [
+          { type: 'root', text: 'vig', label: '词根', desc: '活跃、生命力 (to be lively)' },
+          { type: 'suffix', text: '-or', label: '后缀', desc: '表状态或性质的名词后缀' },
+        ],
+        word_family: [
+          { word: 'vigorous', pos: 'adj.', meaning: '充满活力的，强健的' },
+          { word: 'vigorously', pos: 'adv.', meaning: '精力充沛地，有力地' },
+          { word: 'invigorate', pos: 'v.', meaning: '使精力充沛，鼓舞' },
+        ],
+      },
+      memory_tips: '联想 vig (活力) 如同 vegetable (植物生机)，-or 名词后缀，合起来就是生机活力。',
+    }
+  }
+
   return {
     term,
     is_valid: true,
@@ -348,6 +460,11 @@ export function previewParsed(term = 'abandon') {
         english: 'To stop doing or planning something.',
       },
     ],
+    cognitive_image: {
+      title: '彻底放开掌控与防线的决绝状态',
+      description: 'abandon 的核心心智画面是“松开双手、彻底撒手不管”。既可以指在危难或现实逼迫下无奈丢弃人或物，也可以指卸下所有心理防备与理智约束，全情放纵投入某种情绪之中。',
+      usage_note: '搭配 with abandon 表示毫无顾忌地狂欢/放纵；作及物动词时主语常面临不得不割舍的境遇。',
+    },
     examples: [
       {
         sentence: 'They had to abandon the project due to lack of funds.',
@@ -375,12 +492,51 @@ export function previewParsed(term = 'abandon') {
       { word: 'abandonment', part_of_speech: 'noun', meaning: '遗弃，放弃' },
       { word: 'abandoned', part_of_speech: 'adjective', meaning: '被遗弃的' },
     ],
+    etymology: {
+      origin: '古法语 a bandon（任凭处置），源自拉丁语 bannum（公告、管辖权）。',
+      formula: 'a- (到...) + ban (禁令/管辖) + -don (给予) = 置于他人管辖之下，任凭处置 -> 放弃',
+      components: [
+        { type: 'prefix', text: 'a-', label: '前缀', desc: '表方向或动作朝向' },
+        { type: 'root', text: 'bandon', label: '词根', desc: '控制权、任凭处置' },
+      ],
+      word_family: [
+        { word: 'abandonment', pos: 'n.', meaning: '遗弃，放弃' },
+        { word: 'abandoned', pos: 'adj.', meaning: '被抛弃的，放荡的' },
+      ],
+    },
     memory_tips: '把 abandon 想成“放开控制”，引申为放弃、抛弃。',
   }
 }
 
 export function previewRecord(term = 'abandon') {
   const parsed = previewParsed(term)
+  const isVigor = String(term).toLowerCase() === 'vigor'
+  if (isVigor) {
+    return {
+      id: 2,
+      term: 'vigor',
+      normalizedTerm: 'vigor',
+      cacheHit: true,
+      provider: 'preview',
+      modelName: 'design-preview',
+      sessionId: 1,
+      parsed,
+      rawContent: JSON.stringify(parsed, null, 2),
+      lookupCount: 5,
+      tags: [
+        { tagType: 'part_of_speech', displayName: 'noun' },
+        { tagType: 'meaning_topic', displayName: '生命力/活力' },
+        { tagType: 'difficulty', displayName: 'cet6' },
+        { tagType: 'collocation', displayName: 'with vigor' },
+      ],
+      relations: [
+        { relatedTerm: 'vitality', relationType: 'synonym', relatedPartOfSpeech: 'noun', relatedMeaning: '生命力，活力', relatedPhoneticUk: '/vaɪˈtæləti/', relatedPhoneticUs: '/vaɪˈtæləti/', matchType: 'parsed_object', matchScore: 95 },
+        { relatedTerm: 'lethargy', relationType: 'antonym', relatedPartOfSpeech: 'noun', relatedMeaning: '无精打采，倦怠', relatedPhoneticUk: '/ˈleθədʒi/', relatedPhoneticUs: '/ˈleθərdʒi/', matchType: 'parsed_object', matchScore: 88 },
+        { relatedTerm: 'vigorous', relationType: 'word_family', relatedPartOfSpeech: 'adjective', relatedMeaning: '充满活力的，强健的', relatedPhoneticUk: '/ˈvɪɡərəs/', relatedPhoneticUs: '/ˈvɪɡərəs/', matchType: 'parsed_object', matchScore: 92 },
+      ],
+    }
+  }
+
   return {
     id: 1,
     term,

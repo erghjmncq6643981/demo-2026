@@ -1,0 +1,126 @@
+<Slide style={{ width: 1280, height: 720, background: '#FFFFFF', position: 'relative', fontFamily: '微软雅黑', padding: '72px 60px 60px 60px' }}>
+    <Box style={{ position: 'absolute', top: 0, left: 0, width: 1280, height: 56, background: '#1E4FA8', flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingLeft: 60, paddingRight: 60 }}>
+        <Text style={{ fontSize: 32, fontWeight: 'bold', color: '#FFFFFF' }}>模块与治理：边界写在测试里</Text>
+        <Text style={{ fontSize: 16, color: 'rgba(255,255,255,0.72)' }}>03 · Modular Monolith</Text>
+    </Box>
+
+    <Box style={{ flexDirection: 'column', width: 1160, height: 588, justifyContent: 'space-between' }}>
+        <Box style={{ flexDirection: 'row', gap: 56 }}>
+            <Box style={{ width: 540, flexDirection: 'column' }}>
+                <Text style={{ fontSize: 14, color: '#8B97A8', letterSpacing: 1 }}>六个业务域的实际代码规模（Java 类）</Text>
+                <Box style={{ flexDirection: 'column', marginTop: 18, gap: 14 }}>
+                    <Box style={{ flexDirection: 'row', alignItems: 'center', gap: 12 }}>
+                        <Text style={{ width: 104, fontSize: 17, color: '#1A2230' }}>vocabulary</Text>
+                        <Box style={{ width: 330, height: 18, background: '#E8EFF8' }}>
+                            <Box style={{ width: 330, height: 18, background: '#1E4FA8' }} />
+                        </Box>
+                        <Text style={{ width: 42, fontSize: 17, fontWeight: 'bold', color: '#1E4FA8', textAlign: 'right' }}>106</Text>
+                    </Box>
+                    <Box style={{ flexDirection: 'row', alignItems: 'center', gap: 12 }}>
+                        <Text style={{ width: 104, fontSize: 17, color: '#1A2230' }}>learning</Text>
+                        <Box style={{ width: 330, height: 18, background: '#E8EFF8' }}>
+                            <Box style={{ width: 255, height: 18, background: '#1E4FA8' }} />
+                        </Box>
+                        <Text style={{ width: 42, fontSize: 17, fontWeight: 'bold', color: '#1E4FA8', textAlign: 'right' }}>82</Text>
+                    </Box>
+                    <Box style={{ flexDirection: 'row', alignItems: 'center', gap: 12 }}>
+                        <Text style={{ width: 104, fontSize: 17, color: '#1A2230' }}>ai</Text>
+                        <Box style={{ width: 330, height: 18, background: '#E8EFF8' }}>
+                            <Box style={{ width: 252, height: 18, background: '#1E4FA8' }} />
+                        </Box>
+                        <Text style={{ width: 42, fontSize: 17, fontWeight: 'bold', color: '#1E4FA8', textAlign: 'right' }}>81</Text>
+                    </Box>
+                    <Box style={{ flexDirection: 'row', alignItems: 'center', gap: 12 }}>
+                        <Text style={{ width: 104, fontSize: 17, color: '#1A2230' }}>identity</Text>
+                        <Box style={{ width: 330, height: 18, background: '#E8EFF8' }}>
+                            <Box style={{ width: 90, height: 18, background: '#3D7BD9' }} />
+                        </Box>
+                        <Text style={{ width: 42, fontSize: 17, fontWeight: 'bold', color: '#3D7BD9', textAlign: 'right' }}>29</Text>
+                    </Box>
+                    <Box style={{ flexDirection: 'row', alignItems: 'center', gap: 12 }}>
+                        <Text style={{ width: 104, fontSize: 17, color: '#1A2230' }}>task</Text>
+                        <Box style={{ width: 330, height: 18, background: '#E8EFF8' }}>
+                            <Box style={{ width: 78, height: 18, background: '#3D7BD9' }} />
+                        </Box>
+                        <Text style={{ width: 42, fontSize: 17, fontWeight: 'bold', color: '#3D7BD9', textAlign: 'right' }}>25</Text>
+                    </Box>
+                    <Box style={{ flexDirection: 'row', alignItems: 'center', gap: 12 }}>
+                        <Text style={{ width: 104, fontSize: 17, color: '#1A2230' }}>system</Text>
+                        <Box style={{ width: 330, height: 18, background: '#E8EFF8' }}>
+                            <Box style={{ width: 65, height: 18, background: '#3D7BD9' }} />
+                        </Box>
+                        <Text style={{ width: 42, fontSize: 17, fontWeight: 'bold', color: '#3D7BD9', textAlign: 'right' }}>21</Text>
+                    </Box>
+                    <Box style={{ flexDirection: 'row', alignItems: 'center', gap: 12 }}>
+                        <Text style={{ width: 104, fontSize: 17, color: '#1A2230' }}>reading</Text>
+                        <Box style={{ width: 330, height: 18, background: '#E8EFF8' }}>
+                            <Box style={{ width: 56, height: 18, background: '#3D7BD9' }} />
+                        </Box>
+                        <Text style={{ width: 42, fontSize: 17, fontWeight: 'bold', color: '#3D7BD9', textAlign: 'right' }}>18</Text>
+                    </Box>
+                </Box>
+                <Text style={{ fontSize: 15, color: '#8B97A8', lineHeight: 1.5, marginTop: 18 }}>
+                    合计 400 个类，另含 config 14、security 16、common 5。词汇与 AI 两个域占了近一半，这正是业务复杂度的真实分布。
+                </Text>
+                <Box style={{ flexDirection: 'column', gap: 8, marginTop: 20, paddingTop: 18, borderTop: '1px solid #E5E7EB' }}>
+                    <Text style={{ fontSize: 18, fontWeight: 'bold', color: '#1A2230' }}>按业务域切，不按技术层切</Text>
+                    <Text style={{ fontSize: 17, color: '#4A5568', lineHeight: 1.55 }}>
+                        改一个功能只动一个包：词汇相关的控制器、用例、实体、Mapper 全在 vocabulary 下，评审和回溯不用跨五个根目录。代价是同域内会有少量重复 DTO，这个重复我选择接受。
+                    </Text>
+                </Box>
+            </Box>
+
+            <Box style={{ width: 564, flexDirection: 'column' }}>
+                <Text style={{ fontSize: 14, color: '#8B97A8', letterSpacing: 1 }}>四条硬规则，由架构测试强制执行</Text>
+                <Box style={{ flexDirection: 'column', gap: 12, marginTop: 18 }}>
+                    <Box style={{ flexDirection: 'row', gap: 12, alignItems: 'flex-start' }}>
+                        <Text style={{ fontSize: 16, fontWeight: 'bold', color: '#3D7BD9', width: 24 }}>01</Text>
+                        <Text style={{ fontSize: 18, color: '#1A2230', lineHeight: 1.5, width: 528 }}>
+                            api → application → domain；infrastructure → domain，依赖方向单向。
+                        </Text>
+                    </Box>
+                    <Box style={{ flexDirection: 'row', gap: 12, alignItems: 'flex-start' }}>
+                        <Text style={{ fontSize: 16, fontWeight: 'bold', color: '#3D7BD9', width: 24 }}>02</Text>
+                        <Text style={{ fontSize: 18, color: '#1A2230', lineHeight: 1.5, width: 528 }}>
+                            控制器不碰 Mapper，领域代码不反向依赖接口层或基础设施层。
+                        </Text>
+                    </Box>
+                    <Box style={{ flexDirection: 'row', gap: 12, alignItems: 'flex-start' }}>
+                        <Text style={{ fontSize: 16, fontWeight: 'bold', color: '#3D7BD9', width: 24 }}>03</Text>
+                        <Text style={{ fontSize: 18, color: '#1A2230', lineHeight: 1.5, width: 528 }}>
+                            跨域访问只走窄化过的应用契约，不直接拿别人的实体和 Mapper。
+                        </Text>
+                    </Box>
+                    <Box style={{ flexDirection: 'row', gap: 12, alignItems: 'flex-start' }}>
+                        <Text style={{ fontSize: 16, fontWeight: 'bold', color: '#3D7BD9', width: 24 }}>04</Text>
+                        <Text style={{ fontSize: 18, color: '#1A2230', lineHeight: 1.5, width: 528 }}>
+                            controller / service / mapper 这类横向根包禁止重建，实体、枚举、Mapper 各归其包。
+                        </Text>
+                    </Box>
+                </Box>
+
+                <Box style={{ flexDirection: 'column', gap: 8, marginTop: 22, paddingTop: 18, borderTop: '1px solid #E5E7EB' }}>
+                    <Text style={{ fontSize: 18, fontWeight: 'bold', color: '#1A2230' }}>另有两条规模与文档约束</Text>
+                    <Text style={{ fontSize: 17, color: '#4A5568', lineHeight: 1.55 }}>
+                        单文件超过既定行数，必须按渲染、状态、策略或持久化职责拆开才能合并；对外接口与关键领域概念必须写中文说明，缺文档的提交一样过不了。
+                    </Text>
+                </Box>
+                <Text style={{ fontSize: 14, color: '#8B97A8', lineHeight: 1.5, marginTop: 12 }}>
+                    LayeredPackageArchitectureTest · AiPackageArchitectureTest · SourceSizeGovernanceTest · ChineseDocumentationGovernanceTest
+                </Text>
+            </Box>
+        </Box>
+
+        <Box style={{ flexDirection: 'row', background: '#F7F9FC', alignItems: 'center', padding: '14px 22px', gap: 14 }}>
+            <Box style={{ width: 3, height: 30, background: '#1E4FA8' }} />
+            <Text style={{ fontSize: 18, color: '#1A2230' }}>
+                边界不是写在文档里靠人自觉，是 CI 里跑不过就合不进去。
+            </Text>
+        </Box>
+    </Box>
+
+    <Box style={{ position: 'absolute', top: 670, left: 60, width: 1160, flexDirection: 'row', justifyContent: 'space-between' }}>
+        <Text style={{ fontSize: 14, color: '#8B97A8' }}>基于大模型的英语学习助手 · 毕业答辩</Text>
+        <Text style={{ fontSize: 14, color: '#8B97A8' }}>04 / 11</Text>
+    </Box>
+</Slide>

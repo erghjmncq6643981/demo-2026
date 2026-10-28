@@ -34,6 +34,12 @@ public class WordbookEntryResponse {
     @Schema(description = "标准化词汇")
     private String normalizedTerm;
 
+    @Schema(description = "音标")
+    private String phonetic;
+
+    @Schema(description = "核心释义摘要")
+    private String meaningText;
+
     @Schema(description = "学习笔记")
     private String note;
 

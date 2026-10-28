@@ -144,7 +144,8 @@ export function bindKeyboardShortcuts(ctx) {
       if (openModals.length > 0) {
         event.preventDefault()
         event.stopPropagation()
-        const topModal = openModals[openModals.length - 1]
+        const confirmModal = openModals.find((m) => m.id === 'deleteConfirmModal')
+        const topModal = confirmModal || openModals[openModals.length - 1]
         closeTopmostModal(topModal)
         return
       }
@@ -212,6 +213,37 @@ export function bindKeyboardShortcuts(ctx) {
 
     if (hasOpenModal) {
       return
+    }
+
+    const isWordbookView = state.activeView === 'wordbookView' || elements.wordbookView?.classList.contains('active')
+    if (isWordbookView && !isWordCardModalOpen && !hasOpenModal && !isTyping) {
+      if (key === ' ' || code === 'Space') {
+        event.preventDefault()
+        event.stopPropagation()
+        elements.wordbookPlayAudioBtn?.click()
+        return
+      }
+      const isPlayerBarActive = elements.wordbookAudioPlayerBar && !elements.wordbookAudioPlayerBar.classList.contains('hidden')
+      if (isPlayerBarActive) {
+        if (keyLower === 'j' || code === 'KeyJ') {
+          event.preventDefault()
+          event.stopPropagation()
+          elements.wordbookAudioPrevBtn?.click()
+          return
+        }
+        if (keyLower === 'k' || code === 'KeyK') {
+          event.preventDefault()
+          event.stopPropagation()
+          elements.wordbookAudioNextBtn?.click()
+          return
+        }
+        if (key === 'Escape' || code === 'Escape') {
+          event.preventDefault()
+          event.stopPropagation()
+          elements.wordbookAudioStopBtn?.click()
+          return
+        }
+      }
     }
 
     const isStudyView = state.activeView === 'studyView' || elements.studyView?.classList.contains('active')

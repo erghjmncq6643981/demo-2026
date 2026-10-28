@@ -1,4 +1,5 @@
 import { normalizeWordbookId } from '/src/shared/wordbook.js'
+import { canManageCatalogs } from '/src/shared/permissions.js'
 import { PLAN_STATUS_LABELS, SOURCE_LABELS, asArray, localDateKey, number } from '/src/features/learning/scene-plan/model.js'
 import { createPreviewPlan, createPreviewCookingUnit, previewCatalog } from '/src/features/learning/scene-plan/preview-data.js'
 import { isWordComplete } from '/src/features/learning/scene-plan/challenge-model.js'
@@ -151,9 +152,9 @@ export function createScenePlanFeature(ctx) {
     }
     const selectedPlanId = options.planId || options.preferredPlanId || state.currentLearningPlan?.id
     try {
-      const canManageCatalogs = state.user?.roleCode === 'ADMIN'
+      const canManage = canManageCatalogs(state)
       const [imports, publicCatalogs, plans, tags] = await Promise.all([
-        canManageCatalogs ? api.listImports() : Promise.resolve([]),
+        canManage ? api.listImports() : Promise.resolve([]),
         api.listPublicCatalogs(),
         api.listPlans(),
         catalogApi.listTags().catch(() => []),

@@ -1,5 +1,5 @@
 import { escapeHtml } from '/src/shared/text.js'
-import { normalizeArray, renderCollocationMini, renderRelationItem, semanticRelations, statusLabel } from '/src/shared/vocabulary.js'
+import { cleanPhonetic, normalizeArray, renderCollocationMini, renderRelationItem, semanticRelations, statusLabel } from '/src/shared/vocabulary.js'
 
 export function createWordbookDetailFeature(ctx) {
   const {
@@ -11,7 +11,6 @@ export function createWordbookDetailFeature(ctx) {
     readText,
     stringifyValue,
     tagLabel,
-    openEntryInReview,
     editCurrentNote,
     openEntryStatusModal,
     speak,
@@ -62,7 +61,11 @@ export function createWordbookDetailFeature(ctx) {
         elements.wordbookCardGenerateBtn.title = '选择单词后生成词卡'
         elements.wordbookCardGenerateBtn.dataset.generateCard = ''
       } else {
-        const parsed = entry.parsed || {}
+        let parsed = entry.parsed
+        if (typeof parsed === 'string') {
+          try { parsed = JSON.parse(parsed) } catch { parsed = {} }
+        }
+        parsed = parsed || {}
         let defs = normalizeDefinitions(parsed)
         if (!defs.length && entry.meaningText) {
           defs = [{ pos: 'meaning', cn: entry.meaningText }]
@@ -88,7 +91,14 @@ export function createWordbookDetailFeature(ctx) {
       updateOuterCardControls(null)
       return
     }
-    const parsed = entry.parsed || {}
+    let parsed = entry.parsed
+    if (typeof parsed === 'string') {
+      try { parsed = JSON.parse(parsed) } catch { parsed = {} }
+    }
+    parsed = parsed || {}
+    const hasParsedDetail = Boolean(parsed && typeof parsed === 'object' && Object.keys(parsed).length > 0)
+    const isCardReady = entry.cardStatus === 'ready'
+    const isDetailLoading = isCardReady && !hasParsedDetail
     let definitions = normalizeDefinitions(parsed)
     if (!definitions.length && entry.meaningText) {
       definitions = [{ pos: 'meaning', cn: entry.meaningText }]
@@ -98,10 +108,122 @@ export function createWordbookDetailFeature(ctx) {
     const memoryTips = normalizeArray(parsed?.memory_tips || parsed?.memoryTips || parsed?.tips || parsed?.memory).slice(0, 3)
     const tags = Array.isArray(entry.tags) ? entry.tags.slice(0, 6) : []
     const relations = semanticRelations(entry.relations).slice(0, 6)
+    const pUk = parsed?.phonetic?.uk || parsed?.['phonetic.uk'] || parsed?.phonetic_uk || parsed?.phoneticUk
+    const pUs = parsed?.phonetic?.us || parsed?.['phonetic.us'] || parsed?.phonetic_us || parsed?.phoneticUs
+    const pSingle = typeof parsed?.phonetic === 'string' ? parsed.phonetic : (entry.phonetic || null)
+
     const phoneticItems = [
-      parsed?.phonetic?.uk && { type: 'uk', label: 'UK', text: parsed.phonetic.uk },
-      parsed?.phonetic?.us && { type: 'us', label: 'US', text: parsed.phonetic.us },
+      pUk && { type: 'uk', label: 'UK', text: cleanPhonetic(pUk) ? `/${cleanPhonetic(pUk)}/` : pUk },
+      pUs && { type: 'us', label: 'US', text: cleanPhonetic(pUs) ? `/${cleanPhonetic(pUs)}/` : pUs },
     ].filter(Boolean)
+    if (!phoneticItems.length && pSingle) {
+      const c = cleanPhonetic(pSingle)
+      phoneticItems.push({ type: 'us', label: '', text: c.startsWith('[') && c.endsWith(']') ? c : `/${c}/` })
+    }
+    const cognitiveImage = parsed?.cognitive_image || parsed?.cognitiveImage || null
+    const etymology = parsed?.etymology || null
+    const definitionsHtml = definitions.length
+      ? definitions
+          .map((item) => {
+            const posBadge = item.pos && item.pos !== 'meaning' && item.pos !== 'pos' ? `<span>${escapeHtml(item.pos)}</span>` : ''
+            return `<div>${posBadge}<p>${escapeHtml(item.cn || item.en || '')}</p></div>`
+          })
+          .join('')
+      : '<div class="empty">暂无释义</div>'
+
+    const cognitiveImageHtml = cognitiveImage && (cognitiveImage.title || cognitiveImage.description)
+      ? `
+        <div class="cognitive-image-card">
+          <div class="cognitive-image-header">
+            <span class="cognitive-badge">母语认知画像</span>
+            <h5 class="cognitive-title">${escapeHtml(cognitiveImage.title || '核心心智画面')}</h5>
+          </div>
+          <p class="cognitive-desc">${escapeHtml(cognitiveImage.description || '')}</p>
+          ${cognitiveImage.usage_note ? `<div class="cognitive-note"><span>💡 ${escapeHtml(cognitiveImage.usage_note)}</span></div>` : ''}
+        </div>
+      `
+      : (isDetailLoading
+        ? `
+          <div class="cognitive-image-card cognitive-image-card-loading">
+            <div class="cognitive-image-header">
+              <span class="cognitive-badge">母语认知画像</span>
+              <h5 class="cognitive-title">心智画面加载中...</h5>
+            </div>
+            <p class="cognitive-desc">正在拉取该单词的母语认知画像与语境构建...</p>
+          </div>
+        `
+        : '')
+
+    const etymologyComponents = Array.isArray(etymology?.components) ? etymology.components : []
+    const etymologyFamily = Array.isArray(etymology?.word_family) ? etymology.word_family : []
+    const etymologyHtml = (etymologyComponents.length || etymologyFamily.length)
+      ? `
+        <div class="focus-section">
+          <div class="panel-heading compact-heading">
+            <h3>词汇拓展与构词积木</h3>
+          </div>
+          <div class="etymology-block">
+            ${etymologyComponents.length ? `
+              <div class="etymology-chips">
+                ${etymologyComponents.map((part) => `
+                  <div class="etymology-chip ${escapeHtml(part.type || 'root')}">
+                    <span class="chip-tag">${escapeHtml(part.type === 'prefix' ? '前缀' : part.type === 'suffix' ? '后缀' : '词根')}</span>
+                    <strong class="chip-text">${escapeHtml(part.text || '')}</strong>
+                    <span class="chip-desc">${escapeHtml(part.origin ? `${part.origin}: ` : '')}${escapeHtml(part.meaning || '')}</span>
+                  </div>
+                `).join('')}
+              </div>
+            ` : ''}
+            ${etymologyFamily.length ? `
+              <div class="etymology-family-title">派生词族：</div>
+              <div class="etymology-family-list">
+                ${etymologyFamily.map((wf) => `
+                  <div class="etymology-family-item">
+                    <strong data-focus-related="${escapeHtml(wf.word)}">${escapeHtml(wf.word)}</strong>
+                    <span>${escapeHtml(wf.part_of_speech || '')} ${escapeHtml(wf.meaning || '')}</span>
+                  </div>
+                `).join('')}
+              </div>
+            ` : ''}
+          </div>
+        </div>
+      `
+      : ''
+
+    const collocationsHtml = collocations.length
+      ? `
+        <div class="focus-section">
+          <div class="panel-heading compact-heading">
+            <h3>高频短语与搭配</h3>
+            <span class="mini-pill">${collocations.length}</span>
+          </div>
+          <div class="collocation-card-grid">
+            ${collocations.map((item) => {
+              const phrase = typeof item === 'string' ? item : item.phrase || item.text || ''
+              const meaning = typeof item === 'string' ? '' : item.meaning || item.translation || ''
+              return `
+                <div class="collocation-card">
+                  <div class="collocation-card-header">
+                    <strong class="collocation-phrase" data-collocation-term="${escapeHtml(phrase)}">${escapeHtml(phrase)}</strong>
+                    ${phrase ? `<button class="mini-audio-button" type="button" data-speak-text="${escapeHtml(phrase)}" title="朗读短语">▶</button>` : ''}
+                  </div>
+                  ${meaning ? `<p class="collocation-meaning">${escapeHtml(meaning)}</p>` : ''}
+                </div>
+              `
+            }).join('')}
+          </div>
+        </div>
+      `
+      : (isDetailLoading
+        ? `
+          <div class="focus-section">
+            <div class="panel-heading compact-heading">
+              <h3>高频短语与搭配</h3>
+            </div>
+            <div class="card-detail-loading-placeholder"><span class="card-loading-spinner"></span> 搭配与短语加载中...</div>
+          </div>
+        `
+        : '')
     const term = entry.term || entry.normalizedTerm || ''
     if (elements.wordbookCardModalTitle) {
       elements.wordbookCardModalTitle.textContent = `单词卡片 · ${term}`
@@ -132,17 +254,11 @@ export function createWordbookDetailFeature(ctx) {
         </div>
       </div>
       <div class="mini-definition-list focus-section">
-        ${
-          definitions.length
-            ? definitions
-                .map((item) => {
-                  const posBadge = item.pos && item.pos !== 'meaning' && item.pos !== 'pos' ? `<span>${escapeHtml(item.pos)}</span>` : ''
-                  return `<div>${posBadge}<p>${escapeHtml(item.cn || item.en || '')}</p></div>`
-                })
-                .join('')
-            : '<div class="empty">暂无释义</div>'
-        }
+        ${definitionsHtml}
       </div>
+      ${cognitiveImageHtml}
+      ${collocationsHtml}
+      ${etymologyHtml}
       <div class="focus-section">
         <div class="panel-heading compact-heading">
           <h3>例句</h3>
@@ -162,34 +278,30 @@ export function createWordbookDetailFeature(ctx) {
                     `,
                   )
                   .join('')
-              : '暂无例句'
+              : (isDetailLoading
+                  ? '<div class="card-detail-loading-hint"><span class="card-loading-spinner"></span> 正在加载完整例句与深度释义...</div>'
+                  : '暂无例句')
           }
         </div>
       </div>
+      ${
+        !etymologyHtml && memoryTips.length
+          ? `
+            <div class="focus-section">
+              <div class="panel-heading compact-heading">
+                <h3>记忆提示</h3>
+              </div>
+              <div class="stack">
+                ${memoryTips.map((item) => `<div class="tip-item">${escapeHtml(readText(item, ['content', 'tip', 'text', 'meaning']) || stringifyValue(item))}</div>`).join('')}
+              </div>
+            </div>
+          `
+          : ''
+      }
       <div class="focus-section">
-        <div class="panel-heading compact-heading">
-          <h3>记忆提示</h3>
-        </div>
-        <div class="stack ${memoryTips.length ? '' : 'empty'}">
-          ${
-            memoryTips.length
-              ? memoryTips.map((item) => `<div class="tip-item">${escapeHtml(readText(item, ['content', 'tip', 'text', 'meaning']) || stringifyValue(item))}</div>`).join('')
-              : '暂无记忆提示'
-          }
-        </div>
-      </div>
-      <div class="focus-subgrid">
-        <div>
-          <div class="panel-heading compact-heading"><h3>搭配</h3></div>
-          <div class="collocation-list ${collocations.length ? '' : 'empty'}">
-            ${collocations.length ? collocations.map(renderCollocationMini).join('') : '暂无搭配'}
-          </div>
-        </div>
-        <div>
-          <div class="panel-heading compact-heading"><h3>相关单词</h3></div>
-          <div class="relation-list ${relations.length ? '' : 'empty'}">
-            ${relations.length ? relations.map((item) => renderRelationItem(item, 'focus-related')).join('') : '暂无关联词'}
-          </div>
+        <div class="panel-heading compact-heading"><h3>相关单词</h3></div>
+        <div class="relation-list ${relations.length ? '' : 'empty'}">
+          ${relations.length ? relations.map((item) => renderRelationItem(item, 'focus-related')).join('') : (isDetailLoading ? '<span class="card-detail-loading-hint">关联词加载中...</span>' : '暂无关联词')}
         </div>
       </div>
       <div class="focus-section">
@@ -205,7 +317,7 @@ export function createWordbookDetailFeature(ctx) {
           <button class="icon-button compact-icon" type="button" data-toggle-tags title="隐藏标签" aria-label="隐藏标签" aria-pressed="true">${visibilityIcon(false)}</button>
         </div>
         <div class="chips focus-tags">
-          ${tags.length ? tags.map((tag) => `<span class="chip tag-chip">${escapeHtml(tagLabel(tag))}</span>`).join('') : '<span class="empty">暂无标签</span>'}
+          ${tags.length ? tags.map((tag) => `<span class="chip tag-chip">${escapeHtml(tagLabel(tag))}</span>`).join('') : (isDetailLoading ? '<span class="card-detail-loading-hint">标签加载中...</span>' : '<span class="empty">暂无标签</span>')}
         </div>
       </div>
       <div class="focus-section focus-actions-bar">

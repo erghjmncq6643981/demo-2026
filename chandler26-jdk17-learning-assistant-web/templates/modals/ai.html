@@ -1,0 +1,126 @@
+    <section class="modal-backdrop hidden" id="modelConfigModal" aria-modal="true" role="dialog">
+      <div class="config-modal">
+        <div class="panel-heading">
+          <div>
+            <p class="eyebrow">Model</p>
+            <h3 id="modelModalTitle">新增模型</h3>
+          </div>
+          <button class="icon-button" id="closeModelModalBtn" type="button" title="关闭">×</button>
+        </div>
+        <div class="model-form-grid">
+          <label>模型名称<input id="modelNameInput" placeholder="例如：DeepSeek 默认" /></label>
+          <label>
+            供应商
+            <select id="modelProviderInput"></select>
+          </label>
+          <label>
+            模型明细
+            <select id="modelModelNameInput"></select>
+          </label>
+          <label>Base URL<input id="modelBaseUrlInput" placeholder="例如：https://api.provider.example" /></label>
+          <label>Chat Path<input id="modelChatPathInput" placeholder="/chat/completions" /></label>
+          <label>API KEY<input id="modelApiKeyInput" type="password" placeholder="API KEY" /></label>
+          <label>顺序<input id="modelSequenceInput" type="number" min="0" value="0" /></label>
+          <div class="model-toggle-row">
+            <input id="modelDefaultInput" type="checkbox" hidden />
+            <input id="modelEnabledInput" type="checkbox" hidden checked />
+            <button class="toggle-box" id="modelDefaultToggleBtn" type="button" aria-pressed="false">
+              <span>默认模型</span>
+              <small>学习页优先使用</small>
+            </button>
+            <button class="toggle-box active" id="modelEnabledToggleBtn" type="button" aria-pressed="true">
+              <span>启用状态</span>
+              <small>允许学习时调用</small>
+            </button>
+          </div>
+        </div>
+        <div class="modal-actions">
+          <button class="secondary-button compact" id="saveAndTestModelBtn" type="button">保存并测试</button>
+          <button class="primary-button compact-primary" id="saveModelBtn" type="button">保存模型</button>
+        </div>
+      </div>
+    </section>
+    <section class="modal-backdrop hidden" id="agentModal" aria-modal="true" role="dialog">
+      <div class="config-modal">
+        <div class="panel-heading">
+          <div>
+            <p class="eyebrow">Agent</p>
+            <h3 id="agentModalTitle">新增学习Agent</h3>
+          </div>
+          <button class="icon-button" id="closeAgentModalBtn" type="button" title="关闭">×</button>
+        </div>
+        <div class="model-form-grid">
+          <label>Agent 名称<input id="agentNameInput" placeholder="例如：英语词汇学习" /></label>
+          <label>Agent 编码<input id="agentCodeInput" placeholder="例如：english_vocabulary" /></label>
+          <label>类型<input id="agentTypeInput" placeholder="chat" /></label>
+          <label>图标<input id="agentIconInput" placeholder="✦" /></label>
+          <label class="full-row">
+            绑定模型配置
+            <select id="agentModelConfigInput"></select>
+          </label>
+          <label>排序<input id="agentSequenceInput" type="number" min="0" value="0" /></label>
+          <label>温度<input id="agentTemperatureInput" type="number" min="0" max="2" step="0.1" /></label>
+          <label>最大 Tokens<input id="agentMaxTokensInput" type="number" min="1" step="1" /></label>
+          <label class="full-row">描述<textarea id="agentDescriptionInput" rows="3"></textarea></label>
+          <label class="full-row">系统提示词<textarea id="agentSystemPromptInput" rows="5"></textarea></label>
+          <label class="full-row">精简提示词<textarea id="agentConcisePromptInput" rows="4"></textarea></label>
+          <label class="full-row">欢迎语<textarea id="agentWelcomeMessageInput" rows="3"></textarea></label>
+          <label class="full-row">预设指令 JSON<textarea id="agentPresetCommandsInput" rows="4"></textarea></label>
+        </div>
+        <div class="modal-actions">
+          <button class="primary-button compact-primary" id="saveAgentBtn" type="button">保存学习Agent</button>
+        </div>
+      </div>
+    </section>
+
+    <section class="modal-backdrop hidden" id="templateModal" aria-modal="true" role="dialog">
+      <div class="config-modal">
+        <div class="panel-heading">
+          <div>
+            <p class="eyebrow">Template</p>
+            <h3 id="templateModalTitle">新增学习Agent模板</h3>
+          </div>
+          <button class="icon-button" id="closeTemplateModalBtn" type="button" title="关闭">×</button>
+        </div>
+        <div class="template-editor-panel">
+          <div class="template-meta-grid">
+            <label>模板名称<input id="templateNameInput" /></label>
+            <label>模板编码<input id="templateCodeInput" /></label>
+            <label>类型<input id="templateTypeInput" /></label>
+            <label>排序<input id="templateSequenceInput" type="number" min="0" /></label>
+          </div>
+          <label>标签<input id="templateTagsInput" /></label>
+          <label>描述<textarea id="templateDescriptionInput" rows="3"></textarea></label>
+          <div class="template-meta-grid">
+            <label>示例输入<textarea id="templateExampleInput" rows="4"></textarea></label>
+            <label>示例输出<textarea id="templateExampleOutput" rows="4"></textarea></label>
+          </div>
+          <div>
+            <div class="panel-subtitle">占位符</div>
+            <div id="templatePlaceholderList" class="chips empty">暂无占位符</div>
+          </div>
+          <label>模板内容<textarea id="templateContentInput" rows="12" placeholder="必须包含 {{term}}"></textarea></label>
+          <div id="templateValidationMessage" class="validation-message">模板内容需要包含声明的占位符。</div>
+        </div>
+        <div class="modal-actions">
+          <button class="primary-button compact-primary" id="saveTemplateBtn" type="button">保存模板</button>
+        </div>
+      </div>
+    </section>
+
+    <section class="modal-backdrop hidden" id="aiSessionDetailModal" aria-modal="true" role="dialog" aria-labelledby="aiSessionDetailTitle">
+      <div class="config-modal detail-modal ai-session-detail-modal">
+        <div class="panel-heading">
+          <div><p class="eyebrow">AI Session Detail</p><h3 id="aiSessionDetailTitle">AI 会话详情</h3></div>
+          <button class="icon-button" id="closeAiSessionDetailBtn" type="button" title="关闭" aria-label="关闭">×</button>
+        </div>
+        <div id="aiSessionDetailMeta" class="ai-session-detail-meta"></div>
+        <div id="aiSessionDetailTabs" class="ai-session-detail-tabs" role="tablist" aria-label="AI 会话详情视图">
+          <button class="segmented-button active" type="button" role="tab" aria-selected="true" data-ai-session-detail-tab="overview">概览</button>
+          <button class="segmented-button" type="button" role="tab" aria-selected="false" data-ai-session-detail-tab="messages">消息</button>
+          <button class="segmented-button" type="button" role="tab" aria-selected="false" data-ai-session-detail-tab="calls">模型调用</button>
+          <button class="segmented-button" type="button" role="tab" aria-selected="false" data-ai-session-detail-tab="raw">原始数据</button>
+        </div>
+        <div id="aiSessionDetailContent" class="ai-session-detail-content"></div>
+      </div>
+    </section>

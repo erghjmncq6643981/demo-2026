@@ -56,6 +56,7 @@ public interface LearningWordbookEntryMapper extends BaseMapper<LearningWordbook
             @Param("userId") Long userId,
             @Param("wordbookId") Long wordbookId,
             @Param("status") String status,
+            @Param("cardStatus") String cardStatus,
             @Param("keyword") String keyword,
             @Param("dueOnly") boolean dueOnly,
             @Param("now") java.time.LocalDateTime now);

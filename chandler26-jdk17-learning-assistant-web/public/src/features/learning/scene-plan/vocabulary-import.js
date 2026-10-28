@@ -1,4 +1,5 @@
 import { showModal, hideModal } from '/src/shared/modal.js'
+import { canManageCatalogs as checkCanManageCatalogs } from '/src/shared/permissions.js'
 import { SOURCE_LABELS, asArray, number } from '/src/features/learning/scene-plan/model.js'
 import { parsePreviewMarkdown as parseMarkdown } from '/src/features/learning/scene-plan/markdown-parser.js'
 import { createVocabularyImportView } from '/src/features/learning/scene-plan/vocabulary-import-view.js'
@@ -300,7 +301,7 @@ export function createVocabularyImportWorkflow({
       if (keyword) params.set('keyword', keyword)
       state.currentVocabularyImport = await catalogApi.getImport(jobId, params)
       renderReview()
-      const canManageCatalogs = state.preview || state.user?.roleCode === 'ADMIN'
+      const canManageCatalogs = checkCanManageCatalogs(state)
       if (canManageCatalogs && state.currentVocabularyImport?.catalogVersionId) {
         await loadAnalysis(state.currentVocabularyImport.catalogVersionId, { quiet: true })
       }
@@ -312,7 +313,7 @@ export function createVocabularyImportWorkflow({
 
   async function loadAnalysis(catalogVersionId, options = {}) {
     if (!catalogVersionId) return null
-    const canManageCatalogs = state.preview || state.user?.roleCode === 'ADMIN'
+    const canManageCatalogs = checkCanManageCatalogs(state)
     if (!canManageCatalogs) return null
     if (state.preview) {
       renderAnalysis()
@@ -331,7 +332,7 @@ export function createVocabularyImportWorkflow({
   }
 
   async function triggerAnalysis() {
-    const canManageCatalogs = state.preview || state.user?.roleCode === 'ADMIN'
+    const canManageCatalogs = checkCanManageCatalogs(state)
     if (!canManageCatalogs) return
     const current = state.currentVocabularyImport
     if (!current || !current.catalogVersionId) return
@@ -415,7 +416,7 @@ export function createVocabularyImportWorkflow({
   }
 
   async function publish() {
-    const canManageCatalogs = state.preview || state.user?.roleCode === 'ADMIN'
+    const canManageCatalogs = checkCanManageCatalogs(state)
     if (!canManageCatalogs) return
     const current = state.currentVocabularyImport
     if (!current || current.status === 'published') return
@@ -451,7 +452,7 @@ export function createVocabularyImportWorkflow({
         state.currentVocabularyImport = current
       } else {
         state.currentVocabularyImport = await catalogApi.publish(current.jobId)
-        const canManageCatalogs = state.preview || state.user?.roleCode === 'ADMIN'
+        const canManageCatalogs = checkCanManageCatalogs(state)
         if (canManageCatalogs && state.currentVocabularyImport?.catalogVersionId) {
           await loadAnalysis(state.currentVocabularyImport.catalogVersionId, { quiet: true })
         }

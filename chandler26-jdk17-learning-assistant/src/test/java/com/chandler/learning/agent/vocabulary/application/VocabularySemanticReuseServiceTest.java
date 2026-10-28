@@ -2,6 +2,7 @@ package com.chandler.learning.agent.vocabulary.application;
 
 import com.chandler.learning.agent.vocabulary.domain.entity.*;
 import com.chandler.learning.agent.vocabulary.infrastructure.VocabularySemanticGenerationLock;
+import com.chandler.learning.agent.vocabulary.infrastructure.mapper.EnglishVocabularyStudyRecordMapper;
 import com.chandler.learning.agent.vocabulary.infrastructure.mapper.VocabularySemanticAssetMapper;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import org.junit.jupiter.api.BeforeEach;
@@ -17,7 +18,8 @@ class VocabularySemanticReuseServiceTest {
     private final Map<String, VocabularySemanticAsset> storage = new HashMap<>();
     private final VocabularySemanticAssetMapper mapper = mock(VocabularySemanticAssetMapper.class);
     private final VocabularySemanticGenerationLock lock = mock(VocabularySemanticGenerationLock.class);
-    private final VocabularySemanticReuseService service = new VocabularySemanticReuseService(mapper, lock, new ObjectMapper());
+    private final EnglishVocabularyStudyRecordMapper studyRecordMapper = mock(EnglishVocabularyStudyRecordMapper.class);
+    private final VocabularySemanticReuseService service = new VocabularySemanticReuseService(mapper, lock, new ObjectMapper(), studyRecordMapper);
 
     @BeforeEach
     void setup() {
@@ -106,6 +108,48 @@ class VocabularySemanticReuseServiceTest {
         service.resolve(job(10), List.of(entry), Map.of(1L, entry), false, cold -> List.of(analysis(1, "[]")));
         assertThat(service.resolve(job(20), List.of(entry), Map.of(1L, entry), true, cold -> List.of())).isEmpty();
         assertThat(storage.get("bank").getSourceJobId()).isEqualTo(10L);
+    }
+
+    @Test
+    void reusesFromExistingStudyRecordsWithoutCallingAi() {
+        var first = entry(1, "airport");
+        var related = entry(2, "airfield");
+
+        EnglishVocabularyStudyRecord record = new EnglishVocabularyStudyRecord();
+        record.setId(1001L);
+        record.setNormalizedTerm("airport");
+        record.setParsedJson("""
+                {
+                  "term": "airport",
+                  "lemma": "airport",
+                  "definitions": [
+                    { "meaning": "机场；航空港", "part_of_speech": "noun" }
+                  ],
+                  "cognitive_image": {
+                    "title": "空中枢纽",
+                    "domain": "transport"
+                  },
+                  "synonyms": ["airfield（简易跑道）", "aerodrome"],
+                  "antonyms": [],
+                  "etymology": {
+                    "word_family": ["airport"]
+                  }
+                }
+                """);
+        when(studyRecordMapper.selectList(any())).thenReturn(List.of(record));
+
+        var result = service.resolve(job(10), List.of(first), Map.of(1L, first, 2L, related), false,
+                cold -> { throw new AssertionError("已有词卡不应调用大模型接口"); });
+
+        assertThat(result).hasSize(1);
+        var analysis = result.get(0);
+        assertThat(analysis.getSource()).isEqualTo("inherited");
+        assertThat(analysis.getCatalogEntryId()).isEqualTo(1L);
+        assertThat(analysis.getPrimaryGroupCode()).isEqualTo("AIRPORT");
+        assertThat(analysis.getPrimaryGroupName()).isEqualTo("airport");
+        assertThat(analysis.getRelatedEntryIdsJson()).isEqualTo("[2]");
+        assertThat(storage).containsKey("airport");
+        assertThat(storage.get("airport").getSemanticJson()).contains("AIRPORT");
     }
 
     @Test

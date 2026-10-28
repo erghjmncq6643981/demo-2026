@@ -1,0 +1,244 @@
+    <section class="modal-backdrop hidden" id="quickLookupModal" aria-modal="true" role="dialog" aria-labelledby="quickLookupTitle">
+      <div class="config-modal quick-lookup-modal" data-modal-scroll>
+        <div class="panel-heading">
+          <div>
+            <p class="eyebrow">Quick Lookup</p>
+            <h3 id="quickLookupTitle">全局快速查词 (⌘K / Ctrl+K)</h3>
+          </div>
+          <button class="icon-button" id="quickLookupCloseBtn" type="button" title="关闭 (Esc)" aria-label="关闭">×</button>
+        </div>
+        <div class="quick-lookup-body">
+          <form class="search-card quick-lookup-input-bar" id="quickLookupForm">
+            <input id="quickLookupInput" class="term-input" autocomplete="off" placeholder="输入英语单词后回车（或按 Esc 退出）" />
+            <button class="primary-button compact-primary" type="submit">查词</button>
+          </form>
+          <div id="quickLookupContent" class="quick-lookup-content empty">输入任意英文单词快速查看 AI 词卡</div>
+        </div>
+      </div>
+    </section>
+    <!-- 5秒跟敲巩固模态弹窗 -->
+    <section class="modal-backdrop hidden" id="miniQuizModal" aria-modal="true" role="dialog" aria-labelledby="miniQuizModalTitle">
+      <div class="config-modal mini-quiz-modal" data-modal-scroll>
+        <div class="panel-heading">
+          <div>
+            <p class="eyebrow">5-Second Recall</p>
+            <h3 id="miniQuizModalTitle">5秒跟敲巩固</h3>
+            <p class="panel-description">双手直接键入当前单词，通过击键与音效内化拼写肌肉记忆</p>
+          </div>
+          <div class="inline-actions">
+            <button type="button" class="secondary-button compact" id="restartMiniQuizBtn">重新敲击</button>
+            <button class="icon-button" id="closeMiniQuizModalBtn" type="button" title="关闭 (Esc)" aria-label="关闭">×</button>
+          </div>
+        </div>
+        <div class="mini-quiz-modal-body">
+          <div id="miniQuizBoard" class="mini-quiz-board empty">输入单词后开启跟敲微测</div>
+        </div>
+      </div>
+    </section>
+
+
+
+    <section class="modal-backdrop hidden" id="vocabularyImportModal" aria-modal="true" role="dialog">
+      <div class="config-modal vocabulary-import-modal" data-modal-scroll>
+        <div class="panel-heading">
+          <div>
+            <p class="eyebrow" id="vocabularyImportEyebrow">Vocabulary Import</p>
+            <h3 id="vocabularyImportTitle">导入 Markdown 词表</h3>
+          </div>
+          <button class="icon-button" id="closeVocabularyImportBtn" type="button" title="关闭" aria-label="关闭">×</button>
+        </div>
+
+        <section class="vocabulary-import-form" id="vocabularyImportForm">
+          <label for="vocabularyImportFile" class="file-upload-label" id="vocabularyImportFileLabel">
+            Markdown 文件
+            <input id="vocabularyImportFile" class="sr-only" type="file" accept=".md,text/markdown,text/plain" />
+            <div class="file-upload-trigger">
+              <span id="fileUploadPlaceholder">选择 Markdown 文件</span>
+            </div>
+          </label>
+          <label id="vocabularyImportNameLabel">词表名称<input id="vocabularyImportName" placeholder="例如：自考英语（二）词汇" /></label>
+          <label id="vocabularyImportSourceTypeLabel">
+            数据标签
+            <select id="vocabularyImportSourceType">
+              <option value="primary_to_middle">小升初</option>
+              <option value="ncee">高考</option>
+              <option value="self_study">自考</option>
+              <option value="toefl">托福</option>
+              <option value="cet4">四级</option>
+              <option value="cet6">六级</option>
+              <option value="ielts">雅思</option>
+            </select>
+          </label>
+          <label id="vocabularyImportPurposeLabel">词本说明<input id="vocabularyImportPurpose" placeholder="例如：自考英语（二）考试大纲词汇" /></label>
+          <div class="import-form-actions" id="vocabularyImportFormActions">
+            <button class="primary-button compact-primary" id="startVocabularyImportBtn" type="button">解析词表</button>
+            <button class="secondary-button compact hidden" id="saveVocabularyImportMetadataBtn" type="button">保存信息</button>
+          </div>
+        </section>
+
+        <div class="vocabulary-catalog-meta-banner hidden" id="vocabularyCatalogMetaBanner">
+          <div class="meta-item">
+            <span class="meta-label">分类</span>
+            <span class="mini-pill ok" id="catalogMetaSourceType">自考</span>
+          </div>
+          <div class="meta-item meta-desc">
+            <span class="meta-label">说明</span>
+            <span id="catalogMetaPurpose">官方考试大纲词汇</span>
+          </div>
+          <div class="meta-item meta-count">
+            <span class="mini-pill" id="catalogMetaTotal">0 词</span>
+          </div>
+        </div>
+
+        <section class="vocabulary-review-section hidden" id="vocabularyReviewSection">
+          <div class="vocabulary-review-summary" id="vocabularyReviewSummary">
+            <strong id="vocabularyImportSummary">0 个词</strong>
+            <span class="mini-pill" id="vocabularyWarningSummary">0 个待确认</span>
+          </div>
+          <div class="vocabulary-review-tools">
+            <label class="switch-line compact-switch" id="vocabularyWarningOnlyLabel">
+              <input id="vocabularyWarningOnly" type="checkbox" />
+              <span>只看疑似断词</span>
+            </label>
+            <label class="entry-prefix-field">
+              <span class="sr-only">搜索词条</span>
+              <input id="vocabularyImportKeyword" autocomplete="off" placeholder="搜索单词或释义" />
+            </label>
+            <button class="secondary-button compact hidden" id="vocabularyBatchConfirmBtn" type="button">采用全部建议</button>
+            <button class="secondary-button compact" id="vocabularyReloadReviewBtn" type="button">刷新</button>
+          </div>
+          <div class="vocabulary-review-table-wrap">
+            <table class="vocabulary-review-table">
+              <thead id="vocabularyReviewThead">
+                <tr>
+                  <th>序号</th>
+                  <th>原词</th>
+                  <th>建议 / 人工确认</th>
+                  <th>音标</th>
+                  <th>释义</th>
+                  <th>状态</th>
+                </tr>
+              </thead>
+              <tbody id="vocabularyReviewRows"></tbody>
+            </table>
+          </div>
+          <div class="vocabulary-review-footer">
+            <div class="vocabulary-pagination">
+              <button class="icon-action-button" id="vocabularyPrevPageBtn" type="button" title="上一页" aria-label="上一页">←</button>
+              <span id="vocabularyPageInfo">第 1 页</span>
+              <button class="icon-action-button" id="vocabularyNextPageBtn" type="button" title="下一页" aria-label="下一页">→</button>
+            </div>
+            <div class="vocabulary-analysis-action hidden" id="vocabularyAnalysisAction">
+              <span id="vocabularyAnalysisStatus">词本关联分析：未开始</span>
+              <button class="secondary-button compact" id="triggerVocabularyAnalysisBtn" type="button">开始关联分析</button>
+            </div>
+            <button class="primary-button compact-primary hidden" id="publishVocabularyImportBtn" type="button">发布公共词本</button>
+          </div>
+        </section>
+      </div>
+    </section>
+
+
+    <section class="modal-backdrop hidden" id="wordbookCardModal" aria-modal="true" role="dialog" aria-labelledby="wordbookCardModalTitle">
+      <div class="config-modal wordbook-card-modal" data-modal-scroll>
+        <div class="panel-heading wordbook-card-modal-header">
+          <div class="wordbook-card-header-main">
+            <p class="eyebrow" id="wordbookCardModalEyebrow">Word Card</p>
+            <div class="wordbook-card-title-row">
+              <h3 id="wordbookCardModalTitle">单词卡片</h3>
+              <span class="badge wordbook-card-progress hidden" id="wordbookCardProgress" aria-live="polite">0 / 0</span>
+            </div>
+          </div>
+          <div class="wordbook-card-header-actions">
+            <div class="button-group wordbook-card-nav-group" role="group" aria-label="卡片切换">
+              <button class="secondary-button compact" id="wordbookCardPrevBtn" type="button" title="快捷键：← 方向键" aria-label="上一个单词">
+                <span class="button-icon">←</span> 上一个
+              </button>
+              <button class="secondary-button compact" id="wordbookCardNextBtn" type="button" title="快捷键：→ 方向键" aria-label="下一个单词">
+                下一个 <span class="button-icon">→</span>
+              </button>
+            </div>
+            <button class="primary-button compact-primary" id="wordbookCardGenerateBtn" type="button" title="通过 AI 生成例句、记忆法、搭配与关联词">AI 生成词卡</button>
+            <button class="icon-button" id="closeWordbookCardModalBtn" type="button" title="关闭" aria-label="关闭">×</button>
+          </div>
+        </div>
+        <div id="wordbookFocus" class="wordbook-focus-container">
+          <div class="empty">选择单词后查看详情和笔记</div>
+        </div>
+      </div>
+    </section>
+    <section class="modal-backdrop hidden" id="wordbookModal" aria-modal="true" role="dialog">
+      <div class="config-modal small-modal">
+        <div class="panel-heading">
+          <div>
+            <p class="eyebrow">Wordbook</p>
+            <h3 id="wordbookModalTitle">新增单词本</h3>
+          </div>
+          <button class="icon-button" id="closeWordbookModalBtn" type="button" title="关闭">×</button>
+        </div>
+        <div class="model-form-grid">
+          <label>单词本名称<input id="newWordbookInput" placeholder="例如：四级高频词" /></label>
+          <label>描述<input id="wordbookDescriptionInput" placeholder="例如：考试核心词" /></label>
+          <label class="switch-line compact-switch">
+            <input id="wordbookDefaultInput" type="checkbox" />
+            <span>设为默认单词本</span>
+          </label>
+        </div>
+        <div class="modal-actions">
+          <button class="primary-button compact-primary" id="createWordbookBtn" type="button">保存单词本</button>
+        </div>
+      </div>
+    </section>
+
+    <section class="modal-backdrop hidden" id="addWordbookModal" aria-modal="true" role="dialog">
+      <div class="review-modal add-wordbook-modal">
+        <div class="panel-heading">
+          <div>
+            <p class="eyebrow">Wordbook</p>
+            <h3>选择词书</h3>
+          </div>
+          <button class="icon-button" id="closeAddWordbookModalBtn" type="button" title="关闭">×</button>
+        </div>
+        <p class="panel-description">将 <strong id="addWordbookTerm">当前单词</strong> 加入哪个词书？</p>
+        <div id="addWordbookList" class="wordbook-picker-list empty">暂无词书</div>
+      </div>
+    </section>
+    <section class="modal-backdrop hidden" id="entryTransferModal" aria-modal="true" role="dialog">
+      <div class="review-modal add-wordbook-modal">
+        <div class="panel-heading">
+          <div>
+            <p class="eyebrow">Wordbook</p>
+            <h3>复制或移动</h3>
+          </div>
+          <button class="icon-button" id="closeEntryTransferModalBtn" type="button" title="关闭">×</button>
+        </div>
+        <p class="panel-description">将 <strong id="entryTransferTerm">当前单词</strong> 复制或移动到其它单词本。</p>
+        <div id="entryTransferList" class="wordbook-picker-list empty">暂无可选单词本</div>
+      </div>
+    </section>
+    <section class="modal-backdrop hidden" id="entryStatusModal" aria-modal="true" role="dialog">
+      <div class="review-modal status-modal">
+        <div class="panel-heading">
+          <div>
+            <p class="eyebrow">Mastery Status</p>
+            <h3>修改熟练程度与复习设置</h3>
+          </div>
+          <button class="icon-button" id="closeEntryStatusModalBtn" type="button" title="关闭">×</button>
+        </div>
+        <p class="panel-description">为 <strong id="entryStatusTerm">当前单词</strong> 标记掌握状态。若标记为“熟悉”，系统将大幅提升掌握度并推迟/免除近期复习。</p>
+        <div class="status-choice-list">
+          <button class="status-choice success-action" type="button" data-status-choice="familiar">
+            <strong>熟悉</strong>
+            <small>已牢固掌握 · 免近期复习</small>
+          </button>
+          <button class="status-choice warn-action" type="button" data-status-choice="vague">
+            <strong>模糊</strong>
+            <small>印象一般 · 标准周期复习</small>
+          </button>
+          <button class="status-choice danger-action" type="button" data-status-choice="forgotten">
+            <strong>遗忘</strong>
+            <small>已记不清 · 近期重点巩固</small>
+          </button>
+        </div>
+      </div>
+    </section>

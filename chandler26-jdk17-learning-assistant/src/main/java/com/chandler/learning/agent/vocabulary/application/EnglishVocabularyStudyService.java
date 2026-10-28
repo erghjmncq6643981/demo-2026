@@ -326,10 +326,11 @@ public class EnglishVocabularyStudyService {
                 normalizedTerm,
                 forceRefresh,
                 request.getModelConfigId());
-        // 传递用户输入的词给 AI 生成词卡，由结构化卡片与 Prompt 准确解析原形 lemma
-        AgentChatResponse chatResponse = aiChat(request, normalizedTerm);
+        // 传递用户输入的词给 AI 生成词卡，由结构化卡片与 Prompt 准确解析原形 lemma（保留首字母大写/专有缩写如 AIDS）
+        String promptTerm = StringUtils.hasText(rawTerm) ? rawTerm : normalizedTerm;
+        AgentChatResponse chatResponse = aiChat(request, promptTerm);
         String parsedJson = normalizeCardPayload(
-                chatResponse.requireStructuredRoot(AiInvocationScene.VOCABULARY_CARD_SINGLE), normalizedTerm);
+                chatResponse.requireStructuredRoot(AiInvocationScene.VOCABULARY_CARD_SINGLE), promptTerm);
         validateCardPayload(parsedJson);
 
         // 统一从 AI 结构化输出中提取标准原形（Lemma）作为主词卡的主键和标准展示词
@@ -531,9 +532,9 @@ public class EnglishVocabularyStudyService {
     /**
      * 将词汇学习请求转换成 Agent 对话请求，模型输出仍由学习卡片解析逻辑统一处理。
      */
-    private AgentChatResponse aiChat(VocabularyStudyRequest request, String normalizedTerm) {
+    private AgentChatResponse aiChat(VocabularyStudyRequest request, String termToUse) {
         Map<String, Object> variables = new HashMap<>();
-        variables.put("term", normalizedTerm);
+        variables.put("term", termToUse);
 
         AgentChatRequest chatRequest = new AgentChatRequest();
         chatRequest.setUserId(request.getUserId());
@@ -541,10 +542,10 @@ public class EnglishVocabularyStudyService {
         chatRequest.setAgentCode(resolveAgentCode(request));
         chatRequest.setTemplateCode(resolveTemplateCode(request));
         chatRequest.setModelConfigId(request.getModelConfigId());
-        chatRequest.setTitle("Vocabulary - " + normalizedTerm);
+        chatRequest.setTitle("Vocabulary - " + termToUse);
         chatRequest.setBusinessType(AiChatConstants.BUSINESS_TYPE_LEARNING);
         chatRequest.setBusinessId(LearningScene.ENGLISH_VOCABULARY.getCode());
-        chatRequest.setMessage("请生成英语词汇「" + normalizedTerm + "」的结构化学习卡片。");
+        chatRequest.setMessage("请生成英语词汇「" + termToUse + "」的结构化学习卡片。");
         chatRequest.setVariables(variables);
         return aiChatService.chat(chatRequest);
     }

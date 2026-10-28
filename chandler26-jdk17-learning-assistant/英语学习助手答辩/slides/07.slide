@@ -1,0 +1,152 @@
+<Slide style={{ width: 1280, height: 720, background: '#FFFFFF', position: 'relative', fontFamily: '微软雅黑', padding: '72px 60px 60px 60px' }}>
+    <Box style={{ position: 'absolute', top: 0, left: 0, width: 1280, height: 56, background: '#1E4FA8', flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingLeft: 60, paddingRight: 60 }}>
+        <Text style={{ fontSize: 32, fontWeight: 'bold', color: '#FFFFFF' }}>长任务：不占事务，失败不丢结果</Text>
+        <Text style={{ fontSize: 16, color: 'rgba(255,255,255,0.72)' }}>06 · Async & Consistency</Text>
+    </Box>
+
+    <Box style={{ flexDirection: 'column', width: 1160, height: 588, justifyContent: 'space-between' }}>
+        <Box style={{ flexDirection: 'row', gap: 22 }}>
+            <Box style={{ width: 372, flexDirection: 'column' }}>
+                <Text style={{ fontSize: 14, color: '#8B97A8', letterSpacing: 1 }}>任务记录分三层</Text>
+                <Box style={{ flexDirection: 'column', gap: 0, marginTop: 16 }}>
+                    <Box style={{ flexDirection: 'column', gap: 4, paddingBottom: 14, borderBottom: '1px solid #E5E7EB' }}>
+                        <Text style={{ fontSize: 18, fontWeight: 'bold', color: '#1E4FA8' }}>task　一次生成</Text>
+                        <Text style={{ fontSize: 16, color: '#4A5568', lineHeight: 1.5 }}>learning_ai_async_task：预约、取消、终态与重试次数</Text>
+                    </Box>
+                    <Box style={{ flexDirection: 'column', gap: 4, paddingTop: 14, paddingBottom: 14, borderBottom: '1px solid #E5E7EB' }}>
+                        <Text style={{ fontSize: 18, fontWeight: 'bold', color: '#1E4FA8' }}>step　一段工序</Text>
+                        <Text style={{ fontSize: 16, color: '#4A5568', lineHeight: 1.5 }}>_step：词表分析、词卡、场景、音频各自成步</Text>
+                    </Box>
+                    <Box style={{ flexDirection: 'column', gap: 4, paddingTop: 14 }}>
+                        <Text style={{ fontSize: 18, fontWeight: 'bold', color: '#1E4FA8' }}>attempt　一次尝试</Text>
+                        <Text style={{ fontSize: 16, color: '#4A5568', lineHeight: 1.5 }}>_attempt：同一步的第几次、错在哪个字段</Text>
+                    </Box>
+                </Box>
+                <Text style={{ fontSize: 16, color: '#4A5568', lineHeight: 1.55, marginTop: 20, paddingTop: 16, borderTop: '1px solid #E5E7EB' }}>
+                    三层拆开之后，重试的粒度是「那一步的那一次」，不是整条任务从头再来。
+                </Text>
+            </Box>
+
+            <Box style={{ width: 448, flexDirection: 'column', borderLeft: '1px solid #E5E7EB', borderRight: '1px solid #E5E7EB', paddingLeft: 24, paddingRight: 24 }}>
+                <Text style={{ fontSize: 14, color: '#8B97A8', letterSpacing: 1 }}>事务边界怎么划</Text>
+                <Box style={{ flexDirection: 'column', gap: 12, marginTop: 16 }}>
+                    <Box style={{ flexDirection: 'row', gap: 12, alignItems: 'flex-start' }}>
+                        <Box style={{ width: 24, height: 24, background: '#1E4FA8', alignItems: 'center', justifyContent: 'center' }}>
+                            <Text style={{ fontSize: 13, fontWeight: 'bold', color: '#FFFFFF' }}>1</Text>
+                        </Box>
+                        <Text style={{ fontSize: 17, color: '#1A2230', lineHeight: 1.5, width: 388 }}>
+                            请求进来先建任务，短事务里把 pending 原子领取成 running。
+                        </Text>
+                    </Box>
+                    <Box style={{ flexDirection: 'row', gap: 12, alignItems: 'flex-start' }}>
+                        <Box style={{ width: 24, height: 24, background: '#1E4FA8', alignItems: 'center', justifyContent: 'center' }}>
+                            <Text style={{ fontSize: 13, fontWeight: 'bold', color: '#FFFFFF' }}>2</Text>
+                        </Box>
+                        <Text style={{ fontSize: 17, color: '#1A2230', lineHeight: 1.5, width: 388 }}>
+                            事务提交后发事件，外部调用交给有界 aiTaskExecutor。
+                        </Text>
+                    </Box>
+                    <Box style={{ flexDirection: 'row', gap: 12, alignItems: 'flex-start' }}>
+                        <Box style={{ width: 24, height: 24, background: '#1E4FA8', alignItems: 'center', justifyContent: 'center' }}>
+                            <Text style={{ fontSize: 13, fontWeight: 'bold', color: '#FFFFFF' }}>3</Text>
+                        </Box>
+                        <Text style={{ fontSize: 17, color: '#1A2230', lineHeight: 1.5, width: 388 }}>
+                            结果回写靠业务唯一约束或幂等更新，不靠「只跑一次」。
+                        </Text>
+                    </Box>
+                    <Box style={{ flexDirection: 'row', gap: 12, alignItems: 'flex-start' }}>
+                        <Box style={{ width: 24, height: 24, background: '#1E4FA8', alignItems: 'center', justifyContent: 'center' }}>
+                            <Text style={{ fontSize: 13, fontWeight: 'bold', color: '#FFFFFF' }}>4</Text>
+                        </Box>
+                        <Text style={{ fontSize: 17, color: '#1A2230', lineHeight: 1.5, width: 388 }}>
+                            绝不在事务内等模型 HTTP；拒绝策略也不把任务退回请求线程。
+                        </Text>
+                    </Box>
+                </Box>
+                <Box style={{ flexDirection: 'column', gap: 6, marginTop: 20, paddingTop: 16, borderTop: '1px solid #E5E7EB' }}>
+                    <Text style={{ fontSize: 16, fontWeight: 'bold', color: '#1A2230' }}>为什么不在事务里调模型</Text>
+                    <Text style={{ fontSize: 16, color: '#4A5568', lineHeight: 1.55 }}>
+                        一次场景生成要几十秒，事务开着就锁着连接与行；模型超时还会把已经写好的业务状态一起回滚。
+                    </Text>
+                </Box>
+            </Box>
+
+            <Box style={{ width: 296, flexDirection: 'column' }}>
+                <Text style={{ fontSize: 14, color: '#8B97A8', letterSpacing: 1 }}>一致性分三条边界</Text>
+                <Box style={{ flexDirection: 'column', gap: 16, marginTop: 16 }}>
+                    <Box style={{ flexDirection: 'column', gap: 3 }}>
+                        <Text style={{ fontSize: 18, fontWeight: 'bold', color: '#1A2230' }}>共享缓存 · 可刷新</Text>
+                        <Text style={{ fontSize: 16, color: '#4A5568', lineHeight: 1.5 }}>
+                            公共词卡与语义分析结果，按规则刷新以压低重复调用。
+                        </Text>
+                    </Box>
+                    <Box style={{ flexDirection: 'column', gap: 3 }}>
+                        <Text style={{ fontSize: 18, fontWeight: 'bold', color: '#1A2230' }}>个人快照 · 不可冲掉</Text>
+                        <Text style={{ fontSize: 16, color: '#4A5568', lineHeight: 1.5 }}>
+                            笔记、掌握度、复习排期存个人快照，公共缓存刷新不影响。
+                        </Text>
+                    </Box>
+                    <Box style={{ flexDirection: 'column', gap: 3 }}>
+                        <Text style={{ fontSize: 18, fontWeight: 'bold', color: '#1A2230' }}>生成历史 · 只追加</Text>
+                        <Text style={{ fontSize: 16, color: '#4A5568', lineHeight: 1.5 }}>
+                            材料按 revision 追加，旧记录永远指得回当时的文章。
+                        </Text>
+                    </Box>
+                </Box>
+                <Box style={{ flexDirection: 'column', gap: 4, marginTop: 18, paddingTop: 14, borderTop: '1px solid #E5E7EB' }}>
+                    <Text style={{ fontSize: 16, fontWeight: 'bold', color: '#1A2230' }}>审计走 Outbox</Text>
+                    <Text style={{ fontSize: 15, color: '#4A5568', lineHeight: 1.5 }}>
+                        事务内写日志事件，提交后异步落库；落库失败只丢日志，不回滚业务。
+                    </Text>
+                </Box>
+            </Box>
+        </Box>
+
+        <Box style={{ flexDirection: 'row', alignItems: 'stretch' }}>
+            <Box style={{ width: 211, border: '1px solid #D6DCE5', padding: '10px 12px', flexDirection: 'column', gap: 2 }}>
+                <Text style={{ fontSize: 15, fontWeight: 'bold', color: '#1A2230' }}>pending</Text>
+                <Text style={{ fontSize: 13, color: '#8B97A8' }}>已创建，等执行器</Text>
+            </Box>
+            <Box style={{ width: 26, alignItems: 'center', justifyContent: 'center' }}>
+                <Text style={{ fontSize: 16, color: '#3D7BD9' }}>→</Text>
+            </Box>
+            <Box style={{ width: 211, border: '1px solid #D6DCE5', padding: '10px 12px', flexDirection: 'column', gap: 2 }}>
+                <Text style={{ fontSize: 15, fontWeight: 'bold', color: '#1A2230' }}>running</Text>
+                <Text style={{ fontSize: 13, color: '#8B97A8' }}>原子领取，写 step 状态</Text>
+            </Box>
+            <Box style={{ width: 26, alignItems: 'center', justifyContent: 'center' }}>
+                <Text style={{ fontSize: 16, color: '#3D7BD9' }}>→</Text>
+            </Box>
+            <Box style={{ width: 211, border: '1px solid #D6DCE5', padding: '10px 12px', flexDirection: 'column', gap: 2 }}>
+                <Text style={{ fontSize: 15, fontWeight: 'bold', color: '#1A2230' }}>succeeded</Text>
+                <Text style={{ fontSize: 13, color: '#8B97A8' }}>结果落库，触发后续业务</Text>
+            </Box>
+            <Box style={{ width: 26, alignItems: 'center', justifyContent: 'center' }}>
+                <Text style={{ fontSize: 16, color: '#3D7BD9' }}>→</Text>
+            </Box>
+            <Box style={{ width: 211, border: '1px solid #D6DCE5', padding: '10px 12px', flexDirection: 'column', gap: 2 }}>
+                <Text style={{ fontSize: 15, fontWeight: 'bold', color: '#1A2230' }}>partial</Text>
+                <Text style={{ fontSize: 13, color: '#8B97A8' }}>有效条目入库，缺失批补跑</Text>
+            </Box>
+            <Box style={{ width: 26, alignItems: 'center', justifyContent: 'center' }}>
+                <Text style={{ fontSize: 16, color: '#3D7BD9' }}>→</Text>
+            </Box>
+            <Box style={{ width: 211, border: '1px solid #D6DCE5', padding: '10px 12px', flexDirection: 'column', gap: 2, background: '#F7F9FC' }}>
+                <Text style={{ fontSize: 15, fontWeight: 'bold', color: '#1A2230' }}>failed</Text>
+                <Text style={{ fontSize: 13, color: '#8B97A8' }}>只重试失败项，可人工介入</Text>
+            </Box>
+        </Box>
+
+        <Box style={{ flexDirection: 'row', background: '#F7F9FC', alignItems: 'center', padding: '14px 22px', gap: 14 }}>
+            <Box style={{ width: 3, height: 30, background: '#1E4FA8' }} />
+            <Text style={{ fontSize: 18, color: '#1A2230' }}>
+                异步不是为了跑得快，是为了让失败可恢复，也让事务不被外部 HTTP 拖住。
+            </Text>
+        </Box>
+    </Box>
+
+    <Box style={{ position: 'absolute', top: 670, left: 60, width: 1160, flexDirection: 'row', justifyContent: 'space-between' }}>
+        <Text style={{ fontSize: 14, color: '#8B97A8' }}>基于大模型的英语学习助手 · 毕业答辩</Text>
+        <Text style={{ fontSize: 14, color: '#8B97A8' }}>07 / 11</Text>
+    </Box>
+</Slide>

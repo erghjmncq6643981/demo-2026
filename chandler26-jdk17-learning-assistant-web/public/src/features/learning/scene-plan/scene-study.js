@@ -27,8 +27,8 @@ export function createSceneStudy({
   startChallenge,
   toggleAudio,
   replayAudio,
-  pauseAudio,
-  resumeAudio,
+  _pauseAudio,
+  _resumeAudio,
   speakSentence,
 }) {
   let assessmentFeedback = null

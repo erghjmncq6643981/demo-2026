@@ -33,46 +33,101 @@
         </choose>
     </select>
 
+    <sql id="summaryFields">
+        e.id,
+        e.wordbook_id AS wordbookId,
+        e.vocabulary_id AS vocabularyId,
+        e.term,
+        e.normalized_term AS normalizedTerm,
+        COALESCE(
+            JSON_UNQUOTE(JSON_EXTRACT(e.snapshot_parsed_json, '$.phonetic.uk')),
+            JSON_UNQUOTE(JSON_EXTRACT(e.snapshot_parsed_json, '$.phonetic.us')),
+            JSON_UNQUOTE(JSON_EXTRACT(e.snapshot_parsed_json, '$.phonetic_uk')),
+            JSON_UNQUOTE(JSON_EXTRACT(e.snapshot_parsed_json, '$.phonetic_us')),
+            JSON_UNQUOTE(JSON_EXTRACT(e.snapshot_parsed_json, '$."phonetic.uk"')),
+            JSON_UNQUOTE(JSON_EXTRACT(e.snapshot_parsed_json, '$."phonetic.us"')),
+            JSON_UNQUOTE(JSON_EXTRACT(e.snapshot_parsed_json, '$.phonetic')),
+            JSON_UNQUOTE(JSON_EXTRACT(v.parsed_json, '$.phonetic.uk')),
+            JSON_UNQUOTE(JSON_EXTRACT(v.parsed_json, '$.phonetic.us')),
+            JSON_UNQUOTE(JSON_EXTRACT(v.parsed_json, '$.phonetic_uk')),
+            JSON_UNQUOTE(JSON_EXTRACT(v.parsed_json, '$.phonetic_us')),
+            JSON_UNQUOTE(JSON_EXTRACT(v.parsed_json, '$."phonetic.uk"')),
+            JSON_UNQUOTE(JSON_EXTRACT(v.parsed_json, '$."phonetic.us"')),
+            JSON_UNQUOTE(JSON_EXTRACT(v.parsed_json, '$.phonetic'))
+        ) AS phonetic,
+        COALESCE(
+            JSON_UNQUOTE(JSON_EXTRACT(e.snapshot_parsed_json, '$.definitions[0].meaning')),
+            JSON_UNQUOTE(JSON_EXTRACT(e.snapshot_parsed_json, '$.definitions[0].cn')),
+            JSON_UNQUOTE(JSON_EXTRACT(e.snapshot_parsed_json, '$.definitions[0].definition')),
+            JSON_UNQUOTE(JSON_EXTRACT(e.snapshot_parsed_json, '$.meaning')),
+            JSON_UNQUOTE(JSON_EXTRACT(v.parsed_json, '$.definitions[0].meaning')),
+            JSON_UNQUOTE(JSON_EXTRACT(v.parsed_json, '$.definitions[0].cn')),
+            JSON_UNQUOTE(JSON_EXTRACT(v.parsed_json, '$.definitions[0].definition')),
+            JSON_UNQUOTE(JSON_EXTRACT(v.parsed_json, '$.meaning'))
+        ) AS meaningText,
+        e.status,
+        e.review_stage AS reviewStage,
+        e.mastery_score AS masteryScore,
+        e.last_review_time AS lastReviewTime,
+        e.next_review_time AS nextReviewTime,
+        e.review_count AS reviewCount,
+        e.correct_count AS correctCount,
+        e.wrong_count AS wrongCount,
+        CASE
+            WHEN e.card_status = 'generating' THEN 'generating'
+            WHEN e.card_status = 'ready' THEN 'ready'
+            WHEN JSON_LENGTH(JSON_EXTRACT(e.snapshot_parsed_json, '$.examples')) > 0 THEN 'ready'
+            WHEN v.id IS NOT NULL AND JSON_LENGTH(JSON_EXTRACT(v.parsed_json, '$.examples')) > 0 THEN 'ready'
+            ELSE e.card_status
+        END AS cardStatus,
+        e.create_time AS createTime
+    </sql>
+
     <select id="selectSummaryPage"
             resultType="com.chandler.learning.agent.vocabulary.domain.bo.WordbookEntrySummaryItem">
         SELECT
-            e.id,
-            e.wordbook_id AS wordbookId,
-            e.vocabulary_id AS vocabularyId,
-            e.term,
-            e.normalized_term AS normalizedTerm,
-            COALESCE(
-                JSON_UNQUOTE(JSON_EXTRACT(e.snapshot_parsed_json, '$.phonetic.uk')),
-                JSON_UNQUOTE(JSON_EXTRACT(e.snapshot_parsed_json, '$.phonetic.us')),
-                JSON_UNQUOTE(JSON_EXTRACT(e.snapshot_parsed_json, '$.phonetic_uk')),
-                JSON_UNQUOTE(JSON_EXTRACT(e.snapshot_parsed_json, '$.phonetic_us'))
-            ) AS phonetic,
-            COALESCE(
-                JSON_UNQUOTE(JSON_EXTRACT(e.snapshot_parsed_json, '$.definitions[0].meaning')),
-                JSON_UNQUOTE(JSON_EXTRACT(e.snapshot_parsed_json, '$.definitions[0].cn')),
-                JSON_UNQUOTE(JSON_EXTRACT(e.snapshot_parsed_json, '$.definitions[0].definition')),
-                JSON_UNQUOTE(JSON_EXTRACT(e.snapshot_parsed_json, '$.meaning'))
-            ) AS meaningText,
-            e.status,
-            e.review_stage AS reviewStage,
-            e.mastery_score AS masteryScore,
-            e.last_review_time AS lastReviewTime,
-            e.next_review_time AS nextReviewTime,
-            e.review_count AS reviewCount,
-            e.correct_count AS correctCount,
-            e.wrong_count AS wrongCount,
-            CASE
-                WHEN e.card_status = 'ready' THEN 'ready'
-                WHEN JSON_LENGTH(JSON_EXTRACT(e.snapshot_parsed_json, '$.examples')) > 0 THEN 'ready'
-                ELSE e.card_status
-            END AS cardStatus,
-            e.create_time AS createTime
+            <include refid="summaryFields" />
         FROM learning_wordbook_entry e
+        LEFT JOIN english_vocabulary_study_record v ON v.id = e.vocabulary_id AND v.deleted = 0
         WHERE e.user_id = #{userId}
           AND e.wordbook_id = #{wordbookId}
           AND e.deleted = 0
         <if test="status != null and status != ''">
           AND e.status = #{status}
+        </if>
+        <if test="cardStatus != null and cardStatus != ''">
+          <choose>
+            <when test="cardStatus == 'ready'">
+              AND (e.card_status = 'ready'
+                   OR JSON_LENGTH(JSON_EXTRACT(e.snapshot_parsed_json, '$.examples')) > 0
+                   OR (v.id IS NOT NULL AND JSON_LENGTH(JSON_EXTRACT(v.parsed_json, '$.examples')) > 0))
+            </when>
+            <when test="cardStatus == 'need_card' or cardStatus == 'missing_any'">
+              AND (e.card_status != 'ready' OR e.card_status IS NULL)
+              AND (e.card_status != 'generating' OR e.card_status IS NULL)
+              AND (JSON_LENGTH(JSON_EXTRACT(e.snapshot_parsed_json, '$.examples')) IS NULL OR JSON_LENGTH(JSON_EXTRACT(e.snapshot_parsed_json, '$.examples')) = 0)
+              AND (v.id IS NULL OR JSON_LENGTH(JSON_EXTRACT(v.parsed_json, '$.examples')) IS NULL OR JSON_LENGTH(JSON_EXTRACT(v.parsed_json, '$.examples')) = 0)
+            </when>
+            <when test="cardStatus == 'generating'">
+              AND e.card_status = 'generating'
+            </when>
+            <when test="cardStatus == 'failed'">
+              AND e.card_status = 'failed'
+            </when>
+            <when test="cardStatus == 'missing'">
+              AND (e.card_status = 'missing' OR e.card_status IS NULL)
+              AND (JSON_LENGTH(JSON_EXTRACT(e.snapshot_parsed_json, '$.examples')) IS NULL OR JSON_LENGTH(JSON_EXTRACT(e.snapshot_parsed_json, '$.examples')) = 0)
+              AND (v.id IS NULL OR JSON_LENGTH(JSON_EXTRACT(v.parsed_json, '$.examples')) IS NULL OR JSON_LENGTH(JSON_EXTRACT(v.parsed_json, '$.examples')) = 0)
+            </when>
+            <when test="cardStatus == 'not_required'">
+              AND e.card_status = 'not_required'
+              AND (JSON_LENGTH(JSON_EXTRACT(e.snapshot_parsed_json, '$.examples')) IS NULL OR JSON_LENGTH(JSON_EXTRACT(e.snapshot_parsed_json, '$.examples')) = 0)
+              AND (v.id IS NULL OR JSON_LENGTH(JSON_EXTRACT(v.parsed_json, '$.examples')) IS NULL OR JSON_LENGTH(JSON_EXTRACT(v.parsed_json, '$.examples')) = 0)
+            </when>
+            <otherwise>
+              AND e.card_status = #{cardStatus}
+            </otherwise>
+          </choose>
         </if>
         <if test="keyword != null and keyword != ''">
           AND (e.term LIKE CONCAT(#{keyword}, '%')
@@ -81,44 +136,15 @@
         <if test="dueOnly">
           AND e.next_review_time &lt;= #{now}
         </if>
-        ORDER BY e.next_review_time ASC, e.create_time DESC, e.id ASC
+        ORDER BY e.normalized_term ASC, e.id ASC
     </select>
 
     <select id="selectDueSummary"
             resultType="com.chandler.learning.agent.vocabulary.domain.bo.WordbookEntrySummaryItem">
         SELECT
-            e.id,
-            e.wordbook_id AS wordbookId,
-            e.vocabulary_id AS vocabularyId,
-            e.term,
-            e.normalized_term AS normalizedTerm,
-            COALESCE(
-                JSON_UNQUOTE(JSON_EXTRACT(e.snapshot_parsed_json, '$.phonetic.uk')),
-                JSON_UNQUOTE(JSON_EXTRACT(e.snapshot_parsed_json, '$.phonetic.us')),
-                JSON_UNQUOTE(JSON_EXTRACT(e.snapshot_parsed_json, '$.phonetic_uk')),
-                JSON_UNQUOTE(JSON_EXTRACT(e.snapshot_parsed_json, '$.phonetic_us'))
-            ) AS phonetic,
-            COALESCE(
-                JSON_UNQUOTE(JSON_EXTRACT(e.snapshot_parsed_json, '$.definitions[0].meaning')),
-                JSON_UNQUOTE(JSON_EXTRACT(e.snapshot_parsed_json, '$.definitions[0].cn')),
-                JSON_UNQUOTE(JSON_EXTRACT(e.snapshot_parsed_json, '$.definitions[0].definition')),
-                JSON_UNQUOTE(JSON_EXTRACT(e.snapshot_parsed_json, '$.meaning'))
-            ) AS meaningText,
-            e.status,
-            e.review_stage AS reviewStage,
-            e.mastery_score AS masteryScore,
-            e.last_review_time AS lastReviewTime,
-            e.next_review_time AS nextReviewTime,
-            e.review_count AS reviewCount,
-            e.correct_count AS correctCount,
-            e.wrong_count AS wrongCount,
-            CASE
-                WHEN e.card_status = 'ready' THEN 'ready'
-                WHEN JSON_LENGTH(JSON_EXTRACT(e.snapshot_parsed_json, '$.examples')) > 0 THEN 'ready'
-                ELSE e.card_status
-            END AS cardStatus,
-            e.create_time AS createTime
+            <include refid="summaryFields" />
         FROM learning_wordbook_entry e
+        LEFT JOIN english_vocabulary_study_record v ON v.id = e.vocabulary_id AND v.deleted = 0
         WHERE e.user_id = #{userId}
           AND e.wordbook_id = #{wordbookId}
           AND e.deleted = 0
@@ -130,38 +156,9 @@
     <select id="selectRestartSummary"
             resultType="com.chandler.learning.agent.vocabulary.domain.bo.WordbookEntrySummaryItem">
         SELECT
-            e.id,
-            e.wordbook_id AS wordbookId,
-            e.vocabulary_id AS vocabularyId,
-            e.term,
-            e.normalized_term AS normalizedTerm,
-            COALESCE(
-                JSON_UNQUOTE(JSON_EXTRACT(e.snapshot_parsed_json, '$.phonetic.uk')),
-                JSON_UNQUOTE(JSON_EXTRACT(e.snapshot_parsed_json, '$.phonetic.us')),
-                JSON_UNQUOTE(JSON_EXTRACT(e.snapshot_parsed_json, '$.phonetic_uk')),
-                JSON_UNQUOTE(JSON_EXTRACT(e.snapshot_parsed_json, '$.phonetic_us'))
-            ) AS phonetic,
-            COALESCE(
-                JSON_UNQUOTE(JSON_EXTRACT(e.snapshot_parsed_json, '$.definitions[0].meaning')),
-                JSON_UNQUOTE(JSON_EXTRACT(e.snapshot_parsed_json, '$.definitions[0].cn')),
-                JSON_UNQUOTE(JSON_EXTRACT(e.snapshot_parsed_json, '$.definitions[0].definition')),
-                JSON_UNQUOTE(JSON_EXTRACT(e.snapshot_parsed_json, '$.meaning'))
-            ) AS meaningText,
-            e.status,
-            e.review_stage AS reviewStage,
-            e.mastery_score AS masteryScore,
-            e.last_review_time AS lastReviewTime,
-            e.next_review_time AS nextReviewTime,
-            e.review_count AS reviewCount,
-            e.correct_count AS correctCount,
-            e.wrong_count AS wrongCount,
-            CASE
-                WHEN e.card_status = 'ready' THEN 'ready'
-                WHEN JSON_LENGTH(JSON_EXTRACT(e.snapshot_parsed_json, '$.examples')) > 0 THEN 'ready'
-                ELSE e.card_status
-            END AS cardStatus,
-            e.create_time AS createTime
+            <include refid="summaryFields" />
         FROM learning_wordbook_entry e
+        LEFT JOIN english_vocabulary_study_record v ON v.id = e.vocabulary_id AND v.deleted = 0
         WHERE e.user_id = #{userId}
           AND e.wordbook_id = #{wordbookId}
           AND e.deleted = 0

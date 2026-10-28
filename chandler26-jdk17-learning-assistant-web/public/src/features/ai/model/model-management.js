@@ -1,6 +1,7 @@
 import { sameId } from '/src/shared/ids.js'
 import { hideModal, showModal } from '/src/shared/modal.js'
 import { escapeHtml } from '/src/shared/text.js'
+import { canManageAiModels } from '/src/shared/permissions.js'
 import { providerDefaults, renderModelSelect, renderProviderSelect } from '/src/features/ai/model/provider-catalog.js'
 
 export function createModelManagementFeature(ctx) {
@@ -13,7 +14,7 @@ export function createModelManagementFeature(ctx) {
       renderStudyModelOptions()
       return Promise.resolve()
     }
-    const path = state.user?.roleCode === 'ADMIN' ? '/api/v1/ai/model-configs' : '/api/v1/ai/model-configs/available'
+    const path = canManageAiModels(state) ? '/api/v1/ai/model-configs' : '/api/v1/ai/model-configs/available'
     return request(path)
       .then((configs) => {
         state.modelConfigs = Array.isArray(configs) ? configs : []

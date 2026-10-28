@@ -1,0 +1,77 @@
+<Slide style={{ width: 1280, height: 720, background: '#FFFFFF', position: 'relative', fontFamily: '微软雅黑', padding: '72px 60px 60px 60px' }}>
+    <Box style={{ position: 'absolute', top: 0, left: 0, width: 1280, height: 56, background: '#1E4FA8', flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingLeft: 60, paddingRight: 60 }}>
+        <Text style={{ fontSize: 32, fontWeight: 'bold', color: '#FFFFFF' }}>总体架构：五个层次，一处进出口</Text>
+        <Text style={{ fontSize: 16, color: 'rgba(255,255,255,0.72)' }}>02 · Architecture</Text>
+    </Box>
+
+    <Box style={{ flexDirection: 'column', width: 1160, height: 588, justifyContent: 'space-between' }}>
+        <Box style={{ flexDirection: 'row', gap: 40 }}>
+            <Box style={{ width: 700, flexDirection: 'column', gap: 10 }}>
+                <Image src="assets/arch_layers.png" style={{ width: 700, height: 236, border: '1px solid #E5E7EB' }} />
+                <Text style={{ fontSize: 14, color: '#8B97A8', lineHeight: 1.4 }}>
+                    图 4-1　五层职责边界：模型调用只能从 AI 网关进出，业务域之间不直连
+                </Text>
+                <Text style={{ fontSize: 17, color: '#4A5568', lineHeight: 1.55 }}>
+                    一次请求的路径是固定的：浏览器 → Controller（JWT 与声明式权限）→ 应用服务（事务边界）→ 领域对象 → 基础设施。跨域只走窄化的应用契约；模型调用从网关出去，回包先经场景编解码，再进业务。
+                </Text>
+                <Box style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 0, marginTop: 10 }}>
+                    <Box style={{ width: 350, flexDirection: 'row', alignItems: 'flex-end', gap: 8, paddingBottom: 14 }}>
+                        <Text style={{ fontSize: 34, fontWeight: 'bold', color: '#1E4FA8', lineHeight: 1 }}>400</Text>
+                        <Text style={{ fontSize: 14, color: '#4A5568', lineHeight: 1.2, paddingBottom: 3 }}>个 Java 类</Text>
+                    </Box>
+                    <Box style={{ width: 350, flexDirection: 'row', alignItems: 'flex-end', gap: 8, paddingBottom: 14 }}>
+                        <Text style={{ fontSize: 34, fontWeight: 'bold', color: '#1E4FA8', lineHeight: 1 }}>127</Text>
+                        <Text style={{ fontSize: 14, color: '#4A5568', lineHeight: 1.2, paddingBottom: 3 }}>个 HTTP 接口</Text>
+                    </Box>
+                    <Box style={{ width: 350, flexDirection: 'row', alignItems: 'flex-end', gap: 8 }}>
+                        <Text style={{ fontSize: 34, fontWeight: 'bold', color: '#1E4FA8', lineHeight: 1 }}>39</Text>
+                        <Text style={{ fontSize: 14, color: '#4A5568', lineHeight: 1.2, paddingBottom: 3 }}>张数据表</Text>
+                    </Box>
+                    <Box style={{ width: 350, flexDirection: 'row', alignItems: 'flex-end', gap: 8 }}>
+                        <Text style={{ fontSize: 34, fontWeight: 'bold', color: '#1E4FA8', lineHeight: 1 }}>84</Text>
+                        <Text style={{ fontSize: 14, color: '#4A5568', lineHeight: 1.2, paddingBottom: 3 }}>个前端模块</Text>
+                    </Box>
+                </Box>
+            </Box>
+
+            <Box style={{ width: 420, flexDirection: 'column', justifyContent: 'space-between' }}>
+                <Box style={{ flexDirection: 'column', gap: 5, paddingBottom: 14, borderBottom: '1px solid #E5E7EB' }}>
+                    <Text style={{ fontSize: 19, fontWeight: 'bold', color: '#1A2230' }}>模块化单体，不拆微服务</Text>
+                    <Text style={{ fontSize: 17, color: '#4A5568', lineHeight: 1.5 }}>
+                        六个业务域按包切分，进程 1 个、产物 1 个 jar，省掉注册中心与链路追踪的运维成本。
+                    </Text>
+                </Box>
+                <Box style={{ flexDirection: 'column', gap: 5, paddingTop: 14, paddingBottom: 14, borderBottom: '1px solid #E5E7EB' }}>
+                    <Text style={{ fontSize: 19, fontWeight: 'bold', color: '#1A2230' }}>供应商差异只留在网关</Text>
+                    <Text style={{ fontSize: 17, color: '#4A5568', lineHeight: 1.5 }}>
+                        业务层只声明调用场景，DeepSeek 与 Kimi 的协议差异下沉到请求适配器。
+                    </Text>
+                </Box>
+                <Box style={{ flexDirection: 'column', gap: 5, paddingTop: 14, paddingBottom: 14, borderBottom: '1px solid #E5E7EB' }}>
+                    <Text style={{ fontSize: 19, fontWeight: 'bold', color: '#1A2230' }}>单表走 ORM，复杂 SQL 走 XML</Text>
+                    <Text style={{ fontSize: 17, color: '#4A5568', lineHeight: 1.5 }}>
+                        MyBatis-Plus 管增删改查，28 个 Mapper XML 承担多表摘要与批量写入。
+                    </Text>
+                </Box>
+                <Box style={{ flexDirection: 'column', gap: 5, paddingTop: 14 }}>
+                    <Text style={{ fontSize: 19, fontWeight: 'bold', color: '#1A2230' }}>Long ID 序列化成字符串</Text>
+                    <Text style={{ fontSize: 17, color: '#4A5568', lineHeight: 1.5 }}>
+                        前端 JavaScript 超过 2^53 就丢精度，统一在 Jackson 层转换，不靠前端兜底。
+                    </Text>
+                </Box>
+            </Box>
+        </Box>
+
+        <Box style={{ flexDirection: 'row', background: '#F7F9FC', alignItems: 'center', padding: '14px 22px', gap: 14 }}>
+            <Box style={{ width: 3, height: 30, background: '#1E4FA8' }} />
+            <Text style={{ fontSize: 18, color: '#1A2230' }}>
+                取舍标准只有一条：把不确定性关进一个能被测试、也能被审计的边界里。
+            </Text>
+        </Box>
+    </Box>
+
+    <Box style={{ position: 'absolute', top: 670, left: 60, width: 1160, flexDirection: 'row', justifyContent: 'space-between' }}>
+        <Text style={{ fontSize: 14, color: '#8B97A8' }}>基于大模型的英语学习助手 · 毕业答辩</Text>
+        <Text style={{ fontSize: 14, color: '#8B97A8' }}>03 / 11</Text>
+    </Box>
+</Slide>

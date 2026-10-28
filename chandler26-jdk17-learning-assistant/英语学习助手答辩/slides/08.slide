@@ -1,0 +1,58 @@
+<Slide style={{ width: 1280, height: 720, background: '#FFFFFF', position: 'relative', fontFamily: '微软雅黑', padding: '72px 60px 60px 60px' }}>
+    <Box style={{ position: 'absolute', top: 0, left: 0, width: 1280, height: 56, background: '#1E4FA8', flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingLeft: 60, paddingRight: 60 }}>
+        <Text style={{ fontSize: 32, fontWeight: 'bold', color: '#FFFFFF' }}>功能落地：四个真实页面</Text>
+        <Text style={{ fontSize: 16, color: 'rgba(255,255,255,0.72)' }}>07 · Implementation</Text>
+    </Box>
+
+    <Box style={{ flexDirection: 'row', width: 1160, height: 588, gap: 32 }}>
+        <Box style={{ width: 452, flexDirection: 'column', gap: 14 }}>
+            <Box style={{ flexDirection: 'column', gap: 6 }}>
+                <Image src="assets/ui_challenge.png" style={{ width: 452, height: 247, border: '1px solid #D6DCE5' }} />
+                <Text style={{ fontSize: 16, color: '#1A2230' }}>
+                    <span style={{ fontWeight: 'bold' }}>词汇大挑战</span>　151/5087 词，按周排计划
+                </Text>
+            </Box>
+            <Box style={{ flexDirection: 'column', gap: 6 }}>
+                <Image src="assets/ui_reading.png" style={{ width: 452, height: 247, border: '1px solid #D6DCE5' }} />
+                <Text style={{ fontSize: 16, color: '#1A2230' }}>
+                    <span style={{ fontWeight: 'bold' }}>语境精读</span>　8 句原文，核心词高亮可点
+                </Text>
+            </Box>
+        </Box>
+
+        <Box style={{ width: 452, flexDirection: 'column', gap: 14 }}>
+            <Box style={{ flexDirection: 'column', gap: 6 }}>
+                <Image src="assets/ui_scene.png" style={{ width: 452, height: 247, border: '1px solid #D6DCE5' }} />
+                <Text style={{ fontSize: 16, color: '#1A2230' }}>
+                    <span style={{ fontWeight: 'bold' }}>场景文章</span>　37 个待挑战词，译文可折叠
+                </Text>
+            </Box>
+            <Box style={{ flexDirection: 'column', gap: 6 }}>
+                <Image src="assets/ui_review.png" style={{ width: 452, height: 247, border: '1px solid #D6DCE5' }} />
+                <Text style={{ fontSize: 16, color: '#1A2230' }}>
+                    <span style={{ fontWeight: 'bold' }}>复习跟敲</span>　逐字输入 a-b-i-l-i-t-y
+                </Text>
+            </Box>
+        </Box>
+
+        <Box style={{ width: 192, flexDirection: 'column', justifyContent: 'center', gap: 22, borderLeft: '1px solid #E5E7EB', paddingLeft: 22 }}>
+            <Box style={{ flexDirection: 'column', gap: 4 }}>
+                <Text style={{ fontSize: 26, fontWeight: 'bold', color: '#1E4FA8', lineHeight: 1.1 }}>84</Text>
+                <Text style={{ fontSize: 15, color: '#4A5568', lineHeight: 1.45 }}>个 ES Module，没有前端框架</Text>
+            </Box>
+            <Box style={{ flexDirection: 'column', gap: 4 }}>
+                <Text style={{ fontSize: 26, fontWeight: 'bold', color: '#1E4FA8', lineHeight: 1.1 }}>7</Text>
+                <Text style={{ fontSize: 15, color: '#4A5568', lineHeight: 1.45 }}>个 feature 目录，与后端业务域对齐</Text>
+            </Box>
+            <Box style={{ flexDirection: 'column', gap: 4 }}>
+                <Text style={{ fontSize: 26, fontWeight: 'bold', color: '#1E4FA8', lineHeight: 1.1 }}>0</Text>
+                <Text style={{ fontSize: 15, color: '#4A5568', lineHeight: 1.45 }}>个运行时依赖，不引框架只写 ES Module</Text>
+            </Box>
+        </Box>
+    </Box>
+
+    <Box style={{ position: 'absolute', top: 670, left: 60, width: 1160, flexDirection: 'row', justifyContent: 'space-between' }}>
+        <Text style={{ fontSize: 14, color: '#8B97A8' }}>基于大模型的英语学习助手 · 毕业答辩</Text>
+        <Text style={{ fontSize: 14, color: '#8B97A8' }}>08 / 11</Text>
+    </Box>
+</Slide>

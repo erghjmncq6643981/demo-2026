@@ -1,4 +1,5 @@
 import { formatDateTime } from '/src/shared/text.js'
+import { canManageCatalogs as checkCanManageCatalogs } from '/src/shared/permissions.js'
 import {
   ANALYSIS_STATUS_LABELS,
   IMPORT_STATUS_LABELS,
@@ -22,7 +23,7 @@ export function createVocabularyImportView({
 }) {
   function renderImportList() {
     if (!elements.sceneImportList) return
-    const canManageCatalogs = state.preview || state.user?.roleCode === 'ADMIN'
+    const canManageCatalogs = checkCanManageCatalogs(state)
     const imports = asArray(state.vocabularyImports)
     const page = number(state.vocabularyImportHistoryPage) || 1
     const pageSize = number(state.vocabularyImportHistoryPageSize) || 20
@@ -76,7 +77,7 @@ export function createVocabularyImportView({
   function renderReview() {
     const current = state.currentVocabularyImport
     if (!current) return
-    const canManageCatalogs = state.preview || state.user?.roleCode === 'ADMIN'
+    const canManageCatalogs = checkCanManageCatalogs(state)
     const isPublicCatalogView = current.status === 'published' || !canManageCatalogs
     if (elements.vocabularyImportEyebrow) {
       elements.vocabularyImportEyebrow.textContent = isPublicCatalogView ? 'Public Vocabulary' : 'Vocabulary Import'
@@ -148,7 +149,7 @@ export function createVocabularyImportView({
 
   function renderAnalysis(current = state.currentVocabularyImport) {
     if (!elements.vocabularyAnalysisAction) return
-    const canManageCatalogs = state.preview || state.user?.roleCode === 'ADMIN'
+    const canManageCatalogs = checkCanManageCatalogs(state)
     const canShow = canManageCatalogs && Boolean(current?.catalogVersionId)
     elements.vocabularyAnalysisAction.classList.toggle('hidden', !canShow)
     if (!canShow) return

@@ -100,6 +100,7 @@ const speechFeature = createSpeechFeature({
 
 const {
   speak,
+  speakChinese,
   preloadAudio,
   speakSentence,
   stopSpeaking,
@@ -172,6 +173,7 @@ const {
   loadDueReviews: review.loadDueReviews,
   loadWordbookEntries: profile.loadWordbookEntries,
   changeWordbookPage: profile.changeWordbookPage,
+  jumpToWordbookPage: profile.jumpToWordbookPage,
   loadArticleWords: article.loadArticleWords,
   loadArticleHistory: article.loadArticleHistory,
   changeArticleHistoryPage: article.changeArticleHistoryPage,
@@ -322,6 +324,7 @@ profileFeature = createProfileFeature({
   openEntryInReview: review.openEntryInReview,
   openEntryTransferModal,
   speak,
+  speakChinese,
   speakSentence,
   bindStudyTermCards: studyFacade.bindStudyTermCards,
   bindInlineAudio: studyFacade.bindInlineAudio,
@@ -377,6 +380,7 @@ bindAppEvents({
   loadWordbookEntries: profile.loadWordbookEntries,
   searchWordbookEntries: profile.searchWordbookEntries,
   changeWordbookPage: profile.changeWordbookPage,
+  jumpToWordbookPage: profile.jumpToWordbookPage,
   navigateWordbookCard: profile.navigateWordbookCard,
   generateCurrentWordbookCard: profile.generateCurrentWordbookCard,
   changeArticleWordbook: article.changeArticleWordbook,

@@ -1,0 +1,13 @@
+    <section class="modal-backdrop hidden" id="adminUserModal" aria-modal="true" role="dialog" aria-labelledby="adminUserModalTitle">
+      <div class="config-modal small-modal">
+        <div class="panel-heading"><div><p class="eyebrow">User Center</p><h3 id="adminUserModalTitle">新增用户</h3></div><button class="icon-button" id="closeAdminUserModalBtn" type="button" title="关闭" aria-label="关闭">×</button></div>
+        <div class="model-form-grid">
+          <label>用户名<input id="adminUserUsernameInput" autocomplete="off" placeholder="登录用户名" /></label>
+          <label>昵称<input id="adminUserNicknameInput" placeholder="展示昵称" /></label>
+          <label id="adminUserPasswordField">初始密码<input id="adminUserPasswordInput" type="password" autocomplete="new-password" placeholder="至少 6 位" /></label>
+          <label>角色<select id="adminUserRoleInput"><option value="USER">普通用户</option><option value="ADMIN">系统管理员</option></select></label>
+          <label>状态<select id="adminUserEnabledInput"><option value="true">正常</option><option value="false">停用</option></select></label>
+        </div>
+        <div class="modal-actions"><button class="primary-button compact-primary" id="saveAdminUserBtn" type="button">保存用户</button></div>
+      </div>
+    </section>

@@ -84,6 +84,9 @@ public class WordbookResponseAssembler {
         response.setWrongCount(entry.getWrongCount());
         response.setCreateTime(entry.getCreateTime());
         response.setParsed(readEntryParsed(entry));
+        ParsedCardInfo cardInfo = extractCardInfo(entry);
+        response.setPhonetic(cardInfo.phonetic());
+        response.setMeaningText(cardInfo.meaningText());
         response.setSnapshotProvider(entry.getSnapshotProvider());
         response.setSnapshotModelName(entry.getSnapshotModelName());
         response.setSnapshotSessionId(entry.getSnapshotSessionId());
@@ -144,21 +147,23 @@ public class WordbookResponseAssembler {
         return response;
     }
 
+    private record ParsedCardInfo(String phonetic, String meaningText) {}
+
     private void populateSummaryCardInfo(WordbookEntrySummaryResponse response, LearningWordbookEntry entry) {
-        String json = entry.getSnapshotParsedJson();
-        if (!StringUtils.hasText(json) && entry.getVocabularyId() != null) {
-            EnglishVocabularyStudyRecord record = vocabularyMapper.selectById(entry.getVocabularyId());
-            if (record != null) {
-                json = record.getParsedJson();
-            }
-        }
+        ParsedCardInfo cardInfo = extractCardInfo(entry);
+        response.setPhonetic(cardInfo.phonetic());
+        response.setMeaningText(cardInfo.meaningText());
+    }
+
+    private ParsedCardInfo extractCardInfo(LearningWordbookEntry entry) {
+        String json = readEntryParsed(entry);
         if (!StringUtils.hasText(json)) {
-            return;
+            return new ParsedCardInfo(null, null);
         }
         try {
             JsonNode root = objectMapper.readTree(json);
             if (root == null || root.isNull()) {
-                return;
+                return new ParsedCardInfo(null, null);
             }
             JsonNode phoneticNode = root.get("phonetic");
             String phonetic = null;
@@ -168,15 +173,15 @@ public class WordbookResponseAssembler {
                 phonetic = phoneticNode.asText();
             }
             if (!StringUtils.hasText(phonetic)) {
-                phonetic = firstText(root, "phonetic_uk", "phoneticUk", "phonetic_us", "phoneticUs");
+                phonetic = firstText(root, "phonetic_uk", "phoneticUk", "phonetic_us", "phoneticUs", "phonetic.uk", "phonetic.us");
             }
-            response.setPhonetic(StringUtils.hasText(phonetic) ? phonetic : null);
 
+            String meaningText = null;
             JsonNode defsNode = root.get("definitions");
             if (defsNode != null && defsNode.isArray() && !defsNode.isEmpty()) {
                 List<String> defTexts = new ArrayList<>();
                 for (JsonNode def : defsNode) {
-                    String pos = firstText(def, "pos", "partOfSpeech");
+                    String pos = firstText(def, "pos", "partOfSpeech", "part_of_speech");
                     String meaning = firstText(def, "meaning", "cn", "en", "explanation", "definition");
                     if (StringUtils.hasText(meaning)) {
                         if (StringUtils.hasText(pos) && !"pos".equalsIgnoreCase(pos) && !"meaning".equalsIgnoreCase(pos)) {
@@ -188,16 +193,16 @@ public class WordbookResponseAssembler {
                     }
                 }
                 if (!defTexts.isEmpty()) {
-                    response.setMeaningText(String.join("； ", defTexts));
+                    meaningText = String.join("； ", defTexts);
                 }
             } else {
-                String meaning = firstText(root, "meaning", "definition", "translation", "explanation");
-                if (StringUtils.hasText(meaning)) {
-                    response.setMeaningText(meaning);
-                }
+                meaningText = firstText(root, "meaning", "definition", "translation", "explanation");
             }
+            return new ParsedCardInfo(StringUtils.hasText(phonetic) ? phonetic : null,
+                    StringUtils.hasText(meaningText) ? meaningText : null);
         } catch (Exception ex) {
             log.debug("解析词条摘要 JSON 失败 entryId={} error={}", entry.getId(), ex.getMessage());
+            return new ParsedCardInfo(null, null);
         }
     }
 

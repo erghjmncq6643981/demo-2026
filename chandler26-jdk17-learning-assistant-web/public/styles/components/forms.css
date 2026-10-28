@@ -1,0 +1,127 @@
+label {
+  display: grid;
+  gap: 8px;
+  margin-bottom: 14px;
+  color: var(--muted);
+  font-size: 13px;
+  font-weight: 650;
+}
+
+input,
+select,
+textarea {
+  width: 100%;
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  background: rgba(15, 23, 42, 0.78);
+  color: var(--text);
+  outline: 0;
+}
+
+input,
+select {
+  height: 42px;
+  padding: 0 12px;
+}
+
+textarea {
+  min-height: 112px;
+  resize: vertical;
+  padding: 12px;
+}
+
+input:focus,
+select:focus,
+textarea:focus {
+  border-color: rgba(129, 140, 248, 0.9);
+  box-shadow: 0 0 0 3px rgba(129, 140, 248, 0.14);
+}
+
+.compact-field {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  margin: 0;
+  white-space: nowrap;
+}
+
+.compact-field span,
+.compact-field > span:first-child {
+  flex-shrink: 0;
+  white-space: nowrap;
+  font-weight: 600;
+  font-size: 13px;
+  color: var(--text-secondary);
+}
+
+.compact-field select,
+.compact-field input {
+  min-width: 0;
+  height: 36px;
+}
+
+.compact-field.small-field {
+  width: auto;
+}
+
+.compact-field.small-field input {
+  width: 72px;
+  flex: 0 0 72px;
+}
+
+.filter-field.inline-field input,
+.filter-field.inline-field select {
+  margin: 0;
+  min-width: 140px;
+}
+
+.inline-form {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 82px;
+  gap: 8px;
+}
+
+.form-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 10px;
+}
+
+.form-grid .inline-actions {
+  grid-column: 1 / -1;
+}
+
+.range-field {
+  gap: 8px;
+}
+
+.range-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  color: var(--muted);
+  font-size: 12px;
+  font-weight: 850;
+}
+
+.range-head strong {
+  color: var(--yellow);
+  font-size: 12px;
+}
+
+input[type="range"] {
+  width: 100%;
+  accent-color: var(--yellow);
+}
+
+.entry-prefix-field {
+  width: min(180px, 52%);
+  margin: 0;
+}
+
+.entry-prefix-field input {
+  height: 38px;
+  border-color: rgba(129, 140, 248, 0.34);
+  background: rgba(15, 23, 42, 0.58);
+}

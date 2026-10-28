@@ -1,0 +1,56 @@
+<Slide style={{ width: 1280, height: 720, background: '#FFFFFF', position: 'relative', fontFamily: '微软雅黑', padding: '72px 60px 60px 60px' }}>
+    <Box style={{ position: 'absolute', top: 0, left: 0, width: 1280, height: 56, background: '#1E4FA8', flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingLeft: 60, paddingRight: 60 }}>
+        <Text style={{ fontSize: 32, fontWeight: 'bold', color: '#FFFFFF' }}>学习闭环：导入、组词、生成、学、复习</Text>
+        <Text style={{ fontSize: 16, color: 'rgba(255,255,255,0.72)' }}>04 · Learning Loop</Text>
+    </Box>
+
+    <Box style={{ flexDirection: 'column', width: 1160, height: 588, justifyContent: 'space-between' }}>
+        <Box style={{ flexDirection: 'row', gap: 34 }}>
+            <Box style={{ width: 720, flexDirection: 'column', gap: 10 }}>
+                <Image src="assets/biz_flow.png" style={{ width: 720, height: 450, border: '1px solid #E5E7EB' }} />
+                <Text style={{ fontSize: 14, color: '#8B97A8', lineHeight: 1.4 }}>
+                    图 3-2　三段式闭环：资源准备 → 计划与内容生成 → 学习与复习，失败任务可在任务中心重试
+                </Text>
+            </Box>
+
+            <Box style={{ width: 404, flexDirection: 'column', justifyContent: 'space-between' }}>
+                <Box style={{ flexDirection: 'column', gap: 5, paddingBottom: 14, borderBottom: '1px solid #E5E7EB' }}>
+                    <Text style={{ fontSize: 19, fontWeight: 'bold', color: '#1A2230' }}>均分：单篇不超过 50 词</Text>
+                    <Text style={{ fontSize: 17, color: '#4A5568', lineHeight: 1.5 }}>
+                        每日核心词按篇平分，篇间词量差不超过 1：80 词切成 2×40，120 词切成 3×40。
+                    </Text>
+                </Box>
+                <Box style={{ flexDirection: 'column', gap: 5, paddingTop: 14, paddingBottom: 14, borderBottom: '1px solid #E5E7EB' }}>
+                    <Text style={{ fontSize: 19, fontWeight: 'bold', color: '#1A2230' }}>版本：材料只追加不覆写</Text>
+                    <Text style={{ fontSize: 17, color: '#4A5568', lineHeight: 1.5 }}>
+                        重新生成产生新的 revision，旧学习记录仍指向旧材料，已发生的学习不会被改写。
+                    </Text>
+                </Box>
+                <Box style={{ flexDirection: 'column', gap: 5, paddingTop: 14, paddingBottom: 14, borderBottom: '1px solid #E5E7EB' }}>
+                    <Text style={{ fontSize: 19, fontWeight: 'bold', color: '#1A2230' }}>回流：旧词可复习，不改归属</Text>
+                    <Text style={{ fontSize: 17, color: '#4A5568', lineHeight: 1.5 }}>
+                        未掌握的旧词会回到后续场景，但仍记在原单元名下，历史统计口径不变。
+                    </Text>
+                </Box>
+                <Box style={{ flexDirection: 'column', gap: 5, paddingTop: 14 }}>
+                    <Text style={{ fontSize: 19, fontWeight: 'bold', color: '#1A2230' }}>落库：一次学习留四类记录</Text>
+                    <Text style={{ fontSize: 17, color: '#4A5568', lineHeight: 1.5 }}>
+                        逐词进度、场景笔记、复习记录、活动日志，分别对应四张表，互不覆盖。
+                    </Text>
+                </Box>
+            </Box>
+        </Box>
+
+        <Box style={{ flexDirection: 'row', background: '#F7F9FC', alignItems: 'center', padding: '14px 22px', gap: 14 }}>
+            <Box style={{ width: 3, height: 30, background: '#1E4FA8' }} />
+            <Text style={{ fontSize: 18, color: '#1A2230' }}>
+                闭环的判据不是「生成成功」，而是这次生成有没有留下一条可以复习的记录。
+            </Text>
+        </Box>
+    </Box>
+
+    <Box style={{ position: 'absolute', top: 670, left: 60, width: 1160, flexDirection: 'row', justifyContent: 'space-between' }}>
+        <Text style={{ fontSize: 14, color: '#8B97A8' }}>基于大模型的英语学习助手 · 毕业答辩</Text>
+        <Text style={{ fontSize: 14, color: '#8B97A8' }}>05 / 11</Text>
+    </Box>
+</Slide>

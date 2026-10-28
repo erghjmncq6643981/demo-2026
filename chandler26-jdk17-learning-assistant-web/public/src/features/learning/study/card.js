@@ -7,7 +7,6 @@ import {
   normalizeDefinitions,
   normalizeExamples,
   readText,
-  renderCollocationMini,
   renderRelationItem,
   semanticRelations,
   statusLabel,
@@ -130,13 +129,7 @@ export function createStudyCardFeature(ctx) {
         <div class="asset-bar-left">
           <span class="asset-tip">💡 该词尚未收录到个人单词本</span>
         </div>
-        <div class="asset-bar-right">
-          <button type="button" class="primary-button compact-primary" data-asset-add>＋ 收入单词本</button>
-        </div>
       `
-      elements.wordbookAssetBar.querySelector('[data-asset-add]')?.addEventListener('click', () => {
-        elements.addToWordbookBtn?.click()
-      })
     }
   }
 
@@ -146,7 +139,14 @@ export function createStudyCardFeature(ctx) {
     let breakdown = []
 
     if (morphologyData && typeof morphologyData === 'object') {
-      if (Array.isArray(morphologyData.parts)) {
+      if (Array.isArray(morphologyData.components)) {
+        breakdown = morphologyData.components.map((c) => ({
+          type: c.type || 'root',
+          text: c.text,
+          label: c.type === 'prefix' ? '前缀' : c.type === 'suffix' ? '后缀' : '词根',
+          desc: c.origin ? `${c.origin}: ${c.meaning}` : c.meaning,
+        }))
+      } else if (Array.isArray(morphologyData.parts)) {
         breakdown = morphologyData.parts
       } else if (morphologyData.prefix || morphologyData.root || morphologyData.suffix) {
         if (morphologyData.prefix) breakdown.push({ type: 'prefix', text: morphologyData.prefix, label: '前缀', desc: morphologyData.prefixMeaning || '前缀' })
@@ -440,7 +440,7 @@ export function createStudyCardFeature(ctx) {
       elements.meaningList.innerHTML = '<div class="empty">暂无释义</div>'
       return
     }
-    elements.meaningList.innerHTML = definitions
+    const defsHtml = definitions
       .map(
         (item) => `
           <div class="meaning-item">
@@ -453,6 +453,22 @@ export function createStudyCardFeature(ctx) {
         `,
       )
       .join('')
+
+    const cognitive = parsed?.cognitive_image || parsed?.cognitiveImage
+    const cognitiveHtml = cognitive && (cognitive.title || cognitive.description)
+      ? `
+        <div class="cognitive-image-card">
+          <div class="cognitive-image-header">
+            <span class="cognitive-badge">母语认知画像</span>
+            <h5 class="cognitive-title">${escapeHtml(cognitive.title || '核心心智画面')}</h5>
+          </div>
+          <p class="cognitive-desc">${escapeHtml(cognitive.description || '')}</p>
+          ${cognitive.usage_note ? `<div class="cognitive-note"><span>💡 ${escapeHtml(cognitive.usage_note)}</span></div>` : ''}
+        </div>
+      `
+      : ''
+
+    elements.meaningList.innerHTML = defsHtml + cognitiveHtml
   }
 
   function renderTags(tags) {
@@ -536,8 +552,22 @@ export function createStudyCardFeature(ctx) {
       elements.collocations.textContent = '暂无搭配'
       return
     }
-    elements.collocations.className = 'collocation-list'
-    elements.collocations.innerHTML = collocations.map(renderCollocationMini).join('')
+    elements.collocations.className = 'collocation-card-grid'
+    elements.collocations.innerHTML = collocations
+      .map((item) => {
+        const phrase = typeof item === 'string' ? item : item.phrase || item.collocation || item.text || ''
+        const meaning = typeof item === 'string' ? '' : item.meaning || item.meaning_cn || item.meaningCn || item.translation || ''
+        return `
+          <div class="collocation-card">
+            <div class="collocation-card-header">
+              <strong class="collocation-phrase" data-collocation-term="${escapeHtml(phrase)}">${escapeHtml(phrase)}</strong>
+              ${phrase ? `<button class="mini-audio-button" type="button" data-speak-text="${escapeHtml(phrase)}" title="朗读短语">▶</button>` : ''}
+            </div>
+            ${meaning ? `<p class="collocation-meaning">${escapeHtml(meaning)}</p>` : ''}
+          </div>
+        `
+      })
+      .join('')
     bindStudyTermCards(elements.collocations, '[data-collocation-term]', '词组')
     bindInlineAudio(elements.collocations)
   }

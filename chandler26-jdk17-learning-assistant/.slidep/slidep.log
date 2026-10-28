@@ -1,0 +1,2 @@
+=== boot pid=63190 ts=2026-10-26 15:59:38.172 cwd=/Users/chandler/Documents/repository/github/demo-2026/chandler26-jdk17-learning-assistant argv=/Users/chandler/.workbuddy/binaries/node/versions/22.22.2-6/lib/node_modules/@tencent/slidep/dist/index.js create 英语学习助手答辩/英语学习助手答辩.pptx ===
+[2026-10-26 15:59:38.164] [INFO ] [pid=63190] [server-url] baseUrl=http://localhost:39099 source=portFile(/Users/chandler/.workbuddy/tencent-docs-engine.port)

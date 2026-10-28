@@ -18,6 +18,10 @@ public enum AiProvider {
     DEEPSEEK("deepseek", "DeepSeek", "https://api.deepseek.com", "/chat/completions",
             AiApiProtocol.OPENAI_CHAT_COMPLETIONS),
     KIMI("kimi", "Kimi", "https://api.moonshot.cn/v1", "/chat/completions",
+            AiApiProtocol.OPENAI_CHAT_COMPLETIONS),
+    QWEN("qwen", "通义千问", "https://dashscope.aliyuncs.com/compatible-mode/v1", "/chat/completions",
+            AiApiProtocol.OPENAI_CHAT_COMPLETIONS),
+    GLM("glm", "智谱 GLM", "https://open.bigmodel.cn/api/paas/v4", "/chat/completions",
             AiApiProtocol.OPENAI_CHAT_COMPLETIONS);
 
     private final String code;
@@ -44,10 +48,20 @@ public enum AiProvider {
         }
         String normalized = code.trim().toLowerCase(Locale.ROOT);
         return Arrays.stream(values())
-                .filter(provider -> provider.code.equals(normalized) || provider.name().equalsIgnoreCase(normalized))
+                .filter(provider -> provider.code.equals(normalized)
+                        || provider.name().equalsIgnoreCase(normalized)
+                        || matchesAlias(provider, normalized))
                 .findFirst()
                 .orElseThrow(() -> LearningAssistantException.badRequest(
                         LearningErrorCode.AI_PROVIDER_UNSUPPORTED,
                         "当前不支持 AI 供应商：" + code));
+    }
+
+    private static boolean matchesAlias(AiProvider provider, String normalized) {
+        return switch (provider) {
+            case QWEN -> "dashscope".equals(normalized) || "aliyun".equals(normalized);
+            case GLM -> "zhipu".equals(normalized) || "bigmodel".equals(normalized);
+            default -> false;
+        };
     }
 }

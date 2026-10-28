@@ -1,0 +1,36 @@
+          <section class="view" id="systemAdminView">
+            <nav class="system-tabs" aria-label="系统管理子导航">
+              <button class="system-tab active" type="button" data-system-tab="adminUserPanel">用户中心</button>
+              <button class="system-tab" type="button" data-system-tab="adminVocabularyPanel">公共词本</button>
+              <button class="system-tab" type="button" data-system-tab="aiTaskPanel">AI 任务</button>
+              <button class="system-tab" type="button" data-system-tab="modelManagePanel">模型管理</button>
+              <button class="system-tab" type="button" data-system-tab="agentManagePanel">Agent 与模板</button>
+              <button class="system-tab" type="button" data-system-tab="systemJobPanel">定时任务</button>
+              <button class="system-tab" type="button" data-system-tab="systemLogPanel">系统日志</button>
+            </nav>
+            <div class="system-sections">
+              <section class="panel system-section active" id="adminUserPanel">
+                <div class="admin-user-filters">
+                  <label class="filter-field inline-field"><span>关键词</span><input id="adminUserKeywordInput" placeholder="用户名或昵称" /></label>
+                  <label class="filter-field inline-field"><span>角色</span><select id="adminUserRoleFilter"><option value="">全部角色</option><option value="USER">普通用户</option><option value="ADMIN">系统管理员</option></select></label>
+                  <label class="filter-field inline-field"><span>状态</span><select id="adminUserEnabledFilter"><option value="">全部状态</option><option value="true">正常</option><option value="false">停用</option></select></label>
+                  <div class="inline-actions admin-user-filter-actions"><button class="primary-button compact-primary" id="searchAdminUsersBtn" type="button">查询</button><button class="secondary-button compact" id="resetAdminUsersBtn" type="button">重置</button></div>
+                </div>
+                <div class="admin-table-toolbar">
+                  <button class="primary-button compact-primary" id="openAdminUserModalBtn" type="button">新增用户</button>
+                  <span class="mini-pill" id="adminUserSummary">0 位用户</span>
+                </div>
+                <div class="admin-user-table-wrap">
+                  <table class="admin-user-table"><thead><tr><th>用户</th><th>角色</th><th>状态</th><th>学习计划</th><th>个人词本</th><th>最近登录</th><th>注册时间</th><th>操作</th></tr></thead><tbody id="adminUserRows"></tbody></table>
+                </div>
+                <div class="admin-user-pagination"><span id="adminUserPageInfo">第 1 页</span><div class="inline-actions"><button class="icon-action-button" id="adminUserPrevBtn" type="button" title="上一页" aria-label="上一页">←</button><button class="icon-action-button" id="adminUserNextBtn" type="button" title="下一页" aria-label="下一页">→</button></div></div>
+              </section>
+              <section class="panel profile-section system-section" id="adminVocabularyPanel">
+                <div class="panel-heading"><div><p class="eyebrow">Public Vocabulary</p><h3>公共词本管理</h3><p class="panel-description">导入、审核、关联分析和发布公共词本。普通用户只可在学习计划中选择已发布词本。</p></div><button class="primary-button compact-primary" id="openAdminVocabularyImportBtn" type="button">导入公共词本</button></div>
+                <div id="sceneImportList" class="scene-import-list empty">暂无公共词本管理记录</div>
+                <div class="admin-user-pagination scene-import-pagination"><span id="vocabularyImportHistoryPageInfo">第 1 页</span><div class="inline-actions"><button class="icon-action-button" id="vocabularyImportHistoryPrevBtn" type="button" title="上一页" aria-label="上一页">←</button><button class="icon-action-button" id="vocabularyImportHistoryNextBtn" type="button" title="下一页" aria-label="下一页">→</button></div></div>
+              </section>
+              <div id="systemManagedPanels"></div>
+            </div>
+          </section>
+

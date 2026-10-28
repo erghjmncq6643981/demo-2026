@@ -1,0 +1,866 @@
+@media (max-width: 640px) {
+  .wordbook-card-modal-header {
+    gap: 10px;
+  }
+  .wordbook-card-header-actions {
+    width: 100%;
+    justify-content: flex-end;
+  }
+}
+
+@media (max-width: 720px) {
+  #systemAdminView.view.active {
+    gap: 12px;
+  }
+
+  .ai-session-filters {
+    grid-template-columns: 1fr;
+  }
+
+  .ai-session-filter-actions {
+    grid-column: auto;
+  }
+
+  .ai-session-filter-actions button {
+    flex: 1 1 0;
+  }
+
+  .ai-session-detail-modal > .panel-heading {
+    align-items: flex-start;
+    flex-direction: row;
+  }
+
+  .ai-session-detail-modal {
+    width: 100%;
+    max-height: calc(100vh - 18px);
+    padding: 14px;
+  }
+
+  .ai-session-meta-grid,
+  .ai-session-kpi-grid,
+  .ai-session-overview-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .ai-session-meta-grid > div {
+    padding: 8px 10px;
+  }
+
+  .ai-call-workbench {
+    grid-template-columns: 1fr;
+    min-height: 0;
+  }
+
+  .ai-call-list {
+    max-height: 190px;
+  }
+
+  .ai-call-inspector {
+    overflow: visible;
+  }
+
+  .ai-session-message-header {
+    align-items: flex-start;
+    flex-direction: column;
+    gap: 5px;
+  }
+  .login-screen,
+  .content {
+    width: 100%;
+    padding: 14px;
+  }
+
+  .content {
+    gap: 14px;
+  }
+
+  .login-screen {
+    min-height: 100vh;
+    gap: 22px;
+    align-content: center;
+  }
+
+  .login-visual h1 {
+    font-size: 44px;
+  }
+
+  .login-word-card {
+    margin-top: 22px;
+  }
+
+  .content-topbar,
+  .topbar-actions,
+  .review-start-controls,
+  .wordbook-tools,
+  .article-study-tools,
+  .word-main,
+  .review-header {
+    align-items: stretch;
+    flex-direction: column;
+  }
+
+  .topbar-title {
+    align-items: flex-start;
+  }
+
+  .content-topbar {
+    align-items: center;
+    flex-direction: row;
+    gap: 10px;
+  }
+
+  .topbar-actions {
+    width: auto;
+    align-items: center;
+    flex-direction: row;
+    flex: 0 0 auto;
+  }
+
+  .topbar-title > div {
+    min-width: 0;
+  }
+
+  .topbar-title {
+    flex: 1 1 auto;
+    min-width: 0;
+  }
+
+  .topbar-title .eyebrow {
+    line-height: 1.15;
+  }
+
+  .content-topbar h2 {
+    min-width: 0;
+    font-size: 22px;
+    line-height: 1.15;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+
+  #profileView.view.active {
+    gap: 12px;
+  }
+
+  .profile-tabs,
+  .system-tabs {
+    position: sticky;
+    top: 0;
+    margin: 0 -2px;
+    border-radius: 10px;
+  }
+
+  .profile-tab,
+  .system-tab {
+    min-height: 34px;
+    padding: 0 12px;
+    font-size: 12px;
+  }
+
+  .wordbook-view-content {
+    display: flex;
+    flex-direction: column;
+    overflow: visible;
+  }
+
+  .profile-sections {
+    padding-right: 0;
+    overflow-x: hidden;
+  }
+
+  .profile-row {
+    grid-template-columns: 48px minmax(0, 1fr);
+    gap: 10px;
+  }
+
+  .avatar.large {
+    width: 48px;
+    height: 48px;
+    border-radius: 14px;
+    font-size: 18px;
+  }
+
+  .profile-row h4,
+  .profile-row p {
+    overflow-wrap: anywhere;
+  }
+
+  .metric-row {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    gap: 8px;
+  }
+
+  .metric-row div {
+    min-width: 0;
+    padding: 10px 6px;
+  }
+
+  .metric-row strong {
+    font-size: 20px;
+  }
+
+  .metric-row span {
+    font-size: 11px;
+  }
+
+  .activity-section .compact-heading {
+    align-items: flex-start;
+    flex-direction: column;
+  }
+
+  .activity-heatmap {
+    padding-bottom: 12px;
+  }
+
+  .account-modal {
+    width: 100%;
+  }
+
+  .account-tabs {
+    overflow-x: auto;
+    scrollbar-width: thin;
+  }
+
+  .account-tab {
+    min-width: 112px;
+    flex: 0 0 auto;
+  }
+
+  .account-security-row {
+    grid-template-columns: minmax(0, 1fr) 32px;
+    min-height: 58px;
+    padding: 10px 11px;
+  }
+
+  .account-security-password-grid,
+  .account-security-single-grid {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .account-security-single-field {
+    max-width: none;
+  }
+
+  .compact-field,
+  .compact-field.small-field,
+  .entry-prefix-field {
+    width: 100%;
+  }
+
+  .article-filter-actions {
+    grid-template-columns: 1fr;
+    width: 100%;
+  }
+
+  .article-study-toolbar {
+    flex-direction: row;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 8px;
+  }
+
+  .article-study-toolbar .compact-field,
+  .article-study-toolbar .primary-button {
+    width: 100%;
+  }
+
+  .article-study-toolbar .compact-field {
+    flex: 1 1 220px;
+    grid-template-columns: auto minmax(0, 1fr);
+    gap: 6px;
+  }
+
+  .article-study-toolbar .primary-button {
+    flex: 0 0 auto;
+    width: auto;
+    min-width: 128px;
+  }
+
+  .article-modal-settings {
+    grid-template-columns: 1fr;
+  }
+
+  .article-study-modal > .panel-heading {
+    align-items: flex-start;
+    flex-direction: row;
+  }
+
+  .article-study-modal .modal-actions {
+    grid-template-columns: 1fr;
+    justify-content: stretch;
+  }
+
+  .article-word-grid,
+  .article-mini-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .article-modal-words .article-word-grid {
+    max-height: clamp(260px, 38dvh, 380px);
+    overflow: auto;
+    overscroll-behavior: contain;
+    padding-right: 4px;
+  }
+
+  .article-learning-head {
+    align-items: stretch;
+    flex-direction: column;
+  }
+
+  .article-learning-head h4 {
+    font-size: 24px;
+  }
+
+  .article-modal-words .article-word-card {
+    min-height: 108px;
+    padding: 12px 14px;
+  }
+
+  .article-modal-words .article-word-card strong {
+    font-size: 20px;
+  }
+
+  .article-stage-shell {
+    padding-top: 6px;
+  }
+
+  .article-stage-nav {
+    gap: 5px;
+  }
+
+  .article-stage-tab {
+    min-height: 48px;
+    gap: 5px;
+    padding: 6px 4px;
+  }
+
+  .article-stage-tab span {
+    width: 20px;
+    height: 20px;
+    flex-basis: 20px;
+  }
+
+  .article-stage-tab strong {
+    font-size: 11px;
+  }
+
+  .article-stage-toolbar {
+    align-items: flex-start;
+    flex-direction: column;
+  }
+
+  .article-mode-switch {
+    width: 100%;
+  }
+
+  .article-vocabulary-row {
+    grid-template-columns: minmax(0, 1fr);
+    gap: 5px;
+    padding: 13px 2px;
+  }
+
+  .article-vocabulary-row small {
+    grid-column: 1;
+  }
+
+  .article-practice-options {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .article-stage-actions,
+  .article-stage-actions-split {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    padding-top: 16px;
+  }
+
+  .article-stage-actions:not(.article-stage-actions-split) {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .article-stage-actions button {
+    width: 100%;
+    min-width: 0;
+  }
+
+  .article-check-commands {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 6px;
+  }
+
+  .article-check-result {
+    align-items: flex-start;
+    flex-direction: column;
+  }
+
+  .article-word-card {
+    position: relative;
+    min-height: clamp(146px, 36vw, 180px);
+    align-content: start;
+    gap: 10px;
+    padding: 15px 16px 18px;
+  }
+
+  .article-word-topline {
+    align-items: flex-start;
+  }
+
+  .article-word-card strong {
+    font-size: clamp(20px, 6vw, 24px);
+    line-height: 1.15;
+  }
+
+  .article-word-card p {
+    padding-right: 18px;
+    line-height: 1.55;
+  }
+
+  .article-word-card small {
+    flex: 0 0 auto;
+    white-space: nowrap;
+  }
+
+  .article-word-card .selection-dot {
+    position: absolute;
+    right: 14px;
+    bottom: 14px;
+    width: 16px;
+    height: 16px;
+  }
+
+  .search-card,
+  .inline-form,
+  .form-grid,
+  .template-meta-grid,
+  .model-form-grid,
+  .model-toggle-row,
+  .speech-settings,
+  .sidebar-footer,
+  .nav-menu {
+    grid-template-columns: 1fr;
+  }
+
+  .model-item,
+  .wordbook-card,
+  .focus-subgrid,
+  .status-choice-list,
+  .search-card,
+  .transfer-item {
+    grid-template-columns: 1fr;
+  }
+
+  .panel {
+    padding: 14px;
+  }
+
+  .panel-heading {
+    gap: 10px;
+  }
+
+  .panel-heading,
+  .wordbook-focus-head,
+  .review-card-topline,
+  .review-card-actions,
+  .forgotten-word-head {
+    align-items: stretch;
+    flex-direction: column;
+  }
+
+  .inline-actions,
+  .row-actions {
+    gap: 6px;
+  }
+
+  .modal-actions {
+    flex-direction: column-reverse;
+  }
+
+  .confirm-modal .modal-actions {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .modal-actions button {
+    width: 100%;
+  }
+
+  .primary-button,
+  .secondary-button,
+  .compact-primary {
+    min-width: 0;
+    padding-right: 12px;
+    padding-left: 12px;
+    font-size: 13px;
+  }
+
+  .secondary-button.compact,
+  .ghost-button,
+  .danger-button {
+    min-width: 0;
+    padding-right: 10px;
+    padding-left: 10px;
+    font-size: 12px;
+  }
+
+  .icon-button,
+  .icon-action-button,
+  .danger-icon-button {
+    width: 32px;
+    height: 32px;
+    border-radius: 9px;
+    font-size: 14px;
+  }
+
+  .entry-row {
+    grid-template-columns: minmax(0, 1fr) 72px;
+    min-height: 60px;
+    gap: 8px;
+    padding: 8px 9px;
+  }
+
+  .entry-row > button {
+    gap: 2px;
+  }
+
+  .entry-row > button span {
+    font-size: 14px;
+  }
+
+  .entry-row > button small {
+    font-size: 11px;
+  }
+
+  .entry-row .row-actions {
+    justify-content: flex-end;
+  }
+
+  .wordbook-focus-head .inline-actions {
+    max-width: none;
+    align-items: stretch;
+  }
+
+  .next-review-pill {
+    white-space: normal;
+  }
+
+  .search-card {
+    gap: 10px;
+    padding: 14px;
+  }
+
+  .term-input {
+    height: 54px;
+    font-size: 24px;
+  }
+
+  .search-card .primary-button,
+  .search-card .regenerate-button {
+    height: 44px;
+  }
+
+  .meaning-item {
+    grid-template-columns: 1fr;
+    gap: 6px;
+  }
+
+  .relation-item {
+    grid-template-columns: minmax(0, 1fr);
+    gap: 8px;
+  }
+
+  .relation-side-actions {
+    justify-content: space-between;
+  }
+
+  .collocation-item {
+    grid-template-columns: minmax(0, 1fr) 34px;
+  }
+
+  .review-layout {
+    gap: 14px;
+  }
+
+  .review-focus-card h4,
+  .wordbook-focus-card h4 {
+    font-size: clamp(36px, 15vw, 58px);
+  }
+
+  .review-focus-card h4 {
+    font-size: clamp(32px, 12vw, 48px);
+  }
+
+  .typing-board {
+    padding: 12px;
+  }
+
+  .typing-letters {
+    gap: 5px;
+  }
+
+  .typing-letters span {
+    min-width: 28px;
+    height: 36px;
+    border-radius: 8px;
+    font-size: 18px;
+  }
+
+  .review-actions,
+  .modal-review-actions {
+    grid-template-columns: 1fr;
+  }
+
+  .transfer-actions {
+    justify-content: stretch;
+  }
+
+  .transfer-actions button {
+    flex: 1 1 0;
+  }
+
+  .transfer-actions .transfer-action-button {
+    min-width: 0;
+  }
+
+  .review-actions button,
+  .status-choice {
+    min-height: 40px;
+    font-size: 12px;
+  }
+
+  .note-editor textarea {
+    min-height: 180px;
+    max-height: 48vh;
+  }
+
+  .modal-backdrop {
+    align-items: end;
+    padding: 12px;
+  }
+
+  .review-modal,
+  .config-modal {
+    max-height: calc(100dvh - 24px);
+    padding: 16px;
+  }
+
+  .word-main h2 {
+    font-size: clamp(44px, 16vw, 54px);
+  }
+
+  .voice-actions {
+    flex-wrap: wrap;
+  }
+
+  .scene-plan-toolbar,
+  .scene-unit-header,
+  .scene-plan-overview,
+  .scene-calendar-summary,
+  .profile-learning-plan-card,
+  .vocabulary-review-summary,
+  .vocabulary-review-footer {
+    align-items: stretch;
+    grid-template-columns: 1fr;
+    flex-direction: column;
+  }
+
+  .scene-plan-toolbar {
+    display: grid;
+  }
+
+  .scene-plan-toolbar .compact-field {
+    width: 100%;
+  }
+
+  .scene-range-control {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .scene-calendar-navigation {
+    justify-content: space-between;
+    width: 100%;
+  }
+
+  .scene-calendar-navigation strong {
+    min-width: 0;
+    flex: 1;
+    font-size: 12px;
+  }
+
+  .scene-toolbar-actions,
+  .scene-overview-actions,
+  .scene-unit-actions,
+  .scene-challenge-actions,
+  .scene-complete-actions {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    width: 100%;
+    margin-left: 0;
+  }
+
+  .scene-toolbar-actions button,
+  .scene-overview-actions button,
+  .scene-unit-actions button,
+  .scene-challenge-actions button,
+  .scene-complete-actions button {
+    width: 100%;
+  }
+
+  .scene-overview-actions .mini-pill,
+  .scene-unit-actions .mini-pill {
+    display: grid;
+    min-height: 38px;
+    place-items: center;
+  }
+
+  .scene-calendar-summary small {
+    text-align: left;
+  }
+
+  .scene-calendar-grid,
+  .scene-calendar.month .scene-calendar-grid {
+    grid-template-columns: repeat(4, minmax(58px, 1fr));
+  }
+
+  .scene-calendar-day {
+    min-height: 72px;
+    padding: 7px;
+  }
+
+  .scene-learning-text {
+    font-size: 19px;
+    line-height: 1.95;
+  }
+
+  .scene-inline-word span {
+    display: inline;
+    font-size: 14px;
+  }
+
+  .scene-translation,
+  .scene-translation > div {
+    font-size: 16px;
+  }
+
+  .scene-related-tools {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) auto;
+    width: 100%;
+  }
+
+  .scene-related-tools .entry-prefix-field {
+    min-width: 0;
+  }
+
+  .scene-related-word {
+    align-items: flex-start;
+    flex-direction: column;
+  }
+
+  .scene-related-side {
+    width: 100%;
+    justify-content: space-between;
+  }
+
+  .scene-choice-list,
+  .scene-spelling-form,
+  .profile-learning-plan-list,
+  .vocabulary-import-form {
+    grid-template-columns: 1fr;
+  }
+
+  .scene-challenge-stage,
+  .scene-assessment-panel {
+    min-height: 300px;
+  }
+
+  .scene-challenge-words {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .scene-challenge-words span {
+    font-size: 15px;
+  }
+
+  .scene-challenge-prep {
+    grid-template-columns: 1fr;
+  }
+
+  .scene-challenge-prep p {
+    grid-column: auto;
+  }
+
+  .vocabulary-analysis-action {
+    align-items: stretch;
+    flex-direction: column;
+  }
+
+  .vocabulary-analysis-action button {
+    width: 100%;
+  }
+
+  .profile-plan-progress {
+    justify-items: stretch;
+    text-align: left;
+  }
+
+  .vocabulary-import-modal {
+    width: 100%;
+  }
+
+  .vocabulary-review-tools {
+    display: grid;
+    grid-template-columns: 1fr;
+  }
+
+  .vocabulary-review-table-wrap {
+    max-height: 48vh;
+  }
+
+  .vocabulary-review-table {
+    min-width: 820px;
+  }
+
+  .ai-task-toolbar,
+  .ai-task-item {
+    grid-template-columns: 1fr;
+    align-items: stretch;
+    flex-direction: column;
+  }
+
+  .ai-task-side {
+    align-items: flex-start;
+  }
+}
+
+@media (max-width: 720px) {
+  .scene-vocabulary-preview-modal .panel-heading {
+    align-items: start;
+    flex-direction: row;
+  }
+
+  .scene-overview-unit-row {
+    align-items: stretch;
+    flex-direction: column;
+    gap: 12px;
+    padding: 12px;
+  }
+
+  .unit-preview-button {
+    align-items: stretch;
+    flex-direction: column;
+    gap: 10px;
+  }
+
+  .unit-date-info {
+    min-width: 0;
+  }
+
+  .unit-action-button,
+  .unit-action-button button {
+    width: 100%;
+  }
+
+  .scene-vocabulary-preview-words {
+    grid-template-columns: repeat(auto-fill, minmax(240px, 1fr));
+  }
+}

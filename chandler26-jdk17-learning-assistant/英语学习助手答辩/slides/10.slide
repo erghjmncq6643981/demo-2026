@@ -1,0 +1,108 @@
+<Slide style={{ width: 1280, height: 720, background: '#FFFFFF', position: 'relative', fontFamily: '微软雅黑', padding: '72px 60px 60px 60px' }}>
+    <Box style={{ position: 'absolute', top: 0, left: 0, width: 1280, height: 56, background: '#1E4FA8', flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingLeft: 60, paddingRight: 60 }}>
+        <Text style={{ fontSize: 32, fontWeight: 'bold', color: '#FFFFFF' }}>结论、局限与后续</Text>
+        <Text style={{ fontSize: 16, color: 'rgba(255,255,255,0.72)' }}>09 · Conclusion</Text>
+    </Box>
+
+    <Box style={{ flexDirection: 'column', width: 1160, height: 588, justifyContent: 'space-between' }}>
+        <Box style={{ flexDirection: 'row', gap: 44, height: 362 }}>
+            <Box style={{ width: 620, flexDirection: 'column', justifyContent: 'space-between' }}>
+                <Text style={{ fontSize: 14, color: '#8B97A8', letterSpacing: 1 }}>三条结论</Text>
+                <Box style={{ flexDirection: 'row', gap: 16, paddingBottom: 16, borderBottom: '1px solid #E5E7EB' }}>
+                    <Text style={{ fontSize: 22, fontWeight: 'bold', color: '#1E4FA8', width: 36 }}>01</Text>
+                    <Box style={{ flexDirection: 'column', gap: 5, width: 568 }}>
+                        <Text style={{ fontSize: 21, fontWeight: 'bold', color: '#1A2230' }}>把一次模型调用收敛成可追踪的任务</Text>
+                        <Text style={{ fontSize: 17, color: '#4A5568', lineHeight: 1.5 }}>
+                            场景、模型、Token、解析结果都留痕；失败按「那一步的那一次」重试，不整单重跑。
+                        </Text>
+                    </Box>
+                </Box>
+                <Box style={{ flexDirection: 'row', gap: 16, paddingTop: 16, paddingBottom: 16, borderBottom: '1px solid #E5E7EB' }}>
+                    <Text style={{ fontSize: 22, fontWeight: 'bold', color: '#1E4FA8', width: 36 }}>02</Text>
+                    <Box style={{ flexDirection: 'column', gap: 5, width: 568 }}>
+                        <Text style={{ fontSize: 21, fontWeight: 'bold', color: '#1A2230' }}>学习资产按边界分层，刷新冲不掉</Text>
+                        <Text style={{ fontSize: 17, color: '#4A5568', lineHeight: 1.5 }}>
+                            公共缓存可刷新以压低成本，个人快照与复习排期长期稳定，生成历史只追加。
+                        </Text>
+                    </Box>
+                </Box>
+                <Box style={{ flexDirection: 'row', gap: 16, paddingTop: 16 }}>
+                    <Text style={{ fontSize: 22, fontWeight: 'bold', color: '#1E4FA8', width: 36 }}>03</Text>
+                    <Box style={{ flexDirection: 'column', gap: 5, width: 568 }}>
+                        <Text style={{ fontSize: 21, fontWeight: 'bold', color: '#1A2230' }}>模块化单体在没有微服务成本的前提下守住边界</Text>
+                        <Text style={{ fontSize: 17, color: '#4A5568', lineHeight: 1.5 }}>
+                            六域四层，靠架构测试、规模与文档治理把边界变成可执行的门槛。
+                        </Text>
+                    </Box>
+                </Box>
+            </Box>
+
+            <Box style={{ width: 496, flexDirection: 'column', gap: 12 }}>
+                <Text style={{ fontSize: 14, color: '#8B97A8', letterSpacing: 1 }}>局限（这三条都写在论文里）</Text>
+                <Box style={{ flexDirection: 'row', gap: 10, alignItems: 'flex-start' }}>
+                    <Box style={{ width: 6, height: 6, background: '#D9534F', marginTop: 10 }} />
+                    <Text style={{ fontSize: 18, color: '#1A2230', lineHeight: 1.55, width: 470 }}>
+                        学习数据几乎全部来自单个学习者，跨用户效果无从对照。
+                    </Text>
+                </Box>
+                <Box style={{ flexDirection: 'row', gap: 10, alignItems: 'flex-start' }}>
+                    <Box style={{ width: 6, height: 6, background: '#D9534F', marginTop: 10 }} />
+                    <Text style={{ fontSize: 18, color: '#1A2230', lineHeight: 1.55, width: 470 }}>
+                        并发与首屏只在本地测，独立服务器与多机网络下的表现未验证。
+                    </Text>
+                </Box>
+                <Box style={{ flexDirection: 'row', gap: 10, alignItems: 'flex-start' }}>
+                    <Box style={{ width: 6, height: 6, background: '#D9534F', marginTop: 10 }} />
+                    <Text style={{ fontSize: 18, color: '#1A2230', lineHeight: 1.55, width: 470 }}>
+                        缓存复用率 83.80%，没到任务书要求的 95%，首次学习词占比偏高。
+                    </Text>
+                </Box>
+                <Box style={{ flexDirection: 'row', gap: 10, alignItems: 'flex-start' }}>
+                    <Box style={{ width: 6, height: 6, background: '#D9534F', marginTop: 10 }} />
+                    <Text style={{ fontSize: 18, color: '#1A2230', lineHeight: 1.55, width: 470 }}>
+                        生成内容缺人工纠错、质量评分与事实核验，错了只能靠用户发现。
+                    </Text>
+                </Box>
+                <Text style={{ fontSize: 15, color: '#8B97A8', lineHeight: 1.5, marginTop: 4 }}>
+                    前三条决定了结论的适用范围：单机、单用户、小样本。
+                </Text>
+            </Box>
+        </Box>
+
+        <Box style={{ flexDirection: 'column', gap: 10, paddingTop: 18, borderTop: '1px solid #E5E7EB' }}>
+            <Text style={{ fontSize: 14, color: '#8B97A8', letterSpacing: 1 }}>后续工作</Text>
+            <Box style={{ flexDirection: 'row', gap: 24 }}>
+                <Box style={{ width: 370, flexDirection: 'row', gap: 10, alignItems: 'flex-start' }}>
+                    <Text style={{ fontSize: 16, fontWeight: 'bold', color: '#3D7BD9', width: 24 }}>01</Text>
+                    <Text style={{ fontSize: 17, color: '#1A2230', lineHeight: 1.5, width: 346 }}>
+                        把自适应间隔重复做进去，用 A/B 评估长期留存。
+                    </Text>
+                </Box>
+                <Box style={{ width: 370, flexDirection: 'row', gap: 10, alignItems: 'flex-start' }}>
+                    <Text style={{ fontSize: 16, fontWeight: 'bold', color: '#3D7BD9', width: 24 }}>02</Text>
+                    <Text style={{ fontSize: 17, color: '#1A2230', lineHeight: 1.5, width: 346 }}>
+                        给生成内容补治理闭环：纠错、评分、核验、版本比较。
+                    </Text>
+                </Box>
+                <Box style={{ width: 370, flexDirection: 'row', gap: 10, alignItems: 'flex-start' }}>
+                    <Text style={{ fontSize: 16, fontWeight: 'bold', color: '#3D7BD9', width: 24 }}>03</Text>
+                    <Text style={{ fontSize: 17, color: '#1A2230', lineHeight: 1.5, width: 346 }}>
+                        把这套骨架迁到听说读写其他场景，验证可复用性。
+                    </Text>
+                </Box>
+            </Box>
+        </Box>
+
+        <Box style={{ flexDirection: 'row', background: '#E8EFF8', alignItems: 'center', padding: '14px 22px', gap: 14 }}>
+            <Box style={{ width: 3, height: 30, background: '#1E4FA8' }} />
+            <Text style={{ fontSize: 18, color: '#1A2230' }}>
+                这套骨架的价值不在「能生成」，而在生成之后还能被管、被查、被复习。
+            </Text>
+        </Box>
+    </Box>
+
+    <Box style={{ position: 'absolute', top: 670, left: 60, width: 1160, flexDirection: 'row', justifyContent: 'space-between' }}>
+        <Text style={{ fontSize: 14, color: '#8B97A8' }}>基于大模型的英语学习助手 · 毕业答辩</Text>
+        <Text style={{ fontSize: 14, color: '#8B97A8' }}>10 / 11</Text>
+    </Box>
+</Slide>

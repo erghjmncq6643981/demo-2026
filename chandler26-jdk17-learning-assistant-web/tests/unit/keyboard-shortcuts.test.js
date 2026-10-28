@@ -84,7 +84,7 @@ describe('keyboard-shortcuts Escape handling for all modals', () => {
       elements,
       closeCoreWordsModal: vi.fn(() => elements.sceneCoreWordsModal.classList.add('hidden')),
       closeRelatedWordsModal: vi.fn(() => elements.sceneRelatedWordsModal.classList.add('hidden')),
-      closeDeleteConfirm: vi.fn((confirmed) => {
+      closeDeleteConfirm: vi.fn((_confirmed) => {
         elements.deleteConfirmModal.classList.add('hidden')
       }),
       closeScenePlanModal: vi.fn(() => elements.scenePlanModal.classList.add('hidden')),

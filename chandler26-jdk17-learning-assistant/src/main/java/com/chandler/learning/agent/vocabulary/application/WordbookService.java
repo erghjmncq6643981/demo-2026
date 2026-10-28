@@ -435,14 +435,15 @@ public class WordbookService {
 
     /** 分页读取单词本轻量词条，词卡正文由详情接口按需加载。 */
     public WordbookEntryPageResponse pageEntries(Long userId, Long wordbookId, boolean dueOnly, String status,
-                                                 String keyword, Integer page, Integer pageSize) {
+                                                 String cardStatus, String keyword, Integer page, Integer pageSize) {
         requireWordbook(userId, wordbookId);
         int current = page == null || page < 1 ? 1 : page;
         int size = pageSize == null || pageSize < 1 ? 30 : Math.min(pageSize, 100);
         String trimmedKeyword = StringUtils.hasText(keyword) ? keyword.trim() : null;
         String normalizedStatus = StringUtils.hasText(status) ? normalizeStatus(status) : null;
+        String trimmedCardStatus = StringUtils.hasText(cardStatus) ? cardStatus.trim().toLowerCase() : null;
         Page<WordbookEntrySummaryItem> result = entryMapper.selectSummaryPage(
-                new Page<>(current, size), userId, wordbookId, normalizedStatus, trimmedKeyword,
+                new Page<>(current, size), userId, wordbookId, normalizedStatus, trimmedCardStatus, trimmedKeyword,
                 dueOnly, LocalDateTime.now());
         WordbookEntryPageResponse response = new WordbookEntryPageResponse();
         response.setItems(result.getRecords().stream().map(responseAssembler::toSummaryResponse).toList());
@@ -713,8 +714,12 @@ public class WordbookService {
                     "单词本词条关联词快照序列化失败");
             responseAssembler.applyVocabularySnapshot(entry, vocabulary, now, tagsJson, relationsJson);
             entry.setVocabularyId(vocabulary.getId());
-            entry.setTerm(vocabulary.getTerm());
-            entry.setNormalizedTerm(vocabulary.getNormalizedTerm());
+            if (!StringUtils.hasText(entry.getTerm())) {
+                entry.setTerm(vocabulary.getTerm());
+            }
+            if (!StringUtils.hasText(entry.getNormalizedTerm())) {
+                entry.setNormalizedTerm(vocabulary.getNormalizedTerm());
+            }
             entry.setUpdateTime(now);
             updates.add(entry);
         }

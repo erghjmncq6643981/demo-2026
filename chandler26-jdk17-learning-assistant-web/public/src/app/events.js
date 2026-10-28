@@ -1,6 +1,5 @@
 import { hideModal } from '/src/shared/modal.js'
 import { syncCurrentWordbookId } from '/src/shared/wordbook.js'
-import { firstExample } from '/src/shared/vocabulary.js'
 import { bindKeyboardShortcuts } from '/src/app/keyboard-shortcuts.js'
 
 export function bindAppEvents(ctx) {
@@ -39,6 +38,7 @@ export function bindAppEvents(ctx) {
     loadWordbookEntries,
     searchWordbookEntries,
     changeWordbookPage,
+    jumpToWordbookPage,
     navigateWordbookCard,
     generateCurrentWordbookCard,
     changeArticleWordbook,
@@ -136,7 +136,6 @@ export function bindAppEvents(ctx) {
     closeEntryStatusModal,
     chooseEntryStatus,
     speak,
-    speakSentence,
     editCurrentNote,
     startReview,
     closeReviewModal,
@@ -230,6 +229,10 @@ elements.reloadWordbookViewBtn?.addEventListener('click', () => {
   if (typeof searchWordbookEntries === 'function') searchWordbookEntries()
   else loadWordbookEntries()
 })
+elements.wordCardStatusFilter?.addEventListener('change', () => {
+  if (typeof searchWordbookEntries === 'function') searchWordbookEntries()
+  else loadWordbookEntries()
+})
 elements.wordPrefixInput?.addEventListener('keydown', (event) => {
   if (event.key === 'Enter') {
     event.preventDefault()
@@ -239,6 +242,17 @@ elements.wordPrefixInput?.addEventListener('keydown', (event) => {
 })
 elements.wordbookPrevBtn?.addEventListener('click', () => changeWordbookPage(-1))
 elements.wordbookNextBtn?.addEventListener('click', () => changeWordbookPage(1))
+elements.wordbookJumpPageBtn?.addEventListener('click', () => {
+  const page = elements.wordbookJumpPageInput?.value
+  if (page && typeof jumpToWordbookPage === 'function') jumpToWordbookPage(page)
+})
+elements.wordbookJumpPageInput?.addEventListener('keydown', (event) => {
+  if (event.key === 'Enter') {
+    event.preventDefault()
+    const page = elements.wordbookJumpPageInput?.value
+    if (page && typeof jumpToWordbookPage === 'function') jumpToWordbookPage(page)
+  }
+})
 elements.openWordbookModalBtn?.addEventListener('click', () => openWordbookModal())
 elements.closeWordbookModalBtn?.addEventListener('click', closeWordbookModal)
 elements.wordbookModal?.addEventListener('click', (event) => {
@@ -435,7 +449,6 @@ elements.entryStatusModal?.querySelectorAll('[data-status-choice]')?.forEach((bu
   button.addEventListener('click', () => chooseEntryStatus(button.getAttribute('data-status-choice')))
 })
 elements.speakWordBtn?.addEventListener('click', () => speak(state.currentRecord?.normalizedTerm || elements.termInput?.value))
-elements.speakSentenceBtn?.addEventListener('click', () => speakSentence(firstExample(state.currentRecord?.parsed)))
 
 function updateSentencePlayButtons(sentence, isPlaying) {
   const cleanSentence = String(sentence || '')
@@ -444,18 +457,6 @@ function updateSentencePlayButtons(sentence, isPlaying) {
     .replace(/\*{1,2}(.*?)\*{1,2}/g, '$1')
     .trim()
     .toLowerCase()
-
-  if (elements.speakSentenceBtn) {
-    if (isPlaying) {
-      elements.speakSentenceBtn.textContent = '⏸ 停止例句'
-      elements.speakSentenceBtn.classList.add('playing')
-      elements.speakSentenceBtn.title = '停止朗读例句 (再次点击停止)'
-    } else {
-      elements.speakSentenceBtn.textContent = '朗读例句'
-      elements.speakSentenceBtn.classList.remove('playing')
-      elements.speakSentenceBtn.title = '朗读当前词卡第一条例句'
-    }
-  }
 
   const query = '[data-sentence-index], [data-modal-sentence], [data-forgotten-sentence], [data-focus-sentence], [data-quick-sentence]'
   document.querySelectorAll(query).forEach((button) => {

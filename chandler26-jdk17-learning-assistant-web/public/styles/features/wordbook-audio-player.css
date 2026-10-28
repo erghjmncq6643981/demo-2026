@@ -1,0 +1,230 @@
+/* 单词轮播随身听播放器 (Wordbook Audio Walkman Player Bar) */
+
+.wordbook-audio-player-bar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex-wrap: nowrap;
+  gap: 16px;
+  padding: 10px 18px;
+  min-height: 52px;
+  box-sizing: border-box;
+  flex-shrink: 0;
+  background: var(--bg-surface, #1e293b);
+  border: 1px solid var(--line, rgba(255, 255, 255, 0.08));
+  border-radius: var(--radius-md, 10px);
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.18);
+  animation: audioBarSlideIn 0.25s cubic-bezier(0.16, 1, 0.3, 1);
+  transition: all 0.2s ease;
+}
+
+@keyframes audioBarSlideIn {
+  from {
+    opacity: 0;
+    transform: translateY(-6px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.wordbook-audio-player-bar.hidden {
+  display: none !important;
+}
+
+/* 左侧：状态与当前单词 */
+.player-bar-info {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  min-width: 0;
+  flex: 1 1 auto;
+}
+
+.player-status-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 3px 10px;
+  font-size: 12px;
+  font-weight: 600;
+  border-radius: 999px;
+  background: rgba(99, 102, 241, 0.15);
+  color: var(--accent, #6366f1);
+  border: 1px solid rgba(99, 102, 241, 0.3);
+  white-space: nowrap;
+}
+
+.player-status-badge.is-playing {
+  background: rgba(16, 185, 129, 0.15);
+  color: #10b981;
+  border-color: rgba(16, 185, 129, 0.35);
+}
+
+.player-status-badge.is-paused {
+  background: rgba(245, 158, 11, 0.15);
+  color: #f59e0b;
+  border-color: rgba(245, 158, 11, 0.35);
+}
+
+.status-pulse-dot {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: currentColor;
+}
+
+.player-status-badge.is-playing .status-pulse-dot {
+  animation: statusPulse 1.4s ease-in-out infinite;
+}
+
+@keyframes statusPulse {
+  0%, 100% {
+    opacity: 1;
+    transform: scale(1);
+  }
+  50% {
+    opacity: 0.35;
+    transform: scale(1.35);
+  }
+}
+
+.player-progress-tag {
+  font-size: 12px;
+  font-variant-numeric: tabular-nums;
+  color: var(--muted, #94a3b8);
+  font-weight: 600;
+  white-space: nowrap;
+}
+
+.player-current-meta {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+  min-width: 0;
+  overflow: hidden;
+}
+
+.player-current-meta .current-term {
+  font-size: 15px;
+  font-weight: 700;
+  color: var(--text, #f8fafc);
+  letter-spacing: 0.02em;
+  white-space: nowrap;
+}
+
+.player-current-meta .current-meaning {
+  font-size: 13px;
+  color: var(--muted, #94a3b8);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  max-width: 280px;
+}
+
+/* 中间：播放控制按钮组 */
+.player-bar-controls {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex: 0 0 auto;
+}
+
+.player-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 8px;
+  border: 1px solid var(--line, rgba(255, 255, 255, 0.1));
+  background: var(--bg-canvas, #0f172a);
+  color: var(--text, #e2e8f0);
+  cursor: pointer;
+  transition: all 0.15s ease;
+  user-select: none;
+}
+
+.player-btn:hover {
+  background: rgba(99, 102, 241, 0.15);
+  border-color: var(--accent, #6366f1);
+  color: var(--text, #ffffff);
+}
+
+.player-btn.icon-btn {
+  width: 34px;
+  height: 34px;
+  font-size: 14px;
+}
+
+.player-btn.play-btn {
+  width: 38px;
+  height: 38px;
+  font-size: 16px;
+  background: var(--accent, #6366f1);
+  color: #ffffff;
+  border-color: transparent;
+  box-shadow: 0 2px 8px rgba(99, 102, 241, 0.35);
+}
+
+.player-btn.play-btn:hover {
+  background: var(--accent-hover, #4f46e5);
+  transform: scale(1.05);
+}
+
+.player-btn.stop-btn {
+  width: 34px;
+  height: 34px;
+  font-size: 13px;
+}
+
+.player-btn.stop-btn:hover {
+  color: #ef4444;
+  border-color: rgba(239, 68, 68, 0.4);
+  background: rgba(239, 68, 68, 0.1);
+}
+
+/* 右侧：模式与节奏参数设置 */
+.player-bar-config {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  flex: 0 0 auto;
+}
+
+.player-config-item {
+  display: inline-flex !important;
+  align-items: center !important;
+  gap: 6px !important;
+  margin-bottom: 0 !important;
+  font-size: 12px;
+  color: var(--muted, #94a3b8);
+  white-space: nowrap !important;
+  word-break: keep-all !important;
+  flex-shrink: 0 !important;
+}
+
+.player-config-item > span {
+  display: inline-block;
+  white-space: nowrap !important;
+  word-break: keep-all !important;
+  flex-shrink: 0 !important;
+  line-height: 1;
+  color: var(--muted, #94a3b8);
+}
+
+.player-config-select {
+  height: 30px;
+  padding: 0 8px;
+  border-radius: var(--radius-sm, 6px);
+  border: 1px solid var(--line, rgba(255, 255, 255, 0.12));
+  background: var(--bg-canvas, #0f172a);
+  color: var(--text, #e2e8f0);
+  font-size: 12px;
+  cursor: pointer;
+  outline: none;
+  transition: border-color 0.15s ease;
+}
+
+.player-config-select:focus {
+  border-color: var(--accent, #6366f1);
+}

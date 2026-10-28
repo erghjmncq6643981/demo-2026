@@ -185,9 +185,10 @@ export function loadPreviewData(ctx) {
   ]
   syncCurrentWordbookId(state, elements, state.currentWordbookId || '1')
   state.wordbookEntries = [
-    { id: 11, term: 'abandon', normalizedTerm: 'abandon', status: 'vague', note: '## 记忆\n- abandon a plan\n- with abandon', reviewStage: 2, masteryScore: 45, createTime: daysAgoIso(2), nextReviewTime: new Date().toISOString(), parsed: previewParsed('abandon'), tags: previewRecord('abandon').tags, relations: previewRecord('abandon').relations },
-    { id: 12, term: 'maintain', normalizedTerm: 'maintain', status: 'familiar', note: '常和 **relationship/status** 搭配。', reviewStage: 4, masteryScore: 72, createTime: daysAgoIso(7), nextReviewTime: new Date(Date.now() + 86400000).toISOString(), parsed: previewParsed('maintain'), tags: previewRecord('maintain').tags, relations: previewRecord('maintain').relations },
-    { id: 13, term: 'contrast', normalizedTerm: 'contrast', status: 'forgotten', note: '', reviewStage: 1, masteryScore: 30, createTime: daysAgoIso(12), nextReviewTime: new Date().toISOString(), parsed: previewParsed('contrast'), tags: previewRecord('contrast').tags, relations: previewRecord('contrast').relations },
+    { id: 10, term: 'vigor', normalizedTerm: 'vigor', status: 'familiar', cardStatus: 'ready', note: '有道词典精细对齐词条：母语认知画像 + 高频搭配 + 构词积木。', reviewStage: 3, masteryScore: 60, createTime: daysAgoIso(1), nextReviewTime: new Date().toISOString(), parsed: previewParsed('vigor'), tags: previewRecord('vigor').tags, relations: previewRecord('vigor').relations },
+    { id: 11, term: 'abandon', normalizedTerm: 'abandon', status: 'vague', cardStatus: 'ready', note: '## 记忆\n- abandon a plan\n- with abandon', reviewStage: 2, masteryScore: 45, createTime: daysAgoIso(2), nextReviewTime: new Date().toISOString(), parsed: previewParsed('abandon'), tags: previewRecord('abandon').tags, relations: previewRecord('abandon').relations },
+    { id: 12, term: 'maintain', normalizedTerm: 'maintain', status: 'familiar', cardStatus: 'ready', note: '常和 **relationship/status** 搭配。', reviewStage: 4, masteryScore: 72, createTime: daysAgoIso(7), nextReviewTime: new Date(Date.now() + 86400000).toISOString(), parsed: previewParsed('maintain'), tags: previewRecord('maintain').tags, relations: previewRecord('maintain').relations },
+    { id: 13, term: 'contrast', normalizedTerm: 'contrast', status: 'forgotten', cardStatus: 'missing', note: '', reviewStage: 1, masteryScore: 30, createTime: daysAgoIso(12), nextReviewTime: new Date().toISOString(), parsed: null, tags: [], relations: [] },
   ]
   state.reviewEntries = state.wordbookEntries.slice(0, 2).map((entry) => ({
     ...entry,

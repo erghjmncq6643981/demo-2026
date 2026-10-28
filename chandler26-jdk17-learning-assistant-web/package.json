@@ -7,6 +7,7 @@
     "dev": "node server.mjs",
     "start": "node server.mjs",
     "check": "node scripts/check-modules.mjs",
+    "build:html": "node scripts/build-html.mjs",
     "lint": "eslint public/src public/app.js server.mjs scripts tests playwright.config.js",
     "test": "vitest run",
     "test:watch": "vitest",

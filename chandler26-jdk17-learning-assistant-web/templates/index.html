@@ -1,0 +1,44 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>English Learning Agent</title>
+    <link rel="icon" href="data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22><text y=%22.9em%22 font-size=%2290%22>📖</text></svg>" />
+    <link rel="stylesheet" href="/styles.css?v=20260522-03" />
+    <link rel="stylesheet" href="/src/features/identity/login-showcase.css" />
+    <script type="module" src="/src/features/identity/login-showcase.js"></script>
+  </head>
+  <body>
+    <main class="app">
+      <!-- include: shell/login.html -->
+
+      <section class="product-shell hidden" id="productShell">
+        <!-- include: shell/sidebar.html -->
+
+        <section class="content">
+          <!-- include: shell/topbar.html -->
+          <!-- include: views/identity-profile.html -->
+          <!-- include: views/system-admin.html -->
+          <!-- include: views/vocabulary-wordbook.html -->
+          <!-- include: views/learning-scene-plan.html -->
+          <!-- include: views/reading-article-study.html -->
+          <!-- include: views/learning-study.html -->
+          <!-- include: views/learning-review.html -->
+        </section>
+      </section>
+    </main>
+
+    <!-- Modals & Overlays -->
+    <!-- include: modals/vocabulary.html -->
+    <!-- include: modals/learning.html -->
+    <!-- include: modals/reading.html -->
+    <!-- include: modals/identity.html -->
+    <!-- include: modals/ai.html -->
+    <!-- include: modals/task.html -->
+    <!-- include: modals/system.html -->
+    <!-- include: modals/common.html -->
+
+    <script type="module" src="/app.js?v=20260930-02"></script>
+  </body>
+</html>

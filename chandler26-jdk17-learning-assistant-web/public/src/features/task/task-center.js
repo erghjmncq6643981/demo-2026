@@ -1,5 +1,6 @@
 import { escapeHtml, formatDateTime } from '/src/shared/text.js'
 import { hideModal, showModal } from '/src/shared/modal.js'
+import { canAccessSystemAdmin } from '/src/shared/permissions.js'
 
 const STATUS_LABELS = {
   pending: '等待执行',
@@ -33,7 +34,7 @@ export function createTaskCenterProfileFeature(ctx) {
   let refreshTimer = null
 
   function isAdmin() {
-    return state.preview || state.user?.roleCode === 'ADMIN'
+    return canAccessSystemAdmin(state)
   }
 
   function previewTasks() {
@@ -70,7 +71,7 @@ export function createTaskCenterProfileFeature(ctx) {
       state.aiTaskPage = options.page
     }
     const isExplicitAll = typeof options.all === 'boolean' ? options.all : (state.activeView === 'systemAdminView')
-    const shouldLoadAll = (state.user?.roleCode === 'ADMIN') && isExplicitAll
+    const shouldLoadAll = canAccessSystemAdmin(state) && isExplicitAll
     const filter = elements.aiTaskStatusFilter?.value || ''
     const params = new URLSearchParams({
       page: String(state.aiTaskPage || 1),

@@ -11,7 +11,7 @@
   </head>
   <body>
     <main class="app">
-      <section class="login-screen" id="loginScreen">
+            <section class="login-screen" id="loginScreen">
         <div class="login-visual">
           <p class="eyebrow">English Agent</p>
           <h1>学习助手</h1>
@@ -92,7 +92,7 @@
       </section>
 
       <section class="product-shell hidden" id="productShell">
-        <aside class="sidebar">
+                <aside class="sidebar">
           <div class="brand-block">
             <p class="eyebrow">English Agent</p>
             <h1>学习助手</h1>
@@ -143,7 +143,7 @@
         <button class="sidebar-backdrop" id="sidebarBackdrop" type="button" aria-label="隐藏导航"></button>
 
         <section class="content">
-          <header class="content-topbar" id="contentTopbar">
+                    <header class="content-topbar" id="contentTopbar">
             <div class="topbar-title">
               <button class="icon-button nav-toggle" id="toggleSidebarBtn" type="button" title="隐藏导航" aria-label="隐藏导航" aria-expanded="true">☰</button>
               <div>
@@ -155,8 +155,7 @@
               <button class="icon-button" id="reloadAgentsBtn" type="button" title="刷新当前数据">↻</button>
             </div>
           </header>
-
-          <section class="view active" id="profileView">
+                    <section class="view active" id="profileView">
             <nav class="profile-tabs" aria-label="个人信息子导航">
               <button class="profile-tab active" type="button" data-profile-tab="accountPanel">账户</button>
               <button class="profile-tab" type="button" data-profile-tab="profileWordbookPanel">单词本</button>
@@ -429,8 +428,7 @@
 
             </div>
           </section>
-
-          <section class="view" id="systemAdminView">
+                    <section class="view" id="systemAdminView">
             <nav class="system-tabs" aria-label="系统管理子导航">
               <button class="system-tab active" type="button" data-system-tab="adminUserPanel">用户中心</button>
               <button class="system-tab" type="button" data-system-tab="adminVocabularyPanel">公共词本</button>
@@ -465,8 +463,7 @@
               <div id="systemManagedPanels"></div>
             </div>
           </section>
-
-          <section class="view" id="wordbookView">
+                    <section class="view" id="wordbookView">
             <section class="wordbook-view-content" id="wordbookWordsPanel">
               <section class="panel wordbook-toolbar" id="wordbookHeaderPanel">
                 <div class="wordbook-tools">
@@ -484,12 +481,77 @@
                     </select>
                   </label>
                   <label class="compact-field">
+                    <span>词卡状态</span>
+                    <select id="wordCardStatusFilter" aria-label="词卡状态筛选">
+                      <option value="">全部词卡</option>
+                      <option value="need_card">⚡ 缺少词卡</option>
+                      <option value="ready">已就绪</option>
+                      <option value="not_required">基础词条</option>
+                      <option value="missing">未生成</option>
+                      <option value="failed">生成失败</option>
+                      <option value="generating">生成中</option>
+                    </select>
+                  </label>
+                  <label class="compact-field">
                     <span>单词搜索</span>
                     <input id="wordPrefixInput" autocomplete="off" placeholder="按单词/释义搜索" />
                   </label>
                   <button class="primary-button compact-primary" id="reloadWordbookViewBtn" type="button">查询</button>
+                  <div class="wordbook-toolbar-actions">
+                    <button class="secondary-button compact" id="wordbookBatchGenerateCardBtn" type="button" title="一键提交当前页缺省词条的 AI 词卡生成任务">
+                      <span class="btn-icon">⚡</span> 补全词卡<span class="badge-count hidden" id="wordbookMissingCardBadge">0</span>
+                    </button>
+                    <button class="secondary-button compact" id="wordbookPlayAudioBtn" type="button" title="按顺序朗读当前页单词，支持随时暂停 (空格键)">
+                      <span class="btn-icon" id="wordbookPlayAudioIcon">▶</span> <span id="wordbookPlayAudioText">顺序朗读</span>
+                    </button>
+                  </div>
                 </div>
               </section>
+
+              <!-- 单词轮播随身听控制栏（浮动常驻条） -->
+              <div class="wordbook-audio-player-bar hidden" id="wordbookAudioPlayerBar" role="region" aria-label="单词随身听播放器">
+                <div class="player-bar-info">
+                  <span class="player-status-badge" id="wordbookAudioStatusBadge">
+                    <span class="status-pulse-dot"></span>
+                    <span id="wordbookAudioStatusText">正在朗读</span>
+                  </span>
+                  <span class="player-progress-tag" id="wordbookAudioProgress">0 / 0</span>
+                  <div class="player-current-meta">
+                    <span class="current-term" id="wordbookAudioCurrentTerm">-</span>
+                    <span class="current-meaning" id="wordbookAudioCurrentMeaning"></span>
+                  </div>
+                </div>
+                <div class="player-bar-controls">
+                  <button type="button" class="player-btn icon-btn" id="wordbookAudioPrevBtn" title="上一个词 (快捷键 J)">⏮</button>
+                  <button type="button" class="player-btn play-btn" id="wordbookAudioToggleBtn" title="播放/暂停 (空格键)">⏸</button>
+                  <button type="button" class="player-btn icon-btn" id="wordbookAudioNextBtn" title="下一个词 (快捷键 K)">⏭</button>
+                  <button type="button" class="player-btn stop-btn" id="wordbookAudioStopBtn" title="停止朗读 (Esc)">⏹</button>
+                </div>
+                <div class="player-bar-config">
+                  <label class="player-config-item">
+                    <span>模式</span>
+                    <select id="wordbookAudioModeSelect" class="player-config-select" aria-label="朗读模式">
+                      <option value="term_only" selected>纯英文 (磨耳朵)</option>
+                      <option value="term_and_meaning">英 + 简明释义</option>
+                    </select>
+                  </label>
+                  <label class="player-config-item">
+                    <span>停顿节奏</span>
+                    <select id="wordbookAudioPaceSelect" class="player-config-select" aria-label="停顿节奏">
+                      <option value="normal" selected>标准 (2.0s)</option>
+                      <option value="compact">紧凑 (1.2s)</option>
+                      <option value="relaxed">宽松 (3.0s)</option>
+                    </select>
+                  </label>
+                  <label class="player-config-item">
+                    <span>方式</span>
+                    <select id="wordbookAudioOrderSelect" class="player-config-select" aria-label="播放方式">
+                      <option value="sequence" selected>顺序</option>
+                      <option value="random">随机</option>
+                    </select>
+                  </label>
+                </div>
+              </div>
 
               <section class="panel wordbook-table-panel" id="wordbookTablePanel">
                 <div class="wordbook-table-wrap">
@@ -521,13 +583,20 @@
                 </div>
                 <div class="wordbook-table-footer">
                   <span id="wordbookCountSummary">共 0 个单词</span>
-                  <span class="pagination-actions"><button class="secondary-button compact" id="wordbookPrevBtn" type="button">上一页</button><span id="wordbookPageInfo">第 1 页</span><button class="secondary-button compact" id="wordbookNextBtn" type="button">下一页</button></span>
+                  <span class="pagination-actions">
+                    <button class="secondary-button compact" id="wordbookPrevBtn" type="button">上一页</button>
+                    <span id="wordbookPageInfo">第 1 页</span>
+                    <button class="secondary-button compact" id="wordbookNextBtn" type="button">下一页</button>
+                    <span class="pagination-jump">
+                      <input type="number" id="wordbookJumpPageInput" min="1" placeholder="页码" class="page-jump-input" aria-label="跳转页码" />
+                      <button class="secondary-button compact" id="wordbookJumpPageBtn" type="button">跳转</button>
+                    </span>
+                  </span>
                 </div>
               </section>
             </section>
           </section>
-
-          <section class="view" id="scenePlanView">
+                    <section class="view" id="scenePlanView">
             <section class="panel scene-plan-toolbar" id="scenePlanToolbar">
               <label class="compact-field">
                 <span class="sr-only">学习计划</span>
@@ -675,8 +744,7 @@
               </section>
             </section>
           </section>
-
-          <section class="view" id="articleStudyView">
+                    <section class="view" id="articleStudyView">
             <section class="panel article-study-toolbar" id="articleStudyToolbar">
               <label class="compact-field">
                 单词本
@@ -713,8 +781,7 @@
               </section>
             </section>
           </section>
-
-          <section class="view" id="studyView">
+                    <section class="view" id="studyView">
             <section class="study-layout">
               <div class="study-search-wrap">
                 <form class="search-card study-input-bar" id="studyForm">
@@ -747,7 +814,6 @@
                     <div class="voice-actions">
                       <button class="icon-button large" id="addToWordbookBtn" type="button" title="选择词书加入">＋</button>
                       <button class="icon-button large" id="speakWordBtn" type="button" title="播放单词">▶</button>
-                      <button class="icon-button large" id="speakSentenceBtn" type="button" title="播放例句">◉</button>
                       <button class="action-chip-button" id="openStudyNoteDrawerBtn" type="button" title="学习笔记 (快捷键: ⌘E / Ctrl+E)">📝 笔记 (⌘E)</button>
                       <button class="action-chip-button" id="openMiniQuizModalBtn" type="button" title="5秒跟敲巩固 (快捷键: T)">⌨️ 跟敲 (T)</button>
                     </div>
@@ -836,8 +902,7 @@
             </div>
           </section>
         </section>
-
-        <section class="view" id="reviewView">
+                  <section class="view" id="reviewView">
             <section class="review-header panel" id="reviewHeaderPanel">
               <div class="review-start-controls">
                 <label class="compact-field">
@@ -897,8 +962,8 @@
       </section>
     </main>
 
-    <div class="toast" id="toast"></div>
-    <section class="modal-backdrop hidden" id="quickLookupModal" aria-modal="true" role="dialog" aria-labelledby="quickLookupTitle">
+    <!-- Modals & Overlays -->
+        <section class="modal-backdrop hidden" id="quickLookupModal" aria-modal="true" role="dialog" aria-labelledby="quickLookupTitle">
       <div class="config-modal quick-lookup-modal" data-modal-scroll>
         <div class="panel-heading">
           <div>
@@ -937,67 +1002,6 @@
     </section>
 
 
-    <section class="modal-backdrop hidden" id="sceneCoreWordsModal" aria-modal="true" role="dialog" aria-labelledby="sceneCoreWordsModalTitle">
-      <div class="config-modal scene-core-words-modal" data-modal-scroll>
-        <div class="panel-heading">
-          <div>
-            <p class="eyebrow">Core Vocabulary</p>
-            <h3 id="sceneCoreWordsModalTitle">待挑战核心词汇</h3>
-          </div>
-          <div class="inline-actions">
-            <span class="mini-pill" id="sceneCoreModalCount">0</span>
-            <button class="icon-button" id="sceneCoreWordsModalCloseBtn" type="button" title="关闭" aria-label="关闭">×</button>
-          </div>
-        </div>
-        <div id="sceneCoreWords" class="scene-core-words empty">暂无核心词汇</div>
-        <div class="modal-actions" style="margin-top: 14px; display: flex; justify-content: flex-end; gap: 8px;">
-          <button class="secondary-button compact" id="sceneCoreWordsModalCancelBtn" type="button">返回阅读</button>
-          <button class="primary-button compact-primary" id="sceneStartChallengeFromModalBtn" type="button">开始挑战</button>
-        </div>
-      </div>
-    </section>
-
-    <section class="modal-backdrop hidden" id="sceneRelatedWordsModal" aria-modal="true" role="dialog" aria-labelledby="sceneRelatedWordsModalTitle">
-      <div class="config-modal scene-related-words-modal" data-modal-scroll>
-        <div class="panel-heading">
-          <div>
-            <p class="eyebrow">Related Vocabulary</p>
-            <h3 id="sceneRelatedWordsModalTitle">场景相关词汇</h3>
-          </div>
-          <div class="scene-related-tools">
-            <label class="entry-prefix-field">
-              <span class="sr-only">筛选场景词汇</span>
-              <input id="sceneRelatedFilter" autocomplete="off" placeholder="筛选单词或含义" />
-            </label>
-            <select id="sceneTierFilter" aria-label="场景词汇分类">
-              <option value="">全部分类</option>
-              <option value="object">具体物品</option>
-              <option value="person">人物</option>
-              <option value="place">地点</option>
-              <option value="action">常用动作</option>
-              <option value="other">其他</option>
-            </select>
-            <span class="mini-pill" id="sceneRelatedModalCount">0</span>
-            <button class="icon-button" id="sceneRelatedWordsModalCloseBtn" type="button" title="关闭" aria-label="关闭">×</button>
-          </div>
-        </div>
-        <div id="sceneRelatedWords" class="scene-related-words empty">暂无场景相关词汇</div>
-      </div>
-    </section>
-
-    <section class="modal-backdrop hidden" id="sceneVocabularyPreviewModal" aria-modal="true" role="dialog" aria-labelledby="sceneVocabularyPreviewTitle">
-      <div class="config-modal scene-vocabulary-preview-modal" data-modal-scroll>
-        <div class="panel-heading">
-          <div>
-            <p class="eyebrow">Vocabulary Preview</p>
-            <h3 id="sceneVocabularyPreviewTitle">待挑战 / 已完成词汇</h3>
-          </div>
-          <button class="icon-button" id="closeSceneVocabularyPreviewBtn" type="button" title="关闭" aria-label="关闭">×</button>
-        </div>
-        <p class="scene-vocabulary-preview-summary" id="sceneVocabularyPreviewSummary">选择日历日期或场景查看词汇</p>
-        <div class="scene-vocabulary-preview-list empty" id="sceneVocabularyPreviewList">暂无词汇</div>
-      </div>
-    </section>
 
     <section class="modal-backdrop hidden" id="vocabularyImportModal" aria-modal="true" role="dialog">
       <div class="config-modal vocabulary-import-modal" data-modal-scroll>
@@ -1099,6 +1103,173 @@
       </div>
     </section>
 
+
+    <section class="modal-backdrop hidden" id="wordbookCardModal" aria-modal="true" role="dialog" aria-labelledby="wordbookCardModalTitle">
+      <div class="config-modal wordbook-card-modal" data-modal-scroll>
+        <div class="panel-heading wordbook-card-modal-header">
+          <div class="wordbook-card-header-main">
+            <p class="eyebrow" id="wordbookCardModalEyebrow">Word Card</p>
+            <div class="wordbook-card-title-row">
+              <h3 id="wordbookCardModalTitle">单词卡片</h3>
+              <span class="badge wordbook-card-progress hidden" id="wordbookCardProgress" aria-live="polite">0 / 0</span>
+            </div>
+          </div>
+          <div class="wordbook-card-header-actions">
+            <div class="button-group wordbook-card-nav-group" role="group" aria-label="卡片切换">
+              <button class="secondary-button compact" id="wordbookCardPrevBtn" type="button" title="快捷键：← 方向键" aria-label="上一个单词">
+                <span class="button-icon">←</span> 上一个
+              </button>
+              <button class="secondary-button compact" id="wordbookCardNextBtn" type="button" title="快捷键：→ 方向键" aria-label="下一个单词">
+                下一个 <span class="button-icon">→</span>
+              </button>
+            </div>
+            <button class="primary-button compact-primary" id="wordbookCardGenerateBtn" type="button" title="通过 AI 生成例句、记忆法、搭配与关联词">AI 生成词卡</button>
+            <button class="icon-button" id="closeWordbookCardModalBtn" type="button" title="关闭" aria-label="关闭">×</button>
+          </div>
+        </div>
+        <div id="wordbookFocus" class="wordbook-focus-container">
+          <div class="empty">选择单词后查看详情和笔记</div>
+        </div>
+      </div>
+    </section>
+    <section class="modal-backdrop hidden" id="wordbookModal" aria-modal="true" role="dialog">
+      <div class="config-modal small-modal">
+        <div class="panel-heading">
+          <div>
+            <p class="eyebrow">Wordbook</p>
+            <h3 id="wordbookModalTitle">新增单词本</h3>
+          </div>
+          <button class="icon-button" id="closeWordbookModalBtn" type="button" title="关闭">×</button>
+        </div>
+        <div class="model-form-grid">
+          <label>单词本名称<input id="newWordbookInput" placeholder="例如：四级高频词" /></label>
+          <label>描述<input id="wordbookDescriptionInput" placeholder="例如：考试核心词" /></label>
+          <label class="switch-line compact-switch">
+            <input id="wordbookDefaultInput" type="checkbox" />
+            <span>设为默认单词本</span>
+          </label>
+        </div>
+        <div class="modal-actions">
+          <button class="primary-button compact-primary" id="createWordbookBtn" type="button">保存单词本</button>
+        </div>
+      </div>
+    </section>
+
+    <section class="modal-backdrop hidden" id="addWordbookModal" aria-modal="true" role="dialog">
+      <div class="review-modal add-wordbook-modal">
+        <div class="panel-heading">
+          <div>
+            <p class="eyebrow">Wordbook</p>
+            <h3>选择词书</h3>
+          </div>
+          <button class="icon-button" id="closeAddWordbookModalBtn" type="button" title="关闭">×</button>
+        </div>
+        <p class="panel-description">将 <strong id="addWordbookTerm">当前单词</strong> 加入哪个词书？</p>
+        <div id="addWordbookList" class="wordbook-picker-list empty">暂无词书</div>
+      </div>
+    </section>
+    <section class="modal-backdrop hidden" id="entryTransferModal" aria-modal="true" role="dialog">
+      <div class="review-modal add-wordbook-modal">
+        <div class="panel-heading">
+          <div>
+            <p class="eyebrow">Wordbook</p>
+            <h3>复制或移动</h3>
+          </div>
+          <button class="icon-button" id="closeEntryTransferModalBtn" type="button" title="关闭">×</button>
+        </div>
+        <p class="panel-description">将 <strong id="entryTransferTerm">当前单词</strong> 复制或移动到其它单词本。</p>
+        <div id="entryTransferList" class="wordbook-picker-list empty">暂无可选单词本</div>
+      </div>
+    </section>
+    <section class="modal-backdrop hidden" id="entryStatusModal" aria-modal="true" role="dialog">
+      <div class="review-modal status-modal">
+        <div class="panel-heading">
+          <div>
+            <p class="eyebrow">Mastery Status</p>
+            <h3>修改熟练程度与复习设置</h3>
+          </div>
+          <button class="icon-button" id="closeEntryStatusModalBtn" type="button" title="关闭">×</button>
+        </div>
+        <p class="panel-description">为 <strong id="entryStatusTerm">当前单词</strong> 标记掌握状态。若标记为“熟悉”，系统将大幅提升掌握度并推迟/免除近期复习。</p>
+        <div class="status-choice-list">
+          <button class="status-choice success-action" type="button" data-status-choice="familiar">
+            <strong>熟悉</strong>
+            <small>已牢固掌握 · 免近期复习</small>
+          </button>
+          <button class="status-choice warn-action" type="button" data-status-choice="vague">
+            <strong>模糊</strong>
+            <small>印象一般 · 标准周期复习</small>
+          </button>
+          <button class="status-choice danger-action" type="button" data-status-choice="forgotten">
+            <strong>遗忘</strong>
+            <small>已记不清 · 近期重点巩固</small>
+          </button>
+        </div>
+      </div>
+    </section>
+        <section class="modal-backdrop hidden" id="sceneCoreWordsModal" aria-modal="true" role="dialog" aria-labelledby="sceneCoreWordsModalTitle">
+      <div class="config-modal scene-core-words-modal" data-modal-scroll>
+        <div class="panel-heading">
+          <div>
+            <p class="eyebrow">Core Vocabulary</p>
+            <h3 id="sceneCoreWordsModalTitle">待挑战核心词汇</h3>
+          </div>
+          <div class="inline-actions">
+            <span class="mini-pill" id="sceneCoreModalCount">0</span>
+            <button class="icon-button" id="sceneCoreWordsModalCloseBtn" type="button" title="关闭" aria-label="关闭">×</button>
+          </div>
+        </div>
+        <div id="sceneCoreWords" class="scene-core-words empty">暂无核心词汇</div>
+        <div class="modal-actions" style="margin-top: 14px; display: flex; justify-content: flex-end; gap: 8px;">
+          <button class="secondary-button compact" id="sceneCoreWordsModalCancelBtn" type="button">返回阅读</button>
+          <button class="primary-button compact-primary" id="sceneStartChallengeFromModalBtn" type="button">开始挑战</button>
+        </div>
+      </div>
+    </section>
+
+    <section class="modal-backdrop hidden" id="sceneRelatedWordsModal" aria-modal="true" role="dialog" aria-labelledby="sceneRelatedWordsModalTitle">
+      <div class="config-modal scene-related-words-modal" data-modal-scroll>
+        <div class="panel-heading">
+          <div>
+            <p class="eyebrow">Related Vocabulary</p>
+            <h3 id="sceneRelatedWordsModalTitle">场景相关词汇</h3>
+          </div>
+          <div class="scene-related-tools">
+            <label class="entry-prefix-field">
+              <span class="sr-only">筛选场景词汇</span>
+              <input id="sceneRelatedFilter" autocomplete="off" placeholder="筛选单词或含义" />
+            </label>
+            <select id="sceneTierFilter" aria-label="场景词汇分类">
+              <option value="">全部分类</option>
+              <option value="object">具体物品</option>
+              <option value="person">人物</option>
+              <option value="place">地点</option>
+              <option value="action">常用动作</option>
+              <option value="other">其他</option>
+            </select>
+            <span class="mini-pill" id="sceneRelatedModalCount">0</span>
+            <button class="icon-button" id="sceneRelatedWordsModalCloseBtn" type="button" title="关闭" aria-label="关闭">×</button>
+          </div>
+        </div>
+        <div id="sceneRelatedWords" class="scene-related-words empty">暂无场景相关词汇</div>
+      </div>
+    </section>
+
+    <section class="modal-backdrop hidden" id="sceneVocabularyPreviewModal" aria-modal="true" role="dialog" aria-labelledby="sceneVocabularyPreviewTitle">
+      <div class="config-modal scene-vocabulary-preview-modal" data-modal-scroll>
+        <div class="panel-heading">
+          <div>
+            <p class="eyebrow">Vocabulary Preview</p>
+            <h3 id="sceneVocabularyPreviewTitle">待挑战 / 已完成词汇</h3>
+          </div>
+          <button class="icon-button" id="closeSceneVocabularyPreviewBtn" type="button" title="关闭" aria-label="关闭">×</button>
+        </div>
+        <p class="scene-vocabulary-preview-summary" id="sceneVocabularyPreviewSummary">选择日历日期或场景查看词汇</p>
+        <div class="scene-vocabulary-preview-list empty" id="sceneVocabularyPreviewList">暂无词汇</div>
+      </div>
+    </section>
+
+
     <section class="modal-backdrop hidden" id="scenePlanModal" aria-modal="true" role="dialog">
       <div class="config-modal small-modal">
         <div class="panel-heading">
@@ -1188,93 +1359,7 @@
         </div>
       </div>
     </section>
-    <section class="modal-backdrop hidden" id="modelConfigModal" aria-modal="true" role="dialog">
-      <div class="config-modal">
-        <div class="panel-heading">
-          <div>
-            <p class="eyebrow">Model</p>
-            <h3 id="modelModalTitle">新增模型</h3>
-          </div>
-          <button class="icon-button" id="closeModelModalBtn" type="button" title="关闭">×</button>
-        </div>
-        <div class="model-form-grid">
-          <label>模型名称<input id="modelNameInput" placeholder="例如：DeepSeek 默认" /></label>
-          <label>
-            供应商
-            <select id="modelProviderInput"></select>
-          </label>
-          <label>
-            模型明细
-            <select id="modelModelNameInput"></select>
-          </label>
-          <label>Base URL<input id="modelBaseUrlInput" placeholder="例如：https://api.provider.example" /></label>
-          <label>Chat Path<input id="modelChatPathInput" placeholder="/chat/completions" /></label>
-          <label>API KEY<input id="modelApiKeyInput" type="password" placeholder="API KEY" /></label>
-          <label>顺序<input id="modelSequenceInput" type="number" min="0" value="0" /></label>
-          <div class="model-toggle-row">
-            <input id="modelDefaultInput" type="checkbox" hidden />
-            <input id="modelEnabledInput" type="checkbox" hidden checked />
-            <button class="toggle-box" id="modelDefaultToggleBtn" type="button" aria-pressed="false">
-              <span>默认模型</span>
-              <small>学习页优先使用</small>
-            </button>
-            <button class="toggle-box active" id="modelEnabledToggleBtn" type="button" aria-pressed="true">
-              <span>启用状态</span>
-              <small>允许学习时调用</small>
-            </button>
-          </div>
-        </div>
-        <div class="modal-actions">
-          <button class="secondary-button compact" id="saveAndTestModelBtn" type="button">保存并测试</button>
-          <button class="primary-button compact-primary" id="saveModelBtn" type="button">保存模型</button>
-        </div>
-      </div>
-    </section>
-    <section class="modal-backdrop hidden" id="agentModal" aria-modal="true" role="dialog">
-      <div class="config-modal">
-        <div class="panel-heading">
-          <div>
-            <p class="eyebrow">Agent</p>
-            <h3 id="agentModalTitle">新增学习Agent</h3>
-          </div>
-          <button class="icon-button" id="closeAgentModalBtn" type="button" title="关闭">×</button>
-        </div>
-        <div class="model-form-grid">
-          <label>Agent 名称<input id="agentNameInput" placeholder="例如：英语词汇学习" /></label>
-          <label>Agent 编码<input id="agentCodeInput" placeholder="例如：english_vocabulary" /></label>
-          <label>类型<input id="agentTypeInput" placeholder="chat" /></label>
-          <label>图标<input id="agentIconInput" placeholder="✦" /></label>
-          <label class="full-row">
-            绑定模型配置
-            <select id="agentModelConfigInput"></select>
-          </label>
-          <label>排序<input id="agentSequenceInput" type="number" min="0" value="0" /></label>
-          <label>温度<input id="agentTemperatureInput" type="number" min="0" max="2" step="0.1" /></label>
-          <label>最大 Tokens<input id="agentMaxTokensInput" type="number" min="1" step="1" /></label>
-          <label class="full-row">描述<textarea id="agentDescriptionInput" rows="3"></textarea></label>
-          <label class="full-row">系统提示词<textarea id="agentSystemPromptInput" rows="5"></textarea></label>
-          <label class="full-row">精简提示词<textarea id="agentConcisePromptInput" rows="4"></textarea></label>
-          <label class="full-row">欢迎语<textarea id="agentWelcomeMessageInput" rows="3"></textarea></label>
-          <label class="full-row">预设指令 JSON<textarea id="agentPresetCommandsInput" rows="4"></textarea></label>
-        </div>
-        <div class="modal-actions">
-          <button class="primary-button compact-primary" id="saveAgentBtn" type="button">保存学习Agent</button>
-        </div>
-      </div>
-    </section>
-    <section class="modal-backdrop hidden" id="adminUserModal" aria-modal="true" role="dialog" aria-labelledby="adminUserModalTitle">
-      <div class="config-modal small-modal">
-        <div class="panel-heading"><div><p class="eyebrow">User Center</p><h3 id="adminUserModalTitle">新增用户</h3></div><button class="icon-button" id="closeAdminUserModalBtn" type="button" title="关闭" aria-label="关闭">×</button></div>
-        <div class="model-form-grid">
-          <label>用户名<input id="adminUserUsernameInput" autocomplete="off" placeholder="登录用户名" /></label>
-          <label>昵称<input id="adminUserNicknameInput" placeholder="展示昵称" /></label>
-          <label id="adminUserPasswordField">初始密码<input id="adminUserPasswordInput" type="password" autocomplete="new-password" placeholder="至少 6 位" /></label>
-          <label>角色<select id="adminUserRoleInput"><option value="USER">普通用户</option><option value="ADMIN">系统管理员</option></select></label>
-          <label>状态<select id="adminUserEnabledInput"><option value="true">正常</option><option value="false">停用</option></select></label>
-        </div>
-        <div class="modal-actions"><button class="primary-button compact-primary" id="saveAdminUserBtn" type="button">保存用户</button></div>
-      </div>
-    </section>
+
     <section class="modal-backdrop hidden" id="learningConfigModal" aria-modal="true" role="dialog">
       <div class="config-modal">
         <div class="panel-heading">
@@ -1334,167 +1419,7 @@
         </div>
       </div>
     </section>
-    <section class="modal-backdrop hidden" id="templateModal" aria-modal="true" role="dialog">
-      <div class="config-modal">
-        <div class="panel-heading">
-          <div>
-            <p class="eyebrow">Template</p>
-            <h3 id="templateModalTitle">新增学习Agent模板</h3>
-          </div>
-          <button class="icon-button" id="closeTemplateModalBtn" type="button" title="关闭">×</button>
-        </div>
-        <div class="template-editor-panel">
-          <div class="template-meta-grid">
-            <label>模板名称<input id="templateNameInput" /></label>
-            <label>模板编码<input id="templateCodeInput" /></label>
-            <label>类型<input id="templateTypeInput" /></label>
-            <label>排序<input id="templateSequenceInput" type="number" min="0" /></label>
-          </div>
-          <label>标签<input id="templateTagsInput" /></label>
-          <label>描述<textarea id="templateDescriptionInput" rows="3"></textarea></label>
-          <div class="template-meta-grid">
-            <label>示例输入<textarea id="templateExampleInput" rows="4"></textarea></label>
-            <label>示例输出<textarea id="templateExampleOutput" rows="4"></textarea></label>
-          </div>
-          <div>
-            <div class="panel-subtitle">占位符</div>
-            <div id="templatePlaceholderList" class="chips empty">暂无占位符</div>
-          </div>
-          <label>模板内容<textarea id="templateContentInput" rows="12" placeholder="必须包含 {{term}}"></textarea></label>
-          <div id="templateValidationMessage" class="validation-message">模板内容需要包含声明的占位符。</div>
-        </div>
-        <div class="modal-actions">
-          <button class="primary-button compact-primary" id="saveTemplateBtn" type="button">保存模板</button>
-        </div>
-      </div>
-    </section>
-    <section class="modal-backdrop hidden" id="accountModal" aria-modal="true" role="dialog">
-      <div class="config-modal account-modal">
-        <div class="panel-heading">
-          <div>
-            <p class="eyebrow">Account</p>
-            <h3>修改账户</h3>
-          </div>
-          <button class="icon-button" id="closeAccountModalBtn" type="button" title="关闭">×</button>
-        </div>
-        <nav class="account-tabs" aria-label="账户设置">
-          <button class="account-tab active" type="button" data-account-tab="accountBasicPanel">基本资料</button>
-          <button class="account-tab" type="button" data-account-tab="accountSecurityPanel">安全设置</button>
-        </nav>
-        <div class="account-tab-panels">
-          <section class="account-tab-panel active" id="accountBasicPanel">
-            <div class="model-form-grid account-basic-grid">
-              <label>昵称<input id="accountNicknameInput" placeholder="显示昵称" /></label>
-              <label>账户<input id="accountUsernameInput" disabled /></label>
-            </div>
-            <div class="modal-actions">
-              <button class="primary-button compact-primary" id="saveAccountProfileBtn" type="button">更新资料</button>
-            </div>
-          </section>
-          <section class="account-tab-panel" id="accountSecurityPanel">
-            <div class="account-security-list">
-              <div class="account-security-row" data-security-mode="password">
-                <div class="account-security-row-copy">
-                  <strong>密码</strong>
-                  <span class="account-security-row-value account-security-row-value-muted" id="accountPasswordValue">未展示</span>
-                </div>
-                <button class="icon-action-button" id="editAccountPasswordBtn" type="button" title="修改密码" aria-label="修改密码">✎</button>
-              </div>
-              <div class="account-security-editor-panel hidden" data-security-panel="password">
-                <div class="model-form-grid account-security-password-grid">
-                  <label>当前密码<input id="accountCurrentPasswordInput" type="password" placeholder="修改密码时必填" autocomplete="current-password" /></label>
-                  <label class="account-password-field">
-                    新密码
-                    <input id="accountNewPasswordInput" type="password" placeholder="至少 6 位" autocomplete="new-password" />
-                    <span class="password-strength" id="accountPasswordStrength">密码强度：未输入</span>
-                  </label>
-                  <label>确认新密码<input id="accountConfirmPasswordInput" type="password" placeholder="再次输入新密码" autocomplete="new-password" /></label>
-                </div>
-              </div>
-              <div class="account-security-row" data-security-mode="phone">
-                <div class="account-security-row-copy">
-                  <strong>手机号码</strong>
-                  <span class="account-security-row-value" id="accountPhoneValue">未绑定</span>
-                </div>
-                <button class="icon-action-button" id="editAccountPhoneBtn" type="button" title="修改手机号码" aria-label="修改手机号码">✎</button>
-              </div>
-              <div class="account-security-editor-panel hidden" data-security-panel="phone">
-                <div class="model-form-grid account-security-single-grid">
-                  <label class="account-security-single-field">手机号码<input id="accountPhoneInput" inputmode="tel" placeholder="例如：13800138000" /></label>
-                </div>
-              </div>
-              <div class="account-security-row" data-security-mode="email">
-                <div class="account-security-row-copy">
-                  <strong>邮箱</strong>
-                  <span class="account-security-row-value" id="accountEmailValue">未绑定</span>
-                </div>
-                <button class="icon-action-button" id="editAccountEmailBtn" type="button" title="修改联系邮箱" aria-label="修改联系邮箱">✎</button>
-              </div>
-              <div class="account-security-editor-panel hidden" data-security-panel="email">
-                <div class="model-form-grid account-security-single-grid">
-                  <label class="account-security-single-field">联系邮箱<input id="accountEmailInput" type="email" placeholder="例如：name@example.com" /></label>
-                </div>
-              </div>
-            </div>
-            <div class="modal-actions account-security-actions" id="accountSecurityActions">
-              <button class="secondary-button compact" id="cancelAccountSecurityBtn" type="button">取消</button>
-              <button class="primary-button compact-primary" id="saveAccountSecurityBtn" type="button">保存安全设置</button>
-            </div>
-          </section>
-        </div>
-      </div>
-    </section>
-    <section class="modal-backdrop hidden" id="wordbookCardModal" aria-modal="true" role="dialog" aria-labelledby="wordbookCardModalTitle">
-      <div class="config-modal wordbook-card-modal" data-modal-scroll>
-        <div class="panel-heading wordbook-card-modal-header">
-          <div class="wordbook-card-header-main">
-            <p class="eyebrow" id="wordbookCardModalEyebrow">Word Card</p>
-            <div class="wordbook-card-title-row">
-              <h3 id="wordbookCardModalTitle">单词卡片</h3>
-              <span class="badge wordbook-card-progress hidden" id="wordbookCardProgress" aria-live="polite">0 / 0</span>
-            </div>
-          </div>
-          <div class="wordbook-card-header-actions">
-            <div class="button-group wordbook-card-nav-group" role="group" aria-label="卡片切换">
-              <button class="secondary-button compact" id="wordbookCardPrevBtn" type="button" title="快捷键：← 方向键" aria-label="上一个单词">
-                <span class="button-icon">←</span> 上一个
-              </button>
-              <button class="secondary-button compact" id="wordbookCardNextBtn" type="button" title="快捷键：→ 方向键" aria-label="下一个单词">
-                下一个 <span class="button-icon">→</span>
-              </button>
-            </div>
-            <button class="primary-button compact-primary" id="wordbookCardGenerateBtn" type="button" title="通过 AI 生成例句、记忆法、搭配与关联词">AI 生成词卡</button>
-            <button class="icon-button" id="closeWordbookCardModalBtn" type="button" title="关闭" aria-label="关闭">×</button>
-          </div>
-        </div>
-        <div id="wordbookFocus" class="wordbook-focus-container">
-          <div class="empty">选择单词后查看详情和笔记</div>
-        </div>
-      </div>
-    </section>
-    <section class="modal-backdrop hidden" id="wordbookModal" aria-modal="true" role="dialog">
-      <div class="config-modal small-modal">
-        <div class="panel-heading">
-          <div>
-            <p class="eyebrow">Wordbook</p>
-            <h3 id="wordbookModalTitle">新增单词本</h3>
-          </div>
-          <button class="icon-button" id="closeWordbookModalBtn" type="button" title="关闭">×</button>
-        </div>
-        <div class="model-form-grid">
-          <label>单词本名称<input id="newWordbookInput" placeholder="例如：四级高频词" /></label>
-          <label>描述<input id="wordbookDescriptionInput" placeholder="例如：考试核心词" /></label>
-          <label class="switch-line compact-switch">
-            <input id="wordbookDefaultInput" type="checkbox" />
-            <span>设为默认单词本</span>
-          </label>
-        </div>
-        <div class="modal-actions">
-          <button class="primary-button compact-primary" id="createWordbookBtn" type="button">保存单词本</button>
-        </div>
-      </div>
-    </section>
-    <section class="modal-backdrop hidden" id="articleStudyModal" aria-modal="true" role="dialog">
+        <section class="modal-backdrop hidden" id="articleStudyModal" aria-modal="true" role="dialog">
       <div class="config-modal article-study-modal" data-modal-scroll>
         <div class="panel-heading">
           <div>
@@ -1582,58 +1507,233 @@
         </div>
       </div>
     </section>
-    <section class="modal-backdrop hidden" id="addWordbookModal" aria-modal="true" role="dialog">
-      <div class="review-modal add-wordbook-modal">
+        <section class="modal-backdrop hidden" id="accountModal" aria-modal="true" role="dialog">
+      <div class="config-modal account-modal">
         <div class="panel-heading">
           <div>
-            <p class="eyebrow">Wordbook</p>
-            <h3>选择词书</h3>
+            <p class="eyebrow">Account</p>
+            <h3>修改账户</h3>
           </div>
-          <button class="icon-button" id="closeAddWordbookModalBtn" type="button" title="关闭">×</button>
+          <button class="icon-button" id="closeAccountModalBtn" type="button" title="关闭">×</button>
         </div>
-        <p class="panel-description">将 <strong id="addWordbookTerm">当前单词</strong> 加入哪个词书？</p>
-        <div id="addWordbookList" class="wordbook-picker-list empty">暂无词书</div>
+        <nav class="account-tabs" aria-label="账户设置">
+          <button class="account-tab active" type="button" data-account-tab="accountBasicPanel">基本资料</button>
+          <button class="account-tab" type="button" data-account-tab="accountSecurityPanel">安全设置</button>
+        </nav>
+        <div class="account-tab-panels">
+          <section class="account-tab-panel active" id="accountBasicPanel">
+            <div class="model-form-grid account-basic-grid">
+              <label>昵称<input id="accountNicknameInput" placeholder="显示昵称" /></label>
+              <label>账户<input id="accountUsernameInput" disabled /></label>
+            </div>
+            <div class="modal-actions">
+              <button class="primary-button compact-primary" id="saveAccountProfileBtn" type="button">更新资料</button>
+            </div>
+          </section>
+          <section class="account-tab-panel" id="accountSecurityPanel">
+            <div class="account-security-list">
+              <div class="account-security-row" data-security-mode="password">
+                <div class="account-security-row-copy">
+                  <strong>密码</strong>
+                  <span class="account-security-row-value account-security-row-value-muted" id="accountPasswordValue">未展示</span>
+                </div>
+                <button class="icon-action-button" id="editAccountPasswordBtn" type="button" title="修改密码" aria-label="修改密码">✎</button>
+              </div>
+              <div class="account-security-editor-panel hidden" data-security-panel="password">
+                <div class="model-form-grid account-security-password-grid">
+                  <label>当前密码<input id="accountCurrentPasswordInput" type="password" placeholder="修改密码时必填" autocomplete="current-password" /></label>
+                  <label class="account-password-field">
+                    新密码
+                    <input id="accountNewPasswordInput" type="password" placeholder="至少 6 位" autocomplete="new-password" />
+                    <span class="password-strength" id="accountPasswordStrength">密码强度：未输入</span>
+                  </label>
+                  <label>确认新密码<input id="accountConfirmPasswordInput" type="password" placeholder="再次输入新密码" autocomplete="new-password" /></label>
+                </div>
+              </div>
+              <div class="account-security-row" data-security-mode="phone">
+                <div class="account-security-row-copy">
+                  <strong>手机号码</strong>
+                  <span class="account-security-row-value" id="accountPhoneValue">未绑定</span>
+                </div>
+                <button class="icon-action-button" id="editAccountPhoneBtn" type="button" title="修改手机号码" aria-label="修改手机号码">✎</button>
+              </div>
+              <div class="account-security-editor-panel hidden" data-security-panel="phone">
+                <div class="model-form-grid account-security-single-grid">
+                  <label class="account-security-single-field">手机号码<input id="accountPhoneInput" inputmode="tel" placeholder="例如：13800138000" /></label>
+                </div>
+              </div>
+              <div class="account-security-row" data-security-mode="email">
+                <div class="account-security-row-copy">
+                  <strong>邮箱</strong>
+                  <span class="account-security-row-value" id="accountEmailValue">未绑定</span>
+                </div>
+                <button class="icon-action-button" id="editAccountEmailBtn" type="button" title="修改联系邮箱" aria-label="修改联系邮箱">✎</button>
+              </div>
+              <div class="account-security-editor-panel hidden" data-security-panel="email">
+                <div class="model-form-grid account-security-single-grid">
+                  <label class="account-security-single-field">联系邮箱<input id="accountEmailInput" type="email" placeholder="例如：name@example.com" /></label>
+                </div>
+              </div>
+            </div>
+            <div class="modal-actions account-security-actions" id="accountSecurityActions">
+              <button class="secondary-button compact" id="cancelAccountSecurityBtn" type="button">取消</button>
+              <button class="primary-button compact-primary" id="saveAccountSecurityBtn" type="button">保存安全设置</button>
+            </div>
+          </section>
+        </div>
       </div>
     </section>
-    <section class="modal-backdrop hidden" id="entryTransferModal" aria-modal="true" role="dialog">
-      <div class="review-modal add-wordbook-modal">
+        <section class="modal-backdrop hidden" id="modelConfigModal" aria-modal="true" role="dialog">
+      <div class="config-modal">
         <div class="panel-heading">
           <div>
-            <p class="eyebrow">Wordbook</p>
-            <h3>复制或移动</h3>
+            <p class="eyebrow">Model</p>
+            <h3 id="modelModalTitle">新增模型</h3>
           </div>
-          <button class="icon-button" id="closeEntryTransferModalBtn" type="button" title="关闭">×</button>
+          <button class="icon-button" id="closeModelModalBtn" type="button" title="关闭">×</button>
         </div>
-        <p class="panel-description">将 <strong id="entryTransferTerm">当前单词</strong> 复制或移动到其它单词本。</p>
-        <div id="entryTransferList" class="wordbook-picker-list empty">暂无可选单词本</div>
+        <div class="model-form-grid">
+          <label>模型名称<input id="modelNameInput" placeholder="例如：DeepSeek 默认" /></label>
+          <label>
+            供应商
+            <select id="modelProviderInput"></select>
+          </label>
+          <label>
+            模型明细
+            <select id="modelModelNameInput"></select>
+          </label>
+          <label>Base URL<input id="modelBaseUrlInput" placeholder="例如：https://api.provider.example" /></label>
+          <label>Chat Path<input id="modelChatPathInput" placeholder="/chat/completions" /></label>
+          <label>API KEY<input id="modelApiKeyInput" type="password" placeholder="API KEY" /></label>
+          <label>顺序<input id="modelSequenceInput" type="number" min="0" value="0" /></label>
+          <div class="model-toggle-row">
+            <input id="modelDefaultInput" type="checkbox" hidden />
+            <input id="modelEnabledInput" type="checkbox" hidden checked />
+            <button class="toggle-box" id="modelDefaultToggleBtn" type="button" aria-pressed="false">
+              <span>默认模型</span>
+              <small>学习页优先使用</small>
+            </button>
+            <button class="toggle-box active" id="modelEnabledToggleBtn" type="button" aria-pressed="true">
+              <span>启用状态</span>
+              <small>允许学习时调用</small>
+            </button>
+          </div>
+        </div>
+        <div class="modal-actions">
+          <button class="secondary-button compact" id="saveAndTestModelBtn" type="button">保存并测试</button>
+          <button class="primary-button compact-primary" id="saveModelBtn" type="button">保存模型</button>
+        </div>
       </div>
     </section>
-    <section class="modal-backdrop hidden" id="entryStatusModal" aria-modal="true" role="dialog">
-      <div class="review-modal status-modal">
+    <section class="modal-backdrop hidden" id="agentModal" aria-modal="true" role="dialog">
+      <div class="config-modal">
         <div class="panel-heading">
           <div>
-            <p class="eyebrow">Mastery Status</p>
-            <h3>修改熟练程度与复习设置</h3>
+            <p class="eyebrow">Agent</p>
+            <h3 id="agentModalTitle">新增学习Agent</h3>
           </div>
-          <button class="icon-button" id="closeEntryStatusModalBtn" type="button" title="关闭">×</button>
+          <button class="icon-button" id="closeAgentModalBtn" type="button" title="关闭">×</button>
         </div>
-        <p class="panel-description">为 <strong id="entryStatusTerm">当前单词</strong> 标记掌握状态。若标记为“熟悉”，系统将大幅提升掌握度并推迟/免除近期复习。</p>
-        <div class="status-choice-list">
-          <button class="status-choice success-action" type="button" data-status-choice="familiar">
-            <strong>熟悉</strong>
-            <small>已牢固掌握 · 免近期复习</small>
-          </button>
-          <button class="status-choice warn-action" type="button" data-status-choice="vague">
-            <strong>模糊</strong>
-            <small>印象一般 · 标准周期复习</small>
-          </button>
-          <button class="status-choice danger-action" type="button" data-status-choice="forgotten">
-            <strong>遗忘</strong>
-            <small>已记不清 · 近期重点巩固</small>
-          </button>
+        <div class="model-form-grid">
+          <label>Agent 名称<input id="agentNameInput" placeholder="例如：英语词汇学习" /></label>
+          <label>Agent 编码<input id="agentCodeInput" placeholder="例如：english_vocabulary" /></label>
+          <label>类型<input id="agentTypeInput" placeholder="chat" /></label>
+          <label>图标<input id="agentIconInput" placeholder="✦" /></label>
+          <label class="full-row">
+            绑定模型配置
+            <select id="agentModelConfigInput"></select>
+          </label>
+          <label>排序<input id="agentSequenceInput" type="number" min="0" value="0" /></label>
+          <label>温度<input id="agentTemperatureInput" type="number" min="0" max="2" step="0.1" /></label>
+          <label>最大 Tokens<input id="agentMaxTokensInput" type="number" min="1" step="1" /></label>
+          <label class="full-row">描述<textarea id="agentDescriptionInput" rows="3"></textarea></label>
+          <label class="full-row">系统提示词<textarea id="agentSystemPromptInput" rows="5"></textarea></label>
+          <label class="full-row">精简提示词<textarea id="agentConcisePromptInput" rows="4"></textarea></label>
+          <label class="full-row">欢迎语<textarea id="agentWelcomeMessageInput" rows="3"></textarea></label>
+          <label class="full-row">预设指令 JSON<textarea id="agentPresetCommandsInput" rows="4"></textarea></label>
+        </div>
+        <div class="modal-actions">
+          <button class="primary-button compact-primary" id="saveAgentBtn" type="button">保存学习Agent</button>
         </div>
       </div>
     </section>
+
+    <section class="modal-backdrop hidden" id="templateModal" aria-modal="true" role="dialog">
+      <div class="config-modal">
+        <div class="panel-heading">
+          <div>
+            <p class="eyebrow">Template</p>
+            <h3 id="templateModalTitle">新增学习Agent模板</h3>
+          </div>
+          <button class="icon-button" id="closeTemplateModalBtn" type="button" title="关闭">×</button>
+        </div>
+        <div class="template-editor-panel">
+          <div class="template-meta-grid">
+            <label>模板名称<input id="templateNameInput" /></label>
+            <label>模板编码<input id="templateCodeInput" /></label>
+            <label>类型<input id="templateTypeInput" /></label>
+            <label>排序<input id="templateSequenceInput" type="number" min="0" /></label>
+          </div>
+          <label>标签<input id="templateTagsInput" /></label>
+          <label>描述<textarea id="templateDescriptionInput" rows="3"></textarea></label>
+          <div class="template-meta-grid">
+            <label>示例输入<textarea id="templateExampleInput" rows="4"></textarea></label>
+            <label>示例输出<textarea id="templateExampleOutput" rows="4"></textarea></label>
+          </div>
+          <div>
+            <div class="panel-subtitle">占位符</div>
+            <div id="templatePlaceholderList" class="chips empty">暂无占位符</div>
+          </div>
+          <label>模板内容<textarea id="templateContentInput" rows="12" placeholder="必须包含 {{term}}"></textarea></label>
+          <div id="templateValidationMessage" class="validation-message">模板内容需要包含声明的占位符。</div>
+        </div>
+        <div class="modal-actions">
+          <button class="primary-button compact-primary" id="saveTemplateBtn" type="button">保存模板</button>
+        </div>
+      </div>
+    </section>
+
+    <section class="modal-backdrop hidden" id="aiSessionDetailModal" aria-modal="true" role="dialog" aria-labelledby="aiSessionDetailTitle">
+      <div class="config-modal detail-modal ai-session-detail-modal">
+        <div class="panel-heading">
+          <div><p class="eyebrow">AI Session Detail</p><h3 id="aiSessionDetailTitle">AI 会话详情</h3></div>
+          <button class="icon-button" id="closeAiSessionDetailBtn" type="button" title="关闭" aria-label="关闭">×</button>
+        </div>
+        <div id="aiSessionDetailMeta" class="ai-session-detail-meta"></div>
+        <div id="aiSessionDetailTabs" class="ai-session-detail-tabs" role="tablist" aria-label="AI 会话详情视图">
+          <button class="segmented-button active" type="button" role="tab" aria-selected="true" data-ai-session-detail-tab="overview">概览</button>
+          <button class="segmented-button" type="button" role="tab" aria-selected="false" data-ai-session-detail-tab="messages">消息</button>
+          <button class="segmented-button" type="button" role="tab" aria-selected="false" data-ai-session-detail-tab="calls">模型调用</button>
+          <button class="segmented-button" type="button" role="tab" aria-selected="false" data-ai-session-detail-tab="raw">原始数据</button>
+        </div>
+        <div id="aiSessionDetailContent" class="ai-session-detail-content"></div>
+      </div>
+    </section>
+        <section class="modal-backdrop hidden" id="aiTaskDetailModal" aria-modal="true" role="dialog" aria-labelledby="aiTaskDetailTitle">
+      <div class="config-modal ai-task-detail-modal" data-modal-scroll>
+        <div class="panel-heading">
+          <div><p class="eyebrow">Task Detail</p><h3 id="aiTaskDetailTitle">任务详情</h3></div>
+          <button class="icon-button" id="aiTaskDetailCloseBtn" type="button" title="关闭" aria-label="关闭">×</button>
+        </div>
+        <p id="aiTaskDetailMeta" class="panel-description"></p>
+        <div id="aiTaskDetailSteps" class="ai-task-detail-steps"></div>
+      </div>
+    </section>
+        <section class="modal-backdrop hidden" id="adminUserModal" aria-modal="true" role="dialog" aria-labelledby="adminUserModalTitle">
+      <div class="config-modal small-modal">
+        <div class="panel-heading"><div><p class="eyebrow">User Center</p><h3 id="adminUserModalTitle">新增用户</h3></div><button class="icon-button" id="closeAdminUserModalBtn" type="button" title="关闭" aria-label="关闭">×</button></div>
+        <div class="model-form-grid">
+          <label>用户名<input id="adminUserUsernameInput" autocomplete="off" placeholder="登录用户名" /></label>
+          <label>昵称<input id="adminUserNicknameInput" placeholder="展示昵称" /></label>
+          <label id="adminUserPasswordField">初始密码<input id="adminUserPasswordInput" type="password" autocomplete="new-password" placeholder="至少 6 位" /></label>
+          <label>角色<select id="adminUserRoleInput"><option value="USER">普通用户</option><option value="ADMIN">系统管理员</option></select></label>
+          <label>状态<select id="adminUserEnabledInput"><option value="true">正常</option><option value="false">停用</option></select></label>
+        </div>
+        <div class="modal-actions"><button class="primary-button compact-primary" id="saveAdminUserBtn" type="button">保存用户</button></div>
+      </div>
+    </section>
+        <div class="toast" id="toast"></div>
+
     <div class="celebration-layer" id="celebrationLayer" aria-hidden="true"></div>
     <section class="modal-backdrop hidden" id="reviewCompleteModal" aria-modal="true" role="dialog">
       <div class="review-modal">
@@ -1670,32 +1770,7 @@
         </div>
       </div>
     </section>
-    <section class="modal-backdrop hidden" id="aiSessionDetailModal" aria-modal="true" role="dialog" aria-labelledby="aiSessionDetailTitle">
-      <div class="config-modal detail-modal ai-session-detail-modal">
-        <div class="panel-heading">
-          <div><p class="eyebrow">AI Session Detail</p><h3 id="aiSessionDetailTitle">AI 会话详情</h3></div>
-          <button class="icon-button" id="closeAiSessionDetailBtn" type="button" title="关闭" aria-label="关闭">×</button>
-        </div>
-        <div id="aiSessionDetailMeta" class="ai-session-detail-meta"></div>
-        <div id="aiSessionDetailTabs" class="ai-session-detail-tabs" role="tablist" aria-label="AI 会话详情视图">
-          <button class="segmented-button active" type="button" role="tab" aria-selected="true" data-ai-session-detail-tab="overview">概览</button>
-          <button class="segmented-button" type="button" role="tab" aria-selected="false" data-ai-session-detail-tab="messages">消息</button>
-          <button class="segmented-button" type="button" role="tab" aria-selected="false" data-ai-session-detail-tab="calls">模型调用</button>
-          <button class="segmented-button" type="button" role="tab" aria-selected="false" data-ai-session-detail-tab="raw">原始数据</button>
-        </div>
-        <div id="aiSessionDetailContent" class="ai-session-detail-content"></div>
-      </div>
-    </section>
-    <section class="modal-backdrop hidden" id="aiTaskDetailModal" aria-modal="true" role="dialog" aria-labelledby="aiTaskDetailTitle">
-      <div class="config-modal ai-task-detail-modal" data-modal-scroll>
-        <div class="panel-heading">
-          <div><p class="eyebrow">Task Detail</p><h3 id="aiTaskDetailTitle">任务详情</h3></div>
-          <button class="icon-button" id="aiTaskDetailCloseBtn" type="button" title="关闭" aria-label="关闭">×</button>
-        </div>
-        <p id="aiTaskDetailMeta" class="panel-description"></p>
-        <div id="aiTaskDetailSteps" class="ai-task-detail-steps"></div>
-      </div>
-    </section>
+
     <section class="modal-backdrop hidden" id="deleteConfirmModal" aria-modal="true" role="dialog">
       <div class="review-modal confirm-modal">
         <div class="panel-heading">
@@ -1712,6 +1787,7 @@
         </div>
       </div>
     </section>
+
     <script type="module" src="/app.js?v=20260930-02"></script>
   </body>
 </html>

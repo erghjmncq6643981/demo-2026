@@ -54,74 +54,221 @@ export function createSpeechFeature(ctx) {
     }
   }
 
-  function speak(text, voiceType = currentVoiceType()) {
+  let currentWordAudio = null
+  let currentWordAudioTimeout = null
+
+  function speak(text, voiceType = currentVoiceType(), options = {}) {
     const content = String(text || '').trim()
+    const silentToast = Boolean(options && typeof options === 'object' && options.silentToast)
     if (!content) {
-      toast('暂无可播放内容')
-      return
+      if (!silentToast) {
+        toast('暂无可播放内容')
+      }
+      return Promise.resolve(false)
     }
+
+    // 先停止当前任何正在播放的音频通道，杜绝多声音并发
+    stopSpeaking()
 
     const voice = voiceType === 'uk' ? 'uk' : 'us'
     const backendUrl = pronunciationUrl(content, voice)
     const directUrl = directYoudaoUrl(content, voice)
 
-    let fallbackDone = false
-    const playDirectYoudao = () => {
-      if (fallbackDone) return
-      fallbackDone = true
-      try {
-        const directAudio = new Audio(directUrl)
-        directAudio.play().then(() => {
-          toast(`正在播放有道${voice === 'uk' ? '英音' : '美音'}发音`)
-        }).catch(() => {
-          toast('音频播放受阻，请检查网络或浏览器声音权限')
-        })
-        // 触发后端缺省补充持久化保存
-        fetch(backendUrl, { method: 'GET' }).catch(() => {})
-      } catch {
-        toast('发音播放异常')
+    return new Promise((resolve) => {
+      let settled = false
+      let safetyTimer = null
+
+      const done = (success) => {
+        if (settled) return
+        settled = true
+        if (safetyTimer) {
+          window.clearTimeout(safetyTimer)
+          safetyTimer = null
+        }
+        if (currentWordAudioTimeout) {
+          window.clearTimeout(currentWordAudioTimeout)
+          currentWordAudioTimeout = null
+        }
+        resolve(success)
       }
+
+      // 6秒兜底计时器，防止网络异常导致 Promise 永久挂死
+      safetyTimer = window.setTimeout(() => {
+        done(false)
+      }, 6000)
+
+      let fallbackDone = false
+      const playDirectYoudao = () => {
+        if (fallbackDone) return
+        fallbackDone = true
+        try {
+          const directAudio = new Audio(directUrl)
+          currentWordAudio = directAudio
+
+          directAudio.addEventListener('ended', () => {
+            if (currentWordAudio === directAudio) {
+              currentWordAudio = null
+            }
+            done(true)
+          }, { once: true })
+
+          directAudio.addEventListener('error', () => {
+            if (currentWordAudio === directAudio) {
+              currentWordAudio = null
+            }
+            done(false)
+          }, { once: true })
+
+          directAudio.play().then(() => {
+            if (!silentToast) {
+              toast(`正在播放有道${voice === 'uk' ? '英音' : '美音'}发音`)
+            }
+          }).catch((err) => {
+            if (currentWordAudio === directAudio) {
+              currentWordAudio = null
+            }
+            if (err?.name !== 'AbortError' && !silentToast) {
+              toast('音频播放受阻，请检查网络或浏览器声音权限')
+            }
+            done(false)
+          })
+          // 触发后端缺省补充持久化保存
+          fetch(backendUrl, { method: 'GET' }).catch(() => {})
+        } catch {
+          if (!silentToast) {
+            toast('发音播放异常')
+          }
+          done(false)
+        }
+      }
+
+      try {
+        const backendAudio = new Audio(backendUrl)
+        currentWordAudio = backendAudio
+
+        currentWordAudioTimeout = window.setTimeout(() => {
+          if (backendAudio.paused || backendAudio.currentTime === 0) {
+            try {
+              backendAudio.pause()
+            } catch {
+              /* ignore */
+            }
+            playDirectYoudao()
+          }
+        }, 700)
+
+        backendAudio.addEventListener('playing', () => {
+          if (currentWordAudioTimeout) {
+            window.clearTimeout(currentWordAudioTimeout)
+            currentWordAudioTimeout = null
+          }
+          if (!silentToast) {
+            toast(`正在播放${voice === 'uk' ? '英音' : '美音'}发音`)
+          }
+        }, { once: true })
+
+        backendAudio.addEventListener('ended', () => {
+          if (currentWordAudio === backendAudio) {
+            currentWordAudio = null
+          }
+          done(true)
+        }, { once: true })
+
+        backendAudio.addEventListener('error', () => {
+          if (currentWordAudioTimeout) {
+            window.clearTimeout(currentWordAudioTimeout)
+            currentWordAudioTimeout = null
+          }
+          playDirectYoudao()
+        }, { once: true })
+
+        backendAudio.play().catch((err) => {
+          if (currentWordAudioTimeout) {
+            window.clearTimeout(currentWordAudioTimeout)
+            currentWordAudioTimeout = null
+          }
+          if (err?.name === 'AbortError') {
+            done(false)
+            return
+          }
+          playDirectYoudao()
+        })
+      } catch {
+        playDirectYoudao()
+      }
+    })
+  }
+
+  function speakChinese(text, options = {}) {
+    const content = String(text || '').trim()
+    if (!content) {
+      return Promise.resolve(false)
     }
 
-    try {
-      const backendAudio = new Audio(backendUrl)
-      let timeoutId = window.setTimeout(() => {
-        if (backendAudio.paused || backendAudio.currentTime === 0) {
+    if (!('speechSynthesis' in window && 'SpeechSynthesisUtterance' in window)) {
+      return Promise.resolve(false)
+    }
+
+    stopSpeaking()
+
+    return new Promise((resolve) => {
+      let settled = false
+      let safetyTimer = null
+
+      const done = (success) => {
+        if (settled) return
+        settled = true
+        if (safetyTimer) {
+          window.clearTimeout(safetyTimer)
+          safetyTimer = null
+        }
+        resolve(success)
+      }
+
+      safetyTimer = window.setTimeout(() => {
+        done(false)
+      }, 5000)
+
+      try {
+        if (window.speechSynthesis.paused) {
           try {
-            backendAudio.pause()
+            window.speechSynthesis.resume()
           } catch {
             /* ignore */
           }
-          playDirectYoudao()
         }
-      }, 700)
+        const utterance = new SpeechSynthesisUtterance(content)
+        utterance.lang = 'zh-CN'
+        const voices = typeof window.speechSynthesis.getVoices === 'function' ? window.speechSynthesis.getVoices() : []
+        const zhVoice = voices.find((v) => {
+          const l = String(v.lang || '').toLowerCase().replace(/_/g, '-')
+          return l === 'zh-cn' || l === 'zh' || l.startsWith('zh-')
+        })
+        if (zhVoice) {
+          utterance.voice = zhVoice
+        }
+        utterance.rate = options.rate ?? 0.92
+        utterance.pitch = options.pitch ?? 1
+        activeUtterances.add(utterance)
 
-      backendAudio.addEventListener('playing', () => {
-        if (timeoutId) {
-          window.clearTimeout(timeoutId)
-          timeoutId = null
+        const cleanup = () => {
+          activeUtterances.delete(utterance)
         }
-        toast(`正在播放${voice === 'uk' ? '英音' : '美音'}发音`)
-      }, { once: true })
 
-      backendAudio.addEventListener('error', () => {
-        if (timeoutId) {
-          window.clearTimeout(timeoutId)
-          timeoutId = null
+        utterance.onend = () => {
+          cleanup()
+          done(true)
         }
-        playDirectYoudao()
-      }, { once: true })
+        utterance.onerror = () => {
+          cleanup()
+          done(false)
+        }
 
-      backendAudio.play().catch(() => {
-        if (timeoutId) {
-          window.clearTimeout(timeoutId)
-          timeoutId = null
-        }
-        playDirectYoudao()
-      })
-    } catch {
-      playDirectYoudao()
-    }
+        window.speechSynthesis.speak(utterance)
+      } catch {
+        done(false)
+      }
+    })
   }
 
   function playRemoteAudioByType(content, voiceType = currentVoiceType()) {
@@ -361,6 +508,19 @@ export function createSpeechFeature(ctx) {
 
   function stopSpeaking() {
     const prevSentence = currentSpeakingSentence
+    if (currentWordAudioTimeout) {
+      window.clearTimeout(currentWordAudioTimeout)
+      currentWordAudioTimeout = null
+    }
+    if (currentWordAudio) {
+      try {
+        currentWordAudio.pause()
+        currentWordAudio.currentTime = 0
+      } catch {
+        /* ignore */
+      }
+      currentWordAudio = null
+    }
     try {
       if ('speechSynthesis' in window) {
         window.speechSynthesis.cancel()
@@ -715,6 +875,7 @@ export function createSpeechFeature(ctx) {
     playRemoteAudioByType,
     playSentenceAudio,
     speak,
+    speakChinese,
     speakSentence,
     speakWithBrowserVoice,
     stopSpeaking,

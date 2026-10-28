@@ -1,0 +1,134 @@
+          <section class="view" id="wordbookView">
+            <section class="wordbook-view-content" id="wordbookWordsPanel">
+              <section class="panel wordbook-toolbar" id="wordbookHeaderPanel">
+                <div class="wordbook-tools">
+                  <label class="compact-field">
+                    <span>单词本</span>
+                    <select id="wordbookSelect"></select>
+                  </label>
+                  <label class="compact-field">
+                    <span>状态筛选</span>
+                    <select id="wordStatusFilter">
+                      <option value="">全部状态</option>
+                      <option value="familiar">熟悉</option>
+                      <option value="vague">模糊</option>
+                      <option value="forgotten">遗忘</option>
+                    </select>
+                  </label>
+                  <label class="compact-field">
+                    <span>词卡状态</span>
+                    <select id="wordCardStatusFilter" aria-label="词卡状态筛选">
+                      <option value="">全部词卡</option>
+                      <option value="need_card">⚡ 缺少词卡</option>
+                      <option value="ready">已就绪</option>
+                      <option value="not_required">基础词条</option>
+                      <option value="missing">未生成</option>
+                      <option value="failed">生成失败</option>
+                      <option value="generating">生成中</option>
+                    </select>
+                  </label>
+                  <label class="compact-field">
+                    <span>单词搜索</span>
+                    <input id="wordPrefixInput" autocomplete="off" placeholder="按单词/释义搜索" />
+                  </label>
+                  <button class="primary-button compact-primary" id="reloadWordbookViewBtn" type="button">查询</button>
+                  <div class="wordbook-toolbar-actions">
+                    <button class="secondary-button compact" id="wordbookBatchGenerateCardBtn" type="button" title="一键提交当前页缺省词条的 AI 词卡生成任务">
+                      <span class="btn-icon">⚡</span> 补全词卡<span class="badge-count hidden" id="wordbookMissingCardBadge">0</span>
+                    </button>
+                    <button class="secondary-button compact" id="wordbookPlayAudioBtn" type="button" title="按顺序朗读当前页单词，支持随时暂停 (空格键)">
+                      <span class="btn-icon" id="wordbookPlayAudioIcon">▶</span> <span id="wordbookPlayAudioText">顺序朗读</span>
+                    </button>
+                  </div>
+                </div>
+              </section>
+
+              <!-- 单词轮播随身听控制栏（浮动常驻条） -->
+              <div class="wordbook-audio-player-bar hidden" id="wordbookAudioPlayerBar" role="region" aria-label="单词随身听播放器">
+                <div class="player-bar-info">
+                  <span class="player-status-badge" id="wordbookAudioStatusBadge">
+                    <span class="status-pulse-dot"></span>
+                    <span id="wordbookAudioStatusText">正在朗读</span>
+                  </span>
+                  <span class="player-progress-tag" id="wordbookAudioProgress">0 / 0</span>
+                  <div class="player-current-meta">
+                    <span class="current-term" id="wordbookAudioCurrentTerm">-</span>
+                    <span class="current-meaning" id="wordbookAudioCurrentMeaning"></span>
+                  </div>
+                </div>
+                <div class="player-bar-controls">
+                  <button type="button" class="player-btn icon-btn" id="wordbookAudioPrevBtn" title="上一个词 (快捷键 J)">⏮</button>
+                  <button type="button" class="player-btn play-btn" id="wordbookAudioToggleBtn" title="播放/暂停 (空格键)">⏸</button>
+                  <button type="button" class="player-btn icon-btn" id="wordbookAudioNextBtn" title="下一个词 (快捷键 K)">⏭</button>
+                  <button type="button" class="player-btn stop-btn" id="wordbookAudioStopBtn" title="停止朗读 (Esc)">⏹</button>
+                </div>
+                <div class="player-bar-config">
+                  <label class="player-config-item">
+                    <span>模式</span>
+                    <select id="wordbookAudioModeSelect" class="player-config-select" aria-label="朗读模式">
+                      <option value="term_only" selected>纯英文 (磨耳朵)</option>
+                      <option value="term_and_meaning">英 + 简明释义</option>
+                    </select>
+                  </label>
+                  <label class="player-config-item">
+                    <span>停顿节奏</span>
+                    <select id="wordbookAudioPaceSelect" class="player-config-select" aria-label="停顿节奏">
+                      <option value="normal" selected>标准 (2.0s)</option>
+                      <option value="compact">紧凑 (1.2s)</option>
+                      <option value="relaxed">宽松 (3.0s)</option>
+                    </select>
+                  </label>
+                  <label class="player-config-item">
+                    <span>方式</span>
+                    <select id="wordbookAudioOrderSelect" class="player-config-select" aria-label="播放方式">
+                      <option value="sequence" selected>顺序</option>
+                      <option value="random">随机</option>
+                    </select>
+                  </label>
+                </div>
+              </div>
+
+              <section class="panel wordbook-table-panel" id="wordbookTablePanel">
+                <div class="wordbook-table-wrap">
+                  <table class="wordbook-table">
+                    <colgroup>
+                      <col class="col-term" style="width: 180px;" />
+                      <col class="col-phonetic" style="width: 130px;" />
+                      <col class="col-meaning" style="width: 320px;" />
+                      <col class="col-card-status" style="width: 110px;" />
+                      <col class="col-status" style="width: 140px;" />
+                      <col class="col-mastery" style="width: 80px;" />
+                      <col class="col-next-review" style="width: 160px;" />
+                      <col class="col-actions" style="width: 140px;" />
+                    </colgroup>
+                    <thead>
+                      <tr>
+                        <th class="col-term">单词</th>
+                        <th class="col-phonetic">音标</th>
+                        <th class="col-meaning">释义</th>
+                        <th class="col-card-status">词卡状态</th>
+                        <th class="col-status">学习状态</th>
+                        <th class="col-mastery" style="text-align: center;">掌握度</th>
+                        <th class="col-next-review">复习时间</th>
+                        <th class="col-actions" style="text-align: center;">操作</th>
+                      </tr>
+                    </thead>
+                    <tbody id="wordbookEntryList"></tbody>
+                  </table>
+                </div>
+                <div class="wordbook-table-footer">
+                  <span id="wordbookCountSummary">共 0 个单词</span>
+                  <span class="pagination-actions">
+                    <button class="secondary-button compact" id="wordbookPrevBtn" type="button">上一页</button>
+                    <span id="wordbookPageInfo">第 1 页</span>
+                    <button class="secondary-button compact" id="wordbookNextBtn" type="button">下一页</button>
+                    <span class="pagination-jump">
+                      <input type="number" id="wordbookJumpPageInput" min="1" placeholder="页码" class="page-jump-input" aria-label="跳转页码" />
+                      <button class="secondary-button compact" id="wordbookJumpPageBtn" type="button">跳转</button>
+                    </span>
+                  </span>
+                </div>
+              </section>
+            </section>
+          </section>
+

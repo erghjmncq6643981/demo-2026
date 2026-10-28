@@ -64,7 +64,7 @@ export function createStudyWordbookFeature(ctx) {
           <button class="wordbook-picker-item ${selected ? 'active' : ''}" type="button" data-add-wordbook-id="${escapeHtml(wordbook.id)}" aria-pressed="${selected ? 'true' : 'false'}">
             <strong>${escapeHtml(wordbook.name)}</strong>
             <span>${escapeHtml(wordbook.description || (wordbook.isDefault ? '默认词书' : '自定义词书'))}</span>
-            <small>${selected ? '已选 · ' : ''}${wordbook.entryCount || 0} 个单词 · ${wordbook.dueCount || 0} 个待复习</small>
+            <small>${selected ? '已选 · ' : ''}${wordbook.entryCount || 0} 个单词</small>
           </button>
         `
         },

@@ -1,0 +1,38 @@
+          <section class="view" id="articleStudyView">
+            <section class="panel article-study-toolbar" id="articleStudyToolbar">
+              <label class="compact-field">
+                单词本
+                <select id="articleWordbookSelect"></select>
+              </label>
+              <button class="primary-button compact-primary" id="articleGenerateBtn" type="button">创建精读</button>
+            </section>
+
+            <section class="article-study-layout" id="articleStudyLayout">
+              <section class="panel article-history-panel" id="articleHistoryPanel">
+                <div class="panel-heading">
+                  <div>
+                    <p class="eyebrow">Library</p>
+                    <h3>精读记录</h3>
+                  </div>
+                  <button class="secondary-button compact" id="articleReloadHistoryBtn" type="button">刷新</button>
+                </div>
+                <div id="articleHistoryList" class="article-history-list empty">暂无精读记录</div>
+                <div class="pagination-actions article-history-pagination"><button class="secondary-button compact" id="articleHistoryPrevBtn" type="button">上一页</button><span id="articleHistoryPageInfo">第 1 页</span><button class="secondary-button compact" id="articleHistoryNextBtn" type="button">下一页</button></div>
+              </section>
+
+              <section class="panel article-result-panel">
+                <div class="panel-heading">
+                  <div>
+                    <p class="eyebrow">Learning</p>
+                    <h3>学习工作区</h3>
+                  </div>
+                  <div class="inline-actions">
+                    <span class="mini-pill" id="articleResultBadge">等待生成</span>
+                    <button class="secondary-button compact" id="toggleArticleFocusModeBtn" type="button">专注模式</button>
+                  </div>
+                </div>
+                <div id="articleResult" class="article-result empty">选择一份精读材料开始学习</div>
+              </section>
+            </section>
+          </section>
+

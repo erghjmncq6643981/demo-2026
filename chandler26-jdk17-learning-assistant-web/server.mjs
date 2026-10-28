@@ -2,6 +2,9 @@ import { createServer } from 'node:http'
 import { readFile } from 'node:fs/promises'
 import { extname, join, normalize } from 'node:path'
 import { fileURLToPath } from 'node:url'
+import { buildHtml } from './scripts/build-html.mjs'
+
+await buildHtml()
 
 const root = fileURLToPath(new URL('.', import.meta.url))
 const publicDir = join(root, 'public')

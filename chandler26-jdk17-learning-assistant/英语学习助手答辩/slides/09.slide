@@ -1,0 +1,102 @@
+<Slide style={{ width: 1280, height: 720, background: '#FFFFFF', position: 'relative', fontFamily: '微软雅黑', padding: '72px 60px 60px 60px' }}>
+    <Box style={{ position: 'absolute', top: 0, left: 0, width: 1280, height: 56, background: '#1E4FA8', flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingLeft: 60, paddingRight: 60 }}>
+        <Text style={{ fontSize: 32, fontWeight: 'bold', color: '#FFFFFF' }}>验证结果：四层证据与一处未达标</Text>
+        <Text style={{ fontSize: 16, color: 'rgba(255,255,255,0.72)' }}>08 · Evaluation</Text>
+    </Box>
+
+    <Box style={{ flexDirection: 'column', width: 1160, height: 588, justifyContent: 'space-between' }}>
+        <Box style={{ flexDirection: 'row', gap: 40, height: 504 }}>
+            <Box style={{ width: 388, flexDirection: 'column', justifyContent: 'space-between' }}>
+                <Box style={{ flexDirection: 'column', gap: 2 }}>
+                    <Box style={{ flexDirection: 'row', alignItems: 'flex-end', gap: 6 }}>
+                        <Text style={{ fontSize: 56, fontWeight: 'bold', color: '#1E4FA8', lineHeight: 1 }}>100</Text>
+                        <Text style={{ fontSize: 17, color: '#4A5568', paddingBottom: 6 }}>并发</Text>
+                    </Box>
+                    <Text style={{ fontSize: 17, color: '#4A5568', lineHeight: 1.5 }}>只读接口全部成功返回，无超时、无 5xx</Text>
+                </Box>
+                <Box style={{ width: 388, height: 1, background: '#E5E7EB' }} />
+                <Box style={{ flexDirection: 'column', gap: 2 }}>
+                    <Box style={{ flexDirection: 'row', alignItems: 'flex-end', gap: 6 }}>
+                        <Text style={{ fontSize: 56, fontWeight: 'bold', color: '#1E4FA8', lineHeight: 1 }}>1989</Text>
+                        <Text style={{ fontSize: 17, color: '#4A5568', paddingBottom: 6 }}>ms</Text>
+                    </Box>
+                    <Text style={{ fontSize: 17, color: '#4A5568', lineHeight: 1.5 }}>首屏渲染 P95，业务数据就绪的本地环境</Text>
+                </Box>
+                <Box style={{ width: 388, height: 1, background: '#E5E7EB' }} />
+                <Box style={{ flexDirection: 'column', gap: 2 }}>
+                    <Box style={{ flexDirection: 'row', alignItems: 'flex-end', gap: 6 }}>
+                        <Text style={{ fontSize: 56, fontWeight: 'bold', color: '#1E4FA8', lineHeight: 1 }}>97.17</Text>
+                        <Text style={{ fontSize: 17, color: '#4A5568', paddingBottom: 6 }}>%</Text>
+                    </Box>
+                    <Text style={{ fontSize: 17, color: '#4A5568', lineHeight: 1.5 }}>编辑距离 ≤2 时拼写纠错的 Top-1 准确率</Text>
+                </Box>
+                <Box style={{ flexDirection: 'column', gap: 4, paddingTop: 14, borderTop: '1px solid #E5E7EB' }}>
+                    <Text style={{ fontSize: 15, fontWeight: 'bold', color: '#1A2230' }}>测试环境</Text>
+                    <Text style={{ fontSize: 15, color: '#8B97A8', lineHeight: 1.5 }}>
+                        本机单进程 + MySQL 8，不含独立服务器与多机网络
+                    </Text>
+                </Box>
+            </Box>
+
+            <Box style={{ width: 732, flexDirection: 'column', justifyContent: 'space-between' }}>
+                <Box style={{ flexDirection: 'column' }}>
+                    <Box style={{ flexDirection: 'row', paddingBottom: 10, borderBottom: '1px solid #1A2230' }}>
+                        <Text style={{ width: 250, fontSize: 15, fontWeight: 'bold', color: '#8B97A8' }}>指标</Text>
+                        <Text style={{ width: 150, fontSize: 15, fontWeight: 'bold', color: '#8B97A8' }}>目标</Text>
+                        <Text style={{ width: 200, fontSize: 15, fontWeight: 'bold', color: '#8B97A8' }}>实测</Text>
+                        <Text style={{ width: 132, fontSize: 15, fontWeight: 'bold', color: '#8B97A8' }}>结论</Text>
+                    </Box>
+                    <Box style={{ flexDirection: 'row', paddingTop: 12, paddingBottom: 12, borderBottom: '1px solid #E5E7EB', alignItems: 'center' }}>
+                        <Text style={{ width: 250, fontSize: 18, color: '#1A2230', fontWeight: 'bold' }}>缓存复用率</Text>
+                        <Text style={{ width: 150, fontSize: 18, color: '#4A5568' }}>≥ 95%</Text>
+                        <Text style={{ width: 200, fontSize: 18, color: '#D9534F', fontWeight: 'bold' }}>83.80%</Text>
+                        <Text style={{ width: 132, fontSize: 17, color: '#D9534F' }}>未达标</Text>
+                    </Box>
+                    <Box style={{ flexDirection: 'row', paddingTop: 12, paddingBottom: 12, borderBottom: '1px solid #E5E7EB', alignItems: 'center' }}>
+                        <Text style={{ width: 250, fontSize: 18, color: '#1A2230' }}>模型调用成功率</Text>
+                        <Text style={{ width: 150, fontSize: 18, color: '#4A5568' }}>—</Text>
+                        <Text style={{ width: 200, fontSize: 18, color: '#1A2230' }}>95.49%</Text>
+                        <Text style={{ width: 132, fontSize: 17, color: '#4A5568' }}>稳定版本样本</Text>
+                    </Box>
+                    <Box style={{ flexDirection: 'row', paddingTop: 12, paddingBottom: 12, borderBottom: '1px solid #E5E7EB', alignItems: 'center' }}>
+                        <Text style={{ width: 250, fontSize: 18, color: '#1A2230' }}>自动判题正确率</Text>
+                        <Text style={{ width: 150, fontSize: 18, color: '#4A5568' }}>—</Text>
+                        <Text style={{ width: 200, fontSize: 18, color: '#1A2230' }}>97.62%</Text>
+                        <Text style={{ width: 132, fontSize: 17, color: '#4A5568' }}>真实学习记录</Text>
+                    </Box>
+                    <Box style={{ flexDirection: 'row', paddingTop: 12, paddingBottom: 12, borderBottom: '1px solid #E5E7EB', alignItems: 'center' }}>
+                        <Text style={{ width: 250, fontSize: 18, color: '#1A2230' }}>后端测试</Text>
+                        <Text style={{ width: 150, fontSize: 18, color: '#4A5568' }}>全通过</Text>
+                        <Text style={{ width: 200, fontSize: 18, color: '#1A2230' }}>140 项 · 139 通过</Text>
+                        <Text style={{ width: 132, fontSize: 17, color: '#4A5568' }}>1 项跳过</Text>
+                    </Box>
+                    <Box style={{ flexDirection: 'row', paddingTop: 12, alignItems: 'center' }}>
+                        <Text style={{ width: 250, fontSize: 18, color: '#1A2230' }}>前端模块检查</Text>
+                        <Text style={{ width: 150, fontSize: 18, color: '#4A5568' }}>单文件 ≤1000 行</Text>
+                        <Text style={{ width: 200, fontSize: 18, color: '#1A2230' }}>84 JS 全部通过</Text>
+                        <Text style={{ width: 132, fontSize: 17, color: '#4A5568' }}>自检脚本</Text>
+                    </Box>
+                </Box>
+
+                <Box style={{ flexDirection: 'column', gap: 6, background: '#F7F9FC', padding: '16px 20px' }}>
+                    <Text style={{ fontSize: 16, fontWeight: 'bold', color: '#1A2230' }}>这些数字的边界</Text>
+                    <Text style={{ fontSize: 16, color: '#4A5568', lineHeight: 1.55 }}>
+                        缓存复用率没到任务书要求的 95%，原因是样本里首次学习的词占比过高；140 项测试中跳过的是依赖 Testcontainers 的 MySQL 集成测试，本机 Docker 不可用。数据链来自本机真实库：5087 词、82 个学习单元、419 条学习记录。
+                    </Text>
+                </Box>
+            </Box>
+        </Box>
+
+        <Box style={{ flexDirection: 'row', background: '#E8EFF8', alignItems: 'center', padding: '14px 22px', gap: 14 }}>
+            <Box style={{ width: 3, height: 30, background: '#1E4FA8' }} />
+            <Text style={{ fontSize: 18, color: '#1A2230' }}>
+                能测的都给出了实测值；没达标的写清原因，比把数字藏起来更经得起追问。
+            </Text>
+        </Box>
+    </Box>
+
+    <Box style={{ position: 'absolute', top: 670, left: 60, width: 1160, flexDirection: 'row', justifyContent: 'space-between' }}>
+        <Text style={{ fontSize: 14, color: '#8B97A8' }}>基于大模型的英语学习助手 · 毕业答辩</Text>
+        <Text style={{ fontSize: 14, color: '#8B97A8' }}>09 / 11</Text>
+    </Box>
+</Slide>

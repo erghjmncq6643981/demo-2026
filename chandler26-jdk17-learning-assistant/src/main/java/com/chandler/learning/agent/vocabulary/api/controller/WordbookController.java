@@ -88,12 +88,13 @@ public class WordbookController {
             @PathVariable Long wordbookId,
             @RequestParam(defaultValue = "false") Boolean dueOnly,
             @RequestParam(required = false) String status,
+            @RequestParam(required = false) String cardStatus,
             @RequestParam(required = false) String keyword,
             @RequestParam(defaultValue = "1") Integer page,
             @RequestParam(defaultValue = "30") Integer pageSize) {
         LearningUser user = currentUserContext.requireUser();
-        return wordbookService.pageEntries(user.getId(), wordbookId, Boolean.TRUE.equals(dueOnly), status, keyword,
-                page, pageSize);
+        return wordbookService.pageEntries(user.getId(), wordbookId, Boolean.TRUE.equals(dueOnly), status, cardStatus,
+                keyword, page, pageSize);
     }
 
     /** 加入单词本。 */

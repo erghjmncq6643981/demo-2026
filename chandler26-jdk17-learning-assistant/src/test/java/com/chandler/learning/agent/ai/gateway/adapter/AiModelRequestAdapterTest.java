@@ -66,6 +66,34 @@ class AiModelRequestAdapterTest {
         assertThat(payload).doesNotContainKey("response_format");
     }
 
+    @Test
+    void qwenChatPreparesStandardPayloadWithJsonMode() {
+        ModelChatRequest request = request("qwen3.8-flash");
+        request.setTemperature(0.7);
+
+        Map<String, Object> payload = new QwenChatRequestAdapter().prepare(request).payload();
+
+        assertThat(payload).containsEntry("model", "qwen3.8-flash")
+                .containsEntry("max_tokens", 4096)
+                .containsEntry("temperature", 0.7);
+        assertThat(payload.get("response_format")).isEqualTo(Map.of("type", "json_object"));
+        assertTextContent(payload);
+    }
+
+    @Test
+    void glmChatPreparesStandardPayloadWithJsonMode() {
+        ModelChatRequest request = request("GLM-5.3-Flash");
+        request.setTemperature(0.6);
+
+        Map<String, Object> payload = new GlmChatRequestAdapter().prepare(request).payload();
+
+        assertThat(payload).containsEntry("model", "GLM-5.3-Flash")
+                .containsEntry("max_tokens", 4096)
+                .containsEntry("temperature", 0.6);
+        assertThat(payload.get("response_format")).isEqualTo(Map.of("type", "json_object"));
+        assertTextContent(payload);
+    }
+
     private ModelChatRequest request(String model) {
         ModelChatRequest request = new ModelChatRequest();
         request.setModel(model);

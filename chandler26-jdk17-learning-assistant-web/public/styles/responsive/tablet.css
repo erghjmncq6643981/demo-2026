@@ -1,0 +1,256 @@
+@media (max-width: 991px) {
+  .scene-study-split-layout.with-note-open {
+    display: flex;
+    flex-direction: column;
+    overflow-y: auto;
+  }
+}
+
+@media (max-width: 1100px) {
+  .ai-session-filters {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .ai-session-filter-actions {
+    grid-column: 1 / -1;
+    justify-content: flex-end;
+  }
+  .dashboard-grid,
+  .content-grid,
+  .review-layout,
+  .agent-config-grid,
+  .article-study-layout,
+  .wordbook-layout,
+  .login-screen {
+    grid-template-columns: 1fr;
+  }
+
+  .product-shell,
+  .product-shell.sidebar-collapsed {
+    display: block;
+    height: 100vh;
+    height: 100dvh;
+    overflow: hidden;
+  }
+
+  .sidebar {
+    position: fixed;
+    inset: 0 auto 0 0;
+    z-index: 45;
+    width: min(320px, calc(100vw - 48px));
+    height: 100vh;
+    height: 100dvh;
+    min-height: auto;
+    border-right: 1px solid var(--line);
+    border-bottom: 0;
+    background: rgba(15, 23, 42, 0.96);
+    box-shadow: var(--shadow);
+    opacity: 1;
+  }
+
+  .product-shell.sidebar-collapsed .sidebar {
+    padding: 28px 20px;
+    opacity: 0;
+    transform: translateX(-104%);
+  }
+
+  .sidebar-backdrop {
+    position: fixed;
+    inset: 0;
+    z-index: 44;
+    display: block;
+    border: 0;
+    background: rgba(2, 6, 23, 0.52);
+    opacity: 1;
+    transition: opacity 180ms ease;
+  }
+
+  .product-shell.sidebar-collapsed .sidebar-backdrop {
+    opacity: 0;
+    pointer-events: none;
+  }
+
+  .nav-menu,
+  .sidebar-footer {
+    grid-template-columns: 1fr;
+  }
+
+  .content {
+    height: 100vh;
+    height: 100dvh;
+  }
+
+  #wordbookView.view.active {
+    grid-template-rows: auto;
+    overflow: auto;
+  }
+
+  #articleStudyView.view.active {
+    grid-template-rows: auto auto;
+    overflow: auto;
+  }
+
+  #reviewView.view.active {
+    grid-template-rows: auto auto;
+    overflow: auto;
+  }
+
+  #studyView.view.active {
+    overflow: hidden;
+  }
+
+  .wordbook-layout,
+  .article-study-layout,
+  .review-layout {
+    min-height: auto;
+    overflow: visible;
+  }
+
+  .wordbook-layout > .panel,
+  .article-study-layout > .panel,
+  .review-layout > .panel {
+    max-height: none;
+    overflow: visible;
+    grid-template-rows: auto minmax(0, 1fr);
+  }
+
+  #wordbookEntryList,
+  #wordbookFocus,
+  .article-word-grid,
+  .article-result,
+  .article-history-list,
+  #reviewFocus,
+  #reviewNote {
+    overflow: visible;
+    max-height: none;
+  }
+
+  #wordbookEntryList {
+    max-height: 42vh;
+    overflow: auto;
+  }
+
+  #reviewFocus,
+  #reviewNote {
+    max-height: none;
+  }
+
+  .article-study-layout {
+    grid-template-columns: 1fr;
+  }
+
+  .article-result-panel {
+    order: 1;
+  }
+
+  .article-history-panel {
+    order: 2;
+  }
+
+  #scenePlanView.view.active {
+    grid-template-rows: auto auto;
+    overflow: auto;
+  }
+
+  .scene-plan-layout {
+    grid-template-columns: 1fr;
+    min-height: auto;
+    overflow: visible;
+  }
+
+  .scene-plan-sidebar {
+    max-height: 280px;
+  }
+
+  .scene-workspace,
+  .scene-learning-stage {
+    overflow: visible;
+  }
+
+  #scenePlanView.view.active:has(.scene-focus-layout),
+  #scenePlanView.view.active.scene-focus-view {
+    grid-template-rows: minmax(0, 1fr);
+    height: 100%;
+    min-height: 0;
+    overflow: hidden;
+  }
+
+  .scene-plan-layout.scene-focus-layout {
+    height: 100%;
+    min-height: 0;
+    overflow: hidden;
+    display: flex;
+    flex-direction: column;
+  }
+
+  .scene-plan-layout.scene-focus-layout .scene-workspace {
+    height: 100%;
+    min-height: 0;
+    overflow: hidden;
+  }
+
+  .scene-plan-layout.scene-focus-layout .scene-learning-stage:not(.in-challenge-stage) {
+    height: 100%;
+    min-height: 0;
+    overflow: hidden;
+    display: flex;
+    flex-direction: column;
+  }
+
+  .scene-plan-layout.scene-focus-layout .scene-study-split-layout:not(.with-note-open) {
+    flex: 1 1 0%;
+    min-height: 0;
+    height: 100%;
+    overflow: hidden;
+  }
+
+  .scene-plan-layout.scene-focus-layout .scene-study-split-layout.with-note-open {
+    flex: 1 1 0%;
+    min-height: 0;
+    height: 100%;
+    display: flex;
+    flex-direction: column;
+    overflow-y: auto;
+    -webkit-overflow-scrolling: touch;
+  }
+
+  .scene-plan-layout.scene-focus-layout .scene-reading-panel {
+    flex: 1 1 0%;
+    min-height: 0;
+    height: 100%;
+    overflow-y: auto;
+    -webkit-overflow-scrolling: touch;
+    overscroll-behavior: contain;
+  }
+
+  .scene-plan-layout.scene-focus-layout .scene-study-split-layout.with-note-open .scene-reading-panel {
+    flex: 0 0 auto;
+    height: auto;
+    max-height: 45vh;
+  }
+
+  .scene-plan-layout.scene-focus-layout .scene-study-split-layout.with-note-open .scene-note-panel {
+    flex: 1 0 auto;
+    min-height: 240px;
+  }
+
+  .scene-learning-footer {
+    flex-shrink: 0;
+  }
+
+  .vocabulary-import-form {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .vocabulary-import-form button {
+    min-height: 42px;
+  }
+}
+
+@media (max-width: 991px) {
+  .study-split-layout.with-note-open {
+    display: flex;
+    flex-direction: column;
+    overflow-y: auto;
+  }
+}

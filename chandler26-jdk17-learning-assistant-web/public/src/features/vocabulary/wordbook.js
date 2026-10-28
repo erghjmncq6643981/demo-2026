@@ -4,6 +4,7 @@ import { escapeHtml } from '/src/shared/text.js'
 import { normalizeWordbooks, resolveSelectedWordbookId, syncCurrentWordbookId } from '/src/shared/wordbook.js'
 import { createWordbookDetailFeature } from '/src/features/vocabulary/wordbook-detail.js'
 import { createWordbookEntryListFeature } from '/src/features/vocabulary/wordbook-entry-list.js'
+import { createWordbookAudioPlayer } from '/src/features/vocabulary/wordbook-audio-player.js'
 
 export function createWordbookProfileFeature(ctx) {
   const {
@@ -45,12 +46,275 @@ export function createWordbookProfileFeature(ctx) {
     selectWordbookEntry,
   })
 
+  const audioPlayer = createWordbookAudioPlayer({
+    getEntries: () => state.wordbookEntries || [],
+    speakWord: (term, opts) => ctx.speak?.(term, 'us', { ...opts, silentToast: true }),
+    speakMeaning: (meaning, opts) => ctx.speakChinese?.(meaning, { ...opts, silentToast: true }),
+    stopSpeaking: () => ctx.stopSpeaking?.(),
+    initialOptions: {
+      mode: elements.wordbookAudioModeSelect?.value || 'term_only',
+      intervalPace: elements.wordbookAudioPaceSelect?.value || 'normal',
+      order: elements.wordbookAudioOrderSelect?.value || 'sequence',
+      repeatCount: Number(elements.wordbookAudioRepeatSelect?.value || 1),
+    },
+    onRowChange: (entry) => {
+      const rows = elements.wordbookEntryList?.querySelectorAll('tr.wordbook-row')
+      rows?.forEach((r) => r.classList.remove('wordbook-row-speaking'))
+      if (entry) {
+        selectWordbookEntry(entry, { silent: true })
+        const targetRow = elements.wordbookEntryList?.querySelector(`tr[data-entry-id="${entry.id}"]`)
+        if (targetRow) {
+          targetRow.classList.add('wordbook-row-speaking')
+          targetRow.scrollIntoView({ behavior: 'smooth', block: 'nearest' })
+        }
+        const isCardModalOpen = Boolean(elements.wordbookCardModal && !elements.wordbookCardModal.classList.contains('hidden'))
+        if (isCardModalOpen) {
+          if (elements.wordbookFocus) {
+            elements.wordbookFocus.scrollTop = 0
+          }
+          const hasParsedDetail = entry.parsed && typeof entry.parsed === 'object' && Object.keys(entry.parsed).length > 0
+          if (!state.preview && !hasParsedDetail) {
+            loadWordbookEntryDetail(entry)
+          }
+        }
+      }
+    },
+    onStatusChange: ({ status, currentIndex, total, entry }) => {
+      const isPlaying = status === 'PLAYING'
+      const isPaused = status === 'PAUSED'
+      const isActive = isPlaying || isPaused
+
+      // 1. 同步顶部工具栏小按钮
+      if (elements.wordbookPlayAudioBtn) {
+        elements.wordbookPlayAudioBtn.classList.toggle('playing', isActive)
+        if (elements.wordbookPlayAudioIcon) {
+          elements.wordbookPlayAudioIcon.textContent = isPlaying ? '⏸' : '▶'
+        }
+        if (elements.wordbookPlayAudioText) {
+          if (isPlaying) {
+            elements.wordbookPlayAudioText.textContent = `暂停 (${currentIndex + 1}/${total})`
+          } else if (isPaused) {
+            elements.wordbookPlayAudioText.textContent = `继续 (${currentIndex + 1}/${total})`
+          } else {
+            elements.wordbookPlayAudioText.textContent = '顺序朗读'
+          }
+        }
+      }
+
+      // 2. 同步浮动常驻随身听控制栏 (Player Bar)
+      if (elements.wordbookAudioPlayerBar) {
+        elements.wordbookAudioPlayerBar.classList.toggle('hidden', !isActive)
+      }
+      if (isActive && elements.wordbookAudioPlayerBar) {
+        if (elements.wordbookAudioStatusBadge) {
+          elements.wordbookAudioStatusBadge.classList.toggle('is-playing', isPlaying)
+          elements.wordbookAudioStatusBadge.classList.toggle('is-paused', isPaused)
+        }
+        if (elements.wordbookAudioStatusText) {
+          elements.wordbookAudioStatusText.textContent = isPlaying ? '正在朗读' : '已暂停'
+        }
+        if (elements.wordbookAudioToggleBtn) {
+          elements.wordbookAudioToggleBtn.textContent = isPlaying ? '⏸' : '▶'
+          elements.wordbookAudioToggleBtn.title = isPlaying ? '暂停 (空格键)' : '继续播放 (空格键)'
+        }
+        if (elements.wordbookAudioProgress) {
+          elements.wordbookAudioProgress.textContent = `${currentIndex + 1} / ${total}`
+        }
+        if (elements.wordbookAudioCurrentTerm) {
+          elements.wordbookAudioCurrentTerm.textContent = entry?.term || entry?.normalizedTerm || '-'
+        }
+        if (elements.wordbookAudioCurrentMeaning) {
+          const rawMeaning =
+            entry?.meaningText ||
+            entry?.definition ||
+            entry?.parsed?.definitions?.[0]?.cn ||
+            entry?.parsed?.definitions?.[0]?.meaning ||
+            ''
+          elements.wordbookAudioCurrentMeaning.textContent = rawMeaning ? String(rawMeaning).replace(/^[a-zA-Z]+\.\s*/, '').trim() : ''
+        }
+      }
+    },
+    toast,
+  })
+
+  function updateMissingCardBadge() {
+    const entries = state.wordbookEntries || []
+    const missingCount = entries.filter((item) =>
+      ['missing', 'failed', 'not_required'].includes(item.cardStatus || 'missing')
+    ).length
+    if (elements.wordbookMissingCardBadge) {
+      if (missingCount > 0) {
+        elements.wordbookMissingCardBadge.classList.remove('hidden')
+        elements.wordbookMissingCardBadge.textContent = String(missingCount)
+      } else {
+        elements.wordbookMissingCardBadge.classList.add('hidden')
+      }
+    }
+    if (elements.wordbookBatchGenerateCardBtn) {
+      elements.wordbookBatchGenerateCardBtn.title = missingCount > 0
+        ? `一键为当前页 ${missingCount} 个缺省词条生成 AI 词卡`
+        : '当前页词卡已全部就绪'
+    }
+  }
+
+  async function batchGenerateMissingCards() {
+    const entries = state.wordbookEntries || []
+    const missingEntries = entries.filter((item) =>
+      ['missing', 'failed', 'not_required'].includes(item.cardStatus || 'missing')
+    )
+    if (!missingEntries.length) {
+      if (elements.wordCardStatusFilter && elements.wordCardStatusFilter.value !== 'need_card') {
+        const switchAndFilter = typeof confirmAction === 'function'
+          ? await confirmAction({
+              title: '快捷筛选缺少词卡',
+              message: '当前页所有单词的 AI 词卡均已就绪。\n是否立即为您切换到「⚡ 缺少词卡」筛选视图，直接查看并批量生成尚未就绪的单词？',
+              acceptText: '切换到缺少词卡',
+              cancelText: '保持当前视图',
+            })
+          : window.confirm('当前页所有单词的 AI 词卡均已就绪。\n是否切换到「缺少词卡」筛选视图快速补全？')
+        if (switchAndFilter) {
+          elements.wordCardStatusFilter.value = 'need_card'
+          state.wordbookPage = 1
+          await loadWordbookEntries()
+          toast?.('已切换到缺少词卡筛选列表，点击「⚡ 补全词卡」即可批量生成')
+        }
+        return
+      }
+      toast?.('当前筛选条件下没有缺少词卡的单词')
+      return
+    }
+
+    const count = missingEntries.length
+    const confirmed = typeof confirmAction === 'function'
+      ? await confirmAction({
+          title: '批量生成 AI 词卡',
+          message: `确定要为当前页 ${count} 个未就绪的单词调用 AI 大模型批量生成完整结构化词卡吗？`,
+          acceptText: '立即生成',
+          danger: false,
+        })
+      : window.confirm(`确定要为当前页 ${count} 个未就绪的单词生成 AI 词卡吗？`)
+    if (!confirmed) return
+
+    if (state.preview) {
+      missingEntries.forEach((entry) => {
+        entry.cardStatus = 'ready'
+      })
+      renderWordbookEntries()
+      toast?.(`设计预览：已模拟为当前页 ${count} 个单词生成 AI 词卡`)
+      return
+    }
+
+    const btn = elements.wordbookBatchGenerateCardBtn
+    if (btn) btn.disabled = true
+    missingEntries.forEach((entry) => {
+      entry.cardStatus = 'generating'
+    })
+    renderWordbookEntries()
+
+    const queue = [...missingEntries]
+    let successCount = 0
+
+    async function worker() {
+      while (queue.length > 0) {
+        const item = queue.shift()
+        if (!item) break
+        try {
+          await request(`/api/v1/learning/wordbook-entries/${encodeURIComponent(item.id)}/generate-card/async?forceRefresh=true`, {
+            method: 'POST',
+          })
+          successCount++
+        } catch {
+          item.cardStatus = 'failed'
+        }
+      }
+    }
+
+    try {
+      await Promise.all(Array.from({ length: Math.min(3, queue.length) }, () => worker()))
+      toast?.(`已为当前页 ${successCount} 个单词提交词卡任务，可在任务中心查看进度`)
+      logEvent?.('ai', '批量提交词卡生成', `${successCount} 个单词`)
+    } catch (err) {
+      toast?.(`批量生成异常：${err.message}`)
+    } finally {
+      if (btn) btn.disabled = false
+      renderWordbookEntries()
+    }
+  }
+
+  // 绑定工具栏操作与随身听控制栏事件
+  elements.wordbookBatchGenerateCardBtn?.addEventListener('click', batchGenerateMissingCards)
+  elements.wordbookPlayAudioBtn?.addEventListener('click', () => audioPlayer.toggle())
+  elements.wordbookAudioToggleBtn?.addEventListener('click', () => audioPlayer.toggle())
+  elements.wordbookAudioPrevBtn?.addEventListener('click', () => audioPlayer.prev())
+  elements.wordbookAudioNextBtn?.addEventListener('click', () => audioPlayer.next())
+  elements.wordbookAudioStopBtn?.addEventListener('click', () => audioPlayer.stop())
+  elements.wordbookAudioModeSelect?.addEventListener('change', (e) => {
+    audioPlayer.setOptions({ mode: e.target.value })
+  })
+  elements.wordbookAudioPaceSelect?.addEventListener('change', (e) => {
+    audioPlayer.setOptions({ intervalPace: e.target.value })
+  })
+  elements.wordbookAudioOrderSelect?.addEventListener('change', (e) => {
+    audioPlayer.setOptions({ order: e.target.value })
+  })
+  elements.wordbookAudioRepeatSelect?.addEventListener('change', (e) => {
+    audioPlayer.setOptions({ repeatCount: Number(e.target.value) })
+  })
+  if (elements.wordbookAudioCurrentTerm) {
+    elements.wordbookAudioCurrentTerm.style.cursor = 'pointer'
+    elements.wordbookAudioCurrentTerm.title = '点击查看当前单词卡片'
+    elements.wordbookAudioCurrentTerm.addEventListener('click', () => {
+      const entries = state.wordbookEntries || []
+      const currentIdx = audioPlayer.getCurrentIndex()
+      const currentEntry = entries[currentIdx] || state.selectedEntry
+      if (currentEntry) {
+        selectWordbookEntry(currentEntry, { silent: true })
+        const modal = elements.wordbookCardModal || document.getElementById('wordbookCardModal')
+        if (modal) showModal(modal)
+        const hasParsedDetail = currentEntry.parsed && typeof currentEntry.parsed === 'object' && Object.keys(currentEntry.parsed).length > 0
+        if (!state.preview && !hasParsedDetail) {
+          loadWordbookEntryDetail(currentEntry)
+        }
+      }
+    })
+  }
+
+  function handleAiTaskUpdated(event) {
+    const task = event?.detail
+    if (!task) return
+    const isWordCardTask = task.taskType === 'vocabulary_card_single' || task.taskType === 'vocabulary_card_batch'
+    if (!isWordCardTask) return
+    if (task.status === 'completed' || task.status === 'failed') {
+      const matchingEntry = state.wordbookEntries?.find((item) => sameId(item.id, task.businessId))
+      if (matchingEntry) {
+        if (task.status === 'completed') {
+          loadWordbookEntryDetail(matchingEntry)
+        } else {
+          matchingEntry.cardStatus = 'failed'
+          matchingEntry.cardErrorMessage = task.errorMessage || '生成失败'
+          renderWordbookEntries()
+        }
+      } else {
+        loadWordbookEntries()
+      }
+    }
+  }
+
+  window.addEventListener('learning:ai-task-updated', handleAiTaskUpdated)
+
   function renderWordbookFocus(entry) {
     return detailFeature.renderWordbookFocus(entry)
   }
 
   function renderWordbookEntries() {
+    const currentlySpeakingId = elements.wordbookEntryList?.querySelector('tr.wordbook-row-speaking')?.getAttribute('data-entry-id')
     entryListFeature.render()
+    updateMissingCardBadge()
+    const targetSpeakingId = currentlySpeakingId || (audioPlayer && (audioPlayer.isPlaying() || audioPlayer.isPaused()) ? state.wordbookEntries?.[audioPlayer.getCurrentIndex()]?.id : null)
+    if (targetSpeakingId) {
+      const row = elements.wordbookEntryList?.querySelector(`tr[data-entry-id="${targetSpeakingId}"]`)
+      row?.classList.add('wordbook-row-speaking')
+    }
   }
 
   function loadWordbooks(options = {}) {
@@ -160,7 +424,7 @@ export function createWordbookProfileFeature(ctx) {
     for (const wordbook of state.wordbooks) {
       const option = document.createElement('option')
       option.value = String(wordbook.id)
-      option.textContent = `${wordbook.name} · ${wordbook.entryCount || 0}词 · ${wordbook.dueCount || 0}待复习`
+      option.textContent = `${wordbook.name} · ${wordbook.entryCount || 0}词`
       elements.wordbookSelect.appendChild(option)
       elements.reviewWordbookSelect.appendChild(option.cloneNode(true))
       if (elements.articleWordbookSelect) elements.articleWordbookSelect.appendChild(option.cloneNode(true))
@@ -177,7 +441,7 @@ export function createWordbookProfileFeature(ctx) {
             <button class="wordbook-main" type="button" data-wordbook-id="${escapeHtml(item.id)}">
               <strong>${escapeHtml(item.name)}</strong>
               <span>${escapeHtml(item.description || (item.isDefault ? '默认单词本' : '自定义单词本'))}</span>
-              <small>${item.isDefault ? '默认 · ' : ''}${item.entryCount || 0} 个单词 · ${item.dueCount || 0} 个待复习</small>
+              <small>${item.isDefault ? '默认 · ' : ''}${item.entryCount || 0} 个单词</small>
             </button>
             <div class="row-actions">
               <button class="icon-action-button" type="button" data-wordbook-edit="${escapeHtml(item.id)}" title="编辑单词本" aria-label="编辑单词本">✎</button>
@@ -341,9 +605,11 @@ export function createWordbookProfileFeature(ctx) {
       return Promise.resolve()
     }
     const status = elements.wordStatusFilter?.value || ''
+    const cardStatus = elements.wordCardStatusFilter?.value || ''
     const keyword = elements.wordPrefixInput?.value?.trim() || ''
     const params = new URLSearchParams()
     if (status) params.set('status', status)
+    if (cardStatus) params.set('cardStatus', cardStatus)
     if (keyword) params.set('keyword', keyword)
     params.set('page', String(state.wordbookPage || 1))
     params.set('pageSize', String(state.wordbookPageSize || 30))
@@ -362,11 +628,13 @@ export function createWordbookProfileFeature(ctx) {
   }
 
   function searchWordbookEntries() {
+    audioPlayer.stop()
     state.wordbookPage = 1
     return loadWordbookEntries()
   }
 
   function changeWordbookPage(delta) {
+    audioPlayer.stop()
     const totalCount = Number(state.wordbookTotal ?? state.wordbookEntries.length)
     const maxPage = Math.max(1, Math.ceil(totalCount / (state.wordbookPageSize || 30)))
     const currentPage = Number(state.wordbookPage || 1)
@@ -376,18 +644,32 @@ export function createWordbookProfileFeature(ctx) {
     loadWordbookEntries()
   }
 
+  function jumpToWordbookPage(targetPage) {
+    audioPlayer.stop()
+    const totalCount = Number(state.wordbookTotal ?? state.wordbookEntries.length)
+    const maxPage = Math.max(1, Math.ceil(totalCount / (state.wordbookPageSize || 30)))
+    const pageNum = parseInt(targetPage, 10)
+    if (isNaN(pageNum) || pageNum < 1) return
+    const next = Math.max(1, Math.min(maxPage, pageNum))
+    if (next === state.wordbookPage) return
+    state.wordbookPage = next
+    loadWordbookEntries()
+  }
+
   async function loadWordbookEntryDetail(entry) {
     if (!entry?.id || state.preview || !state.token) return entry
     try {
       const detail = await request(`/api/v1/learning/wordbook-entries/${encodeURIComponent(entry.id)}`)
-      if (!detail || !sameId(state.selectedEntry?.id, entry.id)) return entry
+      if (!detail) return entry
       const index = state.wordbookEntries.findIndex((item) => sameId(item.id, entry.id))
-      if (index >= 0) state.wordbookEntries.splice(index, 1, detail)
-      state.selectedEntry = detail
-      renderWordbookFocus(detail)
-      ctx.renderNotes(detail)
+      const merged = index >= 0 ? { ...state.wordbookEntries[index], ...detail } : detail
+      if (index >= 0) state.wordbookEntries.splice(index, 1, merged)
+      if (!sameId(state.selectedEntry?.id, entry.id)) return merged
+      state.selectedEntry = merged
+      renderWordbookFocus(merged)
+      ctx.renderNotes(merged)
       renderWordbookEntries()
-      return detail
+      return merged
     } catch (error) {
       logEvent('error', '词卡详情加载失败', error.message)
       toast(`词卡详情加载失败：${error.message}`)
@@ -534,6 +816,12 @@ export function createWordbookProfileFeature(ctx) {
     } else {
       updateActiveEntryRow(entry.id)
     }
+
+    const isCardModalOpen = Boolean(elements.wordbookCardModal && !elements.wordbookCardModal.classList.contains('hidden'))
+    const hasParsedDetail = entry.parsed && typeof entry.parsed === 'object' && Object.keys(entry.parsed).length > 0
+    if (!state.preview && !hasParsedDetail && (isCardModalOpen || options.loadDetail)) {
+      loadWordbookEntryDetail(entry)
+    }
   }
 
   let isNavigatingCard = false
@@ -648,6 +936,7 @@ export function createWordbookProfileFeature(ctx) {
     loadWordbookEntries,
     searchWordbookEntries,
     changeWordbookPage,
+    jumpToWordbookPage,
     loadWordbookEntryDetail,
     renderWordbookEntries,
     selectWordbookEntry,
@@ -660,5 +949,8 @@ export function createWordbookProfileFeature(ctx) {
     deleteWordbookEntry,
     currentWordbookName,
     toggleWordbookFocusMode,
+    batchGenerateMissingCards,
+    toggleWordbookAudio: () => audioPlayer.toggle(),
+    stopWordbookAudio: () => audioPlayer.stop(),
   }
 }

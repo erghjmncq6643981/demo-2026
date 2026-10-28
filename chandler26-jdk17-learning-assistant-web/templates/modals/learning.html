@@ -1,0 +1,212 @@
+    <section class="modal-backdrop hidden" id="sceneCoreWordsModal" aria-modal="true" role="dialog" aria-labelledby="sceneCoreWordsModalTitle">
+      <div class="config-modal scene-core-words-modal" data-modal-scroll>
+        <div class="panel-heading">
+          <div>
+            <p class="eyebrow">Core Vocabulary</p>
+            <h3 id="sceneCoreWordsModalTitle">待挑战核心词汇</h3>
+          </div>
+          <div class="inline-actions">
+            <span class="mini-pill" id="sceneCoreModalCount">0</span>
+            <button class="icon-button" id="sceneCoreWordsModalCloseBtn" type="button" title="关闭" aria-label="关闭">×</button>
+          </div>
+        </div>
+        <div id="sceneCoreWords" class="scene-core-words empty">暂无核心词汇</div>
+        <div class="modal-actions" style="margin-top: 14px; display: flex; justify-content: flex-end; gap: 8px;">
+          <button class="secondary-button compact" id="sceneCoreWordsModalCancelBtn" type="button">返回阅读</button>
+          <button class="primary-button compact-primary" id="sceneStartChallengeFromModalBtn" type="button">开始挑战</button>
+        </div>
+      </div>
+    </section>
+
+    <section class="modal-backdrop hidden" id="sceneRelatedWordsModal" aria-modal="true" role="dialog" aria-labelledby="sceneRelatedWordsModalTitle">
+      <div class="config-modal scene-related-words-modal" data-modal-scroll>
+        <div class="panel-heading">
+          <div>
+            <p class="eyebrow">Related Vocabulary</p>
+            <h3 id="sceneRelatedWordsModalTitle">场景相关词汇</h3>
+          </div>
+          <div class="scene-related-tools">
+            <label class="entry-prefix-field">
+              <span class="sr-only">筛选场景词汇</span>
+              <input id="sceneRelatedFilter" autocomplete="off" placeholder="筛选单词或含义" />
+            </label>
+            <select id="sceneTierFilter" aria-label="场景词汇分类">
+              <option value="">全部分类</option>
+              <option value="object">具体物品</option>
+              <option value="person">人物</option>
+              <option value="place">地点</option>
+              <option value="action">常用动作</option>
+              <option value="other">其他</option>
+            </select>
+            <span class="mini-pill" id="sceneRelatedModalCount">0</span>
+            <button class="icon-button" id="sceneRelatedWordsModalCloseBtn" type="button" title="关闭" aria-label="关闭">×</button>
+          </div>
+        </div>
+        <div id="sceneRelatedWords" class="scene-related-words empty">暂无场景相关词汇</div>
+      </div>
+    </section>
+
+    <section class="modal-backdrop hidden" id="sceneVocabularyPreviewModal" aria-modal="true" role="dialog" aria-labelledby="sceneVocabularyPreviewTitle">
+      <div class="config-modal scene-vocabulary-preview-modal" data-modal-scroll>
+        <div class="panel-heading">
+          <div>
+            <p class="eyebrow">Vocabulary Preview</p>
+            <h3 id="sceneVocabularyPreviewTitle">待挑战 / 已完成词汇</h3>
+          </div>
+          <button class="icon-button" id="closeSceneVocabularyPreviewBtn" type="button" title="关闭" aria-label="关闭">×</button>
+        </div>
+        <p class="scene-vocabulary-preview-summary" id="sceneVocabularyPreviewSummary">选择日历日期或场景查看词汇</p>
+        <div class="scene-vocabulary-preview-list empty" id="sceneVocabularyPreviewList">暂无词汇</div>
+      </div>
+    </section>
+
+
+    <section class="modal-backdrop hidden" id="scenePlanModal" aria-modal="true" role="dialog">
+      <div class="config-modal small-modal">
+        <div class="panel-heading">
+          <div>
+            <p class="eyebrow">Learning Plan</p>
+            <h3 id="scenePlanModalTitle">新建学习计划</h3>
+          </div>
+          <button class="icon-button" id="closeScenePlanModalBtn" type="button" title="关闭" aria-label="关闭">×</button>
+        </div>
+        <div class="model-form-grid">
+          <label>计划名称<input id="scenePlanNameInput" placeholder="例如：自考英语词汇冲刺" /></label>
+          <label>公共词本<select id="sceneCatalogSelect"></select></label>
+          <label>生词本<select id="scenePlanWordbookSelect"></select></label>
+          <label>AI 模型<select id="scenePlanModelSelect"></select></label>
+          <label>开始时间
+            <div class="datetime-picker" id="scenePlanStartTimePicker" data-placeholder="选择开始时间">
+              <input type="hidden" id="scenePlanStartTimeInput" />
+              <button class="datetime-picker-trigger" type="button">
+                <span class="datetime-picker-label placeholder">选择开始时间</span>
+                <svg class="datetime-picker-icon" viewBox="0 0 24 24"><path d="M19 4h-1V2h-2v2H8V2H6v2H5c-1.1 0-2 .9-2 2v14c0 1.1.9 2 2 2h14c1.1 0 2-.9 2-2V6c0-1.1-.9-2-2-2zm0 16H5V10h14v10zm0-12H5V6h14v2z" fill="currentColor"/></svg>
+              </button>
+              <div class="datetime-picker-popover hidden">
+                <div class="datetime-picker-header">
+                  <button class="datetime-picker-nav prev" type="button">&lt;</button>
+                  <span class="datetime-picker-title"></span>
+                  <button class="datetime-picker-nav next" type="button">&gt;</button>
+                </div>
+                <div class="datetime-picker-weekdays">
+                  <span>一</span><span>二</span><span>三</span><span>四</span><span>五</span><span>六</span><span>日</span>
+                </div>
+                <div class="datetime-picker-days"></div>
+                <div class="datetime-picker-time">
+                  <span>时间</span>
+                  <select class="datetime-picker-hour"></select>
+                  <span>:</span>
+                  <select class="datetime-picker-minute"></select>
+                </div>
+                <div class="datetime-picker-footer">
+                  <button class="secondary-button compact datetime-picker-clear" type="button">清除</button>
+                  <button class="primary-button compact-primary datetime-picker-now" type="button">现在</button>
+                </div>
+              </div>
+            </div>
+          </label>
+          <label>结束时间
+            <div class="datetime-picker" id="scenePlanEndTimePicker" data-placeholder="选择结束时间">
+              <input type="hidden" id="scenePlanEndTimeInput" />
+              <button class="datetime-picker-trigger" type="button">
+                <span class="datetime-picker-label placeholder">选择结束时间</span>
+                <svg class="datetime-picker-icon" viewBox="0 0 24 24"><path d="M19 4h-1V2h-2v2H8V2H6v2H5c-1.1 0-2 .9-2 2v14c0 1.1.9 2 2 2h14c1.1 0 2-.9 2-2V6c0-1.1-.9-2-2-2zm0 16H5V10h14v10zm0-12H5V6h14v2z" fill="currentColor"/></svg>
+              </button>
+              <div class="datetime-picker-popover hidden">
+                <div class="datetime-picker-header">
+                  <button class="datetime-picker-nav prev" type="button">&lt;</button>
+                  <span class="datetime-picker-title"></span>
+                  <button class="datetime-picker-nav next" type="button">&gt;</button>
+                </div>
+                <div class="datetime-picker-weekdays">
+                  <span>一</span><span>二</span><span>三</span><span>四</span><span>五</span><span>六</span><span>日</span>
+                </div>
+                <div class="datetime-picker-days"></div>
+                <div class="datetime-picker-time">
+                  <span>时间</span>
+                  <select class="datetime-picker-hour"></select>
+                  <span>:</span>
+                  <select class="datetime-picker-minute"></select>
+                </div>
+                <div class="datetime-picker-footer">
+                  <button class="secondary-button compact datetime-picker-clear" type="button">清除</button>
+                  <button class="primary-button compact-primary datetime-picker-now" type="button">现在</button>
+                </div>
+              </div>
+            </div>
+          </label>
+          <label id="scenePlanStatusField" class="hidden">计划状态
+            <select id="scenePlanStatusSelect">
+              <option value="not_started">未开始</option>
+              <option value="active">学习中</option>
+              <option value="paused">已暂停</option>
+              <option value="cancelled">已取消</option>
+            </select>
+          </label>
+          <label class="full-row">学习目标<textarea id="scenePlanPurposeInput" rows="3" placeholder="例如：三个月后参加自考英语（二），高频动词需要会拼写，其余单词达到阅读中能识别"></textarea></label>
+        </div>
+        <div class="modal-actions">
+          <button class="primary-button compact-primary" id="createScenePlanBtn" type="button">创建计划</button>
+        </div>
+      </div>
+    </section>
+
+    <section class="modal-backdrop hidden" id="learningConfigModal" aria-modal="true" role="dialog">
+      <div class="config-modal">
+        <div class="panel-heading">
+          <div>
+            <p class="eyebrow">Learning</p>
+            <h3>修改学习配置</h3>
+          </div>
+          <button class="icon-button" id="closeLearningConfigModalBtn" type="button" title="关闭">×</button>
+        </div>
+        <div class="agent-config-grid">
+          <label>
+            学习 Agent
+            <select id="agentSelect"></select>
+          </label>
+          <label>
+            学习模板
+            <select id="templateSelect">
+              <option value="english_vocab_card_json">词汇卡片 JSON</option>
+              <option value="english_vocab_quiz_json">练习题 JSON</option>
+            </select>
+          </label>
+        </div>
+        <div class="template-summary" id="templateSummary">选择模板后查看完整信息。</div>
+        <label>
+          默认发音
+          <select id="voiceSelect">
+            <option value="us">美音</option>
+            <option value="uk">英音</option>
+          </select>
+        </label>
+        <div class="speech-settings">
+          <div class="panel-subtitle compact-subtitle">句子朗读</div>
+          <label>
+            句子音色
+            <select id="sentenceVoiceSelect">
+              <option value="">自动选择英语音色</option>
+            </select>
+          </label>
+          <label class="range-field">
+            <span class="range-head">
+              <span>句子语速</span>
+              <strong id="sentenceRateValue">0.78x</strong>
+            </span>
+            <input id="sentenceRateInput" type="range" min="0.55" max="1.15" step="0.05" value="0.78" />
+          </label>
+          <label class="range-field">
+            <span class="range-head">
+              <span>句子音调</span>
+              <strong id="sentencePitchValue">1.00</strong>
+            </span>
+            <input id="sentencePitchInput" type="range" min="0.80" max="1.20" step="0.05" value="1.00" />
+          </label>
+        </div>
+        <div class="modal-actions">
+          <button class="secondary-button compact" id="testSentenceVoiceBtn" type="button">试听句子</button>
+          <button class="primary-button compact-primary" id="saveSpeechBtn" type="button">保存学习配置</button>
+        </div>
+      </div>
+    </section>

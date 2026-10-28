@@ -1,0 +1,88 @@
+    <section class="modal-backdrop hidden" id="articleStudyModal" aria-modal="true" role="dialog">
+      <div class="config-modal article-study-modal" data-modal-scroll>
+        <div class="panel-heading">
+          <div>
+            <p class="eyebrow">Guided Reading</p>
+            <h3>创建语境精读</h3>
+          </div>
+          <button class="icon-button" id="closeArticleStudyModalBtn" type="button" title="关闭">×</button>
+        </div>
+
+        <section class="article-modal-section article-modal-words">
+          <div class="panel-heading compact-heading">
+            <div>
+              <h3>目标词汇</h3>
+              <span class="mini-pill" id="articleSelectedCount">已选 0</span>
+            </div>
+            <div class="article-filter-actions">
+              <label class="entry-prefix-field">
+                <span class="sr-only">前缀匹配</span>
+                <input id="articlePrefixInput" autocomplete="off" placeholder="前缀匹配" />
+              </label>
+              <label class="entry-prefix-field">
+                <span class="sr-only">状态筛选</span>
+                <select id="articleStatusFilter">
+                  <option value="">全部状态</option>
+                  <option value="familiar">熟悉</option>
+                  <option value="vague">模糊</option>
+                  <option value="forgotten">遗忘</option>
+                </select>
+              </label>
+              <button class="secondary-button compact" id="articleRecommendWordsBtn" type="button">智能推荐</button>
+              <button class="secondary-button compact" id="articleReloadWordsBtn" type="button">刷新词汇</button>
+              <button class="secondary-button compact" id="articleClearSelectionBtn" type="button">清空选择</button>
+            </div>
+          </div>
+          <div id="articleWordGrid" class="article-word-grid empty">暂无单词</div>
+          <div class="pagination-actions article-word-pagination">
+            <button class="secondary-button compact" id="articleWordPrevBtn" type="button">上一页</button>
+            <span id="articleWordPageInfo">第 1 / 1 页</span>
+            <button class="secondary-button compact" id="articleWordNextBtn" type="button">下一页</button>
+          </div>
+        </section>
+
+        <section class="article-modal-section article-modal-settings">
+          <label class="compact-field small-field article-range-field">
+            字数
+            <select id="articleWordCountSelect">
+              <option value="150-200">150-200</option>
+              <option value="300-500" selected>300-500</option>
+              <option value="500-700">500-700</option>
+              <option value="800-1000">800-1000</option>
+            </select>
+          </label>
+          <label class="compact-field small-field article-range-field">
+            难度
+            <select id="articleDifficultySelect">
+              <option value="easy">基础</option>
+              <option value="medium" selected>适中</option>
+              <option value="hard">挑战</option>
+            </select>
+          </label>
+          <label class="compact-field">
+            AI 模型
+            <select id="articleModelSelect" aria-label="AI 模型"></select>
+          </label>
+            <button class="primary-button compact-primary" id="articlePreviewGenerateBtn" type="button">生成学习材料</button>
+          <label class="article-remark-field">
+            阅读主题或要求
+            <textarea id="articleRemarkInput" rows="2" placeholder="例如：商务沟通、旅行见闻、考试阅读；语气自然"></textarea>
+          </label>
+        </section>
+
+        <section class="article-modal-section article-modal-preview">
+          <div class="panel-heading compact-heading">
+            <div>
+              <h3>材料预览</h3>
+              <span class="mini-pill" id="articleModalPreviewBadge">等待生成</span>
+            </div>
+          </div>
+          <div id="articleModalPreview" class="article-result empty">选择目标词并生成精读材料</div>
+        </section>
+
+        <div class="modal-actions">
+          <button class="secondary-button" id="cancelArticleStudyBtn" type="button">取消</button>
+          <button class="primary-button" id="saveArticleStudyBtn" type="button" disabled>开始精读</button>
+        </div>
+      </div>
+    </section>

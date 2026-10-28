@@ -1,0 +1,55 @@
+    <div class="toast" id="toast"></div>
+
+    <div class="celebration-layer" id="celebrationLayer" aria-hidden="true"></div>
+    <section class="modal-backdrop hidden" id="reviewCompleteModal" aria-modal="true" role="dialog">
+      <div class="review-modal">
+        <div class="panel-heading">
+          <div>
+            <p class="eyebrow">Typed</p>
+            <h3 id="modalWordTitle">完成跟敲</h3>
+          </div>
+          <button class="icon-button" id="closeReviewModalBtn" type="button" title="关闭">×</button>
+        </div>
+        <div id="modalExamples" class="modal-examples empty">暂无例句</div>
+        <div class="modal-review-footer">
+          <span>记住了吗？</span>
+          <div class="review-actions modal-review-actions">
+            <button class="danger-action" type="button" data-modal-result="forgotten">忘记了</button>
+            <button class="warn-action" type="button" data-modal-result="vague">有点模糊</button>
+            <button class="success-action" type="button" data-modal-result="remembered">记住了</button>
+          </div>
+        </div>
+      </div>
+    </section>
+    <section class="modal-backdrop hidden" id="forgottenDetailModal" aria-modal="true" role="dialog">
+      <div class="review-modal detail-modal">
+        <div class="panel-heading">
+          <div>
+            <p class="eyebrow">Review Again</p>
+            <h3 id="forgottenDetailTitle">单词详情</h3>
+          </div>
+          <button class="icon-button" id="closeForgottenDetailModalBtn" type="button" title="关闭">×</button>
+        </div>
+        <div id="forgottenDetailContent" class="forgotten-detail-content empty">暂无详情</div>
+        <div class="modal-actions">
+          <button class="primary-button compact-primary" id="forgottenBackToReviewBtn" type="button">回到复习</button>
+        </div>
+      </div>
+    </section>
+
+    <section class="modal-backdrop hidden" id="deleteConfirmModal" aria-modal="true" role="dialog">
+      <div class="review-modal confirm-modal">
+        <div class="panel-heading">
+          <div>
+            <p class="eyebrow">Confirm</p>
+            <h3 id="deleteConfirmTitle">确认删除</h3>
+          </div>
+          <button class="icon-button" id="deleteConfirmCloseBtn" type="button" title="关闭">×</button>
+        </div>
+        <p class="confirm-message" id="deleteConfirmMessage">删除后不可恢复，请确认是否继续。</p>
+        <div class="modal-actions">
+          <button class="secondary-button compact" id="deleteConfirmCancelBtn" type="button">取消</button>
+          <button class="danger-button compact" id="deleteConfirmAcceptBtn" type="button">确认删除</button>
+        </div>
+      </div>
+    </section>

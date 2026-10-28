@@ -1,0 +1,80 @@
+      <section class="login-screen" id="loginScreen">
+        <div class="login-visual">
+          <p class="eyebrow">English Agent</p>
+          <h1>学习助手</h1>
+          <p class="login-subtitle">在场景中认识单词，在阅读中理解，用复习让记忆留下来。</p>
+          <section class="login-showcase" aria-label="学习功能预览" aria-roledescription="轮播">
+            <div class="showcase-slides">
+              <article class="showcase-slide" data-showcase-slide aria-label="1 / 4：词汇大挑战">
+                <h2>词汇大挑战</h2>
+                <div class="showcase-demo">
+                  <div class="showcase-week" aria-hidden="true"><span>一</span><span>二</span><span class="selected">三</span><span>四</span><span>五</span><span>六</span><span>日</span></div>
+                  <strong>周末大扫除</strong>
+                  <p>Open the <mark>cupboard</mark>, fold the <mark>blanket</mark>, and tidy the room.</p>
+                  <div class="showcase-tags"><span>cupboard · 橱柜</span><span>blanket · 毯子</span><span>tidy · 整理</span></div>
+                  <div class="showcase-path">场景文章 <span>→</span> 核心词汇 <span>→</span> 词汇挑战</div>
+                </div>
+              </article>
+              <article class="showcase-slide" data-showcase-slide aria-label="2 / 4：语境精读" hidden>
+                <h2>语境精读</h2>
+                <div class="showcase-demo">
+                  <div class="showcase-tags"><span>目标词 · journey</span><span>目标词 · discover</span></div>
+                  <strong>A journey beyond the city</strong>
+                  <p>Every <mark>journey</mark> is a chance to <mark>discover</mark> something new.</p>
+                  <div class="showcase-definition">journey /ˈdʒɜːni/ <span>旅行；旅程</span></div>
+                  <div class="showcase-path">阅读材料 <span>→</span> 词句理解 <span>→</span> 阅读检测</div>
+                </div>
+              </article>
+              <article class="showcase-slide" data-showcase-slide aria-label="3 / 4：复习" hidden>
+                <h2>复习</h2>
+                <div class="showcase-demo">
+                  <div class="showcase-review-meta"><span>到期词汇</span><span>专注练习</span></div>
+                  <div class="showcase-typing"><strong>journey</strong><span>/ˈdʒɜːni/ · 旅行；旅程</span></div>
+                  <div class="showcase-tags"><span>忘记了</span><span>有点模糊</span><span class="selected">记住了 ✓</span></div>
+                  <div class="showcase-path">到期队列 <span>→</span> 跟敲回忆 <span>→</span> 下次复习</div>
+                </div>
+              </article>
+            <article class="showcase-slide" data-showcase-slide aria-label="4 / 4：单词词卡" hidden>
+              <h2>单词词卡</h2>
+              <div class="showcase-demo">
+                <div class="showcase-definition"><strong>blanket</strong> /ˈblæŋkɪt/ <span>毯子；毛毯</span></div>
+                <p>She wrapped herself in a warm <mark>blanket</mark>.<br>她用一条温暖的毯子裹住自己。</p>
+                <div class="showcase-tags"><span>electric blanket · 电热毯</span><span>a blanket of snow · 一层雪</span></div>
+                <div class="showcase-path">单词本 <span>→</span> 单词词卡 <span>→</span> 理解与记忆</div>
+              </div>
+            </article>
+            </div>
+            <div class="showcase-controls">
+              <button type="button" data-showcase-prev aria-label="上一个功能">‹</button>
+              <div class="showcase-dots" aria-label="选择功能">
+                <button type="button" data-showcase-index="0" aria-label="查看词汇大挑战" aria-current="true"></button>
+                <button type="button" data-showcase-index="1" aria-label="查看语境精读"></button>
+                <button type="button" data-showcase-index="2" aria-label="查看复习"></button>
+                <button type="button" data-showcase-index="3" aria-label="查看单词词卡"></button>
+              </div>
+              <button type="button" data-showcase-next aria-label="下一个功能">›</button>
+            </div>
+          </section>
+        </div>
+
+        <section class="login-panel">
+          <div class="login-title">
+            <p class="eyebrow">Account</p>
+            <h2>欢迎回来</h2>
+            <p>登录后继续你的词汇学习节奏。</p>
+          </div>
+          <label class="login-field">
+            账号
+            <input id="usernameInput" autocomplete="username" placeholder="chandler" />
+          </label>
+          <label class="login-field">
+            密码
+            <input id="passwordInput" type="password" autocomplete="current-password" placeholder="输入密码" />
+          </label>
+          <div class="login-actions">
+            <button class="primary-button" id="loginBtn" type="button">登录</button>
+            <button class="secondary-button" id="registerBtn" type="button">注册</button>
+          </div>
+        </section>
+      </section>
+

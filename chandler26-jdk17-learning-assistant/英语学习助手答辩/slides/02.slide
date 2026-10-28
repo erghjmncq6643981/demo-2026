@@ -1,0 +1,92 @@
+<Slide style={{ width: 1280, height: 720, background: '#FFFFFF', position: 'relative', fontFamily: '微软雅黑', padding: '72px 60px 60px 60px' }}>
+    <Box style={{ position: 'absolute', top: 0, left: 0, width: 1280, height: 56, background: '#1E4FA8', flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingLeft: 60, paddingRight: 60 }}>
+        <Text style={{ fontSize: 32, fontWeight: 'bold', color: '#FFFFFF' }}>研究问题：把生成能力变成可复习的资产</Text>
+        <Text style={{ fontSize: 16, color: 'rgba(255,255,255,0.72)' }}>01 · Research Question</Text>
+    </Box>
+
+    <Box style={{ flexDirection: 'column', width: 1160, height: 588, justifyContent: 'space-between' }}>
+        <Box style={{ flexDirection: 'row', background: '#E8EFF8', padding: '18px 24px', alignItems: 'flex-start', gap: 20 }}>
+            <Box style={{ width: 4, height: 52, background: '#1E4FA8', marginTop: 2 }} />
+            <Box style={{ flexDirection: 'column', gap: 6 }}>
+                <Text style={{ fontSize: 14, color: '#1E4FA8', fontWeight: 'bold', letterSpacing: 1 }}>核心判断</Text>
+                <Text style={{ fontSize: 19, color: '#1A2230', lineHeight: 1.5 }}>
+                    现有产品要么内容不可更新，要么生成结果留不住；词汇学习的资产其实在词表和复习流程里，而这两处恰好都接不上模型。
+                </Text>
+            </Box>
+        </Box>
+
+        <Box style={{ flexDirection: 'row', gap: 44 }}>
+            <Box style={{ width: 630, flexDirection: 'column' }}>
+                <Text style={{ fontSize: 14, color: '#8B97A8', letterSpacing: 1 }}>现有产品的三处断层</Text>
+                <Box style={{ flexDirection: 'row', gap: 18, paddingTop: 16, paddingBottom: 16, borderBottom: '1px solid #E5E7EB' }}>
+                    <Text style={{ fontSize: 22, fontWeight: 'bold', color: '#1E4FA8', width: 34 }}>Ⅰ</Text>
+                    <Box style={{ flexDirection: 'column', gap: 6, width: 566 }}>
+                        <Text style={{ fontSize: 21, fontWeight: 'bold', color: '#1A2230' }}>内容固化，改一处要重来一遍</Text>
+                        <Text style={{ fontSize: 18, color: '#4A5568', lineHeight: 1.5 }}>
+                            词表以 Markdown 整表导入，改一句例句要重导整张表，版本与审核只能人工比对。
+                        </Text>
+                    </Box>
+                </Box>
+                <Box style={{ flexDirection: 'row', gap: 18, paddingTop: 16, paddingBottom: 16, borderBottom: '1px solid #E5E7EB' }}>
+                    <Text style={{ fontSize: 22, fontWeight: 'bold', color: '#1E4FA8', width: 34 }}>Ⅱ</Text>
+                    <Box style={{ flexDirection: 'column', gap: 6, width: 566 }}>
+                        <Text style={{ fontSize: 21, fontWeight: 'bold', color: '#1A2230' }}>输出易失，关掉窗口就没了</Text>
+                        <Text style={{ fontSize: 18, color: '#4A5568', lineHeight: 1.5 }}>
+                            通用对话把结果留在会话里，既进不了个人词表，也进不了下一次复习的排期。
+                        </Text>
+                    </Box>
+                </Box>
+                <Box style={{ flexDirection: 'row', gap: 18, paddingTop: 16 }}>
+                    <Text style={{ fontSize: 22, fontWeight: 'bold', color: '#1E4FA8', width: 34 }}>Ⅲ</Text>
+                    <Box style={{ flexDirection: 'column', gap: 6, width: 566 }}>
+                        <Text style={{ fontSize: 21, fontWeight: 'bold', color: '#1A2230' }}>流程割裂，掌握度各记各的</Text>
+                        <Text style={{ fontSize: 18, color: '#4A5568', lineHeight: 1.5 }}>
+                            词表资源、逐词进度、复习时间分散在三处，学习者判断不了「哪些词真的会了」。
+                        </Text>
+                    </Box>
+                </Box>
+            </Box>
+
+            <Box style={{ width: 486, flexDirection: 'column', gap: 18 }}>
+                <Box style={{ flexDirection: 'column', gap: 8, border: '1px solid #D6DCE5', padding: '18px 22px' }}>
+                    <Text style={{ fontSize: 14, color: '#8B97A8', letterSpacing: 1 }}>研究问题</Text>
+                    <Text style={{ fontSize: 22, fontWeight: 'bold', color: '#1A2230', lineHeight: 1.45 }}>
+                        模型的生成能力，怎么才能变成学习者留得下的资产？
+                    </Text>
+                </Box>
+                <Box style={{ flexDirection: 'column', gap: 12 }}>
+                    <Box style={{ flexDirection: 'row', gap: 12, alignItems: 'flex-start' }}>
+                        <Text style={{ fontSize: 16, fontWeight: 'bold', color: '#3D7BD9', width: 26 }}>01</Text>
+                        <Text style={{ fontSize: 17, color: '#1A2230', lineHeight: 1.5, width: 448 }}>
+                            <span style={{ fontWeight: 'bold' }}>闭环可跑通</span>：导入、组词、生成、挑战、复习五段都有真实数据。
+                        </Text>
+                    </Box>
+                    <Box style={{ flexDirection: 'row', gap: 12, alignItems: 'flex-start' }}>
+                        <Text style={{ fontSize: 16, fontWeight: 'bold', color: '#3D7BD9', width: 26 }}>02</Text>
+                        <Text style={{ fontSize: 17, color: '#1A2230', lineHeight: 1.5, width: 448 }}>
+                            <span style={{ fontWeight: 'bold' }}>边界可审计</span>：每次调用可定位到场景、模型、Token 与解析结果。
+                        </Text>
+                    </Box>
+                    <Box style={{ flexDirection: 'row', gap: 12, alignItems: 'flex-start' }}>
+                        <Text style={{ fontSize: 16, fontWeight: 'bold', color: '#3D7BD9', width: 26 }}>03</Text>
+                        <Text style={{ fontSize: 17, color: '#1A2230', lineHeight: 1.5, width: 448 }}>
+                            <span style={{ fontWeight: 'bold' }}>指标可测量</span>：并发、首屏、拼写容错、缓存复用率均有实测值。
+                        </Text>
+                    </Box>
+                </Box>
+            </Box>
+        </Box>
+
+        <Box style={{ flexDirection: 'row', background: '#F7F9FC', alignItems: 'center', padding: '14px 22px', gap: 14 }}>
+            <Box style={{ width: 3, height: 30, background: '#1E4FA8' }} />
+            <Text style={{ fontSize: 18, color: '#1A2230' }}>
+                本文要做的不是「更会生成」，而是把生成结果收进可追踪的任务和可复习的记录里。
+            </Text>
+        </Box>
+    </Box>
+
+    <Box style={{ position: 'absolute', top: 670, left: 60, width: 1160, flexDirection: 'row', justifyContent: 'space-between' }}>
+        <Text style={{ fontSize: 14, color: '#8B97A8' }}>基于大模型的英语学习助手 · 毕业答辩</Text>
+        <Text style={{ fontSize: 14, color: '#8B97A8' }}>02 / 11</Text>
+    </Box>
+</Slide>

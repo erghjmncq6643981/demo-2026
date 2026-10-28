@@ -273,4 +273,83 @@ describe('Wordbook Card Continuous Learning Navigation', () => {
     expect(elements.wordbookCardProgress.textContent).toBe('2 / 4')
     expect(elements.wordbookCardNextBtn.disabled).toBe(false)
   })
+
+  it('shows loading placeholders instead of empty text when ready card detail is still loading', () => {
+    const detailFeature = createWordbookDetailFeature(ctx)
+    const entryWithoutParsed = {
+      id: '301',
+      term: 'afterward',
+      normalizedTerm: 'afterward',
+      status: 'NOT_STARTED',
+      cardStatus: 'ready',
+      meaningText: '(某个事件或时间点) 之后，后来',
+      phonetic: '/ɑ:ftəwəd/',
+      parsed: null,
+    }
+
+    detailFeature.renderWordbookFocus(entryWithoutParsed)
+
+    // Should render the term and title
+    expect(elements.wordbookCardModalTitle.textContent).toBe('单词卡片 · afterward')
+
+    // Should NOT show "暂无例句" or "暂无关联词" when cardStatus is ready but details loading
+    expect(elements.wordbookFocus.innerHTML).not.toContain('暂无例句')
+    expect(elements.wordbookFocus.innerHTML).not.toContain('暂无关联词')
+    expect(elements.wordbookFocus.innerHTML).toContain('完整例句与深度释义')
+    expect(elements.wordbookFocus.innerHTML).toContain('母语认知画像')
+    expect(elements.wordbookFocus.innerHTML).toContain('心智画面加载中')
+    expect(elements.wordbookFocus.innerHTML).toContain('搭配与短语加载中')
+  })
+
+  it('automatically loads word card detail when selecting an entry while card modal is open during audio carousel', async () => {
+    const detailedAfterward = {
+      id: '302',
+      term: 'afterward',
+      normalizedTerm: 'afterward',
+      cardStatus: 'ready',
+      parsed: {
+        definitions: [{ pos: 'adv.', cn: '后来，之后' }],
+        examples: [{ sentence: 'Shortly afterward, he left.', translation: '不久之后，他离开了。' }],
+        collocations: [{ phrase: 'soon afterward', meaning: '不久之后' }],
+      },
+    }
+
+    ctx.request.mockImplementation((url) => {
+      if (url.includes('302')) {
+        return Promise.resolve(detailedAfterward)
+      }
+      return Promise.resolve({})
+    })
+
+    const wordbookFeature = createWordbookProfileFeature(ctx)
+    const summaryEntry = {
+      id: '302',
+      term: 'afterward',
+      normalizedTerm: 'afterward',
+      status: 'NOT_STARTED',
+      cardStatus: 'ready',
+      meaningText: '后来，之后',
+      parsed: null,
+    }
+    state.wordbookEntries = [summaryEntry]
+
+    // Modal is currently open
+    elements.wordbookCardModal.classList.remove('hidden')
+    elements.wordbookFocus.scrollTop = 120
+
+    // During audio carousel onRowChange or selectWordbookEntry:
+    wordbookFeature.selectWordbookEntry(summaryEntry, { silent: true })
+
+    // Immediately shows loading state while detail request was dispatched
+    expect(ctx.request).toHaveBeenCalledWith('/api/v1/learning/wordbook-entries/302')
+
+    // Wait for the async detail to resolve and update the card
+    await Promise.resolve()
+    await Promise.resolve()
+
+    // Focus card should now display full details from server
+    expect(elements.wordbookFocus.innerHTML).toContain('Shortly afterward, he left.')
+    expect(elements.wordbookFocus.innerHTML).toContain('soon afterward')
+    expect(state.selectedEntry.parsed).toBeDefined()
+  })
 })

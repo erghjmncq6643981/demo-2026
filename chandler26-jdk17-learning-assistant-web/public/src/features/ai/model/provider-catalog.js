@@ -15,6 +15,18 @@ export const BUILT_IN_PROVIDERS = {
     chatPath: '/chat/completions',
     models: ['kimi-k3', 'kimi-k2.6', 'kimi-k2.5'],
   },
+  qwen: {
+    label: 'Qwen (通义千问)',
+    baseUrl: 'https://dashscope.aliyuncs.com/compatible-mode/v1',
+    chatPath: '/chat/completions',
+    models: ['qwen3.8-flash'],
+  },
+  glm: {
+    label: 'GLM (智谱 AI)',
+    baseUrl: 'https://open.bigmodel.cn/api/paas/v4',
+    chatPath: '/chat/completions',
+    models: ['GLM-5.3-Flash'],
+  },
 }
 
 function buildProviderCatalog(modelConfigs = []) {

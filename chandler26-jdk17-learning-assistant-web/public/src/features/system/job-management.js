@@ -1,4 +1,5 @@
 import { escapeHtml, formatDateTime } from '/src/shared/text.js'
+import { canAccessSystemAdmin } from '/src/shared/permissions.js'
 
 /**
  * 后台定时任务（JOB）管理员端管理模块。
@@ -8,7 +9,7 @@ export function createJobManagementFeature(ctx) {
   let pollTimer = null
 
   function isAdmin() {
-    return state.preview || state.user?.roleCode === 'ADMIN'
+    return canAccessSystemAdmin(state)
   }
 
   async function loadJobs() {
