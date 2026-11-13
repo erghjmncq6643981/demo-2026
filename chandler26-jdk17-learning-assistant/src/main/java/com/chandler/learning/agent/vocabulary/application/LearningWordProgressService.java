@@ -341,6 +341,39 @@ public class LearningWordProgressService {
         return progress;
     }
 
+    /**
+     * 记录知识反刍句型遮挡独立补全的拼写巩固表现，仅更新跨词本拼写维度进度。
+     */
+    public LearningWordProgress recordRuminationSpellingConsolidation(Long userId, String term, boolean correct,
+                                                                      LocalDateTime nextDueTime) {
+        if (userId == null || !StringUtils.hasText(term)) {
+            return null;
+        }
+        LearningWordProgress progress = find(userId, normalize(term));
+        if (progress == null) {
+            progress = getOrCreate(userId, term, ScenePlanConstants.MASTERY_RECOGNITION);
+        }
+        LocalDateTime now = LocalDateTime.now();
+        int delta = correct ? ReviewConstants.REMEMBERED_MASTERY_DELTA : -ReviewConstants.FORGOTTEN_MASTERY_DELTA;
+        progress.setSpellingScore(clamp(value(progress.getSpellingScore()) + delta));
+        progress.setSpellingStage(correct ? value(progress.getSpellingStage()) + 1 : CommonConstants.ZERO);
+        if (nextDueTime != null) {
+            progress.setSpellingDueTime(nextDueTime);
+        }
+        progress.setSpellingCorrectCount(value(progress.getSpellingCorrectCount()) + (correct ? 1 : 0));
+        progress.setSpellingWrongCount(value(progress.getSpellingWrongCount()) + (correct ? 0 : 1));
+        if (ScenePlanConstants.PROGRESS_UNSEEN.equals(progress.getLearningState())
+                || ScenePlanConstants.PROGRESS_EXPOSED.equals(progress.getLearningState())) {
+            progress.setLearningState(ScenePlanConstants.PROGRESS_LEARNING);
+        } else {
+            progress.setLearningState(resolveLearningState(progress));
+        }
+        progress.setLastLearnedTime(now);
+        progress.setUpdateTime(now);
+        progressMapper.updateById(progress);
+        return progress;
+    }
+
     /** 按条件查询词汇数据。 */
     public LearningWordProgress find(Long userId, String normalizedTerm) {
         if (userId == null || !StringUtils.hasText(normalizedTerm)) {

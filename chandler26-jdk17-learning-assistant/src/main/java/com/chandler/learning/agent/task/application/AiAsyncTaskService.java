@@ -240,6 +240,49 @@ public class AiAsyncTaskService {
         return taskMapper.selectOne(wrapper);
     }
 
+    /** 根据业务幂等键查询最近一条未删除的异步任务，涵盖活动、成功与失败终态。 */
+    public AiAsyncTask findLatestByIdempotencyKey(Long ownerUserId, String taskType, String idempotencyKey) {
+        if (ownerUserId == null || !StringUtils.hasText(taskType) || !StringUtils.hasText(idempotencyKey)) {
+            return null;
+        }
+        return taskMapper.selectLatestByIdempotencyKey(
+                ownerUserId, taskType.trim(), limitIdempotencyKey(idempotencyKey));
+    }
+
+    /** 查询指定业务关联对象（如单词本）与场景下的最新任务，优先返回仍在排队或执行中的任务。 */
+    public AiAsyncTask findLatestByJobAndScenario(Long ownerUserId, String taskType,
+                                                  Long relatedJobId, String scenarioCode) {
+        if (ownerUserId == null || !StringUtils.hasText(taskType)
+                || relatedJobId == null || !StringUtils.hasText(scenarioCode)) {
+            return null;
+        }
+        return taskMapper.selectLatestByJobAndScenario(
+                ownerUserId,
+                taskType.trim(),
+                relatedJobId,
+                scenarioCode.trim(),
+                AiTaskConstants.STATUS_PENDING,
+                AiTaskConstants.STATUS_RUNNING,
+                AiTaskConstants.STATUS_RETRY_WAIT);
+    }
+
+    /** 查询指定业务关联对象（如单词本）下多类型任务列表，优先返回活动任务。 */
+    public List<AiAsyncTask> findRecentByRelatedJobAndTypes(Long ownerUserId, Long relatedJobId,
+                                                            List<String> taskTypes, int limit) {
+        if (ownerUserId == null || relatedJobId == null || taskTypes == null || taskTypes.isEmpty()) {
+            return List.of();
+        }
+        int boundedLimit = Math.max(1, Math.min(limit, AiTaskConstants.MAX_PAGE_SIZE));
+        return taskMapper.selectRecentByRelatedJobAndTypes(
+                ownerUserId,
+                relatedJobId,
+                taskTypes,
+                AiTaskConstants.STATUS_PENDING,
+                AiTaskConstants.STATUS_RUNNING,
+                AiTaskConstants.STATUS_RETRY_WAIT,
+                boundedLimit);
+    }
+
     /** 查询指定计划下所有处于活动状态的场景生成或重构任务对应的推荐日期。 */
     public Set<LocalDate> findActiveGeneratingDatesForPlan(Long ownerUserId, Long planId) {
         if (ownerUserId == null || planId == null) {

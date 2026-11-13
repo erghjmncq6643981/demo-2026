@@ -12,6 +12,7 @@ public enum LearningActivityEventType {
     SCENE_COMPLETED("scene_completed", "完成场景学习"),
     ARTICLE_STARTED("article_started", "开始语境精读"),
     ARTICLE_COMPLETED("article_completed", "完成语境精读"),
+    RUMINATION_SENTENCE_PRACTICED("rumination_sentence_practiced", "完成反刍句型练习"),
     AUDIO_PLAYED("audio_played", "有效播放音频");
 
     private final String code;

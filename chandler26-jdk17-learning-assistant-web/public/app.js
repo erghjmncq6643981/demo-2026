@@ -21,7 +21,7 @@ import {
   tagLabel,
 } from '/src/shared/vocabulary.js'
 import { createWordbookTransferFeature } from '/src/features/vocabulary/transfer.js'
-import { createWordbookArticleFeature } from '/src/features/reading/article.js'
+import { createRuminationFeature } from '/src/features/rumination/rumination.js'
 import { createScenePlanFeature } from '/src/features/learning/scene-plan/scene-plan.js'
 import { createProfileFeature } from '/src/features/identity/profile.js'
 import { createSpeechFeature } from '/src/features/learning/speech/speech.js?v=20260930-02'
@@ -77,8 +77,6 @@ function setGlobalFocusMode(viewId, active) {
     state.articleFocusMode = false
     state.reviewFocusMode = false
     elements.articleStudyToolbar?.classList.remove('hidden')
-    elements.articleHistoryPanel?.classList.remove('hidden')
-    elements.articleStudyLayout?.classList.remove('article-focus-layout')
     elements.toggleArticleFocusModeBtn?.classList.remove('active')
     if (elements.toggleArticleFocusModeBtn) elements.toggleArticleFocusModeBtn.textContent = '专注模式'
     elements.reviewHeaderPanel?.classList.remove('hidden')
@@ -110,7 +108,7 @@ const {
   initSpeechSettings,
 } = speechFeature
 
-articleFeature = createWordbookArticleFeature({
+articleFeature = createRuminationFeature({
   state,
   elements,
   request,
@@ -119,7 +117,9 @@ articleFeature = createWordbookArticleFeature({
   logEvent,
   confirmAction,
   speakSentence,
+  stopSpeaking,
   setFocusMode: setGlobalFocusMode,
+  openQuickLookup: (term, options) => studyFacade.openQuickLookup(term, options),
 })
 
 scenePlanFeature = createScenePlanFeature({
@@ -174,18 +174,16 @@ const {
   loadWordbookEntries: profile.loadWordbookEntries,
   changeWordbookPage: profile.changeWordbookPage,
   jumpToWordbookPage: profile.jumpToWordbookPage,
-  loadArticleWords: article.loadArticleWords,
-  loadArticleHistory: article.loadArticleHistory,
-  changeArticleHistoryPage: article.changeArticleHistoryPage,
+  reloadRuminationWorkspace: article.reloadRuminationWorkspace,
+  clearRuminationWorkspace: article.clearRuminationWorkspace,
+  closeRuminationPractice: () => articleFeature?.closeRuminationPractice?.(),
+  setRuminationActive: (active) => articleFeature?.setGraphActive?.(active),
   loadSceneData: scenePlan.loadSceneData,
   clearSceneData: scenePlan.clearSceneData,
   renderProfileMetrics: profile.renderProfileMetrics,
   renderActivityHeatmap: profile.renderActivityHeatmap,
   renderWordbooks: profile.renderWordbooks,
   renderWordbookEntries: profile.renderWordbookEntries,
-  renderArticleWords: article.renderArticleWords,
-  renderArticleHistory: article.renderArticleHistory,
-  renderArticleResult: article.renderArticleResult,
   renderModelConfigs: profile.renderModelConfigs,
   renderAgentConfigs: profile.renderAgentConfigs,
   renderLearningAgentOptions: profile.renderLearningAgentOptions,
@@ -384,17 +382,6 @@ bindAppEvents({
   navigateWordbookCard: profile.navigateWordbookCard,
   generateCurrentWordbookCard: profile.generateCurrentWordbookCard,
   changeArticleWordbook: article.changeArticleWordbook,
-  changeArticleWordPage: article.changeArticleWordPage,
-  loadArticleWords: article.loadArticleWords,
-  loadArticleHistory: article.loadArticleHistory,
-  renderArticleWords: article.renderArticleWords,
-  renderArticleHistory: article.renderArticleHistory,
-  clearArticleSelection: article.clearArticleSelection,
-  recommendArticleWords: article.recommendArticleWords,
-  openArticleStudyModal: article.openArticleStudyModal,
-  closeArticleStudyModal: article.closeArticleStudyModal,
-  generateArticlePreview: article.generateArticlePreview,
-  saveArticleStudy: article.saveArticleStudy,
   loadSceneData: scenePlan.loadSceneData,
   changeSceneWordbook: scenePlan.changeSceneWordbook,
   openVocabularyImport: scenePlan.openVocabularyImport,
@@ -509,6 +496,7 @@ bindAppEvents({
   flushSceneNoteSave: (...args) => scenePlanFeature.flushSceneNoteSave(...args),
   openQuickLookup: studyFacade.openQuickLookup,
   closeQuickLookup: studyFacade.closeQuickLookup,
+  closeRuminationPracticeModal: () => articleFeature?.closeRuminationPractice?.(),
 })
 exposeDebugGlobals({ state, renderRecord: studyFacade.renderRecord, renderReviewCompleteModal, speak, speakSentence, stopSpeaking, setView, setProfileTab })
 

@@ -1,4 +1,5 @@
 import { hideModal, showModal } from '/src/shared/modal.js'
+import { parseVocabularyPayload, renderCognitiveImageCard } from '/src/shared/vocabulary.js'
 
 export function createReviewModalFeature(ctx) {
   const {
@@ -24,9 +25,14 @@ export function createReviewModalFeature(ctx) {
   } = ctx
 
   function renderReviewCompleteModal(entry) {
-    const parsed = entry?.parsed || {}
+    const parsed = parseVocabularyPayload(entry?.parsed || entry?.rawContent)
     const examples = normalizeExamples(parsed).slice(0, 3)
     elements.modalWordTitle.textContent = reviewTargetTerm(entry)
+    if (elements.modalCognitiveImage) {
+      const cognitiveHtml = renderCognitiveImageCard(parsed, { compact: true })
+      elements.modalCognitiveImage.innerHTML = cognitiveHtml
+      elements.modalCognitiveImage.classList.toggle('hidden', !cognitiveHtml)
+    }
     elements.modalExamples.className = examples.length ? 'modal-examples' : 'modal-examples empty'
     elements.modalExamples.innerHTML = examples.length
       ? examples
@@ -50,7 +56,13 @@ export function createReviewModalFeature(ctx) {
   function closeReviewModal(options = {}) {
     if (!elements.reviewCompleteModal) return
     hideModal(elements.reviewCompleteModal)
+    if (elements.modalCognitiveImage) {
+      elements.modalCognitiveImage.innerHTML = ''
+      elements.modalCognitiveImage.classList.add('hidden')
+    }
     state.pendingReviewEntryId = null
+    state.reviewStage = 'copy'
+    state.reviewPeek = false
     if (!options.keepTyped) {
       state.reviewTyped = ''
       state.reviewWrongCount = 0

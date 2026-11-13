@@ -313,7 +313,6 @@ export function createScenePlanFeature(ctx) {
       const isCompleted = plan?.status === 'completed'
       if (elements.sceneUnitEyebrow) elements.sceneUnitEyebrow.textContent = isCompleted ? 'Plan Completed' : (plan ? 'Ready for next scene' : 'Current Scene')
       if (elements.sceneUnitTitle) elements.sceneUnitTitle.textContent = isCompleted ? '计划已圆满完成' : (plan ? '可以生成下一个场景' : '选择一个学习计划')
-      if (elements.sceneUnitSummary) elements.sceneUnitSummary.textContent = isCompleted ? '所有核心词汇与场景挑战已全部学完，可在日历中回顾历史场景。' : (plan?.learningPurpose || '当前场景会显示在这里')
       if (elements.sceneLearningText) { elements.sceneLearningText.className = 'scene-learning-text empty'; elements.sceneLearningText.textContent = isCompleted ? '已完成所有场景学习' : (plan ? '当前没有进行中的场景' : '暂无场景材料') }
       if (elements.sceneTranslation) elements.sceneTranslation.innerHTML = '<p>暂无译文</p>'
       sceneStudy?.renderCoreWords([])
@@ -330,7 +329,6 @@ export function createScenePlanFeature(ctx) {
     const missingCards = asArray(unit.words).some((word) => ['core', 'review'].includes(word.tier) && ['missing', 'failed'].includes(word.cardStatus))
     if (elements.sceneUnitEyebrow) elements.sceneUnitEyebrow.textContent = `Scene ${unit.unitNo || asArray(plan.units).length} · ${unit.scenarioType || 'Vocabulary'}`
     if (elements.sceneUnitTitle) elements.sceneUnitTitle.textContent = unit.title || '未命名场景'
-    if (elements.sceneUnitSummary) { elements.sceneUnitSummary.dataset.tooltip = unit.summary || plan.learningPurpose || ''; elements.sceneUnitSummary.textContent = unit.summary || plan.learningPurpose || '通过当前场景学习相关词汇' }
     if (elements.sceneUnitProgress) elements.sceneUnitProgress.textContent = `${number(unit.completedCoreCount)} / ${number(unit.coreWordCount)}`
     elements.sceneGenerateCardsBtn?.classList.toggle('hidden', !missingCards || plan.status !== 'active')
     elements.sceneScheduleCardsBtn?.classList.toggle('hidden', !missingCards || plan.status !== 'active')

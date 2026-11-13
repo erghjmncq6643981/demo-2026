@@ -88,7 +88,7 @@
   border-radius: 6px;
   cursor: pointer;
   font-size: 12px;
-  transition: all 0.15s ease;
+  transition: background-color var(--motion-fast) var(--motion-ease-standard), border-color var(--motion-fast) var(--motion-ease-standard), color var(--motion-fast) var(--motion-ease-standard);
 }
 
 .recent-chip:hover {
@@ -307,6 +307,78 @@
   flex-shrink: 0;
 }
 
+.quick-lookup-recent-bar {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  font-size: 13px;
+  color: var(--muted, #94a3b8);
+  padding: 4px 2px;
+  margin-top: -4px;
+}
+
+.quick-lookup-recent-bar .recent-title {
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--muted, #94a3b8);
+  white-space: nowrap;
+  flex-shrink: 0;
+}
+
+.quick-recent-chips {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 6px;
+  flex: 1;
+  min-width: 0;
+}
+
+.quick-lookup-recent-bar .recent-chip {
+  background: rgba(255, 255, 255, 0.05);
+  border: 1px solid var(--line, rgba(255, 255, 255, 0.08));
+  color: var(--text-secondary, #cbd5e1);
+  padding: 3px 10px;
+  border-radius: 6px;
+  cursor: pointer;
+  font-size: 12.5px;
+  font-family: inherit;
+  white-space: nowrap;
+  transition: background-color var(--motion-fast) var(--motion-ease-standard), border-color var(--motion-fast) var(--motion-ease-standard), color var(--motion-fast) var(--motion-ease-standard), box-shadow var(--motion-fast) var(--motion-ease-standard);
+}
+
+.quick-lookup-recent-bar .recent-chip:hover {
+  background: rgba(99, 102, 241, 0.22);
+  color: #fff;
+  border-color: var(--primary, #6366f1);
+}
+
+.quick-lookup-recent-bar .recent-chip.active {
+  background: rgba(99, 102, 241, 0.28);
+  color: #a5b4fc;
+  border-color: #6366f1;
+  font-weight: 700;
+  box-shadow: 0 0 6px rgba(99, 102, 241, 0.35);
+}
+
+.quick-lookup-recent-bar .clear-history-link {
+  background: none;
+  border: none;
+  color: var(--muted, #94a3b8);
+  font-size: 11.5px;
+  cursor: pointer;
+  padding: 2px 6px;
+  margin-left: auto;
+  white-space: nowrap;
+  flex-shrink: 0;
+  transition: color 0.15s ease;
+}
+
+.quick-lookup-recent-bar .clear-history-link:hover {
+  color: var(--danger, #ef4444);
+  text-decoration: underline;
+}
+
 .quick-card-hero {
   display: flex;
   justify-content: space-between;
@@ -471,7 +543,7 @@
   border-radius: 6px;
   cursor: pointer;
   white-space: nowrap;
-  transition: all 0.15s ease;
+  transition: background-color var(--motion-fast) var(--motion-ease-standard), border-color var(--motion-fast) var(--motion-ease-standard), color var(--motion-fast) var(--motion-ease-standard), box-shadow var(--motion-fast) var(--motion-ease-standard);
 }
 
 .quick-lemma-standalone-btn:hover {
@@ -503,7 +575,7 @@
   color: var(--text-primary, #e2e8f0);
   font-size: 12px;
   cursor: pointer;
-  transition: all 0.15s ease;
+  transition: background-color var(--motion-fast) var(--motion-ease-standard), border-color var(--motion-fast) var(--motion-ease-standard), color var(--motion-fast) var(--motion-ease-standard);
 }
 
 .quick-inflection-tag:hover {
@@ -639,7 +711,7 @@
   font-size: 13px;
   font-weight: 600;
   cursor: pointer;
-  transition: all 0.2s ease;
+  transition: background-color var(--motion-base) var(--motion-ease-standard), border-color var(--motion-base) var(--motion-ease-standard), color var(--motion-base) var(--motion-ease-standard), transform var(--motion-base) var(--motion-ease-standard);
   white-space: nowrap;
 }
 
@@ -708,6 +780,37 @@
   gap: 6px;
 }
 
+.cognitive-image-card.quick-cognitive-card {
+  margin: 10px 0 6px;
+  padding: 10px 14px;
+  background: linear-gradient(135deg, rgba(30, 41, 59, 0.75), rgba(15, 23, 42, 0.88));
+}
+
+.quick-cognitive-card .cognitive-image-header {
+  gap: 8px;
+  margin-bottom: 6px;
+}
+
+.quick-cognitive-card .cognitive-badge {
+  font-size: 10.5px;
+  padding: 2px 6px;
+}
+
+.quick-cognitive-card .cognitive-title {
+  font-size: 14px;
+}
+
+.quick-cognitive-card .cognitive-desc {
+  font-size: 13px;
+  line-height: 1.55;
+}
+
+.quick-cognitive-card .cognitive-note {
+  margin-top: 6px;
+  padding-top: 6px;
+  font-size: 12px;
+}
+
 .collocation-card-grid {
   display: grid;
   grid-template-columns: repeat(auto-fill, minmax(240px, 1fr));
@@ -720,7 +823,7 @@
   background: rgba(255, 255, 255, 0.035);
   border: 1px solid rgba(255, 255, 255, 0.08);
   border-radius: 10px;
-  transition: all 0.15s ease;
+  transition: background-color var(--motion-fast) var(--motion-ease-standard), border-color var(--motion-fast) var(--motion-ease-standard), transform var(--motion-fast) var(--motion-ease-standard);
   display: flex;
   flex-direction: column;
   gap: 4px;

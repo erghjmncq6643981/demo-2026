@@ -23,6 +23,10 @@ class MapperXmlValidationTest {
                 "mapper/AiChatSessionMapper.xml",
                 "mapper/AiModelCallRecordMapper.xml",
                 "mapper/AiAsyncTaskStepMapper.xml",
+                "mapper/AiAsyncTaskMapper.xml",
+                "mapper/LearningRuminationProbeMapper.xml",
+                "mapper/LearningRuminationSentencePracticeMapper.xml",
+                "mapper/LearningRuminationGraphMapper.xml",
                 "mapper/LearningSceneRelatedWordMapper.xml",
                 "mapper/VocabularyCatalogAnalysisBatchMapper.xml",
                 "mapper/VocabularyCatalogEntryAnalysisMapper.xml",
@@ -147,6 +151,33 @@ class MapperXmlValidationTest {
                 .isTrue();
         assertThat(configuration.hasStatement(
                 "com.chandler.learning.agent.learning.infrastructure.mapper.LearningActivityDailyMapper.selectMetrics"))
+                .isTrue();
+        assertThat(configuration.hasStatement(
+                "com.chandler.learning.agent.task.infrastructure.mapper.AiAsyncTaskMapper.selectLatestByIdempotencyKey"))
+                .isTrue();
+        assertThat(configuration.hasStatement(
+                "com.chandler.learning.agent.task.infrastructure.mapper.AiAsyncTaskMapper.selectLatestByJobAndScenario"))
+                .isTrue();
+        assertThat(configuration.hasStatement(
+                "com.chandler.learning.agent.task.infrastructure.mapper.AiAsyncTaskMapper.selectRecentByRelatedJobAndTypes"))
+                .isTrue();
+        assertThat(configuration.hasStatement(
+                "com.chandler.learning.agent.reading.infrastructure.mapper.LearningRuminationProbeMapper.selectByIdForUpdate"))
+                .isTrue();
+        assertThat(configuration.hasStatement(
+                "com.chandler.learning.agent.reading.infrastructure.mapper.LearningRuminationProbeMapper.markAnsweredAtomically"))
+                .isTrue();
+        assertThat(configuration.hasStatement(
+                "com.chandler.learning.agent.reading.infrastructure.mapper.LearningRuminationSentencePracticeMapper.selectByKeyForUpdate"))
+                .isTrue();
+        assertThat(configuration.hasStatement(
+                "com.chandler.learning.agent.reading.infrastructure.mapper.LearningRuminationSentencePracticeMapper.selectByMaterialIds"))
+                .isTrue();
+        assertThat(configuration.hasStatement(
+                "com.chandler.learning.agent.reading.infrastructure.mapper.LearningRuminationSentencePracticeMapper.countMasterySettledForTargetWord"))
+                .isTrue();
+        assertThat(configuration.hasStatement(
+                "com.chandler.learning.agent.reading.infrastructure.mapper.LearningRuminationGraphMapper.selectByScenarioForUpdate"))
                 .isTrue();
     }
 }

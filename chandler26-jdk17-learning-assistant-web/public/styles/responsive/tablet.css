@@ -19,7 +19,6 @@
   .content-grid,
   .review-layout,
   .agent-config-grid,
-  .article-study-layout,
   .wordbook-layout,
   .login-screen {
     grid-template-columns: 1fr;
@@ -85,6 +84,7 @@
     overflow: auto;
   }
 
+  #ruminationView.view.active,
   #articleStudyView.view.active {
     grid-template-rows: auto auto;
     overflow: auto;
@@ -100,14 +100,12 @@
   }
 
   .wordbook-layout,
-  .article-study-layout,
   .review-layout {
     min-height: auto;
     overflow: visible;
   }
 
   .wordbook-layout > .panel,
-  .article-study-layout > .panel,
   .review-layout > .panel {
     max-height: none;
     overflow: visible;
@@ -116,9 +114,6 @@
 
   #wordbookEntryList,
   #wordbookFocus,
-  .article-word-grid,
-  .article-result,
-  .article-history-list,
   #reviewFocus,
   #reviewNote {
     overflow: visible;
@@ -133,18 +128,6 @@
   #reviewFocus,
   #reviewNote {
     max-height: none;
-  }
-
-  .article-study-layout {
-    grid-template-columns: 1fr;
-  }
-
-  .article-result-panel {
-    order: 1;
-  }
-
-  .article-history-panel {
-    order: 2;
   }
 
   #scenePlanView.view.active {

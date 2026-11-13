@@ -1,5 +1,24 @@
 import { escapeHtml } from '/src/shared/text.js'
-import { normalizeDefinitions, normalizeExamples } from '/src/shared/vocabulary.js'
+import { showModal, hideModal } from '/src/shared/modal.js'
+import { normalizeDefinitions, normalizeExamples, parseVocabularyPayload, renderCognitiveImageCard } from '/src/shared/vocabulary.js'
+import { getRecentSearches, saveRecentSearch, clearRecentSearches } from '/src/features/learning/study/autocomplete.js'
+
+const DIMENSION_LABELS = {
+  peer: '🥬 同类延展',
+  action: '🔪 动作动词',
+  downstream: '🥫 加工产物',
+  attribute: '🍋 感官属性',
+}
+
+const STATUS_LABELS = {
+  mastered: '已掌握',
+  vague: '待反刍',
+  unlearned: '未学',
+}
+
+function clamp(val, min, max) {
+  return Math.max(min, Math.min(max, val))
+}
 
 export function createQuickLookupFeature({
   elements,
@@ -13,58 +32,220 @@ export function createQuickLookupFeature({
 }) {
   let currentLookupTerm = ''
   let isLookingUp = false
+  let currentOpenMode = 'search'
+  let currentNodeContext = null
+  let lastFocusedBeforeOpen = null
+
+  function getDialogPanel() {
+    return elements.quickLookupModal?.querySelector?.('.quick-lookup-modal') || null
+  }
+
+  function applyModalOrigin(origin) {
+    const dialog = getDialogPanel()
+    if (!dialog || !dialog.style) return
+    if (origin && typeof origin.x === 'number' && typeof origin.y === 'number' && typeof window !== 'undefined') {
+      const dx = clamp((origin.x - window.innerWidth / 2) * 0.42, -160, 160)
+      const dy = clamp((origin.y - window.innerHeight / 2) * 0.42, -120, 120)
+      dialog.style.setProperty('--modal-origin-x', `${Math.round(dx)}px`)
+      dialog.style.setProperty('--modal-origin-y', `${Math.round(dy)}px`)
+      dialog.style.setProperty('--modal-origin-scale', '0.9')
+    } else {
+      dialog.style.setProperty('--modal-origin-x', '0px')
+      dialog.style.setProperty('--modal-origin-y', '10px')
+      dialog.style.setProperty('--modal-origin-scale', '0.96')
+    }
+  }
+
+  function renderNodeContext(nodeContext) {
+    if (!elements.quickLookupContext) return
+    if (!nodeContext || currentOpenMode !== 'node') {
+      elements.quickLookupContext.classList.add('hidden')
+      elements.quickLookupContext.innerHTML = ''
+      return
+    }
+    const { scenarioLabel = '', node = {} } = nodeContext
+    const pills = []
+    if (scenarioLabel) pills.push(`<span class="context-pill is-scene">${escapeHtml(scenarioLabel)}</span>`)
+    const dimLabel = DIMENSION_LABELS[node.dimension] || (node.nodeType === 'core' ? '✨ 考纲核心' : '✨ 4D 衍生')
+    if (dimLabel) pills.push(`<span class="context-pill">${escapeHtml(dimLabel)}</span>`)
+    const statusLabel = STATUS_LABELS[node.status]
+    if (statusLabel) pills.push(`<span class="context-pill is-status-${escapeHtml(node.status || 'unlearned')}">${escapeHtml(statusLabel)}</span>`)
+    elements.quickLookupContext.innerHTML = pills.join('')
+    elements.quickLookupContext.classList.toggle('hidden', pills.length === 0)
+    if (elements.quickLookupTitle) {
+      elements.quickLookupTitle.textContent = '星系节点词卡'
+    }
+  }
+
+  function applyPresentationMode(mode, nodeContext = null) {
+    currentOpenMode = mode === 'node' ? 'node' : 'search'
+    currentNodeContext = currentOpenMode === 'node' ? nodeContext : null
+    elements.quickLookupModal?.classList?.toggle('is-node-card-mode', currentOpenMode === 'node')
+
+    if (currentOpenMode === 'node') {
+      if (elements.quickLookupEyebrow) elements.quickLookupEyebrow.textContent = 'Galaxy Word Card'
+      if (elements.quickLookupTitle) elements.quickLookupTitle.textContent = '星系节点词卡'
+      renderNodeContext(currentNodeContext)
+      elements.quickLookupToggleSearchBtn?.classList?.remove('hidden')
+    } else {
+      if (elements.quickLookupEyebrow) elements.quickLookupEyebrow.textContent = 'Quick Lookup'
+      if (elements.quickLookupTitle) elements.quickLookupTitle.textContent = '全局快速查词 (⌘K / Ctrl+K)'
+      elements.quickLookupContext?.classList?.add('hidden')
+      elements.quickLookupToggleSearchBtn?.classList?.add('hidden')
+    }
+  }
+
+  function renderRecentSearches() {
+    if (!elements.quickLookupRecentBar || !elements.quickLookupRecentChips) return
+    const list = getRecentSearches()
+    if (!list.length) {
+      elements.quickLookupRecentBar.classList.add('hidden')
+      return
+    }
+    elements.quickLookupRecentBar.classList.remove('hidden')
+    const activeTerm = (currentLookupTerm || elements.quickLookupInput?.value || '').trim().toLowerCase()
+    elements.quickLookupRecentChips.innerHTML = list
+      .map(
+        (t) => `
+          <button type="button" class="recent-chip ${t.toLowerCase() === activeTerm ? 'active' : ''}" data-quick-recent-term="${escapeHtml(t)}" title="查看「${escapeHtml(t)}」">
+            ${escapeHtml(t)}
+          </button>
+        `,
+      )
+      .join('')
+
+    elements.quickLookupRecentChips.querySelectorAll('[data-quick-recent-term]').forEach((btn) => {
+      btn.addEventListener('click', () => {
+        const term = btn.getAttribute('data-quick-recent-term')
+        if (term) {
+          if (elements.quickLookupInput) elements.quickLookupInput.value = term
+          lookup(term)
+        }
+      })
+    })
+  }
 
   function reset() {
     currentLookupTerm = ''
     isLookingUp = false
+    renderRecentSearches()
     if (!elements.quickLookupContent) return
     elements.quickLookupContent.className = 'quick-lookup-content empty'
-    elements.quickLookupContent.innerHTML = '输入任意英文单词快速查看 AI 词卡'
+    const list = getRecentSearches()
+    elements.quickLookupContent.innerHTML = list.length
+      ? '输入英语单词回车查询，或直接点击上方最近查词快速重温'
+      : '输入任意英文单词快速查看 AI 词卡'
   }
 
   function showLoading(term) {
     if (!elements.quickLookupContent) return
     elements.quickLookupContent.className = 'quick-lookup-content loading'
+    const previewDef = currentOpenMode === 'node' ? currentNodeContext?.node?.definition : ''
     elements.quickLookupContent.innerHTML = `
-      <div class="quick-lookup-loading">
-        <span class="quick-lookup-loading-icon">⏳</span>
-        <span>正在查询「<strong>${escapeHtml(term)}</strong>」AI 词卡...</span>
+      ${currentOpenMode === 'node' ? `
+        <div class="quick-card-hero quick-card-loading-preview">
+          <div>
+            <div class="quick-card-title-row">
+              <h4>${escapeHtml(term)}</h4>
+              <span class="mini-pill">词卡加载中</span>
+            </div>
+            ${previewDef ? `<p class="quick-loading-def">${escapeHtml(previewDef)}</p>` : ''}
+          </div>
+          <span class="quick-loading-tag">⏳ 同步音标与认知画像...</span>
+        </div>
+      ` : `
+        <div class="quick-lookup-loading">
+          <span class="quick-lookup-loading-icon">⏳</span>
+          <span>正在查询「<strong>${escapeHtml(term)}</strong>」AI 词卡...</span>
+        </div>
+      `}
+      <div class="quick-card-skeleton" aria-hidden="true">
+        <div class="skeleton-bar is-lg"></div>
+        <div class="skeleton-bar is-md"></div>
+        <div class="skeleton-block"></div>
       </div>
     `
   }
 
-  function open(initialTerm = '') {
+  function open(initialTerm = '', options = {}) {
     if (!elements.quickLookupModal) return
-    elements.quickLookupModal.classList.remove('hidden')
+    if (typeof document !== 'undefined' && elements.quickLookupModal.classList.contains('hidden')) {
+      const active = document.activeElement
+      if (active && active !== document.body && !elements.quickLookupModal.contains(active)) {
+        lastFocusedBeforeOpen = active
+      }
+    }
     const term = String(initialTerm || '').trim()
+    const mode = options?.mode === 'node' && term ? 'node' : 'search'
+    const nodeContext = mode === 'node'
+      ? { scenarioLabel: options?.scenarioLabel || '', node: options?.node || {} }
+      : null
+
+    applyModalOrigin(options?.origin)
+    applyPresentationMode(mode, nodeContext)
+    showModal(elements.quickLookupModal)
+    renderRecentSearches()
+
     if (term) {
       if (elements.quickLookupInput) {
         elements.quickLookupInput.value = term
-        elements.quickLookupInput.focus()
-        elements.quickLookupInput.select()
-      }
-      lookup(term)
-    } else {
-      if (isLookingUp && currentLookupTerm) {
-        if (elements.quickLookupInput) {
-          elements.quickLookupInput.value = currentLookupTerm
+        if (mode === 'search') {
           elements.quickLookupInput.focus()
           elements.quickLookupInput.select()
         }
-        showLoading(currentLookupTerm)
-      } else {
-        if (elements.quickLookupInput) {
-          elements.quickLookupInput.value = ''
-          elements.quickLookupInput.focus()
-        }
-        reset()
       }
+      if (mode === 'node') {
+        elements.quickLookupCloseBtn?.focus?.({ preventScroll: true })
+      }
+      return lookup(term)
+    }
+
+    if (isLookingUp && currentLookupTerm) {
+      if (elements.quickLookupInput) {
+        elements.quickLookupInput.value = currentLookupTerm
+        elements.quickLookupInput.focus()
+        elements.quickLookupInput.select()
+      }
+      showLoading(currentLookupTerm)
+    } else {
+      if (elements.quickLookupInput) {
+        elements.quickLookupInput.value = ''
+        elements.quickLookupInput.focus()
+      }
+      reset()
     }
   }
 
-  function close() {
+  function close(options = {}) {
     if (!elements.quickLookupModal) return
-    elements.quickLookupModal.classList.add('hidden')
+    const shouldRestoreFocus = options?.restoreFocus !== false
+    const restoreTarget = shouldRestoreFocus ? lastFocusedBeforeOpen : null
+    lastFocusedBeforeOpen = null
+    if (typeof document !== 'undefined' && elements.quickLookupModal.contains(document.activeElement)) {
+      document.activeElement?.blur?.()
+    }
+    hideModal(elements.quickLookupModal)
+    if (shouldRestoreFocus && typeof document !== 'undefined') {
+      let focusTarget =
+        restoreTarget &&
+        (!document.contains || document.contains(restoreTarget)) &&
+        !restoreTarget.closest?.('.hidden')
+          ? restoreTarget
+          : null
+      if (!focusTarget && restoreTarget) {
+        const remainingModals = Array.from(document.querySelectorAll('.modal-backdrop:not(.hidden)'))
+        const topRemaining = remainingModals[remainingModals.length - 1]
+        focusTarget =
+          topRemaining?.querySelector?.('input:not([type="hidden"]):not([disabled]), textarea:not([disabled])') || null
+      }
+      if (focusTarget && typeof focusTarget.focus === 'function') {
+        try {
+          focusTarget.focus({ preventScroll: true })
+        } catch {
+          // 忽略不可聚焦节点异常
+        }
+      }
+    }
   }
 
   async function lookup(term, options = {}) {
@@ -72,6 +253,8 @@ export function createQuickLookupFeature({
     if (!clean) return
     currentLookupTerm = clean
     isLookingUp = true
+    saveRecentSearch(clean)
+    renderRecentSearches()
     showLoading(clean)
 
     const forceRefresh = Boolean(options.forceRefresh)
@@ -93,8 +276,8 @@ export function createQuickLookupFeature({
         method: 'POST',
         body: JSON.stringify({
           term: clean,
-          agentCode: elements.agentSelect?.value || 'english_vocabulary_plan',
-          templateCode: elements.templateSelect?.value || 'vocabulary_card_single',
+          agentCode: 'english_vocabulary',
+          templateCode: 'english_vocab_card_json',
           forceRefresh,
         }),
       })
@@ -116,15 +299,8 @@ export function createQuickLookupFeature({
 
   function renderQuickRecord(record) {
     if (!elements.quickLookupContent) return
-    elements.quickLookupContent.className = 'quick-lookup-content'
-    let parsed = record?.parsed || {}
-    if (typeof parsed === 'string') {
-      try {
-        parsed = JSON.parse(parsed)
-      } catch {
-        parsed = {}
-      }
-    }
+    elements.quickLookupContent.className = 'quick-lookup-content quick-card-content-enter'
+    const parsed = parseVocabularyPayload(record?.parsed)
     const term = record?.term || record?.normalizedTerm || parsed?.term || 'Word'
     const ukRaw = parsed?.phonetic?.uk || parsed?.['phonetic.uk'] || parsed?.phonetic_uk || parsed?.uk_phonetic || (typeof parsed?.phonetic === 'string' ? parsed.phonetic : '') || ''
     const usRaw = parsed?.phonetic?.us || parsed?.['phonetic.us'] || parsed?.phonetic_us || parsed?.us_phonetic || ''
@@ -132,6 +308,7 @@ export function createQuickLookupFeature({
     const cleanUs = usRaw ? String(usRaw).replace(/^US\s+/i, '').replace(/^\/+|\/+$/g, '') : ''
     const meanings = normalizeDefinitions(parsed)
     const examples = normalizeExamples(parsed).slice(0, 2)
+    const cognitiveHtml = renderCognitiveImageCard(parsed, { compact: true })
     preloadAudio?.(term, 'us')
     preloadAudio?.(term, 'uk')
 
@@ -176,6 +353,7 @@ export function createQuickLookupFeature({
           </div>
         `).join('')}
       </div>
+      ${cognitiveHtml}
       ${examples.length ? `
         <div class="quick-card-examples">
           <p class="section-subtitle">经典例句</p>
@@ -261,15 +439,27 @@ export function createQuickLookupFeature({
     })
 
     elements.quickLookupContent.querySelector('[data-quick-goto]')?.addEventListener('click', () => {
-      close()
+      close({ restoreFocus: false })
       if (elements.termInput) elements.termInput.value = term
       setView?.('studyView')
       study?.(term)
     })
+    renderRecentSearches()
+  }
+
+  function switchToSearch() {
+    applyPresentationMode('search', null)
+    if (elements.quickLookupInput) {
+      elements.quickLookupInput.value = currentLookupTerm || elements.quickLookupInput.value || ''
+      elements.quickLookupInput.focus()
+      elements.quickLookupInput.select()
+    }
   }
 
   function bind() {
+    renderRecentSearches()
     elements.quickLookupCloseBtn?.addEventListener('click', close)
+    elements.quickLookupToggleSearchBtn?.addEventListener('click', switchToSearch)
     elements.quickLookupModal?.addEventListener('click', (event) => {
       if (event.target === elements.quickLookupModal) close()
     })
@@ -278,6 +468,19 @@ export function createQuickLookupFeature({
       const term = elements.quickLookupInput?.value.trim()
       if (term) lookup(term)
     })
+    elements.clearQuickRecentBtn?.addEventListener('click', (event) => {
+      event.preventDefault()
+      event.stopPropagation()
+      clearRecentSearches()
+      renderRecentSearches()
+      if (!currentLookupTerm) {
+        reset()
+      }
+    })
+  }
+
+  if (typeof window !== 'undefined') {
+    window.__openQuickLookup = open
   }
 
   return {
@@ -285,5 +488,6 @@ export function createQuickLookupFeature({
     close,
     lookup,
     bind,
+    switchToSearch,
   }
 }

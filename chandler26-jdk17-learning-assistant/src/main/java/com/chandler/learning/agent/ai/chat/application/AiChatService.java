@@ -124,7 +124,10 @@ public class AiChatService {
                 availableOutputTokens));
         if (AiInvocationScene.VOCABULARY_SCENE_UNIT.equals(invocationScene)
                 || AiInvocationScene.VOCABULARY_SCENE_RELATED_WORDS.equals(invocationScene)
-                || AiInvocationScene.VOCABULARY_CARD_BATCH.equals(invocationScene)) {
+                || AiInvocationScene.VOCABULARY_CARD_BATCH.equals(invocationScene)
+                || AiInvocationScene.RUMINATION_MATERIAL.equals(invocationScene)
+                || AiInvocationScene.RUMINATION_SCENARIO.equals(invocationScene)
+                || AiInvocationScene.RUMINATION_FISSION.equals(invocationScene)) {
             modelRequest.setFrequencyPenalty(0.3);
             modelRequest.setPresencePenalty(0.1);
         }
@@ -348,7 +351,8 @@ public class AiChatService {
         return switch (invocationScene) {
             case VOCABULARY_CATALOG_ANALYSIS, VOCABULARY_SCENE_UNIT -> 16_000;
             case VOCABULARY_SCENE_RELATED_WORDS, VOCABULARY_CARD_BATCH,
-                 VOCABULARY_CARD_SINGLE, ARTICLE_STUDY_MATERIAL -> 8_000;
+                 VOCABULARY_CARD_SINGLE,
+                 RUMINATION_MATERIAL, RUMINATION_SCENARIO -> 8_000;
             default -> 4_096;
         };
     }

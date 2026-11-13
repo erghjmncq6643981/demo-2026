@@ -48,6 +48,13 @@ public class LearningPlanProgressQueryService {
                 int generatedCoreCount = value(unitMapper.selectGeneratedCoreCount(plan.getId()));
                 int remainingToGenerate = Math.max(0, value(plan.getTotalCatalogWords()) - generatedCoreCount);
                 target = (int) Math.ceil((double) remainingToGenerate / remainingDays);
+            } else {
+                // 当计划已超出结束日期时（历史补学或延期），按计划总天数的日均词量分摊，保持每天 2~3 篇（约 80~115 词）
+                long totalPlanDays = Math.max(1, ChronoUnit.DAYS.between(planStart, planEnd) + 1);
+                int dailyAverage = (int) Math.ceil((double) value(plan.getTotalCatalogWords()) / totalPlanDays);
+                int generatedCoreCount = value(unitMapper.selectGeneratedCoreCount(plan.getId()));
+                int remainingToGenerate = Math.max(0, value(plan.getTotalCatalogWords()) - generatedCoreCount);
+                target = Math.min(remainingToGenerate, Math.max(dailyAverage, 50));
             }
         } else {
             LearningPlanUnit latestUnit = unitMapper.selectOne(new LambdaQueryWrapper<LearningPlanUnit>()

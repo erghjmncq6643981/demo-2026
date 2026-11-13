@@ -161,8 +161,13 @@ export function createSceneOverview({
       startForRemaining.setHours(12, 0, 0, 0)
       planEnd.setHours(12, 0, 0, 0)
       const diffTime = planEnd.getTime() - startForRemaining.getTime()
-      const remainingDays = diffTime <= 0 ? 1 : Math.ceil(diffTime / (1000 * 3600 * 24)) + 1
-      if (remainingDays > 0) suggestedDailyCount = Math.max(8, Math.ceil(remainingWords / remainingDays))
+      const remainingDays = diffTime <= 0 ? 0 : Math.ceil(diffTime / (1000 * 3600 * 24)) + 1
+      if (remainingDays > 0) {
+        suggestedDailyCount = Math.max(8, Math.ceil(remainingWords / remainingDays))
+      } else {
+        const lastUnitWords = asArray(plan.units).slice(-1)[0]?.coreWordCount || 38
+        suggestedDailyCount = Math.min(Math.max(8, Number(lastUnitWords)), remainingWords)
+      }
     }
     const dayDataFor = (key) => asArray(state.sceneCalendarData).find((item) => String(item?.date || '').slice(0, 10) === key)
     elements.sceneCalendar.className = `scene-calendar ${range}`
@@ -190,8 +195,8 @@ export function createSceneOverview({
         count = 0
         label = '计划外'
       } else if (isPast) {
-        count = 0
-        label = '未生成'
+        count = suggestedDailyCount
+        label = suggestedDailyCount === 0 ? '已全部生成' : '待生成'
       } else {
         count = suggestedDailyCount
         label = suggestedDailyCount === 0 ? '已全部生成' : (isToday ? '待生成' : '预计待挑战')

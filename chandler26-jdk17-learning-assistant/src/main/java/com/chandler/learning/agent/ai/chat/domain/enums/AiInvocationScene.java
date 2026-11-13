@@ -29,9 +29,15 @@ public enum AiInvocationScene {
             List.of("terms")),
     VOCABULARY_CATALOG_ANALYSIS("vocabulary_catalog_analysis", "公共词本关联分析", true,
             List.of("entries"), List.of("analysis_version", "words")),
-    ARTICLE_STUDY_MATERIAL("article_study_material", "语境精读材料生成", true,
-            List.of("title", "article", "translation", "vocabulary_focus", "grammar_points", "practice"),
-            List.of("words", "word_count_range", "difficulty", "difficulty_prompt", "remark")),
+    RUMINATION_MATERIAL("rumination_material", "知识反刍场景材料与探针生成", true,
+            List.of("title", "article", "translation", "probes"),
+            List.of("scenario_name", "scenario_prompt", "target_words", "word_definitions")),
+    RUMINATION_SCENARIO("rumination_scenario", "知识反刍自定义场景构建", true,
+            List.of("core_words", "derivations"),
+            List.of("scenario_name", "scenario_prompt", "candidate_words")),
+    RUMINATION_FISSION("rumination_fission", "知识反刍 4D 衍生裂变", true,
+            List.of("expansions"),
+            List.of("scenario_name", "target_word", "target_definition", "existing_terms")),
     VOCABULARY_SCENE_UNIT("vocabulary_scene_unit", "词汇大挑战场景单元生成", true,
             List.of("title", "learning_text", "translation", "vocabulary"),
             List.of("learning_purpose", "unit_no", "candidate_words", "review_words",
@@ -83,7 +89,8 @@ public enum AiInvocationScene {
     public boolean independentAction() {
         return switch (this) {
             case MODEL_CONNECTION_TEST, VOCABULARY_CARD_SINGLE, VOCABULARY_CARD_BATCH,
-                 VOCABULARY_CATALOG_ANALYSIS, ARTICLE_STUDY_MATERIAL,
+                 VOCABULARY_CATALOG_ANALYSIS,
+                 RUMINATION_MATERIAL, RUMINATION_SCENARIO, RUMINATION_FISSION,
                  VOCABULARY_SCENE_UNIT, VOCABULARY_SCENE_RELATED_WORDS -> true;
             case GENERAL_CHAT -> false;
         };

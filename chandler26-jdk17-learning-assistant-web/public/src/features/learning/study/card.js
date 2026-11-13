@@ -7,6 +7,7 @@ import {
   normalizeDefinitions,
   normalizeExamples,
   readText,
+  renderCognitiveImageCard,
   renderRelationItem,
   semanticRelations,
   statusLabel,
@@ -454,19 +455,7 @@ export function createStudyCardFeature(ctx) {
       )
       .join('')
 
-    const cognitive = parsed?.cognitive_image || parsed?.cognitiveImage
-    const cognitiveHtml = cognitive && (cognitive.title || cognitive.description)
-      ? `
-        <div class="cognitive-image-card">
-          <div class="cognitive-image-header">
-            <span class="cognitive-badge">母语认知画像</span>
-            <h5 class="cognitive-title">${escapeHtml(cognitive.title || '核心心智画面')}</h5>
-          </div>
-          <p class="cognitive-desc">${escapeHtml(cognitive.description || '')}</p>
-          ${cognitive.usage_note ? `<div class="cognitive-note"><span>💡 ${escapeHtml(cognitive.usage_note)}</span></div>` : ''}
-        </div>
-      `
-      : ''
+    const cognitiveHtml = renderCognitiveImageCard(parsed)
 
     elements.meaningList.innerHTML = defsHtml + cognitiveHtml
   }

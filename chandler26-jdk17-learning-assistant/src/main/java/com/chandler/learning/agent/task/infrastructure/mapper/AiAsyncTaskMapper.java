@@ -30,4 +30,27 @@ public interface AiAsyncTaskMapper extends BaseMapper<AiAsyncTask> {
                                                 @Param("pendingStatus") String pendingStatus,
                                                 @Param("runningStatus") String runningStatus,
                                                 @Param("retryWaitStatus") String retryWaitStatus);
+
+    /** 根据幂等键查询最近一条未删除的 AI 异步任务。 */
+    AiAsyncTask selectLatestByIdempotencyKey(@Param("ownerUserId") Long ownerUserId,
+                                             @Param("taskType") String taskType,
+                                             @Param("idempotencyKey") String idempotencyKey);
+
+    /** 查询指定单词本与场景下最新一条未删除的异步任务，优先返回仍处于活动状态的任务。 */
+    AiAsyncTask selectLatestByJobAndScenario(@Param("ownerUserId") Long ownerUserId,
+                                             @Param("taskType") String taskType,
+                                             @Param("relatedJobId") Long relatedJobId,
+                                             @Param("scenarioCode") String scenarioCode,
+                                             @Param("pendingStatus") String pendingStatus,
+                                             @Param("runningStatus") String runningStatus,
+                                             @Param("retryWaitStatus") String retryWaitStatus);
+
+    /** 查询指定业务关联对象（如单词本）下多类型异步任务，优先返回仍处于活动状态的任务。 */
+    List<AiAsyncTask> selectRecentByRelatedJobAndTypes(@Param("ownerUserId") Long ownerUserId,
+                                                       @Param("relatedJobId") Long relatedJobId,
+                                                       @Param("taskTypes") List<String> taskTypes,
+                                                       @Param("pendingStatus") String pendingStatus,
+                                                       @Param("runningStatus") String runningStatus,
+                                                       @Param("retryWaitStatus") String retryWaitStatus,
+                                                       @Param("limit") Integer limit);
 }

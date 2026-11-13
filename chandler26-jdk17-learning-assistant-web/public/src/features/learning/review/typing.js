@@ -1,4 +1,6 @@
 import { playUiTone } from '/src/shared/audio.js'
+import { showCelebrationEffect as triggerCelebrationEffect } from '/src/shared/celebration.js'
+import { renderMaskedLetters, schedulePeekTimer } from '/src/shared/typing-engine.js'
 
 export function createReviewTypingFeature(ctx) {
   const {
@@ -8,6 +10,7 @@ export function createReviewTypingFeature(ctx) {
     renderReviewFocus,
     renderReviewCompleteModal,
     showCelebration,
+    speak,
   } = ctx
 
   function updateReviewProgressBadge() {
@@ -16,43 +19,99 @@ export function createReviewTypingFeature(ctx) {
     elements.reviewProgressBadge.textContent = total ? `${state.currentReviewIndex + 1} / ${total}` : '0 / 0'
   }
 
+  function cancelPeekTimer() {
+    if (triggerPeek.timer) {
+      window.clearTimeout(triggerPeek.timer)
+      triggerPeek.timer = null
+    }
+  }
+
   function goToReviewOffset(offset) {
     const total = state.reviewEntries.length
     if (!total) return
     const nextIndex = Math.max(0, Math.min(total - 1, state.currentReviewIndex + offset))
     if (nextIndex === state.currentReviewIndex && state.currentReviewEntry) return
+    cancelPeekTimer()
     state.currentReviewIndex = nextIndex
+    state.reviewStage = 'copy'
+    state.reviewPeek = false
+    state.reviewTyped = ''
+    state.reviewWrongCount = 0
     ctx.selectReviewEntry(state.reviewEntries[nextIndex])
   }
 
-  function renderTypingLetters(term, typed) {
-    return [...String(term || '')]
-      .map((letter, index) => {
-        const className = index < typed.length ? 'typed' : index === typed.length ? 'current' : ''
-        const label = letter === ' ' ? 'Space' : letter
-        return `<span class="${className}">${escapeHtml(label)}</span>`
-      })
-      .join('')
+  function renderTypingLetters(term, typed, stage = 'copy', peek = false) {
+    return renderMaskedLetters(term, typed, {
+      stage,
+      peek,
+      wrongCount: state.reviewWrongCount || 0,
+      hintAfterWrongs: 3,
+      escapeHtml,
+    })
+  }
+
+  function triggerPeek() {
+    state.reviewPeek = true
+    renderReviewFocus(state.currentReviewEntry)
+    triggerPeek.timer = schedulePeekTimer(triggerPeek.timer, () => {
+      state.reviewPeek = false
+      if (state.activeView === 'reviewView' && state.currentReviewEntry) {
+        renderReviewFocus(state.currentReviewEntry)
+      }
+    }, 1200)
+  }
+
+  function isEditableOrBlockedTarget(el) {
+    if (!el || typeof el.tagName !== 'string') return false
+    const tag = el.tagName.toLowerCase()
+    return ['input', 'textarea', 'select'].includes(tag) || Boolean(el.isContentEditable)
   }
 
   function handleReviewKeydown(event) {
     if (!event || typeof event.key !== 'string') return
+    if (event.isComposing || event.keyCode === 229) return
     if (state.activeView !== 'reviewView' || !state.currentReviewEntry || !state.token) return
-    const activeTag = document.activeElement?.tagName?.toLowerCase()
-    if (['input', 'textarea', 'select'].includes(activeTag) || elements.reviewCompleteModal?.classList.contains('hidden') === false || elements.reviewNoteModal?.classList.contains('hidden') === false) return
+    const hasOpenModal = typeof document !== 'undefined' && Boolean(document.querySelector?.('.modal-backdrop:not(.hidden)'))
+    if (
+      hasOpenModal ||
+      isEditableOrBlockedTarget(document.activeElement) ||
+      isEditableOrBlockedTarget(event.target) ||
+      elements.reviewCompleteModal?.classList.contains('hidden') === false ||
+      elements.reviewNoteModal?.classList.contains('hidden') === false
+    ) {
+      return
+    }
     if (event.altKey || event.ctrlKey || event.metaKey) return
+
+    if (event.key === 'Tab') {
+      if (state.reviewStage === 'recall') {
+        event.preventDefault()
+        triggerPeek()
+      }
+      return
+    }
+
     if (event.key === 'Backspace') {
       event.preventDefault()
       state.reviewTyped = (state.reviewTyped || '').slice(0, -1)
-      renderReviewFocus(state.currentReviewEntry)
-      return
-    }
-    if (event.key === 'Escape') {
-      state.reviewTyped = ''
       state.reviewWrongCount = 0
       renderReviewFocus(state.currentReviewEntry)
       return
     }
+
+    if (event.key === 'Escape') {
+      cancelPeekTimer()
+      if (state.reviewStage === 'recall' && !state.reviewTyped) {
+        state.reviewStage = 'copy'
+      } else {
+        state.reviewTyped = ''
+      }
+      state.reviewWrongCount = 0
+      state.reviewPeek = false
+      renderReviewFocus(state.currentReviewEntry)
+      return
+    }
+
     if (event.key.length !== 1) return
     const term = reviewTargetTerm(state.currentReviewEntry)
     const typed = state.reviewTyped || ''
@@ -60,17 +119,43 @@ export function createReviewTypingFeature(ctx) {
     if (!expected) return
     event.preventDefault()
     if (event.key.toLowerCase() === expected.toLowerCase()) {
+      const targetEntry = state.currentReviewEntry
       state.reviewTyped = typed + expected
+      // 每输入正确一个字母即重置当前字母错误计数，避免历史失误提前剧透下一个字母
+      state.reviewWrongCount = 0
       playUiTone('correct')
       renderReviewFocus(state.currentReviewEntry)
       if (state.reviewTyped.length === term.length) {
-        window.setTimeout(() => completeReviewTyping(), 120)
+        if (state.reviewStage !== 'recall') {
+          // 阶段一（跟敲）完成 -> 过渡到阶段二（遮挡默写）
+          window.setTimeout(() => {
+            if (state.activeView === 'reviewView' && state.currentReviewEntry === targetEntry) {
+              cancelPeekTimer()
+              state.reviewStage = 'recall'
+              state.reviewTyped = ''
+              state.reviewWrongCount = 0
+              state.reviewPeek = false
+              renderReviewFocus(state.currentReviewEntry)
+              speak?.(term, elements?.voiceSelect?.value)
+            }
+          }, 180)
+        } else {
+          // 阶段二（默写）完成 -> 触发结算弹窗与音效喝彩
+          window.setTimeout(() => {
+            if (state.activeView === 'reviewView' && state.currentReviewEntry === targetEntry) {
+              completeReviewTyping()
+            }
+          }, 180)
+        }
       }
       return
     }
     state.reviewWrongCount += 1
     playUiTone('wrong')
     shakeTypingBoard()
+    if (state.reviewStage === 'recall' && state.reviewWrongCount >= 3) {
+      renderReviewFocus(state.currentReviewEntry)
+    }
   }
 
   function reviewTargetTerm(entry) {
@@ -88,33 +173,29 @@ export function createReviewTypingFeature(ctx) {
   function completeReviewTyping() {
     const entry = state.currentReviewEntry
     if (!entry) return
+    cancelPeekTimer()
     state.pendingReviewEntryId = entry.id
     playUiTone('success')
-    renderReviewCompleteModal(entry)
-    showCelebration()
+    renderReviewCompleteModal?.(entry)
+    if (typeof showCelebration === 'function') {
+      showCelebration()
+    } else {
+      showCelebrationEffect()
+    }
   }
 
   function showCelebrationEffect() {
-    const layer = elements.celebrationLayer
-    if (!layer) return
-    layer.innerHTML = Array.from({ length: 34 }, (_, index) => {
-      const left = Math.round(Math.random() * 100)
-      const delay = Math.round(Math.random() * 260)
-      const color = ['#818cf8', '#60a5fa', '#7dd3a8', '#facc6b', '#fb7185'][index % 5]
-      return `<span style="left:${left}%; animation-delay:${delay}ms; background:${color}"></span>`
-    }).join('')
-    layer.classList.add('show')
-    window.clearTimeout(showCelebrationEffect.timer)
-    showCelebrationEffect.timer = window.setTimeout(() => {
-      layer.classList.remove('show')
-      layer.innerHTML = ''
-    }, 1500)
+    const layer =
+      elements.celebrationLayer ||
+      (typeof document !== 'undefined' ? document.getElementById('celebrationLayer') : null)
+    triggerCelebrationEffect(layer)
   }
 
   return {
     updateReviewProgressBadge,
     goToReviewOffset,
     renderTypingLetters,
+    triggerPeek,
     handleReviewKeydown,
     reviewTargetTerm,
     shakeTypingBoard,

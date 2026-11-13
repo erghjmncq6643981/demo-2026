@@ -1,0 +1,88 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "https://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.chandler.learning.agent.reading.infrastructure.mapper.LearningRuminationSentencePracticeMapper">
+
+    <select id="selectByKeyForUpdate"
+            resultType="com.chandler.learning.agent.reading.domain.entity.LearningRuminationSentencePractice">
+        SELECT
+            id,
+            create_by AS createBy,
+            update_by AS updateBy,
+            create_time AS createTime,
+            update_time AS updateTime,
+            deleted,
+            version,
+            user_id AS userId,
+            wordbook_id AS wordbookId,
+            material_id AS materialId,
+            sentence_index AS sentenceIndex,
+            target_word AS targetWord,
+            surface_form AS surfaceForm,
+            sentence_text AS sentenceText,
+            copy_count AS copyCount,
+            last_copy_accuracy AS lastCopyAccuracy,
+            cloze_attempt_count AS clozeAttemptCount,
+            cloze_assisted_count AS clozeAssistedCount,
+            cloze_independent_passed AS clozeIndependentPassed,
+            mastery_settled AS masterySettled,
+            last_practiced_time AS lastPracticedTime
+        FROM learning_rumination_sentence_practice
+        WHERE user_id = #{userId}
+          AND material_id = #{materialId}
+          AND sentence_index = #{sentenceIndex}
+          AND target_word = #{targetWord}
+          AND deleted = 0
+        LIMIT 1
+        FOR UPDATE
+    </select>
+
+    <select id="selectByMaterialIds"
+            resultType="com.chandler.learning.agent.reading.domain.entity.LearningRuminationSentencePractice">
+        SELECT
+            id,
+            create_by AS createBy,
+            update_by AS updateBy,
+            create_time AS createTime,
+            update_time AS updateTime,
+            deleted,
+            version,
+            user_id AS userId,
+            wordbook_id AS wordbookId,
+            material_id AS materialId,
+            sentence_index AS sentenceIndex,
+            target_word AS targetWord,
+            surface_form AS surfaceForm,
+            sentence_text AS sentenceText,
+            copy_count AS copyCount,
+            last_copy_accuracy AS lastCopyAccuracy,
+            cloze_attempt_count AS clozeAttemptCount,
+            cloze_assisted_count AS clozeAssistedCount,
+            cloze_independent_passed AS clozeIndependentPassed,
+            mastery_settled AS masterySettled,
+            last_practiced_time AS lastPracticedTime
+        FROM learning_rumination_sentence_practice
+        WHERE user_id = #{userId}
+          AND deleted = 0
+          AND material_id IN
+        <foreach collection="materialIds" item="materialId" open="(" separator="," close=")">
+            #{materialId}
+        </foreach>
+        ORDER BY sentence_index ASC, id ASC
+    </select>
+
+    <select id="countMasterySettledForTargetWord" resultType="int">
+        SELECT COUNT(1)
+        FROM learning_rumination_sentence_practice
+        WHERE user_id = #{userId}
+          AND material_id = #{materialId}
+          AND target_word = #{targetWord}
+          AND mastery_settled = 1
+          AND deleted = 0
+    </select>
+
+    <delete id="deleteByMaterialId">
+        DELETE FROM learning_rumination_sentence_practice
+        WHERE user_id = #{userId}
+          AND material_id = #{materialId}
+    </delete>
+</mapper>

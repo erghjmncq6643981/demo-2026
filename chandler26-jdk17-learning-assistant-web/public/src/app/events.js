@@ -1,4 +1,5 @@
 import { hideModal } from '/src/shared/modal.js'
+import { applyPlatformShortcutHints } from '/src/shared/shortcuts.js'
 import { syncCurrentWordbookId } from '/src/shared/wordbook.js'
 import { bindKeyboardShortcuts } from '/src/app/keyboard-shortcuts.js'
 
@@ -99,16 +100,6 @@ export function bindAppEvents(ctx) {
     openRelatedWordsModal,
     closeRelatedWordsModal,
     renderSceneRelatedWords,
-    loadArticleWords,
-    loadArticleHistory,
-    changeArticleHistoryPage,
-    changeArticleWordPage,
-    clearArticleSelection,
-    recommendArticleWords,
-    openArticleStudyModal,
-    closeArticleStudyModal,
-    generateArticlePreview,
-    saveArticleStudy,
     openWordbookModal,
     closeWordbookModal,
     createWordbook,
@@ -289,26 +280,8 @@ elements.wordbookSelect?.addEventListener('change', () => {
 })
 elements.toggleWordbookFocusModeBtn?.addEventListener('click', toggleWordbookFocusMode)
 elements.articleWordbookSelect?.addEventListener('change', () => changeArticleWordbook(elements.articleWordbookSelect.value))
-elements.articleStatusFilter?.addEventListener('change', () => {
-  state.articleWordPage = 1
-  loadArticleWords()
-})
 elements.toggleArticleFocusModeBtn?.addEventListener('click', toggleArticleFocusMode)
 elements.toggleReviewFocusModeBtn?.addEventListener('click', toggleReviewFocusMode)
-elements.articlePrefixInput?.addEventListener('input', () => {
-  state.articlePrefixFilter = elements.articlePrefixInput.value.trim()
-  state.articleWordPage = 1
-  loadArticleWords()
-})
-elements.articleWordPrevBtn?.addEventListener('click', () => changeArticleWordPage(-1))
-elements.articleWordNextBtn?.addEventListener('click', () => changeArticleWordPage(1))
-elements.articleReloadWordsBtn?.addEventListener('click', () => {
-  loadArticleWords()
-  loadArticleHistory()
-})
-elements.articleReloadHistoryBtn?.addEventListener('click', loadArticleHistory)
-elements.articleHistoryPrevBtn?.addEventListener('click', () => changeArticleHistoryPage(-1))
-elements.articleHistoryNextBtn?.addEventListener('click', () => changeArticleHistoryPage(1))
 elements.sceneWordbookSelect?.addEventListener('change', () => changeSceneWordbook())
 elements.sceneReloadBtn?.addEventListener('click', loadSceneData)
 elements.openScenePlanModalBtn?.addEventListener('click', openScenePlanModal)
@@ -413,16 +386,6 @@ elements.sceneBackToPlanBtn?.addEventListener('click', backToSceneOverview)
 elements.sceneVocabularyChallengeBtn?.addEventListener('click', showSceneChallengeWords)
 elements.sceneChallengeBackBtn?.addEventListener('click', backToSceneReading)
 elements.sceneChallengeStartBtn?.addEventListener('click', startSceneChallenge)
-elements.articleClearSelectionBtn?.addEventListener('click', clearArticleSelection)
-elements.articleRecommendWordsBtn?.addEventListener('click', recommendArticleWords)
-elements.articleGenerateBtn?.addEventListener('click', openArticleStudyModal)
-elements.closeArticleStudyModalBtn?.addEventListener('click', closeArticleStudyModal)
-elements.cancelArticleStudyBtn?.addEventListener('click', closeArticleStudyModal)
-elements.articleStudyModal?.addEventListener('click', (event) => {
-  if (event.target === elements.articleStudyModal) closeArticleStudyModal()
-})
-elements.articlePreviewGenerateBtn?.addEventListener('click', () => generateArticlePreview({ forceRefresh: Boolean(state.articleDraftRecord) }))
-elements.saveArticleStudyBtn?.addEventListener('click', saveArticleStudy)
 elements.reloadSystemLogsBtn?.addEventListener('click', loadSystemLogs)
 elements.reloadAiTasksBtn?.addEventListener('click', loadAiTasks)
 elements.aiTaskStatusFilter?.addEventListener('change', renderAiTasks)
@@ -458,7 +421,7 @@ function updateSentencePlayButtons(sentence, isPlaying) {
     .trim()
     .toLowerCase()
 
-  const query = '[data-sentence-index], [data-modal-sentence], [data-forgotten-sentence], [data-focus-sentence], [data-quick-sentence]'
+  const query = '.sentence-play-btn[data-sentence-index], [data-modal-sentence], [data-forgotten-sentence], [data-focus-sentence], [data-quick-sentence]'
   document.querySelectorAll(query).forEach((button) => {
     const btnText = (
       button.getAttribute('data-sentence-text') ||
@@ -588,6 +551,7 @@ elements.aiSessionNextBtn?.addEventListener('click', () => systemManagement?.cha
 elements.reloadSystemJobsBtn?.addEventListener('click', () => systemManagement?.loadJobs())
 elements.closeAiSessionDetailBtn?.addEventListener('click', () => systemManagement?.closeDetail())
 elements.aiSessionDetailModal?.addEventListener('click', (event) => { if (event.target === elements.aiSessionDetailModal) systemManagement?.closeDetail() })
+  applyPlatformShortcutHints(document)
   bindKeyboardShortcuts(ctx)
 
   window.addEventListener('unhandledrejection', (event) => {

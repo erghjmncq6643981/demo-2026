@@ -1,5 +1,5 @@
 import { escapeHtml } from '/src/shared/text.js'
-import { cleanPhonetic, normalizeArray, renderCollocationMini, renderRelationItem, semanticRelations, statusLabel } from '/src/shared/vocabulary.js'
+import { cleanPhonetic, normalizeArray, renderCognitiveImageCard, renderCollocationMini, renderRelationItem, semanticRelations, statusLabel } from '/src/shared/vocabulary.js'
 
 export function createWordbookDetailFeature(ctx) {
   const {
@@ -120,7 +120,6 @@ export function createWordbookDetailFeature(ctx) {
       const c = cleanPhonetic(pSingle)
       phoneticItems.push({ type: 'us', label: '', text: c.startsWith('[') && c.endsWith(']') ? c : `/${c}/` })
     }
-    const cognitiveImage = parsed?.cognitive_image || parsed?.cognitiveImage || null
     const etymology = parsed?.etymology || null
     const definitionsHtml = definitions.length
       ? definitions
@@ -131,19 +130,9 @@ export function createWordbookDetailFeature(ctx) {
           .join('')
       : '<div class="empty">暂无释义</div>'
 
-    const cognitiveImageHtml = cognitiveImage && (cognitiveImage.title || cognitiveImage.description)
+    const renderedCognitiveImage = renderCognitiveImageCard(parsed)
+    const cognitiveImageHtml = renderedCognitiveImage || (isDetailLoading
       ? `
-        <div class="cognitive-image-card">
-          <div class="cognitive-image-header">
-            <span class="cognitive-badge">母语认知画像</span>
-            <h5 class="cognitive-title">${escapeHtml(cognitiveImage.title || '核心心智画面')}</h5>
-          </div>
-          <p class="cognitive-desc">${escapeHtml(cognitiveImage.description || '')}</p>
-          ${cognitiveImage.usage_note ? `<div class="cognitive-note"><span>💡 ${escapeHtml(cognitiveImage.usage_note)}</span></div>` : ''}
-        </div>
-      `
-      : (isDetailLoading
-        ? `
           <div class="cognitive-image-card cognitive-image-card-loading">
             <div class="cognitive-image-header">
               <span class="cognitive-badge">母语认知画像</span>
@@ -152,7 +141,7 @@ export function createWordbookDetailFeature(ctx) {
             <p class="cognitive-desc">正在拉取该单词的母语认知画像与语境构建...</p>
           </div>
         `
-        : '')
+      : '')
 
     const etymologyComponents = Array.isArray(etymology?.components) ? etymology.components : []
     const etymologyFamily = Array.isArray(etymology?.word_family) ? etymology.word_family : []

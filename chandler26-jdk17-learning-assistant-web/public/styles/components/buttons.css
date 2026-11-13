@@ -162,7 +162,7 @@
 }
 
 .example-item .icon-button.playing,
-[data-sentence-index].playing,
+.sentence-play-btn[data-sentence-index].playing,
 [data-modal-sentence].playing,
 [data-forgotten-sentence].playing,
 [data-focus-sentence].playing,
@@ -183,7 +183,7 @@
   color: var(--text-secondary);
   border-color: var(--line);
   padding: 4px 8px;
-  transition: all 0.15s ease;
+  transition: border-color var(--motion-fast) var(--motion-ease-standard), color var(--motion-fast) var(--motion-ease-standard), background-color var(--motion-fast) var(--motion-ease-standard);
 }
 
 .scene-tts-rate-btn:hover {

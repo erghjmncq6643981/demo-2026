@@ -1,5 +1,6 @@
 import { createReviewModalFeature } from '/src/features/learning/review/modal.js'
 import { createReviewTypingFeature } from '/src/features/learning/review/typing.js'
+import { formatShortcutCombo } from '/src/shared/shortcuts.js'
 
 export function createReviewFeature(ctx) {
   const {
@@ -146,6 +147,8 @@ export function createReviewFeature(ctx) {
       state.currentReviewIndex = 0
       state.currentReviewEntry = entry
     }
+    state.reviewStage = 'copy'
+    state.reviewPeek = false
     state.reviewTyped = ''
     state.reviewWrongCount = 0
     setView('reviewView', { skipReviewReload: true })
@@ -168,6 +171,13 @@ export function createReviewFeature(ctx) {
           state.currentReviewEntry = resolved
           feature.renderReviewFocus(resolved)
           renderNotes(resolved)
+          if (
+            elements.reviewCompleteModal &&
+            !elements.reviewCompleteModal.classList.contains('hidden') &&
+            sameId(state.pendingReviewEntryId || state.currentReviewEntry?.id, entryId)
+          ) {
+            feature.renderReviewCompleteModal?.(resolved)
+          }
         }
         return resolved
       })
@@ -216,6 +226,8 @@ export function createReviewFeature(ctx) {
   function selectReviewEntry(entry) {
     if (!entry) {
       state.currentReviewEntry = null
+      state.reviewStage = 'copy'
+      state.reviewPeek = false
       state.reviewTyped = ''
       state.reviewWrongCount = 0
       feature.renderReviewFocus(null)
@@ -225,6 +237,8 @@ export function createReviewFeature(ctx) {
     const index = state.reviewEntries.findIndex((item) => sameId(item.id, entry.id))
     state.currentReviewIndex = index >= 0 ? index : state.currentReviewIndex
     state.currentReviewEntry = entry
+    state.reviewStage = 'copy'
+    state.reviewPeek = false
     state.reviewTyped = ''
     state.reviewWrongCount = 0
     feature.renderReviewFocus(entry)
@@ -241,26 +255,33 @@ export function createReviewFeature(ctx) {
     }
     const parsed = entryOrRecord.parsed || null
     const term = parsed?.term || entryOrRecord.term || entryOrRecord.normalizedTerm || 'Ready'
+    const isRecall = state.reviewStage === 'recall'
     const definitions = normalizeDefinitions(parsed).slice(0, 3)
-    const letters = feature.renderTypingLetters(term, state.reviewTyped)
+    const letters = feature.renderTypingLetters(term, state.reviewTyped, state.reviewStage, state.reviewPeek)
     const progress = term ? Math.round((state.reviewTyped.length / term.length) * 100) : 0
     const total = state.reviewEntries.length
     const canPrev = total > 1 && state.currentReviewIndex > 0
     const canNext = total > 1 && state.currentReviewIndex < total - 1
+    const maskedTerm = isRecall && !state.reviewPeek
+      ? [...term].map((ch) => (ch === ' ' ? ' ' : '•')).join('')
+      : term
+
     elements.reviewFocus.className = 'review-focus-card'
     elements.reviewFocus.innerHTML = `
       <div class="review-card-fixed">
         <div class="review-card-topline">
           <span>${total ? `${state.currentReviewIndex + 1} / ${total}` : '0 / 0'}</span>
         </div>
-        <h4>${escapeHtml(term)}</h4>
+        <div class="review-card-word-row">
+          <h4 class="${isRecall ? 'recall-masked-title' : ''}">${escapeHtml(maskedTerm)}</h4>
+          <button class="mini-audio-button" type="button" data-review-audio title="播放单词发音">▶ 读音</button>
+        </div>
         <p class="phonetic">${escapeHtml([parsed?.phonetic?.uk, parsed?.phonetic?.us].filter(Boolean).join('    ') || '暂无音标')}</p>
       </div>
       <div class="review-card-scroll">
-        <div class="typing-board" tabindex="0" aria-label="跟敲单词 ${escapeHtml(term)}">
+        <div class="typing-board" tabindex="0" aria-label="${isRecall ? '默写单词' : '跟敲单词'} ${escapeHtml(term)}">
           <div class="typing-letters">${letters}</div>
           <div class="typing-progress"><span style="width: ${progress}%"></span></div>
-          <p class="typing-hint">按键盘逐字输入，错误会提示；完成后查看例句并提交复习结果。</p>
         </div>
         <div class="mini-definition-list">
         ${
@@ -274,13 +295,20 @@ export function createReviewFeature(ctx) {
         <div class="review-card-nav">
           <button class="secondary-button compact" type="button" data-review-prev ${canPrev ? '' : 'disabled'}>上一个</button>
           <button class="secondary-button compact" type="button" data-review-next ${canNext ? '' : 'disabled'}>下一个</button>
+          ${isRecall ? '<button class="secondary-button compact" type="button" data-review-peek-btn title="按 Tab 或点击偷看提示">偷看提示 (Tab)</button>' : ''}
         </div>
         <div style="display: flex; gap: 8px; align-items: center;">
-          <button class="secondary-button compact" type="button" data-review-note title="复习笔记 (快捷键: ⌘E / Ctrl+E)">复习笔记 (⌘E)</button>
+          <button class="secondary-button compact" type="button" data-review-note title="复习笔记 (${escapeHtml(formatShortcutCombo('⌘E'))})">复习笔记 (${escapeHtml(formatShortcutCombo('⌘E'))})</button>
           <button class="icon-action-button" type="button" data-review-transfer="${escapeHtml(entryOrRecord.id)}" title="复制或移动" aria-label="复制或移动">＋</button>
         </div>
       </div>
     `
+    elements.reviewFocus.querySelector('[data-review-audio]')?.addEventListener('click', () => {
+      speak?.(term, elements.voiceSelect?.value)
+    })
+    elements.reviewFocus.querySelector('[data-review-peek-btn]')?.addEventListener('click', () => {
+      feature.triggerPeek?.()
+    })
     elements.reviewFocus.querySelector('[data-review-prev]')?.addEventListener('click', () => feature.goToReviewOffset(-1))
     elements.reviewFocus.querySelector('[data-review-next]')?.addEventListener('click', () => feature.goToReviewOffset(1))
     elements.reviewFocus.querySelector('[data-review-note]')?.addEventListener('click', () => feature.openReviewNoteModal(entryOrRecord))
@@ -295,7 +323,11 @@ export function createReviewFeature(ctx) {
     feature.updateReviewProgressBadge()
   }
 
+  let isSubmittingReview = false
+
   async function submitReview(entryId, result) {
+    if (isSubmittingReview) return
+    isSubmittingReview = true
     setLoading(true)
     try {
       if (state.preview) {
@@ -308,6 +340,8 @@ export function createReviewFeature(ctx) {
           const previewSource = state.previewReviewEntries.find((item) => sameId(item.id, entryId))
           if (previewSource) previewSource.status = entry.status
         }
+        state.reviewStage = 'copy'
+        state.reviewPeek = false
         state.reviewTyped = ''
         state.reviewWrongCount = 0
         feature.closeReviewModal({ skipRender: true })
@@ -331,6 +365,8 @@ export function createReviewFeature(ctx) {
       })
       await Promise.allSettled([loadWordbooks(), loadWordbookEntries()])
       loadActivity()?.catch?.(() => {})
+      state.reviewStage = 'copy'
+      state.reviewPeek = false
       state.reviewTyped = ''
       state.reviewWrongCount = 0
       feature.closeReviewModal({ skipRender: true })
@@ -360,6 +396,7 @@ export function createReviewFeature(ctx) {
       logEvent('error', '提交复习失败', error.message)
       toast(`提交复习失败：${error.message}`)
     } finally {
+      isSubmittingReview = false
       setLoading(false)
     }
   }
@@ -384,6 +421,7 @@ export function createReviewFeature(ctx) {
     renderReviewCompleteModal: (...args) => feature.renderReviewCompleteModal(...args),
     showCelebration: (...args) => feature.showCelebration(...args),
     selectReviewEntry: (...args) => feature.selectReviewEntry(...args),
+    speak: (...args) => speak(...args),
   })
   const modalFeature = createReviewModalFeature({
     state,

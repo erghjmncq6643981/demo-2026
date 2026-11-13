@@ -15,7 +15,7 @@
   border-radius: var(--radius-md, 10px);
   box-shadow: 0 4px 16px rgba(0, 0, 0, 0.18);
   animation: audioBarSlideIn 0.25s cubic-bezier(0.16, 1, 0.3, 1);
-  transition: all 0.2s ease;
+  transition: background-color var(--motion-base) var(--motion-ease-standard), border-color var(--motion-base) var(--motion-ease-standard), box-shadow var(--motion-base) var(--motion-ease-standard);
 }
 
 @keyframes audioBarSlideIn {
@@ -140,7 +140,7 @@
   background: var(--bg-canvas, #0f172a);
   color: var(--text, #e2e8f0);
   cursor: pointer;
-  transition: all 0.15s ease;
+  transition: background-color var(--motion-fast) var(--motion-ease-standard), border-color var(--motion-fast) var(--motion-ease-standard), color var(--motion-fast) var(--motion-ease-standard);
   user-select: none;
 }
 

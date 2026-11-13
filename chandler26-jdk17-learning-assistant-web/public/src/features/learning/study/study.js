@@ -194,6 +194,7 @@ export function createStudyFeature(ctx) {
     findEntryForRecord,
     openQuickLookup: quickLookup.open,
     closeQuickLookup: quickLookup.close,
+    switchQuickLookupToSearch: quickLookup.switchToSearch,
     ...cardFeature,
     ...wordbookFeature,
     ...notesFeature,

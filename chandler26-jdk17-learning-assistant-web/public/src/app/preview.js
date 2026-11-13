@@ -14,9 +14,6 @@ export function loadPreviewData(ctx) {
     renderTemplateConfigs,
     renderWordbooks,
     renderWordbookEntries,
-    renderArticleWords,
-    renderArticleHistory,
-    renderArticleResult,
     renderReviewQueue,
     renderRecord,
     renderActivityHeatmap,
@@ -195,76 +192,6 @@ export function loadPreviewData(ctx) {
     parsed: previewParsed(entry.term),
   }))
   state.previewReviewEntries = state.reviewEntries.slice()
-  state.articleEntries = state.wordbookEntries.slice()
-  state.selectedArticleEntryIds = state.wordbookEntries.slice(0, 3).map((entry) => String(entry.id))
-  state.articleRecords = [
-    {
-      id: 'preview-article',
-      wordbookId: '1',
-      selectedWords: state.wordbookEntries.slice(0, 3).map((entry) => ({
-        entryId: entry.id,
-        term: entry.term,
-        normalizedTerm: entry.normalizedTerm,
-        status: entry.status,
-        partOfSpeech: 'meaning',
-        meaning: previewParsed(entry.term).definitions?.[0]?.meaning || '核心含义',
-      })),
-      wordCountRange: '300-500',
-      difficulty: 'medium',
-      remark: '偏日常语境，重点解释转折句式。',
-      cacheHit: true,
-      studyStatus: 'in_progress',
-      currentStage: 'reading',
-      practiceTotal: 0,
-      practiceCorrect: 0,
-      practiceScore: 0,
-      startedTime: new Date().toISOString(),
-      provider: 'preview',
-      modelName: 'mock-article',
-      sessionId: 'preview',
-      updateTime: new Date().toISOString(),
-      parsed: {
-        title: 'A Difficult Decision',
-        article: 'Mia had to abandon an old plan, but she decided to maintain her confidence. When she saw the contrast between fear and action, she chose to move forward step by step.',
-        translation: '米娅不得不放弃一个旧计划，但她决定保持自信。当她看见恐惧和行动之间的差别时，她选择一步一步向前走。',
-        vocabulary_focus: [
-          { word: 'abandon', meaning: '放弃', usage: 'abandon a plan', sentence: 'She abandoned the old plan.', translation: '她放弃了旧计划。' },
-          { word: 'maintain', meaning: '保持', usage: 'maintain confidence', sentence: 'She maintained her confidence.', translation: '她保持了自信。' },
-          { word: 'contrast', meaning: '差别；对比', usage: 'the contrast between A and B', sentence: 'She noticed the contrast between fear and action.', translation: '她注意到恐惧和行动之间的差别。' },
-        ],
-        grammar_points: [
-          {
-            title: 'When 引导时间状语从句',
-            explanation: 'when 可以连接两个动作，表示“当……时”。',
-            examples: [{ sentence: 'When she saw the contrast, she moved forward.', translation: '当她看到差别时，她向前走。' }],
-          },
-        ],
-        key_points: ['文章把词汇放进连续语境。', '注意 but 和 when 连接的逻辑。'],
-        practice: [
-          {
-            question: 'What did Mia maintain?',
-            options: ['Her confidence.', 'Her old plan.', 'Her fear.', 'Her schedule.'],
-            correct_answer: 'Her confidence.',
-            explanation: '文章第一句说明她保持了自信。',
-          },
-          {
-            question: 'What did Mia abandon?',
-            options: ['An old plan.', 'A new job.', 'A book.', 'A journey.'],
-            correct_answer: 'An old plan.',
-            explanation: '文章开头说明她放弃了旧计划。',
-          },
-          {
-            question: 'What contrast did Mia see?',
-            options: ['Fear and action.', 'Work and rest.', 'Past and future.', 'Light and shadow.'],
-            correct_answer: 'Fear and action.',
-            explanation: '文章第二句给出了恐惧和行动的对比。',
-          },
-        ],
-        study_tips: ['先朗读英文，再对照中文。', '用每个目标词造一个自己的句子。'],
-      },
-    },
-  ]
-  state.currentArticleRecord = state.articleRecords[0]
   state.activity = createPreviewActivity()
   updateAuthView()
   renderModelConfigs()
@@ -275,9 +202,6 @@ export function loadPreviewData(ctx) {
   renderLearningConfigSummary?.()
   renderWordbooks()
   renderWordbookEntries()
-  renderArticleWords?.()
-  renderArticleHistory?.()
-  renderArticleResult?.(state.currentArticleRecord)
   renderReviewQueue(state.reviewEntries)
   renderRecord(previewRecord())
   renderActivityHeatmap()

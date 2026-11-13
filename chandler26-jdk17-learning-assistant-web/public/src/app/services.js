@@ -47,8 +47,6 @@ export function createAppServices({ state, elements }) {
       elements.studyBtn,
       elements.studyRegenerateBtn,
       elements.addToWordbookBtn,
-      elements.articleGenerateBtn,
-      elements.articlePreviewGenerateBtn,
       elements.createWordbookBtn,
       elements.saveAgentBtn,
       elements.saveSpeechBtn,

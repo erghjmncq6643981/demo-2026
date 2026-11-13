@@ -25,6 +25,12 @@ Flyway 默认关闭；启用需设置 `LEARNING_FLYWAY_ENABLED=true`。应用配
 - V117：全局词汇语义资产。
 - V118：历史词条与学习进度词卡状态回刷纠偏。
 - V119：增强单词卡片认知画像、高频搭配与构词积木 Prompt 模板。
+- V120：知识反刍场景星系图谱拓扑、材料文章与微环境探针独立持久化表。
+- V121：知识反刍材料补充 `generation_source` 生成来源标识与 `task_id` 异步任务幂等唯一约束。
+- V122：知识反刍微环境探针补充 `generation_source` 生成来源标识，区分 AI 原生探针与本地语义补齐。
+- V123：知识反刍按句跟敲与目标词遮挡补全巩固记录表 `learning_rumination_sentence_practice`。
+- V124：知识反刍场景材料补充 AI 语音路径 `audio_path` 与合成状态 `audio_status`。
+- V125：彻底下线旧语境精读模块，清理历史遗留表 `learning_article_study_record`。
 
 升级前必须备份数据库并检查 `flyway_schema_history`。如果旧库尚未达到 112，不得直接执行当前迁移，应先使用对应历史版本代码或备份脚本补齐结构。
 

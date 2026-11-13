@@ -23,6 +23,11 @@ export function createShellElements(root = document) {
     deleteConfirmCloseBtn: $('deleteConfirmCloseBtn'),
     deleteConfirmCancelBtn: $('deleteConfirmCancelBtn'),
     deleteConfirmAcceptBtn: $('deleteConfirmAcceptBtn'),
+    openShortcutHelpBtn: $('openShortcutHelpBtn'),
+    shortcutHelpModal: $('shortcutHelpModal'),
+    shortcutHelpContent: $('shortcutHelpContent'),
+    closeShortcutHelpModalBtn: $('closeShortcutHelpModalBtn'),
+    celebrationLayer: $('celebrationLayer'),
     toast: $('toast'),
   }
 }

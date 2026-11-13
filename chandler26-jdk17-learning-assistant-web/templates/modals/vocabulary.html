@@ -1,17 +1,26 @@
     <section class="modal-backdrop hidden" id="quickLookupModal" aria-modal="true" role="dialog" aria-labelledby="quickLookupTitle">
       <div class="config-modal quick-lookup-modal" data-modal-scroll>
         <div class="panel-heading">
-          <div>
-            <p class="eyebrow">Quick Lookup</p>
+          <div class="quick-lookup-heading-main">
+            <p class="eyebrow" id="quickLookupEyebrow">Quick Lookup</p>
             <h3 id="quickLookupTitle">全局快速查词 (⌘K / Ctrl+K)</h3>
+            <p class="quick-lookup-context hidden" id="quickLookupContext"></p>
           </div>
-          <button class="icon-button" id="quickLookupCloseBtn" type="button" title="关闭 (Esc)" aria-label="关闭">×</button>
+          <div class="inline-actions">
+            <button class="secondary-button compact hidden" id="quickLookupToggleSearchBtn" type="button" data-shortcut-title="{MOD}K" data-shortcut-label="🔍 换词 ({SHORTCUT})" title="切换查词输入框 (⌘K / Ctrl+K)">🔍 换词 (⌘K)</button>
+            <button class="icon-button" id="quickLookupCloseBtn" type="button" title="关闭 (Esc)" aria-label="关闭">×</button>
+          </div>
         </div>
         <div class="quick-lookup-body">
           <form class="search-card quick-lookup-input-bar" id="quickLookupForm">
             <input id="quickLookupInput" class="term-input" autocomplete="off" placeholder="输入英语单词后回车（或按 Esc 退出）" />
             <button class="primary-button compact-primary" type="submit">查词</button>
           </form>
+          <div id="quickLookupRecentBar" class="quick-lookup-recent-bar hidden">
+            <span class="recent-title">最近查词:</span>
+            <div id="quickLookupRecentChips" class="quick-recent-chips"></div>
+            <button type="button" id="clearQuickRecentBtn" class="clear-history-link" title="清空查词历史">清空</button>
+          </div>
           <div id="quickLookupContent" class="quick-lookup-content empty">输入任意英文单词快速查看 AI 词卡</div>
         </div>
       </div>

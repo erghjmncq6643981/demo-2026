@@ -28,14 +28,14 @@
                   <div class="showcase-path">场景文章 <span>→</span> 核心词汇 <span>→</span> 词汇挑战</div>
                 </div>
               </article>
-              <article class="showcase-slide" data-showcase-slide aria-label="2 / 4：语境精读" hidden>
-                <h2>语境精读</h2>
+              <article class="showcase-slide" data-showcase-slide aria-label="2 / 4：知识反刍" hidden>
+                <h2>知识反刍</h2>
                 <div class="showcase-demo">
-                  <div class="showcase-tags"><span>目标词 · journey</span><span>目标词 · discover</span></div>
-                  <strong>A journey beyond the city</strong>
-                  <p>Every <mark>journey</mark> is a chance to <mark>discover</mark> something new.</p>
-                  <div class="showcase-definition">journey /ˈdʒɜːni/ <span>旅行；旅程</span></div>
-                  <div class="showcase-path">阅读材料 <span>→</span> 词句理解 <span>→</span> 阅读检测</div>
+                  <div class="showcase-tags"><span>目标词 · lettuce</span><span>目标词 · cucumber</span></div>
+                  <strong>Fresh Picks and Kitchen Chops</strong>
+                  <p>At the farmers' market, I squeezed a head of <mark>lettuce</mark> and picked a firm <mark>cucumber</mark>.</p>
+                  <div class="showcase-definition">4D 裂变扩展 <span>星系图谱联想与语境反刍</span></div>
+                  <div class="showcase-path">星系图谱 <span>→</span> 场景编织 <span>→</span> 巩固检查</div>
                 </div>
               </article>
               <article class="showcase-slide" data-showcase-slide aria-label="3 / 4：复习" hidden>
@@ -61,7 +61,7 @@
               <button type="button" data-showcase-prev aria-label="上一个功能">‹</button>
               <div class="showcase-dots" aria-label="选择功能">
                 <button type="button" data-showcase-index="0" aria-label="查看词汇大挑战" aria-current="true"></button>
-                <button type="button" data-showcase-index="1" aria-label="查看语境精读"></button>
+                <button type="button" data-showcase-index="1" aria-label="查看知识反刍"></button>
                 <button type="button" data-showcase-index="2" aria-label="查看复习"></button>
                 <button type="button" data-showcase-index="3" aria-label="查看单词词卡"></button>
               </div>
@@ -107,17 +107,17 @@
               <span>词汇大挑战</span>
               <small>计划、日历与词汇挑战</small>
             </button>
-            <button class="nav-item" type="button" data-view="studyView">
-              <span>卡片学习</span>
-              <small>查词与 AI 卡片</small>
-            </button>
-            <button class="nav-item" type="button" data-view="articleStudyView">
-              <span>语境精读</span>
-              <small>选词生成阅读材料</small>
-            </button>
             <button class="nav-item" type="button" data-view="wordbookView">
               <span>单词本</span>
               <small>词表与掌握状态</small>
+            </button>
+            <button class="nav-item" type="button" data-view="ruminationView">
+              <span>知识反刍</span>
+              <small>星系图谱与情境反刍</small>
+            </button>
+            <button class="nav-item" type="button" data-view="studyView">
+              <span>卡片学习</span>
+              <small>查词与 AI 卡片</small>
             </button>
             <button class="nav-item" type="button" data-view="reviewView">
               <span>复习</span>
@@ -152,6 +152,7 @@
               </div>
             </div>
             <div class="topbar-actions">
+              <button class="icon-button" id="openShortcutHelpBtn" type="button" title="快捷键帮助 (?)" aria-label="快捷键帮助" data-shortcut-title="快捷键帮助 (?)">?</button>
               <button class="icon-button" id="reloadAgentsBtn" type="button" title="刷新当前数据">↻</button>
             </div>
           </header>
@@ -648,7 +649,6 @@
                     <div>
                       <p class="eyebrow" id="sceneUnitEyebrow">Current Scene</p>
                       <h3 id="sceneUnitTitle">选择一个学习计划</h3>
-                      <p id="sceneUnitSummary" class="scene-unit-summary-truncated">当前场景会显示在这里</p>
                     </div>
                     <div class="scene-unit-actions">
                       <span class="mini-pill" id="sceneUnitProgress">0 / 0</span>
@@ -744,42 +744,211 @@
               </section>
             </section>
           </section>
-                    <section class="view" id="articleStudyView">
-            <section class="panel article-study-toolbar" id="articleStudyToolbar">
-              <label class="compact-field">
-                单词本
-                <select id="articleWordbookSelect"></select>
-              </label>
-              <button class="primary-button compact-primary" id="articleGenerateBtn" type="button">创建精读</button>
-            </section>
-
-            <section class="article-study-layout" id="articleStudyLayout">
-              <section class="panel article-history-panel" id="articleHistoryPanel">
-                <div class="panel-heading">
-                  <div>
-                    <p class="eyebrow">Library</p>
-                    <h3>精读记录</h3>
-                  </div>
-                  <button class="secondary-button compact" id="articleReloadHistoryBtn" type="button">刷新</button>
+                    <section class="view" id="ruminationView">
+            <div class="rumination-wrapper">
+              <!-- 顶部工具条：顺序为 当前词本 -> 主体场景 -> 新场景（点击弹窗），严格并列同排展示 -->
+              <section class="panel article-study-toolbar" id="articleStudyToolbar">
+                <div class="toolbar-selectors" style="display: flex; align-items: center; gap: 14px; flex-wrap: nowrap; flex: 1 1 auto;">
+                  <label class="compact-field" style="width: auto; margin-bottom: 0; display: inline-flex; align-items: center; gap: 8px;">
+                    当前词本
+                    <select id="articleWordbookSelect" style="width: 170px; height: 34px;"></select>
+                  </label>
+                  <label class="compact-field" style="width: auto; margin-bottom: 0; display: inline-flex; align-items: center; gap: 8px;">
+                    主体场景
+                    <select id="ruminationScenarioSelect" style="width: 210px; height: 34px;">
+                      <option value="produce_kitchen">🥦 生鲜采购与厨房料理</option>
+                    </select>
+                  </label>
+                  <button class="secondary-button compact" id="toolbarAddScenarioBtn" type="button" style="white-space: nowrap; height: 34px; display: inline-flex; align-items: center; gap: 4px; padding: 0 12px; margin: 0;">
+                    <span>➕ 新场景</span>
+                  </button>
                 </div>
-                <div id="articleHistoryList" class="article-history-list empty">暂无精读记录</div>
-                <div class="pagination-actions article-history-pagination"><button class="secondary-button compact" id="articleHistoryPrevBtn" type="button">上一页</button><span id="articleHistoryPageInfo">第 1 页</span><button class="secondary-button compact" id="articleHistoryNextBtn" type="button">下一页</button></div>
               </section>
 
-              <section class="panel article-result-panel">
-                <div class="panel-heading">
-                  <div>
-                    <p class="eyebrow">Learning</p>
-                    <h3>学习工作区</h3>
+              <!-- 主工作台：2D 星系图谱（全宽大图，高度充裕，便于维护场景词汇） -->
+              <div class="rumination-main-grid" id="ruminationMainGrid">
+                <!-- 2D 暗夜星系力导向图谱卡片 -->
+                <section class="rumination-graph-card" id="ruminationGraphCard">
+                  <div class="rumination-graph-header">
+                    <div class="rumination-graph-title">
+                      <div class="rumination-subtabs" role="tablist" aria-label="知识反刍工作区视图">
+                        <button type="button" class="rumination-subtab active" id="btnNavGalaxyGraph" role="tab" aria-selected="true">
+                          <span class="nav-icon">🌌</span>
+                          <span class="nav-label">星系图谱</span>
+                        </button>
+                        <button type="button" class="rumination-subtab" id="btnNavScenarioMaterial" role="tab" aria-selected="false">
+                          <span class="nav-icon">📖</span>
+                          <span class="nav-label">场景材料</span>
+                          <span class="nav-badge" id="materialsNavBadge">0 篇</span>
+                        </button>
+                      </div>
+                    </div>
+                    <div class="rumination-graph-controls" id="ruminationGraphControls">
+                      <button type="button" id="graphResetBtn" title="居中重置">⟲ 居中</button>
+                      <button type="button" id="graphZoomInBtn" title="放大">＋ 放大</button>
+                      <button type="button" id="graphZoomOutBtn" title="缩小">－ 缩小</button>
+                      <button type="button" id="graphExpandMoreBtn" title="AI 衍生裂变"><svg class="btn-svg" viewBox="0 0 24 24" width="13" height="13" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m12 3-1.9 5.8a2 2 0 0 1-1.3 1.3L3 12l5.8 1.9a2 2 0 0 1 1.3 1.3L12 21l1.9-5.8a2 2 0 0 1 1.3-1.3L21 12l-5.8-1.9a2 2 0 0 1-1.3-1.3Z"/></svg> 裂变</button>
+                      <button type="button" id="graphToggleBagBtn" class="bag-toggle-btn" title="点击单词后加入或移除词袋"><svg class="btn-svg" viewBox="0 0 24 24" width="13" height="13" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M6 2 3 6v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2V6l-3-4Z"/><path d="M3 6h18"/><path d="M16 10a4 4 0 0 1-8 0"/></svg> 词袋 (<span id="graphBagCounter">0</span>)</button>
+                    </div>
                   </div>
-                  <div class="inline-actions">
-                    <span class="mini-pill" id="articleResultBadge">等待生成</span>
-                    <button class="secondary-button compact" id="toggleArticleFocusModeBtn" type="button">专注模式</button>
+
+                  <!-- 自定义场景创建与 4D 衍生裂变异步任务横幅 -->
+                  <div class="rumination-task-banner graph-task-banner hidden" id="ruminationGraphTaskBanner" aria-live="polite"></div>
+
+                  <div class="rumination-canvas-wrap" id="ruminationCanvasWrap">
+                    <canvas id="ruminationGraphCanvas" class="rumination-canvas" tabindex="0" role="region" aria-label="星系词汇图谱：方向键选节点，Space 加词袋，E 编辑，A 加关联，Enter 衍生裂变"></canvas>
+                    <!-- 选中节点后的触屏与键盘快捷操作栏（无需鼠标右键） -->
+                    <div id="ruminationNodeActionBar" class="graph-node-action-bar hidden" role="toolbar" aria-label="选中词汇节点操作">
+                      <span class="action-bar-term" id="actionBarNodeTerm">peel</span>
+                      <button type="button" class="action-bar-btn" id="barToggleBagBtn" title="加入或移出词袋 (Space)">
+                        <svg class="btn-svg" viewBox="0 0 24 24" width="13" height="13" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M6 2 3 6v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2V6l-3-4Z"/><path d="M3 6h18"/><path d="M16 10a4 4 0 0 1-8 0"/></svg>
+                        <span id="barToggleBagText">词袋</span>
+                      </button>
+                      <button type="button" class="action-bar-btn" id="barExpandNodeBtn" title="AI 衍生裂变 (Enter)">
+                        <svg class="btn-svg" viewBox="0 0 24 24" width="13" height="13" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m12 3-1.9 5.8a2 2 0 0 1-1.3 1.3L3 12l5.8 1.9a2 2 0 0 1 1.3 1.3L12 21l1.9-5.8a2 2 0 0 1 1.3-1.3L21 12l-5.8-1.9a2 2 0 0 1-1.3-1.3Z"/></svg>
+                        <span>裂变</span>
+                      </button>
+                      <button type="button" class="action-bar-btn" id="barEditNodeBtn" title="修改释义或主题 (E)">
+                        <svg class="btn-svg" viewBox="0 0 24 24" width="13" height="13" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M17 3a2.85 2.83 0 1 1 4 4L7.5 20.5 2 22l1.5-5.5Z"/><path d="m15 5 4 4"/></svg>
+                        <span>编辑</span>
+                      </button>
+                      <button type="button" class="action-bar-btn" id="barAddChildBtn" title="新增关联节点 (A)">
+                        <svg class="btn-svg" viewBox="0 0 24 24" width="13" height="13" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 12h14"/><path d="M12 5v14"/></svg>
+                        <span>关联</span>
+                      </button>
+                      <button type="button" class="action-bar-btn danger" id="barDeleteNodeBtn" title="从图谱删除 (Delete)">
+                        <svg class="btn-svg" viewBox="0 0 24 24" width="13" height="13" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 6h18"/><path d="M19 6v14c0 1-1 2-2 2H7c-1 0-2-1-2-2V6"/><path d="M8 6V4c0-1 1-2 2-2h4c1 0 2 1 2 2v2"/><line x1="10" x2="10" y1="11" y2="17"/><line x1="14" x2="14" y1="11" y2="17"/></svg>
+                      </button>
+                      <button type="button" class="action-bar-btn subtle" id="barClearFocusBtn" title="取消选中" aria-label="取消选中">✕</button>
+                    </div>
+                    <!-- 图谱节点右键菜单 -->
+                    <div id="graphContextMenu" class="graph-context-menu hidden">
+                      <div class="context-menu-header" id="ctxMenuHeader">
+                        <span class="ctx-term" id="ctxNodeTerm">peel</span>
+                        <span class="ctx-tag" id="ctxNodeType">动作衍生</span>
+                      </div>
+                      <div class="context-menu-divider"></div>
+                      <button type="button" class="ctx-item" id="ctxAddChildBtn">
+                        <span class="ctx-icon"><svg class="btn-svg" viewBox="0 0 24 24" width="13" height="13" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 12h14"/><path d="M12 5v14"/></svg></span>
+                        <span id="ctxAddChildText">新增关联</span>
+                      </button>
+                      <button type="button" class="ctx-item" id="ctxEditNodeBtn">
+                        <span class="ctx-icon"><svg class="btn-svg" viewBox="0 0 24 24" width="13" height="13" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M17 3a2.85 2.83 0 1 1 4 4L7.5 20.5 2 22l1.5-5.5Z"/><path d="m15 5 4 4"/></svg></span>
+                        <span id="ctxEditText">编辑释义</span>
+                      </button>
+                      <button type="button" class="ctx-item" id="ctxToggleBagBtn">
+                        <span class="ctx-icon"><svg class="btn-svg" viewBox="0 0 24 24" width="13" height="13" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M6 2 3 6v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2V6l-3-4Z"/><path d="M3 6h18"/><path d="M16 10a4 4 0 0 1-8 0"/></svg></span>
+                        <span id="ctxToggleBagText">加入词袋</span>
+                      </button>
+                      <div class="context-menu-divider" id="ctxDangerDivider"></div>
+                      <button type="button" class="ctx-item danger" id="ctxDeleteNodeBtn">
+                        <span class="ctx-icon"><svg class="btn-svg" viewBox="0 0 24 24" width="13" height="13" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 6h18"/><path d="M19 6v14c0 1-1 2-2 2H7c-1 0-2-1-2-2V6"/><path d="M8 6V4c0-1 1-2 2-2h4c1 0 2 1 2 2v2"/><line x1="10" x2="10" y1="11" y2="17"/><line x1="14" x2="14" y1="11" y2="17"/></svg></span>
+                        <span>删除节点</span>
+                      </button>
+                    </div>
+                    <div class="rumination-graph-legend">
+                      <span class="legend-item"><span class="legend-dot" style="background: #10b981;"></span> 已掌握</span>
+                      <span class="legend-item"><span class="legend-dot" style="background: #f59e0b;"></span> 待反刍</span>
+                      <span class="legend-item"><span class="legend-dot" style="background: #38bdf8;"></span> 未学</span>
+                      <span class="legend-item"><span class="legend-line" style="background: #10b981;"></span> 同类</span>
+                      <span class="legend-item"><span class="legend-line" style="background: #38bdf8;"></span> 动作</span>
+                      <span class="legend-item"><span class="legend-line" style="background: #f97316;"></span> 加工</span>
+                      <span class="legend-item"><span class="legend-line" style="background: #c084fc;"></span> 感官</span>
+                      <span class="legend-item"><span class="legend-dot" style="background: rgba(56, 189, 248, 0.25); border: 2px solid #f8fafc; box-shadow: 0 0 6px #38bdf8;"></span> 当前焦点</span>
+                      <span class="legend-item legend-save-status" id="graphSaveStatus" data-shortcut-template="自动保存 · ⌘S 手动保存"><svg class="btn-svg" viewBox="0 0 24 24" width="12" height="12" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z"/><polyline points="17 21 17 13 7 13 7 21"/><polyline points="7 3 7 8 15 8"/></svg> 自动保存 · ⌘S 手动保存</span>
+                    </div>
                   </div>
-                </div>
-                <div id="articleResult" class="article-result empty">选择一份精读材料开始学习</div>
-              </section>
-            </section>
+
+                  <!-- 1. 场景材料与内联学习结果检查一体化面板（方案 B） -->
+                  <div class="rumination-panel-view rumination-subtab-panel hidden" id="scenarioMaterialPanel">
+                    <!-- 紧凑顶部工作条：归档材料抽屉切换 + 词袋状态 + 编织按钮（把约 90% 版面留给文章阅读） -->
+                    <div class="bag-status-bar rumination-compact-bar">
+                      <div class="bag-info-left">
+                        <button type="button" class="rumination-archive-toggle-btn" id="toggleArchiveDrawerBtn" aria-expanded="false" aria-controls="materialsArchiveBox">
+                          <span>📚 沉淀材料</span>
+                          <span class="rumination-archive-count-pill" id="archiveCountBadge">0 篇</span>
+                          <span class="rumination-drawer-caret" aria-hidden="true">▾</span>
+                        </button>
+                        <div class="rumination-bag-compact-group">
+                          <span class="bag-title">🎒 词袋</span>
+                          <div class="bag-chips-wrap" id="bagChipsWrap">
+                            <span class="bag-empty-tip">0/5 词 · 图谱加词</span>
+                          </div>
+                        </div>
+                      </div>
+                      <div class="bag-action-right">
+                        <button type="button" class="rumination-weave-btn" id="generateMaterialBtn" disabled>
+                          <span>🚀 编织场景材料 (0/5 词)</span>
+                        </button>
+                      </div>
+                    </div>
+
+                    <!-- 异步编织任务状态恢复与进度提示栏 -->
+                    <div class="rumination-task-banner hidden" id="ruminationTaskBanner" aria-live="polite"></div>
+
+                    <!-- 历史场景材料列表抽屉（默认收起；无材料或手动展开时显示） -->
+                    <div class="materials-archive-box hidden" id="materialsArchiveBox">
+                      <div class="archive-bar">
+                        <h4>📚 沉淀的场景材料</h4>
+                        <span class="archive-meta" id="archiveCountInfo">暂无沉淀材料</span>
+                      </div>
+                      <div class="materials-archive-list" id="materialsArchiveList">
+                        <div class="materials-empty-state" id="materialsEmptyState">
+                          <span class="empty-icon">🌱</span>
+                          <p>暂无场景材料文章。切回星系图谱维护 5 个以上词汇到词袋后即可编织长效沉淀。</p>
+                        </div>
+                      </div>
+                    </div>
+
+                    <!-- 选定场景材料阅读卡片 -->
+                    <article class="rumination-article-card hidden" id="ruminationArticleCard">
+                      <div class="rumination-article-top">
+                        <div class="rumination-article-head-info">
+                          <h3 class="rumination-article-title" id="ruminationArticleTitle"></h3>
+                        </div>
+                        <div class="inline-actions rumination-article-actions">
+                          <button class="secondary-button compact scene-tts-audio-btn" id="ruminationTtsAudioBtn" type="button" title="AI 真人朗读当前场景文章">🎙️ AI 真人朗读</button>
+                          <button class="secondary-button compact scene-tts-rate-btn" id="ruminationTtsRateBtn" type="button" title="切换朗读倍速 (0.75x / 1.0x / 1.25x)">1.0x</button>
+                          <button class="icon-button" id="ruminationSpeakArticleBtn" type="button" title="本地实时分句朗读全文（再次点击停止）" aria-label="本地实时朗读全文">▶</button>
+                          <button class="secondary-button compact" id="toggleArticleFocusModeBtn" type="button">专注模式</button>
+                        </div>
+                      </div>
+
+                      <div class="rumination-article-body scene-learning-text" id="ruminationArticleBody">
+                        <!-- 文章段落 -->
+                      </div>
+
+                      <details class="scene-translation rumination-translation-details" id="ruminationTranslationDetails">
+                        <summary id="toggleRuminationTranslationBtn">查看中文对照</summary>
+                        <div class="rumination-translation-box" id="ruminationTranslationBox">
+                          <!-- 中文翻译 -->
+                        </div>
+                      </details>
+                    </article>
+
+                    <!-- 学习结果检查（内联紧随当前场景材料下方，绑定本篇语境与图谱词节点） -->
+                    <section class="rumination-probes-card hidden" id="ruminationProbesCard">
+                      <div class="rumination-probes-header">
+                        <div>
+                          <h3>
+                            <span>🎯 学习结果检查</span>
+                            <span class="mini-pill" style="background: rgba(168,85,247,0.15); color: #c084fc; border-color: rgba(168,85,247,0.3);">全英文辨析 · 星光点化</span>
+                          </h3>
+                          <span class="rumination-probes-subtitle" id="ruminationProbesSubtitle">针对当前场景材料与对应星系图谱词节点的全英文语境检测，答对即沉淀记忆并回写复习进度</span>
+                        </div>
+                      </div>
+
+                      <div class="probe-list-container" id="ruminationProbeList">
+                        <div class="probes-empty-state" id="probesEmptyState">
+                          <p>当前材料未关联学习结果检查</p>
+                        </div>
+                      </div>
+                    </section>
+                  </div>
+                </section>
+              </div>
+
+            </div>
           </section>
                     <section class="view" id="studyView">
             <section class="study-layout">
@@ -966,17 +1135,26 @@
         <section class="modal-backdrop hidden" id="quickLookupModal" aria-modal="true" role="dialog" aria-labelledby="quickLookupTitle">
       <div class="config-modal quick-lookup-modal" data-modal-scroll>
         <div class="panel-heading">
-          <div>
-            <p class="eyebrow">Quick Lookup</p>
+          <div class="quick-lookup-heading-main">
+            <p class="eyebrow" id="quickLookupEyebrow">Quick Lookup</p>
             <h3 id="quickLookupTitle">全局快速查词 (⌘K / Ctrl+K)</h3>
+            <p class="quick-lookup-context hidden" id="quickLookupContext"></p>
           </div>
-          <button class="icon-button" id="quickLookupCloseBtn" type="button" title="关闭 (Esc)" aria-label="关闭">×</button>
+          <div class="inline-actions">
+            <button class="secondary-button compact hidden" id="quickLookupToggleSearchBtn" type="button" data-shortcut-title="{MOD}K" data-shortcut-label="🔍 换词 ({SHORTCUT})" title="切换查词输入框 (⌘K / Ctrl+K)">🔍 换词 (⌘K)</button>
+            <button class="icon-button" id="quickLookupCloseBtn" type="button" title="关闭 (Esc)" aria-label="关闭">×</button>
+          </div>
         </div>
         <div class="quick-lookup-body">
           <form class="search-card quick-lookup-input-bar" id="quickLookupForm">
             <input id="quickLookupInput" class="term-input" autocomplete="off" placeholder="输入英语单词后回车（或按 Esc 退出）" />
             <button class="primary-button compact-primary" type="submit">查词</button>
           </form>
+          <div id="quickLookupRecentBar" class="quick-lookup-recent-bar hidden">
+            <span class="recent-title">最近查词:</span>
+            <div id="quickLookupRecentChips" class="quick-recent-chips"></div>
+            <button type="button" id="clearQuickRecentBtn" class="clear-history-link" title="清空查词历史">清空</button>
+          </div>
           <div id="quickLookupContent" class="quick-lookup-content empty">输入任意英文单词快速查看 AI 词卡</div>
         </div>
       </div>
@@ -1419,92 +1597,131 @@
         </div>
       </div>
     </section>
-        <section class="modal-backdrop hidden" id="articleStudyModal" aria-modal="true" role="dialog">
-      <div class="config-modal article-study-modal" data-modal-scroll>
+        <!-- 新建知识反刍场景弹窗 -->
+    <section class="modal-backdrop hidden" id="addRuminationScenarioModal" aria-modal="true" role="dialog">
+      <div class="config-modal" style="max-width: 520px;">
         <div class="panel-heading">
           <div>
-            <p class="eyebrow">Guided Reading</p>
-            <h3>创建语境精读</h3>
+            <p class="eyebrow">Knowledge Rumination</p>
+            <h3>新建知识反刍场景</h3>
           </div>
-          <button class="icon-button" id="closeArticleStudyModalBtn" type="button" title="关闭">×</button>
+          <button class="icon-button" id="closeScenarioModalBtn" type="button" title="关闭">×</button>
         </div>
 
-        <section class="article-modal-section article-modal-words">
-          <div class="panel-heading compact-heading">
-            <div>
-              <h3>目标词汇</h3>
-              <span class="mini-pill" id="articleSelectedCount">已选 0</span>
-            </div>
-            <div class="article-filter-actions">
-              <label class="entry-prefix-field">
-                <span class="sr-only">前缀匹配</span>
-                <input id="articlePrefixInput" autocomplete="off" placeholder="前缀匹配" />
-              </label>
-              <label class="entry-prefix-field">
-                <span class="sr-only">状态筛选</span>
-                <select id="articleStatusFilter">
-                  <option value="">全部状态</option>
-                  <option value="familiar">熟悉</option>
-                  <option value="vague">模糊</option>
-                  <option value="forgotten">遗忘</option>
-                </select>
-              </label>
-              <button class="secondary-button compact" id="articleRecommendWordsBtn" type="button">智能推荐</button>
-              <button class="secondary-button compact" id="articleReloadWordsBtn" type="button">刷新词汇</button>
-              <button class="secondary-button compact" id="articleClearSelectionBtn" type="button">清空选择</button>
-            </div>
-          </div>
-          <div id="articleWordGrid" class="article-word-grid empty">暂无单词</div>
-          <div class="pagination-actions article-word-pagination">
-            <button class="secondary-button compact" id="articleWordPrevBtn" type="button">上一页</button>
-            <span id="articleWordPageInfo">第 1 / 1 页</span>
-            <button class="secondary-button compact" id="articleWordNextBtn" type="button">下一页</button>
-          </div>
-        </section>
+        <div style="display: flex; flex-direction: column; gap: 16px; padding: 12px 0;">
+          <label class="compact-field" style="display: flex; flex-direction: column; align-items: flex-start; gap: 6px; width: 100%;">
+            <span style="font-size: 13px; font-weight: 600; color: #cbd5e1;">场景名称</span>
+            <input id="newScenarioNameInput" type="text" placeholder="例如：🛒 零售超市与日常购物" style="width: 100%; box-sizing: border-box;" />
+          </label>
 
-        <section class="article-modal-section article-modal-settings">
-          <label class="compact-field small-field article-range-field">
-            字数
-            <select id="articleWordCountSelect">
-              <option value="150-200">150-200</option>
-              <option value="300-500" selected>300-500</option>
-              <option value="500-700">500-700</option>
-              <option value="800-1000">800-1000</option>
-            </select>
+          <label class="compact-field" style="display: flex; flex-direction: column; align-items: flex-start; gap: 6px; width: 100%;">
+            <span style="font-size: 13px; font-weight: 600; color: #cbd5e1;">场景主题与提示词（AI 自动衍生核心词与拓扑）</span>
+            <textarea id="newScenarioPromptInput" rows="3" placeholder="例如：超市日用品、蔬菜水果称重选购、收银结账与退换货对话高频语境" style="width: 100%; box-sizing: border-box; resize: vertical;"></textarea>
           </label>
-          <label class="compact-field small-field article-range-field">
-            难度
-            <select id="articleDifficultySelect">
-              <option value="easy">基础</option>
-              <option value="medium" selected>适中</option>
-              <option value="hard">挑战</option>
-            </select>
-          </label>
-          <label class="compact-field">
-            AI 模型
-            <select id="articleModelSelect" aria-label="AI 模型"></select>
-          </label>
-            <button class="primary-button compact-primary" id="articlePreviewGenerateBtn" type="button">生成学习材料</button>
-          <label class="article-remark-field">
-            阅读主题或要求
-            <textarea id="articleRemarkInput" rows="2" placeholder="例如：商务沟通、旅行见闻、考试阅读；语气自然"></textarea>
-          </label>
-        </section>
 
-        <section class="article-modal-section article-modal-preview">
-          <div class="panel-heading compact-heading">
-            <div>
-              <h3>材料预览</h3>
-              <span class="mini-pill" id="articleModalPreviewBadge">等待生成</span>
-            </div>
+          <div style="background: rgba(15, 23, 42, 0.6); border: 1px solid rgba(56, 189, 248, 0.2); border-radius: 8px; padding: 12px; font-size: 12px; color: #94a3b8; line-height: 1.6;">
+            💡 <strong style="color: #38bdf8;">智能拓扑生成：</strong>
+            系统将基于当前词本词汇与场景描述，智能聚类关联核心词，并向外辐射动作、同类、加工、感官 4D 衍生图谱。
           </div>
-          <div id="articleModalPreview" class="article-result empty">选择目标词并生成精读材料</div>
-        </section>
-
-        <div class="modal-actions">
-          <button class="secondary-button" id="cancelArticleStudyBtn" type="button">取消</button>
-          <button class="primary-button" id="saveArticleStudyBtn" type="button" disabled>开始精读</button>
         </div>
+
+        <div class="modal-actions" style="margin-top: 16px;">
+          <button class="secondary-button" id="cancelScenarioModalBtn" type="button">取消</button>
+          <button class="primary-button" id="submitCreateScenarioBtn" type="button">✨ 立即创建并编织星系</button>
+        </div>
+      </div>
+    </section>
+
+    <!-- 图谱节点手动维护弹窗（新增/修改） -->
+    <section class="modal-backdrop hidden" id="ruminationNodeEditModal" aria-modal="true" role="dialog">
+      <div class="config-modal" style="max-width: 480px;">
+        <div class="panel-heading">
+          <div>
+            <p class="eyebrow" id="nodeModalEyebrow">Knowledge Rumination</p>
+            <h3 id="nodeModalTitle">新增关联节点</h3>
+          </div>
+          <button class="icon-button" id="closeNodeModalBtn" type="button" title="关闭">×</button>
+        </div>
+
+        <div style="display: flex; flex-direction: column; gap: 14px; padding: 12px 0;">
+          <div id="nodeModalParentInfo" style="font-size: 12px; color: #94a3b8; background: rgba(30, 41, 59, 0.6); padding: 8px 12px; border-radius: 6px; border-left: 3px solid #38bdf8;">
+            父级锚点：<strong id="nodeModalParentTerm" style="color: #38bdf8;">potato</strong>
+          </div>
+
+          <label class="compact-field" style="display: flex; flex-direction: column; align-items: flex-start; gap: 6px; width: 100%;">
+            <span style="font-size: 13px; font-weight: 600; color: #cbd5e1;">英文词汇 / 短语 <span style="color: #ef4444;">*</span></span>
+            <input id="nodeModalTermInput" type="text" placeholder="例如：whisk / roast / thermometer" style="width: 100%; box-sizing: border-box;" />
+          </label>
+
+          <label class="compact-field" style="display: flex; flex-direction: column; align-items: flex-start; gap: 6px; width: 100%;">
+            <span style="font-size: 13px; font-weight: 600; color: #cbd5e1;">中文释义</span>
+            <input id="nodeModalDefInput" type="text" placeholder="例如：搅拌/打蛋；留空将自动补全" style="width: 100%; box-sizing: border-box;" />
+          </label>
+
+          <label class="compact-field" id="nodeModalDimensionField" style="display: flex; flex-direction: column; align-items: flex-start; gap: 6px; width: 100%;">
+            <span style="font-size: 13px; font-weight: 600; color: #cbd5e1;">认知维度关系</span>
+            <select id="nodeModalDimensionSelect" style="width: 100%; height: 36px; box-sizing: border-box;">
+              <option value="action">动作动词 (Action - 烹饪/料理/使用动作)</option>
+              <option value="downstream">下游加工 (Downstream - 产物/下游食品/形态)</option>
+              <option value="attribute">感官属性 (Attribute - 口感/特征/属性修饰)</option>
+              <option value="peer">同类延展 (Peer - 场景同类/考纲核心词)</option>
+            </select>
+          </label>
+        </div>
+
+        <div class="modal-actions" style="margin-top: 14px;">
+          <button class="secondary-button" id="cancelNodeModalBtn" type="button">取消</button>
+          <button class="primary-button" id="submitNodeModalBtn" type="button">保存并同步星系</button>
+        </div>
+      </div>
+    </section>
+
+    <!-- 图谱连线关系文字手动维护弹窗（双击连线新增/修改/清除） -->
+    <section class="modal-backdrop hidden" id="ruminationEdgeEditModal" aria-modal="true" role="dialog">
+      <div class="config-modal" style="max-width: 440px;">
+        <div class="panel-heading">
+          <div>
+            <p class="eyebrow">Knowledge Rumination</p>
+            <h3 id="edgeModalTitle">编辑连线关系文字</h3>
+          </div>
+          <button class="icon-button" id="closeEdgeModalBtn" type="button" title="关闭">×</button>
+        </div>
+
+        <div style="display: flex; flex-direction: column; gap: 14px; padding: 12px 0;">
+          <div id="edgeModalDesc" style="font-size: 12px; color: #94a3b8; background: rgba(30, 41, 59, 0.6); padding: 8px 12px; border-radius: 6px; border-left: 3px solid #38bdf8;">
+            为【<strong id="edgeModalSourceTerm" style="color: #38bdf8;">fruit</strong>】与【<strong id="edgeModalTargetTerm" style="color: #38bdf8;">apple</strong>】之间的连线设置说明（留空则不显示文字）
+          </div>
+
+          <label class="compact-field" style="display: flex; flex-direction: column; align-items: flex-start; gap: 6px; width: 100%;">
+            <span style="font-size: 13px; font-weight: 600; color: #cbd5e1;">连线关系文字</span>
+            <input id="edgeModalLabelInput" type="text" maxlength="12" placeholder="例如：包含 / 搭配 / 动作 / 加工；留空清除" style="width: 100%; box-sizing: border-box;" />
+          </label>
+
+          <div style="display: flex; flex-wrap: wrap; gap: 6px; align-items: center;">
+            <span style="font-size: 11px; color: #64748b;">快捷填入：</span>
+            <button type="button" class="compact-tag-btn" data-edge-tag="同类">同类</button>
+            <button type="button" class="compact-tag-btn" data-edge-tag="包含">包含</button>
+            <button type="button" class="compact-tag-btn" data-edge-tag="动作">动作</button>
+            <button type="button" class="compact-tag-btn" data-edge-tag="加工">加工</button>
+            <button type="button" class="compact-tag-btn" data-edge-tag="属性">属性</button>
+            <button type="button" class="compact-tag-btn" data-edge-tag="搭配">搭配</button>
+          </div>
+        </div>
+
+        <div class="modal-actions" style="margin-top: 14px; display: flex; justify-content: space-between; align-items: center;">
+          <button class="secondary-button" id="clearEdgeModalBtn" type="button" style="color: #fda4af;">清空文字</button>
+          <div style="display: flex; gap: 8px;">
+            <button class="secondary-button" id="cancelEdgeModalBtn" type="button">取消</button>
+            <button class="primary-button" id="submitEdgeModalBtn" type="button">保存关系文字</button>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- 知识反刍单句巩固弹窗（按句跟敲 + 目标词遮挡补全） -->
+    <section class="modal-backdrop hidden" id="ruminationPracticeModal" aria-modal="true" role="dialog" aria-label="重点句跟敲与拼写巩固">
+      <div class="config-modal rumination-practice-modal" data-modal-scroll>
+        <div class="rumination-practice-card" id="ruminationPracticeCard" aria-live="polite"></div>
       </div>
     </section>
         <section class="modal-backdrop hidden" id="accountModal" aria-modal="true" role="dialog">
@@ -1744,13 +1961,17 @@
           </div>
           <button class="icon-button" id="closeReviewModalBtn" type="button" title="关闭">×</button>
         </div>
+        <div id="modalCognitiveImage" class="modal-cognitive-image hidden"></div>
         <div id="modalExamples" class="modal-examples empty">暂无例句</div>
         <div class="modal-review-footer">
-          <span>记住了吗？</span>
+          <div class="modal-review-footer-header">
+            <span>记住了吗？</span>
+            <span class="modal-shortcut-hint">快捷键：1 忘记 · 2 模糊 · 3 记住（Tab 聚焦按钮按 Enter/空格执行该按钮）</span>
+          </div>
           <div class="review-actions modal-review-actions">
-            <button class="danger-action" type="button" data-modal-result="forgotten">忘记了</button>
-            <button class="warn-action" type="button" data-modal-result="vague">有点模糊</button>
-            <button class="success-action" type="button" data-modal-result="remembered">记住了</button>
+            <button class="danger-action" type="button" data-modal-result="forgotten" title="快捷键: 1 或 ←">忘记了 (1)</button>
+            <button class="warn-action" type="button" data-modal-result="vague" title="快捷键: 2 或 ↓">有点模糊 (2)</button>
+            <button class="success-action" type="button" data-modal-result="remembered" title="快捷键: 3、空格、回车 或 →（未聚焦按钮时）">记住了 (3 / Enter)</button>
           </div>
         </div>
       </div>
@@ -1766,7 +1987,7 @@
         </div>
         <div id="forgottenDetailContent" class="forgotten-detail-content empty">暂无详情</div>
         <div class="modal-actions">
-          <button class="primary-button compact-primary" id="forgottenBackToReviewBtn" type="button">回到复习</button>
+          <button class="primary-button compact-primary" id="forgottenBackToReviewBtn" type="button" title="快捷键: Enter / Space / Esc">回到复习 (Enter)</button>
         </div>
       </div>
     </section>
@@ -1785,6 +2006,19 @@
           <button class="secondary-button compact" id="deleteConfirmCancelBtn" type="button">取消</button>
           <button class="danger-button compact" id="deleteConfirmAcceptBtn" type="button">确认删除</button>
         </div>
+      </div>
+    </section>
+
+    <section class="modal-backdrop hidden" id="shortcutHelpModal" aria-modal="true" role="dialog" aria-label="快捷键与无障碍帮助">
+      <div class="review-modal small-modal" data-modal-scroll>
+        <div class="panel-heading">
+          <div>
+            <p class="eyebrow">Keyboard & Accessibility</p>
+            <h3>快捷键帮助</h3>
+          </div>
+          <button class="icon-button" id="closeShortcutHelpModalBtn" type="button" title="关闭 (Esc)" aria-label="关闭">×</button>
+        </div>
+        <div id="shortcutHelpContent" class="shortcut-help-content"></div>
       </div>
     </section>
 

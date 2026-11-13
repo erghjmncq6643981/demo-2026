@@ -16,7 +16,10 @@ public enum AiTaskType {
     VOCABULARY_CARD("vocabulary_card", "批量词卡生成"),
     VOCABULARY_CARD_SINGLE("vocabulary_card_single", "单词词卡生成"),
     VOCABULARY_CATALOG_ANALYSIS("vocabulary_catalog_analysis", "词本关联分析"),
-    ARTICLE_MATERIAL("article_material", "语境精读材料生成"),
+    RUMINATION_MATERIAL("rumination_material", "知识反刍场景材料与探针生成"),
+    RUMINATION_SCENARIO("rumination_scenario", "知识反刍自定义场景星系构建"),
+    RUMINATION_FISSION("rumination_fission", "知识反刍节点 4D 衍生裂变"),
+    RUMINATION_MATERIAL_AUDIO("rumination_material_audio", "知识反刍文章语音生成"),
     SCENE_ARTICLE_AUDIO("scene_article_audio", "场景文章语音生成");
 
     private final String code;

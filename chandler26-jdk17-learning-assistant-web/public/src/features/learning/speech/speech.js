@@ -57,6 +57,16 @@ export function createSpeechFeature(ctx) {
   let currentWordAudio = null
   let currentWordAudioTimeout = null
 
+  function isPhraseOrSentence(text) {
+    if (!text) return false
+    const trimmed = String(text).trim()
+    if (trimmed.includes('/') || trimmed.includes('...') || trimmed.includes(';') || trimmed.includes(',') || trimmed.includes('?') || trimmed.includes('!')) {
+      return true
+    }
+    const tokens = trimmed.split(/\s+/).filter(Boolean)
+    return tokens.length > 2
+  }
+
   function speak(text, voiceType = currentVoiceType(), options = {}) {
     const content = String(text || '').trim()
     const silentToast = Boolean(options && typeof options === 'object' && options.silentToast)
@@ -65,6 +75,13 @@ export function createSpeechFeature(ctx) {
         toast('暂无可播放内容')
       }
       return Promise.resolve(false)
+    }
+
+    // 短语/搭配/句式（如包含斜杠、标点或大于2个词）转由短语/例句语音引擎播放，支持斜杠智能转换、服务端TTS及浏览器离线兜底
+    if (isPhraseOrSentence(content)) {
+      const formattedPhrase = content.replace(/\s*\/\s*/g, ' or ')
+      speakSentence(formattedPhrase)
+      return Promise.resolve(true)
     }
 
     // 先停止当前任何正在播放的音频通道，杜绝多声音并发
@@ -98,6 +115,15 @@ export function createSpeechFeature(ctx) {
       }, 6000)
 
       let fallbackDone = false
+      const fallbackToBrowserSpeech = () => {
+        if ('speechSynthesis' in window && 'SpeechSynthesisUtterance' in window) {
+          speakWithBrowserVoice(content, voice, { sentence: false, fromAudioFallback: true })
+          done(true)
+          return true
+        }
+        return false
+      }
+
       const playDirectYoudao = () => {
         if (fallbackDone) return
         fallbackDone = true
@@ -116,7 +142,12 @@ export function createSpeechFeature(ctx) {
             if (currentWordAudio === directAudio) {
               currentWordAudio = null
             }
-            done(false)
+            if (!fallbackToBrowserSpeech()) {
+              if (!silentToast) {
+                toast('音频播放受阻，请检查网络或浏览器声音权限')
+              }
+              done(false)
+            }
           }, { once: true })
 
           directAudio.play().then(() => {
@@ -127,18 +158,26 @@ export function createSpeechFeature(ctx) {
             if (currentWordAudio === directAudio) {
               currentWordAudio = null
             }
-            if (err?.name !== 'AbortError' && !silentToast) {
-              toast('音频播放受阻，请检查网络或浏览器声音权限')
+            if (err?.name === 'AbortError') {
+              done(false)
+              return
             }
-            done(false)
+            if (!fallbackToBrowserSpeech()) {
+              if (!silentToast) {
+                toast('音频播放受阻，请检查网络或浏览器声音权限')
+              }
+              done(false)
+            }
           })
           // 触发后端缺省补充持久化保存
           fetch(backendUrl, { method: 'GET' }).catch(() => {})
         } catch {
-          if (!silentToast) {
-            toast('发音播放异常')
+          if (!fallbackToBrowserSpeech()) {
+            if (!silentToast) {
+              toast('发音播放异常')
+            }
+            done(false)
           }
-          done(false)
         }
       }
 

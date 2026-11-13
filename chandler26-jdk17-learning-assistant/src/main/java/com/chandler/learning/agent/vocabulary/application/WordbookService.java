@@ -133,6 +133,43 @@ public class WordbookService {
                 .in(LearningWordbookEntry::getId, entryIds));
     }
 
+    /** 查询用户在指定词本下的全部有效词条列表。 */
+    public List<LearningWordbookEntry> listAllOwnedEntries(Long userId, Long wordbookId) {
+        return entryMapper.selectList(new LambdaQueryWrapper<LearningWordbookEntry>()
+                .eq(LearningWordbookEntry::getUserId, userId)
+                .eq(LearningWordbookEntry::getWordbookId, wordbookId)
+                .eq(LearningWordbookEntry::getDeleted, false)
+                .orderByDesc(LearningWordbookEntry::getUpdateTime));
+    }
+
+    /** 按用户、单词本和标准词汇拼写查询拥有的词条列表。 */
+    public List<LearningWordbookEntry> findOwnedEntriesByTerms(Long userId, Long wordbookId,
+                                                              java.util.Collection<String> terms) {
+        if (terms == null || terms.isEmpty()) {
+            return List.of();
+        }
+        return entryMapper.selectList(new LambdaQueryWrapper<LearningWordbookEntry>()
+                .eq(LearningWordbookEntry::getUserId, userId)
+                .eq(LearningWordbookEntry::getWordbookId, wordbookId)
+                .eq(LearningWordbookEntry::getDeleted, false)
+                .in(LearningWordbookEntry::getNormalizedTerm, terms.stream().map(String::toLowerCase).toList()));
+    }
+
+    /** 统计用户在指定词本中匹配给定词汇集合的词条总数及待复习数。 */
+    public Map<String, Integer> countMatchingTerms(Long userId, Long wordbookId,
+                                                   java.util.Collection<String> terms,
+                                                   LocalDateTime now) {
+        if (terms == null || terms.isEmpty()) {
+            return Map.of("total", 0, "due", 0);
+        }
+        List<LearningWordbookEntry> entries = findOwnedEntriesByTerms(userId, wordbookId, terms);
+        int total = entries.size();
+        int due = (int) entries.stream()
+                .filter(e -> !"mastered".equals(e.getStatus()) || (e.getNextReviewTime() != null && !e.getNextReviewTime().isAfter(now)))
+                .count();
+        return Map.of("total", total, "due", due);
+    }
+
     /** 为场景学习创建或恢复个人单词本词条，并保存导入词的基础快照。 */
     public LearningWordbookEntry ensureLearningEntry(Long userId, Long wordbookId,
                                                       VocabularyCatalogEntry source,
@@ -616,6 +653,62 @@ public class WordbookService {
         entry.completeReview(now, nextReviewTime, outcome.stageAfter(), outcome.masteryAfter(), now);
         entryMapper.updateById(entry);
 
+        LearningReviewRecord record = buildReviewRecord(userId, entry, request, result.getCode(),
+                outcome.stageBefore(), outcome.stageAfter(), outcome.masteryBefore(), outcome.masteryAfter(),
+                nextReviewTime, now);
+        reviewService.record(record);
+        activityService.record(userId, LearningActivityEventType.WORD_REVIEWED, now,
+                request.getPlanId(), request.getUnitId(), null, entry.getId(), 1,
+                request.getDurationSeconds(), result.getCode(), "word_reviewed:" + record.getId());
+
+        ReviewSubmitResponse response = toReviewSubmitResponse(entry, outcome.stageAfter(), outcome.masteryAfter(),
+                nextReviewTime);
+        systemLogService.record(userId, SystemLogType.REVIEW, "提交复习结果", entry.getNormalizedTerm() + " -> " + result.getCode());
+        log.info("用户「{}」完成了单词「{}」的复习，结果是「{}」，熟练度从 {} 提升到 {}，下次复习时间为 {}",
+                userDisplayNameService.userName(userId),
+                entry.getNormalizedTerm(),
+                result.getLabel(),
+                outcome.masteryBefore(),
+                outcome.masteryAfter(),
+                nextReviewTime);
+        log.debug("复习排期已更新 userId={} entryId={} result={} stage={}=>{} mastery={}=>{} nextReviewTime={}",
+                userId, entryId, result.getCode(), outcome.stageBefore(), outcome.stageAfter(),
+                outcome.masteryBefore(), outcome.masteryAfter(), nextReviewTime);
+        evictDerivedCaches(userId);
+        return response;
+    }
+
+    /**
+     * 仅落库知识反刍句型遮挡独立补全检查明细，当同篇材料探针已推进过词条排期时避免重复延后下次复习时间。
+     */
+    @Transactional(rollbackFor = Exception.class)
+    public ReviewSubmitResponse recordRuminationClozeConsolidation(Long userId, Long entryId,
+                                                                   ReviewSubmitRequest request) {
+        LearningWordbookEntry entry = entryMapper.selectById(entryId);
+        if (entry == null || Boolean.TRUE.equals(entry.getDeleted()) || !entry.getUserId().equals(userId)) {
+            throw LearningAssistantException.notFound(
+                    LearningErrorCode.ENTRY_NOT_FOUND,
+                    "单词本词条不存在: " + entryId);
+        }
+        LocalDateTime now = LocalDateTime.now();
+        int stageCurrent = entry.reviewStage();
+        int masteryCurrent = entry.masteryScore();
+        LocalDateTime nextReviewTime = entry.getNextReviewTime() != null ? entry.getNextReviewTime() : now;
+
+        LearningReviewRecord record = buildReviewRecord(userId, entry, request, ReviewResult.REMEMBERED.getCode(),
+                stageCurrent, stageCurrent, masteryCurrent, masteryCurrent, nextReviewTime, now);
+        reviewService.record(record);
+        systemLogService.record(userId, SystemLogType.REVIEW, "反刍句型独立巩固",
+                entry.getNormalizedTerm() + " -> rumination_cloze");
+        log.info("用户「{}」完成单词「{}」反刍句型独立遮挡补全（同篇探针已推进排期，保持 stage={} nextReviewTime={}）",
+                userDisplayNameService.userName(userId), entry.getNormalizedTerm(), stageCurrent, nextReviewTime);
+        return toReviewSubmitResponse(entry, stageCurrent, masteryCurrent, nextReviewTime);
+    }
+
+    private LearningReviewRecord buildReviewRecord(Long userId, LearningWordbookEntry entry, ReviewSubmitRequest request,
+                                                   String resultCode, int stageBefore, int stageAfter,
+                                                   int masteryBefore, int masteryAfter,
+                                                   LocalDateTime nextReviewTime, LocalDateTime now) {
         LearningReviewRecord record = new LearningReviewRecord();
         record.setUserId(userId);
         record.setWordbookId(entry.getWordbookId());
@@ -634,38 +727,26 @@ public class WordbookService {
         record.setAttemptCount(request.getAttemptCount());
         record.setDurationMillis(request.getDurationMillis());
         record.setNormalizedTerm(entry.getNormalizedTerm());
-        record.setResult(result.getCode());
+        record.setResult(resultCode);
         record.setScore(request.getScore());
-        record.setReviewStageBefore(outcome.stageBefore());
-        record.setReviewStageAfter(outcome.stageAfter());
-        record.setMasteryBefore(outcome.masteryBefore());
-        record.setMasteryAfter(outcome.masteryAfter());
+        record.setReviewStageBefore(stageBefore);
+        record.setReviewStageAfter(stageAfter);
+        record.setMasteryBefore(masteryBefore);
+        record.setMasteryAfter(masteryAfter);
         record.setNextReviewTime(nextReviewTime);
         record.setDurationSeconds(request.getDurationSeconds());
         record.setCreateTime(now);
-        reviewService.record(record);
-        activityService.record(userId, LearningActivityEventType.WORD_REVIEWED, now,
-                request.getPlanId(), request.getUnitId(), null, entry.getId(), 1,
-                request.getDurationSeconds(), result.getCode(), "word_reviewed:" + record.getId());
+        return record;
+    }
 
+    private ReviewSubmitResponse toReviewSubmitResponse(LearningWordbookEntry entry, int reviewStage,
+                                                        int masteryScore, LocalDateTime nextReviewTime) {
         ReviewSubmitResponse response = new ReviewSubmitResponse();
         response.setEntryId(entry.getId());
         response.setNormalizedTerm(entry.getNormalizedTerm());
-        response.setReviewStage(outcome.stageAfter());
-        response.setMasteryScore(outcome.masteryAfter());
+        response.setReviewStage(reviewStage);
+        response.setMasteryScore(masteryScore);
         response.setNextReviewTime(nextReviewTime);
-        systemLogService.record(userId, SystemLogType.REVIEW, "提交复习结果", entry.getNormalizedTerm() + " -> " + result.getCode());
-        log.info("用户「{}」完成了单词「{}」的复习，结果是「{}」，熟练度从 {} 提升到 {}，下次复习时间为 {}",
-                userDisplayNameService.userName(userId),
-                entry.getNormalizedTerm(),
-                result.getLabel(),
-                outcome.masteryBefore(),
-                outcome.masteryAfter(),
-                nextReviewTime);
-        log.debug("复习排期已更新 userId={} entryId={} result={} stage={}=>{} mastery={}=>{} nextReviewTime={}",
-                userId, entryId, result.getCode(), outcome.stageBefore(), outcome.stageAfter(),
-                outcome.masteryBefore(), outcome.masteryAfter(), nextReviewTime);
-        evictDerivedCaches(userId);
         return response;
     }
 

@@ -1,0 +1,127 @@
+    <!-- 新建知识反刍场景弹窗 -->
+    <section class="modal-backdrop hidden" id="addRuminationScenarioModal" aria-modal="true" role="dialog">
+      <div class="config-modal" style="max-width: 520px;">
+        <div class="panel-heading">
+          <div>
+            <p class="eyebrow">Knowledge Rumination</p>
+            <h3>新建知识反刍场景</h3>
+          </div>
+          <button class="icon-button" id="closeScenarioModalBtn" type="button" title="关闭">×</button>
+        </div>
+
+        <div style="display: flex; flex-direction: column; gap: 16px; padding: 12px 0;">
+          <label class="compact-field" style="display: flex; flex-direction: column; align-items: flex-start; gap: 6px; width: 100%;">
+            <span style="font-size: 13px; font-weight: 600; color: #cbd5e1;">场景名称</span>
+            <input id="newScenarioNameInput" type="text" placeholder="例如：🛒 零售超市与日常购物" style="width: 100%; box-sizing: border-box;" />
+          </label>
+
+          <label class="compact-field" style="display: flex; flex-direction: column; align-items: flex-start; gap: 6px; width: 100%;">
+            <span style="font-size: 13px; font-weight: 600; color: #cbd5e1;">场景主题与提示词（AI 自动衍生核心词与拓扑）</span>
+            <textarea id="newScenarioPromptInput" rows="3" placeholder="例如：超市日用品、蔬菜水果称重选购、收银结账与退换货对话高频语境" style="width: 100%; box-sizing: border-box; resize: vertical;"></textarea>
+          </label>
+
+          <div style="background: rgba(15, 23, 42, 0.6); border: 1px solid rgba(56, 189, 248, 0.2); border-radius: 8px; padding: 12px; font-size: 12px; color: #94a3b8; line-height: 1.6;">
+            💡 <strong style="color: #38bdf8;">智能拓扑生成：</strong>
+            系统将基于当前词本词汇与场景描述，智能聚类关联核心词，并向外辐射动作、同类、加工、感官 4D 衍生图谱。
+          </div>
+        </div>
+
+        <div class="modal-actions" style="margin-top: 16px;">
+          <button class="secondary-button" id="cancelScenarioModalBtn" type="button">取消</button>
+          <button class="primary-button" id="submitCreateScenarioBtn" type="button">✨ 立即创建并编织星系</button>
+        </div>
+      </div>
+    </section>
+
+    <!-- 图谱节点手动维护弹窗（新增/修改） -->
+    <section class="modal-backdrop hidden" id="ruminationNodeEditModal" aria-modal="true" role="dialog">
+      <div class="config-modal" style="max-width: 480px;">
+        <div class="panel-heading">
+          <div>
+            <p class="eyebrow" id="nodeModalEyebrow">Knowledge Rumination</p>
+            <h3 id="nodeModalTitle">新增关联节点</h3>
+          </div>
+          <button class="icon-button" id="closeNodeModalBtn" type="button" title="关闭">×</button>
+        </div>
+
+        <div style="display: flex; flex-direction: column; gap: 14px; padding: 12px 0;">
+          <div id="nodeModalParentInfo" style="font-size: 12px; color: #94a3b8; background: rgba(30, 41, 59, 0.6); padding: 8px 12px; border-radius: 6px; border-left: 3px solid #38bdf8;">
+            父级锚点：<strong id="nodeModalParentTerm" style="color: #38bdf8;">potato</strong>
+          </div>
+
+          <label class="compact-field" style="display: flex; flex-direction: column; align-items: flex-start; gap: 6px; width: 100%;">
+            <span style="font-size: 13px; font-weight: 600; color: #cbd5e1;">英文词汇 / 短语 <span style="color: #ef4444;">*</span></span>
+            <input id="nodeModalTermInput" type="text" placeholder="例如：whisk / roast / thermometer" style="width: 100%; box-sizing: border-box;" />
+          </label>
+
+          <label class="compact-field" style="display: flex; flex-direction: column; align-items: flex-start; gap: 6px; width: 100%;">
+            <span style="font-size: 13px; font-weight: 600; color: #cbd5e1;">中文释义</span>
+            <input id="nodeModalDefInput" type="text" placeholder="例如：搅拌/打蛋；留空将自动补全" style="width: 100%; box-sizing: border-box;" />
+          </label>
+
+          <label class="compact-field" id="nodeModalDimensionField" style="display: flex; flex-direction: column; align-items: flex-start; gap: 6px; width: 100%;">
+            <span style="font-size: 13px; font-weight: 600; color: #cbd5e1;">认知维度关系</span>
+            <select id="nodeModalDimensionSelect" style="width: 100%; height: 36px; box-sizing: border-box;">
+              <option value="action">动作动词 (Action - 烹饪/料理/使用动作)</option>
+              <option value="downstream">下游加工 (Downstream - 产物/下游食品/形态)</option>
+              <option value="attribute">感官属性 (Attribute - 口感/特征/属性修饰)</option>
+              <option value="peer">同类延展 (Peer - 场景同类/考纲核心词)</option>
+            </select>
+          </label>
+        </div>
+
+        <div class="modal-actions" style="margin-top: 14px;">
+          <button class="secondary-button" id="cancelNodeModalBtn" type="button">取消</button>
+          <button class="primary-button" id="submitNodeModalBtn" type="button">保存并同步星系</button>
+        </div>
+      </div>
+    </section>
+
+    <!-- 图谱连线关系文字手动维护弹窗（双击连线新增/修改/清除） -->
+    <section class="modal-backdrop hidden" id="ruminationEdgeEditModal" aria-modal="true" role="dialog">
+      <div class="config-modal" style="max-width: 440px;">
+        <div class="panel-heading">
+          <div>
+            <p class="eyebrow">Knowledge Rumination</p>
+            <h3 id="edgeModalTitle">编辑连线关系文字</h3>
+          </div>
+          <button class="icon-button" id="closeEdgeModalBtn" type="button" title="关闭">×</button>
+        </div>
+
+        <div style="display: flex; flex-direction: column; gap: 14px; padding: 12px 0;">
+          <div id="edgeModalDesc" style="font-size: 12px; color: #94a3b8; background: rgba(30, 41, 59, 0.6); padding: 8px 12px; border-radius: 6px; border-left: 3px solid #38bdf8;">
+            为【<strong id="edgeModalSourceTerm" style="color: #38bdf8;">fruit</strong>】与【<strong id="edgeModalTargetTerm" style="color: #38bdf8;">apple</strong>】之间的连线设置说明（留空则不显示文字）
+          </div>
+
+          <label class="compact-field" style="display: flex; flex-direction: column; align-items: flex-start; gap: 6px; width: 100%;">
+            <span style="font-size: 13px; font-weight: 600; color: #cbd5e1;">连线关系文字</span>
+            <input id="edgeModalLabelInput" type="text" maxlength="12" placeholder="例如：包含 / 搭配 / 动作 / 加工；留空清除" style="width: 100%; box-sizing: border-box;" />
+          </label>
+
+          <div style="display: flex; flex-wrap: wrap; gap: 6px; align-items: center;">
+            <span style="font-size: 11px; color: #64748b;">快捷填入：</span>
+            <button type="button" class="compact-tag-btn" data-edge-tag="同类">同类</button>
+            <button type="button" class="compact-tag-btn" data-edge-tag="包含">包含</button>
+            <button type="button" class="compact-tag-btn" data-edge-tag="动作">动作</button>
+            <button type="button" class="compact-tag-btn" data-edge-tag="加工">加工</button>
+            <button type="button" class="compact-tag-btn" data-edge-tag="属性">属性</button>
+            <button type="button" class="compact-tag-btn" data-edge-tag="搭配">搭配</button>
+          </div>
+        </div>
+
+        <div class="modal-actions" style="margin-top: 14px; display: flex; justify-content: space-between; align-items: center;">
+          <button class="secondary-button" id="clearEdgeModalBtn" type="button" style="color: #fda4af;">清空文字</button>
+          <div style="display: flex; gap: 8px;">
+            <button class="secondary-button" id="cancelEdgeModalBtn" type="button">取消</button>
+            <button class="primary-button" id="submitEdgeModalBtn" type="button">保存关系文字</button>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- 知识反刍单句巩固弹窗（按句跟敲 + 目标词遮挡补全） -->
+    <section class="modal-backdrop hidden" id="ruminationPracticeModal" aria-modal="true" role="dialog" aria-label="重点句跟敲与拼写巩固">
+      <div class="config-modal rumination-practice-modal" data-modal-scroll>
+        <div class="rumination-practice-card" id="ruminationPracticeCard" aria-live="polite"></div>
+      </div>
+    </section>

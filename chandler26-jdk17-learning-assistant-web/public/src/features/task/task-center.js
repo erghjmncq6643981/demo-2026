@@ -20,7 +20,6 @@ const TYPE_LABELS = {
   scene_article_audio: '场景文章语音',
   vocabulary_card: '批量词卡',
   vocabulary_catalog_analysis: '词本关联分析',
-  article_material: '语境精读材料',
 }
 
 const MODE_LABELS = {

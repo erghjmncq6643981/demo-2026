@@ -6,7 +6,6 @@ public final class AiScenarioConstants {
     public static final String VOCABULARY_AGENT_CODE = "english_vocabulary";
     public static final String VOCABULARY_TEMPLATE_CODE = "english_vocab_card_json";
     public static final String ARTICLE_AGENT_CODE = "english_article";
-    public static final String ARTICLE_TEMPLATE_CODE = "english_vocab_article_json";
     public static final String VOCABULARY_PLAN_AGENT_CODE = "english_vocabulary_plan";
     public static final String VOCABULARY_PLAN_TEMPLATE_CODE = "english_vocab_scene_unit_json";
     public static final String VOCABULARY_BATCH_TEMPLATE_CODE = "english_vocab_cards_batch_json";

@@ -92,7 +92,6 @@
   .topbar-actions,
   .review-start-controls,
   .wordbook-tools,
-  .article-study-tools,
   .word-main,
   .review-header {
     align-items: stretch;
@@ -247,11 +246,6 @@
     width: 100%;
   }
 
-  .article-filter-actions {
-    grid-template-columns: 1fr;
-    width: 100%;
-  }
-
   .article-study-toolbar {
     flex-direction: row;
     flex-wrap: wrap;
@@ -274,159 +268,6 @@
     flex: 0 0 auto;
     width: auto;
     min-width: 128px;
-  }
-
-  .article-modal-settings {
-    grid-template-columns: 1fr;
-  }
-
-  .article-study-modal > .panel-heading {
-    align-items: flex-start;
-    flex-direction: row;
-  }
-
-  .article-study-modal .modal-actions {
-    grid-template-columns: 1fr;
-    justify-content: stretch;
-  }
-
-  .article-word-grid,
-  .article-mini-grid {
-    grid-template-columns: 1fr;
-  }
-
-  .article-modal-words .article-word-grid {
-    max-height: clamp(260px, 38dvh, 380px);
-    overflow: auto;
-    overscroll-behavior: contain;
-    padding-right: 4px;
-  }
-
-  .article-learning-head {
-    align-items: stretch;
-    flex-direction: column;
-  }
-
-  .article-learning-head h4 {
-    font-size: 24px;
-  }
-
-  .article-modal-words .article-word-card {
-    min-height: 108px;
-    padding: 12px 14px;
-  }
-
-  .article-modal-words .article-word-card strong {
-    font-size: 20px;
-  }
-
-  .article-stage-shell {
-    padding-top: 6px;
-  }
-
-  .article-stage-nav {
-    gap: 5px;
-  }
-
-  .article-stage-tab {
-    min-height: 48px;
-    gap: 5px;
-    padding: 6px 4px;
-  }
-
-  .article-stage-tab span {
-    width: 20px;
-    height: 20px;
-    flex-basis: 20px;
-  }
-
-  .article-stage-tab strong {
-    font-size: 11px;
-  }
-
-  .article-stage-toolbar {
-    align-items: flex-start;
-    flex-direction: column;
-  }
-
-  .article-mode-switch {
-    width: 100%;
-  }
-
-  .article-vocabulary-row {
-    grid-template-columns: minmax(0, 1fr);
-    gap: 5px;
-    padding: 13px 2px;
-  }
-
-  .article-vocabulary-row small {
-    grid-column: 1;
-  }
-
-  .article-practice-options {
-    grid-template-columns: minmax(0, 1fr);
-  }
-
-  .article-stage-actions,
-  .article-stage-actions-split {
-    display: grid;
-    grid-template-columns: repeat(2, minmax(0, 1fr));
-    padding-top: 16px;
-  }
-
-  .article-stage-actions:not(.article-stage-actions-split) {
-    grid-template-columns: minmax(0, 1fr);
-  }
-
-  .article-stage-actions button {
-    width: 100%;
-    min-width: 0;
-  }
-
-  .article-check-commands {
-    display: grid;
-    grid-template-columns: repeat(2, minmax(0, 1fr));
-    gap: 6px;
-  }
-
-  .article-check-result {
-    align-items: flex-start;
-    flex-direction: column;
-  }
-
-  .article-word-card {
-    position: relative;
-    min-height: clamp(146px, 36vw, 180px);
-    align-content: start;
-    gap: 10px;
-    padding: 15px 16px 18px;
-  }
-
-  .article-word-topline {
-    align-items: flex-start;
-  }
-
-  .article-word-card strong {
-    font-size: clamp(20px, 6vw, 24px);
-    line-height: 1.15;
-  }
-
-  .article-word-card p {
-    padding-right: 18px;
-    line-height: 1.55;
-  }
-
-  .article-word-card small {
-    flex: 0 0 auto;
-    white-space: nowrap;
-  }
-
-  .article-word-card .selection-dot {
-    position: absolute;
-    right: 14px;
-    bottom: 14px;
-    width: 16px;
-    height: 16px;
   }
 
   .search-card,
@@ -641,6 +482,12 @@
   .config-modal {
     max-height: calc(100dvh - 24px);
     padding: 16px;
+  }
+
+  #reviewCompleteModal .panel-heading {
+    flex-direction: row;
+    align-items: flex-start;
+    justify-content: space-between;
   }
 
   .word-main h2 {

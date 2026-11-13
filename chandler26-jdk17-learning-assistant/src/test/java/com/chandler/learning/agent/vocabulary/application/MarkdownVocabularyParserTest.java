@@ -22,7 +22,7 @@ class MarkdownVocabularyParserTest {
         List<MarkdownVocabularyParser.ParsedVocabulary> words = parser.parse(markdown);
 
         assertThat(words).hasSize(5_087);
-        assertThat(words.stream().filter(MarkdownVocabularyParser.ParsedVocabulary::suspicious)).hasSize(7);
+        assertThat(words.stream().filter(MarkdownVocabularyParser.ParsedVocabulary::suspicious)).hasSize(23);
         assertThat(words.get(0).sourceOrder()).isEqualTo(1);
         assertThat(words.get(words.size() - 1).sourceOrder()).isEqualTo(5_087);
         assertThat(find(words, 112))
@@ -30,6 +30,11 @@ class MarkdownVocabularyParserTest {
                         MarkdownVocabularyParser.ParsedVocabulary::suggestedTerm,
                         MarkdownVocabularyParser.ParsedVocabulary::suspicious)
                 .containsExactly("air-conditionin g", "air-conditioning", true);
+        assertThat(find(words, 4_593))
+                .extracting(MarkdownVocabularyParser.ParsedVocabulary::originalTerm,
+                        MarkdownVocabularyParser.ParsedVocabulary::suggestedTerm,
+                        MarkdownVocabularyParser.ParsedVocabulary::suspicious)
+                .containsExactly("take ... into acc ount", "take ... into account", true);
         assertThat(find(words, 5_018))
                 .extracting(MarkdownVocabularyParser.ParsedVocabulary::originalTerm,
                         MarkdownVocabularyParser.ParsedVocabulary::suggestedTerm,

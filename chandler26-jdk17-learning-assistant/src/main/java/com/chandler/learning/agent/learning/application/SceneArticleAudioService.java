@@ -59,7 +59,7 @@ public class SceneArticleAudioService {
     @Value("${learning.audio.storage-path:./data/audio/}")
     private String storagePath;
 
-    private final ConcurrentHashMap<Long, Object> unitLocks = new ConcurrentHashMap<>();
+    private final ConcurrentHashMap<String, Object> synthesisLocks = new ConcurrentHashMap<>();
 
     /**
      * 文本清洗：去除 Markdown 语法、特殊符号与标签，提取纯净朗读文本。
@@ -148,13 +148,23 @@ public class SceneArticleAudioService {
     }
 
     /**
-     * 查询本地已存在的场景音频文件。
+     * 检查是否已配置完整的阿里云 NLS 语音合成密钥。
      */
-    public Resource getExistingSceneAudio(Long unitId) {
-        if (unitId == null) {
+    public boolean isNlsConfigured() {
+        return StringUtils.hasText(nlsProperties.getAppKey())
+                && StringUtils.hasText(nlsProperties.getAkId())
+                && StringUtils.hasText(nlsProperties.getAkSecret());
+    }
+
+    /**
+     * 查询指定分类目录下已缓存的完整 MP3 音频文件。
+     */
+    public Resource getExistingStoredAudio(String category, Long itemId) {
+        if (!StringUtils.hasText(category) || itemId == null) {
             return null;
         }
-        Path targetFile = Paths.get(storagePath, "scene", unitId + ".mp3");
+        String safeCategory = category.trim().replaceAll("[^a-zA-Z0-9_-]", "");
+        Path targetFile = Paths.get(storagePath, safeCategory, itemId + ".mp3");
         if (Files.exists(targetFile)) {
             try {
                 if (Files.size(targetFile) >= 100) {
@@ -164,6 +174,32 @@ public class SceneArticleAudioService {
             }
         }
         return null;
+    }
+
+    /**
+     * 清理指定分类目录下已缓存的 MP3 音频文件。
+     */
+    public void deleteStoredAudio(String category, Long itemId) {
+        if (!StringUtils.hasText(category) || itemId == null) {
+            return;
+        }
+        String safeCategory = category.trim().replaceAll("[^a-zA-Z0-9_-]", "");
+        Path targetFile = Paths.get(storagePath, safeCategory, itemId + ".mp3");
+        try {
+            if (Files.deleteIfExists(targetFile)) {
+                log.info("已清理过期音频缓存文件: category={}, itemId={}", safeCategory, itemId);
+            }
+        } catch (IOException ex) {
+            log.warn("清理过期音频缓存文件失败，将由后续重新合成覆盖: category={}, itemId={}, reason={}",
+                    safeCategory, itemId, ex.getMessage());
+        }
+    }
+
+    /**
+     * 查询本地已存在的场景音频文件。
+     */
+    public Resource getExistingSceneAudio(Long unitId) {
+        return getExistingStoredAudio("scene", unitId);
     }
 
     /**
@@ -343,16 +379,7 @@ public class SceneArticleAudioService {
             }
         }
 
-        // 2. 校验阿里云 NLS 配置
-        if (!StringUtils.hasText(nlsProperties.getAppKey())
-                || !StringUtils.hasText(nlsProperties.getAkId())
-                || !StringUtils.hasText(nlsProperties.getAkSecret())) {
-            throw LearningAssistantException.badRequest(
-                    LearningErrorCode.AI_PROVIDER_API_KEY_MISSING,
-                    "未配置阿里云语音服务密钥（NLS_APP_KEY / ALIYUN_AK_ID / ALIYUN_AK_SECRET），无法进行 AI 真人朗读合成");
-        }
-
-        // 3. 读取场景单元与关联的教材材料
+        // 2. 读取场景单元与关联的教材材料（在触发密钥校验前给出明确单元/材料状态）
         LearningPlanUnit unit = unitMapper.selectById(unitId);
         if (unit == null) {
             throw LearningAssistantException.notFound(LearningErrorCode.LEARNING_PLAN_UNIT_NOT_FOUND, "场景学习单元不存在");
@@ -365,43 +392,72 @@ public class SceneArticleAudioService {
             throw LearningAssistantException.badRequest(LearningErrorCode.LEARNING_SCENE_MATERIAL_NOT_FOUND, "场景英文学习材料正文为空");
         }
 
-        // 4. 并发锁控制，避免对同一单元重复调用阿里云 TTS
-        Object lock = unitLocks.computeIfAbsent(unitId, k -> new Object());
+        return synthesizeAndCacheAudio("scene", unitId, unit.getTitle(), material.getLearningText(), forceRefresh);
+    }
+
+    /**
+     * 对任意英文正文执行分段 TTS 合成并原子落盘缓存，供场景文章与知识反刍材料复用。
+     */
+    public Resource synthesizeAndCacheAudio(String category, Long itemId, String titleForLog,
+                                            String rawText, boolean forceRefresh) {
+        if (!StringUtils.hasText(category) || itemId == null) {
+            throw LearningAssistantException.badRequest(LearningErrorCode.LEARNING_SCENE_MATERIAL_NOT_FOUND, "音频缓存标识无效");
+        }
+        if (!forceRefresh) {
+            Resource existing = getExistingStoredAudio(category, itemId);
+            if (existing != null) {
+                return existing;
+            }
+        }
+        if (!isNlsConfigured()) {
+            throw LearningAssistantException.badRequest(
+                    LearningErrorCode.AI_PROVIDER_API_KEY_MISSING,
+                    "未配置阿里云语音服务密钥（NLS_APP_KEY / ALIYUN_AK_ID / ALIYUN_AK_SECRET），无法进行 AI 真人朗读合成");
+        }
+        if (!StringUtils.hasText(rawText)) {
+            throw LearningAssistantException.badRequest(LearningErrorCode.LEARNING_SCENE_MATERIAL_NOT_FOUND, "英文学习正文为空");
+        }
+
+        String safeCategory = category.trim().replaceAll("[^a-zA-Z0-9_-]", "");
+        String lockKey = safeCategory + ":" + itemId;
+        Object lock = synthesisLocks.computeIfAbsent(lockKey, k -> new Object());
         synchronized (lock) {
             try {
                 if (!forceRefresh) {
-                    Resource existing = getExistingSceneAudio(unitId);
+                    Resource existing = getExistingStoredAudio(safeCategory, itemId);
                     if (existing != null) {
                         return existing;
                     }
                 }
 
-                Path sceneDir = Paths.get(storagePath, "scene");
-                if (!Files.exists(sceneDir)) {
-                    Files.createDirectories(sceneDir);
+                Path targetDir = Paths.get(storagePath, safeCategory);
+                if (!Files.exists(targetDir)) {
+                    Files.createDirectories(targetDir);
                 }
-                Path targetFile = sceneDir.resolve(unitId + ".mp3");
-                Path tmpFile = sceneDir.resolve(unitId + ".mp3.tmp." + System.currentTimeMillis());
+                Path targetFile = targetDir.resolve(itemId + ".mp3");
+                Path tmpFile = targetDir.resolve(itemId + ".mp3.tmp." + System.currentTimeMillis());
 
-                String cleanText = cleanTtsText(material.getLearningText());
+                String cleanText = cleanTtsText(rawText);
                 List<String> chunks = splitIntoChunks(cleanText, nlsProperties.getMaxChunkLength());
                 if (chunks.isEmpty()) {
                     throw LearningAssistantException.badRequest(LearningErrorCode.LEARNING_SCENE_MATERIAL_NOT_FOUND, "清洗后无有效朗读文本");
                 }
 
-                log.info("开始合成场景文章音频 unitId={} title={} voice={} 切片数={}",
-                        unitId, unit.getTitle(), nlsProperties.getVoice(), chunks.size());
+                log.info("开始合成文章音频 category={} itemId={} title={} voice={} 切片数={}",
+                        safeCategory, itemId, titleForLog, nlsProperties.getVoice(), chunks.size());
 
                 String token;
                 try {
                     token = getValidAccessToken();
                 } catch (Exception ex) {
                     log.error("申请阿里云 NLS AccessToken 异常: {}", ex.getMessage());
-                    throw LearningAssistantException.externalService(LearningErrorCode.EXTERNAL_SERVICE_CALL_FAILED, "获取阿里云 NLS AccessToken 失败: " + ex.getMessage(), ex);
+                    throw LearningAssistantException.externalService(
+                            LearningErrorCode.EXTERNAL_SERVICE_CALL_FAILED,
+                            "获取阿里云 NLS AccessToken 失败: " + ex.getMessage(),
+                            ex);
                 }
 
                 NlsClient nlsClient = new NlsClient(nlsProperties.getGatewayUrl(), token);
-
                 try (FileOutputStream fos = new FileOutputStream(tmpFile.toFile())) {
                     for (int i = 0; i < chunks.size(); i++) {
                         String chunk = chunks.get(i);
@@ -421,21 +477,23 @@ public class SceneArticleAudioService {
 
                 if (Files.exists(tmpFile) && Files.size(tmpFile) >= 100) {
                     Files.move(tmpFile, targetFile, StandardCopyOption.ATOMIC_MOVE, StandardCopyOption.REPLACE_EXISTING);
-                    log.info("场景文章音频合成成功已落盘: {} ({} bytes)", targetFile, Files.size(targetFile));
+                    log.info("文章音频合成成功已落盘: {} ({} bytes)", targetFile, Files.size(targetFile));
                     return new FileSystemResource(targetFile);
-                } else {
-                    Files.deleteIfExists(tmpFile);
-                    throw LearningAssistantException.system(LearningErrorCode.SYSTEM_UNEXPECTED, "语音合成数据写入为空", null);
                 }
+                Files.deleteIfExists(tmpFile);
+                throw LearningAssistantException.system(LearningErrorCode.SYSTEM_UNEXPECTED, "语音合成数据写入为空", null);
             } catch (LearningAssistantException lae) {
                 throw lae;
             } catch (Exception ex) {
-                log.warn("event=scene_audio result=failed unitId={} errorType={}",
-                        unitId, ex.getClass().getSimpleName());
-                log.debug("合成场景文章语音异常 unitId={}", unitId, ex);
-                throw LearningAssistantException.externalService(LearningErrorCode.EXTERNAL_SERVICE_CALL_FAILED, "语音合成失败: " + ex.getMessage(), ex);
+                log.warn("event=article_audio result=failed category={} itemId={} errorType={}",
+                        safeCategory, itemId, ex.getClass().getSimpleName());
+                log.debug("合成文章语音异常 category={} itemId={}", safeCategory, itemId, ex);
+                throw LearningAssistantException.externalService(
+                        LearningErrorCode.EXTERNAL_SERVICE_CALL_FAILED,
+                        "语音合成失败: " + ex.getMessage(),
+                        ex);
             } finally {
-                unitLocks.remove(unitId);
+                synthesisLocks.remove(lockKey);
             }
         }
     }

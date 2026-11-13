@@ -161,7 +161,7 @@ public class LearningPlanSceneContentService {
         }
         int requiredMinimum = Math.min(targetWordCount, candidateTerms.size());
         int acceptableMinimum = Math.min(requiredMinimum,
-                Math.max(1, (int) Math.floor(requiredMinimum * 0.75)));
+                Math.max(1, (int) Math.floor(requiredMinimum * 0.60)));
         if (coreCount < acceptableMinimum) {
             throw sceneInvalid("核心词数量不足，期望至少 " + acceptableMinimum + " 个，实际为 " + coreCount + " 个");
         }
@@ -223,7 +223,25 @@ public class LearningPlanSceneContentService {
                 return candidateNoS;
             }
         }
+        // 短语/省略号忽略匹配：become accustomed to ... -> become accustomed to
+        String cleanNormalized = stripPhraseDecorations(normalized);
+        if (!cleanNormalized.isEmpty()) {
+            for (String candidate : candidates) {
+                if (cleanNormalized.equalsIgnoreCase(stripPhraseDecorations(candidate))) {
+                    return candidate;
+                }
+            }
+        }
         return null;
+    }
+
+    private String stripPhraseDecorations(String str) {
+        if (str == null) {
+            return "";
+        }
+        return str.replace("...", "")
+                .replaceAll("[^a-zA-Z0-9]", "")
+                .toLowerCase(java.util.Locale.ROOT);
     }
 
     private JsonNode node(JsonNode node, String... keys) {

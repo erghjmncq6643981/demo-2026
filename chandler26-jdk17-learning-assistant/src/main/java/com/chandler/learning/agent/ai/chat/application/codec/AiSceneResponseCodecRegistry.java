@@ -92,7 +92,8 @@ public class AiSceneResponseCodecRegistry {
             "term", "lemma", "inflections", "phonetic", "definitions", "examples",
             "collocations", "memory_tips", "synonyms", "antonyms", "word_family",
             "title", "learning_text", "translation", "vocabulary", "related_words",
-            "entries", "cards", "article", "vocabulary_focus", "grammar_points", "practice");
+            "entries", "cards", "article", "vocabulary_focus", "grammar_points", "practice",
+            "probes", "core_words", "derivations", "expansions");
 
     private void normalizeAliases(JsonNode root, List<String> requiredFields) {
         if (!(root instanceof ObjectNode objectNode)) {
@@ -141,6 +142,10 @@ public class AiSceneResponseCodecRegistry {
             case "vocabulary_focus" -> List.of("vocabularyFocus", "vocabulary", "words", "core_words");
             case "grammar_points" -> List.of("grammarPoints", "grammar", "points");
             case "practice" -> List.of("exercises", "questions");
+            case "probes" -> List.of("questions", "probe_list", "quiz", "tests");
+            case "core_words" -> List.of("coreWords", "words", "vocabulary", "terms");
+            case "derivations" -> List.of("derivations_4d", "related_words", "expansions");
+            case "expansions" -> List.of("derivations", "related_words", "nodes");
             default -> List.of();
         };
     }

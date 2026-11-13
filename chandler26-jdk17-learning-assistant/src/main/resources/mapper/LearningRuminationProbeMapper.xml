@@ -1,0 +1,51 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "https://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.chandler.learning.agent.reading.infrastructure.mapper.LearningRuminationProbeMapper">
+
+    <select id="selectByIdForUpdate"
+            resultType="com.chandler.learning.agent.reading.domain.entity.LearningRuminationProbe">
+        SELECT
+            id,
+            create_by AS createBy,
+            update_by AS updateBy,
+            create_time AS createTime,
+            update_time AS updateTime,
+            deleted,
+            version,
+            material_id AS materialId,
+            user_id AS userId,
+            target_word AS targetWord,
+            probe_type AS probeType,
+            question,
+            options_json AS optionsJson,
+            correct_answer AS correctAnswer,
+            hint,
+            generation_source AS generationSource,
+            selected_answer AS selectedAnswer,
+            is_correct AS isCorrect,
+            score,
+            illuminated,
+            answered_time AS answeredTime
+        FROM learning_rumination_probe
+        WHERE id = #{probeId}
+          AND user_id = #{userId}
+          AND deleted = 0
+        LIMIT 1
+        FOR UPDATE
+    </select>
+
+    <update id="markAnsweredAtomically">
+        UPDATE learning_rumination_probe
+        SET selected_answer = #{selectedAnswer},
+            is_correct = #{isCorrect},
+            score = #{score},
+            illuminated = #{illuminated},
+            answered_time = #{answeredTime},
+            update_by = #{userId},
+            update_time = #{answeredTime}
+        WHERE id = #{probeId}
+          AND user_id = #{userId}
+          AND deleted = 0
+          AND answered_time IS NULL
+    </update>
+</mapper>

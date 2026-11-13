@@ -362,16 +362,16 @@ public class LearningPlanService {
                     "学习计划已经完成");
         }
         LocalDate today = LocalDate.now();
-        if (plan.getStartTime() != null && today.isBefore(plan.getStartTime().toLocalDate())) {
-            throw LearningAssistantException.badRequest(
-                    LearningErrorCode.LEARNING_PLAN_STATE_ERROR,
-                    "学习计划尚未开始，暂不可生成场景");
-        }
-        if (plan.getEndTime() != null && today.isAfter(plan.getEndTime().toLocalDate())) {
-            throw LearningAssistantException.badRequest(
-                    LearningErrorCode.LEARNING_PLAN_STATE_ERROR,
-                    "学习计划已超出结束日期，不可继续生成场景");
-        }
+//        if (plan.getStartTime() != null && today.isBefore(plan.getStartTime().toLocalDate())) {
+//            throw LearningAssistantException.badRequest(
+//                    LearningErrorCode.LEARNING_PLAN_STATE_ERROR,
+//                    "学习计划尚未开始，暂不可生成场景");
+//        }
+//        if (plan.getEndTime() != null && today.isAfter(plan.getEndTime().toLocalDate())) {
+//            throw LearningAssistantException.badRequest(
+//                    LearningErrorCode.LEARNING_PLAN_STATE_ERROR,
+//                    "学习计划已超出结束日期，不可继续生成场景");
+//        }
 
         LocalDate resolvedRecommendedDate = resolveRecommendedDate(plan, recommendedDate, today);
         String lockToken = UUID.randomUUID().toString();
@@ -902,13 +902,7 @@ public class LearningPlanService {
     }
 
     private LocalDate resolveRecommendedDate(LearningPlan plan, LocalDate requested, LocalDate today) {
-        LocalDate resolved = requested == null ? today : requested;
-        if (plan.getEndTime() != null && resolved.isAfter(plan.getEndTime().toLocalDate())) {
-            throw LearningAssistantException.badRequest(
-                    LearningErrorCode.LEARNING_PLAN_STATE_ERROR,
-                    "场景日期不能晚于学习计划结束日期");
-        }
-        return resolved;
+        return requested == null ? today : requested;
     }
 
     private void markPlanCompleted(LearningPlan plan) {

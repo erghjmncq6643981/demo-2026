@@ -14,6 +14,14 @@
   --yellow: #facc6b;
   --danger: #fb7185;
   --shadow: 0 28px 80px rgba(0, 0, 0, 0.34);
+
+  /* 统一动效与焦点可访问性参数 */
+  --motion-fast: 140ms;
+  --motion-base: 200ms;
+  --motion-slow: 260ms;
+  --motion-ease-standard: cubic-bezier(0.2, 0.8, 0.2, 1);
+  --motion-ease-out: cubic-bezier(0.16, 1, 0.3, 1);
+  --focus-ring: 0 0 0 2px #0f172a, 0 0 0 4px rgba(129, 140, 248, 0.92);
 }
 
 

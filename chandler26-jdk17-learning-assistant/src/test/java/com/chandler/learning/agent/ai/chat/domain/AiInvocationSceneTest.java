@@ -36,15 +36,17 @@ class AiInvocationSceneTest {
         assertThat(AiInvocationScene.VOCABULARY_CARD_SINGLE.independentAction()).isTrue();
         assertThat(AiInvocationScene.VOCABULARY_CARD_BATCH.independentAction()).isTrue();
         assertThat(AiInvocationScene.VOCABULARY_CATALOG_ANALYSIS.independentAction()).isTrue();
-        assertThat(AiInvocationScene.ARTICLE_STUDY_MATERIAL.independentAction()).isTrue();
+        assertThat(AiInvocationScene.RUMINATION_MATERIAL.independentAction()).isTrue();
+        assertThat(AiInvocationScene.RUMINATION_SCENARIO.independentAction()).isTrue();
+        assertThat(AiInvocationScene.RUMINATION_FISSION.independentAction()).isTrue();
         assertThat(AiInvocationScene.VOCABULARY_SCENE_UNIT.independentAction()).isTrue();
         assertThat(AiInvocationScene.GENERAL_CHAT.independentAction()).isFalse();
     }
 
     @Test
     void shouldSerializeAsBusinessCode() throws Exception {
-        assertThat(objectMapper.writeValueAsString(AiInvocationScene.ARTICLE_STUDY_MATERIAL))
-                .isEqualTo("\"article_study_material\"");
+        assertThat(objectMapper.writeValueAsString(AiInvocationScene.RUMINATION_MATERIAL))
+                .isEqualTo("\"rumination_material\"");
     }
 
     @Test

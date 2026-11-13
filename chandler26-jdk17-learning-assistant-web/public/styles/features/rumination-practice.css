@@ -1,0 +1,603 @@
+/* 知识反刍阅读后按句跟敲与目标词遮挡补全弹窗及句子触发器样式 */
+
+#ruminationPracticeModal.modal-backdrop {
+  z-index: 40;
+}
+
+.rumination-practice-modal {
+  width: min(720px, 94vw);
+  max-width: 720px;
+  max-height: min(840px, calc(100vh - 36px));
+  padding: 22px 24px;
+  border-radius: 16px;
+  border-color: rgba(56, 189, 248, 0.28);
+  background: rgba(15, 23, 42, 0.96);
+  box-shadow: 0 24px 56px rgba(2, 6, 23, 0.72);
+}
+
+.rumination-practice-modal .rumination-practice-card {
+  margin-top: 0;
+  padding: 0;
+  border: none;
+  background: transparent;
+  backdrop-filter: none;
+}
+
+.rumination-practice-modal .rumination-practice-header {
+  flex-wrap: nowrap;
+  align-items: flex-start;
+}
+
+.rumination-practice-modal .rumination-practice-queue {
+  flex: 1;
+  min-width: 0;
+}
+
+.rumination-practice-modal .rumination-practice-header .inline-actions {
+  flex-shrink: 0;
+}
+
+.rumination-sentence-unit {
+  display: inline;
+  padding: 2px 3px;
+  border-radius: 6px;
+  transition: background 0.16s ease;
+}
+
+.rumination-sentence-unit.has-practice:hover,
+.rumination-sentence-unit.is-practicing {
+  background: rgba(56, 189, 248, 0.11);
+}
+
+.sentence-practice-trigger {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 24px;
+  height: 24px;
+  margin: 0 5px 0 4px;
+  padding: 0;
+  border-radius: 6px;
+  font-family: inherit;
+  font-size: 13px;
+  line-height: 1;
+  color: #7dd3fc;
+  background: rgba(14, 165, 233, 0.12);
+  border: 1px solid rgba(56, 189, 248, 0.28);
+  cursor: pointer;
+  vertical-align: middle;
+  opacity: 0.85;
+  transition: opacity var(--motion-fast) var(--motion-ease-standard), transform var(--motion-fast) var(--motion-ease-standard), background-color var(--motion-fast) var(--motion-ease-standard), border-color var(--motion-fast) var(--motion-ease-standard), color var(--motion-fast) var(--motion-ease-standard);
+}
+
+.sentence-practice-trigger:hover {
+  opacity: 1;
+  transform: translateY(-1px);
+  background: rgba(56, 189, 248, 0.25);
+  border-color: rgba(125, 211, 252, 0.65);
+  color: #f0f9ff;
+}
+
+.sentence-practice-trigger.is-recommended {
+  color: #fde68a;
+  background: rgba(245, 158, 11, 0.14);
+  border-color: rgba(245, 158, 11, 0.36);
+}
+
+.sentence-practice-trigger.is-practiced {
+  color: #7dd3fc;
+  background: rgba(56, 189, 248, 0.2);
+  border-color: rgba(56, 189, 248, 0.5);
+}
+
+.sentence-practice-trigger.is-consolidated {
+  color: #6ee7b7;
+  background: rgba(16, 185, 129, 0.14);
+  border-color: rgba(16, 185, 129, 0.38);
+}
+
+.probe-post-practice-cta {
+  margin-top: 16px;
+  padding: 14px 16px;
+  border-radius: 12px;
+  background: linear-gradient(135deg, rgba(14, 165, 233, 0.14), rgba(99, 102, 241, 0.12));
+  border: 1px solid rgba(56, 189, 248, 0.34);
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+
+.probe-post-practice-cta-text {
+  font-size: 13px;
+  color: #e2e8f0;
+  line-height: 1.5;
+}
+
+.probe-post-practice-cta-text small {
+  display: block;
+  margin-top: 2px;
+  color: #94a3b8;
+  font-size: 12px;
+}
+
+.rumination-practice-card {
+  margin-top: 14px;
+  background: rgba(15, 23, 42, 0.84);
+  border: 1px solid rgba(56, 189, 248, 0.3);
+  border-radius: 14px;
+  padding: 20px;
+  backdrop-filter: blur(12px);
+}
+
+.rumination-practice-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  flex-wrap: wrap;
+  margin-bottom: 14px;
+}
+
+.rumination-practice-queue {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex-wrap: wrap;
+}
+
+.practice-queue-dot {
+  padding: 4px 10px;
+  border-radius: 999px;
+  font-size: 12px;
+  font-weight: 600;
+  border: 1px solid rgba(148, 163, 184, 0.25);
+  background: rgba(30, 41, 59, 0.65);
+  color: #94a3b8;
+  cursor: pointer;
+}
+
+.practice-queue-dot.active {
+  background: rgba(56, 189, 248, 0.22);
+  border-color: #38bdf8;
+  color: #f8fafc;
+}
+
+.practice-queue-dot.done {
+  background: rgba(16, 185, 129, 0.16);
+  border-color: rgba(16, 185, 129, 0.45);
+  color: #6ee7b7;
+}
+
+.rumination-copy-stage-board,
+.rumination-cloze-stage-board {
+  padding: 16px;
+  border-radius: 12px;
+  background: rgba(11, 15, 26, 0.72);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+}
+
+.rumination-copy-tokens {
+  font-family: inherit;
+  font-size: 18px;
+  line-height: 1.95;
+  letter-spacing: 0.2px;
+  color: #e5e7eb;
+  margin-bottom: 14px;
+  word-break: break-word;
+}
+
+.copy-token {
+  display: inline-block;
+  margin-right: 3px;
+  padding: 1px 3px;
+  border-radius: 4px;
+}
+
+.copy-token.is-target {
+  border-bottom: 2px dashed rgba(56, 189, 248, 0.55);
+}
+
+.copy-token.matched {
+  color: #34d399;
+  background: rgba(16, 185, 129, 0.12);
+}
+
+.copy-token.current {
+  color: #f8fafc;
+  background: rgba(56, 189, 248, 0.18);
+  outline: 1px solid rgba(56, 189, 248, 0.45);
+}
+
+.copy-token.error {
+  color: #fca5a5;
+  background: rgba(239, 68, 68, 0.2);
+  outline: 1px solid rgba(239, 68, 68, 0.65);
+}
+
+.rumination-cloze-sentence {
+  font-family: inherit;
+  font-size: 18px;
+  line-height: 1.95;
+  letter-spacing: 0.2px;
+  color: #e5e7eb;
+  margin-bottom: 14px;
+}
+
+.rumination-cloze-slot {
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+  margin: 0 1px;
+  padding: 1px 6px;
+  border-radius: 8px;
+  background: rgba(56, 189, 248, 0.12);
+  border: 1px dashed rgba(56, 189, 248, 0.55);
+  font-family: inherit;
+  font-size: 16px;
+  line-height: 1.5;
+  vertical-align: baseline;
+}
+
+.rumination-cloze-slot.is-active {
+  background: rgba(56, 189, 248, 0.2);
+  border-color: #38bdf8;
+  box-shadow: 0 0 0 2px rgba(56, 189, 248, 0.14);
+}
+
+.rumination-cloze-slot.is-pending {
+  background: rgba(30, 41, 59, 0.65);
+  border-color: rgba(148, 163, 184, 0.35);
+}
+
+.rumination-cloze-slot.is-solved {
+  border-style: solid;
+  border-color: rgba(16, 185, 129, 0.5);
+  background: rgba(16, 185, 129, 0.15);
+  color: #6ee7b7;
+  font-weight: 600;
+}
+
+.rumination-cloze-slot span.typed {
+  color: #38bdf8;
+  font-weight: 700;
+}
+
+.rumination-cloze-slot span.recall-letter {
+  color: #94a3b8;
+}
+
+.rumination-cloze-slot.is-peeking span {
+  color: #fde68a;
+  font-weight: 700;
+}
+
+.rumination-practice-input-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+
+.rumination-practice-input {
+  flex: 1;
+  min-width: 220px;
+  padding: 10px 14px;
+  border-radius: 10px;
+  border: 1px solid rgba(56, 189, 248, 0.35);
+  background: rgba(15, 23, 42, 0.9);
+  color: #f8fafc;
+  font-size: 15px;
+  outline: none;
+}
+
+.rumination-practice-input:focus {
+  border-color: #38bdf8;
+  box-shadow: 0 0 0 3px rgba(56, 189, 248, 0.16);
+}
+
+.rumination-error-localization {
+  margin-top: 12px;
+  padding: 10px 12px;
+  border-radius: 10px;
+  background: rgba(239, 68, 68, 0.11);
+  border: 1px solid rgba(239, 68, 68, 0.36);
+  color: #fecaca;
+  font-size: 13px;
+  line-height: 1.6;
+}
+
+.diff-seg {
+  display: inline-block;
+  padding: 0 4px;
+  margin-right: 2px;
+  border-radius: 4px;
+  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+  font-weight: 700;
+}
+
+.diff-seg.match {
+  background: rgba(16, 185, 129, 0.18);
+  color: #6ee7b7;
+}
+
+.diff-seg.wrong {
+  background: rgba(239, 68, 68, 0.25);
+  color: #fca5a5;
+  text-decoration: line-through;
+}
+
+.diff-seg.missing {
+  background: rgba(245, 158, 11, 0.22);
+  color: #fde68a;
+  border-bottom: 2px solid #f59e0b;
+}
+
+.rumination-practice-feedback {
+  margin-top: 12px;
+  padding: 10px 12px;
+  border-radius: 10px;
+  background: rgba(16, 185, 129, 0.12);
+  border-left: 3px solid #10b981;
+  color: #d1fae5;
+  font-size: 13px;
+  line-height: 1.5;
+}
+
+.rumination-practice-tools {
+  margin-top: 12px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.rumination-practice-round-summary {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+  gap: 12px;
+  margin: 14px 0;
+}
+
+.practice-metric-tile {
+  padding: 14px;
+  border-radius: 10px;
+  background: rgba(11, 15, 26, 0.72);
+  border: 1px solid rgba(148, 163, 184, 0.18);
+}
+
+.practice-metric-tile .metric-value {
+  font-size: 22px;
+  font-weight: 700;
+  color: #f8fafc;
+}
+
+.practice-metric-tile .metric-label {
+  margin-top: 4px;
+  font-size: 12px;
+  color: #94a3b8;
+  line-height: 1.4;
+}
+
+.rumination-practice-card .shake {
+  animation: shakeBoard 0.26s ease;
+}
+
+@keyframes shakeBoard {
+  0%, 100% { transform: translateX(0); }
+  25% { transform: translateX(-5px); }
+  75% { transform: translateX(5px); }
+}
+
+@media (max-width: 640px) {
+  .rumination-practice-card {
+    padding: 14px;
+  }
+  .rumination-copy-tokens,
+  .rumination-cloze-sentence {
+    font-size: 15px;
+  }
+  .rumination-practice-input {
+    min-width: 100%;
+  }
+}
+
+/* 场景材料顶部紧凑栏、正文阅读排版（对齐学习计划文章风格）与内联探针 */
+.bag-status-bar.rumination-compact-bar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 8px 12px;
+  background: rgba(15, 23, 42, 0.72);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: 10px;
+  backdrop-filter: blur(12px);
+}
+
+.rumination-archive-toggle-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 5px 10px;
+  border-radius: 8px;
+  background: rgba(30, 41, 59, 0.85);
+  border: 1px solid rgba(148, 163, 184, 0.22);
+  color: #e2e8f0;
+  font-size: 12px;
+  font-weight: 600;
+  cursor: pointer;
+  white-space: nowrap;
+  transition: background-color var(--motion-base) var(--motion-ease-standard), border-color var(--motion-base) var(--motion-ease-standard), color var(--motion-base) var(--motion-ease-standard);
+}
+
+.rumination-archive-toggle-btn:hover {
+  border-color: rgba(56, 189, 248, 0.45);
+  color: #f8fafc;
+}
+
+.rumination-archive-toggle-btn[aria-expanded='true'] {
+  background: rgba(14, 165, 233, 0.16);
+  border-color: rgba(56, 189, 248, 0.5);
+  color: #e0f2fe;
+}
+
+.rumination-archive-toggle-btn[aria-expanded='true'] .rumination-drawer-caret {
+  transform: rotate(180deg);
+}
+
+.rumination-drawer-caret {
+  font-size: 11px;
+  transition: transform 0.18s ease;
+}
+
+.rumination-archive-count-pill {
+  padding: 1px 6px;
+  border-radius: 999px;
+  font-size: 11px;
+  background: rgba(255, 255, 255, 0.08);
+  color: #cbd5e1;
+}
+
+.rumination-bag-compact-group {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+  flex: 1 1 auto;
+}
+
+.rumination-article-card {
+  background: rgba(15, 23, 42, 0.65);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: 14px;
+  padding: 20px 24px 22px;
+  backdrop-filter: blur(12px);
+}
+
+.rumination-article-card.hidden,
+.rumination-probes-card.hidden,
+.materials-archive-box.hidden {
+  display: none !important;
+}
+
+.rumination-article-top {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 16px;
+  flex-wrap: wrap;
+  margin-bottom: 16px;
+  padding-bottom: 12px;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.06);
+}
+
+.rumination-article-head-info {
+  flex: 1 1 280px;
+  min-width: 0;
+}
+
+.rumination-article-actions {
+  flex-shrink: 0;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+}
+
+.rumination-article-title {
+  margin: 0;
+  font-size: 20px;
+  color: #f8fafc;
+  font-weight: 700;
+  letter-spacing: -0.01em;
+}
+
+.rumination-article-body {
+  font-size: 21px;
+  line-height: 2.05;
+  letter-spacing: 0.2px;
+  color: #e5e7eb;
+  font-family: inherit;
+}
+
+.rumination-article-body p {
+  margin: 0 0 16px 0;
+}
+
+.target-word-mark {
+  display: inline;
+  padding: 2px 6px;
+  border-radius: 4px;
+  background: rgba(250, 204, 107, 0.12);
+  border-bottom: 1.5px solid rgba(250, 204, 107, 0.65);
+  color: var(--text, #f8fafc);
+  font-weight: 500;
+  cursor: pointer;
+  transition: background 0.18s ease, border-color 0.18s ease, box-shadow 0.18s ease;
+}
+
+.target-word-mark:hover {
+  background: rgba(250, 204, 107, 0.24);
+  border-bottom-color: #facc6b;
+  box-shadow: 0 0 8px rgba(250, 204, 107, 0.25);
+}
+
+.rumination-translation-details {
+  margin-top: 14px;
+  border-top: 1px solid rgba(255, 255, 255, 0.08);
+  padding-top: 10px;
+}
+
+.rumination-translation-details summary {
+  cursor: pointer;
+  color: #94a3b8;
+  font-size: 13px;
+  font-weight: 600;
+  user-select: none;
+}
+
+.rumination-translation-box {
+  margin-top: 10px;
+  padding: 12px 14px;
+  border-radius: 10px;
+  background: rgba(11, 15, 26, 0.7);
+  border-left: 3px solid #10b981;
+  font-size: 15px;
+  color: #cbd5e1;
+  line-height: 1.75;
+}
+
+.rumination-probes-subtitle {
+  display: block;
+  margin-top: 4px;
+  font-size: 12px;
+  color: #94a3b8;
+}
+
+@media (max-width: 760px) {
+  .bag-status-bar.rumination-compact-bar {
+    flex-wrap: wrap;
+    gap: 8px;
+  }
+
+  .rumination-article-card {
+    padding: 16px;
+  }
+
+  .rumination-article-body {
+    font-size: 18px;
+    line-height: 1.92;
+  }
+
+  .rumination-article-actions {
+    width: 100%;
+    justify-content: flex-start;
+  }
+
+  .rumination-practice-modal {
+    width: calc(100vw - 24px);
+    padding: 16px;
+    max-height: calc(100vh - 24px);
+  }
+}

@@ -103,7 +103,7 @@ class AiChatServicePromptContextTest {
         List<ChatMessageParam> messages = List.of(new ChatMessageParam("user", "a".repeat(30_000)));
 
         assertThatThrownBy(() -> ReflectionTestUtils.invokeMethod(
-                service, "validatePromptBudget", AiInvocationScene.ARTICLE_STUDY_MATERIAL,
+                service, "validatePromptBudget", AiInvocationScene.RUMINATION_MATERIAL,
                 AiModelDefinition.DEEPSEEK_V4_PRO, 943_600, 1))
                 .isInstanceOf(LearningAssistantException.class)
                 .hasMessageContaining("943718 Token");

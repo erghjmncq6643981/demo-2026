@@ -82,6 +82,14 @@
   margin-top: 16px;
 }
 
+.modal-cognitive-image {
+  margin-bottom: 12px;
+}
+
+.modal-cognitive-image .cognitive-image-card {
+  margin: 0;
+}
+
 .modal-examples {
   display: grid;
   gap: 10px;
@@ -108,10 +116,24 @@
   margin-top: 16px;
 }
 
-.modal-review-footer > span {
+.modal-review-footer-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.modal-review-footer > span,
+.modal-review-footer-header > span:first-child {
   color: var(--muted);
   font-size: 13px;
   font-weight: 850;
+}
+
+.modal-shortcut-hint {
+  font-size: 11px;
+  color: var(--muted);
+  font-weight: 600;
 }
 
 .detail-modal {
@@ -198,4 +220,286 @@
   border-color: rgba(125, 211, 168, 0.48);
   background: rgba(125, 211, 168, 0.13);
   color: var(--green);
+}
+
+/* 星系图谱双击节点词卡：柔和入场动效、节点语义上下文与骨架占位 */
+@keyframes quickBackdropFadeIn {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+
+@keyframes quickCardReveal {
+  from {
+    opacity: 0;
+    transform: translate3d(var(--modal-origin-x, 0px), var(--modal-origin-y, 10px), 0) scale(var(--modal-origin-scale, 0.92));
+  }
+  to {
+    opacity: 1;
+    transform: translate3d(0, 0, 0) scale(1);
+  }
+}
+
+@keyframes quickContentFadeIn {
+  from {
+    opacity: 0;
+    transform: translateY(4px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@keyframes quickSkeletonShimmer {
+  0% {
+    background-position: 200% 0;
+  }
+  100% {
+    background-position: -200% 0;
+  }
+}
+
+#quickLookupModal.modal-backdrop:not(.hidden) {
+  animation: quickBackdropFadeIn 180ms ease-out both;
+}
+
+#quickLookupModal.modal-backdrop.is-node-card-mode {
+  background: rgba(2, 6, 23, 0.52);
+  backdrop-filter: blur(5px);
+}
+
+#quickLookupModal:not(.hidden) .quick-lookup-modal {
+  animation: quickCardReveal 220ms cubic-bezier(0.22, 1, 0.36, 1) both;
+}
+
+#quickLookupModal.is-node-card-mode .quick-lookup-input-bar,
+#quickLookupModal.is-node-card-mode .quick-lookup-recent-bar {
+  display: none !important;
+}
+
+#quickLookupModal.is-node-card-mode .panel-heading {
+  align-items: flex-start;
+  flex-wrap: nowrap;
+  gap: 12px;
+  padding-bottom: 12px;
+  margin-bottom: 4px;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.07);
+}
+
+#quickLookupModal .quick-lookup-heading-main {
+  flex: 1;
+  min-width: 0;
+}
+
+#quickLookupModal .panel-heading .inline-actions {
+  flex-shrink: 0;
+  white-space: nowrap;
+}
+
+#quickLookupCloseBtn:focus:not(:focus-visible) {
+  outline: none;
+  box-shadow: none;
+}
+
+#quickLookupModal .quick-meaning-item .pos {
+  white-space: nowrap;
+  flex-shrink: 0;
+}
+
+#quickLookupModal .quick-card-actions button {
+  white-space: nowrap;
+}
+
+@media (max-width: 640px) {
+  #quickLookupModal .quick-lookup-modal {
+    padding: 18px 16px;
+  }
+
+  #quickLookupModal .quick-card-hero {
+    flex-direction: column;
+    gap: 12px;
+  }
+
+  #quickLookupModal .quick-meaning-item {
+    flex-wrap: wrap;
+    gap: 6px;
+  }
+}
+
+#quickLookupModal.is-node-card-mode #quickLookupTitle {
+  font-size: 22px;
+  line-height: 1.25;
+}
+
+.quick-lookup-context {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px;
+  margin: 8px 0 0;
+}
+
+.quick-lookup-context .context-pill {
+  display: inline-flex;
+  align-items: center;
+  padding: 2px 9px;
+  border-radius: 999px;
+  font-size: 11.5px;
+  font-weight: 600;
+  background: rgba(148, 163, 184, 0.14);
+  border: 1px solid rgba(148, 163, 184, 0.24);
+  color: #cbd5e1;
+}
+
+.quick-lookup-context .context-pill.is-scene {
+  background: rgba(16, 185, 129, 0.14);
+  border-color: rgba(16, 185, 129, 0.32);
+  color: #6ee7b7;
+}
+
+.quick-lookup-context .context-pill.is-status-mastered {
+  background: rgba(16, 185, 129, 0.14);
+  border-color: rgba(16, 185, 129, 0.32);
+  color: #6ee7b7;
+}
+
+.quick-lookup-context .context-pill.is-status-vague {
+  background: rgba(245, 158, 11, 0.14);
+  border-color: rgba(245, 158, 11, 0.35);
+  color: #fcd34d;
+}
+
+.quick-lookup-context .context-pill.is-status-unlearned {
+  background: rgba(56, 189, 248, 0.14);
+  border-color: rgba(56, 189, 248, 0.32);
+  color: #7dd3fc;
+}
+
+.quick-card-content-enter {
+  animation: quickContentFadeIn 180ms ease-out both;
+}
+
+.quick-card-loading-preview {
+  align-items: center;
+  margin-bottom: 12px;
+}
+
+.quick-loading-def {
+  margin: 6px 0 0;
+  font-size: 14px;
+  color: #cbd5e1;
+}
+
+.quick-loading-tag {
+  font-size: 12.5px;
+  color: #94a3b8;
+  white-space: nowrap;
+}
+
+.quick-card-skeleton {
+  display: grid;
+  gap: 12px;
+  padding: 6px 0;
+  min-height: 240px;
+}
+
+.quick-card-skeleton .skeleton-bar,
+.quick-card-skeleton .skeleton-block {
+  border-radius: 10px;
+  background: linear-gradient(90deg, rgba(255, 255, 255, 0.04) 25%, rgba(255, 255, 255, 0.09) 50%, rgba(255, 255, 255, 0.04) 75%);
+  background-size: 200% 100%;
+  animation: quickSkeletonShimmer 1.4s ease-in-out infinite;
+}
+
+.quick-card-skeleton .skeleton-bar.is-lg {
+  height: 46px;
+}
+
+.quick-card-skeleton .skeleton-bar.is-md {
+  height: 36px;
+  width: 78%;
+}
+
+.quick-card-skeleton .skeleton-block {
+  height: 128px;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  #quickLookupModal.modal-backdrop:not(.hidden),
+  #quickLookupModal:not(.hidden) .quick-lookup-modal,
+  .quick-card-content-enter,
+  .quick-card-skeleton .skeleton-bar,
+  .quick-card-skeleton .skeleton-block {
+    animation: none !important;
+  }
+}
+
+.shortcut-help-modal {
+  width: min(720px, calc(100vw - 24px));
+}
+
+.shortcut-help-sections {
+  display: grid;
+  gap: 14px;
+  max-height: 62vh;
+  overflow-y: auto;
+  padding-right: 4px;
+}
+
+.shortcut-help-section {
+  background: rgba(15, 23, 42, 0.55);
+  border: 1px solid rgba(148, 163, 184, 0.16);
+  border-radius: 12px;
+  padding: 12px 14px;
+}
+
+.shortcut-help-section h4 {
+  margin: 0 0 10px 0;
+  font-size: 13px;
+  font-weight: 700;
+  color: #e0f2fe;
+}
+
+.shortcut-help-list {
+  display: grid;
+  gap: 8px;
+  margin: 0;
+}
+
+.shortcut-help-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  font-size: 13px;
+  color: #cbd5e1;
+}
+
+.shortcut-help-row dt,
+.shortcut-help-row dd {
+  margin: 0;
+}
+
+.shortcut-help-row dd {
+  text-align: right;
+  line-height: 1.45;
+}
+
+.shortcut-help-keys {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 2px 8px;
+  border-radius: 6px;
+  border: 1px solid rgba(129, 140, 248, 0.35);
+  background: rgba(129, 140, 248, 0.14);
+  color: #e0e7ff;
+  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+  font-size: 12px;
+  font-weight: 600;
+  white-space: nowrap;
 }

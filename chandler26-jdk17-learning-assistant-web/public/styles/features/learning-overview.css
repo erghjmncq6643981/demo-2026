@@ -350,7 +350,7 @@
 .unit-status-tag.running {
   background: rgba(59, 130, 246, 0.15);
   color: #3b82f6;
-  animation: pulse-glow 2s infinite ease-in-out;
+  animation: pulse-glow 2s 3 ease-in-out;
 }
 
 .scene-calendar-day.generating-day {
@@ -467,7 +467,7 @@
   border-left: 3.5px solid rgba(148, 163, 184, 0.45);
   border-radius: 8px;
   background: rgba(255, 255, 255, 0.025);
-  transition: all 140ms ease;
+  transition: background-color var(--motion-fast) var(--motion-ease-standard), border-color var(--motion-fast) var(--motion-ease-standard), color var(--motion-fast) var(--motion-ease-standard);
 }
 
 .scene-vocabulary-preview-word.completed {

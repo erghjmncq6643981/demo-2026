@@ -1,0 +1,45 @@
+.rumination-toolbar,
+.article-study-toolbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 10px 12px;
+}
+
+.rumination-toolbar .toolbar-selectors,
+.article-study-toolbar .toolbar-selectors {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  flex-wrap: nowrap;
+}
+
+.rumination-toolbar .toolbar-selectors .compact-field,
+.article-study-toolbar .toolbar-selectors .compact-field {
+  width: auto;
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 0;
+  white-space: nowrap;
+}
+
+.rumination-toolbar .toolbar-selectors select,
+.article-study-toolbar .toolbar-selectors select {
+  height: 34px;
+}
+
+.rumination-toolbar .compact-field,
+.article-study-toolbar .compact-field {
+  width: min(300px, 100%);
+  grid-template-columns: auto minmax(180px, 1fr);
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 0;
+}
+
+.rumination-toolbar .primary-button,
+.article-study-toolbar .primary-button {
+  min-width: 140px;
+}

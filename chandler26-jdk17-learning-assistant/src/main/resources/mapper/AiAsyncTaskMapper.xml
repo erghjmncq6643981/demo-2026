@@ -66,4 +66,156 @@
               OR idempotency_key IS NOT NULL
           )
     </select>
+
+    <select id="selectLatestByIdempotencyKey"
+            resultType="com.chandler.learning.agent.task.domain.entity.AiAsyncTask">
+        SELECT
+            id,
+            create_by AS createBy,
+            create_time AS createTime,
+            update_by AS updateBy,
+            update_time AS updateTime,
+            deleted,
+            version,
+            user_id AS userId,
+            owner_user_id AS ownerUserId,
+            trigger_user_id AS triggerUserId,
+            operator_user_id AS operatorUserId,
+            trigger_type AS triggerType,
+            visibility,
+            task_type AS taskType,
+            task_name AS taskName,
+            plan_id AS planId,
+            unit_id AS unitId,
+            related_job_id AS relatedJobId,
+            business_type AS businessType,
+            business_id AS businessId,
+            idempotency_key AS idempotencyKey,
+            status,
+            execution_mode AS executionMode,
+            scheduled_time AS scheduledTime,
+            priority,
+            total_count AS totalCount,
+            success_count AS successCount,
+            failed_count AS failedCount,
+            progress_percent AS progressPercent,
+            retry_count AS retryCount,
+            max_retry_count AS maxRetryCount,
+            payload_json AS payloadJson,
+            error_message AS errorMessage,
+            started_time AS startedTime,
+            finished_time AS finishedTime,
+            cancelled_time AS cancelledTime
+        FROM learning_ai_async_task
+        WHERE owner_user_id = #{ownerUserId}
+          AND task_type = #{taskType}
+          AND idempotency_key = #{idempotencyKey}
+          AND deleted = 0
+        ORDER BY create_time DESC, id DESC
+        LIMIT 1
+    </select>
+
+    <select id="selectLatestByJobAndScenario"
+            resultType="com.chandler.learning.agent.task.domain.entity.AiAsyncTask">
+        SELECT
+            id,
+            create_by AS createBy,
+            create_time AS createTime,
+            update_by AS updateBy,
+            update_time AS updateTime,
+            deleted,
+            version,
+            user_id AS userId,
+            owner_user_id AS ownerUserId,
+            trigger_user_id AS triggerUserId,
+            operator_user_id AS operatorUserId,
+            trigger_type AS triggerType,
+            visibility,
+            task_type AS taskType,
+            task_name AS taskName,
+            plan_id AS planId,
+            unit_id AS unitId,
+            related_job_id AS relatedJobId,
+            business_type AS businessType,
+            business_id AS businessId,
+            idempotency_key AS idempotencyKey,
+            status,
+            execution_mode AS executionMode,
+            scheduled_time AS scheduledTime,
+            priority,
+            total_count AS totalCount,
+            success_count AS successCount,
+            failed_count AS failedCount,
+            progress_percent AS progressPercent,
+            retry_count AS retryCount,
+            max_retry_count AS maxRetryCount,
+            payload_json AS payloadJson,
+            error_message AS errorMessage,
+            started_time AS startedTime,
+            finished_time AS finishedTime,
+            cancelled_time AS cancelledTime
+        FROM learning_ai_async_task
+        WHERE owner_user_id = #{ownerUserId}
+          AND task_type = #{taskType}
+          AND related_job_id = #{relatedJobId}
+          AND deleted = 0
+          AND JSON_UNQUOTE(JSON_EXTRACT(payload_json, '$.scenarioCode')) = #{scenarioCode}
+        ORDER BY CASE WHEN status IN (#{pendingStatus}, #{runningStatus}, #{retryWaitStatus}) THEN 0 ELSE 1 END ASC,
+                 create_time DESC,
+                 id DESC
+        LIMIT 1
+    </select>
+
+    <select id="selectRecentByRelatedJobAndTypes"
+            resultType="com.chandler.learning.agent.task.domain.entity.AiAsyncTask">
+        SELECT
+            id,
+            create_by AS createBy,
+            create_time AS createTime,
+            update_by AS updateBy,
+            update_time AS updateTime,
+            deleted,
+            version,
+            user_id AS userId,
+            owner_user_id AS ownerUserId,
+            trigger_user_id AS triggerUserId,
+            operator_user_id AS operatorUserId,
+            trigger_type AS triggerType,
+            visibility,
+            task_type AS taskType,
+            task_name AS taskName,
+            plan_id AS planId,
+            unit_id AS unitId,
+            related_job_id AS relatedJobId,
+            business_type AS businessType,
+            business_id AS businessId,
+            idempotency_key AS idempotencyKey,
+            status,
+            execution_mode AS executionMode,
+            scheduled_time AS scheduledTime,
+            priority,
+            total_count AS totalCount,
+            success_count AS successCount,
+            failed_count AS failedCount,
+            progress_percent AS progressPercent,
+            retry_count AS retryCount,
+            max_retry_count AS maxRetryCount,
+            payload_json AS payloadJson,
+            error_message AS errorMessage,
+            started_time AS startedTime,
+            finished_time AS finishedTime,
+            cancelled_time AS cancelledTime
+        FROM learning_ai_async_task
+        WHERE owner_user_id = #{ownerUserId}
+          AND related_job_id = #{relatedJobId}
+          AND deleted = 0
+          AND task_type IN
+          <foreach collection="taskTypes" item="itemType" open="(" separator="," close=")">
+              #{itemType}
+          </foreach>
+        ORDER BY CASE WHEN status IN (#{pendingStatus}, #{runningStatus}, #{retryWaitStatus}) THEN 0 ELSE 1 END ASC,
+                 create_time DESC,
+                 id DESC
+        LIMIT #{limit}
+    </select>
 </mapper>

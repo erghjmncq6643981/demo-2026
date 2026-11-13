@@ -7,20 +7,26 @@ import static org.assertj.core.api.Assertions.assertThat;
 class LearningPlanServiceWordSplitTest {
 
     @Test
-    void splitsEightyWordsIntoTwoEvenMaterials() {
+    void splitsNinetySixWordsIntoThreeEvenMaterials() {
+        assertThat(LearningPlanService.splitMaterialWordCounts(96))
+                .containsExactly(32, 32, 32);
+    }
+
+    @Test
+    void splitsEightyWordsIntoThreeMaterials() {
         assertThat(LearningPlanService.splitMaterialWordCounts(80))
-                .containsExactly(40, 40);
+                .containsExactly(27, 27, 26);
     }
 
     @Test
-    void splitsOneHundredTwentyWordsIntoThreeEvenMaterials() {
+    void splitsOneHundredTwentyWordsIntoFourEvenMaterials() {
         assertThat(LearningPlanService.splitMaterialWordCounts(120))
-                .containsExactly(40, 40, 40);
+                .containsExactly(30, 30, 30, 30);
     }
 
     @Test
-    void keepsEachMaterialAtOrBelowFiftyWords() {
+    void keepsEachMaterialAtOrBelowThirtyFiveWords() {
         assertThat(LearningPlanService.splitMaterialWordCounts(121))
-                .containsExactly(41, 40, 40);
+                .containsExactly(31, 30, 30, 30);
     }
 }

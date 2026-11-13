@@ -232,4 +232,32 @@ describe('Speech Feature with Preload, Cache, and Fast Fallback', () => {
     speech.playSentenceAudio('Play this sentence')
     expect(ctx.toast).toHaveBeenLastCalledWith('已停止朗读')
   })
+
+  it('routes multi-word collocations and phrases with slashes to sentence speech engine', () => {
+    const speech = createSpeechFeature(ctx)
+    speech.speak('abolish a law / an act')
+    // In test environment, speakSentence calls speakWithBrowserVoice
+    expect(mockSpeechSynthesis.speak).toHaveBeenCalled()
+    expect(global.SpeechSynthesisUtterance).toHaveBeenCalledWith('abolish a law or an act')
+
+    speech.speak('abolish the death penalty')
+    expect(global.SpeechSynthesisUtterance).toHaveBeenCalledWith('abolish the death penalty')
+  })
+
+  it('falls back to browser speech synthesis when word audio errors', async () => {
+    const speech = createSpeechFeature(ctx)
+    const speakPromise = speech.speak('abolish')
+
+    // First audio instance is backend audio
+    const backendAudio = mockAudioInstances[mockAudioInstances.length - 1]
+    backendAudio._listeners['error']?.()
+
+    // Second audio instance is Youdao direct audio
+    const youdaoAudio = mockAudioInstances[mockAudioInstances.length - 1]
+    youdaoAudio._listeners['error']?.()
+
+    const result = await speakPromise
+    expect(result).toBe(true)
+    expect(mockSpeechSynthesis.speak).toHaveBeenCalled()
+  })
 })

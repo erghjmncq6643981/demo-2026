@@ -1,0 +1,29 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "https://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.chandler.learning.agent.reading.infrastructure.mapper.LearningRuminationGraphMapper">
+
+    <select id="selectByScenarioForUpdate"
+            resultType="com.chandler.learning.agent.reading.domain.entity.LearningRuminationGraph">
+        SELECT
+            id,
+            create_by AS createBy,
+            update_by AS updateBy,
+            create_time AS createTime,
+            update_time AS updateTime,
+            deleted,
+            version,
+            user_id AS userId,
+            wordbook_id AS wordbookId,
+            scenario_code AS scenarioCode,
+            graph_nodes_json AS graphNodesJson,
+            graph_edges_json AS graphEdgesJson,
+            bag_terms_json AS bagTermsJson
+        FROM learning_rumination_graph
+        WHERE user_id = #{userId}
+          AND wordbook_id = #{wordbookId}
+          AND scenario_code = #{scenarioCode}
+          AND deleted = 0
+        LIMIT 1
+        FOR UPDATE
+    </select>
+</mapper>

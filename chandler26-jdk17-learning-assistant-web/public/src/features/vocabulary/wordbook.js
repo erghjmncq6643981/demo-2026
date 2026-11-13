@@ -467,9 +467,6 @@ export function createWordbookProfileFeature(ctx) {
   async function changeWordbook(wordbookId) {
     syncCurrentWordbookId(state, elements, wordbookId)
     state.wordbookPage = 1
-    state.selectedArticleEntryIds = []
-    state.currentArticleRecord = null
-    state.articleRecords = []
     renderWordbooks()
     await Promise.allSettled([loadWordbookEntries(), loadDueReviewsFromCtx()])
     logEvent('wordbook', '切换单词本', currentWordbookName())

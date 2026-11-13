@@ -1,7 +1,38 @@
 import { escapeHtml } from '/src/shared/text.js'
 
-const RECENT_SEARCHES_KEY = 'learning.recentSearches'
-const MAX_RECENT = 8
+export const RECENT_SEARCHES_KEY = 'learning.recentSearches'
+export const MAX_RECENT = 12
+
+export function getRecentSearches() {
+  try {
+    const data = localStorage.getItem(RECENT_SEARCHES_KEY)
+    return data ? JSON.parse(data) : []
+  } catch {
+    return []
+  }
+}
+
+export function saveRecentSearch(term, max = MAX_RECENT) {
+  const clean = String(term || '').trim().toLowerCase()
+  if (!clean) return []
+  const list = getRecentSearches().filter((t) => t.toLowerCase() !== clean)
+  list.unshift(clean)
+  const sliced = list.slice(0, max)
+  try {
+    localStorage.setItem(RECENT_SEARCHES_KEY, JSON.stringify(sliced))
+  } catch {
+    /* ignore */
+  }
+  return sliced
+}
+
+export function clearRecentSearches() {
+  try {
+    localStorage.removeItem(RECENT_SEARCHES_KEY)
+  } catch {
+    /* ignore */
+  }
+}
 
 export function createStudyAutocomplete({
   inputElement,
@@ -16,34 +47,13 @@ export function createStudyAutocomplete({
   let currentSuggestions = []
   let debounceTimer = null
 
-  function getRecentSearches() {
-    try {
-      const data = localStorage.getItem(RECENT_SEARCHES_KEY)
-      return data ? JSON.parse(data) : []
-    } catch {
-      return []
-    }
-  }
-
-  function saveRecentSearch(term) {
-    const clean = String(term || '').trim().toLowerCase()
-    if (!clean) return
-    const list = getRecentSearches().filter((t) => t.toLowerCase() !== clean)
-    list.unshift(clean)
-    try {
-      localStorage.setItem(RECENT_SEARCHES_KEY, JSON.stringify(list.slice(0, MAX_RECENT)))
-    } catch {
-      /* ignore */
-    }
+  function saveRecentSearchItem(term) {
+    saveRecentSearch(term)
     renderRecentSearches()
   }
 
-  function clearRecentSearches() {
-    try {
-      localStorage.removeItem(RECENT_SEARCHES_KEY)
-    } catch {
-      /* ignore */
-    }
+  function clearRecentSearchItems() {
+    clearRecentSearches()
     renderRecentSearches()
   }
 
@@ -144,7 +154,7 @@ export function createStudyAutocomplete({
 
   function bind() {
     renderRecentSearches()
-    clearRecentBtn?.addEventListener('click', clearRecentSearches)
+    clearRecentBtn?.addEventListener('click', clearRecentSearchItems)
 
     if (inputElement) {
       inputElement.addEventListener('input', () => {
@@ -199,7 +209,8 @@ export function createStudyAutocomplete({
 
   return {
     bind,
-    saveRecentSearch,
+    saveRecentSearch: saveRecentSearchItem,
+    clearRecentSearches: clearRecentSearchItems,
     renderRecentSearches,
     hideDropdown,
   }

@@ -24,17 +24,16 @@ export function createAppShell(ctx) {
     clearFocusMode,
     loadDueReviews,
     loadWordbookEntries,
-    loadArticleWords,
-    loadArticleHistory,
+    reloadRuminationWorkspace,
+    clearRuminationWorkspace,
+    closeRuminationPractice,
+    setRuminationActive,
     loadSceneData,
     clearSceneData,
     renderProfileMetrics,
     renderActivityHeatmap,
     renderWordbooks,
     renderWordbookEntries,
-    renderArticleWords,
-    renderArticleHistory,
-    renderArticleResult,
     renderModelConfigs,
     renderAgentConfigs,
     renderLearningAgentOptions,
@@ -124,10 +123,20 @@ export function createAppShell(ctx) {
       viewId = 'profileView'
     }
     if (state.focusModeView && state.focusModeView !== viewId) clearFocusMode?.()
+    const isRuminationView = viewId === 'ruminationView' || viewId === 'articleStudyView'
+    if (!isRuminationView) {
+      const practiceModal = elements.ruminationPracticeModal || document.getElementById('ruminationPracticeModal')
+      if (practiceModal && !practiceModal.classList.contains('hidden')) {
+        practiceModal.querySelector('[data-close-modal], #practiceBackToArticleBtn')?.click()
+        closeRuminationPractice?.()
+        practiceModal.classList.add('hidden')
+      }
+    }
+    setRuminationActive?.(isRuminationView)
     state.activeView = viewId
     localStorage.setItem('learning.activeView', viewId)
-    document.querySelectorAll('.view').forEach((view) => view.classList.toggle('active', view.id === viewId))
-    document.querySelectorAll('.nav-item').forEach((button) => button.classList.toggle('active', button.dataset.view === viewId))
+    document.querySelectorAll('.view').forEach((view) => view.classList.toggle('active', view.id === viewId || (view.id === 'articleStudyView' && viewId === 'ruminationView') || (view.id === 'ruminationView' && viewId === 'articleStudyView')))
+    document.querySelectorAll('.nav-item').forEach((button) => button.classList.toggle('active', button.dataset.view === viewId || (button.dataset.view === 'articleStudyView' && viewId === 'ruminationView') || (button.dataset.view === 'ruminationView' && viewId === 'articleStudyView')))
     const [eyebrow, title] = viewMeta[viewId] || viewMeta.profileView
     elements.viewEyebrow.textContent = eyebrow
     elements.viewTitle.textContent = title
@@ -137,9 +146,8 @@ export function createAppShell(ctx) {
     if (!state.initializing) {
       if (viewId === 'reviewView' && !options.skipReviewReload) loadDueReviews()
       if (viewId === 'wordbookView') loadWordbookEntries()
-      if (viewId === 'articleStudyView') {
-        loadArticleWords?.()
-        loadArticleHistory?.()
+      if (isRuminationView) {
+        reloadRuminationWorkspace?.()
       }
       if (viewId === 'scenePlanView') {
         loadSceneData?.({ keepStage: Boolean(state.sceneChallengeStage && state.sceneChallengeStage !== 'overview') })
@@ -234,10 +242,6 @@ export function createAppShell(ctx) {
     state.user = null
     state.wordbooks = []
     state.wordbookEntries = []
-    state.articleEntries = []
-    state.articleRecords = []
-    state.selectedArticleEntryIds = []
-    state.currentArticleRecord = null
     state.reviewEntries = []
     state.previewReviewEntries = []
     state.modelConfigs = []
@@ -257,15 +261,13 @@ export function createAppShell(ctx) {
     state.pendingReviewEntryId = null
     state.activity = null
     clearSceneData?.()
+    clearRuminationWorkspace?.()
     localStorage.removeItem('learning.token')
     localStorage.removeItem('learning.user')
     localStorage.removeItem('learning.wordbookId')
     syncCurrentWordbookId(state, elements, null, { persist: false })
     renderWordbooks()
     renderWordbookEntries()
-    renderArticleWords?.()
-    renderArticleHistory?.()
-    renderArticleResult?.(null)
     renderModelConfigs()
     renderTemplateOptions()
     renderReviewQueue([])
@@ -308,9 +310,6 @@ export function createAppShell(ctx) {
       renderTemplateConfigs,
       renderWordbooks,
       renderWordbookEntries,
-      renderArticleWords,
-      renderArticleHistory,
-      renderArticleResult,
       renderReviewQueue,
       renderRecord,
       renderActivityHeatmap,
@@ -364,9 +363,10 @@ export function createAppShell(ctx) {
           toast('已刷新卡片学习数据')
           break
         }
+        case 'ruminationView':
         case 'articleStudyView': {
-          await Promise.allSettled([loadArticleWords?.(), loadArticleHistory?.()])
-          toast('已刷新语境精读数据')
+          reloadRuminationWorkspace?.({ force: true })
+          toast('已刷新知识反刍数据')
           break
         }
         case 'reviewView': {

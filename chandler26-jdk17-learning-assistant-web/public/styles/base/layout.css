@@ -237,6 +237,7 @@
   min-height: 0;
 }
 
+#ruminationView.view.active,
 #articleStudyView.view.active {
   grid-template-rows: auto minmax(0, 1fr);
   align-content: start;

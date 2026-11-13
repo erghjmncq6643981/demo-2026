@@ -14,6 +14,7 @@ import java.util.List;
 import java.util.Locale;
 import java.util.Map;
 import java.util.Set;
+import java.util.regex.Pattern;
 
 /**
  * 按表头解析 Markdown 词表，只保留来源“序号”，忽略额外的 No. 列。
@@ -25,6 +26,25 @@ public class MarkdownVocabularyParser {
     private static final String HEADER_WORD = "word";
     private static final String HEADER_PHONETIC = "音标";
     private static final String HEADER_DEFINITION = "释义";
+
+    private static final Map<Pattern, String> KNOWN_SPLIT_PATTERNS = Map.ofEntries(
+            Map.entry(Pattern.compile("\\bacc\\s+ount\\b", Pattern.CASE_INSENSITIVE), "account"),
+            Map.entry(Pattern.compile("\\bval\\s+ue\\b", Pattern.CASE_INSENSITIVE), "value"),
+            Map.entry(Pattern.compile("\\bthou\\s+ght\\b", Pattern.CASE_INSENSITIVE), "thought"),
+            Map.entry(Pattern.compile("\\bth\\s+ought\\b", Pattern.CASE_INSENSITIVE), "thought"),
+            Map.entry(Pattern.compile("\\bme\\s+ans\\b", Pattern.CASE_INSENSITIVE), "means"),
+            Map.entry(Pattern.compile("\\bli\\s+fe\\b", Pattern.CASE_INSENSITIVE), "life"),
+            Map.entry(Pattern.compile("\\bhav\\s+e\\b", Pattern.CASE_INSENSITIVE), "have"),
+            Map.entry(Pattern.compile("\\bfro\\s+m\\b", Pattern.CASE_INSENSITIVE), "from"),
+            Map.entry(Pattern.compile("\\bd\\s+o\\b", Pattern.CASE_INSENSITIVE), "do"),
+            Map.entry(Pattern.compile("\\bwa\\s+y\\b", Pattern.CASE_INSENSITIVE), "way"),
+            Map.entry(Pattern.compile("\\btab\\s+le\\b", Pattern.CASE_INSENSITIVE), "table"),
+            Map.entry(Pattern.compile("\\bimporta\\s+nce\\b", Pattern.CASE_INSENSITIVE), "importance"),
+            Map.entry(Pattern.compile("\\bexpect\\s+ations\\b", Pattern.CASE_INSENSITIVE), "expectations"),
+            Map.entry(Pattern.compile("\\bdifferen\\s+ce\\b", Pattern.CASE_INSENSITIVE), "difference"),
+            Map.entry(Pattern.compile("\\baccustom\\s+ed\\b", Pattern.CASE_INSENSITIVE), "accustomed"),
+            Map.entry(Pattern.compile("\\bwit\\s+h\\b", Pattern.CASE_INSENSITIVE), "with")
+    );
 
     /**
      * 解析 Markdown 表格并返回结构化词条。
@@ -105,6 +125,13 @@ public class MarkdownVocabularyParser {
     }
 
     private String suggestSplitCorrection(String term) {
+        String result = term;
+        for (Map.Entry<Pattern, String> entry : KNOWN_SPLIT_PATTERNS.entrySet()) {
+            result = entry.getKey().matcher(result).replaceAll(entry.getValue());
+        }
+        if (!result.equals(term)) {
+            return result;
+        }
         List<String> tokens = new ArrayList<>(Arrays.asList(term.trim().split("\\s+")));
         for (int index = 0; index < tokens.size(); index++) {
             String token = tokens.get(index);

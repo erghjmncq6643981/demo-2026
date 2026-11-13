@@ -10,13 +10,17 @@
           </div>
           <button class="icon-button" id="closeReviewModalBtn" type="button" title="关闭">×</button>
         </div>
+        <div id="modalCognitiveImage" class="modal-cognitive-image hidden"></div>
         <div id="modalExamples" class="modal-examples empty">暂无例句</div>
         <div class="modal-review-footer">
-          <span>记住了吗？</span>
+          <div class="modal-review-footer-header">
+            <span>记住了吗？</span>
+            <span class="modal-shortcut-hint">快捷键：1 忘记 · 2 模糊 · 3 记住（Tab 聚焦按钮按 Enter/空格执行该按钮）</span>
+          </div>
           <div class="review-actions modal-review-actions">
-            <button class="danger-action" type="button" data-modal-result="forgotten">忘记了</button>
-            <button class="warn-action" type="button" data-modal-result="vague">有点模糊</button>
-            <button class="success-action" type="button" data-modal-result="remembered">记住了</button>
+            <button class="danger-action" type="button" data-modal-result="forgotten" title="快捷键: 1 或 ←">忘记了 (1)</button>
+            <button class="warn-action" type="button" data-modal-result="vague" title="快捷键: 2 或 ↓">有点模糊 (2)</button>
+            <button class="success-action" type="button" data-modal-result="remembered" title="快捷键: 3、空格、回车 或 →（未聚焦按钮时）">记住了 (3 / Enter)</button>
           </div>
         </div>
       </div>
@@ -32,7 +36,7 @@
         </div>
         <div id="forgottenDetailContent" class="forgotten-detail-content empty">暂无详情</div>
         <div class="modal-actions">
-          <button class="primary-button compact-primary" id="forgottenBackToReviewBtn" type="button">回到复习</button>
+          <button class="primary-button compact-primary" id="forgottenBackToReviewBtn" type="button" title="快捷键: Enter / Space / Esc">回到复习 (Enter)</button>
         </div>
       </div>
     </section>
@@ -51,5 +55,18 @@
           <button class="secondary-button compact" id="deleteConfirmCancelBtn" type="button">取消</button>
           <button class="danger-button compact" id="deleteConfirmAcceptBtn" type="button">确认删除</button>
         </div>
+      </div>
+    </section>
+
+    <section class="modal-backdrop hidden" id="shortcutHelpModal" aria-modal="true" role="dialog" aria-label="快捷键与无障碍帮助">
+      <div class="review-modal small-modal" data-modal-scroll>
+        <div class="panel-heading">
+          <div>
+            <p class="eyebrow">Keyboard & Accessibility</p>
+            <h3>快捷键帮助</h3>
+          </div>
+          <button class="icon-button" id="closeShortcutHelpModalBtn" type="button" title="关闭 (Esc)" aria-label="关闭">×</button>
+        </div>
+        <div id="shortcutHelpContent" class="shortcut-help-content"></div>
       </div>
     </section>

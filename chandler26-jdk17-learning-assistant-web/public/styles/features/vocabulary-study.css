@@ -410,6 +410,27 @@
   gap: 10px;
 }
 
+.review-card-topline > span {
+  margin-left: auto;
+}
+
+.review-card-word-row {
+  display: flex;
+  align-items: baseline;
+  gap: 14px;
+}
+
+.recall-masked-title {
+  letter-spacing: 0.18em;
+  font-family: "SFMono-Regular", Consolas, monospace;
+}
+
+.typing-letters span.recall-letter:not(.typed) {
+  letter-spacing: 0;
+  font-size: 20px;
+  color: var(--text-secondary);
+}
+
 .review-card-actions {
   display: flex;
   align-items: center;

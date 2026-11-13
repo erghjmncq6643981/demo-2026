@@ -165,6 +165,190 @@ describe('Study Card Enhancements', () => {
     expect(toast).toHaveBeenCalledWith('播放例句失败')
   })
 
+  it('renders cognitive image in quick lookup when available', async () => {
+    const modal = document.createElement('div')
+    const input = document.createElement('input')
+    const content = document.createElement('div')
+
+    const quickLookup = createQuickLookupFeature({
+      state: {},
+      elements: {
+        quickLookupModal: modal,
+        quickLookupInput: input,
+        quickLookupContent: content,
+      },
+      request: vi.fn().mockResolvedValue({
+        term: 'vigor',
+        parsed: {
+          definitions: [{ pos: 'n.', cn: '精力，活力' }],
+          cognitive_image: {
+            title: '生机勃发的植物脉动',
+            description: '初春嫩芽破土、细胞充满汁液的喷薄生命力',
+            usage_note: '常用于形容生理或组织机构充满源源不断的活力',
+          },
+        },
+      }),
+      speak: vi.fn(),
+      speakSentence: vi.fn(),
+      study: vi.fn(),
+      setView: vi.fn(),
+    })
+
+    await quickLookup.open('vigor')
+    const cognitiveCard = content.querySelector('.quick-cognitive-card')
+    expect(cognitiveCard).toBeTruthy()
+    expect(cognitiveCard.textContent).toContain('生机勃发的植物脉动')
+    expect(cognitiveCard.textContent).toContain('初春嫩芽破土')
+    expect(cognitiveCard.textContent).toContain('母语认知画像')
+  })
+
+  it('saves, renders and switches recent search chips in quick lookup', async () => {
+    localStorage.clear()
+    const modal = document.createElement('div')
+    modal.classList.add('hidden')
+    const input = document.createElement('input')
+    const content = document.createElement('div')
+    const recentBar = document.createElement('div')
+    recentBar.classList.add('hidden')
+    const recentChips = document.createElement('div')
+    const clearBtn = document.createElement('button')
+
+    const request = vi.fn().mockImplementation((url) => {
+      const term = url.split('/').pop()
+      return Promise.resolve({
+        term,
+        parsed: {
+          definitions: [{ pos: 'n.', cn: `${term} 的释义` }],
+        },
+      })
+    })
+
+    const quickLookup = createQuickLookupFeature({
+      state: {},
+      elements: {
+        quickLookupModal: modal,
+        quickLookupInput: input,
+        quickLookupContent: content,
+        quickLookupRecentBar: recentBar,
+        quickLookupRecentChips: recentChips,
+        clearQuickRecentBtn: clearBtn,
+      },
+      request,
+      speak: vi.fn(),
+      speakSentence: vi.fn(),
+      study: vi.fn(),
+      setView: vi.fn(),
+    })
+    quickLookup.bind()
+
+    // 1. Open and lookup "tense"
+    await quickLookup.open('tense')
+    expect(recentBar.classList.contains('hidden')).toBe(false)
+    let chips = recentChips.querySelectorAll('.recent-chip')
+    expect(chips.length).toBe(1)
+    expect(chips[0].textContent).toContain('tense')
+    expect(chips[0].classList.contains('active')).toBe(true)
+
+    // 2. Lookup "vigor"
+    await quickLookup.lookup('vigor')
+    chips = recentChips.querySelectorAll('.recent-chip')
+    expect(chips.length).toBe(2)
+    expect(chips[0].textContent).toContain('vigor')
+    expect(chips[0].classList.contains('active')).toBe(true)
+    expect(chips[1].textContent).toContain('tense')
+
+    // 3. Click "tense" chip to switch back
+    chips[1].click()
+    await new Promise((resolve) => setTimeout(resolve, 0))
+    expect(input.value).toBe('tense')
+
+    // 4. Click clearBtn to remove recent searches
+    clearBtn.click()
+    expect(recentBar.classList.contains('hidden')).toBe(true)
+  })
+
+  it('opens node word card mode from galaxy double-click without selecting search input and toggles search on demand', async () => {
+    const modal = document.createElement('div')
+    modal.classList.add('hidden')
+    modal.innerHTML = '<div class="quick-lookup-modal"></div>'
+    const dialogPanel = modal.querySelector('.quick-lookup-modal')
+    const eyebrow = document.createElement('p')
+    const title = document.createElement('h3')
+    const context = document.createElement('p')
+    context.classList.add('hidden')
+    const toggleSearchBtn = document.createElement('button')
+    toggleSearchBtn.classList.add('hidden')
+    const closeBtn = document.createElement('button')
+    const input = document.createElement('input')
+    input.select = vi.fn()
+    const content = document.createElement('div')
+
+    let resolveLookup = null
+    const request = vi.fn(() => new Promise((resolve) => {
+      resolveLookup = resolve
+    }))
+
+    const quickLookup = createQuickLookupFeature({
+      elements: {
+        quickLookupModal: modal,
+        quickLookupEyebrow: eyebrow,
+        quickLookupTitle: title,
+        quickLookupContext: context,
+        quickLookupToggleSearchBtn: toggleSearchBtn,
+        quickLookupCloseBtn: closeBtn,
+        quickLookupInput: input,
+        quickLookupContent: content,
+      },
+      request,
+      speak: vi.fn(),
+      speakSentence: vi.fn(),
+      study: vi.fn(),
+      setView: vi.fn(),
+    })
+    quickLookup.bind()
+
+    const pendingOpen = quickLookup.open('oregano', {
+      mode: 'node',
+      origin: { x: 240, y: 180 },
+      scenarioLabel: '🥦 生鲜采购与厨房料理',
+      node: {
+        id: 'exp-oregano',
+        term: 'oregano',
+        nodeType: 'expansion',
+        dimension: 'attribute',
+        status: 'unlearned',
+        definition: '牛至',
+      },
+    })
+
+    expect(modal.classList.contains('hidden')).toBe(false)
+    expect(modal.classList.contains('is-node-card-mode')).toBe(true)
+    expect(eyebrow.textContent).toBe('Galaxy Word Card')
+    expect(title.textContent).toBe('星系节点词卡')
+    expect(context.classList.contains('hidden')).toBe(false)
+    expect(context.textContent).toContain('生鲜采购与厨房料理')
+    expect(context.textContent).toContain('感官属性')
+    expect(input.select).not.toHaveBeenCalled()
+    expect(content.querySelector('.quick-card-skeleton')).not.toBeNull()
+    expect(content.textContent).toContain('牛至')
+    expect(dialogPanel.style.getPropertyValue('--modal-origin-x')).not.toBe('')
+
+    resolveLookup({
+      term: 'oregano',
+      cacheHit: true,
+      parsed: { definitions: [{ pos: 'n.', cn: '牛至' }] },
+    })
+    await pendingOpen
+
+    expect(content.querySelector('.quick-card-skeleton')).toBeNull()
+    expect(content.classList.contains('quick-card-content-enter')).toBe(true)
+
+    toggleSearchBtn.click()
+    expect(modal.classList.contains('is-node-card-mode')).toBe(false)
+    expect(title.textContent).toContain('全局快速查词')
+    expect(input.select).toHaveBeenCalledTimes(1)
+  })
+
   it('toggles study note drawer and supports saving note with shortcut', async () => {
     const drawer = document.createElement('aside')
     drawer.classList.add('hidden')

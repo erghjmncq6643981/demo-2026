@@ -366,6 +366,42 @@ export function firstExample(parsed) {
   return list.length > 0 ? (list[0].sentence || '') : ''
 }
 
+export function parseVocabularyPayload(parsed) {
+  if (!parsed) return {}
+  if (typeof parsed === 'string') {
+    try {
+      const value = JSON.parse(parsed)
+      return value && typeof value === 'object' ? value : {}
+    } catch {
+      return {}
+    }
+  }
+  return typeof parsed === 'object' ? parsed : {}
+}
+
+/** 渲染单词卡中的母语认知画像卡片 HTML。 */
+export function renderCognitiveImageCard(parsed, options = {}) {
+  const payload = parseVocabularyPayload(parsed)
+  const cognitive = payload?.cognitive_image || payload?.cognitiveImage || null
+  if (!cognitive || (!cognitive.title && !cognitive.description && !cognitive.usage_note && !cognitive.usageNote)) {
+    return ''
+  }
+  const cardClass = ['cognitive-image-card', options.compact ? 'quick-cognitive-card' : '', options.className || '']
+    .filter(Boolean)
+    .join(' ')
+  const usageNote = cognitive.usage_note || cognitive.usageNote || ''
+  return `
+    <div class="${cardClass}">
+      <div class="cognitive-image-header">
+        <span class="cognitive-badge">母语认知画像</span>
+        <h5 class="cognitive-title">${escapeHtml(cognitive.title || '核心心智画面')}</h5>
+      </div>
+      ${cognitive.description ? `<p class="cognitive-desc">${escapeHtml(cognitive.description)}</p>` : ''}
+      ${usageNote ? `<div class="cognitive-note"><span>💡 ${escapeHtml(usageNote)}</span></div>` : ''}
+    </div>
+  `
+}
+
 export function previewParsed(term = 'abandon') {
   const isVigor = String(term).toLowerCase() === 'vigor'
   if (isVigor) {

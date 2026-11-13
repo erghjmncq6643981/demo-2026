@@ -164,7 +164,7 @@ export function createSceneActions({
   async function generateNextUnit() {
     const plan = state.currentLearningPlan
     if (!plan?.canGenerateNext) return
-    const confirmed = await confirmAction({ title: '生成下一场景材料', message: '任务将提交至后台异步生成下一批场景材料（若待挑战词超过 50 个将自动均分为多篇）。任务在后台执行，不会中断当前学习，可在任务中心实时查看进度。是否确认生成？', acceptText: '开始生成' })
+    const confirmed = await confirmAction({ title: '生成下一场景材料', message: '任务将提交至后台异步生成下一批场景材料（若待挑战词超过 35 个将自动均分为多篇）。任务在后台执行，不会中断当前学习，可在任务中心实时查看进度。是否确认生成？', acceptText: '开始生成' })
     if (!confirmed) return
     setButtonLoading(elements.sceneNextUnitBtn, true, '提交中...')
     try {
