@@ -21,4 +21,13 @@ public class RuminationEdgeResponse {
 
     @Schema(description = "连线中央展示的简短微标签，如 '🔪 削皮'")
     private String label;
+
+    @Schema(description = "连线形态样式：curve（平滑曲线）、straight（直线连接）")
+    private String lineStyle;
+
+    @Schema(description = "是否采用贝塞尔平滑曲线")
+    private Boolean isCurved;
+
+    @Schema(description = "是否在末端渲染方向箭头")
+    private Boolean showArrow;
 }

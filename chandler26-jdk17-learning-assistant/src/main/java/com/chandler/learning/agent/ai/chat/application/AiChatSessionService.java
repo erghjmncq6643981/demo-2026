@@ -27,6 +27,7 @@ import org.springframework.security.core.Authentication;
 import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.dao.DuplicateKeyException;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
 import org.springframework.util.StringUtils;
 
 import java.time.LocalDateTime;
@@ -202,6 +203,7 @@ public class AiChatSessionService {
     }
 
     /** 删除AI 会话。 */
+    @Transactional(rollbackFor = Exception.class)
     public void delete(Long sessionId) {
         Long userId = currentUserId();
         if (userId == null || getOwnedSession(userId, sessionId) == null) {
@@ -209,11 +211,9 @@ public class AiChatSessionService {
                     LearningErrorCode.CHAT_SESSION_NOT_FOUND,
                     "会话不存在: " + sessionId);
         }
-        AiChatSession session = new AiChatSession();
-        session.setId(sessionId);
-        session.setDeleted(true);
-        session.setUpdateTime(LocalDateTime.now());
-        sessionMapper.updateById(session);
+        sessionMapper.deleteById(sessionId);
+        messageMapper.delete(new LambdaQueryWrapper<AiChatMessage>()
+                .eq(AiChatMessage::getSessionId, sessionId));
     }
 
     private void addMessage(Long sessionId, String role, String content, Integer tokenCount,

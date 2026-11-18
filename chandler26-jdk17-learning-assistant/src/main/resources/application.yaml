@@ -9,10 +9,11 @@ spring:
   datasource:
     username: ${LEARNING_DB_USERNAME:micro}
     password: ${LEARNING_DB_PASSWORD:123456}
-    url: ${LEARNING_DB_URL:jdbc:mysql://localhost:3306/study?useUnicode=true&characterEncoding=utf-8&autoReconnect=true&autoReconnectForPools=true&useSSL=false&allowPublicKeyRetrieval=true}
+    url: ${LEARNING_DB_URL:jdbc:mysql://localhost:3306/study?useUnicode=true&characterEncoding=utf-8&autoReconnect=true&autoReconnectForPools=true&useSSL=false&allowPublicKeyRetrieval=true&sessionVariables=sort_buffer_size=2097152}
     driver-class-name: com.mysql.cj.jdbc.Driver
     type: com.alibaba.druid.pool.DruidDataSource
     druid:
+      connection-init-sqls: SET SESSION sort_buffer_size = 2097152;
       initial-size: 5
       min-idle: 5
       max-active: 100
@@ -28,7 +29,7 @@ spring:
     enabled: ${LEARNING_FLYWAY_ENABLED:false}
     locations: classpath:db/migration
     baseline-on-migrate: true
-    baseline-version: 107
+    baseline-version: 1
     validate-on-migrate: true
     clean-disabled: true
 

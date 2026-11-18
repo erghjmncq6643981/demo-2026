@@ -3,13 +3,39 @@
  * 负责星空暗夜渐变、环境星尘、多维关系连线、语义胶囊节点、焦点高亮及吸附反馈的纯 Canvas 绘制。
  */
 
-import { drawDropTargetFeedback } from '/src/features/rumination/rumination-graph-drag.js'
+import { drawDropTargetFeedback } from './rumination-graph-drag.js'
+import { computeEdgeRouting, computeNodeCollapseTogglePoint } from './rumination-graph-layout.js'
 
 export const RELATION_CONFIG = {
   peer: { color: '#10b981', label: '同类', glow: 'rgba(16, 185, 129, 0.4)' },
   action: { color: '#38bdf8', label: '动作', glow: 'rgba(56, 189, 248, 0.4)' },
   downstream: { color: '#f97316', label: '加工', glow: 'rgba(249, 115, 22, 0.4)' },
   attribute: { color: '#c084fc', label: '感官', glow: 'rgba(192, 132, 252, 0.4)' },
+}
+
+function drawArrowhead(ctx, toX, toY, angle, size = 7, color = '#38bdf8') {
+  if (typeof ctx?.rotate !== 'function') return
+  ctx.save()
+  ctx.fillStyle = color
+  ctx.beginPath()
+  ctx.translate(toX, toY)
+  ctx.rotate(angle)
+  ctx.moveTo(0, 0)
+  ctx.lineTo(-size, -size * 0.42)
+  ctx.lineTo(-size * 0.72, 0)
+  ctx.lineTo(-size, size * 0.42)
+  ctx.closePath()
+  ctx.fill()
+  ctx.restore()
+}
+
+function drawEndpointDot(ctx, toX, toY, radius = 2.4, color = '#64748b') {
+  ctx.save()
+  ctx.fillStyle = color
+  ctx.beginPath()
+  ctx.arc(toX, toY, radius, 0, Math.PI * 2)
+  ctx.fill()
+  ctx.restore()
 }
 
 export function drawNode(ctx, node, {
@@ -95,10 +121,17 @@ export function drawNode(ctx, node, {
   }
   ctx.fill()
 
-  // 3. 边框渲染
+  // 3. 边框渲染：默认全部为实线，按节点 borderStyle 自适应呈现
   ctx.lineWidth = isSelected ? 2.5 : isHub ? 1.5 : isExpansion ? 1.5 : 2
-  if (isExpansion && !isSelected) {
-    ctx.setLineDash([4, 3])
+  const borderStyle = node.borderStyle || 'solid'
+  if (borderStyle === 'dashed') {
+    ctx.setLineDash([5, 4])
+  } else if (borderStyle === 'dotted') {
+    ctx.setLineDash([2, 3])
+  } else if (borderStyle === 'dashdot') {
+    ctx.setLineDash([6, 3, 2, 3])
+  } else {
+    ctx.setLineDash([])
   }
   if (isSelected) {
     ctx.strokeStyle = '#f59e0b'
@@ -177,6 +210,33 @@ export function drawNode(ctx, node, {
     }
   }
 
+  // 5. 分支折叠/展开按钮 (+ / -) 绘制（方案 3）
+  if (node.hasChildren && !isHub) {
+    const toggle = computeNodeCollapseTogglePoint(node)
+    const isCollapsed = Boolean(node.collapsed)
+    ctx.save()
+    ctx.translate(toggle.x, toggle.y)
+
+    ctx.beginPath()
+    ctx.arc(0, 0, 7.5, 0, Math.PI * 2)
+    ctx.fillStyle = isCollapsed ? '#0284c7' : '#1e293b'
+    ctx.fill()
+    ctx.strokeStyle = isCollapsed ? '#38bdf8' : isHovered ? '#38bdf8' : '#64748b'
+    ctx.lineWidth = 1.4
+    if (isCollapsed) {
+      ctx.shadowColor = '#38bdf8'
+      ctx.shadowBlur = 6
+    }
+    ctx.stroke()
+
+    ctx.fillStyle = isCollapsed ? '#ffffff' : '#94a3b8'
+    ctx.font = 'bold 10.5px sans-serif'
+    ctx.textAlign = 'center'
+    ctx.textBaseline = 'middle'
+    ctx.fillText(isCollapsed ? '+' : '−', 0, 0.5)
+    ctx.restore()
+  }
+
   ctx.restore()
 }
 
@@ -191,6 +251,7 @@ export function drawGraphScene({
   selectedNodeIds = new Set(),
   focusedNodeId = null,
   hoveredNode = null,
+  selectedEdge = null,
   illuminatedNodeIds = new Set(),
   reducedMotion = false,
   pulseState = null,
@@ -235,45 +296,76 @@ export function drawGraphScene({
     const s = edge.sourceNode
     const t = edge.targetNode
     if (!s || !t) continue
+    const isEdgeSelected = selectedEdge === edge
     const isConnectedSelected = selectedNodeIds.has(s.id) && selectedNodeIds.has(t.id)
     const relConf = relationConfig[edge.relationType] || { color: '#64748b', glow: 'rgba(100,116,139,0.3)', label: '' }
     const isHubEdge = s.nodeType === 'hub' || t.nodeType === 'hub'
+    const route = computeEdgeRouting(s, t, edge)
 
     ctx.save()
-    ctx.lineWidth = isConnectedSelected ? 3 : isHubEdge ? 1.2 : 1.5
-    ctx.strokeStyle = isConnectedSelected ? '#fbbf24' : isHubEdge ? 'rgba(52, 211, 153, 0.4)' : relConf.color
-    ctx.globalAlpha = isConnectedSelected ? 0.95 : isHubEdge ? 0.5 : 0.65
+    ctx.lineWidth = isEdgeSelected ? 3.2 : isConnectedSelected ? 2.8 : isHubEdge ? 1.2 : 1.6
+    ctx.strokeStyle = isEdgeSelected
+      ? '#f59e0b'
+      : isConnectedSelected
+      ? '#fbbf24'
+      : isHubEdge
+      ? 'rgba(52, 211, 153, 0.45)'
+      : relConf.color
+    ctx.globalAlpha = isEdgeSelected ? 1 : isConnectedSelected ? 0.95 : isHubEdge ? 0.5 : 0.72
 
-    if (isConnectedSelected) {
-      ctx.shadowColor = '#fbbf24'
+    if (isEdgeSelected || isConnectedSelected) {
+      ctx.shadowColor = isEdgeSelected ? '#f59e0b' : '#fbbf24'
       ctx.shadowBlur = 10
     }
 
     ctx.beginPath()
-    ctx.moveTo(s.x, s.y)
-    ctx.lineTo(t.x, t.y)
+    ctx.moveTo(route.startX, route.startY)
+    if (route.isCurved && typeof ctx.bezierCurveTo === 'function') {
+      ctx.bezierCurveTo(route.cp1X, route.cp1Y, route.cp2X, route.cp2Y, route.endX, route.endY)
+    } else {
+      ctx.lineTo(route.endX, route.endY)
+    }
     ctx.stroke()
     ctx.restore()
+
+    // 绘制语义端点标记（箭头或圆点）
+    const showArrow = edge.showArrow !== undefined
+      ? Boolean(edge.showArrow)
+      : (edge.relationType === 'action' || edge.relationType === 'downstream')
+
+    const strokeColor = isEdgeSelected
+      ? '#f59e0b'
+      : isConnectedSelected
+      ? '#fbbf24'
+      : isHubEdge
+      ? '#34d399'
+      : relConf.color
+
+    if (showArrow) {
+      drawArrowhead(ctx, route.endX, route.endY, route.endAngle, isEdgeSelected ? 8 : 7, strokeColor)
+    } else if (!isHubEdge) {
+      drawEndpointDot(ctx, route.endX, route.endY, isEdgeSelected ? 3 : 2.4, strokeColor)
+    }
 
     // 仅当明确指定了具体的实体关系微标签时才展示（默认绝对不显示“核心”等内置类型）
     const rawLabel = edge.label ? String(edge.label).trim() : ''
     const tag = !isHubEdge && rawLabel && rawLabel !== '核心' ? rawLabel : null
     const edgeDist = Math.hypot(t.x - s.x, t.y - s.y)
-    if (tag && edgeDist > 50) {
-      const mx = (s.x + t.x) / 2
-      const my = (s.y + t.y) / 2
+    if (tag && edgeDist > 45) {
+      const mx = route.midX
+      const my = route.midY
       ctx.save()
       ctx.font = '10px -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif'
       const tagWidth = ctx.measureText(tag).width + 12
-      ctx.fillStyle = 'rgba(15, 23, 42, 0.92)'
+      ctx.fillStyle = 'rgba(15, 23, 42, 0.94)'
       ctx.beginPath()
       ctx.roundRect(mx - tagWidth / 2, my - 8, tagWidth, 16, 8)
       ctx.fill()
-      ctx.strokeStyle = relConf.color
-      ctx.lineWidth = 1
-      ctx.globalAlpha = 0.85
+      ctx.strokeStyle = isEdgeSelected ? '#f59e0b' : relConf.color
+      ctx.lineWidth = isEdgeSelected ? 1.5 : 1
+      ctx.globalAlpha = 0.92
       ctx.stroke()
-      ctx.fillStyle = '#e2e8f0'
+      ctx.fillStyle = isEdgeSelected ? '#fde68a' : '#e2e8f0'
       ctx.textAlign = 'center'
       ctx.textBaseline = 'middle'
       ctx.fillText(tag, mx, my)

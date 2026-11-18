@@ -28,19 +28,21 @@ class DatabaseSchemaIntegrationTest {
                     "db/schema/00_ai_schema_mysql.sql",
                     "db/schema/10_learning_core_schema_mysql.sql",
                     "db/schema/20_vocabulary_plan_schema_mysql.sql",
-                    "db/schema/30_article_reading_schema_mysql.sql",
-                    "db/schema/40_user_authorization_schema_mysql.sql",
+                    "db/schema/30_rumination_schema_mysql.sql",
                     "db/init/00_ai_agent_seed_mysql.sql",
                     "db/init/01_system_admin_seed_mysql.sql")) {
                 ScriptUtils.executeSqlScript(connection, new ClassPathResource(script));
             }
+            // 校验一键合并初始化脚本可幂等重复执行
+            ScriptUtils.executeSqlScript(connection, new ClassPathResource("db/init_all_mysql.sql"));
 
             assertThat(tableExists(connection, "learning_plan")).isTrue();
             assertThat(tableExists(connection, "ai_model_call_record")).isTrue();
             assertThat(tableExists(connection, "learning_system_log_outbox")).isTrue();
+            assertThat(tableExists(connection, "learning_rumination_graph_history")).isTrue();
             assertThat(queryCount(connection, "SELECT COUNT(*) FROM ai_agent")).isGreaterThan(0);
             assertThat(queryCount(connection, "SELECT COUNT(*) FROM learning_user WHERE role_code = 'ADMIN'"))
-                    .isGreaterThan(0);
+                    .isEqualTo(1);
         }
     }
 

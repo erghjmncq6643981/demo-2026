@@ -1,7 +1,9 @@
 package com.chandler.learning.agent.vocabulary.api.controller;
 
 import com.chandler.learning.agent.vocabulary.api.request.AddWordbookEntryRequest;
+import com.chandler.learning.agent.vocabulary.api.request.RecentSearchReviewSubmitRequest;
 import com.chandler.learning.agent.vocabulary.api.request.ReviewSubmitRequest;
+import com.chandler.learning.agent.vocabulary.api.response.RecentSearchReviewQueueResponse;
 import com.chandler.learning.agent.vocabulary.api.response.ReviewSubmitResponse;
 import com.chandler.learning.agent.vocabulary.api.response.WordbookEntryResponse;
 import com.chandler.learning.agent.task.api.response.AiAsyncTaskResponse;
@@ -13,6 +15,7 @@ import com.chandler.learning.agent.vocabulary.api.response.WordbookResponse;
 import com.chandler.learning.agent.vocabulary.api.request.WordbookSaveRequest;
 import com.chandler.learning.agent.identity.domain.entity.LearningUser;
 import com.chandler.learning.agent.security.CurrentUserContext;
+import com.chandler.learning.agent.vocabulary.application.VocabularyLookupHistoryService;
 import com.chandler.learning.agent.vocabulary.application.WordbookService;
 import com.chandler.learning.agent.task.application.AiAsyncTaskService;
 import com.chandler.learning.agent.vocabulary.domain.constant.ReviewConstants;
@@ -43,6 +46,7 @@ public class WordbookController {
 
     private final CurrentUserContext currentUserContext;
     private final WordbookService wordbookService;
+    private final VocabularyLookupHistoryService lookupHistoryService;
     private final AiAsyncTaskService aiAsyncTaskService;
 
     /** 我的单词本列表。 */
@@ -185,6 +189,39 @@ public class WordbookController {
             @RequestParam(defaultValue = ReviewConstants.RESTART_DEFAULT_LIMIT_PARAM) Integer limit) {
         LearningUser user = currentUserContext.requireUser();
         return wordbookService.listRestartReviewEntries(user.getId(), wordbookId, limit);
+    }
+
+    /** 获取近期搜索词汇轻量复习队列（今天+昨天优先，少于 5 词自动兜底最近 20 词）。 */
+    @GetMapping("/reviews/recent-searches")
+    @Operation(summary = "获取近期查词轻量复习队列")
+    public RecentSearchReviewQueueResponse recentSearchReviews(
+            @RequestParam(defaultValue = "2") Integer days,
+            @RequestParam(defaultValue = "5") Integer minCount,
+            @RequestParam(defaultValue = "20") Integer fallbackLimit) {
+        LearningUser user = currentUserContext.requireUser();
+        return lookupHistoryService.listRecentSearchReviewQueue(user.getId(), days, minCount, fallbackLimit);
+    }
+
+    /** 提交近期查词轻量复习结果（已入词本则联动更新艾宾浩斯排期，未入词本则记录足迹与活跃度）。 */
+    @PostMapping("/reviews/recent-searches/submit")
+    @Operation(summary = "提交近期查词轻量复习结果")
+    public ReviewSubmitResponse submitRecentSearchReview(
+            @Valid @RequestBody RecentSearchReviewSubmitRequest request) {
+        LearningUser user = currentUserContext.requireUser();
+        Long resolvedEntryId = request.getEntryId();
+        if (resolvedEntryId == null) {
+            resolvedEntryId = lookupHistoryService.findOwnedEntryIdByTerm(user.getId(), request.getTerm());
+        }
+        if (resolvedEntryId != null) {
+            ReviewSubmitRequest reviewReq = new ReviewSubmitRequest();
+            reviewReq.setResult(request.getResult());
+            reviewReq.setAssessmentType(request.getReviewAction());
+            reviewReq.setDurationSeconds(request.getDurationSeconds());
+            ReviewSubmitResponse response = wordbookService.submitReview(user.getId(), resolvedEntryId, reviewReq);
+            lookupHistoryService.markReviewed(user.getId(), request.getTerm());
+            return response;
+        }
+        return lookupHistoryService.submitLookupOnlyReview(user.getId(), request);
     }
 
     /** 提交复习结果。 */

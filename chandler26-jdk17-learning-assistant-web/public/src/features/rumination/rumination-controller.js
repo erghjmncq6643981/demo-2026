@@ -12,13 +12,11 @@ import { createRuminationGraphTaskTracker } from '/src/features/rumination/rumin
 import { collectRuminationElements } from '/src/features/rumination/rumination-elements.js'
 import { createRuminationNodeActions } from '/src/features/rumination/rumination-node-actions.js'
 import { createRuminationGraphPersistence } from '/src/features/rumination/rumination-persistence.js'
+import { createRuminationHistory } from '/src/features/rumination/rumination-history.js'
+import { createRuminationGraphHistoryDialog } from '/src/features/rumination/rumination-graph-history-dialog.js'
 import { createRuminationStore } from '/src/features/rumination/rumination-store.js'
 import { createRuminationScenarioDialog } from '/src/features/rumination/rumination-scenario-dialog.js'
-import {
-  PRODUCE_GRAPH_DATA,
-  FISSION_EXPANSIONS,
-  getPresetGraphData,
-} from '/src/features/rumination/rumination-data.js'
+import { PRODUCE_GRAPH_DATA, FISSION_EXPANSIONS, getPresetGraphData } from '/src/features/rumination/rumination-data.js'
 import { sameId } from '/src/shared/ids.js'
 import { escapeHtml } from '/src/shared/text.js'
 
@@ -58,9 +56,7 @@ export function initRuminationWorkspace(ctx = {}) {
       if (wordbookId && scenarioCode && typeof sessionStorage !== 'undefined') {
         sessionStorage.setItem(`rumination_scenario_${String(wordbookId)}`, String(scenarioCode))
       }
-    } catch (err) {
-      console.debug('保存场景偏好失败', err)
-    }
+    } catch (err) { /* noop */ }
   }
 
   function restoreScenarioPreference(wordbookId) {
@@ -68,9 +64,7 @@ export function initRuminationWorkspace(ctx = {}) {
       if (wordbookId && typeof sessionStorage !== 'undefined') {
         return sessionStorage.getItem(`rumination_scenario_${String(wordbookId)}`) || ''
       }
-    } catch (err) {
-      console.debug('读取场景偏好失败', err)
-    }
+    } catch (err) { /* noop */ }
     return ''
   }
 
@@ -78,18 +72,10 @@ export function initRuminationWorkspace(ctx = {}) {
   let nodeActions = null
   let graphPersistence = null
   let practiceView = null
-  function syncLiveNodePositions() {
-    graphPersistence?.syncLiveNodePositions?.()
-  }
-  function flushPendingGraphSave(options) {
-    return graphPersistence?.flushPendingGraphSave?.(options)
-  }
-  function saveCurrentGraphDebounced(immediate = false, options = {}) {
-    return graphPersistence?.saveCurrentGraphDebounced?.(immediate, options)
-  }
-  function updateSaveStatus(mode, text) {
-    graphPersistence?.updateSaveStatus?.(mode, text)
-  }
+  const syncLiveNodePositions = () => graphPersistence?.syncLiveNodePositions?.()
+  const flushPendingGraphSave = (options) => graphPersistence?.flushPendingGraphSave?.(options)
+  const saveCurrentGraphDebounced = (immediate = false, options = {}) => graphPersistence?.saveCurrentGraphDebounced?.(immediate, options)
+  const updateSaveStatus = (mode, text) => graphPersistence?.updateSaveStatus?.(mode, text)
   function setActiveFocus(nodeId) {
     store.setActiveFocus(nodeId)
     graph?.setFocusedNode?.(store.getActiveFocusNodeId())
@@ -97,19 +83,17 @@ export function initRuminationWorkspace(ctx = {}) {
   }
 
   function syncGraphLifecycle() {
-    if (isHostViewActive && store.getWorkspaceTab() === 'graph') {
-      graph?.resume?.()
-    } else {
-      graph?.pause?.()
-    }
+    if (isHostViewActive && store.getWorkspaceTab() === 'graph') graph?.resume?.()
+    else graph?.pause?.()
   }
+
+  let history = null
+  let preDragSnapshot = null
 
   // 初始化图谱引擎（点击单词选中并聚焦，不弹任何多余提示或侧边栏）
   graph = createRuminationGraph(canvas, {
     onNodeSelect: (node) => {
-      if (node.nodeType === 'hub') {
-        return
-      }
+      if (!node) return
       setActiveFocus(node.id)
       nodeActions?.closeContextMenu()
     },
@@ -152,9 +136,29 @@ export function initRuminationWorkspace(ctx = {}) {
     onEdgeDblClick: (edge, pos) => {
       nodeActions?.openEdgeModal?.(edge, pos)
     },
-    onNodeReparent: (child, parent) => nodeActions?.reparentNode?.(child, parent),
+    onEdgeSelect: (edge, pos) => {
+      nodeActions?.syncEdgeActionBar?.(edge, pos)
+    },
+    onEdgeDeselect: () => {
+      nodeActions?.closeEdgeActionBar?.()
+    },
+    onUndo: () => history?.undo?.(),
+    onRedo: () => history?.redo?.(),
+    onNodeDragStart: () => {
+      preDragSnapshot = history?.getSnapshot?.()
+    },
+    onNodeReparent: (child, parent) => {
+      preDragSnapshot = null
+      nodeActions?.reparentNode?.(child, parent)
+    },
     onNodeDragEnd: (node, pos) => {
       const nextX = Math.round(pos.x), nextY = Math.round(pos.y)
+      const origNode = preDragSnapshot?.nodes?.find((n) => n.id === node.id)
+      const moved = origNode && Math.hypot(nextX - origNode.x, nextY - origNode.y) > 2
+      if (moved && preDragSnapshot && history) {
+        history.recordAction('移动节点', preDragSnapshot)
+      }
+      preDragSnapshot = null
       const raw = store.findNode(node.id)
       if (raw) { raw.x = nextX; raw.y = nextY; raw.fixed = true }
       if (graphPersistence?.saveNodePositionsIncremental) {
@@ -171,6 +175,14 @@ export function initRuminationWorkspace(ctx = {}) {
   syncGraphLifecycle()
 
   const elements = collectRuminationElements(document)
+
+  history = createRuminationHistory({
+    store,
+    graph,
+    elements,
+    toast,
+    saveCurrentGraphDebounced,
+  })
 
   let audioController = null
   const launchPractice = (openAction) => {
@@ -385,6 +397,8 @@ export function initRuminationWorkspace(ctx = {}) {
 
   let toggleNodeInBag = () => {}
 
+  let historyDialog = null
+
   // 图谱坐标同步、串行持久化与 Command+S 保存快捷键（抽离保持单文件紧凑）
   graphPersistence = createRuminationGraphPersistence({
     state,
@@ -407,6 +421,28 @@ export function initRuminationWorkspace(ctx = {}) {
       store.setSelectedNodeIds(mapBagTermsToIds(bagTerms))
       graph.setSelectedNodes(store.getSelectedNodeIds())
       renderBag()
+    },
+    onSaveSuccess: (time, res) => {
+      historyDialog?.updateLastSavedTime?.(time, res?.version)
+    },
+  })
+
+  // 星系图谱历史变更记录与版本回滚浮层管理
+  historyDialog = createRuminationGraphHistoryDialog({
+    api,
+    store,
+    toast,
+    getElements: () => elements,
+    getActiveScenarioCode: () => store.getActiveScenarioCode(),
+    getCurrentWordbookId,
+    onGraphRestored: (restoredData, version) => {
+      store.setGraphData(restoredData, { syncBag: false })
+      graph.setData(store.getGraphData(), { isNewScenario: false })
+      store.setSelectedNodeIds(mapBagTermsToIds(restoredData.bagTerms))
+      graph.setSelectedNodes(store.getSelectedNodeIds())
+      renderBag()
+      updateSaveStatus('saved', '已恢复')
+      history?.clear?.()
     },
   })
 
@@ -438,6 +474,7 @@ export function initRuminationWorkspace(ctx = {}) {
 
   // 从后端异步加载星系图谱拓扑
   async function loadGraphData(wordbookId, scenarioCode) {
+    history?.clear?.()
     const seq = ++latestLoadSeq
     setActiveFocus(null)
     let loaded = false
@@ -457,8 +494,8 @@ export function initRuminationWorkspace(ctx = {}) {
           store.setSelectedNodeIds(mapBagTermsToIds(backendGraph.bagTerms))
           graph.setSelectedNodes(store.getSelectedNodeIds())
           renderBag()
-          const hasCustomCoords = backendGraph.nodes.some((n) => n.nodeType !== 'hub' && Boolean(n.fixed))
-          updateSaveStatus(hasCustomCoords ? 'saved' : 'idle', hasCustomCoords ? '✅ 已恢复自定义布局' : '💾 自动保存 · ⌘S 手动保存')
+          updateSaveStatus('saved', '已保存')
+          historyDialog?.updateLastSavedTime?.(new Date(), backendGraph.version)
           loaded = true
         }
       } catch (err) {
@@ -483,9 +520,11 @@ export function initRuminationWorkspace(ctx = {}) {
 
   switchScenario = (code) => {
     if (!code || code === store.getActiveScenarioCode()) return
+    history?.clear?.()
+    historyDialog?.close?.()
     flushPendingGraphSave()
     practiceView?.closePractice()
-    updateSaveStatus('idle', '💾 自动保存 · ⌘S 手动保存')
+    updateSaveStatus('saved', '已保存')
     store.setActiveScenarioCode(code)
     setActiveFocus(null)
     taskTracker.resetView()
@@ -634,6 +673,7 @@ export function initRuminationWorkspace(ctx = {}) {
     elements,
     graph,
     toast,
+    history,
     getGraphData: () => store.getGraphData(),
     getSelectedNodeIds: () => store.getSelectedNodeIds(),
     setSelectedNodeIds: (next) => store.setSelectedNodeIds(next),
@@ -643,7 +683,7 @@ export function initRuminationWorkspace(ctx = {}) {
     onToggleBag: (id) => toggleNodeInBag(id),
     onExpandNode: (node) => {
       if (node?.id) setActiveFocus(node.id)
-      elements.expandMoreBtn?.click()
+      triggerNodeFission(node)
     },
     syncLiveNodePositions,
     renderBag,
@@ -667,15 +707,15 @@ export function initRuminationWorkspace(ctx = {}) {
     })
   }
 
-  // AI 衍生裂变按钮（优先提交持久化异步任务绑定原词本/场景/父节点，预览模式下本地词库兜底）
-  if (elements.expandMoreBtn) {
-    elements.expandMoreBtn.addEventListener('click', async () => {
-      const currentGraph = store.getGraphData()
-      if (currentGraph?.building) {
-        toast('当前自定义场景仍在后台构建图谱，请等待构建完成后再执行衍生裂变')
-        return
-      }
-      let targetParentNode = null
+  // 节点 4D 衍生裂变核心逻辑（供右键菜单、操作栏调用）
+  async function triggerNodeFission(specifiedNode = null) {
+    const currentGraph = store.getGraphData()
+    if (currentGraph?.building) {
+      toast('当前自定义场景仍在后台构建图谱，请等待构建完成后再执行衍生裂变')
+      return
+    }
+    let targetParentNode = specifiedNode
+    if (!targetParentNode) {
       const activeFocus = store.getActiveFocusNodeId()
       const selectedIds = store.getSelectedNodeIds()
       if (activeFocus) {
@@ -685,86 +725,83 @@ export function initRuminationWorkspace(ctx = {}) {
         const lastSelectedId = selectedIds[selectedIds.length - 1]
         targetParentNode = store.findNode(lastSelectedId)
       }
+    }
 
-      if (!targetParentNode || targetParentNode.nodeType === 'hub') {
-        toast('请先在星系图谱中选择一个词汇（如 fever、peel 或 cough），再点击衍生裂变！')
+    if (!targetParentNode || targetParentNode.nodeType === 'hub') {
+      toast('请先在星系图谱中选择一个词汇（如 fever、peel 或 cough），再执行衍生裂变！')
+      return
+    }
+
+    syncLiveNodePositions()
+    const currentWbId = getCurrentWordbookId()
+    const requestScenarioCode = store.getActiveScenarioCode()
+    const requestParentId = targetParentNode.id
+    const targetTerm = targetParentNode.term || requestParentId
+    const termKey = targetTerm.toLowerCase()
+    const existingTerms = currentGraph.nodes.map((n) => n.term).filter(Boolean)
+
+    try {
+      if (api?.submitRuminationFissionTask && currentWbId) {
+        await flushPendingGraphSave()
+        const task = await api.submitRuminationFissionTask({
+          wordbookId: currentWbId,
+          scenarioCode: requestScenarioCode,
+          scenarioName: currentGraph.scenarioName || '',
+          parentNodeId: requestParentId,
+          targetWord: targetTerm,
+          targetDefinition: targetParentNode.definition || '',
+          existingTerms,
+          requestId: `fis_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`,
+        })
+        await graphTaskTracker.trackSubmission(task, {
+          wordbookId: currentWbId,
+          scenarioCode: requestScenarioCode,
+          scenarioName: currentGraph.scenarioName || requestScenarioCode,
+          parentNodeId: requestParentId,
+          targetWord: targetTerm,
+        })
+        toast(`✨ 已提交【${targetTerm}】4D 衍生裂变异步任务，切场景或刷新不丢失`)
         return
       }
 
-      syncLiveNodePositions()
-      const currentWbId = getCurrentWordbookId()
-      const requestScenarioCode = store.getActiveScenarioCode()
-      const requestParentId = targetParentNode.id
-      const targetTerm = targetParentNode.term || requestParentId
-      const termKey = targetTerm.toLowerCase()
-      const existingTerms = currentGraph.nodes.map((n) => n.term).filter(Boolean)
-
-      const originBtnHtml = elements.expandMoreBtn.innerHTML
-      elements.expandMoreBtn.disabled = true
-      elements.expandMoreBtn.innerHTML = '<span>⏳ 提交裂变任务...</span>'
-
-      try {
-        if (api?.submitRuminationFissionTask && currentWbId) {
-          await flushPendingGraphSave()
-          const task = await api.submitRuminationFissionTask({
-            wordbookId: currentWbId,
-            scenarioCode: requestScenarioCode,
-            scenarioName: currentGraph.scenarioName || '',
-            parentNodeId: requestParentId,
-            targetWord: targetTerm,
-            targetDefinition: targetParentNode.definition || '',
-            existingTerms,
-            requestId: `fis_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`,
-          })
-          await graphTaskTracker.trackSubmission(task, {
-            wordbookId: currentWbId,
-            scenarioCode: requestScenarioCode,
-            scenarioName: currentGraph.scenarioName || requestScenarioCode,
-            parentNodeId: requestParentId,
-            targetWord: targetTerm,
-          })
-          toast(`✨ 已提交【${targetTerm}】4D 衍生裂变异步任务，切场景或刷新不丢失`)
-          return
-        }
-
-        let addedCount = 0
-        const addedTerms = []
-        const expansions = FISSION_EXPANSIONS[termKey]
-        if (expansions && expansions.length > 0) {
-          for (const item of expansions) {
-            const exists = store.getGraphData().nodes.some(
-              (n) => n.id === item.node.id || n.term?.toLowerCase() === item.node.term?.toLowerCase()
-            )
-            if (!exists) {
-              store.addNode({
-                node: { ...item.node },
-                edge: {
-                  source: targetParentNode.id,
-                  target: item.node.id,
-                  relationType: item.edge.relationType,
-                  label: '',
-                },
-              })
-              addedCount++
-              addedTerms.push(item.node.term)
-            }
+      let addedCount = 0
+      const addedTerms = []
+      const expansions = FISSION_EXPANSIONS[termKey]
+      if (expansions && expansions.length > 0) {
+        for (const item of expansions) {
+          const exists = store.getGraphData().nodes.some(
+            (n) => n.id === item.node.id || n.term?.toLowerCase() === item.node.term?.toLowerCase()
+          )
+          if (!exists) {
+            store.addNode({
+              node: { ...item.node },
+              edge: {
+                source: targetParentNode.id,
+                target: item.node.id,
+                relationType: item.edge.relationType,
+                label: '',
+              },
+            })
+            addedCount++
+            addedTerms.push(item.node.term)
           }
         }
-        if (addedCount > 0) {
-          graph.setData(store.getGraphData())
-          toast(`✨ 成功为【${targetTerm}】衍生出 ${addedCount} 个关联词汇 (${addedTerms.join(', ')})`)
-          saveCurrentGraphDebounced(true)
-        } else {
-          toast(`【${targetTerm}】暂无可新增的关联词汇，可右击节点手动新增`)
-        }
-      } catch (err) {
-        console.error('提交节点衍生裂变失败', err)
-        toast(err.message || '提交节点衍生裂变失败，请稍后重试')
-      } finally {
-        elements.expandMoreBtn.disabled = false
-        elements.expandMoreBtn.innerHTML = originBtnHtml
       }
-    })
+      if (addedCount > 0) {
+        graph.setData(store.getGraphData())
+        toast(`✨ 成功为【${targetTerm}】衍生出 ${addedCount} 个关联词汇 (${addedTerms.join(', ')})`)
+        saveCurrentGraphDebounced(true)
+      } else {
+        toast(`【${targetTerm}】暂无可新增的关联词汇，可右击节点手动新增`)
+      }
+    } catch (err) {
+      console.error('提交节点衍生裂变失败', err)
+      toast(err.message || '提交节点衍生裂变失败，请稍后重试')
+    }
+  }
+
+  if (elements.expandMoreBtn) {
+    elements.expandMoreBtn.addEventListener('click', () => triggerNodeFission())
   }
 
   // 渲染反刍词袋
@@ -841,6 +878,7 @@ export function initRuminationWorkspace(ctx = {}) {
 
     elements.graphCanvasWrap?.classList.toggle('hidden', !isGraph)
     elements.graphControls?.classList.toggle('hidden', !isGraph)
+    elements.saveStatus?.classList.toggle('hidden', !isGraph)
     elements.scenarioMaterialPanel?.classList.toggle('hidden', !isMaterial)
 
     if (!isGraph) {
@@ -933,7 +971,7 @@ export function initRuminationWorkspace(ctx = {}) {
       if (wordbookId) {
         store.setCurrentWordbookId(wordbookId)
         flushPendingGraphSave()
-        updateSaveStatus('idle', '💾 自动保存 · ⌘S 手动保存')
+        updateSaveStatus('saved', '已保存')
         setActiveFocus(null)
         const remembered = restoreScenarioPreference(wordbookId)
         if (remembered) {
@@ -948,6 +986,7 @@ export function initRuminationWorkspace(ctx = {}) {
     },
     destroy() {
       audioController?.stopAll?.()
+      historyDialog?.destroy?.()
       graphPersistence?.destroy?.()
       graph?.destroy?.()
     },

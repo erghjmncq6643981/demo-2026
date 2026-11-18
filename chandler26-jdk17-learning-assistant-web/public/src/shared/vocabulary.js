@@ -598,32 +598,60 @@ export function previewRecord(term = 'abandon') {
   }
 }
 
-export function createPreviewActivity() {
-  const days = 365
+export function createPreviewActivity(days = 365) {
   const items = Array.from({ length: days }, (_, index) => {
     const date = new Date()
     date.setDate(date.getDate() - (days - index - 1))
     const pulse = index % 9 === 0 ? 3 : index % 5 === 0 ? 2 : index % 3 === 0 ? 1 : 0
     const learnedCount = index % 11 === 0 ? 2 : pulse > 1 ? 1 : 0
     const reviewCount = pulse
+    const wordAddedCount = index % 17 === 0 ? 1 : 0
+    const sceneCompletedCount = index % 14 === 0 ? 1 : 0
+    const ruminationCount = index % 4 === 0 ? 2 : index >= days - 3 ? 1 : 0
+    const totalCount = learnedCount + wordAddedCount + reviewCount + sceneCompletedCount + ruminationCount
     return {
       date: date.toISOString().slice(0, 10),
       learnedCount,
-      wordAddedCount: index % 17 === 0 ? 1 : 0,
+      wordAddedCount,
       reviewCount,
-      sceneCompletedCount: index % 14 === 0 ? 1 : 0,
-      articleCompletedCount: index % 21 === 0 ? 1 : 0,
-      studySeconds: reviewCount * 90,
-      totalCount: learnedCount + reviewCount + (index % 17 === 0 ? 1 : 0) + (index % 14 === 0 ? 1 : 0) + (index % 21 === 0 ? 1 : 0),
+      sceneCompletedCount,
+      articleCompletedCount: 0,
+      ruminationCount,
+      studySeconds: (reviewCount + ruminationCount) * 75,
+      totalCount,
     }
   })
+  let activeDays = 0
+  let longestStreak = 0
+  let running = 0
+  items.forEach((item) => {
+    if (item.totalCount > 0) {
+      activeDays += 1
+      running += 1
+      if (running > longestStreak) longestStreak = running
+    } else {
+      running = 0
+    }
+  })
+  let idx = items.length - 1
+  if (idx >= 0 && items[idx].totalCount <= 0) idx -= 1
+  let currentStreak = 0
+  while (idx >= 0 && items[idx].totalCount > 0) {
+    currentStreak += 1
+    idx -= 1
+  }
   return {
     days,
     learnedTotal: items.reduce((sum, item) => sum + item.learnedCount, 0),
     wordAddedTotal: items.reduce((sum, item) => sum + item.wordAddedCount, 0),
     reviewTotal: items.reduce((sum, item) => sum + item.reviewCount, 0),
     sceneCompletedTotal: items.reduce((sum, item) => sum + item.sceneCompletedCount, 0),
-    articleCompletedTotal: items.reduce((sum, item) => sum + item.articleCompletedCount, 0),
+    articleCompletedTotal: 0,
+    ruminationTotal: items.reduce((sum, item) => sum + item.ruminationCount, 0),
+    totalActivityCount: items.reduce((sum, item) => sum + item.totalCount, 0),
+    activeDays,
+    currentStreak,
+    longestStreak,
     studySecondsTotal: items.reduce((sum, item) => sum + item.studySeconds, 0),
     items,
   }

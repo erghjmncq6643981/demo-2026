@@ -319,9 +319,14 @@ describe('知识反刍异步材料任务追踪与防串线/防剧透校验', () 
     await vi.advanceTimersByTimeAsync(1250)
     expect(onScenarioCompleted).toHaveBeenCalledTimes(1)
 
-    // 恢复 produce_kitchen 的裂变任务，但用户在完成后已切换到 custom_airport
+    // 恢复 produce_kitchen 的裂变任务，但用户当前处于 custom_airport 场景，横幅不在无关场景中跨场景展示
     await tracker.recoverForWordbook('2001', 'custom_airport')
-    expect(bannerEl.textContent).toContain('查看原场景')
+    expect(bannerEl.classList.contains('hidden')).toBe(true)
+
+    // 切回任务所属场景 produce_kitchen 时，横幅按预期正常展示
+    currentCtx.scenarioCode = 'produce_kitchen'
+    tracker.rerender()
+    expect(bannerEl.textContent).toContain('carrot')
     await vi.advanceTimersByTimeAsync(1250)
 
     expect(mockApi.getRuminationFissionResult).toHaveBeenCalledWith('9902')
@@ -369,6 +374,7 @@ describe('知识反刍异步材料任务追踪与防串线/防剧透校验', () 
       save: () => {},
       restore: () => {},
       translate: () => {},
+      rotate: () => {},
       scale: () => {},
       beginPath: () => {},
       closePath: () => {},
@@ -377,6 +383,7 @@ describe('知识反刍异步材料任务追踪与防串线/防剧透校验', () 
       moveTo: () => {},
       lineTo: () => {},
       quadraticCurveTo: () => {},
+      bezierCurveTo: () => {},
       stroke: () => {},
       roundRect: () => {},
       setLineDash: () => {},
@@ -553,6 +560,7 @@ describe('知识反刍异步材料任务追踪与防串线/防剧透校验', () 
       save: () => {},
       restore: () => {},
       translate: () => {},
+      rotate: () => {},
       scale: () => {},
       beginPath: () => {},
       closePath: () => {},
@@ -561,6 +569,7 @@ describe('知识反刍异步材料任务追踪与防串线/防剧透校验', () 
       moveTo: () => {},
       lineTo: () => {},
       quadraticCurveTo: () => {},
+      bezierCurveTo: () => {},
       stroke: () => {},
       roundRect: () => {},
       setLineDash: () => {},
@@ -656,7 +665,7 @@ describe('知识反刍异步材料任务追踪与防串线/防剧透校验', () 
     expect(persistedCarrot.fixed).toBe(true)
     expect(persistedCarrot.x).toBe(Math.round(carrot.x))
     expect(persistedCarrot.y).toBe(Math.round(carrot.y))
-    expect(document.getElementById('graphSaveStatus').textContent).toContain('布局位置已保存')
+    expect(document.getElementById('graphSaveStatus').textContent).toContain('已保存')
 
     // 模拟刷新后从服务端重新载入：carrot 保持保存位置且不会复位
     const reloadedLayout = computeGalaxyLayout(mockCtx, {
@@ -742,6 +751,7 @@ describe('知识反刍异步材料任务追踪与防串线/防剧透校验', () 
       save: () => {},
       restore: () => {},
       translate: () => {},
+      rotate: () => {},
       scale: () => {},
       beginPath: () => {},
       closePath: () => {},
@@ -750,6 +760,7 @@ describe('知识反刍异步材料任务追踪与防串线/防剧透校验', () 
       moveTo: () => {},
       lineTo: () => {},
       quadraticCurveTo: () => {},
+      bezierCurveTo: () => {},
       stroke: () => {},
       roundRect: () => {},
       setLineDash: () => {},

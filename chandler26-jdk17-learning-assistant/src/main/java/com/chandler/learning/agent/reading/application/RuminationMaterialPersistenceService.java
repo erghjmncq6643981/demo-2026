@@ -4,6 +4,8 @@ import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import com.baomidou.mybatisplus.core.conditions.update.UpdateWrapper;
 import com.chandler.learning.agent.common.exception.LearningErrorCode;
 import com.chandler.learning.agent.exception.LearningAssistantException;
+import com.chandler.learning.agent.learning.application.LearningActivityService;
+import com.chandler.learning.agent.learning.domain.enums.LearningActivityEventType;
 import com.chandler.learning.agent.reading.api.response.RuminationMaterialResponse;
 import com.chandler.learning.agent.reading.api.response.RuminationProbeResponse;
 import com.chandler.learning.agent.reading.domain.entity.LearningRuminationGraph;
@@ -21,6 +23,7 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.util.StringUtils;
 
+import java.time.LocalDateTime;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Locale;
@@ -40,29 +43,42 @@ public class RuminationMaterialPersistenceService {
     private final LearningRuminationGraphMapper graphMapper;
     private final LearningRuminationSentencePracticeMapper sentencePracticeMapper;
     private final ObjectMapper objectMapper;
+    private final LearningActivityService activityService;
 
-    /** 兼容旧 4 参构造（供未注入句型跟敲 Mapper 的单元测试使用）。 */
+    /** 兼容旧 4 参构造（供未注入句型跟敲 Mapper 与活动服务的单元测试使用）。 */
     public RuminationMaterialPersistenceService(
             LearningRuminationMaterialMapper materialMapper,
             LearningRuminationProbeMapper probeMapper,
             LearningRuminationGraphMapper graphMapper,
             ObjectMapper objectMapper) {
-        this(materialMapper, probeMapper, graphMapper, null, objectMapper);
+        this(materialMapper, probeMapper, graphMapper, null, objectMapper, null);
     }
 
-    /** Spring 主构造函数：注入材料、探针、图谱与句型跟敲 Mapper。 */
-    @Autowired
+    /** 兼容旧 5 参构造（供未注入活动服务的单元测试使用）。 */
     public RuminationMaterialPersistenceService(
             LearningRuminationMaterialMapper materialMapper,
             LearningRuminationProbeMapper probeMapper,
             LearningRuminationGraphMapper graphMapper,
             LearningRuminationSentencePracticeMapper sentencePracticeMapper,
             ObjectMapper objectMapper) {
+        this(materialMapper, probeMapper, graphMapper, sentencePracticeMapper, objectMapper, null);
+    }
+
+    /** Spring 主构造函数：注入材料、探针、图谱、句型跟敲 Mapper 与学习活动服务。 */
+    @Autowired
+    public RuminationMaterialPersistenceService(
+            LearningRuminationMaterialMapper materialMapper,
+            LearningRuminationProbeMapper probeMapper,
+            LearningRuminationGraphMapper graphMapper,
+            LearningRuminationSentencePracticeMapper sentencePracticeMapper,
+            ObjectMapper objectMapper,
+            LearningActivityService activityService) {
         this.materialMapper = materialMapper;
         this.probeMapper = probeMapper;
         this.graphMapper = graphMapper;
         this.sentencePracticeMapper = sentencePracticeMapper;
         this.objectMapper = objectMapper;
+        this.activityService = activityService;
     }
 
     /**
@@ -163,6 +179,26 @@ public class RuminationMaterialPersistenceService {
         Integer updatedGraphVersion = consumeBag
                 ? subtractConsumedWordsFromBag(userId, wordbookId, scenarioCode, normalizedSnapshot)
                 : null;
+
+        if (activityService != null && material.getId() != null) {
+            LocalDateTime now = LocalDateTime.now();
+            String idempotencyKey = sourceMaterialId != null
+                    ? "rumination_material_regenerated:" + material.getId() + ":" + (taskId != null ? taskId : now)
+                    : "rumination_material_generated:" + material.getId();
+            activityService.record(
+                    userId,
+                    LearningActivityEventType.RUMINATION_MATERIAL_GENERATED,
+                    now,
+                    null,
+                    null,
+                    material.getId(),
+                    null,
+                    1,
+                    null,
+                    resolvedSource,
+                    idempotencyKey
+            );
+        }
 
         RuminationMaterialResponse response = mapMaterialToResponse(material, persistedProbes);
         response.setGraphVersion(updatedGraphVersion);

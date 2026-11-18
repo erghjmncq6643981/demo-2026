@@ -96,6 +96,21 @@ public class WordbookService {
     private final AiAsyncTaskService aiAsyncTaskService;
     private final LearningActivityService activityService;
 
+    private VocabularyLookupHistoryService lookupHistoryService;
+
+    /** 注入查词足迹服务（使用可选注入保持旧单元测试构造兼容）。 */
+    @org.springframework.beans.factory.annotation.Autowired(required = false)
+    public void setLookupHistoryService(VocabularyLookupHistoryService lookupHistoryService) {
+        this.lookupHistoryService = lookupHistoryService;
+    }
+
+    private void recordWordbookAddLookup(Long userId, Long vocabularyId, String term, String normalizedTerm) {
+        if (lookupHistoryService != null) {
+            lookupHistoryService.recordLookup(
+                    userId, vocabularyId, term, normalizedTerm, VocabularyLookupHistoryService.SOURCE_WORDBOOK_ADD);
+        }
+    }
+
     /** 按用户批量统计有效个人单词本数，供系统用户中心使用。 */
     public Map<Long, Integer> countByUserIds(java.util.Collection<Long> userIds) {
         if (userIds == null || userIds.isEmpty()) {
@@ -306,16 +321,11 @@ public class WordbookService {
                     "单词本中还有单词，不能删除");
         }
         LocalDateTime now = LocalDateTime.now();
-        wordbook.markDeleted(now);
-        wordbookMapper.updateById(wordbook);
+        wordbookMapper.deleteById(wordbook.getId());
 
-        LearningWordbookEntry updateEntry = new LearningWordbookEntry();
-        updateEntry.setDeleted(true);
-        updateEntry.setUpdateTime(now);
-        entryMapper.update(updateEntry, new LambdaUpdateWrapper<LearningWordbookEntry>()
+        entryMapper.delete(new LambdaQueryWrapper<LearningWordbookEntry>()
                 .eq(LearningWordbookEntry::getUserId, userId)
-                .eq(LearningWordbookEntry::getWordbookId, wordbookId)
-                .eq(LearningWordbookEntry::getDeleted, false));
+                .eq(LearningWordbookEntry::getWordbookId, wordbookId));
         LearningWordbook nextDefault = wordbookMapper.selectOne(new LambdaQueryWrapper<LearningWordbook>()
                 .eq(LearningWordbook::getUserId, userId)
                 .eq(LearningWordbook::getDeleted, false)
@@ -418,6 +428,7 @@ public class WordbookService {
                 activityService.record(userId, LearningActivityEventType.WORD_ADDED, now,
                         null, null, null, existing.getId(), 1, null, "restored",
                         "word_added:" + existing.getId() + ":" + now);
+                recordWordbookAddLookup(userId, existing.getVocabularyId(), existing.getTerm(), existing.getNormalizedTerm());
             } else if (responseAssembler.refreshSnapshotIfVocabularyChanged(existing, vocabulary, now)) {
                 entryMapper.updateById(existing);
                 systemLogService.record(userId, SystemLogType.WORDBOOK, "刷新词条学习卡", existing.getNormalizedTerm());
@@ -449,6 +460,7 @@ public class WordbookService {
                     userDisplayNameService.userName(userId), entry.getNormalizedTerm(), wordbook.getName());
             activityService.record(userId, LearningActivityEventType.WORD_ADDED, now,
                     null, null, null, entry.getId(), 1, null, "added", "word_added:" + entry.getId());
+            recordWordbookAddLookup(userId, null, entry.getTerm(), entry.getNormalizedTerm());
             invalidateActivityCache(userId);
             invalidateWordbookCache(userId);
             return responseAssembler.toEntryResponse(entry);
@@ -465,6 +477,7 @@ public class WordbookService {
                 wordbook.getName());
         activityService.record(userId, LearningActivityEventType.WORD_ADDED, now,
                 null, null, null, entry.getId(), 1, null, "added", "word_added:" + entry.getId());
+        recordWordbookAddLookup(userId, entry.getVocabularyId(), entry.getTerm(), entry.getNormalizedTerm());
         invalidateActivityCache(userId);
         invalidateWordbookCache(userId);
         return responseAssembler.toEntryResponse(entry);
@@ -606,8 +619,7 @@ public class WordbookService {
     /** 删除个人单词本词条。 */
     public void deleteEntry(Long userId, Long entryId) {
         LearningWordbookEntry entry = requireEntry(userId, entryId);
-        entry.markDeleted(LocalDateTime.now());
-        entryMapper.updateById(entry);
+        entryMapper.deleteById(entry.getId());
         systemLogService.record(userId, SystemLogType.WORDBOOK, "删除词条", entry.getNormalizedTerm());
         log.info("用户「{}」从单词本中删除了单词「{}」",
                 userDisplayNameService.userName(userId),
@@ -657,9 +669,14 @@ public class WordbookService {
                 outcome.stageBefore(), outcome.stageAfter(), outcome.masteryBefore(), outcome.masteryAfter(),
                 nextReviewTime, now);
         reviewService.record(record);
-        activityService.record(userId, LearningActivityEventType.WORD_REVIEWED, now,
+        boolean isRuminationProbe = "rumination_probe".equalsIgnoreCase(request.getAssessmentType());
+        LearningActivityEventType activityType = isRuminationProbe
+                ? LearningActivityEventType.RUMINATION_PROBE_SUBMITTED
+                : LearningActivityEventType.WORD_REVIEWED;
+        String eventKeyPrefix = isRuminationProbe ? "rumination_probe:" : "word_reviewed:";
+        activityService.record(userId, activityType, now,
                 request.getPlanId(), request.getUnitId(), null, entry.getId(), 1,
-                request.getDurationSeconds(), result.getCode(), "word_reviewed:" + record.getId());
+                request.getDurationSeconds(), result.getCode(), eventKeyPrefix + record.getId());
 
         ReviewSubmitResponse response = toReviewSubmitResponse(entry, outcome.stageAfter(), outcome.masteryAfter(),
                 nextReviewTime);

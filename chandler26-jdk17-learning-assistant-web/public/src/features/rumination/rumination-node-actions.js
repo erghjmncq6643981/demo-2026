@@ -1,8 +1,10 @@
 /**
  * 知识反刍模块 - 右键上下文菜单、浮动操作栏与手工节点维护弹窗控制
  */
-import { showModal, hideModal } from '/src/shared/modal.js'
+import { showModal, hideModal, bindModalDismiss } from '/src/shared/modal.js'
 import { calculateReparentPosition } from '/src/features/rumination/rumination-graph-drag.js'
+import { RELATION_CONFIG } from '/src/features/rumination/rumination-graph-renderer.js'
+import { computeEdgeRouting } from '/src/features/rumination/rumination-graph-layout.js'
 
 export function createRuminationNodeActions({
   elements,
@@ -20,6 +22,7 @@ export function createRuminationNodeActions({
   syncLiveNodePositions,
   renderBag,
   saveCurrentGraphDebounced,
+  history,
 }) {
   let contextMenuTargetNode = null
   let nodeModalMode = 'add'
@@ -28,6 +31,7 @@ export function createRuminationNodeActions({
     if (elements.graphContextMenu) {
       elements.graphContextMenu.classList.add('hidden')
     }
+    closeNodeBorderStyleMenu()
   }
 
   function closeNodeModal() {
@@ -41,40 +45,124 @@ export function createRuminationNodeActions({
     return graphData?.nodes?.find((n) => n.id === focusId || n.term === focusId) || null
   }
 
-  function syncActionBar() {
-    if (!elements.nodeActionBar) return
-    const focusedNode = resolveFocusedNode()
-    if (!focusedNode) {
-      elements.nodeActionBar.classList.add('hidden')
+  let selectedGraphEdge = null
+
+  function syncEdgeActionBar(edge) {
+    selectedGraphEdge = edge || null
+    if (!elements.edgeActionBar) return
+    if (!edge) {
+      elements.edgeActionBar.classList.add('hidden')
       return
     }
-    const isHub = focusedNode.nodeType === 'hub'
-    const term = focusedNode.label || focusedNode.term || focusedNode.id
-    const inBag = !isHub && typeof isNodeInBag === 'function' ? isNodeInBag(focusedNode.id, term) : false
-    if (elements.actionBarNodeTerm) {
-      elements.actionBarNodeTerm.textContent = term
+    if (elements.nodeActionBar) {
+      elements.nodeActionBar.classList.add('hidden')
     }
-    if (elements.barToggleBagBtn) {
-      elements.barToggleBagBtn.style.display = isHub ? 'none' : 'inline-flex'
+    const relConf = RELATION_CONFIG[edge.relationType] || { label: '关联' }
+    const displayLabel = (edge.label && edge.label !== '核心') ? edge.label : relConf.label
+    if (elements.edgeBarRelationLabel) {
+      elements.edgeBarRelationLabel.textContent = displayLabel
     }
-    if (elements.barToggleBagText) {
-      elements.barToggleBagText.textContent = inBag ? '移出词袋' : '词袋'
+    if (elements.edgeBarCurveText) {
+      const isStraight = edge.lineStyle === 'straight' || edge.isCurved === false
+      elements.edgeBarCurveText.textContent = isStraight ? '― 直线' : '∿ 曲线'
     }
-    if (elements.barExpandNodeBtn) {
-      elements.barExpandNodeBtn.style.display = isHub ? 'none' : 'inline-flex'
+    if (elements.edgeBarArrowText) {
+      const hasArrow = edge.showArrow !== false && (edge.relationType === 'action' || edge.relationType === 'downstream' || edge.showArrow === true)
+      elements.edgeBarArrowText.textContent = hasArrow ? '➔ 箭头' : '• 端点'
     }
-    if (elements.barDeleteNodeBtn) {
-      elements.barDeleteNodeBtn.style.display = isHub ? 'none' : 'inline-flex'
+    elements.edgeActionBar.classList.remove('hidden')
+  }
+
+  function closeEdgeActionBar() {
+    selectedGraphEdge = null
+    if (elements.edgeActionBar) {
+      elements.edgeActionBar.classList.add('hidden')
     }
-    if (elements.barEditNodeBtn) {
-      elements.barEditNodeBtn.style.display = 'inline-flex'
-      elements.barEditNodeBtn.title = isHub ? '修改中心主题 (E)' : '修改词汇释义 (E)'
+    closeEdgeInlineEditor()
+  }
+
+  function syncActionBar() {
+    if (elements.edgeActionBar) {
+      elements.edgeActionBar.classList.add('hidden')
     }
-    if (elements.barAddChildBtn) {
-      elements.barAddChildBtn.style.display = 'inline-flex'
-      elements.barAddChildBtn.title = isHub ? '新增核心词 (A)' : '新增关联节点 (A)'
+    if (elements.nodeActionBar) {
+      elements.nodeActionBar.classList.add('hidden')
     }
-    elements.nodeActionBar.classList.remove('hidden')
+  }
+
+  const BORDER_STYLE_LABELS = {
+    solid: '实线',
+    dashed: '虚线',
+    dotted: '点线',
+    dashdot: '点划线',
+  }
+
+  function syncNodeBorderStyleUI(style) {
+    const curStyle = style || 'solid'
+    const label = BORDER_STYLE_LABELS[curStyle] || '实线'
+    if (elements.barBorderStyleText) {
+      elements.barBorderStyleText.textContent = label
+    }
+    if (elements.barBorderStyleIcon) {
+      elements.barBorderStyleIcon.className = `border-style-indicator ${curStyle}-indicator`
+    }
+    if (elements.nodeBorderStyleMenu) {
+      elements.nodeBorderStyleMenu.querySelectorAll('.border-style-menu-item').forEach((item) => {
+        const itemStyle = item.getAttribute('data-style')
+        if (itemStyle === curStyle) {
+          item.classList.add('active')
+        } else {
+          item.classList.remove('active')
+        }
+      })
+    }
+    if (elements.ctxBorderStyleText) {
+      elements.ctxBorderStyleText.textContent = `边框: ${label}`
+    }
+  }
+
+  function toggleNodeBorderStyleMenu() {
+    if (!elements.nodeBorderStyleMenu) return
+    const isHidden = elements.nodeBorderStyleMenu.classList.contains('hidden')
+    if (isHidden) {
+      elements.nodeBorderStyleMenu.classList.remove('hidden')
+    } else {
+      elements.nodeBorderStyleMenu.classList.add('hidden')
+    }
+  }
+
+  function closeNodeBorderStyleMenu() {
+    if (elements.nodeBorderStyleMenu) {
+      elements.nodeBorderStyleMenu.classList.add('hidden')
+    }
+  }
+
+  function changeNodeBorderStyle(targetNode, newStyle) {
+    if (!targetNode) return
+    const graphData = store?.getGraphData ? store.getGraphData() : getGraphData()
+    if (!graphData) return
+    history?.recordBefore?.('修改边框线型')
+
+    const style = newStyle || 'solid'
+    targetNode.borderStyle = style
+
+    const rawNode = (store?.findNode ? store.findNode(targetNode.id) : null)
+      || graphData.nodes?.find((n) => n.id === targetNode.id)
+      || targetNode
+    if (rawNode) {
+      rawNode.borderStyle = style
+    }
+
+    syncNodeBorderStyleUI(style)
+    closeNodeBorderStyleMenu()
+    if (graph?.requestRedraw) {
+      graph.requestRedraw()
+    } else if (graph?.setData) {
+      graph.setData(store?.getGraphData ? store.getGraphData() : graphData)
+    }
+    saveCurrentGraphDebounced?.(true)
+    const label = BORDER_STYLE_LABELS[style] || '实线'
+    toast(`✨ 节点【${targetNode.term || targetNode.label || targetNode.id}】边框已修改为【${label}】`)
   }
 
   function toggleBagForNode(node) {
@@ -102,6 +190,7 @@ export function createRuminationNodeActions({
 
   function deleteNode(node) {
     if (!node || node.nodeType === 'hub') return
+    history?.recordBefore?.('删除节点')
     const term = node.term || node.label || node.id
     const targetId = node.id
     const graphData = getGraphData()
@@ -149,21 +238,24 @@ export function createRuminationNodeActions({
     const isHub = node.nodeType === 'hub'
     const inBag = !isHub && typeof isNodeInBag === 'function' ? isNodeInBag(node.id, term) : false
 
+    if (elements.ctxExpandNodeBtn) {
+      elements.ctxExpandNodeBtn.style.display = isHub ? 'none' : 'flex'
+    }
     if (elements.ctxAddChildText) {
-      elements.ctxAddChildText.textContent = isHub ? '新增核心词' : '新增关联'
+      elements.ctxAddChildText.textContent = isHub ? '新增核心' : '关联'
     }
     if (elements.ctxEditNodeBtn) {
       elements.ctxEditNodeBtn.style.display = 'flex'
     }
     const ctxEditTextEl = elements.ctxEditNodeBtn?.querySelector('span:last-child')
     if (ctxEditTextEl) {
-      ctxEditTextEl.textContent = isHub ? '修改中心主题' : '编辑释义'
+      ctxEditTextEl.textContent = isHub ? '修改主题' : '编辑'
     }
     if (elements.ctxToggleBagBtn) {
       elements.ctxToggleBagBtn.style.display = isHub ? 'none' : 'flex'
     }
     if (elements.ctxToggleBagText) {
-      elements.ctxToggleBagText.textContent = inBag ? '移出词袋' : '加入词袋'
+      elements.ctxToggleBagText.textContent = inBag ? '移出' : '词袋'
     }
     if (elements.ctxDangerDivider) {
       elements.ctxDangerDivider.style.display = isHub ? 'none' : 'block'
@@ -171,11 +263,14 @@ export function createRuminationNodeActions({
     if (elements.ctxDeleteNodeBtn) {
       elements.ctxDeleteNodeBtn.style.display = isHub ? 'none' : 'flex'
     }
+    if (elements.ctxBorderStyleText) {
+      elements.ctxBorderStyleText.textContent = `边框: ${BORDER_STYLE_LABELS[node.borderStyle || 'solid'] || '实线'}`
+    }
 
     const menu = elements.graphContextMenu
     menu.classList.remove('hidden')
-    const menuWidth = 180
-    const menuHeight = isHub ? 80 : 185
+    const menuWidth = 124
+    const menuHeight = isHub ? 140 : 250
     let left = pos.clientX + 4
     let top = pos.clientY + 4
     if (left + menuWidth > window.innerWidth) left = pos.clientX - menuWidth - 4
@@ -208,15 +303,15 @@ export function createRuminationNodeActions({
     if (mode === 'add') {
       if (elements.nodeModalTermInput) {
         elements.nodeModalTermInput.value = ''
-        elements.nodeModalTermInput.placeholder = isHub ? '例如：vegetables / fruit / meat' : '例如：whisk / roast / thermometer'
+        elements.nodeModalTermInput.placeholder = isHub ? '例如：vegetables / fruit / meat' : '例如：strawberry / peel / cozy'
       }
       if (elements.nodeModalDefInput) {
         elements.nodeModalDefInput.value = ''
-        elements.nodeModalDefInput.placeholder = '例如：蔬菜 / 水果；留空自动补全'
+        elements.nodeModalDefInput.placeholder = '例如：草莓；留空将自动补全'
       }
       if (dimLabel) dimLabel.style.display = 'flex'
       if (elements.nodeModalDimensionSelect) {
-        elements.nodeModalDimensionSelect.value = isHub ? 'peer' : 'action'
+        elements.nodeModalDimensionSelect.value = 'peer'
       }
       showModal(elements.nodeEditModal, { initialFocus: elements.nodeModalTermInput })
     } else {
@@ -268,6 +363,7 @@ export function createRuminationNodeActions({
     if (!childNode || !newParentNode || childNode.id === newParentNode.id) return
     const graphData = store?.getGraphData ? store.getGraphData() : getGraphData()
     if (!graphData || !Array.isArray(graphData.edges) || !Array.isArray(graphData.nodes)) return
+    history?.recordBefore?.('重新关联父节点')
 
     const childId = childNode.id
     const childTerm = childNode.term
@@ -332,6 +428,15 @@ export function createRuminationNodeActions({
     saveCurrentGraphDebounced(true)
   }
 
+  if (elements.ctxExpandNodeBtn) {
+    elements.ctxExpandNodeBtn.addEventListener('click', () => {
+      const target = contextMenuTargetNode
+      closeContextMenu()
+      if (target && target.nodeType !== 'hub') {
+        handleNodeAction('expand', target)
+      }
+    })
+  }
   if (elements.ctxAddChildBtn) {
     elements.ctxAddChildBtn.addEventListener('click', () => openNodeModal('add'))
   }
@@ -361,143 +466,268 @@ export function createRuminationNodeActions({
     syncActionBar()
   })
 
-  elements.closeNodeModalBtn?.addEventListener?.('click', closeNodeModal)
-  elements.cancelNodeModalBtn?.addEventListener?.('click', closeNodeModal)
-  elements.nodeEditModal?.addEventListener?.('click', (e) => {
-    if (e.target === elements.nodeEditModal) closeNodeModal()
-  })
-
-  if (elements.submitNodeModalBtn) {
-    elements.submitNodeModalBtn.addEventListener('click', () => {
-      const termVal = elements.nodeModalTermInput?.value?.trim()
-      const defVal = elements.nodeModalDefInput?.value?.trim()
-      const dimVal = elements.nodeModalDimensionSelect?.value || 'action'
-
-      if (!termVal) {
-        toast('请输入内容')
-        elements.nodeModalTermInput?.focus()
-        return
-      }
-
-      const graphData = store?.getGraphData ? store.getGraphData() : getGraphData()
-      if (nodeModalMode === 'add') {
-        if (!contextMenuTargetNode) return
-        syncLiveNodePositions?.()
-        const isCore = contextMenuTargetNode.nodeType === 'hub'
-        const newId = `custom_${termVal.toLowerCase().replace(/\s+/g, '_')}_${Date.now().toString(36)}`
-        const newNode = {
-          id: newId,
-          nodeType: isCore ? 'core' : 'expansion',
-          term: termVal,
-          definition: defVal || termVal,
-          dimension: dimVal,
-          status: 'unlearned',
-          masteryScore: 0,
-          reviewStage: 0,
-        }
-        const newEdge = {
-          source: contextMenuTargetNode.id,
-          target: newId,
-          relationType: dimVal,
-          label: '',
-        }
-        if (store?.addNode) {
-          store.addNode({ node: newNode, edge: newEdge })
-        } else {
-          graphData.nodes.push(newNode)
-          graphData.edges.push(newEdge)
-        }
-        graph.setData(store?.getGraphData ? store.getGraphData() : graphData)
-        toast(`已将【${termVal}】挂载至【${contextMenuTargetNode.term || contextMenuTargetNode.label}】`)
-        saveCurrentGraphDebounced(true)
-      } else if (nodeModalMode === 'edit') {
-        if (!contextMenuTargetNode) return
-        syncLiveNodePositions?.()
-        const isHub = contextMenuTargetNode.nodeType === 'hub'
-        const targetRaw = (store?.findNode ? store.findNode(contextMenuTargetNode.id) : null) || graphData.nodes.find((n) => n.id === contextMenuTargetNode.id) || contextMenuTargetNode
-        if (isHub) {
-          targetRaw.label = termVal
-          targetRaw.term = termVal
-          if (defVal) targetRaw.subLabel = defVal
-          graph.setData(store?.getGraphData ? store.getGraphData() : graphData)
-          syncActionBar()
-          toast(`已更新场景中心主题为【${termVal}】`)
-          saveCurrentGraphDebounced(true)
-          closeNodeModal()
-          return
-        }
-        const oldTerm = contextMenuTargetNode.term
-        targetRaw.term = termVal
-        targetRaw.definition = defVal || termVal
-        targetRaw.dimension = dimVal
-        const currentEdges = store?.getGraphData ? store.getGraphData().edges : graphData.edges
-        const edge = currentEdges.find(
-          (e) => e.target === targetRaw.id || (oldTerm && e.target === oldTerm)
-        )
-        if (edge) edge.relationType = dimVal
-        graph.setData(store?.getGraphData ? store.getGraphData() : graphData)
-        syncActionBar()
-        toast(`已更新【${termVal}】释义与属性`)
-        saveCurrentGraphDebounced(true)
-      }
-      closeNodeModal()
+  if (elements.ctxBorderStyleBtn) {
+    elements.ctxBorderStyleBtn.addEventListener('click', () => {
+      if (!contextMenuTargetNode) return
+      const styles = ['solid', 'dashed', 'dotted', 'dashdot']
+      const curStyle = contextMenuTargetNode.borderStyle || 'solid'
+      const nextIdx = (styles.indexOf(curStyle) + 1) % styles.length
+      const nextStyle = styles[nextIdx]
+      closeContextMenu()
+      changeNodeBorderStyle(contextMenuTargetNode, nextStyle)
     })
   }
 
-  let currentEditingEdge = null
+  elements.barBorderStyleBtn?.addEventListener('click', (e) => {
+    e.stopPropagation()
+    toggleNodeBorderStyleMenu()
+  })
 
-  function closeEdgeModal() {
-    hideModal(elements.edgeEditModal)
-    currentEditingEdge = null
+  elements.nodeBorderStyleMenu?.querySelectorAll('.border-style-menu-item').forEach((item) => {
+    item.addEventListener('click', (e) => {
+      e.stopPropagation()
+      const focusedNode = resolveFocusedNode()
+      const target = focusedNode || contextMenuTargetNode
+      const style = item.getAttribute('data-style')
+      if (target && style) {
+        changeNodeBorderStyle(target, style)
+      }
+    })
+  })
+
+  bindModalDismiss(elements.nodeEditModal, {
+    closeButtons: [elements.closeNodeModalBtn, elements.cancelNodeModalBtn],
+  })
+
+  function submitNodeModal() {
+    const termVal = elements.nodeModalTermInput?.value?.trim()
+    const defVal = elements.nodeModalDefInput?.value?.trim()
+    const dimVal = elements.nodeModalDimensionSelect?.value || 'peer'
+
+    if (!termVal) {
+      toast('请输入内容')
+      elements.nodeModalTermInput?.focus()
+      return
+    }
+
+    const graphData = store?.getGraphData ? store.getGraphData() : getGraphData()
+    if (nodeModalMode === 'add') {
+      if (!contextMenuTargetNode) return
+      syncLiveNodePositions?.()
+      history?.recordBefore?.('新增关联')
+      const isCore = contextMenuTargetNode.nodeType === 'hub'
+      const newId = `custom_${termVal.toLowerCase().replace(/\s+/g, '_')}_${Date.now().toString(36)}`
+      const newNode = {
+        id: newId,
+        nodeType: isCore ? 'core' : 'expansion',
+        term: termVal,
+        definition: defVal || termVal,
+        dimension: dimVal,
+        status: 'unlearned',
+        masteryScore: 0,
+        reviewStage: 0,
+      }
+      const currentNodes = store?.getGraphData ? store.getGraphData().nodes : graphData.nodes
+      const currentEdges = store?.getGraphData ? store.getGraphData().edges : graphData.edges
+      if (typeof contextMenuTargetNode.x === 'number' && typeof contextMenuTargetNode.y === 'number') {
+        const pos = calculateReparentPosition(newNode, contextMenuTargetNode, currentNodes, currentEdges)
+        newNode.x = pos.x
+        newNode.y = pos.y
+        newNode.fixed = true
+      }
+      const newEdge = {
+        source: contextMenuTargetNode.id,
+        target: newId,
+        relationType: dimVal,
+        label: '',
+      }
+      if (store?.addNode) {
+        store.addNode({ node: newNode, edge: newEdge })
+      } else {
+        graphData.nodes.push(newNode)
+        graphData.edges.push(newEdge)
+      }
+      graph.setData(store?.getGraphData ? store.getGraphData() : graphData)
+      toast(`已将【${termVal}】挂载至【${contextMenuTargetNode.term || contextMenuTargetNode.label}】`)
+      saveCurrentGraphDebounced(true, { changeSummary: `新增节点 ${termVal}` })
+    } else if (nodeModalMode === 'edit') {
+      if (!contextMenuTargetNode) return
+      syncLiveNodePositions?.()
+      history?.recordBefore?.('编辑词汇')
+      const isHub = contextMenuTargetNode.nodeType === 'hub'
+      const targetRaw = (store?.findNode ? store.findNode(contextMenuTargetNode.id) : null) || graphData.nodes.find((n) => n.id === contextMenuTargetNode.id) || contextMenuTargetNode
+      if (isHub) {
+        targetRaw.label = termVal
+        targetRaw.term = termVal
+        if (defVal) targetRaw.subLabel = defVal
+        graph.setData(store?.getGraphData ? store.getGraphData() : graphData)
+        syncActionBar()
+        toast(`已更新场景中心主题为【${termVal}】`)
+        saveCurrentGraphDebounced(true, { changeSummary: `更新中心主题 ${termVal}` })
+        closeNodeModal()
+        return
+      }
+      const oldTerm = contextMenuTargetNode.term
+      targetRaw.term = termVal
+      targetRaw.definition = defVal || termVal
+      targetRaw.dimension = dimVal
+      const currentEdges = store?.getGraphData ? store.getGraphData().edges : graphData.edges
+      const edge = currentEdges.find(
+        (e) => e.target === targetRaw.id || (oldTerm && e.target === oldTerm)
+      )
+      if (edge) edge.relationType = dimVal
+      graph.setData(store?.getGraphData ? store.getGraphData() : graphData)
+      syncActionBar()
+      toast(`已更新【${termVal}】释义与属性`)
+      saveCurrentGraphDebounced(true, { changeSummary: `修改节点 ${termVal}` })
+    }
+    closeNodeModal()
   }
 
-  function openEdgeModal(edge) {
+  if (elements.submitNodeModalBtn) {
+    elements.submitNodeModalBtn.addEventListener('click', submitNodeModal)
+  }
+
+  function handleNodeModalKeydown(e) {
+    if (e.isComposing || e.keyCode === 229) return
+    if (e.key === 'Enter') {
+      if (e.target === elements.cancelNodeModalBtn || e.target === elements.closeNodeModalBtn) return
+      e.preventDefault()
+      e.stopPropagation()
+      submitNodeModal()
+    } else if (e.key === 'Escape') {
+      e.preventDefault()
+      e.stopPropagation()
+      closeNodeModal()
+    }
+  }
+
+  elements.nodeEditModal?.addEventListener?.('keydown', handleNodeModalKeydown)
+  elements.nodeModalTermInput?.addEventListener?.('keydown', handleNodeModalKeydown)
+  elements.nodeModalDefInput?.addEventListener?.('keydown', handleNodeModalKeydown)
+  elements.nodeModalDimensionSelect?.addEventListener?.('keydown', handleNodeModalKeydown)
+
+  let currentEditingEdge = null
+
+  function openEdgeInlineEditor(edge, pos) {
     if (!edge) return
     currentEditingEdge = edge
     closeContextMenu()
+    if (!elements.edgeInlineEditor) return
 
-    const graphData = getGraphData()
-    const sNode = graphData?.nodes?.find((n) => n.id === edge.source || n.term === edge.source) || edge.sourceNode
-    const tNode = graphData?.nodes?.find((n) => n.id === edge.target || n.term === edge.target) || edge.targetNode
-    const sTerm = sNode?.label || sNode?.term || edge.source || '起点'
-    const tTerm = tNode?.label || tNode?.term || edge.target || '终点'
+    const s = edge.sourceNode
+    const t = edge.targetNode
+    const canvasWrap = elements.canvasWrap || elements.canvas?.parentElement
+    if (!s || !t || !canvasWrap) return
 
-    if (elements.edgeModalSourceTerm) elements.edgeModalSourceTerm.textContent = sTerm
-    if (elements.edgeModalTargetTerm) elements.edgeModalTargetTerm.textContent = tTerm
+    const route = computeEdgeRouting(s, t, edge)
+    const transform = graph?.getTransform ? graph.getTransform() : { x: 0, y: 0, scale: 1 }
+    const canvas = elements.canvas || canvasWrap.querySelector('canvas')
+    const canvasRect = canvas?.getBoundingClientRect ? canvas.getBoundingClientRect() : { left: 0, top: 0 }
+    const wrapRect = canvasWrap.getBoundingClientRect ? canvasWrap.getBoundingClientRect() : { left: 0, top: 0 }
+
+    const screenX = canvasRect.left + transform.x + route.midX * transform.scale
+    const screenY = canvasRect.top + transform.y + route.midY * transform.scale
+
+    const relX = screenX - wrapRect.left
+    const relY = screenY - wrapRect.top
+
+    elements.edgeInlineEditor.style.left = `${Math.round(relX)}px`
+    elements.edgeInlineEditor.style.top = `${Math.round(relY)}px`
+
     const currentLabel = edge.label && edge.label !== '核心' ? edge.label : ''
-    if (elements.edgeModalLabelInput) {
-      elements.edgeModalLabelInput.value = currentLabel
+    if (elements.edgeInlineInput) {
+      elements.edgeInlineInput.value = currentLabel
     }
 
-    showModal(elements.edgeEditModal, { initialFocus: elements.edgeModalLabelInput })
+    elements.edgeInlineEditor.classList.remove('hidden')
+    setTimeout(() => {
+      elements.edgeInlineInput?.focus()
+      elements.edgeInlineInput?.select()
+    }, 20)
+  }
+
+  function closeEdgeInlineEditor() {
+    currentEditingEdge = null
+    if (elements.edgeInlineEditor) {
+      elements.edgeInlineEditor.classList.add('hidden')
+    }
+  }
+
+  function commitEdgeInlineLabel(newLabel) {
+    if (!currentEditingEdge) return
+    saveEdgeLabel(newLabel)
+    closeEdgeInlineEditor()
+  }
+
+  function closeEdgeModal() {
+    closeEdgeInlineEditor()
+    if (elements.edgeEditModal) {
+      hideModal(elements.edgeEditModal)
+    }
+    currentEditingEdge = null
+  }
+
+  function openEdgeModal(edge, pos) {
+    if (elements.edgeModalSourceTerm || elements.edgeModalTargetTerm || elements.edgeModalLabelInput) {
+      const gd = store?.getGraphData ? store.getGraphData() : getGraphData()
+      if (elements.edgeModalSourceTerm) {
+        const s = edge.sourceNode || gd?.nodes?.find((n) => n.id === edge.source)
+        elements.edgeModalSourceTerm.textContent = s?.term || s?.label || edge.source || ''
+      }
+      if (elements.edgeModalTargetTerm) {
+        const t = edge.targetNode || gd?.nodes?.find((n) => n.id === edge.target)
+        elements.edgeModalTargetTerm.textContent = t?.term || t?.label || edge.target || ''
+      }
+      if (elements.edgeModalLabelInput) {
+        elements.edgeModalLabelInput.value = edge.label && edge.label !== '核心' ? edge.label : ''
+      }
+    }
+    // 零弹窗遮挡：直接打开 ProcessOn 式连线就地就位输入框
+    openEdgeInlineEditor(edge, pos)
   }
 
   function saveEdgeLabel(newLabel) {
     if (!currentEditingEdge) return
     const graphData = store?.getGraphData ? store.getGraphData() : getGraphData()
     if (!graphData || !Array.isArray(graphData.edges)) return
+    history?.recordBefore?.('修改连线文字')
 
     const trimmed = (newLabel || '').trim()
     const finalLabel = trimmed === '核心' ? '' : trimmed
 
+    const sId = currentEditingEdge.source || currentEditingEdge.sourceNode?.id
+    const tId = currentEditingEdge.target || currentEditingEdge.targetNode?.id
+    const sTerm = currentEditingEdge.sourceNode?.term
+    const tTerm = currentEditingEdge.targetNode?.term
+
     if (store?.updateEdgeLabel) {
-      store.updateEdgeLabel(
-        currentEditingEdge.source || currentEditingEdge.sourceNode?.id,
-        currentEditingEdge.target || currentEditingEdge.targetNode?.id,
-        finalLabel,
-      )
+      store.updateEdgeLabel(sId, tId, finalLabel)
     } else {
       const rawEdge = graphData.edges.find((e) =>
-        (e.source === currentEditingEdge.source || e.source === currentEditingEdge.sourceNode?.id)
-        && (e.target === currentEditingEdge.target || e.target === currentEditingEdge.targetNode?.id)
+        (e.source === sId || (sTerm && e.source === sTerm))
+        && (e.target === tId || (tTerm && e.target === tTerm))
       )
       if (rawEdge) {
         rawEdge.label = finalLabel
       }
     }
     currentEditingEdge.label = finalLabel
+    if (selectedGraphEdge) {
+      selectedGraphEdge.label = finalLabel
+      syncEdgeActionBar(selectedGraphEdge)
+    }
 
     graph?.setData?.(store?.getGraphData ? store.getGraphData() : graphData)
+    const newEdges = graph?.getEdges ? graph.getEdges() : []
+    const newSelectedEdge = newEdges.find((e) =>
+      (e.source === sId || (sTerm && e.source === sTerm))
+      && (e.target === tId || (tTerm && e.target === tTerm))
+    )
+    if (newSelectedEdge) {
+      selectedGraphEdge = newSelectedEdge
+      graph?.setSelectedEdge?.(newSelectedEdge)
+    }
     saveCurrentGraphDebounced?.(true)
     if (finalLabel) {
       toast(`已更新连线关系文字为【${finalLabel}】`)
@@ -507,8 +737,10 @@ export function createRuminationNodeActions({
     closeEdgeModal()
   }
 
-  elements.closeEdgeModalBtn?.addEventListener?.('click', closeEdgeModal)
-  elements.cancelEdgeModalBtn?.addEventListener?.('click', closeEdgeModal)
+  bindModalDismiss(elements.edgeEditModal, {
+    closeButtons: [elements.closeEdgeModalBtn, elements.cancelEdgeModalBtn],
+    onClose: () => { currentEditingEdge = null },
+  })
   elements.clearEdgeModalBtn?.addEventListener?.('click', () => saveEdgeLabel(''))
   elements.submitEdgeModalBtn?.addEventListener?.('click', () => saveEdgeLabel(elements.edgeModalLabelInput?.value))
   elements.edgeModalLabelInput?.addEventListener?.('keydown', (e) => {
@@ -529,9 +761,171 @@ export function createRuminationNodeActions({
     })
   }
 
+  if (elements.tidyBtn) {
+    elements.tidyBtn.addEventListener('click', () => {
+      if (!graph?.tidyLayout) return
+      history?.recordBefore?.('整理图谱布局')
+      graph.tidyLayout()
+      syncLiveNodePositions?.()
+      saveCurrentGraphDebounced?.(true)
+      toast('✨ 画布已智能整理并等距排布')
+    })
+  }
+
+  if (elements.edgeBarToggleCurveBtn) {
+    elements.edgeBarToggleCurveBtn.addEventListener('click', () => {
+      if (!selectedGraphEdge) return
+      history?.recordBefore?.('修改连线形态')
+      const isCurrentlyStraight = selectedGraphEdge.lineStyle === 'straight' || selectedGraphEdge.isCurved === false
+      const nextCurved = isCurrentlyStraight
+      selectedGraphEdge.isCurved = nextCurved
+      selectedGraphEdge.lineStyle = nextCurved ? 'curve' : 'straight'
+
+      const graphData = store?.getGraphData ? store.getGraphData() : getGraphData()
+      const sId = selectedGraphEdge.source || selectedGraphEdge.sourceNode?.id
+      const tId = selectedGraphEdge.target || selectedGraphEdge.targetNode?.id
+      const sTerm = selectedGraphEdge.sourceNode?.term
+      const tTerm = selectedGraphEdge.targetNode?.term
+      const rawEdge = graphData?.edges?.find((e) =>
+        (e.source === sId || (sTerm && e.source === sTerm))
+        && (e.target === tId || (tTerm && e.target === tTerm))
+      )
+      if (rawEdge) {
+        rawEdge.isCurved = nextCurved
+        rawEdge.lineStyle = nextCurved ? 'curve' : 'straight'
+      }
+      syncEdgeActionBar(selectedGraphEdge)
+      graph?.setData?.(store?.getGraphData ? store.getGraphData() : graphData)
+      const newEdges = graph?.getEdges ? graph.getEdges() : []
+      const newSelectedEdge = newEdges.find((e) =>
+        (e.source === sId || (sTerm && e.source === sTerm))
+        && (e.target === tId || (tTerm && e.target === tTerm))
+      )
+      if (newSelectedEdge) {
+        selectedGraphEdge = newSelectedEdge
+        graph?.setSelectedEdge?.(newSelectedEdge)
+      }
+      saveCurrentGraphDebounced?.(true)
+      toast(nextCurved ? '∿ 已切换为平滑贝塞尔曲线' : '― 已切换为直线连线')
+    })
+  }
+
+  if (elements.edgeBarToggleArrowBtn) {
+    elements.edgeBarToggleArrowBtn.addEventListener('click', () => {
+      if (!selectedGraphEdge) return
+      history?.recordBefore?.('修改连线箭头')
+      const currentHasArrow = selectedGraphEdge.showArrow !== false && (
+        selectedGraphEdge.relationType === 'action' ||
+        selectedGraphEdge.relationType === 'downstream' ||
+        selectedGraphEdge.showArrow === true
+      )
+      const nextShowArrow = !currentHasArrow
+      selectedGraphEdge.showArrow = nextShowArrow
+
+      const graphData = store?.getGraphData ? store.getGraphData() : getGraphData()
+      const sId = selectedGraphEdge.source || selectedGraphEdge.sourceNode?.id
+      const tId = selectedGraphEdge.target || selectedGraphEdge.targetNode?.id
+      const sTerm = selectedGraphEdge.sourceNode?.term
+      const tTerm = selectedGraphEdge.targetNode?.term
+      const rawEdge = graphData?.edges?.find((e) =>
+        (e.source === sId || (sTerm && e.source === sTerm))
+        && (e.target === tId || (tTerm && e.target === tTerm))
+      )
+      if (rawEdge) {
+        rawEdge.showArrow = nextShowArrow
+      }
+      syncEdgeActionBar(selectedGraphEdge)
+      graph?.setData?.(store?.getGraphData ? store.getGraphData() : graphData)
+      const newEdges = graph?.getEdges ? graph.getEdges() : []
+      const newSelectedEdge = newEdges.find((e) =>
+        (e.source === sId || (sTerm && e.source === sTerm))
+        && (e.target === tId || (tTerm && e.target === tTerm))
+      )
+      if (newSelectedEdge) {
+        selectedGraphEdge = newSelectedEdge
+        graph?.setSelectedEdge?.(newSelectedEdge)
+      }
+      saveCurrentGraphDebounced?.(true)
+      toast(nextShowArrow ? '➔ 已开启关系端点箭头' : '• 已切换为极简端点')
+    })
+  }
+
+  if (elements.edgeBarEditLabelBtn) {
+    elements.edgeBarEditLabelBtn.addEventListener('click', () => {
+      if (!selectedGraphEdge) return
+      openEdgeInlineEditor(selectedGraphEdge)
+    })
+  }
+
+  elements.edgeInlineConfirmBtn?.addEventListener('click', () => {
+    commitEdgeInlineLabel(elements.edgeInlineInput?.value)
+  })
+  elements.edgeInlineClearBtn?.addEventListener('click', () => {
+    commitEdgeInlineLabel('')
+  })
+  elements.edgeInlineInput?.addEventListener('keydown', (e) => {
+    if (e.key === 'Enter') {
+      e.preventDefault()
+      commitEdgeInlineLabel(elements.edgeInlineInput?.value)
+    } else if (e.key === 'Escape') {
+      e.preventDefault()
+      closeEdgeInlineEditor()
+    }
+  })
+  if (elements.edgeInlineQuickTags) {
+    elements.edgeInlineQuickTags.querySelectorAll('.edge-mini-tag').forEach((btn) => {
+      btn.addEventListener('click', () => {
+        const tag = btn.getAttribute('data-tag')
+        if (tag) {
+          commitEdgeInlineLabel(tag)
+        }
+      })
+    })
+  }
+
+  if (elements.edgeBarDeleteBtn) {
+    elements.edgeBarDeleteBtn.addEventListener('click', () => {
+      if (!selectedGraphEdge) return
+      history?.recordBefore?.('删除连线')
+      const sId = selectedGraphEdge.source || selectedGraphEdge.sourceNode?.id
+      const tId = selectedGraphEdge.target || selectedGraphEdge.targetNode?.id
+      const sTerm = selectedGraphEdge.sourceNode?.term
+      const tTerm = selectedGraphEdge.targetNode?.term
+      const graphData = store?.getGraphData ? store.getGraphData() : getGraphData()
+      if (graphData && Array.isArray(graphData.edges)) {
+        graphData.edges = graphData.edges.filter((e) =>
+          !( (e.source === sId || (sTerm && e.source === sTerm))
+             && (e.target === tId || (tTerm && e.target === tTerm)) )
+        )
+      }
+      closeEdgeActionBar()
+      graph?.setSelectedEdge?.(null)
+      graph?.setData?.(store?.getGraphData ? store.getGraphData() : graphData)
+      saveCurrentGraphDebounced?.(true)
+      toast('已删除所选连线')
+    })
+  }
+
+  if (elements.edgeBarClearFocusBtn) {
+    elements.edgeBarClearFocusBtn.addEventListener('click', () => {
+      closeEdgeActionBar()
+      graph?.setSelectedEdge?.(null)
+    })
+  }
+
   window.addEventListener('click', (e) => {
     if (elements.graphContextMenu && !elements.graphContextMenu.contains(e.target)) {
       closeContextMenu()
+    }
+    if (elements.edgeInlineEditor && !elements.edgeInlineEditor.classList.contains('hidden')) {
+      if (!elements.edgeInlineEditor.contains(e.target) && e.target !== elements.edgeBarEditLabelBtn && !elements.edgeBarEditLabelBtn?.contains(e.target)) {
+        closeEdgeInlineEditor()
+      }
+    }
+    if (elements.nodeBorderStyleMenu && !elements.nodeBorderStyleMenu.classList.contains('hidden')) {
+      if (!elements.nodeBorderStyleMenu.contains(e.target) && !elements.barBorderStyleBtn?.contains(e.target)) {
+        closeNodeBorderStyleMenu()
+      }
     }
   })
 
@@ -542,8 +936,16 @@ export function createRuminationNodeActions({
     closeNodeModal,
     openEdgeModal,
     closeEdgeModal,
+    openEdgeInlineEditor,
+    closeEdgeInlineEditor,
     syncActionBar,
+    syncEdgeActionBar,
+    closeEdgeActionBar,
     handleNodeAction,
     reparentNode,
+    changeNodeBorderStyle,
+    syncNodeBorderStyleUI,
+    toggleNodeBorderStyleMenu,
+    closeNodeBorderStyleMenu,
   }
 }

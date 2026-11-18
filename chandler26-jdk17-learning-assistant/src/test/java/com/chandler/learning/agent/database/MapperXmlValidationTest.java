@@ -27,6 +27,7 @@ class MapperXmlValidationTest {
                 "mapper/LearningRuminationProbeMapper.xml",
                 "mapper/LearningRuminationSentencePracticeMapper.xml",
                 "mapper/LearningRuminationGraphMapper.xml",
+                "mapper/LearningRuminationGraphHistoryMapper.xml",
                 "mapper/LearningSceneRelatedWordMapper.xml",
                 "mapper/VocabularyCatalogAnalysisBatchMapper.xml",
                 "mapper/VocabularyCatalogEntryAnalysisMapper.xml",
@@ -36,6 +37,7 @@ class MapperXmlValidationTest {
                 "mapper/LearningWordbookEntryMapper.xml",
                 "mapper/LearningWordbookMapper.xml",
                 "mapper/EnglishVocabularyStudyRecordMapper.xml",
+                "mapper/LearningVocabularyLookupHistoryMapper.xml",
                 "mapper/LearningVocabularyTagMapper.xml",
                 "mapper/LearningVocabularyRelationMapper.xml",
                 "mapper/LearningUserPreferenceMapper.xml",
@@ -178,6 +180,15 @@ class MapperXmlValidationTest {
                 .isTrue();
         assertThat(configuration.hasStatement(
                 "com.chandler.learning.agent.reading.infrastructure.mapper.LearningRuminationGraphMapper.selectByScenarioForUpdate"))
+                .isTrue();
+        assertThat(configuration.hasStatement(
+                "com.chandler.learning.agent.reading.infrastructure.mapper.LearningRuminationGraphHistoryMapper.selectRecentSummaries"))
+                .isTrue();
+        assertThat(configuration.hasStatement(
+                "com.chandler.learning.agent.reading.infrastructure.mapper.LearningRuminationGraphHistoryMapper.selectOverflowHistoryIds"))
+                .isTrue();
+        assertThat(configuration.hasStatement(
+                "com.chandler.learning.agent.reading.infrastructure.mapper.LearningRuminationGraphHistoryMapper.softDeleteByIds"))
                 .isTrue();
     }
 }

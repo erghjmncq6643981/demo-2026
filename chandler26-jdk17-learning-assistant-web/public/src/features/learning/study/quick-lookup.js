@@ -279,6 +279,7 @@ export function createQuickLookupFeature({
           agentCode: 'english_vocabulary',
           templateCode: 'english_vocab_card_json',
           forceRefresh,
+          lookupSource: 'quick_lookup',
         }),
       })
 

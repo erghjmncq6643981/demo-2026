@@ -2,7 +2,7 @@ import { createServer } from 'node:http'
 import { readFile } from 'node:fs/promises'
 import { extname, join, normalize } from 'node:path'
 import { fileURLToPath } from 'node:url'
-import { buildHtml } from './scripts/build-html.mjs'
+import { buildHtml, assembleHtml } from './scripts/build-html.mjs'
 
 await buildHtml()
 
@@ -87,6 +87,15 @@ const server = createServer(async (req, res) => {
       return
     }
     const pathname = url.pathname === '/' ? '/index.html' : decodeURIComponent(url.pathname)
+    if (pathname === '/index.html') {
+      const content = await assembleHtml()
+      res.writeHead(200, {
+        'content-type': 'text/html; charset=utf-8',
+        'cache-control': 'no-store',
+      })
+      res.end(content)
+      return
+    }
     const filePath = normalize(join(publicDir, pathname))
     if (!filePath.startsWith(publicDir)) {
       res.writeHead(403)

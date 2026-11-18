@@ -23,6 +23,7 @@ function createMockCanvasContext() {
     arc: vi.fn(),
     ellipse: vi.fn(),
     quadraticCurveTo: vi.fn(),
+    bezierCurveTo: vi.fn(),
     closePath: vi.fn(),
     fill: vi.fn(),
     stroke: vi.fn(),
@@ -200,11 +201,58 @@ describe('motion governance and rumination graph keyboard/touch accessibility', 
     canvas.dispatchEvent(new KeyboardEvent('keydown', { key: 'a', bubbles: true, cancelable: true }))
     expect(onNodeAction).toHaveBeenCalledWith('addChild', expect.objectContaining({ id: 'n2' }))
 
+    // Tab 快捷键同样触发新增关联子节点（符合思维导图高频操作肌肉记忆）
+    const tabEvent = new KeyboardEvent('keydown', { key: 'Tab', bubbles: true, cancelable: true })
+    canvas.dispatchEvent(tabEvent)
+    expect(onNodeAction).toHaveBeenCalledWith('addChild', expect.objectContaining({ id: 'n2' }))
+    expect(tabEvent.defaultPrevented).toBe(true)
+
     canvas.dispatchEvent(new KeyboardEvent('keydown', { key: 'Delete', bubbles: true, cancelable: true }))
     expect(onNodeAction).toHaveBeenCalledWith('delete', expect.objectContaining({ id: 'n2' }))
 
     canvas.dispatchEvent(new KeyboardEvent('keydown', { key: 'm', bubbles: true, cancelable: true }))
     expect(onNodeContextMenu).toHaveBeenCalledWith(expect.objectContaining({ id: 'n2' }), expect.any(Object))
+
+    graph.destroy()
+  })
+
+  it('focuses canvas on mouse click and triggers addChild on Tab even when focus was on body or hub node', () => {
+    const onNodeSelect = vi.fn()
+    const onNodeAction = vi.fn()
+    const { canvas, graph } = createGraphHarness({ onNodeSelect, onNodeAction })
+    flushFrames(5)
+
+    // 模拟鼠标点击右侧节点 n2 (cucumber, x=140, y=0)
+    const { x: tx, y: ty, scale } = graph.getTransform()
+    const clickX = tx + 140 * scale
+    const clickY = ty + 0 * scale
+
+    canvas.dispatchEvent(new MouseEvent('mousedown', { clientX: clickX, clientY: clickY, button: 0, bubbles: true, cancelable: true }))
+    window.dispatchEvent(new MouseEvent('mouseup', { clientX: clickX, clientY: clickY, button: 0, bubbles: true, cancelable: true }))
+
+    expect(document.activeElement).toBe(canvas)
+    expect(onNodeSelect).toHaveBeenCalledWith(expect.objectContaining({ id: 'n2' }))
+
+    // 直接按 Tab 键：立即触发 addChild
+    const tabOnCanvas = new KeyboardEvent('keydown', { key: 'Tab', bubbles: true, cancelable: true })
+    canvas.dispatchEvent(tabOnCanvas)
+    expect(onNodeAction).toHaveBeenCalledWith('addChild', expect.objectContaining({ id: 'n2' }))
+    expect(tabOnCanvas.defaultPrevented).toBe(true)
+
+    // 即使焦点意外回落到 document.body，只要节点仍处于选中状态，按 Tab 同样触发 addChild
+    onNodeAction.mockClear()
+    canvas.blur()
+    const tabOnWindow = new KeyboardEvent('keydown', { key: 'Tab', bubbles: true, cancelable: true })
+    document.body.dispatchEvent(tabOnWindow)
+    expect(onNodeAction).toHaveBeenCalledWith('addChild', expect.objectContaining({ id: 'n2' }))
+    expect(tabOnWindow.defaultPrevented).toBe(true)
+
+    // 选中中心 hub 节点后按 Tab：同样支持为中心节点添加核心子词
+    onNodeAction.mockClear()
+    graph.setFocusedNode('hub')
+    const tabOnHub = new KeyboardEvent('keydown', { key: 'Tab', bubbles: true, cancelable: true })
+    canvas.dispatchEvent(tabOnHub)
+    expect(onNodeAction).toHaveBeenCalledWith('addChild', expect.objectContaining({ id: 'hub' }))
 
     graph.destroy()
   })

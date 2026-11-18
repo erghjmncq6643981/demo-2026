@@ -136,9 +136,7 @@ public class AiAgentService {
                     "最后一个学习 Agent 不能删除");
         }
         AiAgent agent = requireAgent(id);
-        agent.setDeleted(true);
-        agent.setUpdateTime(LocalDateTime.now());
-        agentMapper.updateById(agent);
+        agentMapper.deleteById(agent.getId());
         systemLogService.record(null, SystemLogType.AGENT, "删除 Agent", agent.getName());
         log.info("用户「{}」删除了 Agent「{}」", userDisplayNameService.currentUserName(), agent.getName());
     }

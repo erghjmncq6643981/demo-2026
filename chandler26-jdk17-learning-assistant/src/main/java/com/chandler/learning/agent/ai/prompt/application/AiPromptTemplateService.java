@@ -123,9 +123,7 @@ public class AiPromptTemplateService {
                     LearningErrorCode.PROMPT_TEMPLATE_NOT_FOUND,
                     "模板不存在: " + id);
         }
-        template.setDeleted(true);
-        template.setUpdateTime(LocalDateTime.now());
-        templateMapper.updateById(template);
+        templateMapper.deleteById(template.getId());
         systemLogService.record(null, SystemLogType.AGENT, "删除提示词模板", template.getName());
         log.info("用户「{}」删除了提示词模板「{}」", userDisplayNameService.currentUserName(), template.getName());
     }

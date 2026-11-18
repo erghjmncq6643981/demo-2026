@@ -111,3 +111,29 @@ export function hideModal(modal, options = {}) {
     }
   }
 }
+
+/**
+ * 统一绑定模态弹窗的关闭与遮罩点击行为，消除各业务模块重复手写的样板代码。
+ */
+export function bindModalDismiss(modal, options = {}) {
+  if (!modal) return () => {}
+  const { closeButtons = [], onClose = null, closeOnBackdrop = true } = options
+
+  const close = () => {
+    hideModal(modal)
+    if (typeof onClose === 'function') onClose()
+  }
+
+  const buttons = Array.isArray(closeButtons) ? closeButtons : [closeButtons]
+  for (const btn of buttons) {
+    btn?.addEventListener?.('click', close)
+  }
+
+  if (closeOnBackdrop) {
+    modal?.addEventListener?.('click', (e) => {
+      if (e.target === modal) close()
+    })
+  }
+
+  return close
+}

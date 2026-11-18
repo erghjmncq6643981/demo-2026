@@ -25,6 +25,9 @@ public class LearningActivityDayResponse {
     @Schema(description = "完成语境精读次数")
     private Integer articleCompletedCount;
 
+    @Schema(description = "完成知识反刍练习与产出次数")
+    private Integer ruminationCount;
+
     @Schema(description = "有效学习时长，单位秒")
     private Integer studySeconds;
 

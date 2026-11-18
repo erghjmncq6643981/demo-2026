@@ -9,11 +9,22 @@
 
 ## Shared Rules
 
-- Inspect first with `rg` / `rg --files`; follow local patterns and preserve unrelated dirty worktree changes.
+- Inspect first with `rg` / `rg --files` when preparing code modifications; follow local patterns and preserve unrelated dirty worktree changes.
 - Use `apply_patch` for manual edits. Do not stage, commit, revert, or delete files outside the requested scope.
 - Never hardcode real provider, database, SIP, NATS, FreeSWITCH, or model credentials. Logs, docs, SQL, and frontend bundles must not expose them.
 - Product and design documents describe implemented and verified behavior only. Separate current behavior from known gaps; remove superseded proposals and duplicated descriptions.
 - Important user actions require readable business logs and, where relevant, a persistent audit record.
+- Keep frontend UI copy minimal and self-explanatory: do not clutter headers, cards, or action bars with verbose instructional sentences or rule explanations; rely on concise titles, badges, and buttons, placing optional hints only in tooltips or empty states.
+
+## Interaction & Collaboration Cadence
+
+- Strictly separate "Discussion & Proposal phase" from "Code Execution phase":
+  - When the user asks for proposals ("出方案", "先出方案"), asks questions ("为什么", "怎么看"), or explores architecture and UI interaction, it is a discussion phase. Respond immediately in text with concise analysis and options; never execute unprompted full-repo scans, background daemon restarts, or test runs before aligning with the user.
+  - Only when the proposal is confirmed by the user (e.g. "开始改", "按这个做") do we enter the code execution phase.
+- Targeted inspection over blind global scans:
+  - Scope searches strictly to the specific module directory (e.g. `public/src/features/<module>/` or a single Java package). Never perform unconstrained, multi-round global recursive regex sweeps across unrelated projects or directories.
+- Template vs. assembly artifact awareness:
+  - In web projects with assembly scripts, source templates live under `templates/**`; `public/index.html` and `dist/**` are compiled outputs. Never confuse assembled output with duplicate business logic.
 
 ## Cross-Project Delivery
 

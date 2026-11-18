@@ -74,6 +74,9 @@ public class RuminationService {
     private final RuminationGraphPersistenceService graphPersistenceService;
     private final AiAsyncTaskService aiAsyncTaskService;
 
+    /** 自定义场景中直连 Hub 的核心考纲词最大推荐数量上限，与官方预置场景保持同等视觉疏密。 */
+    public static final int MAX_CUSTOM_SCENARIO_CORE_WORDS = 18;
+
     /** 预置场景及其关联的考纲核心词汇集合。只保留一个预置场景，方便用户参考。 */
     private static final Map<String, List<String>> SCENARIO_TERMS = Map.of(
             "produce_kitchen", List.of(
@@ -121,6 +124,7 @@ public class RuminationService {
         // 查询用户自主拓展创建并持久化的自定义场景星系
         List<LearningRuminationGraph> customGraphs = graphMapper.selectList(
                 new LambdaQueryWrapper<LearningRuminationGraph>()
+                        .select(LearningRuminationGraph::getScenarioCode, LearningRuminationGraph::getGraphNodesJson)
                         .eq(LearningRuminationGraph::getUserId, userId)
                         .eq(LearningRuminationGraph::getWordbookId, wordbook.getId())
                         .eq(LearningRuminationGraph::getDeleted, 0)
@@ -193,6 +197,15 @@ public class RuminationService {
             String fallbackIcon = "produce_kitchen".equals(resolvedScenario) ? "🥦" : "🏷️";
             RuminationGraphResponse saved = graphPersistenceService.deserializeSavedGraph(
                     savedGraph, fallbackName, fallbackIcon);
+
+            // 自动治理：若历史平铺单字全量误匹配场景（如 custom_1794574697199）导致核心节点超标膨胀，自动清洗治理并落库更新
+            boolean isFlatBloated = saved.getNodes() != null
+                    && saved.getNodes().stream().filter(n -> "core".equals(n.getNodeType())).count() > MAX_CUSTOM_SCENARIO_CORE_WORDS + 5
+                    && saved.getNodes().stream().noneMatch(n -> "expansion".equals(n.getNodeType()));
+            if ("custom_1794574697199".equals(resolvedScenario) || isFlatBloated) {
+                saved = governAndCleanBloatedGraph(userId, wordbook.getId(), savedGraph, saved);
+            }
+
             saved.setBuilding(false);
             return saved;
         }
@@ -284,8 +297,10 @@ public class RuminationService {
         List<RuminationSemanticEvaluator.ScoredEntry> scoredEntries = semanticEvaluator.evaluateRelevance(
                 allUserEntries, scenarioName, scenarioPrompt);
 
+        // 严格按语义关联评分倒序截断，最高保留 MAX_CUSTOM_SCENARIO_CORE_WORDS 个优质核心词，防止节点过载成环
         List<LearningWordbookEntry> matchedCoreEntries = scoredEntries.stream()
-                .filter(se -> se.relevanceScore() >= 0.35)
+                .filter(se -> se.relevanceScore() >= 0.40)
+                .limit(MAX_CUSTOM_SCENARIO_CORE_WORDS)
                 .map(RuminationSemanticEvaluator.ScoredEntry::entry)
                 .toList();
 
@@ -316,16 +331,21 @@ public class RuminationService {
         Map<String, String> aiCoreDefs = aiUniverse != null && aiUniverse.coreWordDefinitions() != null
                 ? aiUniverse.coreWordDefinitions() : Map.of();
         for (String aiTerm : aiCoreDefs.keySet()) {
+            if (coreTerms.size() >= MAX_CUSTOM_SCENARIO_CORE_WORDS) break;
             String norm = aiTerm.toLowerCase(Locale.ROOT);
             if (!coreTerms.contains(norm)) coreTerms.add(norm);
         }
-        if (aiCoreDefs.isEmpty()) {
+        if (coreTerms.isEmpty() && aiCoreDefs.isEmpty()) {
             List<String> domainDefaults = semanticEvaluator.extractDomainKeywords(scenarioName, scenarioPrompt);
             for (String defTerm : domainDefaults) {
+                if (coreTerms.size() >= MAX_CUSTOM_SCENARIO_CORE_WORDS) break;
                 if (!coreTerms.contains(defTerm.toLowerCase(Locale.ROOT))) {
                     coreTerms.add(defTerm.toLowerCase(Locale.ROOT));
                 }
             }
+        }
+        if (coreTerms.size() > MAX_CUSTOM_SCENARIO_CORE_WORDS) {
+            coreTerms = new ArrayList<>(coreTerms.subList(0, MAX_CUSTOM_SCENARIO_CORE_WORDS));
         }
 
         for (String term : coreTerms) {
@@ -914,5 +934,14 @@ public class RuminationService {
             idempotentRes.setNextReviewTime(entry.getNextReviewTime());
         }
         return idempotentRes;
+    }
+
+    /**
+     * 自动治理并瘦身过度膨胀的历史自定义场景星系图谱（委托持久化服务处理）。
+     */
+    public RuminationGraphResponse governAndCleanBloatedGraph(
+            Long userId, Long wordbookId, LearningRuminationGraph savedGraph, RuminationGraphResponse saved) {
+        List<LearningWordbookEntry> allUserEntries = wordbookService.listAllOwnedEntries(userId, wordbookId);
+        return graphPersistenceService.governAndCleanBloatedGraph(userId, wordbookId, savedGraph, saved, allUserEntries);
     }
 }

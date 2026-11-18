@@ -39,6 +39,7 @@ CREATE TABLE IF NOT EXISTS learning_user (
     email VARCHAR(128) DEFAULT NULL COMMENT '联系邮箱',
     password_hash VARCHAR(128) NOT NULL COMMENT '密码哈希',
     enabled TINYINT(1) NOT NULL DEFAULT 1 COMMENT '是否启用',
+    role_code VARCHAR(20) NOT NULL DEFAULT 'USER' COMMENT '系统角色：USER-普通用户，ADMIN-系统管理员',
     last_login_time DATETIME DEFAULT NULL COMMENT '最近登录时间',
     create_time DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP COMMENT '创建时间',
     update_time DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP COMMENT '更新时间',
@@ -46,6 +47,7 @@ CREATE TABLE IF NOT EXISTS learning_user (
     version INT NOT NULL DEFAULT 0 COMMENT '乐观锁版本号',
     PRIMARY KEY (id),
     UNIQUE KEY uk_learning_user_username (username),
+    KEY idx_learning_user_role_enabled (role_code, enabled, deleted),
     KEY idx_learning_user_update_time (deleted, update_time)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci COMMENT='学习助手用户';
 
@@ -200,6 +202,29 @@ CREATE TABLE IF NOT EXISTS learning_vocabulary_alias (
     KEY idx_learning_vocabulary_alias_lookup (normalized_alias, deleted),
     KEY idx_learning_vocabulary_alias_vocab (vocabulary_id)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci COMMENT='英语词汇形态变形与别名索引';
+
+CREATE TABLE IF NOT EXISTS learning_vocabulary_lookup_history (
+    id BIGINT NOT NULL COMMENT '主键',
+    create_by BIGINT NOT NULL DEFAULT 0 COMMENT '创建人用户 ID',
+    update_by BIGINT NOT NULL DEFAULT 0 COMMENT '更新人用户 ID',
+    user_id BIGINT NOT NULL COMMENT '查询用户 ID',
+    vocabulary_id BIGINT DEFAULT NULL COMMENT '关联公共词卡缓存 ID',
+    term VARCHAR(128) NOT NULL COMMENT '展示单词或短语',
+    normalized_term VARCHAR(128) NOT NULL COMMENT '归一化单词或短语',
+    lookup_source VARCHAR(32) NOT NULL DEFAULT 'study' COMMENT '查询来源：study-卡片查词，quick_lookup-快捷查词，wordbook_add-手动加词',
+    lookup_count INT NOT NULL DEFAULT 1 COMMENT '累计查询次数',
+    first_lookup_time DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP COMMENT '首次查询时间',
+    last_lookup_time DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP COMMENT '最近查询时间',
+    last_reviewed_time DATETIME DEFAULT NULL COMMENT '最近一次在复习流中过关时间',
+    create_time DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP COMMENT '创建时间',
+    update_time DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP COMMENT '更新时间',
+    deleted TINYINT(1) NOT NULL DEFAULT 0 COMMENT '是否逻辑删除',
+    version INT NOT NULL DEFAULT 0 COMMENT '乐观锁版本号',
+    PRIMARY KEY (id),
+    UNIQUE KEY uk_vocab_lookup_user_term (user_id, normalized_term),
+    KEY idx_vocab_lookup_user_last_time (user_id, deleted, last_lookup_time),
+    KEY idx_vocab_lookup_vocab (vocabulary_id)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci COMMENT='用户个人查词与搜索历史足迹';
 
 CREATE TABLE IF NOT EXISTS learning_review_record (
     id BIGINT NOT NULL COMMENT '主键',

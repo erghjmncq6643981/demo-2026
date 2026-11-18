@@ -16,15 +16,17 @@ import com.chandler.learning.agent.reading.application.task.RuminationScenarioCh
 import com.chandler.learning.agent.reading.domain.entity.LearningRuminationGraph;
 import com.chandler.learning.agent.reading.infrastructure.mapper.LearningRuminationGraphMapper;
 import com.chandler.learning.agent.vocabulary.domain.entity.LearningWordbookEntry;
+import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
-import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.dao.DuplicateKeyException;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.util.StringUtils;
 
 import java.util.ArrayList;
+import java.util.Comparator;
 import java.util.LinkedHashMap;
 import java.util.LinkedHashSet;
 import java.util.List;
@@ -41,12 +43,29 @@ import java.util.stream.Collectors;
  */
 @Slf4j
 @Service
-@RequiredArgsConstructor
 public class RuminationGraphPersistenceService {
 
     private final LearningRuminationGraphMapper graphMapper;
+    private final RuminationGraphHistoryService graphHistoryService;
     private final RuminationSemanticEvaluator semanticEvaluator;
     private final ObjectMapper objectMapper;
+
+    @Autowired
+    public RuminationGraphPersistenceService(LearningRuminationGraphMapper graphMapper,
+                                             RuminationGraphHistoryService graphHistoryService,
+                                             RuminationSemanticEvaluator semanticEvaluator,
+                                             ObjectMapper objectMapper) {
+        this.graphMapper = graphMapper;
+        this.graphHistoryService = graphHistoryService;
+        this.semanticEvaluator = semanticEvaluator;
+        this.objectMapper = objectMapper;
+    }
+
+    public RuminationGraphPersistenceService(LearningRuminationGraphMapper graphMapper,
+                                             RuminationSemanticEvaluator semanticEvaluator,
+                                             ObjectMapper objectMapper) {
+        this(graphMapper, null, semanticEvaluator, objectMapper);
+    }
 
     /** 根据节点生成单个核心或衍生节点响应对象。 */
     public RuminationNodeResponse buildCoreOrExpansionNode(String id, String nodeType, String term, String definition,
@@ -154,6 +173,9 @@ public class RuminationGraphPersistenceService {
             response.setBagTerms(savedBag);
             if (savedNodes != null) {
                 for (RuminationNodeResponse n : savedNodes) {
+                    if (n.getBorderStyle() == null) {
+                        n.setBorderStyle("solid");
+                    }
                     if ("hub".equals(n.getNodeType()) && StringUtils.hasText(n.getTerm())) {
                         response.setScenarioName(n.getTerm());
                         if (StringUtils.hasText(n.getLabel())) {
@@ -185,8 +207,27 @@ public class RuminationGraphPersistenceService {
         LearningRuminationGraph existing = graphMapper.selectByScenarioForUpdate(
                 userId, wordbookId, checkpoint.scenarioCode());
         if (existing != null) {
-            log.info("自定义场景落库命中幂等已存在记录 userId={} wordbookId={} scenario={} graphId={}",
-                    userId, wordbookId, checkpoint.scenarioCode(), existing.getId());
+            int existingNodeCount = 0;
+            if (StringUtils.hasText(existing.getGraphNodesJson())) {
+                try {
+                    JsonNode existingJson = objectMapper.readTree(existing.getGraphNodesJson());
+                    if (existingJson.isArray()) existingNodeCount = existingJson.size();
+                } catch (Exception ignored) {}
+            }
+            if (existingNodeCount > RuminationService.MAX_CUSTOM_SCENARIO_CORE_WORDS + 5 && checkpoint.nodes() != null && !checkpoint.nodes().isEmpty()) {
+                ensureBaselineArchived(existing);
+                existing.setGraphNodesJson(writeJson(checkpoint.nodes()));
+                existing.setGraphEdgesJson(writeJson(checkpoint.edges() == null ? List.of() : checkpoint.edges()));
+                existing.setUpdateBy(userId);
+                existing.setVersion((existing.getVersion() == null ? 0 : existing.getVersion()) + 1);
+                graphMapper.updateById(existing);
+                recordHistorySnapshot(existing, "自定义场景异步落库治理");
+                log.info("异步任务落库覆盖治理历史超标自定义场景: userId={} scenario={} 旧节点数={} 新节点数={}",
+                        userId, checkpoint.scenarioCode(), existingNodeCount, checkpoint.nodes().size());
+            } else {
+                log.info("自定义场景落库命中幂等已存在记录 userId={} wordbookId={} scenario={} graphId={}",
+                        userId, wordbookId, checkpoint.scenarioCode(), existing.getId());
+            }
             return existing.getId();
         }
 
@@ -203,6 +244,7 @@ public class RuminationGraphPersistenceService {
 
         try {
             graphMapper.insert(graph);
+            recordHistorySnapshot(graph, "自定义场景初次构建");
         } catch (DuplicateKeyException ex) {
             LearningRuminationGraph concurrent = graphMapper.selectByScenarioForUpdate(
                     userId, wordbookId, checkpoint.scenarioCode());
@@ -326,6 +368,9 @@ public class RuminationGraphPersistenceService {
         int previousVersion = graph.getVersion() == null ? 0 : graph.getVersion();
         Integer updatedVersion = previousVersion;
         if (newlyInitializedPreset || !addedNodes.isEmpty()) {
+            if (!newlyInitializedPreset) {
+                ensureBaselineArchived(graph);
+            }
             graph.setGraphNodesJson(writeJson(existingNodes));
             graph.setGraphEdgesJson(writeJson(existingEdges));
             graph.setUpdateBy(userId);
@@ -337,6 +382,7 @@ public class RuminationGraphPersistenceService {
                 graphMapper.updateById(graph);
                 updatedVersion = resolveUpdatedVersion(graph, previousVersion);
             }
+            recordHistorySnapshot(graph, "节点 4D 衍生裂变：" + checkpoint.targetWord());
         }
 
         response.setApplyStatus("applied");
@@ -372,6 +418,8 @@ public class RuminationGraphPersistenceService {
             created.setBagTermsJson(request.getBagTermsJson());
             created.setVersion(0);
             insertGraphOrThrowConflict(created);
+            recordHistorySnapshot(created, StringUtils.hasText(request.getChangeSummary())
+                    ? request.getChangeSummary() : "首次初始化保存图谱");
             log.info("用户「{}」首次落库场景「{}」星系图谱拓扑与词袋状态 version=0", userId, request.getScenarioCode());
             return buildSaveResponse(wordbookId, request.getScenarioCode(), 0,
                     readStringList(request.getBagTermsJson()));
@@ -384,11 +432,14 @@ public class RuminationGraphPersistenceService {
             throw LearningAssistantException.of(LearningErrorCode.RUMINATION_GRAPH_VERSION_CONFLICT);
         }
 
+        ensureBaselineArchived(graph);
         graph.setGraphNodesJson(request.getGraphNodesJson());
         graph.setGraphEdgesJson(request.getGraphEdgesJson());
         graph.setBagTermsJson(request.getBagTermsJson());
         graph.setUpdateBy(userId);
         int nextVersion = updateGraphOrThrowConflict(graph, currentVersion);
+        recordHistorySnapshot(graph, StringUtils.hasText(request.getChangeSummary())
+                ? request.getChangeSummary() : "保存图谱变更");
         log.info("用户「{}」已持久化保存场景「{}」星系图谱拓扑与词袋状态 version={}",
                 userId, request.getScenarioCode(), nextVersion);
         return buildSaveResponse(wordbookId, request.getScenarioCode(), nextVersion,
@@ -594,6 +645,115 @@ public class RuminationGraphPersistenceService {
             return objectMapper.writeValueAsString(value);
         } catch (Exception ex) {
             return "[]";
+        }
+    }
+
+    /**
+     * 自动治理并瘦身过度膨胀的历史自定义场景星系图谱。
+     * <p>清除历史因单字虚词全量误匹配产生的大量无意义核心节点，依据场景主题重新评估保留优质核心词及其连线，
+     * 并持久化写库更新，使图谱恢复为轻量美观的星系拓扑。</p>
+     */
+    public RuminationGraphResponse governAndCleanBloatedGraph(
+            Long userId, Long wordbookId, LearningRuminationGraph savedGraph,
+            RuminationGraphResponse saved, List<LearningWordbookEntry> allUserEntries) {
+        if (saved == null || saved.getNodes() == null || saved.getNodes().size() <= RuminationService.MAX_CUSTOM_SCENARIO_CORE_WORDS + 5) {
+            return saved;
+        }
+        String scenarioName = saved.getScenarioName();
+        String scenarioCode = saved.getScenarioCode();
+        log.info("触发自定义场景图谱治理清洗: userId={} wordbookId={} scenario={} 当前节点数={}",
+                userId, wordbookId, scenarioCode, saved.getNodes().size());
+
+        List<RuminationSemanticEvaluator.ScoredEntry> scored = semanticEvaluator.evaluateRelevance(
+                allUserEntries, scenarioName, scenarioName);
+        Map<String, Double> scoreMap = scored.stream()
+                .collect(Collectors.toMap(
+                        se -> se.entry().getNormalizedTerm().toLowerCase(Locale.ROOT),
+                        RuminationSemanticEvaluator.ScoredEntry::relevanceScore,
+                        (a, b) -> Math.max(a, b)));
+
+        RuminationNodeResponse hubNode = saved.getNodes().stream()
+                .filter(n -> "hub".equals(n.getNodeType()))
+                .findFirst()
+                .orElse(null);
+
+        List<RuminationNodeResponse> coreNodes = saved.getNodes().stream()
+                .filter(n -> !"hub".equals(n.getNodeType()))
+                .sorted(Comparator.comparingDouble((RuminationNodeResponse n) -> {
+                    String term = n.getTerm() != null ? n.getTerm().toLowerCase(Locale.ROOT) : "";
+                    return scoreMap.getOrDefault(term, 0.0);
+                }).reversed())
+                .limit(RuminationService.MAX_CUSTOM_SCENARIO_CORE_WORDS)
+                .toList();
+
+        List<RuminationNodeResponse> cleanedNodes = new ArrayList<>();
+        if (hubNode != null) {
+            cleanedNodes.add(hubNode);
+        }
+        cleanedNodes.addAll(coreNodes);
+        Set<String> keptNodeIds = cleanedNodes.stream().map(RuminationNodeResponse::getId).collect(Collectors.toSet());
+
+        List<RuminationEdgeResponse> cleanedEdges = new ArrayList<>();
+        if (saved.getEdges() != null) {
+            for (RuminationEdgeResponse e : saved.getEdges()) {
+                if (keptNodeIds.contains(e.getSource()) && keptNodeIds.contains(e.getTarget())) {
+                    cleanedEdges.add(e);
+                }
+            }
+        }
+        for (RuminationNodeResponse cn : coreNodes) {
+            boolean hasEdge = cleanedEdges.stream().anyMatch(e ->
+                    ("hub".equals(e.getSource()) && cn.getId().equals(e.getTarget())) ||
+                    ("hub".equals(e.getTarget()) && cn.getId().equals(e.getSource())));
+            if (!hasEdge) {
+                RuminationEdgeResponse newEdge = new RuminationEdgeResponse();
+                newEdge.setSource("hub");
+                newEdge.setTarget(cn.getId());
+                newEdge.setRelationType("peer");
+                newEdge.setLabel("");
+                cleanedEdges.add(newEdge);
+            }
+        }
+
+        Set<String> keptTerms = cleanedNodes.stream()
+                .map(n -> n.getTerm() != null ? n.getTerm().toLowerCase(Locale.ROOT) : "")
+                .filter(StringUtils::hasText)
+                .collect(Collectors.toSet());
+        List<String> cleanedBag = saved.getBagTerms() != null
+                ? saved.getBagTerms().stream().filter(t -> keptTerms.contains(t.toLowerCase(Locale.ROOT))).toList()
+                : List.of();
+
+        saved.setNodes(cleanedNodes);
+        saved.setEdges(cleanedEdges);
+        saved.setBagTerms(cleanedBag);
+
+        try {
+            ensureBaselineArchived(savedGraph);
+            savedGraph.setGraphNodesJson(objectMapper.writeValueAsString(cleanedNodes));
+            savedGraph.setGraphEdgesJson(objectMapper.writeValueAsString(cleanedEdges));
+            savedGraph.setBagTermsJson(objectMapper.writeValueAsString(cleanedBag));
+            savedGraph.setVersion((savedGraph.getVersion() == null ? 0 : savedGraph.getVersion()) + 1);
+            savedGraph.setUpdateBy(userId);
+            graphMapper.updateById(savedGraph);
+            recordHistorySnapshot(savedGraph, "图谱自动瘦身治理");
+            log.info("自定义场景图谱治理清洗持久化完成: userId={} scenario={} 治理后节点数={}",
+                    userId, scenarioCode, cleanedNodes.size());
+        } catch (Exception ex) {
+            log.warn("保存图谱治理清洗结果失败", ex);
+        }
+
+        return saved;
+    }
+
+    private void ensureBaselineArchived(LearningRuminationGraph existingGraph) {
+        if (graphHistoryService != null) {
+            graphHistoryService.ensureBaselineArchived(existingGraph);
+        }
+    }
+
+    private void recordHistorySnapshot(LearningRuminationGraph graph, String changeSummary) {
+        if (graphHistoryService != null) {
+            graphHistoryService.recordSnapshotAndTrim(graph, changeSummary);
         }
     }
 }

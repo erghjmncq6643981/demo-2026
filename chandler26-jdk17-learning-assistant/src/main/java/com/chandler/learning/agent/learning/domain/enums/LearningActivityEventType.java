@@ -13,6 +13,8 @@ public enum LearningActivityEventType {
     ARTICLE_STARTED("article_started", "开始语境精读"),
     ARTICLE_COMPLETED("article_completed", "完成语境精读"),
     RUMINATION_SENTENCE_PRACTICED("rumination_sentence_practiced", "完成反刍句型练习"),
+    RUMINATION_PROBE_SUBMITTED("rumination_probe_submitted", "提交反刍微探针"),
+    RUMINATION_MATERIAL_GENERATED("rumination_material_generated", "生成反刍场景材料"),
     AUDIO_PLAYED("audio_played", "有效播放音频");
 
     private final String code;
@@ -29,6 +31,19 @@ public enum LearningActivityEventType {
 
     public String getLabel() {
         return label;
+    }
+
+    /** 判断是否为知识反刍维度的有效学习活动。 */
+    public boolean isRuminationActivity() {
+        return this == RUMINATION_SENTENCE_PRACTICED
+                || this == RUMINATION_PROBE_SUBMITTED
+                || this == RUMINATION_MATERIAL_GENERATED;
+    }
+
+    /** 按编码判断是否为知识反刍维度的指标。 */
+    public static boolean isRuminationMetric(String code) {
+        LearningActivityEventType type = of(code);
+        return type != null && type.isRuminationActivity();
     }
 
     /** 按编码解析事件类型，未知编码返回 null。 */

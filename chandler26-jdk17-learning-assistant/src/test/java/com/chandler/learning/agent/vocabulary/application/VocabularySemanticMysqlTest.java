@@ -63,10 +63,19 @@ class VocabularySemanticMysqlTest {
                           confidence, status, source)
                          VALUES (11,10,1,10,'finance','金融','finance','banking','["money"]','[2]','easy',0.9,'ready','ai')
                         """);
-                String migration = renamed(resource("db/migration/V117__GlobalVocabularySemanticAssets.sql"),
-                        entryTable, analysisTable, assetTable);
-                ScriptUtils.executeSqlScript(connection, bytes(migration));
-                ScriptUtils.executeSqlScript(connection, bytes(migration));
+                String assetSchemaSql = extractCreateTable(
+                        resource("db/schema/20_vocabulary_plan_schema_mysql.sql"),
+                        "vocabulary_semantic_asset");
+                String ddl = renamed(assetSchemaSql, entryTable, analysisTable, assetTable);
+                ScriptUtils.executeSqlScript(connection, bytes(ddl));
+                ScriptUtils.executeSqlScript(connection, bytes(ddl));
+                statement.execute("INSERT INTO " + assetTable + """
+                         (id, language, normalized_term, semantic_json, related_terms_json, source_job_id,
+                          create_by, update_by, create_time, update_time, deleted, version)
+                         VALUES (11, 'en', 'bank',
+                                 '{"primaryGroupCode":"finance","primaryGroupName":"金融","domainCode":"finance","subTopicCode":"banking","tagsJson":"[\\"money\\"]","difficultyLevel":"easy","confidence":0.9,"status":"ready"}',
+                                 '["money"]', 10, 1, 1, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP, 0, 0)
+                        """);
                 try (var rows = statement.executeQuery("SELECT COUNT(*) FROM " + assetTable)) {
                     rows.next();
                     assertThat(rows.getInt(1)).isEqualTo(1);
@@ -142,6 +151,16 @@ class VocabularySemanticMysqlTest {
 
     private static ByteArrayResource bytes(String sql) {
         return new ByteArrayResource(sql.getBytes(StandardCharsets.UTF_8));
+    }
+
+    private static String extractCreateTable(String schemaSql, String tableName) {
+        String marker = "CREATE TABLE IF NOT EXISTS " + tableName;
+        int start = schemaSql.indexOf(marker);
+        if (start < 0) {
+            throw new IllegalStateException("未在 schema 中找到建表语句: " + tableName);
+        }
+        int end = schemaSql.indexOf(';', start);
+        return schemaSql.substring(start, end + 1);
     }
 
     private static String renamed(String source, String entries, String analyses, String assets) {

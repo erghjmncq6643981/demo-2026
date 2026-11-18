@@ -101,3 +101,28 @@ CREATE TABLE IF NOT EXISTS learning_rumination_sentence_practice (
     KEY idx_rumination_practice_material (user_id, material_id, deleted),
     KEY idx_rumination_practice_target (user_id, material_id, target_word, deleted)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci COMMENT='知识反刍按句跟敲与遮挡巩固记录';
+
+-- 知识反刍场景星系图谱历史快照版本表（每个场景保留最近 30 次变更记录）
+CREATE TABLE IF NOT EXISTS learning_rumination_graph_history (
+    id BIGINT NOT NULL COMMENT '主键',
+    create_by BIGINT NOT NULL DEFAULT 0 COMMENT '创建人用户 ID',
+    update_by BIGINT NOT NULL DEFAULT 0 COMMENT '更新人用户 ID',
+    graph_id BIGINT NOT NULL COMMENT '关联主图谱记录 ID',
+    user_id BIGINT NOT NULL COMMENT '所属用户 ID',
+    wordbook_id BIGINT NOT NULL COMMENT '所属个人单词本 ID',
+    scenario_code VARCHAR(50) NOT NULL COMMENT '主题场景编码',
+    graph_version INT NOT NULL DEFAULT 0 COMMENT '快照对应的图谱版本号',
+    node_count INT NOT NULL DEFAULT 0 COMMENT '快照节点总数',
+    edge_count INT NOT NULL DEFAULT 0 COMMENT '快照连线总数',
+    graph_nodes_json JSON NOT NULL COMMENT '快照场景星系节点 JSON',
+    graph_edges_json JSON NOT NULL COMMENT '快照场景星系连线关系 JSON',
+    bag_terms_json JSON DEFAULT NULL COMMENT '快照词袋中所选词汇列表 JSON',
+    change_summary VARCHAR(255) DEFAULT NULL COMMENT '变更摘要说明（如：手动保存、节点裂变、历史版本恢复等）',
+    create_time DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP COMMENT '创建时间',
+    update_time DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP COMMENT '更新时间',
+    deleted TINYINT(1) NOT NULL DEFAULT 0 COMMENT '是否逻辑删除',
+    version INT NOT NULL DEFAULT 0 COMMENT '乐观锁版本号',
+    PRIMARY KEY (id),
+    KEY idx_rumination_graph_history_user_scenario (user_id, wordbook_id, scenario_code, deleted, graph_version, id),
+    KEY idx_rumination_graph_history_graph (graph_id, deleted)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci COMMENT='知识反刍场景星系图谱历史快照版本记录';

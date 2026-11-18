@@ -15,6 +15,7 @@ export function createRuminationGraphPersistence({
   isSameContext = () => true,
   onVersionConflict = null,
   onBagSynced = null,
+  onSaveSuccess = null,
 }) {
   let saveTimer = null
   let pendingSnapshot = null
@@ -50,7 +51,7 @@ export function createRuminationGraphPersistence({
   function handleSaveError(seq, wordbookId, scenarioCode, err, keepalive = false) {
     if (seq === latestSaveSeq) {
       if (isVersionConflictError(err)) {
-        updateSaveStatus('error', '⚠️ 版本已更新，正在同步...')
+        updateSaveStatus('error', '⚠️ 版本同步中...')
         pendingSnapshot = null
         pendingPositions.clear()
         if (!keepalive) {
@@ -59,7 +60,7 @@ export function createRuminationGraphPersistence({
         onVersionConflict?.(wordbookId, scenarioCode, err)
         return
       }
-      updateSaveStatus('error', '⚠️ 位置保存失败')
+      updateSaveStatus('error', '⚠️ 保存失败')
       console.warn('持久化保存星系图谱失败', err)
       if (!keepalive) {
         toast(err?.message || '星系节点位置保存失败，请检查网络后重试')
@@ -98,9 +99,12 @@ export function createRuminationGraphPersistence({
       nodeType: n.nodeType,
       term: n.term,
       definition: n.definition,
+      phonetic: n.phonetic,
       label: n.label,
       subLabel: n.subLabel,
       dimension: n.dimension,
+      borderStyle: n.borderStyle || 'solid',
+      collapsed: Boolean(n.collapsed),
       entryId: n.entryId,
       status: n.status,
       masteryScore: n.masteryScore,
@@ -114,6 +118,9 @@ export function createRuminationGraphPersistence({
       target: e.target,
       relationType: e.relationType,
       label: e.label,
+      lineStyle: e.lineStyle,
+      isCurved: e.isCurved,
+      showArrow: e.showArrow,
     }))
     const bagTermsList = (getSelectedNodeIds() || []).map((id) => {
       const node = (graphData.nodes || []).find((n) => n.id === id || n.term === id)
@@ -131,20 +138,25 @@ export function createRuminationGraphPersistence({
   async function commitGraphSnapshot(snapshot, requestOptions = {}) {
     if (!api?.saveRuminationGraph || !snapshot) return false
     const seq = ++latestSaveSeq
-    const { manual = false, ...fetchOptions } = requestOptions
-    updateSaveStatus('saving', '⏳ 保存布局中...')
+    const { manual = false, changeSummary = undefined, ...fetchOptions } = requestOptions
+    updateSaveStatus('saving', '保存中...')
     let succeeded = false
     const executeSave = () => {
       const liveGraphData = isSameContext(snapshot.wordbookId, snapshot.scenarioCode)
         ? getCurrentGraphData()
         : null
       const expectedVersion = typeof liveGraphData?.version === 'number' ? liveGraphData.version : null
-      return api.saveRuminationGraph({ ...snapshot, expectedVersion }, fetchOptions)
+      const payload = { ...snapshot, expectedVersion }
+      if (changeSummary || snapshot.changeSummary) {
+        payload.changeSummary = changeSummary || snapshot.changeSummary
+      }
+      return api.saveRuminationGraph(payload, fetchOptions)
         .then((res) => {
           succeeded = true
           applyServerVersionIfCurrent(snapshot.wordbookId, snapshot.scenarioCode, res?.version)
           if (seq === latestSaveSeq) {
-            updateSaveStatus('saved', '✅ 布局位置已保存')
+            updateSaveStatus('saved', '已保存')
+            onSaveSuccess?.(new Date(), res)
             if (manual) {
               toast('💾 已保存当前星系图谱与节点位置 (⌘S)')
             }
@@ -185,7 +197,7 @@ export function createRuminationGraphPersistence({
 
     const seq = ++latestSaveSeq
     const fetchOptions = { ...requestOptions }
-    updateSaveStatus('saving', '⏳ 同步节点坐标...')
+    updateSaveStatus('saving', '保存中...')
     let succeeded = false
 
     const executePositionSave = () => {
@@ -204,7 +216,8 @@ export function createRuminationGraphPersistence({
           succeeded = true
           applyServerVersionIfCurrent(currentWbId, currentScenario, res?.version)
           if (seq === latestSaveSeq) {
-            updateSaveStatus('saved', '✅ 布局位置已保存')
+            updateSaveStatus('saved', '已保存')
+            onSaveSuccess?.(new Date(), res)
           }
         })
         .catch((err) => {
@@ -232,7 +245,7 @@ export function createRuminationGraphPersistence({
 
     const seq = ++latestSaveSeq
     pendingBagCount += 1
-    updateSaveStatus('saving', '⏳ 同步词袋...')
+    updateSaveStatus('saving', '保存中...')
     let succeeded = false
 
     const executeBagSave = () => api.updateRuminationBagItem({
@@ -249,7 +262,8 @@ export function createRuminationGraphPersistence({
           onBagSynced?.(res.bagTerms)
         }
         if (seq === latestSaveSeq) {
-          updateSaveStatus('saved', '✅ 词袋已同步')
+          updateSaveStatus('saved', '已保存')
+          onSaveSuccess?.(new Date(), res)
         }
       })
       .catch((err) => {

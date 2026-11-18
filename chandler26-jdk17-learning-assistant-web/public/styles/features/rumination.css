@@ -220,6 +220,16 @@
   color: #38bdf8;
 }
 
+.rumination-graph-controls button:disabled,
+.rumination-graph-controls button.disabled {
+  opacity: 0.35;
+  cursor: not-allowed;
+  pointer-events: none;
+  background: rgba(255, 255, 255, 0.03);
+  border-color: rgba(255, 255, 255, 0.06);
+  color: #64748b;
+}
+
 .rumination-canvas-wrap {
   position: relative;
   width: 100%;
@@ -261,22 +271,108 @@
   pointer-events: none;
 }
 
-.legend-save-status {
-  padding-left: 8px;
-  border-left: 1px solid rgba(255, 255, 255, 0.12);
-  color: #cbd5e1;
+.graph-header-save-status {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 4px 10px;
+  margin-left: 4px;
+  border-radius: 999px;
+  font-size: 12px;
+  font-weight: 500;
+  color: #94a3b8;
+  background: rgba(255, 255, 255, 0.04);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  white-space: nowrap;
 }
 
-.legend-save-status.is-saving {
+.graph-header-save-status::before {
+  content: "";
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: currentColor;
+  flex-shrink: 0;
+}
+
+.legend-save-status.is-saving,
+.graph-header-save-status.is-saving {
+  color: #38bdf8;
+  background: rgba(56, 189, 248, 0.12);
+  border-color: rgba(56, 189, 248, 0.28);
+}
+
+.legend-save-status.is-saved,
+.graph-header-save-status.is-saved {
+  color: #34d399;
+  background: rgba(16, 185, 129, 0.1);
+  border-color: rgba(16, 185, 129, 0.25);
+}
+
+.legend-save-status.is-error,
+.graph-header-save-status.is-error {
+  color: #f87171;
+  background: rgba(248, 113, 113, 0.12);
+  border-color: rgba(248, 113, 113, 0.28);
+}
+
+.graph-header-status-wrap {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.graph-header-history-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 4px 10px;
+  border-radius: 999px;
+  font-size: 11px;
+  font-weight: 500;
+  color: #94a3b8;
+  background: rgba(255, 255, 255, 0.04);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  white-space: nowrap;
+  cursor: pointer;
+  transition: background-color var(--motion-fast) var(--motion-ease-standard), border-color var(--motion-fast) var(--motion-ease-standard), color var(--motion-fast) var(--motion-ease-standard), box-shadow var(--motion-fast) var(--motion-ease-standard);
+}
+
+.graph-header-history-btn:hover {
+  background: rgba(56, 189, 248, 0.12);
+  border-color: rgba(56, 189, 248, 0.35);
   color: #38bdf8;
 }
 
-.legend-save-status.is-saved {
-  color: #34d399;
+.graph-header-history-btn.is-active {
+  background: rgba(56, 189, 248, 0.18);
+  border-color: #38bdf8;
+  color: #f0f9ff;
+  box-shadow: 0 0 10px rgba(56, 189, 248, 0.25);
 }
 
-.legend-save-status.is-error {
-  color: #f87171;
+.graph-header-history-btn .history-clock-icon {
+  font-size: 11px;
+  line-height: 1;
+}
+
+.graph-header-history-btn .history-dropdown-arrow {
+  font-size: 10px;
+  transition: transform var(--motion-fast) var(--motion-ease-standard);
+}
+
+.graph-header-history-btn.is-active .history-dropdown-arrow {
+  transform: rotate(180deg);
+}
+
+.rumination-graph-controls .graph-zoom-btn {
+  min-width: 28px;
+  padding: 4px 6px;
+  font-size: 13px;
+  font-weight: 600;
+  line-height: 1;
+  text-align: center;
 }
 
 .legend-item {

@@ -1,0 +1,64 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "https://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.chandler.learning.agent.vocabulary.infrastructure.mapper.LearningVocabularyLookupHistoryMapper">
+
+    <insert id="upsertLookup">
+        INSERT INTO learning_vocabulary_lookup_history (
+            id, create_by, update_by, user_id, vocabulary_id, term, normalized_term,
+            lookup_source, lookup_count, first_lookup_time, last_lookup_time,
+            create_time, update_time, deleted, version
+        ) VALUES (
+            #{item.id}, #{item.createBy}, #{item.updateBy}, #{item.userId}, #{item.vocabularyId},
+            #{item.term}, #{item.normalizedTerm}, #{item.lookupSource}, #{item.lookupCount},
+            #{item.firstLookupTime}, #{item.lastLookupTime},
+            #{item.createTime}, #{item.updateTime}, 0, 0
+        )
+        ON DUPLICATE KEY UPDATE
+            vocabulary_id = COALESCE(VALUES(vocabulary_id), vocabulary_id),
+            term = VALUES(term),
+            lookup_source = VALUES(lookup_source),
+            lookup_count = lookup_count + 1,
+            last_lookup_time = VALUES(last_lookup_time),
+            update_by = VALUES(update_by),
+            update_time = VALUES(update_time),
+            deleted = 0,
+            version = version + 1
+    </insert>
+
+    <select id="selectSinceTime"
+            resultType="com.chandler.learning.agent.vocabulary.domain.entity.LearningVocabularyLookupHistory">
+        SELECT id, create_by, update_by, user_id, vocabulary_id, term, normalized_term,
+               lookup_source, lookup_count, first_lookup_time, last_lookup_time,
+               last_reviewed_time, create_time, update_time, deleted, version
+        FROM learning_vocabulary_lookup_history
+        WHERE user_id = #{userId}
+          AND deleted = 0
+          AND last_lookup_time &gt;= #{sinceTime}
+        ORDER BY last_lookup_time DESC, lookup_count DESC, id DESC
+        LIMIT #{limit}
+    </select>
+
+    <select id="selectRecent"
+            resultType="com.chandler.learning.agent.vocabulary.domain.entity.LearningVocabularyLookupHistory">
+        SELECT id, create_by, update_by, user_id, vocabulary_id, term, normalized_term,
+               lookup_source, lookup_count, first_lookup_time, last_lookup_time,
+               last_reviewed_time, create_time, update_time, deleted, version
+        FROM learning_vocabulary_lookup_history
+        WHERE user_id = #{userId}
+          AND deleted = 0
+        ORDER BY last_lookup_time DESC, lookup_count DESC, id DESC
+        LIMIT #{limit}
+    </select>
+
+    <update id="markReviewed">
+        UPDATE learning_vocabulary_lookup_history
+        SET last_reviewed_time = #{reviewedTime},
+            update_by = #{userId},
+            update_time = #{reviewedTime},
+            version = version + 1
+        WHERE user_id = #{userId}
+          AND normalized_term = #{normalizedTerm}
+          AND deleted = 0
+    </update>
+
+</mapper>

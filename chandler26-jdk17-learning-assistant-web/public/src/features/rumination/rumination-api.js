@@ -30,6 +30,14 @@ export function createRuminationApi(request) {
       body: JSON.stringify(payload),
       ...fetchOptions,
     }),
+    listRuminationGraphHistory: (wordbookId, scenarioCode = 'produce_kitchen') => requests.latest(
+      'rumination-graph-history',
+      `/api/v1/learning/rumination/graph/history?wordbookId=${id(wordbookId)}&scenarioCode=${id(scenarioCode)}`,
+    ),
+    restoreRuminationGraphHistory: (payload) => request('/api/v1/learning/rumination/graph/history/restore', {
+      method: 'POST',
+      body: JSON.stringify(payload),
+    }),
     updateRuminationGraphPositions: (payload, fetchOptions = {}) => request('/api/v1/learning/rumination/graph/positions', {
       method: 'POST',
       body: JSON.stringify(payload),

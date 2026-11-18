@@ -29,4 +29,7 @@ public class VocabularyStudyRequest {
 
     @Schema(description = "用户 ID")
     private Long userId;
+
+    @Schema(description = "查询来源：study-卡片查词，quick_lookup-快捷查词")
+    private String lookupSource = "study";
 }

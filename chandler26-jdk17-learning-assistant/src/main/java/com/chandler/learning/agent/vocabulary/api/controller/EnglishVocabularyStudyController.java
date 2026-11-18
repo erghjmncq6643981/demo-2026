@@ -7,6 +7,7 @@ import com.chandler.learning.agent.vocabulary.api.response.VocabularyStudyRespon
 import com.chandler.learning.agent.vocabulary.api.response.VocabularyBestMatchResponse;
 import com.chandler.learning.agent.vocabulary.api.response.VocabularySuggestionResponse;
 import com.chandler.learning.agent.vocabulary.application.EnglishVocabularyStudyService;
+import com.chandler.learning.agent.vocabulary.application.VocabularyLookupHistoryService;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.Valid;
@@ -25,6 +26,7 @@ import java.util.List;
 public class EnglishVocabularyStudyController {
 
     private final EnglishVocabularyStudyService vocabularyStudyService;
+    private final VocabularyLookupHistoryService lookupHistoryService;
     private final CurrentUserContext currentUserContext;
 
     /** 查询或生成词汇学习结果。 */
@@ -32,7 +34,16 @@ public class EnglishVocabularyStudyController {
     @Operation(summary = "查询或生成词汇学习结果")
     public VocabularyStudyResponse study(@Valid @RequestBody VocabularyStudyRequest request) {
         LearningUser user = currentUserContext.requireUser();
-        return vocabularyStudyService.study(user.getId(), request);
+        VocabularyStudyResponse response = vocabularyStudyService.study(user.getId(), request);
+        if (response != null) {
+            lookupHistoryService.recordLookup(
+                    user.getId(),
+                    response.getId(),
+                    response.getTerm(),
+                    response.getNormalizedTerm(),
+                    request.getLookupSource());
+        }
+        return response;
     }
 
     /**
@@ -55,6 +66,15 @@ public class EnglishVocabularyStudyController {
     @GetMapping("/{term}")
     @Operation(summary = "查询词汇学习缓存")
     public VocabularyStudyResponse detail(@PathVariable String term) {
-        return vocabularyStudyService.detail(term);
+        VocabularyStudyResponse response = vocabularyStudyService.detail(term);
+        if (response != null) {
+            currentUserContext.findUser().ifPresent(user -> lookupHistoryService.recordLookup(
+                    user.getId(),
+                    response.getId(),
+                    response.getTerm(),
+                    response.getNormalizedTerm(),
+                    VocabularyLookupHistoryService.SOURCE_QUICK_LOOKUP));
+        }
+        return response;
     }
 }

@@ -27,6 +27,21 @@ public class LearningActivityResponse {
     @Schema(description = "完成语境精读累计次数")
     private Integer articleCompletedTotal;
 
+    @Schema(description = "知识反刍累计活跃次数")
+    private Integer ruminationTotal;
+
+    @Schema(description = "周期内有效学习行为总次数")
+    private Integer totalActivityCount;
+
+    @Schema(description = "周期内有学习记录的活跃天数")
+    private Integer activeDays;
+
+    @Schema(description = "当前连续活跃天数（含今天或昨天不断签）")
+    private Integer currentStreak;
+
+    @Schema(description = "周期内最长连续活跃天数")
+    private Integer longestStreak;
+
     @Schema(description = "有效学习累计时长，单位秒")
     private Integer studySecondsTotal;
 

@@ -199,22 +199,38 @@
                   </div>
                 </div>
                 <div class="activity-section">
-                  <div class="panel-heading compact-heading">
+                  <div class="panel-heading compact-heading activity-heading">
                     <div>
                       <p class="eyebrow">Activity</p>
                       <h3>学习活跃图</h3>
                     </div>
-                    <span class="mini-pill" id="activitySummary">0 学习 / 0 复习 / 0 场景</span>
+                    <div class="activity-range-tabs" id="activityRangeTabs" role="tablist" aria-label="学习活跃图时间范围">
+                      <button type="button" class="activity-range-tab" data-days="90" role="tab" aria-selected="false">近 90 天</button>
+                      <button type="button" class="activity-range-tab" data-days="180" role="tab" aria-selected="false">近半年</button>
+                      <button type="button" class="activity-range-tab active" data-days="365" role="tab" aria-selected="true">近 1 年</button>
+                    </div>
                   </div>
-                  <div id="activityHeatmap" class="activity-heatmap empty">暂无学习活跃数据</div>
-                  <div class="activity-legend">
-                    <span>少</span>
-                    <i data-level="0"></i>
-                    <i data-level="1"></i>
-                    <i data-level="2"></i>
-                    <i data-level="3"></i>
-                    <i data-level="4"></i>
-                    <span>多</span>
+                  <div class="activity-stats-bar" id="activityStatsBar">
+                    <span class="activity-stat-pill is-highlight" id="activityTotalPill">共 0 次活跃</span>
+                    <span class="activity-stat-pill" id="activityActiveDaysPill">活跃 0 天</span>
+                    <span class="activity-stat-pill" id="activityStreakPill">连续 0 天</span>
+                    <span class="mini-pill activity-breakdown-pill" id="activitySummary">0 学习 / 0 复习 / 0 场景 / 0 反刍</span>
+                  </div>
+                  <div class="activity-heatmap-stage" id="activityHeatmapStage">
+                    <div id="activityHeatmap" class="activity-heatmap empty">暂无学习活跃数据</div>
+                    <div id="activityTooltip" class="activity-tooltip hidden" role="tooltip" aria-hidden="true"></div>
+                  </div>
+                  <div class="activity-footer">
+                    <span class="activity-hint" id="activitySelectedHint">悬停或点击日期格子查看当日学习明细</span>
+                    <div class="activity-legend">
+                      <span>少</span>
+                      <i data-level="0"></i>
+                      <i data-level="1"></i>
+                      <i data-level="2"></i>
+                      <i data-level="3"></i>
+                      <i data-level="4"></i>
+                      <span>多</span>
+                    </div>
                   </div>
                 </div>
               </section>
@@ -757,6 +773,15 @@
                     主体场景
                     <select id="ruminationScenarioSelect" style="width: 210px; height: 34px;">
                       <option value="produce_kitchen">🥦 生鲜采购与厨房料理</option>
+                      <option value="time_calendar_seasons">🗓️ 日历、时间与四季作息</option>
+                      <option value="clothing_accessories">👔 服装穿戴与个人配饰</option>
+                      <option value="animal_kingdom">🐾 动物王国与自然生灵</option>
+                      <option value="human_body_anatomy">🧍 人体结构、五官与身心</option>
+                      <option value="family_relationships">👨‍👩‍👧‍👦 家庭成员与亲属谱系</option>
+                      <option value="numbers_quantities">🔢 数词系统与度量表达</option>
+                      <option value="weather_nature_directions">⛅ 天气气候与地理方位</option>
+                      <option value="appliances_devices">🔌 家用设备与装置</option>
+                      <option value="room_spaces">🏠 房间格局与起居空间</option>
                     </select>
                   </label>
                   <button class="secondary-button compact" id="toolbarAddScenarioBtn" type="button" style="white-space: nowrap; height: 34px; display: inline-flex; align-items: center; gap: 4px; padding: 0 12px; margin: 0;">
@@ -782,12 +807,39 @@
                           <span class="nav-badge" id="materialsNavBadge">0 篇</span>
                         </button>
                       </div>
+                      <div class="graph-header-status-wrap">
+                        <span class="graph-header-save-status legend-save-status is-saved" id="graphSaveStatus" role="status" aria-live="polite">已保存</span>
+                        <button type="button" class="graph-header-history-btn" id="graphHistoryBtn" title="查看最近 30 次变更记录与版本回滚" aria-haspopup="dialog" aria-expanded="false">
+                          <span class="history-clock-icon" aria-hidden="true">🕒</span>
+                          <span class="history-time-text" id="graphLastUpdateTime">刚刚更新</span>
+                          <span class="history-dropdown-arrow" aria-hidden="true">▾</span>
+                        </button>
+                        <!-- 星系图谱历史变更记录与回滚下拉面板 -->
+                        <div id="ruminationHistoryPopover" class="rumination-history-popover hidden" role="dialog" aria-labelledby="ruminationHistoryTitle" aria-modal="false">
+                          <div class="history-popover-header">
+                            <div class="history-popover-title-row">
+                              <span class="history-popover-icon" aria-hidden="true">📜</span>
+                              <span class="history-popover-title" id="ruminationHistoryTitle">星系变更记录</span>
+                              <span class="history-popover-badge" id="ruminationHistoryCountBadge">保留最近 30 次</span>
+                            </div>
+                            <div class="history-popover-actions">
+                              <button type="button" class="history-popover-refresh-btn" id="ruminationHistoryRefreshBtn" title="刷新历史记录" aria-label="刷新历史记录">⟲</button>
+                              <button type="button" class="history-popover-close-btn" id="ruminationHistoryCloseBtn" title="关闭面板" aria-label="关闭面板">×</button>
+                            </div>
+                          </div>
+                          <div class="history-popover-body" id="ruminationHistoryList" role="list">
+                            <!-- 动态加载历史记录条目 -->
+                          </div>
+                        </div>
+                      </div>
                     </div>
                     <div class="rumination-graph-controls" id="ruminationGraphControls">
+                      <button type="button" id="graphUndoBtn" class="graph-tool-btn disabled" title="撤销上一步操作 (⌘Z / Ctrl+Z)" disabled>↩ 撤销</button>
+                      <button type="button" id="graphRedoBtn" class="graph-tool-btn disabled" title="重做上一步操作 (⌘⇧Z / Ctrl+Y)" disabled>↪ 重做</button>
+                      <button type="button" id="graphTidyBtn" title="智能整理图谱节点布局，消除重叠并自动等距排列">✧ 整理</button>
                       <button type="button" id="graphResetBtn" title="居中重置">⟲ 居中</button>
-                      <button type="button" id="graphZoomInBtn" title="放大">＋ 放大</button>
-                      <button type="button" id="graphZoomOutBtn" title="缩小">－ 缩小</button>
-                      <button type="button" id="graphExpandMoreBtn" title="AI 衍生裂变"><svg class="btn-svg" viewBox="0 0 24 24" width="13" height="13" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m12 3-1.9 5.8a2 2 0 0 1-1.3 1.3L3 12l5.8 1.9a2 2 0 0 1 1.3 1.3L12 21l1.9-5.8a2 2 0 0 1 1.3-1.3L21 12l-5.8-1.9a2 2 0 0 1-1.3-1.3Z"/></svg> 裂变</button>
+                      <button type="button" id="graphZoomInBtn" class="graph-zoom-btn" title="放大" aria-label="放大">＋</button>
+                      <button type="button" id="graphZoomOutBtn" class="graph-zoom-btn" title="缩小" aria-label="缩小">－</button>
                       <button type="button" id="graphToggleBagBtn" class="bag-toggle-btn" title="点击单词后加入或移除词袋"><svg class="btn-svg" viewBox="0 0 24 24" width="13" height="13" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M6 2 3 6v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2V6l-3-4Z"/><path d="M3 6h18"/><path d="M16 10a4 4 0 0 1-8 0"/></svg> 词袋 (<span id="graphBagCounter">0</span>)</button>
                     </div>
                   </div>
@@ -796,66 +848,78 @@
                   <div class="rumination-task-banner graph-task-banner hidden" id="ruminationGraphTaskBanner" aria-live="polite"></div>
 
                   <div class="rumination-canvas-wrap" id="ruminationCanvasWrap">
-                    <canvas id="ruminationGraphCanvas" class="rumination-canvas" tabindex="0" role="region" aria-label="星系词汇图谱：方向键选节点，Space 加词袋，E 编辑，A 加关联，Enter 衍生裂变"></canvas>
-                    <!-- 选中节点后的触屏与键盘快捷操作栏（无需鼠标右键） -->
-                    <div id="ruminationNodeActionBar" class="graph-node-action-bar hidden" role="toolbar" aria-label="选中词汇节点操作">
-                      <span class="action-bar-term" id="actionBarNodeTerm">peel</span>
-                      <button type="button" class="action-bar-btn" id="barToggleBagBtn" title="加入或移出词袋 (Space)">
-                        <svg class="btn-svg" viewBox="0 0 24 24" width="13" height="13" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M6 2 3 6v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2V6l-3-4Z"/><path d="M3 6h18"/><path d="M16 10a4 4 0 0 1-8 0"/></svg>
-                        <span id="barToggleBagText">词袋</span>
+                    <canvas id="ruminationGraphCanvas" class="rumination-canvas" tabindex="0" role="region" aria-label="星系词汇图谱：方向键选节点，A 加关联，Enter 衍生裂变，Space 加词袋，E 编辑，右键菜单查看全部操作"></canvas>
+                    <!-- 选中连线后的触屏与悬浮操作栏（ProcessOn 式连线快捷维护） -->
+                    <div id="ruminationEdgeActionBar" class="graph-edge-action-bar hidden" role="toolbar" aria-label="选中连线操作">
+                      <span class="edge-bar-label" id="edgeBarRelationLabel">同类</span>
+                      <button type="button" class="action-bar-btn" id="edgeBarToggleCurveBtn" title="切换平滑曲线 / 直线连线形态">
+                        <span id="edgeBarCurveText">∿ 曲线</span>
                       </button>
-                      <button type="button" class="action-bar-btn" id="barExpandNodeBtn" title="AI 衍生裂变 (Enter)">
-                        <svg class="btn-svg" viewBox="0 0 24 24" width="13" height="13" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m12 3-1.9 5.8a2 2 0 0 1-1.3 1.3L3 12l5.8 1.9a2 2 0 0 1 1.3 1.3L12 21l1.9-5.8a2 2 0 0 1 1.3-1.3L21 12l-5.8-1.9a2 2 0 0 1-1.3-1.3Z"/></svg>
-                        <span>裂变</span>
+                      <button type="button" class="action-bar-btn" id="edgeBarToggleArrowBtn" title="切换关系箭头端点">
+                        <span id="edgeBarArrowText">➔ 箭头</span>
                       </button>
-                      <button type="button" class="action-bar-btn" id="barEditNodeBtn" title="修改释义或主题 (E)">
+                      <button type="button" class="action-bar-btn" id="edgeBarEditLabelBtn" title="修改连线文字说明">
                         <svg class="btn-svg" viewBox="0 0 24 24" width="13" height="13" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M17 3a2.85 2.83 0 1 1 4 4L7.5 20.5 2 22l1.5-5.5Z"/><path d="m15 5 4 4"/></svg>
-                        <span>编辑</span>
+                        <span id="edgeBarLabelText">文字</span>
                       </button>
-                      <button type="button" class="action-bar-btn" id="barAddChildBtn" title="新增关联节点 (A)">
-                        <svg class="btn-svg" viewBox="0 0 24 24" width="13" height="13" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 12h14"/><path d="M12 5v14"/></svg>
-                        <span>关联</span>
+                      <button type="button" class="action-bar-btn danger" id="edgeBarDeleteBtn" title="删除该连线">
+                        <svg class="btn-svg" viewBox="0 0 24 24" width="13" height="13" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 6h18"/><path d="M19 6v14c0 1-1 2-2 2H7c-1 0-2-1-2-2V6"/><line x1="10" x2="10" y1="11" y2="17"/><line x1="14" x2="14" y1="11" y2="17"/></svg>
                       </button>
-                      <button type="button" class="action-bar-btn danger" id="barDeleteNodeBtn" title="从图谱删除 (Delete)">
-                        <svg class="btn-svg" viewBox="0 0 24 24" width="13" height="13" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 6h18"/><path d="M19 6v14c0 1-1 2-2 2H7c-1 0-2-1-2-2V6"/><path d="M8 6V4c0-1 1-2 2-2h4c1 0 2 1 2 2v2"/><line x1="10" x2="10" y1="11" y2="17"/><line x1="14" x2="14" y1="11" y2="17"/></svg>
-                      </button>
-                      <button type="button" class="action-bar-btn subtle" id="barClearFocusBtn" title="取消选中" aria-label="取消选中">✕</button>
+                      <button type="button" class="action-bar-btn subtle" id="edgeBarClearFocusBtn" title="取消选中" aria-label="取消选中">✕</button>
                     </div>
-                    <!-- 图谱节点右键菜单 -->
+                    <!-- ProcessOn 式连线就地文字编辑浮层（零弹窗遮挡，就地实时编辑） -->
+                    <div id="ruminationEdgeInlineEditor" class="graph-edge-inline-editor hidden" role="dialog" aria-label="连线关系文字就地编辑">
+                      <div class="edge-inline-input-row">
+                        <input type="text" id="edgeInlineInput" class="edge-inline-input" placeholder="输入关系文字..." maxlength="12" autocomplete="off" />
+                        <button type="button" class="edge-inline-btn confirm" id="edgeInlineConfirmBtn" title="保存文字 (Enter)">✓</button>
+                        <button type="button" class="edge-inline-btn clear" id="edgeInlineClearBtn" title="清除文字">✕</button>
+                      </div>
+                      <div class="edge-inline-quick-tags" id="edgeInlineQuickTags">
+                        <button type="button" class="edge-mini-tag" data-tag="同类">同类</button>
+                        <button type="button" class="edge-mini-tag" data-tag="包含">包含</button>
+                        <button type="button" class="edge-mini-tag" data-tag="动作">动作</button>
+                        <button type="button" class="edge-mini-tag" data-tag="加工">加工</button>
+                        <button type="button" class="edge-mini-tag" data-tag="感官">感官</button>
+                        <button type="button" class="edge-mini-tag" data-tag="搭配">搭配</button>
+                      </div>
+                    </div>
+                    <!-- 图谱节点右键菜单（微型紧凑胶囊风格，顺序：关联，边框，编辑，词袋，裂变，删除） -->
                     <div id="graphContextMenu" class="graph-context-menu hidden">
                       <div class="context-menu-header" id="ctxMenuHeader">
                         <span class="ctx-term" id="ctxNodeTerm">peel</span>
-                        <span class="ctx-tag" id="ctxNodeType">动作衍生</span>
+                        <span class="ctx-tag" id="ctxNodeType">动作</span>
                       </div>
                       <div class="context-menu-divider"></div>
-                      <button type="button" class="ctx-item" id="ctxAddChildBtn">
+                      <button type="button" class="ctx-item" id="ctxAddChildBtn" title="新增关联节点 (Tab / A)">
                         <span class="ctx-icon"><svg class="btn-svg" viewBox="0 0 24 24" width="13" height="13" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 12h14"/><path d="M12 5v14"/></svg></span>
-                        <span id="ctxAddChildText">新增关联</span>
+                        <span id="ctxAddChildText">关联</span>
+                      </button>
+                      <button type="button" class="ctx-item" id="ctxBorderStyleBtn">
+                        <span class="ctx-icon"><svg class="btn-svg" viewBox="0 0 24 24" width="13" height="13" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="3" width="18" height="18" rx="4" stroke-dasharray="4 2"/></svg></span>
+                        <span id="ctxBorderStyleText">边框: 实线</span>
                       </button>
                       <button type="button" class="ctx-item" id="ctxEditNodeBtn">
                         <span class="ctx-icon"><svg class="btn-svg" viewBox="0 0 24 24" width="13" height="13" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M17 3a2.85 2.83 0 1 1 4 4L7.5 20.5 2 22l1.5-5.5Z"/><path d="m15 5 4 4"/></svg></span>
-                        <span id="ctxEditText">编辑释义</span>
+                        <span id="ctxEditText">编辑</span>
                       </button>
                       <button type="button" class="ctx-item" id="ctxToggleBagBtn">
                         <span class="ctx-icon"><svg class="btn-svg" viewBox="0 0 24 24" width="13" height="13" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M6 2 3 6v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2V6l-3-4Z"/><path d="M3 6h18"/><path d="M16 10a4 4 0 0 1-8 0"/></svg></span>
-                        <span id="ctxToggleBagText">加入词袋</span>
+                        <span id="ctxToggleBagText">词袋</span>
+                      </button>
+                      <button type="button" class="ctx-item" id="ctxExpandNodeBtn">
+                        <span class="ctx-icon"><svg class="btn-svg" viewBox="0 0 24 24" width="13" height="13" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m12 3-1.9 5.8a2 2 0 0 1-1.3 1.3L3 12l5.8 1.9a2 2 0 0 1 1.3 1.3L12 21l1.9-5.8a2 2 0 0 1 1.3-1.3L21 12l-5.8-1.9a2 2 0 0 1-1.3-1.3Z"/></svg></span>
+                        <span id="ctxExpandNodeText">裂变</span>
                       </button>
                       <div class="context-menu-divider" id="ctxDangerDivider"></div>
                       <button type="button" class="ctx-item danger" id="ctxDeleteNodeBtn">
                         <span class="ctx-icon"><svg class="btn-svg" viewBox="0 0 24 24" width="13" height="13" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 6h18"/><path d="M19 6v14c0 1-1 2-2 2H7c-1 0-2-1-2-2V6"/><path d="M8 6V4c0-1 1-2 2-2h4c1 0 2 1 2 2v2"/><line x1="10" x2="10" y1="11" y2="17"/><line x1="14" x2="14" y1="11" y2="17"/></svg></span>
-                        <span>删除节点</span>
+                        <span>删除</span>
                       </button>
                     </div>
                     <div class="rumination-graph-legend">
                       <span class="legend-item"><span class="legend-dot" style="background: #10b981;"></span> 已掌握</span>
                       <span class="legend-item"><span class="legend-dot" style="background: #f59e0b;"></span> 待反刍</span>
                       <span class="legend-item"><span class="legend-dot" style="background: #38bdf8;"></span> 未学</span>
-                      <span class="legend-item"><span class="legend-line" style="background: #10b981;"></span> 同类</span>
-                      <span class="legend-item"><span class="legend-line" style="background: #38bdf8;"></span> 动作</span>
-                      <span class="legend-item"><span class="legend-line" style="background: #f97316;"></span> 加工</span>
-                      <span class="legend-item"><span class="legend-line" style="background: #c084fc;"></span> 感官</span>
-                      <span class="legend-item"><span class="legend-dot" style="background: rgba(56, 189, 248, 0.25); border: 2px solid #f8fafc; box-shadow: 0 0 6px #38bdf8;"></span> 当前焦点</span>
-                      <span class="legend-item legend-save-status" id="graphSaveStatus" data-shortcut-template="自动保存 · ⌘S 手动保存"><svg class="btn-svg" viewBox="0 0 24 24" width="12" height="12" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z"/><polyline points="17 21 17 13 7 13 7 21"/><polyline points="7 3 7 8 15 8"/></svg> 自动保存 · ⌘S 手动保存</span>
                     </div>
                   </div>
 
@@ -1073,16 +1137,25 @@
         </section>
                   <section class="view" id="reviewView">
             <section class="review-header panel" id="reviewHeaderPanel">
-              <div class="review-start-controls">
-                <label class="compact-field">
-                  <span>单词本</span>
-                  <select id="reviewWordbookSelect"></select>
-                </label>
-                <label class="compact-field small-field">
-                  <span>数量</span>
-                  <input id="reviewLimitInput" type="number" min="1" max="100" value="10" />
-                </label>
-                <button class="primary-button compact-primary" id="reloadReviewBtn" type="button">开始复习</button>
+              <div class="review-header-bar">
+                <div class="review-mode-tabs" id="reviewModeTabs" role="tablist" aria-label="复习来源切换">
+                  <button type="button" class="review-mode-tab active" data-review-mode="recent" role="tab" aria-selected="true">🔍 近期查词</button>
+                  <button type="button" class="review-mode-tab" data-review-mode="wordbook" role="tab" aria-selected="false">📚 词本抽查</button>
+                </div>
+                <div class="review-recent-meta" id="reviewRecentMeta">
+                  <button class="secondary-button compact" id="refreshRecentReviewBtn" type="button">刷新列表</button>
+                </div>
+                <div class="review-start-controls hidden" id="reviewWordbookControls">
+                  <label class="compact-field">
+                    <span>单词本</span>
+                    <select id="reviewWordbookSelect"></select>
+                  </label>
+                  <label class="compact-field small-field">
+                    <span>数量</span>
+                    <input id="reviewLimitInput" type="number" min="1" max="100" value="10" />
+                  </label>
+                  <button class="primary-button compact-primary" id="reloadReviewBtn" type="button">开始复习</button>
+                </div>
               </div>
             </section>
 
@@ -1091,11 +1164,14 @@
                 <div class="review-focus-heading">
                   <div>
                     <p class="eyebrow">Focused Review</p>
-                    <h3>专注复习</h3>
+                    <h3>轻量词卡复习</h3>
                   </div>
-                  <button class="secondary-button compact" id="toggleReviewFocusModeBtn" type="button" disabled>专注模式</button>
+                  <div class="inline-actions">
+                    <span class="mini-pill" id="reviewProgressBadge">0 / 0</span>
+                    <button class="secondary-button compact" id="toggleReviewFocusModeBtn" type="button" disabled>专注模式</button>
+                  </div>
                 </div>
-                <div id="reviewFocus" class="empty">选择词书和数量后开始复习</div>
+                <div id="reviewFocus" class="empty">正在为你整理近期搜索过的词汇...</div>
               </section>
 
               <!-- 复习笔记侧边栏 -->
@@ -1603,7 +1679,7 @@
         <div class="panel-heading">
           <div>
             <p class="eyebrow">Knowledge Rumination</p>
-            <h3>新建知识反刍场景</h3>
+            <h3>新建场景</h3>
           </div>
           <button class="icon-button" id="closeScenarioModalBtn" type="button" title="关闭">×</button>
         </div>
@@ -1615,19 +1691,19 @@
           </label>
 
           <label class="compact-field" style="display: flex; flex-direction: column; align-items: flex-start; gap: 6px; width: 100%;">
-            <span style="font-size: 13px; font-weight: 600; color: #cbd5e1;">场景主题与提示词（AI 自动衍生核心词与拓扑）</span>
+            <span style="font-size: 13px; font-weight: 600; color: #cbd5e1;">场景主题与提示词</span>
             <textarea id="newScenarioPromptInput" rows="3" placeholder="例如：超市日用品、蔬菜水果称重选购、收银结账与退换货对话高频语境" style="width: 100%; box-sizing: border-box; resize: vertical;"></textarea>
           </label>
 
           <div style="background: rgba(15, 23, 42, 0.6); border: 1px solid rgba(56, 189, 248, 0.2); border-radius: 8px; padding: 12px; font-size: 12px; color: #94a3b8; line-height: 1.6;">
             💡 <strong style="color: #38bdf8;">智能拓扑生成：</strong>
-            系统将基于当前词本词汇与场景描述，智能聚类关联核心词，并向外辐射动作、同类、加工、感官 4D 衍生图谱。
+            系统将基于当前词本词汇与场景描述，智能聚类关联核心词。
           </div>
         </div>
 
         <div class="modal-actions" style="margin-top: 16px;">
           <button class="secondary-button" id="cancelScenarioModalBtn" type="button">取消</button>
-          <button class="primary-button" id="submitCreateScenarioBtn" type="button">✨ 立即创建并编织星系</button>
+          <button class="primary-button" id="submitCreateScenarioBtn" type="button">✨ 创建图谱</button>
         </div>
       </div>
     </section>
@@ -1650,21 +1726,21 @@
 
           <label class="compact-field" style="display: flex; flex-direction: column; align-items: flex-start; gap: 6px; width: 100%;">
             <span style="font-size: 13px; font-weight: 600; color: #cbd5e1;">英文词汇 / 短语 <span style="color: #ef4444;">*</span></span>
-            <input id="nodeModalTermInput" type="text" placeholder="例如：whisk / roast / thermometer" style="width: 100%; box-sizing: border-box;" />
+            <input id="nodeModalTermInput" type="text" placeholder="例如：strawberry / peel / cozy" style="width: 100%; box-sizing: border-box;" />
           </label>
 
           <label class="compact-field" style="display: flex; flex-direction: column; align-items: flex-start; gap: 6px; width: 100%;">
             <span style="font-size: 13px; font-weight: 600; color: #cbd5e1;">中文释义</span>
-            <input id="nodeModalDefInput" type="text" placeholder="例如：搅拌/打蛋；留空将自动补全" style="width: 100%; box-sizing: border-box;" />
+            <input id="nodeModalDefInput" type="text" placeholder="例如：草莓；留空将自动补全" style="width: 100%; box-sizing: border-box;" />
           </label>
 
           <label class="compact-field" id="nodeModalDimensionField" style="display: flex; flex-direction: column; align-items: flex-start; gap: 6px; width: 100%;">
-            <span style="font-size: 13px; font-weight: 600; color: #cbd5e1;">认知维度关系</span>
+            <span style="font-size: 13px; font-weight: 600; color: #cbd5e1;">关联关系类型</span>
             <select id="nodeModalDimensionSelect" style="width: 100%; height: 36px; box-sizing: border-box;">
-              <option value="action">动作动词 (Action - 烹饪/料理/使用动作)</option>
-              <option value="downstream">下游加工 (Downstream - 产物/下游食品/形态)</option>
-              <option value="attribute">感官属性 (Attribute - 口感/特征/属性修饰)</option>
-              <option value="peer">同类延展 (Peer - 场景同类/考纲核心词)</option>
+              <option value="peer">同类归属（子分类 / 同族词汇）</option>
+              <option value="action">动作搭配（关联动词 / 常用动作）</option>
+              <option value="attribute">特征属性（状态修饰 / 感官特征）</option>
+              <option value="downstream">衍生关联（下游产物 / 场景延展）</option>
             </select>
           </label>
         </div>
@@ -1672,48 +1748,6 @@
         <div class="modal-actions" style="margin-top: 14px;">
           <button class="secondary-button" id="cancelNodeModalBtn" type="button">取消</button>
           <button class="primary-button" id="submitNodeModalBtn" type="button">保存并同步星系</button>
-        </div>
-      </div>
-    </section>
-
-    <!-- 图谱连线关系文字手动维护弹窗（双击连线新增/修改/清除） -->
-    <section class="modal-backdrop hidden" id="ruminationEdgeEditModal" aria-modal="true" role="dialog">
-      <div class="config-modal" style="max-width: 440px;">
-        <div class="panel-heading">
-          <div>
-            <p class="eyebrow">Knowledge Rumination</p>
-            <h3 id="edgeModalTitle">编辑连线关系文字</h3>
-          </div>
-          <button class="icon-button" id="closeEdgeModalBtn" type="button" title="关闭">×</button>
-        </div>
-
-        <div style="display: flex; flex-direction: column; gap: 14px; padding: 12px 0;">
-          <div id="edgeModalDesc" style="font-size: 12px; color: #94a3b8; background: rgba(30, 41, 59, 0.6); padding: 8px 12px; border-radius: 6px; border-left: 3px solid #38bdf8;">
-            为【<strong id="edgeModalSourceTerm" style="color: #38bdf8;">fruit</strong>】与【<strong id="edgeModalTargetTerm" style="color: #38bdf8;">apple</strong>】之间的连线设置说明（留空则不显示文字）
-          </div>
-
-          <label class="compact-field" style="display: flex; flex-direction: column; align-items: flex-start; gap: 6px; width: 100%;">
-            <span style="font-size: 13px; font-weight: 600; color: #cbd5e1;">连线关系文字</span>
-            <input id="edgeModalLabelInput" type="text" maxlength="12" placeholder="例如：包含 / 搭配 / 动作 / 加工；留空清除" style="width: 100%; box-sizing: border-box;" />
-          </label>
-
-          <div style="display: flex; flex-wrap: wrap; gap: 6px; align-items: center;">
-            <span style="font-size: 11px; color: #64748b;">快捷填入：</span>
-            <button type="button" class="compact-tag-btn" data-edge-tag="同类">同类</button>
-            <button type="button" class="compact-tag-btn" data-edge-tag="包含">包含</button>
-            <button type="button" class="compact-tag-btn" data-edge-tag="动作">动作</button>
-            <button type="button" class="compact-tag-btn" data-edge-tag="加工">加工</button>
-            <button type="button" class="compact-tag-btn" data-edge-tag="属性">属性</button>
-            <button type="button" class="compact-tag-btn" data-edge-tag="搭配">搭配</button>
-          </div>
-        </div>
-
-        <div class="modal-actions" style="margin-top: 14px; display: flex; justify-content: space-between; align-items: center;">
-          <button class="secondary-button" id="clearEdgeModalBtn" type="button" style="color: #fda4af;">清空文字</button>
-          <div style="display: flex; gap: 8px;">
-            <button class="secondary-button" id="cancelEdgeModalBtn" type="button">取消</button>
-            <button class="primary-button" id="submitEdgeModalBtn" type="button">保存关系文字</button>
-          </div>
         </div>
       </div>
     </section>

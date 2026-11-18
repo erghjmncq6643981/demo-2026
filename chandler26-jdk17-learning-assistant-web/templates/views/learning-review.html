@@ -1,15 +1,24 @@
         <section class="view" id="reviewView">
             <section class="review-header panel" id="reviewHeaderPanel">
-              <div class="review-start-controls">
-                <label class="compact-field">
-                  <span>单词本</span>
-                  <select id="reviewWordbookSelect"></select>
-                </label>
-                <label class="compact-field small-field">
-                  <span>数量</span>
-                  <input id="reviewLimitInput" type="number" min="1" max="100" value="10" />
-                </label>
-                <button class="primary-button compact-primary" id="reloadReviewBtn" type="button">开始复习</button>
+              <div class="review-header-bar">
+                <div class="review-mode-tabs" id="reviewModeTabs" role="tablist" aria-label="复习来源切换">
+                  <button type="button" class="review-mode-tab active" data-review-mode="recent" role="tab" aria-selected="true">🔍 近期查词</button>
+                  <button type="button" class="review-mode-tab" data-review-mode="wordbook" role="tab" aria-selected="false">📚 词本抽查</button>
+                </div>
+                <div class="review-recent-meta" id="reviewRecentMeta">
+                  <button class="secondary-button compact" id="refreshRecentReviewBtn" type="button">刷新列表</button>
+                </div>
+                <div class="review-start-controls hidden" id="reviewWordbookControls">
+                  <label class="compact-field">
+                    <span>单词本</span>
+                    <select id="reviewWordbookSelect"></select>
+                  </label>
+                  <label class="compact-field small-field">
+                    <span>数量</span>
+                    <input id="reviewLimitInput" type="number" min="1" max="100" value="10" />
+                  </label>
+                  <button class="primary-button compact-primary" id="reloadReviewBtn" type="button">开始复习</button>
+                </div>
               </div>
             </section>
 
@@ -18,11 +27,14 @@
                 <div class="review-focus-heading">
                   <div>
                     <p class="eyebrow">Focused Review</p>
-                    <h3>专注复习</h3>
+                    <h3>轻量词卡复习</h3>
                   </div>
-                  <button class="secondary-button compact" id="toggleReviewFocusModeBtn" type="button" disabled>专注模式</button>
+                  <div class="inline-actions">
+                    <span class="mini-pill" id="reviewProgressBadge">0 / 0</span>
+                    <button class="secondary-button compact" id="toggleReviewFocusModeBtn" type="button" disabled>专注模式</button>
+                  </div>
                 </div>
-                <div id="reviewFocus" class="empty">选择词书和数量后开始复习</div>
+                <div id="reviewFocus" class="empty">正在为你整理近期搜索过的词汇...</div>
               </section>
 
               <!-- 复习笔记侧边栏 -->

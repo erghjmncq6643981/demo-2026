@@ -33,4 +33,7 @@ public class RuminationGraphSaveRequest {
 
     @Schema(description = "客户端当前持有的星系图谱版本号（未落库基线可为空），用于乐观并发校验")
     private Integer expectedVersion;
+
+    @Schema(description = "本次保存的变更摘要说明（可选，如：新增节点、删除连线、布局整理等）")
+    private String changeSummary;
 }

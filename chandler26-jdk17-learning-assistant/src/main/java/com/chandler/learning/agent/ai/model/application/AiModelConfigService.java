@@ -290,9 +290,7 @@ public class AiModelConfigService {
             return;
         }
         ensureNotBound(config.getId(), "删除");
-        config.setDeleted(true);
-        config.setUpdateTime(LocalDateTime.now());
-        modelConfigMapper.updateById(config);
+        modelConfigMapper.deleteById(config.getId());
         invalidateEnabledOptionsCache();
         systemLogService.record(null, SystemLogType.AI_MODEL, "删除模型配置", config.getName());
         log.info("用户「{}」删除了 AI 模型「{}」，供应商「{}」，明细模型「{}」",

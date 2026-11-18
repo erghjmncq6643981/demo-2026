@@ -41,7 +41,7 @@ public class RuminationSemanticEvaluator {
 
     /** 预置领域核心词库与高频概念映射，用于冷启动或少词时补充领域经典概念。 */
     private static final Map<String, List<String>> DOMAIN_CORE_LEXICON = Map.of(
-            "medical", List.of("fever", "cough", "headache", "doctor", "nurse", "hospital", "medicine", "pill", "treatment", "pain", "clinic", "symptom"),
+            "medical", List.of("fever", "cough", "headache", "doctor", "nurse", "hospital", "medicine", "pill", "treatment", "pain", "clinic", "symptom", "body", "muscle", "bone", "heart", "brain", "liver", "lung", "stomach", "blood", "skin", "throat", "eye", "ear", "hand", "foot", "leg", "arm", "finger", "chest", "neck", "shoulder", "knee", "organ"),
             "dining", List.of("coffee", "tea", "bread", "butter", "cheese", "beef", "soup", "menu", "dessert", "roast", "pork", "chicken"),
             "travel", List.of("airport", "flight", "hotel", "station", "ticket", "luggage", "passport", "subway", "taxi", "reservation", "journey", "tourist"),
             "business", List.of("meeting", "report", "contract", "salary", "project", "interview", "client", "strategy", "presentation", "negotiation", "company", "budget"),
@@ -114,7 +114,7 @@ public class RuminationSemanticEvaluator {
     /** 识别场景所述的领域类型。 */
     public String detectDomain(String scenarioName, String scenarioPrompt) {
         String combined = ((scenarioName != null ? scenarioName : "") + " " + (scenarioPrompt != null ? scenarioPrompt : "")).toLowerCase(Locale.ROOT);
-        if (containsAny(combined, "医", "药", "病", "院", "康", "诊", "痛", "健", "咳", "烧", "疾", "hospital", "medicine", "health", "fever", "clinic", "medical", "doctor", "nurse")) {
+        if (containsAny(combined, "医", "药", "病", "院", "康", "诊", "痛", "健", "咳", "烧", "疾", "身体", "人体", "器官", "部位", "肌肉", "骨骼", "内脏", "解剖", "生理", "hospital", "medicine", "health", "fever", "clinic", "medical", "doctor", "nurse", "body", "organ", "muscle", "bone")) {
             return "medical";
         }
         if (containsAny(combined, "厨", "餐", "食", "饮", "咖", "烹", "菜", "饭", "茶", "生鲜", "kitchen", "cook", "food", "dining", "restaurant", "cafe", "coffee", "produce")) {
@@ -155,11 +155,11 @@ public class RuminationSemanticEvaluator {
 
         String domain = detectDomain(scenarioName, scenarioPrompt);
         List<String> domainKeywords = DOMAIN_CORE_LEXICON.getOrDefault(domain, List.of());
-        String combinedTopic = ((scenarioName != null ? scenarioName : "") + " " + (scenarioPrompt != null ? scenarioPrompt : "")).toLowerCase(Locale.ROOT);
+        List<String> topicKeywords = extractTopicKeywords(scenarioName);
 
         List<ScoredEntry> scored = new ArrayList<>();
         for (LearningWordbookEntry entry : entries) {
-            double score = computeWordRelevance(entry, domain, domainKeywords, combinedTopic);
+            double score = computeWordRelevance(entry, domain, domainKeywords, scenarioName, topicKeywords);
             scored.add(new ScoredEntry(entry, score));
         }
 
@@ -167,7 +167,27 @@ public class RuminationSemanticEvaluator {
         return scored;
     }
 
-    private double computeWordRelevance(LearningWordbookEntry entry, String domain, List<String> domainKeywords, String combinedTopic) {
+    private List<String> extractTopicKeywords(String scenarioName) {
+        if (!StringUtils.hasText(scenarioName)) {
+            return List.of();
+        }
+        String clean = scenarioName.replaceAll("[与和及在或的了中高低星网自定义语境生态词汇]", " ").trim();
+        List<String> keywords = new ArrayList<>();
+        for (String segment : clean.split("\\s+")) {
+            String trimmed = segment.trim();
+            if (trimmed.length() >= 2) {
+                keywords.add(trimmed);
+                if (trimmed.length() >= 4) {
+                    keywords.add(trimmed.substring(0, 2));
+                    keywords.add(trimmed.substring(trimmed.length() - 2));
+                }
+            }
+        }
+        return keywords;
+    }
+
+    private double computeWordRelevance(LearningWordbookEntry entry, String domain, List<String> domainKeywords,
+                                       String scenarioName, List<String> topicKeywords) {
         String term = entry.getNormalizedTerm().toLowerCase(Locale.ROOT);
         double score = 0.0;
 
@@ -179,32 +199,35 @@ public class RuminationSemanticEvaluator {
         // 2. 检查解析出的中文释义与场景主题重合度
         String definition = extractEntryDefinition(entry).toLowerCase(Locale.ROOT);
         if (StringUtils.hasText(definition)) {
-            // 释义中直接含有场景名称中的核心汉字
-            for (char ch : combinedTopic.toCharArray()) {
-                if (Character.isLetterOrDigit(ch) && ch > 127 && definition.indexOf(ch) >= 0) {
-                    score += 0.08;
+            // 释义中直接含有场景名称中提取的主题关键词（按词匹配，杜绝单字虚词泛化）
+            for (String kw : topicKeywords) {
+                if (definition.contains(kw.toLowerCase(Locale.ROOT))) {
+                    score += 0.25;
                 }
             }
 
-            // 释义中含有该领域的经典特征字词
-            if ("medical".equals(domain) && containsAny(definition, "医", "药", "病", "痛", "体", "烧", "咳", "诊", "疗", "针", "护", "伤", "疾", "健", "胃", "牙")) {
+            // 释义中含有该领域的经典特征词汇（使用复合词或医学专用特征，避免 "体"、"人" 等宽泛单字泛化）
+            if ("medical".equals(domain) && containsAny(definition, "医疗", "医学", "医药", "生病", "疾病", "疼痛", "发烧", "咳嗽", "诊断", "治疗", "针灸", "护理", "创伤", "胃痛", "牙齿", "器官", "身体", "人体", "内脏", "骨骼", "肌肉", "血液", "脉搏", "呼吸", "肢体", "心脏", "大脑", "咽喉", "眼睛", "耳朵", "胸部", "腹部", "关节", "体温")) {
                 score += 0.35;
-            } else if ("dining".equals(domain) && containsAny(definition, "食", "餐", "肉", "菜", "饮", "味", "吃", "喝", "酒", "茶", "奶", "果", "粮", "烹", "鲜")) {
+            } else if ("dining".equals(domain) && containsAny(definition, "餐饮", "料理", "菜肴", "美食", "烹饪", "食材", "饮料", "咖啡", "肉类", "蔬菜", "烘焙", "面包", "汤品", "甜点")) {
                 score += 0.35;
-            } else if ("travel".equals(domain) && containsAny(definition, "旅", "行", "车", "机", "飞", "住", "店", "票", "路", "游", "站", "海", "空")) {
+            } else if ("travel".equals(domain) && containsAny(definition, "旅行", "旅游", "酒店", "航班", "飞机", "机票", "车站", "旅客", "行李", "出游", "度假")) {
                 score += 0.35;
-            } else if ("business".equals(domain) && containsAny(definition, "商", "工", "企", "会", "报", "职", "薪", "款", "约", "谈", "经", "合")) {
+            } else if ("business".equals(domain) && containsAny(definition, "商务", "会议", "合同", "项目", "谈判", "职场", "企业", "公司", "薪资", "汇报", "策划")) {
                 score += 0.35;
-            } else if ("campus".equals(domain) && containsAny(definition, "学", "考", "校", "生", "课", "书", "教", "试", "文", "研", "读")) {
+            } else if ("campus".equals(domain) && containsAny(definition, "校园", "学校", "大学", "课程", "考试", "教授", "学生", "作业", "讲座", "论文", "学期")) {
                 score += 0.35;
-            } else if ("retail".equals(domain) && containsAny(definition, "购", "买", "店", "价", "货", "币", "金", "市", "售", "客")) {
+            } else if ("retail".equals(domain) && containsAny(definition, "零售", "商场", "超市", "购物", "结账", "收银", "货架", "商品", "折扣", "售价")) {
                 score += 0.35;
             }
         }
 
-        // 3. 词形本身包含关联词根
-        if (combinedTopic.contains(term) && term.length() >= 3) {
-            score += 0.25;
+        // 3. 词形本身包含场景名称有效英文片段或与 term 一致
+        if (StringUtils.hasText(scenarioName)) {
+            String lowerName = scenarioName.toLowerCase(Locale.ROOT);
+            if (lowerName.contains(term) && term.length() >= 3) {
+                score += 0.25;
+            }
         }
 
         return Math.min(1.0, score);
@@ -230,7 +253,14 @@ public class RuminationSemanticEvaluator {
             Map.entry("dose", "剂量"), Map.entry("prescription", "处方"), Map.entry("pharmacy", "药房"),
             Map.entry("treatment", "治疗"), Map.entry("airport", "机场"), Map.entry("station", "车站"),
             Map.entry("meeting", "会议"), Map.entry("report", "报告"), Map.entry("course", "课程"),
-            Map.entry("exam", "考试")
+            Map.entry("exam", "考试"), Map.entry("body", "身体/人体"), Map.entry("heart", "心脏/心"),
+            Map.entry("brain", "大脑/脑"), Map.entry("lung", "肺/肺部"), Map.entry("liver", "肝脏/肝"),
+            Map.entry("bone", "骨骼/骨头"), Map.entry("muscle", "肌肉"), Map.entry("blood", "血液/血"),
+            Map.entry("skin", "皮肤"), Map.entry("eye", "眼睛/眼"), Map.entry("ear", "耳朵/耳"),
+            Map.entry("hand", "手/手部"), Map.entry("foot", "脚/足部"), Map.entry("leg", "腿/下肢"),
+            Map.entry("arm", "手臂/胳膊"), Map.entry("chest", "胸部/胸膛"), Map.entry("neck", "颈部/脖子"),
+            Map.entry("finger", "手指"), Map.entry("knee", "膝盖/膝关节"), Map.entry("shoulder", "肩膀/肩部"),
+            Map.entry("throat", "咽喉/喉咙"), Map.entry("organ", "器官/内脏")
     );
 
     /**

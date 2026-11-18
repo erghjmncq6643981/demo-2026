@@ -3,7 +3,7 @@
  * 纯原生 ES Module，零外部运行时依赖，支持高帧率力导向物理弹簧、视口拖拽缩放与多维语义连线渲染。
  */
 
-import { computeGalaxyLayout, computeFitViewportTransform, pickEdgeAt } from '/src/features/rumination/rumination-graph-layout.js'
+import { computeGalaxyLayout, computeFitViewportTransform, pickEdgeAt, tidyUpGalaxyLayout, computeNodeCollapseTogglePoint } from '/src/features/rumination/rumination-graph-layout.js'
 import { bindGraphA11yAndTouch } from '/src/features/rumination/rumination-graph-a11y.js'
 import { prefersReducedMotion } from '/src/shared/celebration.js'
 import { findDropTarget } from '/src/features/rumination/rumination-graph-drag.js'
@@ -41,10 +41,16 @@ export function createRuminationGraph(canvas, options = {}) {
   const onNodeDblClick = options.onNodeDblClick || (() => {})
   const onNodeContextMenu = options.onNodeContextMenu || (() => {})
   const onBackgroundContextMenu = options.onBackgroundContextMenu || (() => {})
+  const onNodeDragStart = options.onNodeDragStart || (() => {})
   const onNodeDragEnd = options.onNodeDragEnd || (() => {})
   const onNodeReparent = options.onNodeReparent || (() => {})
   const onNodeAction = options.onNodeAction || (() => {})
   const onEdgeDblClick = options.onEdgeDblClick || (() => {})
+  const onEdgeSelect = options.onEdgeSelect || (() => {})
+  const onEdgeDeselect = options.onEdgeDeselect || (() => {})
+  const onUndo = options.onUndo || (() => {})
+  const onRedo = options.onRedo || (() => {})
+  let selectedEdge = null
 
   // 星尘粒子背景
   let stars = []
@@ -66,7 +72,9 @@ export function createRuminationGraph(canvas, options = {}) {
   }
 
   function fitToViewport({ redraw = true } = {}) {
-    const fitted = computeFitViewportTransform({ nodes, width, height })
+    const { visibleNodes } = getVisibleElements()
+    const targetNodes = visibleNodes.length > 0 ? visibleNodes : nodes
+    const fitted = computeFitViewportTransform({ nodes: targetNodes, width, height })
     if (!fitted) {
       hasFittedViewport = false
       return false
@@ -139,6 +147,17 @@ export function createRuminationGraph(canvas, options = {}) {
     layout.nodeMap.forEach((v, k) => nodeMap.set(k, v))
     nodes = layout.placedNodes
     edges = layout.edges
+
+    if (selectedEdge) {
+      const sId = selectedEdge.source || selectedEdge.sourceNode?.id
+      const tId = selectedEdge.target || selectedEdge.targetNode?.id
+      const sTerm = selectedEdge.sourceNode?.term
+      const tTerm = selectedEdge.targetNode?.term
+      selectedEdge = edges.find((e) =>
+        (e.source === sId || (sTerm && e.source === sTerm))
+        && (e.target === tId || (tTerm && e.target === tTerm))
+      ) || null
+    }
 
     if (!hasFittedViewport) {
       hasUserTransformed = false
@@ -260,18 +279,108 @@ export function createRuminationGraph(canvas, options = {}) {
     needsRender = true
   }
 
+  function updateTreeHierarchy() {
+    const childrenMap = new Map()
+    for (const n of nodes) {
+      childrenMap.set(n.id, [])
+    }
+    for (const e of edges) {
+      const sId = e.sourceNode?.id || e.source
+      const tId = e.targetNode?.id || e.target
+      if (sId && tId && sId !== tId && childrenMap.has(sId)) {
+        const list = childrenMap.get(sId)
+        if (!list.includes(tId)) list.push(tId)
+      }
+    }
+    for (const n of nodes) {
+      const cList = childrenMap.get(n.id) || []
+      n.hasChildren = cList.length > 0
+      n.childCount = cList.length
+    }
+    return childrenMap
+  }
+
+  function getDescendants(nodeId, childrenMap) {
+    const set = new Set()
+    const queue = [nodeId]
+    while (queue.length > 0) {
+      const curr = queue.shift()
+      const children = childrenMap.get(curr) || []
+      for (const childId of children) {
+        if (!set.has(childId)) {
+          set.add(childId)
+          queue.push(childId)
+        }
+      }
+    }
+    return set
+  }
+
+  function getVisibleElements() {
+    const childrenMap = updateTreeHierarchy()
+    const hiddenNodeIds = new Set()
+    for (const n of nodes) {
+      if (n.collapsed && n.hasChildren) {
+        const desc = getDescendants(n.id, childrenMap)
+        desc.forEach((id) => hiddenNodeIds.add(id))
+      }
+    }
+    const visibleNodes = nodes.filter((n) => !hiddenNodeIds.has(n.id))
+    const visibleEdges = edges.filter(
+      (e) => !hiddenNodeIds.has(e.sourceNode?.id || e.source) && !hiddenNodeIds.has(e.targetNode?.id || e.target)
+    )
+    return { visibleNodes, visibleEdges, hiddenNodeIds, childrenMap }
+  }
+
+  function getCollapseToggleAt(sx, sy) {
+    const { x, y } = screenToWorld(sx, sy)
+    const { visibleNodes } = getVisibleElements()
+    for (let i = visibleNodes.length - 1; i >= 0; i--) {
+      const node = visibleNodes[i]
+      if (!node.hasChildren || node.nodeType === 'hub') continue
+      const toggle = computeNodeCollapseTogglePoint(node)
+      const wx = node.x + toggle.x
+      const wy = node.y + toggle.y
+      if (Math.hypot(x - wx, y - wy) <= 13) {
+        return node
+      }
+    }
+    return null
+  }
+
+  function toggleCollapseNode(nodeId) {
+    const target = nodeMap.get(nodeId)
+    if (!target || !target.hasChildren) return
+    target.collapsed = !target.collapsed
+    const childrenMap = updateTreeHierarchy()
+    const descCount = getDescendants(target.id, childrenMap).size
+    if (typeof options.onToast === 'function') {
+      if (target.collapsed) {
+        options.onToast(`已折叠「${target.term || target.label}」分支 (${descCount} 个词汇)`)
+      } else {
+        options.onToast(`已展开「${target.term || target.label}」分支`)
+      }
+    }
+    if (typeof options.onNodeCollapseToggle === 'function') {
+      options.onNodeCollapseToggle(target, target.collapsed)
+    }
+    requestRedraw()
+  }
+
   function render() {
+    const { visibleNodes, visibleEdges } = getVisibleElements()
     drawGraphScene({
       ctx,
       width,
       height,
       transform,
       stars,
-      nodes,
-      edges,
+      nodes: visibleNodes,
+      edges: visibleEdges,
       selectedNodeIds,
       focusedNodeId,
       hoveredNode,
+      selectedEdge,
       illuminatedNodeIds,
       reducedMotion,
       pulseState,
@@ -366,8 +475,9 @@ export function createRuminationGraph(canvas, options = {}) {
 
   function getNodeAt(sx, sy) {
     const { x, y } = screenToWorld(sx, sy)
-    for (let i = nodes.length - 1; i >= 0; i--) {
-      const node = nodes[i]
+    const { visibleNodes } = getVisibleElements()
+    for (let i = visibleNodes.length - 1; i >= 0; i--) {
+      const node = visibleNodes[i]
       const halfW = (node.width || 80) / 2 + 6
       const halfH = (node.height || 36) / 2 + 6
       if (
@@ -384,7 +494,8 @@ export function createRuminationGraph(canvas, options = {}) {
 
   function getEdgeAt(sx, sy) {
     const { x, y } = screenToWorld(sx, sy)
-    return pickEdgeAt({ edges, x, y, scale: transform.scale, tolerance: 14 })
+    const { visibleEdges } = getVisibleElements()
+    return pickEdgeAt({ edges: visibleEdges, x, y, scale: transform.scale, tolerance: 14 })
   }
 
   // 交互事件监听
@@ -393,15 +504,35 @@ export function createRuminationGraph(canvas, options = {}) {
       // 鼠标右键由 contextmenu 统一派发，屏蔽 mousedown 拖拽/视口移动
       return
     }
-    // 阻止浏览器默认文本选择与拖动行为，避免松手事件丢失
+    // 阻止浏览器默认文本选择与拖动行为，避免松手事件丢失；同时显式聚焦画布以响应 Tab/A/Enter 等键盘快捷键
     e.preventDefault()
+    if (typeof canvas.focus === 'function') {
+      try {
+        canvas.focus({ preventScroll: true })
+      } catch {
+        canvas.focus()
+      }
+    }
 
     const rect = canvas.getBoundingClientRect()
     const sx = e.clientX - rect.left
     const sy = e.clientY - rect.top
+
+    // 优先判定是否点击了分支折叠/展开按钮 (+ / -)（方案 3）
+    const collapseHit = getCollapseToggleAt(sx, sy)
+    if (collapseHit) {
+      toggleCollapseNode(collapseHit.id)
+      return
+    }
+
     const clickedNode = getNodeAt(sx, sy)
 
     if (clickedNode) {
+      if (selectedEdge) {
+        selectedEdge = null
+        onEdgeDeselect()
+        requestRedraw()
+      }
       const now = performance.now()
       const isRapidSecondTap = lastTapState.nodeId === clickedNode.id && (now - lastTapState.time) < 340
       lastTapState = { nodeId: clickedNode.id, time: now }
@@ -423,13 +554,35 @@ export function createRuminationGraph(canvas, options = {}) {
             draggedNode = potentialNode
             canvas.style.cursor = 'move'
             freezePhysics()
+            onNodeDragStart(draggedNode)
           }
         }, 180)
       }
     } else {
-      isPanning = true
-      panStart = { x: e.clientX - transform.x, y: e.clientY - transform.y }
-      canvas.style.cursor = 'grabbing'
+      const clickedEdge = getEdgeAt(sx, sy)
+      if (clickedEdge) {
+        selectedEdge = clickedEdge
+        focusedNodeId = null
+        selectedNodeIds.clear()
+        const s = clickedEdge.sourceNode
+        const t = clickedEdge.targetNode
+        const midWorld = { x: (s.x + t.x) / 2, y: (s.y + t.y) / 2 }
+        const edgeMidScreenPos = {
+          x: rect.left + transform.x + midWorld.x * transform.scale,
+          y: rect.top + transform.y + midWorld.y * transform.scale,
+        }
+        onEdgeSelect(clickedEdge, { clientX: e.clientX, clientY: e.clientY, edgeMidScreenPos })
+        requestRedraw()
+      } else {
+        if (selectedEdge) {
+          selectedEdge = null
+          onEdgeDeselect()
+          requestRedraw()
+        }
+        isPanning = true
+        panStart = { x: e.clientX - transform.x, y: e.clientY - transform.y }
+        canvas.style.cursor = 'grabbing'
+      }
     }
   }
 
@@ -450,6 +603,7 @@ export function createRuminationGraph(canvas, options = {}) {
         draggedNode = potentialNode
         canvas.style.cursor = 'move'
         freezePhysics()
+        onNodeDragStart(draggedNode)
       }
     }
 
@@ -503,11 +657,13 @@ export function createRuminationGraph(canvas, options = {}) {
       canvas.style.cursor = 'grab'
       requestRedraw()
     } else if (potentialNode) {
+      focusedNodeId = potentialNode.id
       onNodeSelect(potentialNode)
       potentialNode = null
       draggedNode = null
       isDraggingNode = false
       canvas.style.cursor = 'pointer'
+      requestRedraw()
     }
 
     isPanning = false
@@ -670,6 +826,8 @@ export function createRuminationGraph(canvas, options = {}) {
       onNodeDragEnd(node, { x: node.x, y: node.y })
       requestRedraw()
     },
+    undo: () => onUndo(),
+    redo: () => onRedo(),
   })
 
   // 绑定事件
@@ -727,6 +885,54 @@ export function createRuminationGraph(canvas, options = {}) {
       requestRedraw()
     },
     getNodes: () => nodes,
+    getEdges: () => edges,
+    getSelectedEdge: () => selectedEdge,
+    setSelectedEdge(edge) {
+      selectedEdge = edge
+      requestRedraw()
+    },
+    tidyLayout() {
+      const cleanData = {
+        nodes: nodes.map((n) => ({
+          ...n,
+          fixed: n.nodeType === 'hub',
+          x: n.nodeType === 'hub' ? 0 : undefined,
+          y: n.nodeType === 'hub' ? 0 : undefined,
+        })),
+        edges,
+      }
+      const layout = tidyUpGalaxyLayout(ctx, cleanData)
+      nodeMap.clear()
+      layout.nodes.forEach((n) => {
+        nodeMap.set(n.id, n)
+        if (n.term) nodeMap.set(n.term, n)
+      })
+      nodes = layout.nodes
+      edges = layout.edges
+      for (const n of nodes) {
+        n.fixed = true
+        n.vx = 0
+        n.vy = 0
+      }
+      hasFittedViewport = false
+      hasUserTransformed = false
+      fitToViewport({ redraw: false })
+      freezePhysics()
+      requestRedraw()
+      return nodes
+    },
+    toggleCollapse: toggleCollapseNode,
+    expandAll() {
+      nodes.forEach((n) => { n.collapsed = false })
+      requestRedraw()
+    },
+    collapseAll() {
+      nodes.forEach((n) => {
+        if (n.hasChildren && n.nodeType !== 'hub') n.collapsed = true
+      })
+      requestRedraw()
+    },
+    isNodeCollapsed: (nodeId) => Boolean(nodeMap.get(nodeId)?.collapsed),
     getTransform: () => ({ ...transform }),
     triggerSelectNode(nodeId) {
       const target = nodeMap.get(nodeId)

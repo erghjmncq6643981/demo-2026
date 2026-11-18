@@ -54,4 +54,7 @@ public class RuminationNodeResponse {
 
     @Schema(description = "节点是否已锁定自定义固定摆放位置")
     private Boolean fixed;
+
+    @Schema(description = "节点边框线型：solid（实线，默认）、dashed（虚线）、dotted（点线）、dashdot（点划线）")
+    private String borderStyle = "solid";
 }

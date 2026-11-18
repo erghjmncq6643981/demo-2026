@@ -1,49 +1,34 @@
-# 数据库初始化与迁移
+# 数据库初始化说明
 
-## 新数据库
+本目录保存 English Learning Assistant 当前版本的完整 MySQL 8.0+ 初始化脚本（共 46 张业务表 + 内置基础种子数据），全部脚本均支持幂等重复执行，不包含任何真实 API Key 或业务凭据。
 
-按顺序执行：
+## 方式一：一键完整初始化（推荐全新建库）
 
-1. `schema/00_ai_schema_mysql.sql`
-2. `schema/10_learning_core_schema_mysql.sql`
-3. `schema/20_vocabulary_plan_schema_mysql.sql`
-4. `schema/30_article_reading_schema_mysql.sql`
-5. `schema/40_user_authorization_schema_mysql.sql`
-6. `init/00_ai_agent_seed_mysql.sql`
-7. `init/01_system_admin_seed_mysql.sql`
+直接执行合并版脚本即可一次性完成全部表结构与内置种子数据初始化：
 
-`schema` 是当前完整结构，`init` 只保存可重复执行的基础数据，不包含真实 API Key。
+```bash
+mysql -u<username> -p <database> < src/main/resources/db/init_all_mysql.sql
+```
 
-## 已有数据库
+## 方式二：按业务模块分步初始化
 
-Flyway 默认关闭；启用需设置 `LEARNING_FLYWAY_ENABLED=true`。应用配置以版本 107 为非空旧库基线，当前源码包含：
+如需按领域逐步建表或独立维护某模块结构，按以下顺序执行：
 
-- V113：性能查询索引。
-- V114：活动统计与 AI 会话索引。
-- V115：异步任务日历索引。
-- V116：学习活动事件和日汇总。
-- V117：全局词汇语义资产。
-- V118：历史词条与学习进度词卡状态回刷纠偏。
-- V119：增强单词卡片认知画像、高频搭配与构词积木 Prompt 模板。
-- V120：知识反刍场景星系图谱拓扑、材料文章与微环境探针独立持久化表。
-- V121：知识反刍材料补充 `generation_source` 生成来源标识与 `task_id` 异步任务幂等唯一约束。
-- V122：知识反刍微环境探针补充 `generation_source` 生成来源标识，区分 AI 原生探针与本地语义补齐。
-- V123：知识反刍按句跟敲与目标词遮挡补全巩固记录表 `learning_rumination_sentence_practice`。
-- V124：知识反刍场景材料补充 AI 语音路径 `audio_path` 与合成状态 `audio_status`。
-- V125：彻底下线旧语境精读模块，清理历史遗留表 `learning_article_study_record`。
+1. `schema/00_ai_schema_mysql.sql` — AI 模型配置、Agent、提示词模板、会话消息与调用审计（6 张表）
+2. `schema/10_learning_core_schema_mysql.sql` — 公共词卡缓存、用户与角色、登录令牌、个人单词本、查词足迹、复习记录、学习活跃度、用户偏好与系统日志（15 张表）
+3. `schema/20_vocabulary_plan_schema_mysql.sql` — 公共词表、导入任务、学习计划、场景单元、逐词进度、异步任务、批量词卡、语义分析与全局语义资产（20 张表）
+4. `schema/30_rumination_schema_mysql.sql` — 知识反刍星系图谱、历史快照（每场景保留近 30 次变更）、场景材料、微环境探针与按句跟敲巩固（5 张表）
+5. `init/00_ai_agent_seed_mysql.sql` — 内置 AI Agent 与最新 Prompt 模板种子数据
+6. `init/01_system_admin_seed_mysql.sql` — 初始系统管理员账号（`admin` / `ChangeMe!2026`，首次登录后请立即修改密码）
 
-升级前必须备份数据库并检查 `flyway_schema_history`。如果旧库尚未达到 112，不得直接执行当前迁移，应先使用对应历史版本代码或备份脚本补齐结构。
+## 后续维护与升级规范
 
-## 维护规则
-
-- 新增结构先更新当前 `schema`，再新增下一编号迁移；禁止改写已执行迁移。
-- 迁移与种子数据必须可重复执行，不依赖本机账号或真实凭据。
-- 表、字段和索引需说明业务含义；批量数据通过批量 SQL 或分块处理。
-- 生产环境禁止 Flyway clean。
-- 数据库不可用时只能报告未验证，不能把 Mock 测试视为迁移成功。
+- **保持同步**：修改任何 `schema/*.sql` 或 `init/*.sql` 后，必须同步更新一键脚本 `init_all_mysql.sql`（单元测试 `DatabaseInitSqlValidationTest` 会自动校验所有 Java `@TableName` 实体表与合并一致性）。
+- **未来增量升级**：本项目已收口至统一初始化基线（`baseline-version: 1`），后续如对已上线环境做增量结构变更，可在 `db/migration/` 新增 `V2__...sql` 编号迁移脚本，并在需要时设置 `LEARNING_FLYWAY_ENABLED=true`。
+- **幂等与安全**：所有建表与种子数据脚本必须可重复执行；严禁写入真实模型 API Key、生产密码或个人业务数据。
 
 ## 验证
 
-- Mapper XML 使用项目校验测试解析。
-- 数据库工作流优先在隔离库或随机测试表验证。
-- 全局词汇语义资产测试可设置 `LEARNING_SEMANTIC_MYSQL_TEST=true` 后运行对应测试。
+- `DatabaseInitSqlValidationTest`：无需 Docker，自动校验全部 Java 实体表覆盖、脚本幂等性与 `init_all_mysql.sql` 同步一致性。
+- `DatabaseSchemaIntegrationTest`：Docker 可用时在真实 MySQL 8.0 容器中验证分步脚本与一键脚本初始化及重复执行幂等性。
+- `MapperXmlValidationTest`：解析并校验全部 MyBatis Mapper XML。

@@ -57,7 +57,8 @@ public class LearningActivityAggregationService {
                     item -> createDaily(item, event));
             daily.setMetricCount(safeAdd(daily.getMetricCount(), value(event.getQuantity())));
             daily.setDurationSeconds(safeAdd(daily.getDurationSeconds(), value(event.getDurationSeconds())));
-            if (type == LearningActivityEventType.WORD_REVIEWED) {
+            if (type == LearningActivityEventType.WORD_REVIEWED
+                    || type == LearningActivityEventType.RUMINATION_PROBE_SUBMITTED) {
                 daily.setTotalCount(safeAdd(daily.getTotalCount(), value(event.getQuantity())));
                 if ("correct".equalsIgnoreCase(event.getResultCode())
                         || "remembered".equalsIgnoreCase(event.getResultCode())) {

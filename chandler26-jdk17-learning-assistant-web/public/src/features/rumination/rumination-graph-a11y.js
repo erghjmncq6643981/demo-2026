@@ -57,12 +57,13 @@ export function bindGraphA11yAndTouch(canvas, bridge) {
     const nodes = bridge.getNodes()
     const nonHubNodes = nodes.filter((n) => n.nodeType !== 'hub')
     const focusedId = bridge.getFocusedNodeId()
-    const activeNode = nonHubNodes.find((n) => n.id === focusedId) || null
+    const activeNode = nodes.find((n) => n.id === focusedId) || null
 
     if (e.key === 'ArrowLeft' || e.key === 'ArrowRight' || e.key === 'ArrowUp' || e.key === 'ArrowDown') {
       if (!nonHubNodes.length) return
       e.preventDefault()
-      const nextNode = activeNode ? findDirectionalNeighbor(nodes, activeNode, e.key) || activeNode : nonHubNodes[0]
+      const baseNode = activeNode && activeNode.nodeType !== 'hub' ? activeNode : null
+      const nextNode = baseNode ? findDirectionalNeighbor(nodes, baseNode, e.key) || baseNode : nonHubNodes[0]
       if (nextNode) {
         bridge.focusAndSelectNode(nextNode)
       }
@@ -85,22 +86,43 @@ export function bindGraphA11yAndTouch(canvas, bridge) {
       return
     }
 
+    const isMetaOrCtrl = Boolean(e.metaKey || e.ctrlKey)
+    if (isMetaOrCtrl && (e.key === 'z' || e.key === 'Z')) {
+      e.preventDefault()
+      e.stopPropagation()
+      if (e.shiftKey) {
+        bridge.redo?.()
+      } else {
+        bridge.undo?.()
+      }
+      return
+    }
+    if (isMetaOrCtrl && (e.key === 'y' || e.key === 'Y')) {
+      e.preventDefault()
+      e.stopPropagation()
+      bridge.redo?.()
+      return
+    }
+
     if (!activeNode) return
 
     if (e.key === ' ' || e.code === 'Space') {
+      if (activeNode.nodeType === 'hub') return
       e.preventDefault()
       bridge.triggerAction('bag', activeNode)
     } else if (e.key === 'Enter') {
+      if (activeNode.nodeType === 'hub') return
       e.preventDefault()
       bridge.pulseNode(activeNode.id)
       bridge.triggerAction('expand', activeNode)
     } else if (e.key === 'e' || e.key === 'E' || e.key === 'F2') {
       e.preventDefault()
       bridge.triggerAction('edit', activeNode)
-    } else if (e.key === 'a' || e.key === 'A') {
+    } else if ((e.key === 'Tab' && !e.shiftKey) || e.key === 'a' || e.key === 'A') {
       e.preventDefault()
       bridge.triggerAction('addChild', activeNode)
     } else if (e.key === 'Delete' || e.key === 'Backspace') {
+      if (activeNode.nodeType === 'hub') return
       e.preventDefault()
       bridge.triggerAction('delete', activeNode)
     } else if (e.key === 'm' || e.key === 'M' || e.key === 'ContextMenu' || (e.shiftKey && e.key === 'F10')) {
@@ -108,6 +130,19 @@ export function bindGraphA11yAndTouch(canvas, bridge) {
       const pos = bridge.getNodeClientCoords(activeNode)
       bridge.openContextMenu(activeNode, { clientX: pos.x, clientY: pos.y })
     }
+  }
+
+  function onWindowKeyDown(e) {
+    if (e.defaultPrevented) return
+    if (e.target === canvas || canvas.contains?.(e.target)) return
+    if (!document.body?.contains(canvas)) return
+    const targetTag = e.target?.tagName ? e.target.tagName.toLowerCase() : ''
+    if (['input', 'textarea', 'select', 'button'].includes(targetTag) || e.target?.isContentEditable) return
+    if (document.querySelector?.('.modal-backdrop:not(.hidden)')) return
+    const ruminationView = document.getElementById?.('ruminationView')
+    if (ruminationView && !ruminationView.classList.contains('active')) return
+    if (!bridge.getFocusedNodeId()) return
+    onKeyDown(e)
   }
 
   function onTouchStart(e) {
@@ -203,6 +238,7 @@ export function bindGraphA11yAndTouch(canvas, bridge) {
     canvas.style.touchAction = 'none'
   }
   canvas.addEventListener('keydown', onKeyDown)
+  window.addEventListener('keydown', onWindowKeyDown)
   canvas.addEventListener('touchstart', onTouchStart, { passive: true })
   canvas.addEventListener('touchmove', onTouchMove, { passive: false })
   canvas.addEventListener('touchend', onTouchEnd, { passive: false })
@@ -211,6 +247,7 @@ export function bindGraphA11yAndTouch(canvas, bridge) {
   return function unbindGraphA11yAndTouch() {
     clearTouchTimers()
     canvas.removeEventListener('keydown', onKeyDown)
+    window.removeEventListener('keydown', onWindowKeyDown)
     canvas.removeEventListener('touchstart', onTouchStart)
     canvas.removeEventListener('touchmove', onTouchMove)
     canvas.removeEventListener('touchend', onTouchEnd)

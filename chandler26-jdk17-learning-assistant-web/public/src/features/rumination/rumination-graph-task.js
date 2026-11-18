@@ -48,11 +48,10 @@ export function createRuminationGraphTaskTracker({
     const ctx = getContext()
     const visibleItems = Array.from(tracked.values()).filter((item) => {
       if (!sameId(item.wordbookId, ctx.wordbookId)) return false
+      if (item.scenarioCode && item.scenarioCode !== ctx.scenarioCode) return false
       const st = item.task?.status
       if (ACTIVE_STATUSES.has(st)) return true
-      if (FAILURE_STATUSES.has(st)) {
-        return item.scenarioCode === ctx.scenarioCode || item.task?.taskType === 'rumination_scenario'
-      }
+      if (FAILURE_STATUSES.has(st)) return true
       return false
     })
 

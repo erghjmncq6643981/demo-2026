@@ -4,6 +4,7 @@ import com.chandler.learning.agent.identity.domain.entity.LearningUser;
 import com.chandler.learning.agent.reading.api.request.RuminationCustomScenarioRequest;
 import com.chandler.learning.agent.reading.api.request.RuminationFissionRequest;
 import com.chandler.learning.agent.reading.api.request.RuminationGraphBagUpdateRequest;
+import com.chandler.learning.agent.reading.api.request.RuminationGraphHistoryRestoreRequest;
 import com.chandler.learning.agent.reading.api.request.RuminationGraphPositionsUpdateRequest;
 import com.chandler.learning.agent.reading.api.request.RuminationGraphSaveRequest;
 import com.chandler.learning.agent.reading.api.request.RuminationMaterialGenerateRequest;
@@ -11,6 +12,7 @@ import com.chandler.learning.agent.reading.api.request.RuminationProbeSubmitRequ
 import com.chandler.learning.agent.reading.api.request.RuminationSentencePracticeSubmitRequest;
 import com.chandler.learning.agent.reading.api.response.RuminationAsyncTaskItemResponse;
 import com.chandler.learning.agent.reading.api.response.RuminationFissionResponse;
+import com.chandler.learning.agent.reading.api.response.RuminationGraphHistoryItemResponse;
 import com.chandler.learning.agent.reading.api.response.RuminationGraphResponse;
 import com.chandler.learning.agent.reading.api.response.RuminationGraphSaveResponse;
 import com.chandler.learning.agent.reading.api.response.RuminationMaterialAudioStatusResponse;
@@ -19,6 +21,7 @@ import com.chandler.learning.agent.reading.api.response.RuminationProbeSubmitRes
 import com.chandler.learning.agent.reading.api.response.RuminationScenarioResponse;
 import com.chandler.learning.agent.reading.api.response.RuminationSentencePracticeSubmitResponse;
 import com.chandler.learning.agent.reading.application.RuminationAudioService;
+import com.chandler.learning.agent.reading.application.RuminationGraphHistoryService;
 import com.chandler.learning.agent.reading.application.RuminationGraphTaskSubmissionService;
 import com.chandler.learning.agent.reading.application.RuminationMaterialTaskSubmissionService;
 import com.chandler.learning.agent.reading.application.RuminationSentencePracticeService;
@@ -57,6 +60,7 @@ public class RuminationController {
 
     private final CurrentUserContext currentUserContext;
     private final RuminationService ruminationService;
+    private final RuminationGraphHistoryService graphHistoryService;
     private final RuminationAudioService ruminationAudioService;
     private final RuminationMaterialTaskSubmissionService materialTaskSubmissionService;
     private final RuminationGraphTaskSubmissionService graphTaskSubmissionService;
@@ -104,6 +108,25 @@ public class RuminationController {
     public RuminationGraphSaveResponse saveGraph(@Valid @RequestBody RuminationGraphSaveRequest request) {
         LearningUser user = currentUserContext.requireUser();
         return ruminationService.saveGraph(user.getId(), request);
+    }
+
+    /** 查询指定场景最近 30 次图谱变更历史版本摘要列表。 */
+    @GetMapping("/graph/history")
+    @Operation(summary = "查询指定场景最近 30 次图谱变更历史记录")
+    public List<RuminationGraphHistoryItemResponse> listGraphHistory(
+            @RequestParam Long wordbookId,
+            @RequestParam(defaultValue = "produce_kitchen") String scenarioCode) {
+        LearningUser user = currentUserContext.requireUser();
+        return graphHistoryService.listRecentHistory(user.getId(), wordbookId, scenarioCode);
+    }
+
+    /** 按指定历史快照版本安全恢复场景星系图谱。 */
+    @PostMapping("/graph/history/restore")
+    @Operation(summary = "从历史快照版本恢复场景星系图谱")
+    public RuminationGraphResponse restoreGraphHistory(
+            @Valid @RequestBody RuminationGraphHistoryRestoreRequest request) {
+        LearningUser user = currentUserContext.requireUser();
+        return graphHistoryService.restoreFromHistory(user.getId(), request);
     }
 
     /** 增量更新部分节点固定坐标，避免覆盖并发衍生裂变与词袋变更。 */

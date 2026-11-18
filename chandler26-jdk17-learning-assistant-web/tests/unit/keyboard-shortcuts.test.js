@@ -95,6 +95,8 @@ describe('keyboard-shortcuts Escape handling for all modals', () => {
         <button id="closeNodeModalBtn">×</button>
       </section>
       <div class="graph-context-menu hidden" id="graphContextMenu"></div>
+      <button id="graphUndoBtn"></button>
+      <button id="graphRedoBtn"></button>
       <button id="openShortcutHelpBtn">?</button>
       <aside class="panel study-note-panel hidden" id="studyNoteDrawer"></aside>
       <aside class="panel review-note-panel hidden" id="reviewNoteModal"></aside>
@@ -137,6 +139,8 @@ describe('keyboard-shortcuts Escape handling for all modals', () => {
       shortcutHelpContent: document.getElementById('shortcutHelpContent'),
       closeShortcutHelpModalBtn: document.getElementById('closeShortcutHelpModalBtn'),
       openShortcutHelpBtn: document.getElementById('openShortcutHelpBtn'),
+      graphUndoBtn: document.getElementById('graphUndoBtn'),
+      graphRedoBtn: document.getElementById('graphRedoBtn'),
     }
 
     ctx = {
@@ -595,5 +599,38 @@ describe('keyboard-shortcuts Escape handling for all modals', () => {
 
     document.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true, cancelable: true }))
     expect(nodeModal.classList.contains('hidden')).toBe(true)
+  })
+
+  it('triggers graph undo and redo on Cmd+Z, Cmd+Shift+Z, and Cmd+Y when on rumination view', () => {
+    state.activeView = 'ruminationView'
+    const undoSpy = vi.fn()
+    const redoSpy = vi.fn()
+    elements.graphUndoBtn.addEventListener('click', undoSpy)
+    elements.graphRedoBtn.addEventListener('click', redoSpy)
+
+    // 1. Cmd+Z -> Undo
+    const undoEvent = new KeyboardEvent('keydown', { key: 'z', code: 'KeyZ', metaKey: true, bubbles: true, cancelable: true })
+    document.dispatchEvent(undoEvent)
+    expect(undoSpy).toHaveBeenCalledTimes(1)
+    expect(undoEvent.defaultPrevented).toBe(true)
+
+    // 2. Cmd+Shift+Z -> Redo
+    const redoShiftEvent = new KeyboardEvent('keydown', { key: 'z', code: 'KeyZ', metaKey: true, shiftKey: true, bubbles: true, cancelable: true })
+    document.dispatchEvent(redoShiftEvent)
+    expect(redoSpy).toHaveBeenCalledTimes(1)
+    expect(redoShiftEvent.defaultPrevented).toBe(true)
+
+    // 3. Cmd+Y -> Redo
+    const redoYEvent = new KeyboardEvent('keydown', { key: 'y', code: 'KeyY', metaKey: true, bubbles: true, cancelable: true })
+    document.dispatchEvent(redoYEvent)
+    expect(redoSpy).toHaveBeenCalledTimes(2)
+    expect(redoYEvent.defaultPrevented).toBe(true)
+
+    // 4. In text input: do not intercept (native text undo respected)
+    const textInput = elements.quickLookupInput
+    textInput.focus()
+    const typingEvent = new KeyboardEvent('keydown', { key: 'z', code: 'KeyZ', metaKey: true, bubbles: true, cancelable: true })
+    textInput.dispatchEvent(typingEvent)
+    expect(undoSpy).toHaveBeenCalledTimes(1)
   })
 })

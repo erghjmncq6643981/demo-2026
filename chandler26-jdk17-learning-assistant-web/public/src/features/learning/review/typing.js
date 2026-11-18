@@ -11,6 +11,11 @@ export function createReviewTypingFeature(ctx) {
     renderReviewCompleteModal,
     showCelebration,
     speak,
+    onSelectTag,
+    onConfirmKnown,
+    onStartBlindRecall,
+    onGuidedCopyComplete,
+    onBlindRecallComplete,
   } = ctx
 
   function updateReviewProgressBadge() {
@@ -83,6 +88,47 @@ export function createReviewTypingFeature(ctx) {
     }
     if (event.altKey || event.ctrlKey || event.metaKey) return
 
+    const phase = state.reviewCardPhase
+    if (phase === 'brief') {
+      if (event.key === '1') {
+        event.preventDefault()
+        onSelectTag?.('known')
+      } else if (event.key === '2') {
+        event.preventDefault()
+        onSelectTag?.('vague')
+      } else if (event.key === '3') {
+        event.preventDefault()
+        onSelectTag?.('forgotten')
+      } else if (event.key === 'r' || event.key === 'R') {
+        event.preventDefault()
+        speak?.(reviewTargetTerm(state.currentReviewEntry), elements?.voiceSelect?.value)
+      }
+      return
+    }
+    if (phase === 'known_check') {
+      if (event.key === 'Enter' || event.key === ' ') {
+        event.preventDefault()
+        onConfirmKnown?.()
+      } else if (event.key === '2') {
+        event.preventDefault()
+        onSelectTag?.('vague')
+      } else if (event.key === 'r' || event.key === 'R') {
+        event.preventDefault()
+        speak?.(reviewTargetTerm(state.currentReviewEntry), elements?.voiceSelect?.value)
+      }
+      return
+    }
+    if (phase === 'forgot_study') {
+      if (event.key === 'Enter' || event.key === ' ') {
+        event.preventDefault()
+        onStartBlindRecall?.()
+      } else if (event.key === 'r' || event.key === 'R') {
+        event.preventDefault()
+        speak?.(reviewTargetTerm(state.currentReviewEntry), elements?.voiceSelect?.value)
+      }
+      return
+    }
+
     if (event.key === 'Tab') {
       if (state.reviewStage === 'recall') {
         event.preventDefault()
@@ -126,7 +172,25 @@ export function createReviewTypingFeature(ctx) {
       playUiTone('correct')
       renderReviewFocus(state.currentReviewEntry)
       if (state.reviewTyped.length === term.length) {
-        if (state.reviewStage !== 'recall') {
+        if (phase === 'vague_copy') {
+          window.setTimeout(() => {
+            if (state.activeView === 'reviewView' && state.currentReviewEntry === targetEntry) {
+              cancelPeekTimer()
+              playUiTone('success')
+              onGuidedCopyComplete?.(targetEntry)
+            }
+          }, 180)
+        } else if (phase === 'forgot_recall') {
+          window.setTimeout(() => {
+            if (state.activeView === 'reviewView' && state.currentReviewEntry === targetEntry) {
+              cancelPeekTimer()
+              playUiTone('success')
+              if (typeof showCelebration === 'function') showCelebration()
+              else showCelebrationEffect()
+              onBlindRecallComplete?.(targetEntry)
+            }
+          }, 180)
+        } else if (state.reviewStage !== 'recall') {
           // 阶段一（跟敲）完成 -> 过渡到阶段二（遮挡默写）
           window.setTimeout(() => {
             if (state.activeView === 'reviewView' && state.currentReviewEntry === targetEntry) {

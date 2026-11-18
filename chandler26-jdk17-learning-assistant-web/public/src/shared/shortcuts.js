@@ -84,6 +84,7 @@ const VIEW_SHORTCUT_GROUPS = {
   ruminationView: {
     title: '知识反刍（星系图谱 & 跟敲弹窗）',
     items: [
+      { keys: '{MOD}Z / {MOD}⇧Z', desc: '撤销 / 重做上一步图谱操作（移动、关联、删除、编辑、边框线型等）' },
       { keys: '{MOD}S', desc: '手动立即保存星系图谱布局与词袋' },
       { keys: '↑ ↓ ← →（画布获焦）', desc: '按空间方向在星系节点间移动焦点（无需右键）' },
       { keys: 'Space / E / A / Enter（画布获焦）', desc: '当前节点加入词袋 / 修改释义 / 新增关联 / 衍生裂变' },

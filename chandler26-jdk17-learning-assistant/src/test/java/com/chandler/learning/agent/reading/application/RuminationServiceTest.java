@@ -12,6 +12,7 @@ import com.chandler.learning.agent.reading.api.response.RuminationFissionRespons
 import com.chandler.learning.agent.reading.api.response.RuminationGraphResponse;
 import com.chandler.learning.agent.reading.api.response.RuminationGraphSaveResponse;
 import com.chandler.learning.agent.reading.api.response.RuminationMaterialResponse;
+import com.chandler.learning.agent.reading.api.response.RuminationNodeResponse;
 import com.chandler.learning.agent.reading.api.response.RuminationProbeSubmitResponse;
 import com.chandler.learning.agent.reading.api.response.RuminationScenarioResponse;
 import com.chandler.learning.agent.reading.domain.entity.LearningRuminationGraph;
@@ -38,6 +39,7 @@ import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 
 import java.time.LocalDateTime;
+import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
 
@@ -85,6 +87,10 @@ class RuminationServiceTest {
 
     @BeforeEach
     void setUp() {
+        com.baomidou.mybatisplus.core.metadata.TableInfoHelper.initTableInfo(
+                new org.apache.ibatis.builder.MapperBuilderAssistant(
+                        new com.baomidou.mybatisplus.core.MybatisConfiguration(), ""),
+                LearningRuminationGraph.class);
         persistenceService = new RuminationMaterialPersistenceService(
                 materialMapper, probeMapper, graphMapper, objectMapper);
         graphPersistenceService = new RuminationGraphPersistenceService(
@@ -601,5 +607,52 @@ class RuminationServiceTest {
 
         assertThat(detail.getBagConsumed()).isFalse();
         assertThat(detail.getId()).isEqualTo(String.valueOf(materialId));
+    }
+
+    @Test
+    @DisplayName("治理膨胀图谱: 历史包含超多节点的异常图谱自动治理为至多18个核心节点并写库保存")
+    void governAndCleanBloatedGraph_withOverBloatedNodes_reducesToCappedCoreNodes() {
+        LearningRuminationGraph savedGraph = new LearningRuminationGraph();
+        savedGraph.setId(9901L);
+        savedGraph.setScenarioCode("custom_body_parts");
+        savedGraph.setVersion(1);
+
+        RuminationGraphResponse response = new RuminationGraphResponse();
+        response.setScenarioCode("custom_body_parts");
+        response.setScenarioName("人体部位与器官");
+        response.setScenarioIcon("🫁");
+
+        List<RuminationNodeResponse> bloatedNodes = new ArrayList<>();
+        RuminationNodeResponse hub = new RuminationNodeResponse();
+        hub.setId("hub");
+        hub.setNodeType("hub");
+        hub.setTerm("人体部位与器官");
+        bloatedNodes.add(hub);
+
+        // 模拟旧版本宽泛匹配写入的 50 个核心节点
+        for (int i = 1; i <= 50; i++) {
+            RuminationNodeResponse node = new RuminationNodeResponse();
+            node.setId("core-node-" + i);
+            node.setNodeType("core");
+            node.setTerm(i == 1 ? "heart" : (i == 2 ? "brain" : "word-" + i));
+            bloatedNodes.add(node);
+        }
+        response.setNodes(bloatedNodes);
+        response.setEdges(new ArrayList<>());
+        response.setBagTerms(List.of("heart", "brain", "word-10"));
+
+        when(wordbookService.listAllOwnedEntries(userId, wordbookId)).thenReturn(List.of());
+        when(semanticEvaluator.evaluateRelevance(any(), any(), any())).thenReturn(List.of(
+                new RuminationSemanticEvaluator.ScoredEntry(entry, 0.9)
+        ));
+
+        RuminationGraphResponse governed = ruminationService.governAndCleanBloatedGraph(
+                userId, wordbookId, savedGraph, response);
+
+        assertThat(governed.getNodes()).isNotNull();
+        // hub + 至多 MAX_CUSTOM_SCENARIO_CORE_WORDS (18) = 19
+        assertThat(governed.getNodes().size()).isLessThanOrEqualTo(RuminationService.MAX_CUSTOM_SCENARIO_CORE_WORDS + 1);
+        verify(graphMapper).updateById(savedGraph);
+        assertThat(savedGraph.getVersion()).isEqualTo(2);
     }
 }

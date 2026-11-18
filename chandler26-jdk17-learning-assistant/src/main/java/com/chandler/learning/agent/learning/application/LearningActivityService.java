@@ -164,6 +164,7 @@ public class LearningActivityService {
             item.setReviewCount(0);
             item.setSceneCompletedCount(0);
             item.setArticleCompletedCount(0);
+            item.setRuminationCount(0);
             item.setStudySeconds(0);
             item.setTotalCount(0);
             dayMap.put(date, item);
@@ -187,6 +188,8 @@ public class LearningActivityService {
                 item.setSceneCompletedCount(item.getSceneCompletedCount() + count);
             } else if (LearningActivityEventType.ARTICLE_COMPLETED.getCode().equals(type)) {
                 item.setArticleCompletedCount(item.getArticleCompletedCount() + count);
+            } else if (LearningActivityEventType.isRuminationMetric(type)) {
+                item.setRuminationCount(item.getRuminationCount() + count);
             }
             item.setStudySeconds(item.getStudySeconds() + nullToZero(metric.getDurationSeconds()));
         }
@@ -196,21 +199,40 @@ public class LearningActivityService {
         int reviewTotal = 0;
         int sceneCompletedTotal = 0;
         int articleCompletedTotal = 0;
+        int ruminationTotal = 0;
+        int totalActivityCount = 0;
         int studySecondsTotal = 0;
-        for (LearningActivityDayResponse item : dayMap.values()) {
+        int activeDays = 0;
+        int longestStreak = 0;
+        int runningStreak = 0;
+        List<LearningActivityDayResponse> daysList = new ArrayList<>(dayMap.values());
+        for (LearningActivityDayResponse item : daysList) {
             int total = nullToZero(item.getLearnedCount())
                     + nullToZero(item.getWordAddedCount())
                     + nullToZero(item.getReviewCount())
                     + nullToZero(item.getSceneCompletedCount())
-                    + nullToZero(item.getArticleCompletedCount());
+                    + nullToZero(item.getArticleCompletedCount())
+                    + nullToZero(item.getRuminationCount());
             item.setTotalCount(total);
             learnedTotal += nullToZero(item.getLearnedCount());
             wordAddedTotal += nullToZero(item.getWordAddedCount());
             reviewTotal += nullToZero(item.getReviewCount());
             sceneCompletedTotal += nullToZero(item.getSceneCompletedCount());
             articleCompletedTotal += nullToZero(item.getArticleCompletedCount());
+            ruminationTotal += nullToZero(item.getRuminationCount());
+            totalActivityCount += total;
             studySecondsTotal += nullToZero(item.getStudySeconds());
+            if (total > 0) {
+                activeDays++;
+                runningStreak++;
+                if (runningStreak > longestStreak) {
+                    longestStreak = runningStreak;
+                }
+            } else {
+                runningStreak = 0;
+            }
         }
+        int currentStreak = calculateCurrentStreak(daysList);
 
         LearningActivityResponse response = new LearningActivityResponse();
         response.setDays(resolvedDays);
@@ -219,9 +241,33 @@ public class LearningActivityService {
         response.setReviewTotal(reviewTotal);
         response.setSceneCompletedTotal(sceneCompletedTotal);
         response.setArticleCompletedTotal(articleCompletedTotal);
+        response.setRuminationTotal(ruminationTotal);
+        response.setTotalActivityCount(totalActivityCount);
+        response.setActiveDays(activeDays);
+        response.setCurrentStreak(currentStreak);
+        response.setLongestStreak(longestStreak);
         response.setStudySecondsTotal(studySecondsTotal);
-        response.setItems(List.copyOf(dayMap.values()));
+        response.setItems(List.copyOf(daysList));
         return response;
+    }
+
+    /**
+     * 计算当前连续活跃天数：若今天已有活跃则从今天起算，若今天尚未学习但昨天有活跃则从昨天起算（不断签）。
+     */
+    private int calculateCurrentStreak(List<LearningActivityDayResponse> daysList) {
+        if (daysList.isEmpty()) {
+            return 0;
+        }
+        int idx = daysList.size() - 1;
+        if (nullToZero(daysList.get(idx).getTotalCount()) <= 0) {
+            idx--;
+        }
+        int streak = 0;
+        while (idx >= 0 && nullToZero(daysList.get(idx).getTotalCount()) > 0) {
+            streak++;
+            idx--;
+        }
+        return streak;
     }
 
     private int nullToZero(Integer value) {

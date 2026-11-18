@@ -278,6 +278,28 @@ export function bindKeyboardShortcuts(ctx) {
       return
     }
 
+    const isUndo = isMetaOrCtrl && !event.shiftKey && (keyLower === 'z' || code === 'KeyZ')
+    const isRedo = isMetaOrCtrl && ((event.shiftKey && (keyLower === 'z' || code === 'KeyZ')) || (keyLower === 'y' || code === 'KeyY'))
+
+    if ((isUndo || isRedo) && !isTyping) {
+      const ruminationEl = document.getElementById('ruminationView') || document.getElementById('articleStudyView')
+      const isRuminationActive = state?.activeView === 'ruminationView'
+        || state?.activeView === 'articleStudyView'
+        || (ruminationEl && ruminationEl.classList.contains('active'))
+      if (isRuminationActive && !hasOpenModal) {
+        event.preventDefault()
+        event.stopPropagation()
+        if (isRedo) {
+          const redoBtn = elements.graphRedoBtn || document.getElementById('graphRedoBtn')
+          redoBtn?.click()
+        } else {
+          const undoBtn = elements.graphUndoBtn || document.getElementById('graphUndoBtn')
+          undoBtn?.click()
+        }
+        return
+      }
+    }
+
     if (isHelpKey && !isTyping) {
       event.preventDefault()
       event.stopPropagation()
@@ -475,6 +497,38 @@ export function bindKeyboardShortcuts(ctx) {
         event.stopPropagation()
         elements.forgottenDetailContent?.querySelector('[data-forgotten-word-audio]')?.click()
         return
+      }
+    }
+
+    // 新增/编辑表单弹窗统一支持按 Enter 直接提交（多行 textarea 需 Cmd/Ctrl+Enter，聚焦在取消/关闭等按钮上时保留按钮自身行为）
+    const isEnterKey = key === 'Enter' || code === 'Enter' || code === 'NumpadEnter'
+    if (hasOpenModal && isEnterKey && !event.defaultPrevented && !event.isComposing && event.key !== 'Process' && event.keyCode !== 229 && !isFocusedControl) {
+      const modalSubmitSelectorMap = {
+        ruminationNodeEditModal: '#submitNodeModalBtn',
+        addRuminationScenarioModal: '#submitCreateScenarioBtn',
+        wordbookModal: '#createWordbookBtn',
+        scenePlanModal: '#createScenePlanBtn',
+        modelConfigModal: '#saveModelBtn',
+        agentModal: '#saveAgentBtn',
+        templateModal: '#saveTemplateBtn',
+        adminUserModal: '#saveAdminUserBtn',
+        learningConfigModal: '#saveSpeechBtn',
+        deleteConfirmModal: '#deleteConfirmSubmitBtn',
+      }
+      const submitSelector = topmostModal?.id ? modalSubmitSelectorMap[topmostModal.id] : null
+      if (submitSelector) {
+        const activeTag = document.activeElement?.tagName?.toLowerCase() || event.target?.tagName?.toLowerCase() || ''
+        const isInTextarea = activeTag === 'textarea'
+        const allowTextareaEnter = topmostModal.id === 'addRuminationScenarioModal' && !event.shiftKey
+        if (!isInTextarea || isMetaOrCtrl || allowTextareaEnter) {
+          const submitBtn = topmostModal.querySelector(submitSelector) || document.querySelector(submitSelector)
+          if (submitBtn && !submitBtn.disabled && !submitBtn.classList.contains('hidden')) {
+            event.preventDefault()
+            event.stopPropagation()
+            submitBtn.click()
+            return
+          }
+        }
       }
     }
 

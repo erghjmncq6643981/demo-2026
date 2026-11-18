@@ -1,0 +1,64 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "https://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.chandler.learning.agent.reading.infrastructure.mapper.LearningRuminationGraphHistoryMapper">
+
+    <select id="countByScenarioAndVersion" resultType="long">
+        SELECT COUNT(1)
+        FROM learning_rumination_graph_history
+        WHERE user_id = #{userId}
+          AND wordbook_id = #{wordbookId}
+          AND scenario_code = #{scenarioCode}
+          AND graph_version = #{graphVersion}
+          AND deleted = 0
+    </select>
+
+    <select id="selectRecentSummaries"
+            resultType="com.chandler.learning.agent.reading.domain.entity.LearningRuminationGraphHistory">
+        SELECT
+            id,
+            create_by AS createBy,
+            update_by AS updateBy,
+            create_time AS createTime,
+            update_time AS updateTime,
+            deleted,
+            version,
+            graph_id AS graphId,
+            user_id AS userId,
+            wordbook_id AS wordbookId,
+            scenario_code AS scenarioCode,
+            graph_version AS graphVersion,
+            node_count AS nodeCount,
+            edge_count AS edgeCount,
+            change_summary AS changeSummary
+        FROM learning_rumination_graph_history
+        WHERE user_id = #{userId}
+          AND wordbook_id = #{wordbookId}
+          AND scenario_code = #{scenarioCode}
+          AND deleted = 0
+        ORDER BY graph_version DESC, id DESC
+        LIMIT #{limit}
+    </select>
+
+    <select id="selectOverflowHistoryIds" resultType="java.lang.Long">
+        SELECT id
+        FROM learning_rumination_graph_history
+        WHERE user_id = #{userId}
+          AND wordbook_id = #{wordbookId}
+          AND scenario_code = #{scenarioCode}
+          AND deleted = 0
+        ORDER BY graph_version DESC, id DESC
+        LIMIT 1000 OFFSET #{keepCount}
+    </select>
+
+    <update id="softDeleteByIds">
+        UPDATE learning_rumination_graph_history
+        SET deleted = 1,
+            update_by = #{updateBy},
+            update_time = CURRENT_TIMESTAMP
+        WHERE deleted = 0
+          AND id IN
+        <foreach collection="ids" item="id" open="(" separator="," close=")">
+            #{id}
+        </foreach>
+    </update>
+</mapper>
