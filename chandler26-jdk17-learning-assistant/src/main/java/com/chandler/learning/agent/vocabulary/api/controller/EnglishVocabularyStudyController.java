@@ -28,6 +28,7 @@ public class EnglishVocabularyStudyController {
     private final EnglishVocabularyStudyService vocabularyStudyService;
     private final VocabularyLookupHistoryService lookupHistoryService;
     private final CurrentUserContext currentUserContext;
+    private final com.chandler.learning.agent.vocabulary.application.WordbookEntryQueryService wordbookEntryQueryService;
 
     /** 查询或生成词汇学习结果。 */
     @PostMapping("/study")
@@ -42,6 +43,7 @@ public class EnglishVocabularyStudyController {
                     response.getTerm(),
                     response.getNormalizedTerm(),
                     request.getLookupSource());
+            response.setUserEntry(wordbookEntryQueryService.findUserEntryByTerm(user.getId(), response.getNormalizedTerm()));
         }
         return response;
     }
@@ -59,7 +61,12 @@ public class EnglishVocabularyStudyController {
     @GetMapping("/{term}/best-match")
     @Operation(summary = "查询用户输入的最接近词汇缓存")
     public VocabularyBestMatchResponse bestMatch(@PathVariable String term) {
-        return vocabularyStudyService.bestMatch(term);
+        VocabularyBestMatchResponse response = vocabularyStudyService.bestMatch(term);
+        if (response != null && response.getRecord() != null) {
+            currentUserContext.findUser().ifPresent(user ->
+                    response.getRecord().setUserEntry(wordbookEntryQueryService.findUserEntryByTerm(user.getId(), response.getRecord().getNormalizedTerm())));
+        }
+        return response;
     }
 
     /** 查询词汇学习缓存。 */
@@ -68,12 +75,15 @@ public class EnglishVocabularyStudyController {
     public VocabularyStudyResponse detail(@PathVariable String term) {
         VocabularyStudyResponse response = vocabularyStudyService.detail(term);
         if (response != null) {
-            currentUserContext.findUser().ifPresent(user -> lookupHistoryService.recordLookup(
-                    user.getId(),
-                    response.getId(),
-                    response.getTerm(),
-                    response.getNormalizedTerm(),
-                    VocabularyLookupHistoryService.SOURCE_QUICK_LOOKUP));
+            currentUserContext.findUser().ifPresent(user -> {
+                lookupHistoryService.recordLookup(
+                        user.getId(),
+                        response.getId(),
+                        response.getTerm(),
+                        response.getNormalizedTerm(),
+                        VocabularyLookupHistoryService.SOURCE_QUICK_LOOKUP);
+                response.setUserEntry(wordbookEntryQueryService.findUserEntryByTerm(user.getId(), response.getNormalizedTerm()));
+            });
         }
         return response;
     }

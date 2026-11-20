@@ -139,6 +139,9 @@ export function createStudyFeature(ctx) {
   }
 
   function findEntryForRecord(record) {
+    if (record?.userEntry) {
+      return record.userEntry
+    }
     const term = record?.normalizedTerm || record?.term || record?.parsed?.term
     if (!term) return null
     return (state.wordbookEntries || []).find((entry) => entry.normalizedTerm === term || entry.term === term) || null

@@ -11,9 +11,11 @@ describe('Recent-Search 3-Tag Progressive Review (Plan A)', () => {
   let elements
   let state
   let mockRequest
+  let mockSpeakSentence
   let review
 
   beforeEach(() => {
+    mockSpeakSentence = vi.fn()
     document.body.innerHTML = ''
     root = document.createElement('div')
     root.innerHTML = `
@@ -146,7 +148,7 @@ describe('Recent-Search 3-Tag Progressive Review (Plan A)', () => {
       readText: () => '',
       stringifyValue: (v) => String(v || ''),
       renderCollocationMini: () => '',
-      speakSentence: vi.fn(),
+      speakSentence: mockSpeakSentence,
       speak: vi.fn(),
       setFocusMode: vi.fn(),
       bindStudyTermCards: vi.fn(),
@@ -194,14 +196,19 @@ describe('Recent-Search 3-Tag Progressive Review (Plan A)', () => {
     expect(state.reviewCardPhase).toBe('brief')
   })
 
-  it('tag 2 (模糊) opens 1-pass guided copy typing and requeues word to tail on completion', async () => {
+  it('tag 2 (模糊) shows study definitions first, then opens 1-pass guided copy typing on start', async () => {
     vi.useFakeTimers()
     await review.loadDueReviews()
 
     elements.reviewFocus.querySelector('[data-review-tag="vague"]').click()
+    expect(state.reviewCardPhase).toBe('vague_study')
+    expect(elements.reviewFocus.querySelector('.typing-board')).toBeNull()
+    expect(elements.reviewFocus.textContent).toContain('猫')
+    expect(elements.reviewFocus.querySelector('[data-review-start-vague]')).not.toBeNull()
+
+    elements.reviewFocus.querySelector('[data-review-start-vague]').click()
     expect(state.reviewCardPhase).toBe('vague_copy')
     expect(elements.reviewFocus.querySelector('.typing-board')).not.toBeNull()
-    expect(elements.reviewFocus.textContent).toContain('猫')
 
     const preventDefault = vi.fn()
     review.handleReviewKeydown({ key: 'c', preventDefault })
@@ -215,6 +222,17 @@ describe('Recent-Search 3-Tag Progressive Review (Plan A)', () => {
     expect(state.reviewEntries[1].term).toBe('cat')
     expect(state.reviewEntries[1].requeued).toBe(true)
     vi.useRealTimers()
+  })
+
+  it('pressing Enter in vague_study starts guided copy', async () => {
+    await review.loadDueReviews()
+    elements.reviewFocus.querySelector('[data-review-tag="vague"]').click()
+    expect(state.reviewCardPhase).toBe('vague_study')
+
+    const preventDefault = vi.fn()
+    review.handleReviewKeydown({ key: 'Enter', preventDefault })
+    expect(preventDefault).toHaveBeenCalled()
+    expect(state.reviewCardPhase).toBe('vague_copy')
   })
 
   it('tag 3 (没印象) shows cognitive image first, then masks word for blind recall', async () => {
@@ -240,5 +258,19 @@ describe('Recent-Search 3-Tag Progressive Review (Plan A)', () => {
     const submitBody = JSON.parse(mockRequest.mock.calls.find((c) => c[0].endsWith('/submit'))[1].body)
     expect(submitBody).toMatchObject({ term: 'cat', result: 'forgotten', reviewAction: 'blind_recall' })
     vi.useRealTimers()
+  })
+
+  it('renders example play button in vague_study and plays sentence audio on click', async () => {
+    await review.loadDueReviews()
+    elements.reviewFocus.querySelector('[data-review-tag="vague"]').click()
+    expect(state.reviewCardPhase).toBe('vague_study')
+
+    const playBtn = elements.reviewFocus.querySelector('[data-review-sentence]')
+    expect(playBtn).not.toBeNull()
+    expect(playBtn.textContent).toBe('▶ 读音')
+    expect(playBtn.getAttribute('data-sentence-text')).toBe('The cat is sleeping.')
+
+    playBtn.click()
+    expect(mockSpeakSentence).toHaveBeenCalledWith('The cat is sleeping.')
   })
 })

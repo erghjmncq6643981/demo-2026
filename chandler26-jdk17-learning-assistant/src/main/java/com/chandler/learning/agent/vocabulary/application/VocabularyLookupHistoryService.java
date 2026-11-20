@@ -122,9 +122,20 @@ public class VocabularyLookupHistoryService {
 
         if (recentTwoDayCount >= resolvedMinCount) {
             List<RecentSearchReviewItemResponse> items = assembleFromLookupHistories(userId, twoDayRecords);
+            long unreviewedCount = twoDayRecords.stream()
+                    .filter(r -> r.getLastReviewedTime() == null || r.getLastReviewedTime().isBefore(r.getLastLookupTime()))
+                    .count();
             response.setMode("today_yesterday");
             response.setTotalCount(items.size());
-            response.setHintMessage("今天与昨天共搜索过 " + items.size() + " 个词，趁热巩固一遍");
+            String hint;
+            if (unreviewedCount > 0 && unreviewedCount < items.size()) {
+                hint = "今天与昨天共搜索过 " + items.size() + " 个词，其中 " + unreviewedCount + " 个待复习已优先置顶";
+            } else if (unreviewedCount == 0) {
+                hint = "近两日搜索的 " + items.size() + " 个词已全部巩固过一遍，再次回看温故知新";
+            } else {
+                hint = "今天与昨天共搜索过 " + items.size() + " 个词，趁热巩固一遍";
+            }
+            response.setHintMessage(hint);
             response.setItems(items);
             return response;
         }
@@ -133,11 +144,19 @@ public class VocabularyLookupHistoryService {
                 lookupHistoryMapper.selectRecent(userId, resolvedFallbackLimit));
         if (!recentRecords.isEmpty()) {
             List<RecentSearchReviewItemResponse> items = assembleFromLookupHistories(userId, recentRecords);
+            long unreviewedCount = recentRecords.stream()
+                    .filter(r -> r.getLastReviewedTime() == null || r.getLastReviewedTime().isBefore(r.getLastLookupTime()))
+                    .count();
             response.setMode("recent_fallback");
             response.setTotalCount(items.size());
-            String message = recentTwoDayCount > 0
-                    ? "今天与昨天仅搜索 " + recentTwoDayCount + " 个词，已为你自动补齐最近搜索的 " + items.size() + " 个词"
-                    : "近两日暂无新搜索记录，已为你展示最近搜索的 " + items.size() + " 个词";
+            String message;
+            if (unreviewedCount > 0 && unreviewedCount < items.size()) {
+                message = "已为你自动补齐最近搜索的 " + items.size() + " 个词，其中 " + unreviewedCount + " 个待复习已优先置顶";
+            } else if (recentTwoDayCount > 0) {
+                message = "今天与昨天仅搜索 " + recentTwoDayCount + " 个词，已为你自动补齐最近搜索的 " + items.size() + " 个词";
+            } else {
+                message = "近两日暂无新搜索记录，已为你展示最近搜索的 " + items.size() + " 个词";
+            }
             response.setHintMessage(message);
             response.setItems(items);
             return response;

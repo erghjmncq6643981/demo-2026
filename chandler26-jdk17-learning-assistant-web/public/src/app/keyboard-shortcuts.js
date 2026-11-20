@@ -574,7 +574,13 @@ export function bindKeyboardShortcuts(ctx) {
       if (isNoteShortcut) {
         event.preventDefault()
         event.stopPropagation()
-        toggleStudyNoteDrawer?.()
+        const isDrawerOpen = Boolean(elements.studyNoteDrawer && !elements.studyNoteDrawer.classList.contains('hidden'))
+        const isEditing = Boolean(elements.studyNoteDrawer?.querySelector('.note-editor'))
+        if (isDrawerOpen && !isEditing) {
+          editCurrentNote?.()
+        } else {
+          toggleStudyNoteDrawer?.()
+        }
         return
       }
       if ((isKeyT && !isTyping) || (event.altKey && isKeyT)) {

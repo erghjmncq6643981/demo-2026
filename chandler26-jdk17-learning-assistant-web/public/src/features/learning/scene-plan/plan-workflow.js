@@ -39,7 +39,7 @@ export function createPlanWorkflow({
   function renderPlanList() {
     const plans = asArray(state.learningPlans)
     if (elements.scenePlanCount) elements.scenePlanCount.textContent = String(plans.length)
-    renderSelectOptions(elements.scenePlanSelect, plans, state.currentLearningPlan?.id, (item) => `${item.name} · ${number(item.learnedCoreWords)}/${number(item.totalCatalogWords)}词`, '暂无学习计划')
+    renderSelectOptions(elements.scenePlanSelect, plans, state.currentLearningPlan?.id, (item) => item.name, '暂无学习计划')
     if (!plans.length) {
       if (elements.scenePlanList) {
         elements.scenePlanList.className = 'scene-plan-list empty'

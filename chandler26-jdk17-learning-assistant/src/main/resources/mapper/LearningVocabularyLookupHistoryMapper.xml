@@ -34,7 +34,9 @@
         WHERE user_id = #{userId}
           AND deleted = 0
           AND last_lookup_time &gt;= #{sinceTime}
-        ORDER BY last_lookup_time DESC, lookup_count DESC, id DESC
+        ORDER BY
+            CASE WHEN (last_reviewed_time IS NULL OR last_reviewed_time &lt; last_lookup_time) THEN 0 ELSE 1 END ASC,
+            last_lookup_time DESC, lookup_count DESC, id DESC
         LIMIT #{limit}
     </select>
 
@@ -46,7 +48,9 @@
         FROM learning_vocabulary_lookup_history
         WHERE user_id = #{userId}
           AND deleted = 0
-        ORDER BY last_lookup_time DESC, lookup_count DESC, id DESC
+        ORDER BY
+            CASE WHEN (last_reviewed_time IS NULL OR last_reviewed_time &lt; last_lookup_time) THEN 0 ELSE 1 END ASC,
+            last_lookup_time DESC, lookup_count DESC, id DESC
         LIMIT #{limit}
     </select>
 

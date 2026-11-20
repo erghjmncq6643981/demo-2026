@@ -76,4 +76,7 @@ public class VocabularyStudyResponse {
 
     @Schema(description = "词汇关联列表")
     private List<VocabularyRelationResponse> relations;
+
+    @Schema(description = "当前登录用户在该词上的个人词条与笔记快照（未收录则为 null）")
+    private WordbookEntryResponse userEntry;
 }

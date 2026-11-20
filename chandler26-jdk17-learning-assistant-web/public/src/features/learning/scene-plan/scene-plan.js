@@ -79,9 +79,9 @@ export function createScenePlanFeature(ctx) {
   function renderSourceOptions() {
     const wordbooks = asArray(state.wordbooks)
     const preferredWordbook = normalizeWordbookId(state.currentWordbookId) || normalizeWordbookId(wordbooks[0]?.id)
-    ;[elements.sceneWordbookSelect, elements.vocabularyImportWordbook, elements.scenePlanWordbookSelect].forEach((select) => renderSelectOptions(select, wordbooks, select?.value || preferredWordbook, (item) => `${item.name} · ${item.entryCount || 0}词`, '暂无单词本'))
-    renderSelectOptions(elements.sceneCatalogSelect, asArray(state.publicVocabularyCatalogs).map((item) => ({ ...item, id: item.catalogVersionId })), elements.sceneCatalogSelect?.value, (item) => `${item.catalogName} · ${SOURCE_LABELS[item.sourceType] || item.sourceType || '公共'} · ${item.totalCount || 0}词`, '请先导入并发布公共词本')
-    renderSelectOptions(elements.scenePlanSelect, asArray(state.learningPlans), state.currentLearningPlan?.id || elements.scenePlanSelect?.value, (item) => `${item.name} · ${number(item.learnedCoreWords)}/${number(item.totalCatalogWords)}词`, '暂无学习计划')
+    ;[elements.sceneWordbookSelect, elements.vocabularyImportWordbook, elements.scenePlanWordbookSelect].forEach((select) => renderSelectOptions(select, wordbooks, select?.value || preferredWordbook, (item) => item.name, '暂无单词本'))
+    renderSelectOptions(elements.sceneCatalogSelect, asArray(state.publicVocabularyCatalogs).map((item) => ({ ...item, id: item.catalogVersionId })), elements.sceneCatalogSelect?.value, (item) => item.catalogName, '请先导入并发布公共词本')
+    renderSelectOptions(elements.scenePlanSelect, asArray(state.learningPlans), state.currentLearningPlan?.id || elements.scenePlanSelect?.value, (item) => item.name, '暂无学习计划')
     if (elements.vocabularyImportSourceType && asArray(state.vocabularyDataTags).length) {
       const current = elements.vocabularyImportSourceType.value
       renderSelectOptions(

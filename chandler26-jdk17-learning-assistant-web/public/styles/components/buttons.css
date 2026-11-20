@@ -166,7 +166,8 @@
 [data-modal-sentence].playing,
 [data-forgotten-sentence].playing,
 [data-focus-sentence].playing,
-[data-quick-sentence].playing {
+[data-quick-sentence].playing,
+[data-review-sentence].playing {
   background: rgba(16, 185, 129, 0.2) !important;
   border-color: rgba(52, 211, 153, 0.7) !important;
   color: #10b981 !important;

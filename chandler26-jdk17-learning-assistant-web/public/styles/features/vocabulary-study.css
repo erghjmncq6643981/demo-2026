@@ -707,6 +707,21 @@
   gap: 4px;
 }
 
+.review-example-header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.review-example-header .review-example-en {
+  flex: 1;
+}
+
+.review-example-header .mini-audio-button {
+  flex-shrink: 0;
+}
+
 .review-example-en {
   margin: 0;
   font-size: 14px;

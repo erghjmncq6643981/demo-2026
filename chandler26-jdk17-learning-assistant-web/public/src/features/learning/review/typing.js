@@ -13,6 +13,7 @@ export function createReviewTypingFeature(ctx) {
     speak,
     onSelectTag,
     onConfirmKnown,
+    onStartGuidedCopy,
     onStartBlindRecall,
     onGuidedCopyComplete,
     onBlindRecallComplete,
@@ -112,6 +113,16 @@ export function createReviewTypingFeature(ctx) {
       } else if (event.key === '2') {
         event.preventDefault()
         onSelectTag?.('vague')
+      } else if (event.key === 'r' || event.key === 'R') {
+        event.preventDefault()
+        speak?.(reviewTargetTerm(state.currentReviewEntry), elements?.voiceSelect?.value)
+      }
+      return
+    }
+    if (phase === 'vague_study') {
+      if (event.key === 'Enter' || event.key === ' ') {
+        event.preventDefault()
+        onStartGuidedCopy?.()
       } else if (event.key === 'r' || event.key === 'R') {
         event.preventDefault()
         speak?.(reviewTargetTerm(state.currentReviewEntry), elements?.voiceSelect?.value)

@@ -421,11 +421,12 @@ function updateSentencePlayButtons(sentence, isPlaying) {
     .trim()
     .toLowerCase()
 
-  const query = '.sentence-play-btn[data-sentence-index], [data-modal-sentence], [data-forgotten-sentence], [data-focus-sentence], [data-quick-sentence]'
+  const query = '.sentence-play-btn[data-sentence-index], [data-modal-sentence], [data-forgotten-sentence], [data-focus-sentence], [data-quick-sentence], [data-review-sentence]'
   document.querySelectorAll(query).forEach((button) => {
     const btnText = (
       button.getAttribute('data-sentence-text') ||
       button.parentElement?.querySelector('.sentence')?.textContent ||
+      button.parentElement?.querySelector('.review-example-en')?.textContent ||
       ''
     )
       .replace(/\{[^}]+\}/g, '')
@@ -435,12 +436,14 @@ function updateSentencePlayButtons(sentence, isPlaying) {
       .toLowerCase()
 
     const isMatch = isPlaying && cleanSentence && btnText && (btnText.includes(cleanSentence) || cleanSentence.includes(btnText))
+    const idleText = button.getAttribute('data-idle-text') || '▶'
+    const playingText = button.getAttribute('data-playing-text') || '⏸'
     if (isMatch) {
-      button.textContent = '⏸'
+      button.textContent = playingText
       button.classList.add('playing')
       button.title = '停止朗读 (再次点击停止)'
     } else {
-      button.textContent = '▶'
+      button.textContent = idleText
       button.classList.remove('playing')
       button.title = '播放例句'
     }

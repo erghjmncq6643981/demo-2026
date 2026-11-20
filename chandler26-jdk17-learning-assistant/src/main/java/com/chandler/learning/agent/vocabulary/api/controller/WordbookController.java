@@ -46,6 +46,7 @@ public class WordbookController {
 
     private final CurrentUserContext currentUserContext;
     private final WordbookService wordbookService;
+    private final com.chandler.learning.agent.vocabulary.application.WordbookEntryQueryService wordbookEntryQueryService;
     private final VocabularyLookupHistoryService lookupHistoryService;
     private final AiAsyncTaskService aiAsyncTaskService;
 
@@ -150,6 +151,14 @@ public class WordbookController {
             @PathVariable Long entryId) {
         LearningUser user = currentUserContext.requireUser();
         return wordbookService.detailEntry(user.getId(), entryId);
+    }
+
+    /** 按单词查询当前用户的个人词条信息与笔记。 */
+    @GetMapping("/wordbook-entries/by-term")
+    @Operation(summary = "按单词查询当前用户的个人词条")
+    public WordbookEntryResponse findEntryByTerm(@RequestParam("term") String term) {
+        LearningUser user = currentUserContext.requireUser();
+        return wordbookEntryQueryService.findUserEntryByTerm(user.getId(), term);
     }
 
     /** 删除单词本词条。 */

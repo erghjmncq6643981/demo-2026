@@ -401,7 +401,7 @@ export function createReviewFeature(ctx) {
       return
     }
     if (tag === 'vague') {
-      state.reviewCardPhase = 'vague_copy'
+      state.reviewCardPhase = 'vague_study'
       state.reviewStage = 'copy'
       state.reviewTyped = ''
       state.reviewWrongCount = 0
@@ -417,6 +417,18 @@ export function createReviewFeature(ctx) {
       state.reviewPeek = false
       feature.renderReviewFocus(entry)
     }
+  }
+
+  function startGuidedCopyForCurrent() {
+    const entry = state.currentReviewEntry
+    if (!entry) return
+    state.reviewCardPhase = 'vague_copy'
+    state.reviewStage = 'copy'
+    state.reviewTyped = ''
+    state.reviewWrongCount = 0
+    state.reviewPeek = false
+    feature.renderReviewFocus(entry)
+    speak?.(feature.reviewTargetTerm(entry), elements.voiceSelect?.value)
   }
 
   function startBlindRecallForCurrent() {
@@ -468,7 +480,10 @@ export function createReviewFeature(ctx) {
     const ex = list[0]
     return `
       <div class="review-example-mini">
-        <p class="review-example-en">${escapeHtml(ex.sentence || '')}</p>
+        <div class="review-example-header">
+          <p class="review-example-en">${escapeHtml(ex.sentence || '')}</p>
+          ${ex.sentence ? `<button type="button" class="mini-audio-button sentence-play-btn" data-review-sentence="0" data-sentence-text="${escapeHtml(ex.sentence || '')}" data-idle-text="▶ 读音" data-playing-text="⏸ 暂停" title="播放例句">▶ 读音</button>` : ''}
+        </div>
         ${ex.translation ? `<p class="review-example-cn">${escapeHtml(ex.translation)}</p>` : ''}
       </div>
     `
@@ -485,7 +500,7 @@ export function createReviewFeature(ctx) {
       chips.push(`<span class="review-meta-chip">${escapeHtml([timeText, sourceText].filter(Boolean).join(' · '))}</span>`)
     }
     if (Number(entry.lookupCount || 0) >= 2) {
-      chips.push(`<span class="review-meta-chip is-hot">查过 ${Number(entry.lookupCount)} 次</span>`)
+      chips.push(`<span class="review-meta-chip is-hot" title="历史累计查词频次（高频词优先排入复习）">查过 ${Number(entry.lookupCount)} 次</span>`)
     }
     return chips.join('')
   }
@@ -550,7 +565,7 @@ export function createReviewFeature(ctx) {
             <span class="review-tag-key">1</span>
             <span class="review-tag-title">认识</span>
           </button>
-          <button type="button" class="review-tag-card is-vague" data-review-tag="vague" title="看释义并跟敲 1 遍">
+          <button type="button" class="review-tag-card is-vague" data-review-tag="vague" title="看释义后跟敲 1 遍">
             <span class="review-tag-key">2</span>
             <span class="review-tag-title">模糊</span>
           </button>
@@ -569,6 +584,15 @@ export function createReviewFeature(ctx) {
           <button class="secondary-button" type="button" data-review-tag="vague" title="记错了，转为模糊跟敲 (2)">记错了</button>
         </div>
       `
+    } else if (phase === 'vague_study') {
+      bodyHtml = `
+        <div class="mini-definition-list">${renderDefinitionsHtml(definitions)}</div>
+        ${renderCompactExampleHtml(parsed)}
+        <div class="review-phase-actions">
+          <button class="primary-button" type="button" data-review-start-vague title="查看释义后开始跟敲 1 遍 (Enter / Space)">开始跟敲</button>
+          <button class="secondary-button" type="button" data-review-skip-vague title="跳过跟敲，记为模糊并下一词">跳过</button>
+        </div>
+      `
     } else if (phase === 'vague_copy') {
       bodyHtml = `
         <div class="typing-board" tabindex="0" aria-label="跟敲单词 ${escapeHtml(term)}">
@@ -578,6 +602,7 @@ export function createReviewFeature(ctx) {
         <div class="mini-definition-list">${renderDefinitionsHtml(definitions)}</div>
         ${renderCompactExampleHtml(parsed)}
         <div class="review-phase-actions compact">
+          <button class="secondary-button compact" type="button" data-review-back-vague title="返回查看释义与例句">看解析</button>
           <button class="secondary-button compact" type="button" data-review-skip-vague title="跳过跟敲，记为模糊并下一词">跳过</button>
         </div>
       `
@@ -639,11 +664,27 @@ export function createReviewFeature(ctx) {
     elements.reviewFocus.querySelector('[data-review-audio]')?.addEventListener('click', () => {
       speak?.(term, elements.voiceSelect?.value)
     })
+    elements.reviewFocus.querySelectorAll('[data-review-sentence]').forEach((btn) => {
+      btn.addEventListener('click', (event) => {
+        event.preventDefault()
+        event.stopPropagation()
+        const text = btn.getAttribute('data-sentence-text')
+        if (text) {
+          speakSentence?.(text)
+        }
+      })
+    })
     elements.reviewFocus.querySelectorAll('[data-review-tag]').forEach((btn) => {
       btn.addEventListener('click', () => handleSelectReviewTag(btn.dataset.reviewTag))
     })
     elements.reviewFocus.querySelector('[data-review-confirm-known]')?.addEventListener('click', () => {
       submitCardOutcome(entryOrRecord, 'remembered', 'quick_pass')
+    })
+    elements.reviewFocus.querySelector('[data-review-start-vague]')?.addEventListener('click', () => {
+      startGuidedCopyForCurrent()
+    })
+    elements.reviewFocus.querySelector('[data-review-back-vague]')?.addEventListener('click', () => {
+      handleSelectReviewTag('vague')
     })
     elements.reviewFocus.querySelector('[data-review-skip-vague]')?.addEventListener('click', () => {
       submitCardOutcome(entryOrRecord, 'vague', 'guided_copy')
@@ -806,6 +847,7 @@ export function createReviewFeature(ctx) {
     speak: (...args) => speak?.(...args),
     onSelectTag: (tag) => handleSelectReviewTag(tag),
     onConfirmKnown: () => submitCardOutcome(state.currentReviewEntry, 'remembered', 'quick_pass'),
+    onStartGuidedCopy: () => startGuidedCopyForCurrent(),
     onStartBlindRecall: () => startBlindRecallForCurrent(),
     onGuidedCopyComplete: (entry) => submitCardOutcome(entry, 'vague', 'guided_copy'),
     onBlindRecallComplete: (entry) => submitCardOutcome(entry, 'forgotten', 'blind_recall'),

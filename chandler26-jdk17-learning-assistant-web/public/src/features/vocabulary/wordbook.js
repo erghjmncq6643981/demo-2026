@@ -424,7 +424,7 @@ export function createWordbookProfileFeature(ctx) {
     for (const wordbook of state.wordbooks) {
       const option = document.createElement('option')
       option.value = String(wordbook.id)
-      option.textContent = `${wordbook.name} · ${wordbook.entryCount || 0}词`
+      option.textContent = wordbook.name
       elements.wordbookSelect.appendChild(option)
       elements.reviewWordbookSelect.appendChild(option.cloneNode(true))
       if (elements.articleWordbookSelect) elements.articleWordbookSelect.appendChild(option.cloneNode(true))

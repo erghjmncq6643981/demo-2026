@@ -65,11 +65,25 @@ export function createStudyNotesFeature(ctx) {
     }
   }
 
-  function editCurrentNote() {
+  async function editCurrentNote() {
     const isWordCardModalOpen = Boolean(elements.wordbookCardModal && !elements.wordbookCardModal.classList.contains('hidden'))
-    const entry = (isWordCardModalOpen && state.selectedEntry)
+    let entry = (isWordCardModalOpen && state.selectedEntry)
       ? state.selectedEntry
       : (state.currentNoteEntry || findEntryForRecord?.(state.currentRecord) || state.selectedEntry)
+    if (!entry && state.currentRecord?.term) {
+      const term = state.currentRecord.normalizedTerm || state.currentRecord.term
+      try {
+        const fetched = await request(`/api/v1/learning/wordbook-entries/by-term?term=${encodeURIComponent(term)}`)
+        if (fetched) {
+          entry = fetched
+          if (state.currentRecord) state.currentRecord.userEntry = fetched
+          state.currentNoteEntry = fetched
+          renderNotes(fetched)
+        }
+      } catch (err) {
+        // ignored
+      }
+    }
     if (!entry) {
       toast('请先把单词加入当前词表')
       return
@@ -175,6 +189,9 @@ export function createStudyNotesFeature(ctx) {
         method: 'PUT',
         body: JSON.stringify(payload),
       })
+      if (state.currentRecord?.userEntry && sameId(state.currentRecord.userEntry.id, entryId)) {
+        state.currentRecord.userEntry = { ...state.currentRecord.userEntry, ...updated }
+      }
       state.wordbookEntries = state.wordbookEntries.map((entry) => (sameId(entry.id, entryId) ? { ...entry, ...updated } : entry))
       state.reviewEntries = state.reviewEntries.map((entry) => (sameId(entry.id, entryId) ? { ...entry, ...updated } : entry))
       if (state.selectedEntry && sameId(state.selectedEntry.id, entryId)) {
@@ -193,6 +210,21 @@ export function createStudyNotesFeature(ctx) {
       toast(`词条更新失败：${error.message}`)
       return null
     }
+  }
+
+  if (elements.studyNote) {
+    elements.studyNote.addEventListener('click', () => {
+      if (!elements.studyNote.querySelector('.note-editor')) {
+        editCurrentNote()
+      }
+    })
+  }
+  if (elements.reviewNote) {
+    elements.reviewNote.addEventListener('click', () => {
+      if (!elements.reviewNote.querySelector('.note-editor')) {
+        editCurrentNote()
+      }
+    })
   }
 
   return {

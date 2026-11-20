@@ -10,7 +10,13 @@
 }
 
 .scene-plan-toolbar .compact-field {
-  width: min(420px, 100%);
+  width: auto;
+}
+
+.scene-plan-toolbar #scenePlanSelect {
+  width: auto;
+  min-width: 160px;
+  max-width: 260px;
 }
 
 .scene-calendar-navigation {
