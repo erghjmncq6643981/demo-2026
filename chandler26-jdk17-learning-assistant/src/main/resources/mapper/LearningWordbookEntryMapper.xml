@@ -167,6 +167,22 @@
         LIMIT #{limit}
     </select>
 
+    <select id="selectReviewedTodaySummary"
+            resultType="com.chandler.learning.agent.vocabulary.domain.bo.WordbookEntrySummaryItem">
+        SELECT
+            <include refid="summaryFields" />
+        FROM learning_wordbook_entry e
+        LEFT JOIN english_vocabulary_study_record v ON v.id = e.vocabulary_id AND v.deleted = 0
+        WHERE e.user_id = #{userId}
+          <if test="wordbookId != null">
+            AND e.wordbook_id = #{wordbookId}
+          </if>
+          AND e.deleted = 0
+          AND e.last_review_time &gt;= #{todayStart}
+        ORDER BY e.last_review_time DESC, e.id DESC
+        LIMIT #{limit}
+    </select>
+
     <select id="selectDistinctAudioTerms" resultType="string">
         SELECT normalized_term
         FROM learning_wordbook_entry

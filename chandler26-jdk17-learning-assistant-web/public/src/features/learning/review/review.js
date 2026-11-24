@@ -1,13 +1,15 @@
 import { createReviewModalFeature } from '/src/features/learning/review/modal.js'
 import { createReviewTypingFeature } from '/src/features/learning/review/typing.js'
 import { formatShortcutCombo } from '/src/shared/shortcuts.js'
-
-const LOOKUP_SOURCE_LABELS = {
-  study: '卡片查词',
-  quick_lookup: '快捷查词',
-  wordbook_add: '手动加词',
-  wordbook_recent: '最近词条',
-}
+import {
+  LOOKUP_SOURCE_LABELS,
+  formatRelativeLookupTime,
+  isTodayDate,
+  buildFootprintBadge,
+  renderDefinitionsHtml,
+  renderCognitiveAndTipsHtml,
+  renderCompactExampleHtml,
+} from '/src/features/learning/review/card-render.js'
 
 export function createReviewFeature(ctx) {
   const {
@@ -84,6 +86,18 @@ export function createReviewFeature(ctx) {
         loadRecentSearchReviews()
       })
     }
+    if (elements.openReviewQueueModalBtn && elements.openReviewQueueModalBtn.dataset.bound !== 'true') {
+      elements.openReviewQueueModalBtn.dataset.bound = 'true'
+      elements.openReviewQueueModalBtn.addEventListener('click', () => {
+        feature.openReviewQueueModal?.()
+      })
+    }
+    if (elements.reviewProgressBadge && elements.reviewProgressBadge.dataset.bound !== 'true') {
+      elements.reviewProgressBadge.dataset.bound = 'true'
+      elements.reviewProgressBadge.addEventListener('click', () => {
+        feature.openReviewQueueModal?.()
+      })
+    }
   }
 
   function syncHeaderModeUi() {
@@ -109,21 +123,6 @@ export function createReviewFeature(ctx) {
     } else if (state.currentWordbookId) {
       syncCurrentWordbookId(state, elements, state.currentWordbookId)
     }
-  }
-
-  function formatRelativeLookupTime(value) {
-    if (!value) return ''
-    const date = new Date(value)
-    if (Number.isNaN(date.getTime())) return ''
-    const now = new Date()
-    const startOfToday = new Date(now.getFullYear(), now.getMonth(), now.getDate())
-    const startOfYesterday = new Date(startOfToday)
-    startOfYesterday.setDate(startOfYesterday.getDate() - 1)
-    const pad = (n) => String(n).padStart(2, '0')
-    const hm = `${pad(date.getHours())}:${pad(date.getMinutes())}`
-    if (date >= startOfToday) return `今天 ${hm}`
-    if (date >= startOfYesterday) return `昨天 ${hm}`
-    return `${date.getMonth() + 1}月${date.getDate()}日 ${hm}`
   }
 
   function resetCardPhaseForEntry(entry, phase = 'brief') {
@@ -152,6 +151,7 @@ export function createReviewFeature(ctx) {
         lastLookupTime: new Date(Date.now() - idx * 3600 * 1000).toISOString(),
         detailLoaded: Boolean(entry.parsed),
       }))
+      state.reviewRoundEntries = items.map((item) => ({ ...item, roundStatus: 'pending' }))
       resetRoundStats(items.length)
       feature.renderReviewQueue(items)
       return items
@@ -162,15 +162,21 @@ export function createReviewFeature(ctx) {
     }
     try {
       const res = await request('/api/v1/learning/reviews/recent-searches?days=2&minCount=5&fallbackLimit=20')
-      const items = (Array.isArray(res?.items) ? res.items : []).map((item) => ({
-        ...item,
-        detailLoaded: Boolean(item.parsed),
-      }))
-      state.reviewEntries = items
+      const items = (Array.isArray(res?.items) ? res.items : []).map((item) => {
+        const isReviewedToday = isTodayDate(item.lastReviewedTime)
+        return {
+          ...item,
+          roundStatus: isReviewedToday ? 'remembered' : 'pending',
+          detailLoaded: Boolean(item.parsed),
+        }
+      })
+      const unreviewed = items.filter((item) => item.roundStatus !== 'remembered')
+      state.reviewEntries = unreviewed.length > 0 ? unreviewed : items
+      state.reviewRoundEntries = items
       state.currentReviewIndex = 0
       state.currentReviewEntry = null
-      resetRoundStats(items.length)
-      feature.renderReviewQueue(items)
+      resetRoundStats(state.reviewEntries.length)
+      feature.renderReviewQueue(state.reviewEntries)
       renderProfileMetrics?.()
       return items
     } catch (error) {
@@ -189,6 +195,7 @@ export function createReviewFeature(ctx) {
     if (state.preview) {
       applyReviewWordbookSelection(selectedWordbookId)
       const entries = (state.previewReviewEntries.length ? state.previewReviewEntries : state.reviewEntries).slice(0, limit)
+      state.reviewRoundEntries = entries.map((item) => ({ ...item, roundStatus: 'pending' }))
       resetRoundStats(entries.length)
       feature.renderReviewQueue(entries)
       return entries
@@ -204,13 +211,43 @@ export function createReviewFeature(ctx) {
       if (selectedWordbookId) params.set('wordbookId', selectedWordbookId)
       const query = params.toString() ? `?${params.toString()}` : ''
       const entries = await request(`/api/v1/learning/reviews/due${query}`)
-      state.reviewEntries = (Array.isArray(entries) ? entries : []).slice(0, limit)
+      const rawDue = (Array.isArray(entries) ? entries : []).slice(0, limit)
+      const dueItems = rawDue.map((item) => ({
+        ...item,
+        roundStatus: 'pending',
+        detailLoaded: Boolean(item.parsed),
+      }))
+
+      let reviewedTodayItems = []
+      try {
+        const todayParams = new URLSearchParams()
+        todayParams.set('limit', '100')
+        if (selectedWordbookId) todayParams.set('wordbookId', selectedWordbookId)
+        const reviewedRes = await request(`/api/v1/learning/reviews/reviewed-today?${todayParams.toString()}`)
+        if (Array.isArray(reviewedRes)) {
+          reviewedTodayItems = reviewedRes.map((item) => ({
+            ...item,
+            roundStatus: 'remembered',
+            detailLoaded: Boolean(item.parsed),
+          }))
+        }
+      } catch (err) {
+        logEvent('debug', '获取今日已复习词条失败', err.message)
+      }
+
+      const dueIdSet = new Set(dueItems.map((item) => String(item.id)))
+      const nonDueReviewed = reviewedTodayItems.filter((item) => !dueIdSet.has(String(item.id)))
+      const combinedRound = [...dueItems, ...nonDueReviewed]
+
+      state.reviewEntries = dueItems
+      state.reviewRoundEntries = combinedRound
       state.currentReviewIndex = 0
       state.currentReviewEntry = null
-      resetRoundStats(state.reviewEntries.length)
-      feature.renderReviewQueue(state.reviewEntries)
+      resetRoundStats(dueItems.length)
+      feature.renderReviewQueue(dueItems)
       renderProfileMetrics?.()
-      return state.reviewEntries
+      prefetchReviewEntriesDetails(combinedRound)
+      return dueItems
     } catch (error) {
       logEvent('error', '复习队列加载失败', error.message)
       toast(`复习队列加载失败：${error.message}`)
@@ -235,6 +272,7 @@ export function createReviewFeature(ctx) {
       const sourceEntries = state.wordbookEntries.filter((entry) => !selectedWordbookId || sameId(entry.wordbookId, selectedWordbookId))
       const entries = sourceEntries.slice(0, limit)
       state.previewReviewEntries = entries.slice()
+      state.reviewRoundEntries = entries.map((item) => ({ ...item, roundStatus: 'pending' }))
       resetRoundStats(entries.length)
       feature.renderReviewQueue(entries)
       toast(entries.length ? `已重新生成 ${entries.length} 个复习任务` : '当前词书还没有可复习的单词')
@@ -249,12 +287,23 @@ export function createReviewFeature(ctx) {
       params.set('limit', String(limit))
       if (selectedWordbookId) params.set('wordbookId', selectedWordbookId)
       const entries = await request(`/api/v1/learning/reviews/restart?${params.toString()}`)
-      state.reviewEntries = Array.isArray(entries) ? entries : []
+      const restartItems = (Array.isArray(entries) ? entries : []).map((item) => ({
+        ...item,
+        roundStatus: 'pending',
+        detailLoaded: Boolean(item.parsed),
+      }))
+      const oldRemembered = (state.reviewRoundEntries || []).filter((e) => e.roundStatus === 'remembered')
+      const restartIdSet = new Set(restartItems.map((e) => String(e.id)))
+      const preservedRemembered = oldRemembered.filter((e) => !restartIdSet.has(String(e.id)))
+
+      state.reviewEntries = restartItems
+      state.reviewRoundEntries = [...restartItems, ...preservedRemembered]
       state.currentReviewIndex = 0
       state.currentReviewEntry = null
       resetRoundStats(state.reviewEntries.length)
       feature.renderReviewQueue(state.reviewEntries)
       renderProfileMetrics?.()
+      prefetchReviewEntriesDetails(state.reviewRoundEntries)
       logEvent('review', '重新生成复习任务', `共 ${state.reviewEntries.length} 个单词`)
       toast(state.reviewEntries.length ? `已重新生成 ${state.reviewEntries.length} 个复习任务` : '当前词书还没有可复习的单词')
       return state.reviewEntries
@@ -321,10 +370,16 @@ export function createReviewFeature(ctx) {
           ? { ...entry, ...detail, entryId: detail.id || entry.entryId, detailLoaded: true }
           : { ...entry, parsed: detail.parsed || entry.parsed, vocabularyId: detail.id || entry.vocabularyId, detailLoaded: true }
         state.reviewEntries = state.reviewEntries.map((item) => (sameId(item.id, entry.id) ? resolved : item))
+        if (state.reviewRoundEntries) {
+          state.reviewRoundEntries = state.reviewRoundEntries.map((item) => (sameId(item.id, entry.id) ? { ...item, ...resolved } : item))
+        }
         if (state.currentReviewEntry && sameId(state.currentReviewEntry.id, entry.id)) {
           state.currentReviewEntry = resolved
           feature.renderReviewFocus(resolved)
           renderNotes?.(resolved)
+        }
+        if (elements.reviewQueueModal && !elements.reviewQueueModal.classList.contains('hidden')) {
+          modalFeature?.renderReviewQueueModal?.()
         }
         return resolved
       })
@@ -335,6 +390,14 @@ export function createReviewFeature(ctx) {
       .finally(() => detailLoads.delete(loadKey))
     detailLoads.set(loadKey, pending)
     return pending
+  }
+
+  function prefetchReviewEntriesDetails(entries) {
+    if (!Array.isArray(entries) || !state.token || state.preview) return
+    const targets = entries.filter((e) => !e.detailLoaded && !e.parsed).slice(0, 30)
+    targets.forEach((entry) => {
+      loadReviewEntryDetail(entry).catch(() => {})
+    })
   }
 
   function renderReviewQueue(entries) {
@@ -431,6 +494,18 @@ export function createReviewFeature(ctx) {
     speak?.(feature.reviewTargetTerm(entry), elements.voiceSelect?.value)
   }
 
+  function startForgotCopyForCurrent() {
+    const entry = state.currentReviewEntry
+    if (!entry) return
+    state.reviewCardPhase = 'forgot_copy'
+    state.reviewStage = 'copy'
+    state.reviewTyped = ''
+    state.reviewWrongCount = 0
+    state.reviewPeek = false
+    feature.renderReviewFocus(entry)
+    speak?.(feature.reviewTargetTerm(entry), elements.voiceSelect?.value)
+  }
+
   function startBlindRecallForCurrent() {
     const entry = state.currentReviewEntry
     if (!entry) return
@@ -441,68 +516,6 @@ export function createReviewFeature(ctx) {
     state.reviewPeek = false
     feature.renderReviewFocus(entry)
     speak?.(feature.reviewTargetTerm(entry), elements.voiceSelect?.value)
-  }
-
-  function renderDefinitionsHtml(definitions) {
-    if (!definitions.length) return '<div class="empty">暂无释义</div>'
-    return definitions
-      .map((item) => `<div><span>${escapeHtml(item.pos || 'meaning')}</span><p>${escapeHtml(item.cn || item.en || '')}</p></div>`)
-      .join('')
-  }
-
-  function renderCognitiveAndTipsHtml(parsed) {
-    const parts = []
-    const cognitive = parsed?.cognitive_image
-    if (cognitive && (cognitive.title || cognitive.description)) {
-      parts.push(`
-        <div class="review-insight-box">
-          <div class="review-insight-eyebrow">💡 认知画面${cognitive.title ? ` · ${escapeHtml(cognitive.title)}` : ''}</div>
-          ${cognitive.description ? `<p>${escapeHtml(cognitive.description)}</p>` : ''}
-          ${cognitive.usage_note ? `<small>避坑提示：${escapeHtml(cognitive.usage_note)}</small>` : ''}
-        </div>
-      `)
-    }
-    const tips = normalizeArray?.(parsed?.memory_tips || parsed?.memoryTips).slice(0, 2) || []
-    if (tips.length) {
-      parts.push(`
-        <div class="review-tips-box">
-          <div class="review-insight-eyebrow">🧠 助记要点</div>
-          <ul>${tips.map((tip) => `<li>${escapeHtml(stringifyValue ? stringifyValue(tip) : String(tip || ''))}</li>`).join('')}</ul>
-        </div>
-      `)
-    }
-    return parts.join('')
-  }
-
-  function renderCompactExampleHtml(parsed) {
-    const list = normalizeExamples ? normalizeExamples(parsed).slice(0, 1) : []
-    if (!list.length) return ''
-    const ex = list[0]
-    return `
-      <div class="review-example-mini">
-        <div class="review-example-header">
-          <p class="review-example-en">${escapeHtml(ex.sentence || '')}</p>
-          ${ex.sentence ? `<button type="button" class="mini-audio-button sentence-play-btn" data-review-sentence="0" data-sentence-text="${escapeHtml(ex.sentence || '')}" data-idle-text="▶ 读音" data-playing-text="⏸ 暂停" title="播放例句">▶ 读音</button>` : ''}
-        </div>
-        ${ex.translation ? `<p class="review-example-cn">${escapeHtml(ex.translation)}</p>` : ''}
-      </div>
-    `
-  }
-
-  function buildFootprintBadge(entry) {
-    const chips = []
-    if (entry.requeued) {
-      chips.push('<span class="review-meta-chip is-requeued">本轮回看</span>')
-    }
-    const timeText = formatRelativeLookupTime(entry.lastLookupTime)
-    const sourceText = LOOKUP_SOURCE_LABELS[entry.lookupSource] || ''
-    if (timeText || sourceText) {
-      chips.push(`<span class="review-meta-chip">${escapeHtml([timeText, sourceText].filter(Boolean).join(' · '))}</span>`)
-    }
-    if (Number(entry.lookupCount || 0) >= 2) {
-      chips.push(`<span class="review-meta-chip is-hot" title="历史累计查词频次（高频词优先排入复习）">查过 ${Number(entry.lookupCount)} 次</span>`)
-    }
-    return chips.join('')
   }
 
   function renderCompletedEmptyState() {
@@ -539,11 +552,11 @@ export function createReviewFeature(ctx) {
       renderCompletedEmptyState()
       return
     }
+    const term = feature.reviewTargetTerm(entryOrRecord) || 'Ready'
     const parsed = entryOrRecord.parsed || null
-    const term = parsed?.term || entryOrRecord.term || entryOrRecord.normalizedTerm || 'Ready'
     const phase = state.reviewCardPhase || 'brief'
     const isRecall = phase === 'forgot_recall' || state.reviewStage === 'recall'
-    const showTyping = phase === 'vague_copy' || phase === 'forgot_recall' || (!state.reviewCardPhase && (state.reviewStage === 'copy' || state.reviewStage === 'recall'))
+    const showTyping = phase === 'vague_copy' || phase === 'forgot_copy' || phase === 'forgot_recall' || (!state.reviewCardPhase && (state.reviewStage === 'copy' || state.reviewStage === 'recall'))
     const definitions = normalizeDefinitions(parsed).slice(0, 3)
     const letters = showTyping ? feature.renderTypingLetters(term, state.reviewTyped, isRecall ? 'recall' : 'copy', state.reviewPeek) : ''
     const progress = term ? Math.round(((state.reviewTyped || '').length / term.length) * 100) : 0
@@ -577,8 +590,8 @@ export function createReviewFeature(ctx) {
       `
     } else if (phase === 'known_check') {
       bodyHtml = `
-        <div class="mini-definition-list">${renderDefinitionsHtml(definitions)}</div>
-        ${renderCompactExampleHtml(parsed)}
+        <div class="mini-definition-list">${renderDefinitionsHtml(definitions, escapeHtml)}</div>
+        ${renderCompactExampleHtml(parsed, { escapeHtml, normalizeExamples })}
         <div class="review-phase-actions">
           <button class="primary-button" type="button" data-review-confirm-known title="确认认识并进入下一词 (Enter / Space)">下一词</button>
           <button class="secondary-button" type="button" data-review-tag="vague" title="记错了，转为模糊跟敲 (2)">记错了</button>
@@ -586,8 +599,8 @@ export function createReviewFeature(ctx) {
       `
     } else if (phase === 'vague_study') {
       bodyHtml = `
-        <div class="mini-definition-list">${renderDefinitionsHtml(definitions)}</div>
-        ${renderCompactExampleHtml(parsed)}
+        <div class="mini-definition-list">${renderDefinitionsHtml(definitions, escapeHtml)}</div>
+        ${renderCompactExampleHtml(parsed, { escapeHtml, normalizeExamples })}
         <div class="review-phase-actions">
           <button class="primary-button" type="button" data-review-start-vague title="查看释义后开始跟敲 1 遍 (Enter / Space)">开始跟敲</button>
           <button class="secondary-button" type="button" data-review-skip-vague title="跳过跟敲，记为模糊并下一词">跳过</button>
@@ -599,8 +612,8 @@ export function createReviewFeature(ctx) {
           <div class="typing-letters">${letters}</div>
           <div class="typing-progress"><span style="width: ${progress}%"></span></div>
         </div>
-        <div class="mini-definition-list">${renderDefinitionsHtml(definitions)}</div>
-        ${renderCompactExampleHtml(parsed)}
+        <div class="mini-definition-list">${renderDefinitionsHtml(definitions, escapeHtml)}</div>
+        ${renderCompactExampleHtml(parsed, { escapeHtml, normalizeExamples })}
         <div class="review-phase-actions compact">
           <button class="secondary-button compact" type="button" data-review-back-vague title="返回查看释义与例句">看解析</button>
           <button class="secondary-button compact" type="button" data-review-skip-vague title="跳过跟敲，记为模糊并下一词">跳过</button>
@@ -608,12 +621,26 @@ export function createReviewFeature(ctx) {
       `
     } else if (phase === 'forgot_study') {
       bodyHtml = `
-        <div class="mini-definition-list">${renderDefinitionsHtml(definitions)}</div>
-        ${renderCognitiveAndTipsHtml(parsed)}
-        ${renderCompactExampleHtml(parsed)}
+        <div class="mini-definition-list">${renderDefinitionsHtml(definitions, escapeHtml)}</div>
+        ${renderCognitiveAndTipsHtml(parsed, { escapeHtml, normalizeArray, stringifyValue })}
+        ${renderCompactExampleHtml(parsed, { escapeHtml, normalizeExamples })}
         <div class="review-phase-actions">
-          <button class="primary-button" type="button" data-review-start-recall title="隐藏原词开始盲敲默写 (Enter)">开始默写</button>
+          <button class="primary-button" type="button" data-review-start-forgot title="查看助记后照词跟敲 1 遍 (Enter / Space)">开始跟敲</button>
           <button class="secondary-button" type="button" data-review-skip-forgot title="放队尾稍后回看">稍后回看</button>
+        </div>
+      `
+    } else if (phase === 'forgot_copy') {
+      bodyHtml = `
+        <div class="typing-board" tabindex="0" aria-label="跟敲单词 ${escapeHtml(term)}">
+          <div class="typing-letters">${letters}</div>
+          <div class="typing-progress"><span style="width: ${progress}%"></span></div>
+        </div>
+        <div class="mini-definition-list">${renderDefinitionsHtml(definitions, escapeHtml)}</div>
+        ${renderCognitiveAndTipsHtml(parsed, { escapeHtml, normalizeArray, stringifyValue })}
+        ${renderCompactExampleHtml(parsed, { escapeHtml, normalizeExamples })}
+        <div class="review-phase-actions compact">
+          <button class="secondary-button compact" type="button" data-review-back-study title="返回查看助记与例句">看解析</button>
+          <button class="secondary-button compact" type="button" data-review-skip-forgot title="跳过敲写，放队尾稍后回看">稍后回看</button>
         </div>
       `
     } else {
@@ -622,7 +649,7 @@ export function createReviewFeature(ctx) {
           <div class="typing-letters">${letters}</div>
           <div class="typing-progress"><span style="width: ${progress}%"></span></div>
         </div>
-        <div class="mini-definition-list">${renderDefinitionsHtml(definitions)}</div>
+        <div class="mini-definition-list">${renderDefinitionsHtml(definitions, escapeHtml)}</div>
         <div class="review-phase-actions compact">
           <button class="secondary-button compact" type="button" data-review-peek-btn title="偷看提示 (Tab)">提示</button>
           <button class="secondary-button compact" type="button" data-review-back-study title="返回查看释义与助记">看解析</button>
@@ -634,8 +661,8 @@ export function createReviewFeature(ctx) {
     elements.reviewFocus.innerHTML = `
       <div class="review-card-fixed">
         <div class="review-card-topline">
-          <div class="review-meta-chips">${buildFootprintBadge(entryOrRecord)}</div>
-          <span>${total ? `${state.currentReviewIndex + 1} / ${total}` : '0 / 0'}</span>
+          <div class="review-meta-chips">${buildFootprintBadge(entryOrRecord, escapeHtml)}</div>
+          <span class="review-card-progress-hint" data-open-review-queue title="查看复习词单全览">${total ? `${state.currentReviewIndex + 1} / ${total}` : '0 / 0'}</span>
         </div>
         <div class="review-card-word-row">
           <h4 class="${isRecall ? 'recall-masked-title' : ''}">${escapeHtml(maskedTerm)}</h4>
@@ -661,6 +688,9 @@ export function createReviewFeature(ctx) {
       </div>
     `
 
+    elements.reviewFocus.querySelector('[data-open-review-queue]')?.addEventListener('click', () => {
+      feature.openReviewQueueModal?.()
+    })
     elements.reviewFocus.querySelector('[data-review-audio]')?.addEventListener('click', () => {
       speak?.(term, elements.voiceSelect?.value)
     })
@@ -688,6 +718,9 @@ export function createReviewFeature(ctx) {
     })
     elements.reviewFocus.querySelector('[data-review-skip-vague]')?.addEventListener('click', () => {
       submitCardOutcome(entryOrRecord, 'vague', 'guided_copy')
+    })
+    elements.reviewFocus.querySelector('[data-review-start-forgot]')?.addEventListener('click', () => {
+      startForgotCopyForCurrent()
     })
     elements.reviewFocus.querySelector('[data-review-start-recall]')?.addEventListener('click', () => {
       startBlindRecallForCurrent()
@@ -745,6 +778,18 @@ export function createReviewFeature(ctx) {
     else if (result === 'vague') state.reviewRoundStats.vague += 1
     else state.reviewRoundStats.forgotten += 1
 
+    if (state.reviewRoundEntries) {
+      const roundItem = state.reviewRoundEntries.find((item) => sameId(item.id, entry.id))
+      if (roundItem) {
+        roundItem.roundStatus = result === 'remembered' ? 'remembered' : 'requeued'
+      } else {
+        state.reviewRoundEntries.push({
+          ...entry,
+          roundStatus: result === 'remembered' ? 'remembered' : 'requeued',
+        })
+      }
+    }
+
     const currentIndex = state.currentReviewIndex
     if (result === 'remembered') {
       state.reviewEntries = state.reviewEntries.filter((item) => !sameId(item.id, entry.id))
@@ -752,6 +797,7 @@ export function createReviewFeature(ctx) {
         const nextIndex = Math.min(currentIndex, state.reviewEntries.length - 1)
         selectReviewEntry(state.reviewEntries[nextIndex], 'brief')
       } else {
+        selectReviewEntry(null)
         feature.renderReviewQueue([])
       }
       return
@@ -783,7 +829,7 @@ export function createReviewFeature(ctx) {
           body: JSON.stringify({
             lookupId: entry.lookupId || null,
             entryId: entry.entryId || (entry.wordbookId ? entry.id : null),
-            term: entry.term || entry.normalizedTerm,
+            term: entry.term || entry.normalizedTerm || feature.reviewTargetTerm(entry),
             result,
             reviewAction,
             durationSeconds,
@@ -840,16 +886,20 @@ export function createReviewFeature(ctx) {
     state,
     elements,
     escapeHtml,
+    sameId,
     renderReviewFocus: (...args) => feature.renderReviewFocus(...args),
     renderReviewCompleteModal: (...args) => feature.renderReviewCompleteModal(...args),
     showCelebration: (...args) => feature.showCelebration(...args),
     selectReviewEntry: (...args) => feature.selectReviewEntry(...args),
     speak: (...args) => speak?.(...args),
+    toast: (...args) => toast?.(...args),
     onSelectTag: (tag) => handleSelectReviewTag(tag),
     onConfirmKnown: () => submitCardOutcome(state.currentReviewEntry, 'remembered', 'quick_pass'),
     onStartGuidedCopy: () => startGuidedCopyForCurrent(),
+    onStartForgotCopy: () => startForgotCopyForCurrent(),
     onStartBlindRecall: () => startBlindRecallForCurrent(),
     onGuidedCopyComplete: (entry) => submitCardOutcome(entry, 'vague', 'guided_copy'),
+    onForgotCopyComplete: (entry) => startBlindRecallForCurrent(),
     onBlindRecallComplete: (entry) => submitCardOutcome(entry, 'forgotten', 'blind_recall'),
   })
 
@@ -873,6 +923,8 @@ export function createReviewFeature(ctx) {
     toast,
     reviewTargetTerm: (...args) => feature.reviewTargetTerm(...args),
     renderReviewFocus: (...args) => feature.renderReviewFocus(...args),
+    selectReviewEntry: (...args) => feature.selectReviewEntry(...args),
+    sameId,
   })
 
   Object.assign(feature, {

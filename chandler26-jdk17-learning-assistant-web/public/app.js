@@ -298,6 +298,10 @@ const {
   closeReviewNoteModal,
   toggleReviewNotePreview,
   saveReviewNote,
+  openReviewQueueModal,
+  closeReviewQueueModal,
+  exportReviewQueueImage,
+  closeReviewImagePreviewModal,
 } = reviewFeature
 
 profileFeature = createProfileFeature({
@@ -483,6 +487,10 @@ bindAppEvents({
   closeForgottenDetailModal,
   toggleReviewNotePreview,
   saveReviewNote,
+  openReviewQueueModal,
+  closeReviewQueueModal,
+  exportReviewQueueImage,
+  closeReviewImagePreviewModal,
   closeDeleteConfirm,
   setView,
   setProfileTab,

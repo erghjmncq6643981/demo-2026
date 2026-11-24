@@ -210,3 +210,52 @@
         </div>
       </div>
     </section>
+
+    <section class="modal-backdrop hidden" id="reviewQueueModal" aria-modal="true" role="dialog" aria-labelledby="reviewQueueModalTitle">
+      <div class="review-modal review-queue-modal" data-modal-scroll>
+        <div class="panel-heading">
+          <div>
+            <p class="eyebrow">Review Queue</p>
+            <h3 id="reviewQueueModalTitle">今日复习词单全览</h3>
+          </div>
+          <div class="inline-actions">
+            <span class="mini-pill" id="reviewQueueModalCount">0 词</span>
+            <button class="icon-button" id="closeReviewQueueModalBtn" type="button" title="关闭 (Esc)" aria-label="关闭">×</button>
+          </div>
+        </div>
+        <div class="review-queue-summary-bar" id="reviewQueueModalSummary">
+          <span class="review-queue-summary-text" id="reviewQueueSummaryText">共 0 词</span>
+          <div class="review-queue-filter-group" id="reviewQueueFilterGroup" role="tablist">
+            <button class="review-queue-filter-btn active" type="button" data-queue-filter="all">全部 (0)</button>
+            <button class="review-queue-filter-btn" type="button" data-queue-filter="pending">待复习 (0)</button>
+            <button class="review-queue-filter-btn" type="button" data-queue-filter="remembered">今日已复习 (0)</button>
+          </div>
+        </div>
+        <div class="review-queue-list" id="reviewQueueList">
+          <div class="empty">暂无复习词汇</div>
+        </div>
+        <div class="modal-actions review-queue-modal-actions" style="margin-top: 14px; display: flex; justify-content: flex-end; gap: 8px;">
+          <button class="secondary-button compact" id="exportReviewQueueImageFooterBtn" type="button" title="导出完整复习词单长图">📷 导出长图 (PNG)</button>
+          <button class="secondary-button compact" id="closeReviewQueueModalFooterBtn" type="button">关闭 (Esc)</button>
+        </div>
+      </div>
+    </section>
+
+    <section class="modal-backdrop hidden" id="reviewImagePreviewModal" aria-modal="true" role="dialog" aria-labelledby="reviewImagePreviewModalTitle">
+      <div class="review-modal review-image-preview-modal" data-modal-scroll>
+        <div class="panel-heading">
+          <div>
+            <p class="eyebrow">Export Image</p>
+            <h3 id="reviewImagePreviewModalTitle">复习词单长图预览</h3>
+          </div>
+          <button class="icon-button" id="closeReviewImagePreviewModalBtn" type="button" title="关闭 (Esc)" aria-label="关闭">×</button>
+        </div>
+        <p class="review-image-preview-hint">长图已生成并自动下载。手机端可长按下方图片保存到相册，或在睡前/早晨速览。</p>
+        <div class="review-image-preview-container" id="reviewImagePreviewContainer">
+          <img id="reviewImagePreviewImg" src="" alt="今日复习词单长图" />
+        </div>
+        <div class="modal-actions" style="margin-top: 14px; display: flex; justify-content: flex-end; gap: 8px;">
+          <button class="secondary-button compact" id="closeReviewImagePreviewModalFooterBtn" type="button">关闭 (Esc)</button>
+        </div>
+      </div>
+    </section>

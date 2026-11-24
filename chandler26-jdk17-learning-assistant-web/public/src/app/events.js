@@ -132,6 +132,10 @@ export function bindAppEvents(ctx) {
     closeReviewModal,
     submitReview,
     closeForgottenDetailModal,
+    openReviewQueueModal,
+    closeReviewQueueModal,
+    exportReviewQueueImage,
+    closeReviewImagePreviewModal,
     openStudyNoteDrawer,
     closeStudyNoteDrawer,
     openMiniQuizModal,
@@ -514,6 +518,19 @@ elements.closeForgottenDetailModalBtn?.addEventListener('click', closeForgottenD
 elements.forgottenBackToReviewBtn?.addEventListener('click', closeForgottenDetailModal)
 elements.forgottenDetailModal?.addEventListener('click', (event) => {
   if (event.target === elements.forgottenDetailModal) closeForgottenDetailModal()
+})
+elements.openReviewQueueModalBtn?.addEventListener('click', openReviewQueueModal)
+elements.reviewProgressBadge?.addEventListener('click', openReviewQueueModal)
+elements.closeReviewQueueModalBtn?.addEventListener('click', closeReviewQueueModal)
+elements.closeReviewQueueModalFooterBtn?.addEventListener('click', closeReviewQueueModal)
+elements.exportReviewQueueImageFooterBtn?.addEventListener('click', exportReviewQueueImage)
+elements.closeReviewImagePreviewModalBtn?.addEventListener('click', closeReviewImagePreviewModal)
+elements.closeReviewImagePreviewModalFooterBtn?.addEventListener('click', closeReviewImagePreviewModal)
+elements.reviewImagePreviewModal?.addEventListener('click', (event) => {
+  if (event.target === elements.reviewImagePreviewModal) closeReviewImagePreviewModal()
+})
+elements.reviewQueueModal?.addEventListener('click', (event) => {
+  if (event.target === elements.reviewQueueModal) closeReviewQueueModal()
 })
 elements.deleteConfirmCloseBtn?.addEventListener('click', () => closeDeleteConfirm(false))
 elements.deleteConfirmCancelBtn?.addEventListener('click', () => closeDeleteConfirm(false))

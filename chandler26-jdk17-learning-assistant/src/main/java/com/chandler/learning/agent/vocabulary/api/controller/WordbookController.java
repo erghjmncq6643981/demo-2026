@@ -200,6 +200,16 @@ public class WordbookController {
         return wordbookService.listRestartReviewEntries(user.getId(), wordbookId, limit);
     }
 
+    /** 获取今日已复习词条列表。 */
+    @GetMapping("/reviews/reviewed-today")
+    @Operation(summary = "获取今日已复习词条列表")
+    public List<WordbookEntrySummaryResponse> listReviewedTodayEntries(
+            @RequestParam(required = false) Long wordbookId,
+            @RequestParam(defaultValue = "100") Integer limit) {
+        LearningUser user = currentUserContext.requireUser();
+        return wordbookService.listReviewedTodayEntries(user.getId(), wordbookId, limit);
+    }
+
     /** 获取近期搜索词汇轻量复习队列（今天+昨天优先，少于 5 词自动兜底最近 20 词）。 */
     @GetMapping("/reviews/recent-searches")
     @Operation(summary = "获取近期查词轻量复习队列")

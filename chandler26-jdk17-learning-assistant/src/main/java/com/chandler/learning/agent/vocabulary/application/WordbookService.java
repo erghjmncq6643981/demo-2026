@@ -55,6 +55,7 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.util.StringUtils;
 
+import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.util.LinkedHashMap;
 import java.util.ArrayList;
@@ -575,6 +576,23 @@ public class WordbookService {
                 wordbook.getId(),
                 resolvedLimit,
                 entries.size());
+        return entries.stream().map(responseAssembler::toSummaryResponse).toList();
+    }
+
+    /**
+     * 查询用户今天已经复习过的词条列表（按最近复习时间倒序）。
+     *
+     * @param userId     用户 ID
+     * @param wordbookId 单词本 ID（可选，为空则查询用户所有词本）
+     * @param limit      限制数量
+     * @return 今日已复习词条摘要列表
+     */
+    public List<WordbookEntrySummaryResponse> listReviewedTodayEntries(Long userId, Long wordbookId, Integer limit) {
+        int resolvedLimit = Math.max(1, Math.min(limit == null ? 100 : limit, 200));
+        LocalDateTime todayStart = LocalDate.now().atStartOfDay();
+        List<WordbookEntrySummaryItem> entries = entryMapper.selectReviewedTodaySummary(
+                userId, wordbookId, todayStart, resolvedLimit);
+        log.debug("今日已复习词条已查询 userId={} wordbookId={} count={}", userId, wordbookId, entries.size());
         return entries.stream().map(responseAssembler::toSummaryResponse).toList();
     }
 

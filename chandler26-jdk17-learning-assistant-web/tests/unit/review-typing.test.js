@@ -311,6 +311,91 @@ describe('review typing keydown', () => {
     document.body.innerHTML = ''
     vi.useRealTimers()
   })
+
+  it('triggers onGuidedCopyComplete even if currentReviewEntry object reference changed during typing (async detail resolution)', () => {
+    vi.useFakeTimers()
+    const initialEntry = { id: '42', term: 'curtain' }
+    const state = {
+      activeView: 'reviewView',
+      token: 'fake-token',
+      currentReviewEntry: initialEntry,
+      reviewCardPhase: 'vague_copy',
+      reviewStage: 'copy',
+      reviewTyped: '',
+      reviewWrongCount: 0,
+      reviewPeek: false,
+    }
+    const renderReviewFocus = vi.fn()
+    const onGuidedCopyComplete = vi.fn()
+
+    const typingFeature = createReviewTypingFeature({
+      state,
+      elements: {},
+      escapeHtml: (s) => s,
+      renderReviewFocus,
+      onGuidedCopyComplete,
+    })
+
+    const preventDefault = vi.fn()
+    // Type 'c', 'u', 'r', 't', 'a', 'i'
+    for (const ch of 'curtai') {
+      typingFeature.handleReviewKeydown({ key: ch, preventDefault })
+    }
+    expect(state.reviewTyped).toBe('curtai')
+
+    // Simulate async detail load resolving before or during the last letter:
+    // currentReviewEntry is replaced with a brand new object instance
+    const updatedEntry = { ...initialEntry, detailLoaded: true, phonetic: '/kɜːtn/' }
+    state.currentReviewEntry = updatedEntry
+
+    // Type the final letter 'n'
+    typingFeature.handleReviewKeydown({ key: 'n', preventDefault })
+    expect(state.reviewTyped).toBe('curtain')
+
+    // Advance 200ms
+    vi.advanceTimersByTime(200)
+
+    expect(onGuidedCopyComplete).toHaveBeenCalledTimes(1)
+    expect(onGuidedCopyComplete).toHaveBeenCalledWith(expect.objectContaining({ id: '42', term: 'curtain' }))
+    vi.useRealTimers()
+  })
+
+  it('prioritizes parsed.term over entry.term when plural/inflected lookup term differs from lemma (e.g. curtains -> curtain)', () => {
+    vi.useFakeTimers()
+    const entry = { id: '99', term: 'curtains', parsed: { term: 'curtain' } }
+    const state = {
+      activeView: 'reviewView',
+      token: 'fake-token',
+      currentReviewEntry: entry,
+      reviewCardPhase: 'vague_copy',
+      reviewStage: 'copy',
+      reviewTyped: '',
+      reviewWrongCount: 0,
+      reviewPeek: false,
+    }
+    const onGuidedCopyComplete = vi.fn()
+
+    const typingFeature = createReviewTypingFeature({
+      state,
+      elements: {},
+      escapeHtml: (s) => s,
+      renderReviewFocus: vi.fn(),
+      onGuidedCopyComplete,
+    })
+
+    expect(typingFeature.reviewTargetTerm(entry)).toBe('curtain')
+
+    const preventDefault = vi.fn()
+    for (const ch of 'curtain') {
+      typingFeature.handleReviewKeydown({ key: ch, preventDefault })
+    }
+    expect(state.reviewTyped).toBe('curtain')
+
+    vi.advanceTimersByTime(200)
+
+    expect(onGuidedCopyComplete).toHaveBeenCalledTimes(1)
+    vi.useRealTimers()
+  })
 })
 
 describe('review focus UI and complete modal cognitive image', () => {

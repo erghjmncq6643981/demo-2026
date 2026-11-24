@@ -25,6 +25,18 @@
   background: rgba(129, 140, 248, 0.13);
 }
 
+.mini-pill.clickable-pill {
+  cursor: pointer;
+  user-select: none;
+  transition: background-color 0.15s ease, color 0.15s ease, border-color 0.15s ease;
+}
+
+.mini-pill.clickable-pill:hover {
+  background: rgba(255, 255, 255, 0.1);
+  color: #fff;
+  border-color: rgba(255, 255, 255, 0.3);
+}
+
 .status-pill.status-vague {
   background: rgba(234, 179, 8, 0.15);
   color: #facc15;

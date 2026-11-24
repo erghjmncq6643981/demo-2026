@@ -21,6 +21,7 @@
 @import './styles/features/rumination-history.css';
 @import './styles/features/vocabulary.css';
 @import './styles/features/vocabulary-study.css';
+@import './styles/features/review-queue-modal.css';
 @import './styles/features/vocabulary-card-enhancements.css';
 @import './styles/features/wordbook-audio-player.css';
 @import './styles/features/learning.css';

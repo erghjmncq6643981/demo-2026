@@ -1,6 +1,7 @@
 import { playUiTone } from '/src/shared/audio.js'
 import { showCelebrationEffect as triggerCelebrationEffect } from '/src/shared/celebration.js'
 import { renderMaskedLetters, schedulePeekTimer } from '/src/shared/typing-engine.js'
+import { sameId as sharedSameId } from '/src/shared/ids.js'
 
 export function createReviewTypingFeature(ctx) {
   const {
@@ -11,13 +12,31 @@ export function createReviewTypingFeature(ctx) {
     renderReviewCompleteModal,
     showCelebration,
     speak,
+    toast,
     onSelectTag,
     onConfirmKnown,
     onStartGuidedCopy,
+    onStartForgotCopy,
     onStartBlindRecall,
     onGuidedCopyComplete,
+    onForgotCopyComplete,
     onBlindRecallComplete,
   } = ctx
+
+  const sameId = ctx.sameId || sharedSameId
+
+  function isSameCurrentEntry(current, target) {
+    if (!current || !target) return false
+    if (current === target) return true
+    const currentId = current.id ?? current.entryId ?? current.lookupId
+    const targetId = target.id ?? target.entryId ?? target.lookupId
+    if (currentId !== undefined && currentId !== null && targetId !== undefined && targetId !== null) {
+      if (sameId(currentId, targetId)) return true
+    }
+    const currentTerm = reviewTargetTerm(current).toLowerCase()
+    const targetTerm = reviewTargetTerm(target).toLowerCase()
+    return Boolean(currentTerm && currentTerm === targetTerm)
+  }
 
   function updateReviewProgressBadge() {
     if (!elements.reviewProgressBadge) return
@@ -132,7 +151,11 @@ export function createReviewTypingFeature(ctx) {
     if (phase === 'forgot_study') {
       if (event.key === 'Enter' || event.key === ' ') {
         event.preventDefault()
-        onStartBlindRecall?.()
+        if (typeof onStartForgotCopy === 'function') {
+          onStartForgotCopy()
+        } else {
+          onStartBlindRecall?.()
+        }
       } else if (event.key === 'r' || event.key === 'R') {
         event.preventDefault()
         speak?.(reviewTargetTerm(state.currentReviewEntry), elements?.voiceSelect?.value)
@@ -158,7 +181,13 @@ export function createReviewTypingFeature(ctx) {
 
     if (event.key === 'Escape') {
       cancelPeekTimer()
-      if (state.reviewStage === 'recall' && !state.reviewTyped) {
+      if (phase === 'forgot_recall' && !state.reviewTyped) {
+        state.reviewCardPhase = 'forgot_study'
+        state.reviewStage = 'study'
+      } else if (phase === 'forgot_copy' && !state.reviewTyped) {
+        state.reviewCardPhase = 'forgot_study'
+        state.reviewStage = 'study'
+      } else if (state.reviewStage === 'recall' && !state.reviewTyped) {
         state.reviewStage = 'copy'
       } else {
         state.reviewTyped = ''
@@ -185,26 +214,35 @@ export function createReviewTypingFeature(ctx) {
       if (state.reviewTyped.length === term.length) {
         if (phase === 'vague_copy') {
           window.setTimeout(() => {
-            if (state.activeView === 'reviewView' && state.currentReviewEntry === targetEntry) {
+            if (state.activeView === 'reviewView' && isSameCurrentEntry(state.currentReviewEntry, targetEntry)) {
               cancelPeekTimer()
               playUiTone('success')
-              onGuidedCopyComplete?.(targetEntry)
+              onGuidedCopyComplete?.(state.currentReviewEntry || targetEntry)
             }
           }, 180)
+        } else if (phase === 'forgot_copy') {
+          window.setTimeout(() => {
+            if (state.activeView === 'reviewView' && isSameCurrentEntry(state.currentReviewEntry, targetEntry)) {
+              cancelPeekTimer()
+              playUiTone('success')
+              toast?.('跟敲完成，现在开始遮挡默写')
+              onForgotCopyComplete?.(state.currentReviewEntry || targetEntry)
+            }
+          }, 200)
         } else if (phase === 'forgot_recall') {
           window.setTimeout(() => {
-            if (state.activeView === 'reviewView' && state.currentReviewEntry === targetEntry) {
+            if (state.activeView === 'reviewView' && isSameCurrentEntry(state.currentReviewEntry, targetEntry)) {
               cancelPeekTimer()
               playUiTone('success')
               if (typeof showCelebration === 'function') showCelebration()
               else showCelebrationEffect()
-              onBlindRecallComplete?.(targetEntry)
+              onBlindRecallComplete?.(state.currentReviewEntry || targetEntry)
             }
           }, 180)
         } else if (state.reviewStage !== 'recall') {
           // 阶段一（跟敲）完成 -> 过渡到阶段二（遮挡默写）
           window.setTimeout(() => {
-            if (state.activeView === 'reviewView' && state.currentReviewEntry === targetEntry) {
+            if (state.activeView === 'reviewView' && isSameCurrentEntry(state.currentReviewEntry, targetEntry)) {
               cancelPeekTimer()
               state.reviewStage = 'recall'
               state.reviewTyped = ''
@@ -217,7 +255,7 @@ export function createReviewTypingFeature(ctx) {
         } else {
           // 阶段二（默写）完成 -> 触发结算弹窗与音效喝彩
           window.setTimeout(() => {
-            if (state.activeView === 'reviewView' && state.currentReviewEntry === targetEntry) {
+            if (state.activeView === 'reviewView' && isSameCurrentEntry(state.currentReviewEntry, targetEntry)) {
               completeReviewTyping()
             }
           }, 180)
@@ -234,7 +272,12 @@ export function createReviewTypingFeature(ctx) {
   }
 
   function reviewTargetTerm(entry) {
-    return String(entry?.term || entry?.normalizedTerm || '').trim()
+    if (!entry) return ''
+    let parsed = entry.parsed
+    if (typeof parsed === 'string') {
+      try { parsed = JSON.parse(parsed) } catch {}
+    }
+    return String(parsed?.term || entry.term || entry.normalizedTerm || '').trim()
   }
 
   function shakeTypingBoard() {

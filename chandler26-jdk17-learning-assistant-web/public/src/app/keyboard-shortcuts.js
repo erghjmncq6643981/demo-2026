@@ -49,6 +49,8 @@ export function bindKeyboardShortcuts(ctx) {
     entryTransferModal: () => ctx.closeEntryTransferModal?.(),
     entryStatusModal: () => ctx.closeEntryStatusModal?.(),
     reviewCompleteModal: () => ctx.closeReviewModal?.(),
+    reviewQueueModal: () => ctx.closeReviewQueueModal?.(),
+    reviewImagePreviewModal: () => ctx.closeReviewImagePreviewModal?.(),
     forgottenDetailModal: () => ctx.closeForgottenDetailModal?.(),
     aiSessionDetailModal: () => ctx.systemManagement?.closeDetail?.(),
     aiTaskDetailModal: () => hideModal(elements.aiTaskDetailModal),

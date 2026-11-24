@@ -74,6 +74,13 @@ public interface LearningWordbookEntryMapper extends BaseMapper<LearningWordbook
             @Param("wordbookId") Long wordbookId,
             @Param("limit") int limit);
 
+    /** 查询今日已复习的词条投影。 */
+    List<WordbookEntrySummaryItem> selectReviewedTodaySummary(
+            @Param("userId") Long userId,
+            @Param("wordbookId") Long wordbookId,
+            @Param("todayStart") java.time.LocalDateTime todayStart,
+            @Param("limit") int limit);
+
     /** 一次查询词本与词汇缓存中的可下载发音词，避免维护任务分页循环访问数据库。 */
     List<String> selectDistinctAudioTerms();
 }
