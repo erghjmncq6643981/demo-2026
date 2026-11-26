@@ -401,6 +401,7 @@ describe('review typing keydown', () => {
 describe('review focus UI and complete modal cognitive image', () => {
   it('omits stage badge and typing hint text in reviewFocus', () => {
     const reviewFocus = document.createElement('div')
+    const reviewProgressBadge = document.createElement('span')
     const state = {
       reviewEntries: [{ id: '1', term: 'absence', parsed: { definitions: [{ part_of_speech: 'noun', meaning: '缺席' }] } }],
       currentReviewIndex: 0,
@@ -411,7 +412,7 @@ describe('review focus UI and complete modal cognitive image', () => {
     }
     const review = createReviewFeature({
       state,
-      elements: { reviewFocus },
+      elements: { reviewFocus, reviewProgressBadge },
       sameId: (a, b) => String(a) === String(b),
       normalizeDefinitions: (p) => (p?.definitions || []).map((d) => ({ pos: d.part_of_speech, cn: d.meaning })),
       normalizeExamples,
@@ -434,7 +435,8 @@ describe('review focus UI and complete modal cognitive image', () => {
     expect(reviewFocus.querySelector('.review-stage-badge')).toBeNull()
     expect(reviewFocus.querySelector('.typing-hint')).toBeNull()
     expect(reviewFocus.textContent).not.toContain('明文跟敲')
-    expect(reviewFocus.textContent).toContain('1 / 1')
+    expect(reviewFocus.textContent).not.toContain('1 / 1')
+    expect(reviewProgressBadge.textContent).toBe('1 / 1')
 
     state.reviewStage = 'recall'
     review.renderReviewFocus(state.reviewEntries[0])

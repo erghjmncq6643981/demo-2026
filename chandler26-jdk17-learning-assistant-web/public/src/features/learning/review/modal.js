@@ -23,6 +23,8 @@ export function createReviewModalFeature(ctx) {
     reviewTargetTerm,
     renderReviewFocus,
     selectReviewEntry,
+    request,
+    setSidebarCollapsed,
   } = ctx
 
   const sameId = ctx.sameId || ((a, b) => String(a ?? '') === String(b ?? ''))
@@ -151,20 +153,190 @@ export function createReviewModalFeature(ctx) {
     hideModal(elements.forgottenDetailModal)
   }
 
+  const NOTE_DEBOUNCE_DELAY_MS = 2500
+  let isNoteComposing = false
+  let isNoteDirty = false
+  let lastSavedNoteContent = ''
+  let noteAutoSaveTimer = null
+  let inFlightNoteSavePromise = null
+
+  const REVIEW_NOTE_EMPTY_HTML = '<div class="scene-note-empty-preview"><p class="sub">暂无笔记，双击开始编辑</p></div>'
+
+  function updateReviewNoteStatus(statusText, tone = '', title = '') {
+    if (!elements.reviewNoteStatus) return
+    elements.reviewNoteStatus.textContent = statusText
+    elements.reviewNoteStatus.title = title
+    elements.reviewNoteStatus.className = tone ? `scene-note-status ${tone}` : 'scene-note-status'
+  }
+
+  function handleReviewNoteCompositionStart() {
+    isNoteComposing = true
+  }
+
+  function handleReviewNoteCompositionEnd() {
+    isNoteComposing = false
+    handleReviewNoteInput()
+  }
+
+  function handleReviewNoteInput() {
+    if (isNoteComposing) return
+    const targetEntry = state.currentReviewNoteEntry || state.currentReviewEntry
+    if (!targetEntry || !elements.reviewNoteInput) return
+
+    const currentContent = elements.reviewNoteInput.value || ''
+    if (currentContent === lastSavedNoteContent) {
+      isNoteDirty = false
+      if (noteAutoSaveTimer) {
+        clearTimeout(noteAutoSaveTimer)
+        noteAutoSaveTimer = null
+      }
+      if (lastSavedNoteContent.trim()) {
+        updateReviewNoteStatus('✓ 已保存', 'saved', '已同步')
+      } else {
+        updateReviewNoteStatus('')
+      }
+      return
+    }
+
+    isNoteDirty = true
+    updateReviewNoteStatus('● 待保存', 'saving')
+
+    if (noteAutoSaveTimer) {
+      clearTimeout(noteAutoSaveTimer)
+    }
+    noteAutoSaveTimer = setTimeout(() => {
+      void flushReviewNoteSave(false)
+    }, NOTE_DEBOUNCE_DELAY_MS)
+  }
+
+  async function flushReviewNoteSave(isManual = false) {
+    if (noteAutoSaveTimer) {
+      clearTimeout(noteAutoSaveTimer)
+      noteAutoSaveTimer = null
+    }
+    if (inFlightNoteSavePromise) {
+      return inFlightNoteSavePromise
+    }
+
+    const targetEntry = state.currentReviewNoteEntry || state.currentReviewEntry
+    if (!targetEntry || !elements.reviewNoteInput) return null
+
+    const note = elements.reviewNoteInput.value || ''
+    if (!isNoteDirty && note === lastSavedNoteContent && !isManual) {
+      return targetEntry
+    }
+
+    updateReviewNoteStatus('● 保存中...', 'saving')
+
+    inFlightNoteSavePromise = (async () => {
+      try {
+        let resolvedEntryId = targetEntry.entryId || (targetEntry.wordbookId ? targetEntry.id : null)
+
+        // 若词条未入单词本且处于非预览模式，先自动加入默认单词本
+        if (!resolvedEntryId && !state.preview && typeof request === 'function') {
+          const targetWordbookId = state.currentWordbookId || state.wordbooks?.[0]?.id
+          if (targetWordbookId && (targetEntry.term || targetEntry.normalizedTerm)) {
+            try {
+              const termToAdd = targetEntry.term || targetEntry.normalizedTerm
+              const created = await request(`/api/v1/learning/wordbooks/${encodeURIComponent(targetWordbookId)}/entries`, {
+                method: 'POST',
+                body: JSON.stringify({ term: termToAdd, note }),
+              })
+              if (created?.id) {
+                resolvedEntryId = created.id
+                targetEntry.entryId = created.id
+                targetEntry.wordbookId = created.wordbookId || targetWordbookId
+              }
+            } catch (createErr) {
+              // 失败降级继续尝试直接更新
+            }
+          }
+        }
+
+        const idToUpdate = resolvedEntryId || targetEntry.id
+        const updated = await saveEntry(idToUpdate, { note }, { silent: !isManual })
+
+        if (updated || state.preview) {
+          lastSavedNoteContent = note
+          isNoteDirty = false
+          targetEntry.note = note
+          if (state.currentReviewEntry && sameId(state.currentReviewEntry.id, targetEntry.id)) {
+            state.currentReviewEntry.note = note
+            if (resolvedEntryId) state.currentReviewEntry.entryId = resolvedEntryId
+          }
+          if (state.currentReviewNoteEntry) {
+            state.currentReviewNoteEntry.note = note
+            if (resolvedEntryId) state.currentReviewNoteEntry.entryId = resolvedEntryId
+          }
+          updateReviewNoteStatus('✓ 已保存', 'saved', isManual ? '已手动保存' : '已自动保存')
+          if (isManual) {
+            toast?.('复习笔记已保存')
+          }
+          if (elements.reviewNotePreview) {
+            elements.reviewNotePreview.innerHTML = note ? renderMarkdown(note) : REVIEW_NOTE_EMPTY_HTML
+          }
+          return updated || targetEntry
+        } else {
+          updateReviewNoteStatus('保存失败', 'error', '按 ⌘S 重试')
+          return null
+        }
+      } catch (error) {
+        updateReviewNoteStatus('保存失败', 'error', '按 ⌘S 重试')
+        toast?.(`复习笔记保存失败：${error.message || error}`)
+        return null
+      } finally {
+        inFlightNoteSavePromise = null
+      }
+    })()
+
+    return inFlightNoteSavePromise
+  }
+
+  function saveReviewNote(isManual = true) {
+    return flushReviewNoteSave(isManual)
+  }
+
   function openReviewNoteModal(entry) {
     const targetEntry = entry || state.currentReviewEntry
     if (!targetEntry) return
-    state.currentReviewNoteEntry = targetEntry
-    const term = targetEntry.term || targetEntry.normalizedTerm || '复习单词'
-    if (elements.reviewNoteModalTitle) elements.reviewNoteModalTitle.textContent = `复习笔记 · ${term}`
-    if (elements.reviewNoteInput) elements.reviewNoteInput.value = targetEntry.note || ''
-    if (elements.reviewNotePreview) {
-      elements.reviewNotePreview.innerHTML = targetEntry.note ? renderMarkdown(targetEntry.note) : '<span class="empty">暂无笔记内容</span>'
-      elements.reviewNotePreview.classList.add('hidden')
+
+    // 如果切换到了不同的词条且存在未落库草稿，先静默保存前一个词条的草稿
+    if (isNoteDirty && state.currentReviewNoteEntry && !sameId(state.currentReviewNoteEntry.id, targetEntry.id)) {
+      void flushReviewNoteSave(false)
     }
-    if (elements.reviewNoteInput) elements.reviewNoteInput.classList.remove('hidden')
-    if (elements.reviewNotePreviewBtn) elements.reviewNotePreviewBtn.textContent = '预览 Markdown (⌘E)'
-    if (elements.reviewNoteStatus) elements.reviewNoteStatus.textContent = targetEntry.note ? '已同步' : '未记录'
+
+    if (noteAutoSaveTimer) {
+      clearTimeout(noteAutoSaveTimer)
+      noteAutoSaveTimer = null
+    }
+
+    state.currentReviewNoteEntry = targetEntry
+    if (elements.reviewNoteModalTitle) elements.reviewNoteModalTitle.textContent = '复习笔记'
+
+    const note = targetEntry.note || ''
+    const hasNote = Boolean(note.trim())
+    lastSavedNoteContent = note
+    isNoteDirty = false
+
+    if (elements.reviewNoteInput) {
+      elements.reviewNoteInput.value = note
+      elements.reviewNoteInput.classList.toggle('hidden', hasNote)
+    }
+    if (elements.reviewNotePreview) {
+      elements.reviewNotePreview.innerHTML = note ? renderMarkdown(note) : REVIEW_NOTE_EMPTY_HTML
+      elements.reviewNotePreview.classList.toggle('hidden', !hasNote)
+    }
+    if (elements.reviewNotePreviewBtn) elements.reviewNotePreviewBtn.textContent = hasNote ? '✏️ 编辑' : '👁️ 预览'
+    if (hasNote) {
+      updateReviewNoteStatus('✓ 已保存', 'saved', '已同步')
+    } else {
+      updateReviewNoteStatus('')
+    }
+
+    const wasHidden = elements.reviewNoteModal?.classList.contains('hidden')
+    if (wasHidden) {
+      setSidebarCollapsed?.(true, { persist: false })
+    }
     if (elements.reviewNoteModal) {
       elements.reviewNoteModal.classList.remove('hidden')
     }
@@ -172,14 +344,24 @@ export function createReviewModalFeature(ctx) {
       elements.reviewNoteDrawerBackdrop.classList.remove('hidden')
     }
     elements.reviewLayout?.classList.add('with-note-open')
-    elements.reviewNoteInput?.focus()
+    if (!hasNote) {
+      elements.reviewNoteInput?.focus()
+    }
   }
 
   function closeReviewNoteModal() {
+    if (isNoteDirty) {
+      void flushReviewNoteSave(false)
+    }
+    if (noteAutoSaveTimer) {
+      clearTimeout(noteAutoSaveTimer)
+      noteAutoSaveTimer = null
+    }
     if (elements.reviewNoteModal) elements.reviewNoteModal.classList.add('hidden')
     if (elements.reviewNoteDrawerBackdrop) elements.reviewNoteDrawerBackdrop.classList.add('hidden')
     elements.reviewLayout?.classList.remove('with-note-open')
     state.currentReviewNoteEntry = null
+    isNoteDirty = false
   }
 
   function toggleReviewNoteDrawer(forceState) {
@@ -199,29 +381,17 @@ export function createReviewModalFeature(ctx) {
     if (isPreview) {
       elements.reviewNotePreview.classList.add('hidden')
       elements.reviewNoteInput.classList.remove('hidden')
-      if (elements.reviewNotePreviewBtn) elements.reviewNotePreviewBtn.textContent = '预览 Markdown (⌘E)'
+      if (elements.reviewNotePreviewBtn) elements.reviewNotePreviewBtn.textContent = '👁️ 预览'
       elements.reviewNoteInput.focus()
     } else {
+      if (isNoteDirty) {
+        void flushReviewNoteSave(false)
+      }
       const content = elements.reviewNoteInput.value || ''
-      elements.reviewNotePreview.innerHTML = content ? renderMarkdown(content) : '<span class="empty">暂无笔记内容</span>'
+      elements.reviewNotePreview.innerHTML = content ? renderMarkdown(content) : REVIEW_NOTE_EMPTY_HTML
       elements.reviewNotePreview.classList.remove('hidden')
       elements.reviewNoteInput.classList.add('hidden')
-      if (elements.reviewNotePreviewBtn) elements.reviewNotePreviewBtn.textContent = '编辑 Markdown (⌘E)'
-    }
-  }
-
-  async function saveReviewNote() {
-    const entry = state.currentReviewNoteEntry || state.currentReviewEntry
-    if (!entry) return
-    const note = elements.reviewNoteInput?.value || ''
-    if (elements.reviewNoteStatus) elements.reviewNoteStatus.textContent = '保存中...'
-    const updated = await saveEntry(entry.id, { note })
-    if (updated) {
-      if (elements.reviewNoteStatus) elements.reviewNoteStatus.textContent = '已保存'
-      toast('复习笔记已保存')
-      closeReviewNoteModal()
-    } else {
-      if (elements.reviewNoteStatus) elements.reviewNoteStatus.textContent = '保存失败'
+      if (elements.reviewNotePreviewBtn) elements.reviewNotePreviewBtn.textContent = '✏️ 编辑'
     }
   }
 
@@ -724,6 +894,10 @@ export function createReviewModalFeature(ctx) {
     toggleReviewNoteDrawer,
     toggleReviewNotePreview,
     saveReviewNote,
+    flushReviewNoteSave,
+    handleReviewNoteInput,
+    handleReviewNoteCompositionStart,
+    handleReviewNoteCompositionEnd,
     renderReviewQueueModal,
     openReviewQueueModal,
     closeReviewQueueModal,

@@ -619,11 +619,11 @@
 .study-note-panel {
   display: flex;
   flex-direction: column;
-  gap: 12px;
+  gap: 10px;
   background: var(--surface);
   border: 1px solid var(--line);
   border-radius: var(--radius);
-  padding: 16px 20px;
+  padding: 16px;
   min-height: 0;
   height: 100%;
   overflow: hidden;
@@ -631,18 +631,6 @@
 
 .study-note-panel.hidden {
   display: none !important;
-}
-
-.study-note-panel .study-note-header {
-  padding-bottom: 8px;
-  border-bottom: 1px solid var(--line);
-}
-
-.study-note-panel .study-note-body {
-  flex: 1 1 0%;
-  min-height: 0;
-  overflow-y: auto;
-  overscroll-behavior: contain;
 }
 
 .review-layout.with-note-open {
@@ -657,7 +645,7 @@
   background: var(--surface);
   border: 1px solid var(--line);
   border-radius: var(--radius);
-  padding: 16px 20px;
+  padding: 16px;
   min-height: 0;
   height: 100%;
   overflow: hidden;
@@ -665,11 +653,6 @@
 
 .review-note-panel.hidden {
   display: none !important;
-}
-
-.review-note-panel .review-note-header {
-  padding-bottom: 8px;
-  border-bottom: 1px solid var(--line);
 }
 
 /* Fallback for legacy drawer classes if needed */

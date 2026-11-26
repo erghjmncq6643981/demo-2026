@@ -57,4 +57,10 @@ public class RuminationNodeResponse {
 
     @Schema(description = "节点边框线型：solid（实线，默认）、dashed（虚线）、dotted（点线）、dashdot（点划线）")
     private String borderStyle = "solid";
+
+    @Schema(description = "近义词簇分组 ID，相同 ID 的词汇节点在图谱中以虚线语义框聚合呈现")
+    private String synonymGroupId;
+
+    @Schema(description = "近义词簇公共概念标签，如 '毯/被'")
+    private String synonymGroupLabel;
 }

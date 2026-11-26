@@ -104,6 +104,8 @@ export function createRuminationGraphPersistence({
       subLabel: n.subLabel,
       dimension: n.dimension,
       borderStyle: n.borderStyle || 'solid',
+      synonymGroupId: n.synonymGroupId || undefined,
+      synonymGroupLabel: n.synonymGroupLabel || undefined,
       collapsed: Boolean(n.collapsed),
       entryId: n.entryId,
       status: n.status,

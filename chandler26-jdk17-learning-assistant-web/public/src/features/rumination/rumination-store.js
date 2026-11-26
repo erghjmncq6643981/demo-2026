@@ -4,6 +4,8 @@
  * 杜绝外部子模块直接篡改原生可变图对象。
  */
 
+import { cleanupOrphanSynonymGroups } from '/src/features/rumination/rumination-synonym-groups.js'
+
 function asArray(val) {
   return Array.isArray(val) ? val : []
 }
@@ -97,6 +99,7 @@ export function createRuminationStore(initialConfig = {}) {
     graphData.edges = graphData.edges.filter(
       (e) => e.source !== targetId && e.target !== targetId && e.source !== targetTerm && e.target !== targetTerm,
     )
+    cleanupOrphanSynonymGroups(graphData.nodes)
 
     if (activeFocusNodeId === targetId || activeFocusNodeId === targetTerm) {
       activeFocusNodeId = null

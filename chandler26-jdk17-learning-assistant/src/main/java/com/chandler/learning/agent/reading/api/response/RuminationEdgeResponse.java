@@ -16,7 +16,7 @@ public class RuminationEdgeResponse {
     @Schema(description = "终点节点标识")
     private String target;
 
-    @Schema(description = "语义关系类型：peer（同类/核心）、action（动作动词）、downstream（下游加工）、attribute（感官属性）")
+    @Schema(description = "语义关系类型：peer（同类/核心）、action（动作动词）、downstream（下游加工）、attribute（感官属性）、synonym（近义辨析）")
     private String relationType;
 
     @Schema(description = "连线中央展示的简短微标签，如 '🔪 削皮'")

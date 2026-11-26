@@ -1,13 +1,13 @@
           <section class="view" id="studyView">
-            <section class="study-layout">
+            <section class="study-layout is-empty" id="studyLayout">
               <div class="study-search-wrap">
                 <form class="search-card study-input-bar" id="studyForm">
                   <div class="search-input-field">
                     <label class="sr-only" for="termInput">输入英语单词或短语</label>
-                    <input id="termInput" class="term-input" autocomplete="off" placeholder="输入英语单词或短语（或按 ⌘K / Ctrl+K 全局查词）" />
+                    <input id="termInput" class="term-input" autocomplete="off" placeholder="输入单词或短语" title="快捷键: ⌘K / Ctrl+K" />
                     <div id="searchAutocompleteDropdown" class="autocomplete-dropdown hidden"></div>
                   </div>
-                  <button class="primary-button" id="studyBtn" type="submit">查词精读</button>
+                  <button class="primary-button" id="studyBtn" type="submit">查词</button>
                   <button class="secondary-button regenerate-button" id="studyRegenerateBtn" type="button">重新生成</button>
                   <select id="studyModelSelect" class="hidden" aria-label="AI 模型"></select>
                 </form>
@@ -18,7 +18,7 @@
                 </div>
               </div>
 
-              <div class="study-split-layout" id="studySplitLayout">
+              <div class="study-split-layout hidden" id="studySplitLayout">
                 <div class="study-main">
                 <section class="word-hero panel">
                   <div class="word-main">
@@ -31,57 +31,50 @@
                     <div class="voice-actions">
                       <button class="icon-button large" id="addToWordbookBtn" type="button" title="选择词书加入">＋</button>
                       <button class="icon-button large" id="speakWordBtn" type="button" title="播放单词">▶</button>
-                      <button class="action-chip-button" id="openStudyNoteDrawerBtn" type="button" title="学习笔记 (快捷键: ⌘E / Ctrl+E)">📝 笔记 (⌘E)</button>
-                      <button class="action-chip-button" id="openMiniQuizModalBtn" type="button" title="5秒跟敲巩固 (快捷键: T)">⌨️ 跟敲 (T)</button>
+                      <button class="action-chip-button" id="openStudyNoteDrawerBtn" type="button" title="学习笔记 (⌘E)">📝 笔记</button>
+                      <button class="action-chip-button" id="openMiniQuizModalBtn" type="button" title="跟敲巩固 (T)">⌨️ 跟敲</button>
                     </div>
                   </div>
                   <div id="meaningList" class="meaning-list"></div>
                 </section>
 
-                <section class="panel morphology-panel" id="morphologyPanel">
+                <section class="panel morphology-panel hidden" id="morphologyPanel">
                   <div class="panel-heading">
-                    <div>
-                      <p class="eyebrow">Morphology &amp; Roots</p>
-                      <h3>构词剖析（词根词缀）</h3>
-                    </div>
+                    <h3>构词剖析</h3>
                   </div>
-                  <div id="morphologyBoard" class="morphology-board empty">暂无构词分析</div>
+                  <div id="morphologyBoard" class="morphology-board empty"></div>
                 </section>
 
-                <section class="content-grid">
-                  <div class="panel">
+                <section class="content-grid hidden" id="examplesTipsGrid">
+                  <div class="panel hidden" id="examplesPanel">
                     <div class="panel-heading"><h3>例句</h3></div>
                     <div id="examples" class="stack empty">暂无例句</div>
                   </div>
-                  <div class="panel">
+                  <div class="panel hidden" id="memoryTipsPanel">
                     <div class="panel-heading"><h3>记忆提示</h3></div>
                     <div id="memoryTips" class="stack empty">暂无记忆提示</div>
                   </div>
                 </section>
 
-                <section class="content-grid">
-                  <div class="panel">
+                <section class="content-grid hidden" id="collocationsRelationsGrid">
+                  <div class="panel hidden" id="collocationsPanel">
                     <div class="panel-heading"><h3>搭配</h3></div>
                     <div id="collocations" class="collocation-list empty">暂无搭配</div>
                   </div>
-                  <div class="panel">
+                  <div class="panel hidden" id="relationsPanel">
                     <div class="panel-heading"><h3>相关单词</h3></div>
                     <div id="relationList" class="relation-list empty">暂无关联词</div>
                   </div>
                 </section>
 
-                <section class="panel">
+                <section class="panel hidden" id="tagsPanel">
                   <div class="panel-heading"><h3>释义标签</h3></div>
                   <div id="tagList" class="chips empty">暂无标签</div>
                 </section>
 
                 <section class="panel ai-prompt-panel hidden" id="aiPromptChipsPanel">
                   <div class="panel-heading">
-                    <div>
-                      <p class="eyebrow">AI Assistant Q&amp;A</p>
-                      <h3>AI 私教深度答疑</h3>
-                      <p class="panel-description">点击高频 Prompt 快捷芯片，向 AI 私教发起多维辨析、职场造句或语法批改</p>
-                    </div>
+                    <h3>AI 私教深度答疑</h3>
                   </div>
                   <div class="ai-prompt-chips" id="aiPromptChips">
                     <button type="button" class="prompt-chip" data-prompt-type="synonym_diff">💡 易混近义词辨析</button>
@@ -102,18 +95,19 @@
 
               <!-- 学习笔记侧边栏 -->
               <aside class="panel study-note-panel hidden" id="studyNoteDrawer" aria-label="学习笔记侧边栏">
-                <div class="panel-heading compact-heading study-note-header">
-                  <div>
-                    <p class="eyebrow">Study Note</p>
+                <div class="panel-heading compact-heading scene-note-panel-header">
+                  <div class="scene-note-header-main">
                     <h3 id="studyNoteDrawerTitle">学习笔记</h3>
+                    <span id="studyNoteStatus" class="scene-note-status"></span>
                   </div>
                   <div class="inline-actions">
-                    <button class="secondary-button compact" id="editStudyNoteBtn" type="button" title="编辑笔记 (快捷键: ⌘E / Ctrl+E)">编辑 (⌘E)</button>
-                    <button class="icon-button" id="closeStudyNoteDrawerBtn" type="button" title="收起笔记 (Esc)" aria-label="收起笔记">×</button>
+                    <button class="secondary-button compact" id="studyNotePreviewBtn" type="button" title="切换预览/编辑 (⌘E)">✏️ 编辑</button>
+                    <button class="icon-button" id="closeStudyNoteDrawerBtn" type="button" title="收起 (Esc)" aria-label="收起笔记">×</button>
                   </div>
                 </div>
-                <div class="study-note-body">
-                  <div id="studyNote" class="note-view empty">加入词书后可以记录 Markdown 笔记</div>
+                <div class="scene-note-panel-body">
+                  <textarea id="studyNoteInput" class="scene-note-input hidden" rows="12" placeholder="支持 Markdown"></textarea>
+                  <div id="studyNote" class="scene-note-preview"></div>
                 </div>
               </aside>
             </div>

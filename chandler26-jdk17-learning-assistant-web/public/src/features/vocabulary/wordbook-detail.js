@@ -295,10 +295,13 @@ export function createWordbookDetailFeature(ctx) {
       </div>
       <div class="focus-section">
         <div class="panel-heading compact-heading">
-          <h3>笔记</h3>
-          <button class="secondary-button compact" type="button" data-edit-focus-note title="编辑笔记 (快捷键: ⌘E / Ctrl+E)">编辑笔记 (⌘E)</button>
+          <div class="scene-note-header-main">
+            <h3>笔记</h3>
+            <span class="scene-note-status${(entry.note || '').trim() ? ' saved' : ''}" data-focus-note-status title="${(entry.note || '').trim() ? '已同步' : ''}">${(entry.note || '').trim() ? '✓ 已保存' : ''}</span>
+          </div>
+          <button class="secondary-button compact" type="button" data-edit-focus-note title="切换预览/编辑 (⌘E)">✏️ 编辑</button>
         </div>
-        <div class="note-view">${renderMarkdown(entry.note || '') || '<span class="empty">暂无笔记</span>'}</div>
+        <div class="note-view scene-note-preview${(entry.note || '').trim() ? '' : ' empty'}">${renderMarkdown(entry.note || '') || '<div class="scene-note-empty-preview"><p class="sub">暂无笔记，双击开始编辑</p></div>'}</div>
       </div>
       <div class="focus-section">
         <div class="panel-heading compact-heading">
@@ -317,6 +320,12 @@ export function createWordbookDetailFeature(ctx) {
     elements.wordbookFocus.querySelector('[data-edit-focus-note]')?.addEventListener('click', () => {
       state.currentNoteEntry = entry
       editCurrentNote()
+    })
+    elements.wordbookFocus.querySelector('.note-view')?.addEventListener('dblclick', () => {
+      if (!elements.wordbookFocus.querySelector('.note-editor')) {
+        state.currentNoteEntry = entry
+        editCurrentNote()
+      }
     })
     elements.wordbookFocus.querySelector('[data-toggle-tags]')?.addEventListener('click', () => {
       toggleFocusTags()

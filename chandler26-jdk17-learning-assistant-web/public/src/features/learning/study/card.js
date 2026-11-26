@@ -25,14 +25,35 @@ export function createStudyCardFeature(ctx) {
     renderReviewFocus,
     findEntryForRecord,
     renderNotes,
+    closeStudyNoteDrawer,
+    syncStudyNoteForRecord,
     speak,
     speakSentence,
     request,
   } = ctx
 
+  function syncGridVisibility(gridElement, firstPanel, secondPanel) {
+    if (!gridElement) return
+    const firstVisible = Boolean(firstPanel && !firstPanel.classList.contains('hidden'))
+    const secondVisible = Boolean(secondPanel && !secondPanel.classList.contains('hidden'))
+    const visibleCount = (firstVisible ? 1 : 0) + (secondVisible ? 1 : 0)
+    gridElement.classList.toggle('hidden', visibleCount === 0)
+    gridElement.classList.toggle('single-col', visibleCount === 1)
+  }
+
   function renderRecord(record) {
     state.currentRecord = record
     state.currentSessionId = record?.sessionId || state.currentSessionId
+    const hasRecord = Boolean(record)
+    elements.studyLayout?.classList.toggle('is-empty', !hasRecord)
+    elements.studySplitLayout?.classList.toggle('hidden', !hasRecord)
+    if (!hasRecord) {
+      closeStudyNoteDrawer?.()
+      syncStudyNoteForRecord?.(null)
+      if (!syncStudyNoteForRecord) renderNotes?.(null)
+      renderReviewFocus?.(null)
+      return
+    }
     const parsed = record?.parsed || null
     const baseLemma = record?.lemma || parsed?.lemma
     const term = baseLemma || parsed?.term || record?.term || record?.normalizedTerm || 'Ready'
@@ -64,7 +85,11 @@ export function createStudyCardFeature(ctx) {
     renderAiPromptChips(term, parsed)
     renderMiniQuiz(term)
     renderReviewFocus(record)
-    renderNotes(findEntryForRecord(record))
+    if (syncStudyNoteForRecord) {
+      syncStudyNoteForRecord(record)
+    } else {
+      renderNotes?.(findEntryForRecord(record))
+    }
   }
 
   function renderPhonetics(term, uk, us) {
@@ -211,11 +236,13 @@ export function createStudyCardFeature(ctx) {
     }
 
     if (!breakdown.length) {
+      elements.morphologyPanel?.classList.add('hidden')
       elements.morphologyBoard.className = 'morphology-board empty'
-      elements.morphologyBoard.innerHTML = '<div class="morphology-empty-tip">暂无复杂派生拆分，属于基础单素词</div>'
+      elements.morphologyBoard.innerHTML = ''
       return
     }
 
+    elements.morphologyPanel?.classList.remove('hidden')
     elements.morphologyBoard.className = 'morphology-board'
     elements.morphologyBoard.innerHTML = `
       <div class="morphology-chips">
@@ -409,11 +436,10 @@ export function createStudyCardFeature(ctx) {
 
   function openMiniQuizModal() {
     if (!elements.miniQuizModal) return
-    elements.miniQuizModal.classList.remove('hidden')
     const currentTerm = state.currentRecord?.lemma || state.currentRecord?.term || state.currentRecord?.normalizedTerm || state.studyQuizTarget
-    if (currentTerm && currentTerm !== 'Ready') {
-      renderMiniQuiz(currentTerm)
-    }
+    if (!currentTerm || currentTerm === 'Ready') return
+    elements.miniQuizModal.classList.remove('hidden')
+    renderMiniQuiz(currentTerm)
     const board = elements.miniQuizBoard?.querySelector('.typing-board')
     board?.focus()
   }
@@ -464,10 +490,12 @@ export function createStudyCardFeature(ctx) {
     if (!elements.tagList) return
     const list = Array.isArray(tags) ? tags : []
     if (!list.length) {
+      elements.tagsPanel?.classList.add('hidden')
       elements.tagList.className = 'chips empty'
-      elements.tagList.textContent = '暂无标签'
+      elements.tagList.textContent = ''
       return
     }
+    elements.tagsPanel?.classList.remove('hidden')
     elements.tagList.className = 'chips'
     elements.tagList.innerHTML = list.map((tag) => `<span class="chip tag-chip">${escapeHtml(tagLabel(tag))}</span>`).join('')
   }
@@ -476,14 +504,18 @@ export function createStudyCardFeature(ctx) {
     if (!elements.relationList) return
     const list = semanticRelations(relations)
     if (!list.length) {
+      elements.relationsPanel?.classList.add('hidden')
       elements.relationList.className = 'relation-list empty'
-      elements.relationList.textContent = '暂无关联词'
+      elements.relationList.textContent = ''
+      syncGridVisibility(elements.collocationsRelationsGrid, elements.collocationsPanel, elements.relationsPanel)
       return
     }
+    elements.relationsPanel?.classList.remove('hidden')
     elements.relationList.className = 'relation-list'
     elements.relationList.innerHTML = list.map((item) => renderRelationItem(item, 'related-term')).join('')
     bindStudyTermCards(elements.relationList, '[data-related-term]', '单词')
     bindInlineAudio(elements.relationList)
+    syncGridVisibility(elements.collocationsRelationsGrid, elements.collocationsPanel, elements.relationsPanel)
   }
 
   function bindInlineAudio(container) {
@@ -512,10 +544,13 @@ export function createStudyCardFeature(ctx) {
     if (!elements.examples) return
     const examples = normalizeExamples(parsed)
     if (!examples.length) {
+      elements.examplesPanel?.classList.add('hidden')
       elements.examples.className = 'stack empty'
-      elements.examples.textContent = '暂无例句'
+      elements.examples.textContent = ''
+      syncGridVisibility(elements.examplesTipsGrid, elements.examplesPanel, elements.memoryTipsPanel)
       return
     }
+    elements.examplesPanel?.classList.remove('hidden')
     elements.examples.className = 'stack'
     elements.examples.innerHTML = examples
       .map(
@@ -531,16 +566,20 @@ export function createStudyCardFeature(ctx) {
     elements.examples.querySelectorAll('[data-sentence-index]').forEach((button) => {
       button.addEventListener('click', () => speakSentence(examples[Number(button.getAttribute('data-sentence-index'))]?.sentence))
     })
+    syncGridVisibility(elements.examplesTipsGrid, elements.examplesPanel, elements.memoryTipsPanel)
   }
 
   function renderCollocations(parsed) {
     if (!elements.collocations) return
     const collocations = normalizeArray(parsed?.collocations || parsed?.phrases || parsed?.common_phrases)
     if (!collocations.length) {
+      elements.collocationsPanel?.classList.add('hidden')
       elements.collocations.className = 'collocation-list empty'
-      elements.collocations.textContent = '暂无搭配'
+      elements.collocations.textContent = ''
+      syncGridVisibility(elements.collocationsRelationsGrid, elements.collocationsPanel, elements.relationsPanel)
       return
     }
+    elements.collocationsPanel?.classList.remove('hidden')
     elements.collocations.className = 'collocation-card-grid'
     elements.collocations.innerHTML = collocations
       .map((item) => {
@@ -559,18 +598,23 @@ export function createStudyCardFeature(ctx) {
       .join('')
     bindStudyTermCards(elements.collocations, '[data-collocation-term]', '词组')
     bindInlineAudio(elements.collocations)
+    syncGridVisibility(elements.collocationsRelationsGrid, elements.collocationsPanel, elements.relationsPanel)
   }
 
   function renderMemoryTips(parsed) {
     if (!elements.memoryTips) return
     const tips = normalizeArray(parsed?.memory_tips || parsed?.memoryTips || parsed?.tips || parsed?.memory)
     if (!tips.length) {
+      elements.memoryTipsPanel?.classList.add('hidden')
       elements.memoryTips.className = 'stack empty'
-      elements.memoryTips.textContent = '暂无记忆提示'
+      elements.memoryTips.textContent = ''
+      syncGridVisibility(elements.examplesTipsGrid, elements.examplesPanel, elements.memoryTipsPanel)
       return
     }
+    elements.memoryTipsPanel?.classList.remove('hidden')
     elements.memoryTips.className = 'stack'
     elements.memoryTips.innerHTML = tips.map((item) => `<div class="tip-item">${escapeHtml(readText(item, ['content', 'tip', 'text', 'meaning']) || stringifyValue(item))}</div>`).join('')
+    syncGridVisibility(elements.examplesTipsGrid, elements.examplesPanel, elements.memoryTipsPanel)
   }
 
   return {

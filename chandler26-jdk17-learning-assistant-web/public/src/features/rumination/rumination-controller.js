@@ -17,6 +17,7 @@ import { createRuminationGraphHistoryDialog } from '/src/features/rumination/rum
 import { createRuminationStore } from '/src/features/rumination/rumination-store.js'
 import { createRuminationScenarioDialog } from '/src/features/rumination/rumination-scenario-dialog.js'
 import { PRODUCE_GRAPH_DATA, FISSION_EXPANSIONS, getPresetGraphData } from '/src/features/rumination/rumination-data.js'
+import { syncCompactedSynonymClusters } from '/src/features/rumination/rumination-synonym-groups.js'
 import { sameId } from '/src/shared/ids.js'
 import { escapeHtml } from '/src/shared/text.js'
 
@@ -150,6 +151,17 @@ export function initRuminationWorkspace(ctx = {}) {
     onNodeReparent: (child, parent) => {
       preDragSnapshot = null
       nodeActions?.reparentNode?.(child, parent)
+    },
+    onGroupDragEnd: (movedNodes) => {
+      if (preDragSnapshot && history) history.recordAction('移动近义词组', preDragSnapshot)
+      preDragSnapshot = null
+      const updates = (movedNodes || []).map((n) => {
+        const nextX = Math.round(n.x), nextY = Math.round(n.y)
+        const raw = store.findNode(n.id)
+        if (raw) { raw.x = nextX; raw.y = nextY; raw.fixed = true }
+        return { nodeId: n.id, x: nextX, y: nextY, fixed: true }
+      })
+      if (updates.length) graphPersistence?.saveNodePositionsIncremental ? graphPersistence.saveNodePositionsIncremental(updates) : saveCurrentGraphDebounced(true)
     },
     onNodeDragEnd: (node, pos) => {
       const nextX = Math.round(pos.x), nextY = Math.round(pos.y)
@@ -490,6 +502,9 @@ export function initRuminationWorkspace(ctx = {}) {
         if (backendGraph && Array.isArray(backendGraph.nodes) && backendGraph.nodes.length) {
           store.setGraphData(backendGraph, { syncBag: false })
           graph.setData(store.getGraphData(), { isNewScenario: true })
+          if (!backendGraph.building && syncCompactedSynonymClusters(store.getGraphData(), graph.getNodes())) {
+            saveCurrentGraphDebounced(true, { changeSummary: '整理历史近义词簇为紧凑排布' })
+          }
 
           store.setSelectedNodeIds(mapBagTermsToIds(backendGraph.bagTerms))
           graph.setSelectedNodes(store.getSelectedNodeIds())
@@ -952,44 +967,28 @@ export function initRuminationWorkspace(ctx = {}) {
     renderBag,
     getGraphData: () => store.getGraphData(),
     getSelectedNodeIds: () => store.getSelectedNodeIds(),
-    handleTaskUpdate: (detail) => {
-      taskTracker.handleExternalUpdate(detail)
-      graphTaskTracker.handleExternalUpdate(detail)
-    },
-    selectNode: (node) => {
-      if (!node) return
-      setActiveFocus(node.id)
-    },
+    handleTaskUpdate: (detail) => { taskTracker.handleExternalUpdate(detail); graphTaskTracker.handleExternalUpdate(detail) },
+    selectNode: (node) => { if (node) setActiveFocus(node.id) },
     closePractice: () => practiceView?.closePractice?.(),
-    setGraphActive: (active) => {
-      isHostViewActive = Boolean(active)
-      syncGraphLifecycle()
-    },
+    setGraphActive: (active) => { isHostViewActive = Boolean(active); syncGraphLifecycle() },
     saveGraphNow: () => graphPersistence?.saveGraphNow?.(),
     reload(wordbookId) {
       audioController?.stopAll?.()
-      if (wordbookId) {
-        store.setCurrentWordbookId(wordbookId)
-        flushPendingGraphSave()
-        updateSaveStatus('saved', '已保存')
-        setActiveFocus(null)
-        const remembered = restoreScenarioPreference(wordbookId)
-        if (remembered) {
-          store.setActiveScenarioCode(remembered)
-          if (elements.scenarioSelect) {
-            const exists = Array.from(elements.scenarioSelect.options || []).some((o) => o.value === remembered)
-            if (exists) elements.scenarioSelect.value = remembered
-          }
+      if (!wordbookId) return
+      store.setCurrentWordbookId(wordbookId)
+      flushPendingGraphSave()
+      updateSaveStatus('saved', '已保存')
+      setActiveFocus(null)
+      const remembered = restoreScenarioPreference(wordbookId)
+      if (remembered) {
+        store.setActiveScenarioCode(remembered)
+        if (elements.scenarioSelect && Array.from(elements.scenarioSelect.options || []).some((o) => o.value === remembered)) {
+          elements.scenarioSelect.value = remembered
         }
-        loadGraphData(wordbookId, store.getActiveScenarioCode())
       }
+      loadGraphData(wordbookId, store.getActiveScenarioCode())
     },
-    destroy() {
-      audioController?.stopAll?.()
-      historyDialog?.destroy?.()
-      graphPersistence?.destroy?.()
-      graph?.destroy?.()
-    },
+    destroy() { audioController?.stopAll?.(); historyDialog?.destroy?.(); graphPersistence?.destroy?.(); graph?.destroy?.() },
   }
   return workspaceInstance
 }

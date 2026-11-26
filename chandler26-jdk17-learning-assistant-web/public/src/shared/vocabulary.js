@@ -49,41 +49,50 @@ export function renderMarkdown(markdown) {
   if (!source) return ''
   const lines = source.split(/\r?\n/)
   const html = []
-  let listOpen = false
+  const listStack = []
+  const closeAllLists = () => {
+    while (listStack.length > 0) {
+      html.push('</li></ul>')
+      listStack.pop()
+    }
+  }
   for (const line of lines) {
     const text = line.trim()
     if (!text) {
-      if (listOpen) {
-        html.push('</ul>')
-        listOpen = false
-      }
+      closeAllLists()
       continue
     }
     const headingMatch = text.match(/^(#{1,6})\s+(.+)$/)
+    const listMatch = line.match(/^([ \t]*)([-*+•])\s+(.+)$/)
     if (headingMatch) {
-      if (listOpen) {
-        html.push('</ul>')
-        listOpen = false
-      }
+      closeAllLists()
       const level = headingMatch[1].length
       const title = inlineMarkdown(headingMatch[2])
       html.push(`<h${level}>${title}</h${level}>`)
-    } else if (/^[-*+•]\s+/.test(text)) {
-      if (!listOpen) {
+    } else if (listMatch) {
+      const rawIndent = listMatch[1].replace(/\t/g, '  ').length
+      const itemContent = inlineMarkdown(listMatch[3].trim())
+      if (listStack.length === 0 || rawIndent > listStack[listStack.length - 1]) {
         html.push('<ul>')
-        listOpen = true
+        listStack.push(rawIndent)
+        html.push(`<li>${itemContent}`)
+      } else {
+        html.push('</li>')
+        while (listStack.length > 1 && rawIndent < listStack[listStack.length - 1]) {
+          listStack.pop()
+          html.push('</ul></li>')
+        }
+        if (rawIndent < listStack[0]) {
+          listStack[0] = rawIndent
+        }
+        html.push(`<li>${itemContent}`)
       }
-      const itemContent = text.replace(/^[-*+•]\s+/, '')
-      html.push(`<li>${inlineMarkdown(itemContent)}</li>`)
     } else {
-      if (listOpen) {
-        html.push('</ul>')
-        listOpen = false
-      }
+      closeAllLists()
       html.push(`<p>${inlineMarkdown(text)}</p>`)
     }
   }
-  if (listOpen) html.push('</ul>')
+  closeAllLists()
   return html.join('')
 }
 

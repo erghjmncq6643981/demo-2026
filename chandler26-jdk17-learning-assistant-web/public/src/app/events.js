@@ -2,6 +2,7 @@ import { hideModal } from '/src/shared/modal.js'
 import { applyPlatformShortcutHints } from '/src/shared/shortcuts.js'
 import { syncCurrentWordbookId } from '/src/shared/wordbook.js'
 import { bindKeyboardShortcuts } from '/src/app/keyboard-shortcuts.js'
+import { handleTextareaTabIndent } from '/src/features/learning/scene-plan/scene-note.js'
 
 export function bindAppEvents(ctx) {
   const {
@@ -138,11 +139,21 @@ export function bindAppEvents(ctx) {
     closeReviewImagePreviewModal,
     openStudyNoteDrawer,
     closeStudyNoteDrawer,
+    toggleStudyNotePreview,
+    saveStudyNote,
+    flushStudyNoteSave,
+    handleStudyNoteInput,
+    handleStudyNoteCompositionStart,
+    handleStudyNoteCompositionEnd,
     openMiniQuizModal,
     closeMiniQuizModal,
     closeReviewNoteModal,
     toggleReviewNotePreview,
     saveReviewNote,
+    flushReviewNoteSave,
+    handleReviewNoteInput,
+    handleReviewNoteCompositionStart,
+    handleReviewNoteCompositionEnd,
     closeDeleteConfirm,
     setView,
     setProfileTab,
@@ -463,6 +474,46 @@ if (typeof window !== 'undefined') {
 elements.openStudyNoteDrawerBtn?.addEventListener('click', () => openStudyNoteDrawer?.(false))
 elements.closeStudyNoteDrawerBtn?.addEventListener('click', () => closeStudyNoteDrawer?.())
 elements.studyNoteDrawerBackdrop?.addEventListener('click', () => closeStudyNoteDrawer?.())
+elements.studyNotePreviewBtn?.addEventListener('click', () => toggleStudyNotePreview?.())
+elements.studyNote?.addEventListener('dblclick', () => {
+  if (!elements.studyNote.classList.contains('hidden')) toggleStudyNotePreview?.()
+})
+elements.studyNoteInput?.addEventListener('input', handleStudyNoteInput)
+elements.studyNoteInput?.addEventListener('compositionstart', handleStudyNoteCompositionStart)
+elements.studyNoteInput?.addEventListener('compositionend', handleStudyNoteCompositionEnd)
+elements.studyNoteInput?.addEventListener('blur', () => flushStudyNoteSave?.(false))
+elements.studyNoteInput?.addEventListener('keydown', (e) => {
+  const isSave = (e.metaKey || e.ctrlKey) && (e.key === 's' || e.key === 'S' || e.key === 'Enter')
+  if (isSave) {
+    e.preventDefault()
+    e.stopPropagation()
+    saveStudyNote?.(true)
+    return
+  }
+  const isTogglePreview = (e.metaKey || e.ctrlKey) && (e.key === 'e' || e.key === 'E')
+  if (isTogglePreview) {
+    e.preventDefault()
+    e.stopPropagation()
+    toggleStudyNotePreview?.()
+    return
+  }
+  if (e.key === 'Tab') {
+    e.preventDefault()
+    e.stopPropagation()
+    handleTextareaTabIndent(elements.studyNoteInput, Boolean(e.shiftKey))
+    handleStudyNoteInput?.()
+    return
+  }
+  if (e.key === 'Escape') {
+    e.preventDefault()
+    e.stopPropagation()
+    if ((elements.studyNoteInput?.value || '').trim()) {
+      toggleStudyNotePreview?.()
+    } else {
+      closeStudyNoteDrawer?.()
+    }
+  }
+})
 elements.openMiniQuizModalBtn?.addEventListener('click', () => openMiniQuizModal?.())
 elements.closeMiniQuizModalBtn?.addEventListener('click', () => closeMiniQuizModal?.())
 elements.miniQuizModal?.addEventListener('click', (event) => {
@@ -472,18 +523,21 @@ elements.editStudyNoteBtn?.addEventListener('click', editCurrentNote)
 elements.editReviewNoteBtn?.addEventListener('click', editCurrentNote)
 elements.reviewNoteDrawerBackdrop?.addEventListener('click', () => closeReviewNoteModal?.())
 elements.reviewNoteModalCloseBtn?.addEventListener('click', closeReviewNoteModal)
-elements.reviewNoteModalCancelBtn?.addEventListener('click', closeReviewNoteModal)
 elements.reviewNoteModal?.addEventListener('click', (event) => {
   if (event.target === elements.reviewNoteModal) closeReviewNoteModal()
 })
 elements.reviewNotePreviewBtn?.addEventListener('click', toggleReviewNotePreview)
-elements.reviewNoteSaveBtn?.addEventListener('click', saveReviewNote)
+elements.reviewNotePreview?.addEventListener('dblclick', toggleReviewNotePreview)
+elements.reviewNoteInput?.addEventListener('input', handleReviewNoteInput)
+elements.reviewNoteInput?.addEventListener('compositionstart', handleReviewNoteCompositionStart)
+elements.reviewNoteInput?.addEventListener('compositionend', handleReviewNoteCompositionEnd)
+elements.reviewNoteInput?.addEventListener('blur', () => flushReviewNoteSave?.(false))
 elements.reviewNoteInput?.addEventListener('keydown', (e) => {
   const isSave = (e.metaKey || e.ctrlKey) && (e.key === 's' || e.key === 'S' || e.key === 'Enter')
   if (isSave) {
     e.preventDefault()
     e.stopPropagation()
-    saveReviewNote?.()
+    saveReviewNote?.(true)
     return
   }
   const isTogglePreview = (e.metaKey || e.ctrlKey) && (e.key === 'e' || e.key === 'E')
@@ -493,10 +547,21 @@ elements.reviewNoteInput?.addEventListener('keydown', (e) => {
     toggleReviewNotePreview?.()
     return
   }
+  if (e.key === 'Tab') {
+    e.preventDefault()
+    e.stopPropagation()
+    handleTextareaTabIndent(elements.reviewNoteInput, Boolean(e.shiftKey))
+    handleReviewNoteInput?.()
+    return
+  }
   if (e.key === 'Escape') {
     e.preventDefault()
     e.stopPropagation()
-    closeReviewNoteModal?.()
+    if ((elements.reviewNoteInput?.value || '').trim()) {
+      toggleReviewNotePreview?.()
+    } else {
+      closeReviewNoteModal?.()
+    }
   }
 })
 elements.reloadReviewBtn?.addEventListener('click', startReview)

@@ -68,10 +68,10 @@
 
 .search-card {
   display: grid;
-  grid-template-columns: minmax(0, 1fr) 132px 132px;
+  grid-template-columns: minmax(0, 1fr) 104px 104px;
   gap: 12px;
   align-items: end;
-  padding: 18px;
+  padding: 12px 14px;
   border: 1px solid var(--line);
   border-radius: 14px;
   background: rgba(31, 41, 55, 0.78);
@@ -82,9 +82,48 @@
 }
 
 .term-input {
-  height: 62px;
-  font-size: 30px;
-  font-weight: 850;
+  height: 46px;
+  font-size: 20px;
+  font-weight: 700;
+}
+
+.study-layout.is-empty {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  min-height: calc(100vh - 180px);
+  padding-bottom: 10vh;
+}
+
+.study-layout.is-empty .study-search-wrap {
+  width: 100%;
+  max-width: 720px;
+}
+
+.study-layout.is-empty .search-card {
+  grid-template-columns: minmax(0, 1fr) 112px;
+  padding: 16px;
+  box-shadow: 0 20px 48px rgba(15, 23, 42, 0.35);
+}
+
+.study-layout.is-empty .term-input {
+  height: 56px;
+  font-size: 24px;
+  font-weight: 750;
+}
+
+.study-layout.is-empty #studyRegenerateBtn {
+  display: none;
+}
+
+.study-layout.is-empty .recent-searches-bar {
+  justify-content: center;
+  margin-top: 14px;
+}
+
+.content-grid.single-col {
+  grid-template-columns: minmax(0, 1fr);
 }
 
 .search-card .primary-button,
@@ -98,15 +137,27 @@
 
 .word-main {
   display: flex;
+  flex-wrap: wrap;
+  align-items: flex-start;
   justify-content: space-between;
-  gap: 20px;
+  gap: 16px 20px;
+}
+
+.word-main > div:first-child {
+  min-width: 0;
+  flex: 1 1 260px;
 }
 
 .word-main h2 {
   margin: 6px 0;
-  font-size: clamp(52px, 9vw, 118px);
-  line-height: 0.92;
+  font-size: clamp(44px, 7vw, 96px);
+  line-height: 0.96;
   letter-spacing: 0;
+  overflow-wrap: anywhere;
+}
+
+.study-split-layout.with-note-open .word-main h2 {
+  font-size: clamp(36px, 4.8vw, 68px);
 }
 
 .phonetic {
@@ -144,6 +195,7 @@
 
 .voice-actions {
   display: flex;
+  flex-wrap: wrap;
   flex-shrink: 0;
   gap: 10px;
 }

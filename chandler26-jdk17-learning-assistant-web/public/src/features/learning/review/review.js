@@ -12,10 +12,10 @@ import {
 } from '/src/features/learning/review/card-render.js'
 
 export function createReviewFeature(ctx) {
+  const sameId = ctx.sameId || ((a, b) => String(a ?? '') === String(b ?? ''))
   const {
     state,
     elements,
-    sameId,
     syncCurrentWordbookId,
     request,
     setLoading,
@@ -43,6 +43,7 @@ export function createReviewFeature(ctx) {
     speakSentence,
     speak,
     setFocusMode,
+    setSidebarCollapsed,
     bindStudyTermCards,
     bindInlineAudio,
     reviewResultToStatus,
@@ -439,6 +440,10 @@ export function createReviewFeature(ctx) {
   }
 
   function selectReviewEntry(entry, phase = 'brief') {
+    const isNoteDrawerOpen = Boolean(elements.reviewNoteModal && !elements.reviewNoteModal.classList.contains('hidden'))
+    if (isNoteDrawerOpen) {
+      feature.flushReviewNoteSave?.(false)
+    }
     if (!entry) {
       state.currentReviewEntry = null
       resetCardPhaseForEntry(null, 'brief')
@@ -453,6 +458,9 @@ export function createReviewFeature(ctx) {
     renderNotes?.(entry)
     feature.updateReviewProgressBadge()
     feature.loadReviewEntryDetail(entry)
+    if (isNoteDrawerOpen) {
+      feature.openReviewNoteModal?.(entry)
+    }
   }
 
   function handleSelectReviewTag(tag) {
@@ -662,7 +670,6 @@ export function createReviewFeature(ctx) {
       <div class="review-card-fixed">
         <div class="review-card-topline">
           <div class="review-meta-chips">${buildFootprintBadge(entryOrRecord, escapeHtml)}</div>
-          <span class="review-card-progress-hint" data-open-review-queue title="查看复习词单全览">${total ? `${state.currentReviewIndex + 1} / ${total}` : '0 / 0'}</span>
         </div>
         <div class="review-card-word-row">
           <h4 class="${isRecall ? 'recall-masked-title' : ''}">${escapeHtml(maskedTerm)}</h4>
@@ -681,16 +688,13 @@ export function createReviewFeature(ctx) {
         </div>
         <div style="display: flex; gap: 8px; align-items: center;">
           ${hasWordbookEntry
-            ? `<button class="secondary-button compact" type="button" data-review-note title="复习笔记 (${escapeHtml(formatShortcutCombo('⌘E'))})">复习笔记 (${escapeHtml(formatShortcutCombo('⌘E'))})</button>
+            ? `<button class="secondary-button compact" type="button" data-review-note title="复习笔记 (${escapeHtml(formatShortcutCombo('⌘E'))})">📝 笔记</button>
                <button class="icon-action-button" type="button" data-review-transfer="${escapeHtml(transferId)}" title="复制或移动" aria-label="复制或移动">＋</button>`
             : `<button class="secondary-button compact" type="button" data-review-add-wordbook title="保存到当前默认单词本">＋ 存入词本</button>`}
         </div>
       </div>
     `
 
-    elements.reviewFocus.querySelector('[data-open-review-queue]')?.addEventListener('click', () => {
-      feature.openReviewQueueModal?.()
-    })
     elements.reviewFocus.querySelector('[data-review-audio]')?.addEventListener('click', () => {
       speak?.(term, elements.voiceSelect?.value)
     })
@@ -924,7 +928,9 @@ export function createReviewFeature(ctx) {
     reviewTargetTerm: (...args) => feature.reviewTargetTerm(...args),
     renderReviewFocus: (...args) => feature.renderReviewFocus(...args),
     selectReviewEntry: (...args) => feature.selectReviewEntry(...args),
+    request,
     sameId,
+    setSidebarCollapsed,
   })
 
   Object.assign(feature, {

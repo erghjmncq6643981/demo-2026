@@ -119,6 +119,7 @@
                         <button type="button" class="edge-mini-tag" data-tag="加工">加工</button>
                         <button type="button" class="edge-mini-tag" data-tag="感官">感官</button>
                         <button type="button" class="edge-mini-tag" data-tag="搭配">搭配</button>
+                        <button type="button" class="edge-mini-tag" data-tag="≈ 近义">≈ 近义</button>
                       </div>
                     </div>
                     <!-- 图谱节点右键菜单（微型紧凑胶囊风格，顺序：关联，边框，编辑，词袋，裂变，删除） -->
@@ -131,6 +132,18 @@
                       <button type="button" class="ctx-item" id="ctxAddChildBtn" title="新增关联节点 (Tab / A)">
                         <span class="ctx-icon"><svg class="btn-svg" viewBox="0 0 24 24" width="13" height="13" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 12h14"/><path d="M12 5v14"/></svg></span>
                         <span id="ctxAddChildText">关联</span>
+                      </button>
+                      <button type="button" class="ctx-item" id="ctxAddSynonymBtn" title="为该词新增近义词并以虚线框聚合成簇">
+                        <span class="ctx-icon"><svg class="btn-svg" viewBox="0 0 24 24" width="13" height="13" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="8" cy="12" r="4"/><circle cx="16" cy="12" r="4"/></svg></span>
+                        <span>加近义词</span>
+                      </button>
+                      <button type="button" class="ctx-item hidden" id="ctxSplitSynonymBtn" title="按斜杠拆分为独立节点并组为近义词簇">
+                        <span class="ctx-icon"><svg class="btn-svg" viewBox="0 0 24 24" width="13" height="13" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M16 3h5v5"/><path d="M8 3H3v5"/><path d="M12 22v-8.3a4 4 0 0 0-1.172-2.872L3 3"/><path d="m15 9 6-6"/></svg></span>
+                        <span>拆为近义组</span>
+                      </button>
+                      <button type="button" class="ctx-item hidden" id="ctxLeaveSynonymGroupBtn" title="将该词移出当前近义词簇">
+                        <span class="ctx-icon"><svg class="btn-svg" viewBox="0 0 24 24" width="13" height="13" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/><polyline points="16 17 21 12 16 7"/><line x1="21" x2="9" y1="12" y2="12"/></svg></span>
+                        <span>移出词组</span>
                       </button>
                       <button type="button" class="ctx-item" id="ctxBorderStyleBtn">
                         <span class="ctx-icon"><svg class="btn-svg" viewBox="0 0 24 24" width="13" height="13" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="3" width="18" height="18" rx="4" stroke-dasharray="4 2"/></svg></span>
@@ -158,6 +171,7 @@
                       <span class="legend-item"><span class="legend-dot" style="background: #10b981;"></span> 已掌握</span>
                       <span class="legend-item"><span class="legend-dot" style="background: #f59e0b;"></span> 待反刍</span>
                       <span class="legend-item"><span class="legend-dot" style="background: #38bdf8;"></span> 未学</span>
+                      <span class="legend-item"><span class="legend-dot" style="background: #2dd4bf;"></span> 近义簇</span>
                     </div>
                   </div>
 

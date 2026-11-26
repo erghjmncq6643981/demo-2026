@@ -35,6 +35,7 @@ describe('Scene Note Smart Auto-Save with MD5, UpdateTime and 15s Idle Refresh',
 
     const status = {
       textContent: '',
+      title: '',
       className: '',
     }
 
@@ -66,6 +67,7 @@ describe('Scene Note Smart Auto-Save with MD5, UpdateTime and 15s Idle Refresh',
 
     const toast = vi.fn()
     const logEvent = vi.fn()
+    const setSidebarCollapsed = vi.fn()
 
     const sceneNote = createSceneNote({
       state,
@@ -75,9 +77,10 @@ describe('Scene Note Smart Auto-Save with MD5, UpdateTime and 15s Idle Refresh',
       sameId: (a, b) => String(a) === String(b),
       toast,
       logEvent,
+      setSidebarCollapsed,
     })
 
-    return { state, elements, api, activeUnit, toast, logEvent, sceneNote }
+    return { state, elements, api, activeUnit, toast, logEvent, setSidebarCollapsed, sceneNote }
   }
 
   beforeEach(() => {
@@ -108,7 +111,8 @@ describe('Scene Note Smart Auto-Save with MD5, UpdateTime and 15s Idle Refresh',
 
     fixture.elements.sceneNoteInput.value = 'Original'
     fixture.sceneNote.handleInput()
-    expect(fixture.elements.sceneNoteStatus.textContent).toContain('✓ 已自动保存')
+    expect(fixture.elements.sceneNoteStatus.textContent).toBe('✓ 已保存')
+    expect(fixture.elements.sceneNoteStatus.title).toContain('已自动保存')
 
     await fixture.sceneNote.flushSave()
     expect(fixture.api.saveNote).not.toHaveBeenCalled()
@@ -129,7 +133,8 @@ describe('Scene Note Smart Auto-Save with MD5, UpdateTime and 15s Idle Refresh',
     expect(fixture.api.saveNote).toHaveBeenCalledWith('plan-1', 'unit-1', 'After Modification')
     expect(fixture.state.sceneNote.content).toBe('After Modification')
     expect(fixture.state.sceneNote.updateTime).toBe('2026-08-31T10:05:00.000Z')
-    expect(fixture.elements.sceneNoteStatus.textContent).toContain('✓ 已自动保存')
+    expect(fixture.elements.sceneNoteStatus.textContent).toBe('✓ 已保存')
+    expect(fixture.elements.sceneNoteStatus.title).toContain('已自动保存')
   })
 
   it('never touches or resets input.value during editing save', async () => {
@@ -256,8 +261,9 @@ describe('Scene Note Smart Auto-Save with MD5, UpdateTime and 15s Idle Refresh',
     fixture.sceneNote.scheduleLoad(unit3, 1000)
     expect(fixture.api.getNote).not.toHaveBeenCalled()
 
-    // 用户主动点击打开笔记面板，立即取消计时器并即时请求
+    // 用户主动点击打开笔记面板，立即取消计时器并即时请求，且自动收起左侧导航
     fixture.sceneNote.openPanel()
+    expect(fixture.setSidebarCollapsed).toHaveBeenCalledWith(true, { persist: false })
     expect(fixture.api.getNote).toHaveBeenCalledWith('plan-1', 'unit-3')
   })
 
@@ -301,6 +307,18 @@ describe('Markdown Heading and Bullet List Rendering', () => {
 
     const mixed = '- dash\n* star\n+ plus'
     expect(renderMarkdown(mixed)).toBe('<ul><li>dash</li><li>star</li><li>plus</li></ul>')
+  })
+
+  it('renders 2-level and 3-level nested bullet lists preserving indentation', () => {
+    const nested = '- parent\n  - child 1\n    - grand 1\n  - child 2\n- back'
+    expect(renderMarkdown(nested)).toBe(
+      '<ul><li>parent<ul><li>child 1<ul><li>grand 1</li></ul></li><li>child 2</li></ul></li><li>back</li></ul>'
+    )
+
+    const tabbed = '- wrap\n\t- inner a\n\t- inner b'
+    expect(renderMarkdown(tabbed)).toBe(
+      '<ul><li>wrap<ul><li>inner a</li><li>inner b</li></ul></li></ul>'
+    )
   })
 })
 

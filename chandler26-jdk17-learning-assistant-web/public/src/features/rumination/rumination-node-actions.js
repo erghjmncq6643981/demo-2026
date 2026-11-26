@@ -5,6 +5,7 @@ import { showModal, hideModal, bindModalDismiss } from '/src/shared/modal.js'
 import { calculateReparentPosition } from '/src/features/rumination/rumination-graph-drag.js'
 import { RELATION_CONFIG } from '/src/features/rumination/rumination-graph-renderer.js'
 import { computeEdgeRouting } from '/src/features/rumination/rumination-graph-layout.js'
+import { hasSlashSynonyms, splitSlashNodeToSynonymGroup, addSynonymNodeToTarget, removeNodeFromSynonymGroup } from '/src/features/rumination/rumination-synonym-groups.js'
 
 export function createRuminationNodeActions({
   elements,
@@ -241,6 +242,17 @@ export function createRuminationNodeActions({
     if (elements.ctxExpandNodeBtn) {
       elements.ctxExpandNodeBtn.style.display = isHub ? 'none' : 'flex'
     }
+    if (elements.ctxAddSynonymBtn) elements.ctxAddSynonymBtn.style.display = isHub ? 'none' : 'flex'
+    const canSplit = !isHub && hasSlashSynonyms(node.term)
+    if (elements.ctxSplitSynonymBtn) {
+      elements.ctxSplitSynonymBtn.style.display = canSplit ? 'flex' : 'none'
+      elements.ctxSplitSynonymBtn.classList.toggle('hidden', !canSplit)
+    }
+    const inSynGroup = !isHub && Boolean(node.synonymGroupId)
+    if (elements.ctxLeaveSynonymGroupBtn) {
+      elements.ctxLeaveSynonymGroupBtn.style.display = inSynGroup ? 'flex' : 'none'
+      elements.ctxLeaveSynonymGroupBtn.classList.toggle('hidden', !inSynGroup)
+    }
     if (elements.ctxAddChildText) {
       elements.ctxAddChildText.textContent = isHub ? '新增核心' : '关联'
     }
@@ -270,7 +282,7 @@ export function createRuminationNodeActions({
     const menu = elements.graphContextMenu
     menu.classList.remove('hidden')
     const menuWidth = 124
-    const menuHeight = isHub ? 140 : 250
+    const menuHeight = isHub ? 140 : (280 + (canSplit ? 30 : 0) + (inSynGroup ? 30 : 0))
     let left = pos.clientX + 4
     let top = pos.clientY + 4
     if (left + menuWidth > window.innerWidth) left = pos.clientX - menuWidth - 4
@@ -280,7 +292,17 @@ export function createRuminationNodeActions({
     menu.style.top = `${Math.max(10, top)}px`
   }
 
-  function openNodeModal(mode) {
+  function syncSynonymModalFields() {
+    const dimVal = elements.nodeModalDimensionSelect?.value || 'peer'
+    const isAddSyn = nodeModalMode === 'add' && dimVal === 'synonym'
+    const isEditSyn = nodeModalMode === 'edit' && Boolean(contextMenuTargetNode?.synonymGroupId)
+    if (elements.nodeModalSynonymGroupField) {
+      elements.nodeModalSynonymGroupField.style.display = (isAddSyn || isEditSyn) ? 'flex' : 'none'
+      elements.nodeModalSynonymGroupField.classList.toggle('hidden', !(isAddSyn || isEditSyn))
+    }
+  }
+
+  function openNodeModal(mode, defaultDimension = 'peer') {
     nodeModalMode = mode
     closeContextMenu()
     if (!contextMenuTargetNode) return
@@ -290,7 +312,7 @@ export function createRuminationNodeActions({
 
     if (elements.nodeModalTitle) {
       elements.nodeModalTitle.textContent = mode === 'add'
-        ? (isHub ? '新增考纲核心词' : '新增关联节点')
+        ? (isHub ? '新增考纲核心词' : (defaultDimension === 'synonym' ? '新增近义词（同簇聚合）' : '新增关联节点'))
         : (isHub ? '修改场景中心主题' : '修改词汇释义')
     }
     if (elements.nodeModalParentInfo) {
@@ -303,16 +325,16 @@ export function createRuminationNodeActions({
     if (mode === 'add') {
       if (elements.nodeModalTermInput) {
         elements.nodeModalTermInput.value = ''
-        elements.nodeModalTermInput.placeholder = isHub ? '例如：vegetables / fruit / meat' : '例如：strawberry / peel / cozy'
+        elements.nodeModalTermInput.placeholder = defaultDimension === 'synonym' ? '例如：quilt / duvet' : (isHub ? '例如：vegetables / fruit / meat' : '例如：strawberry / peel / cozy')
       }
       if (elements.nodeModalDefInput) {
         elements.nodeModalDefInput.value = ''
-        elements.nodeModalDefInput.placeholder = '例如：草莓；留空将自动补全'
+        elements.nodeModalDefInput.placeholder = defaultDimension === 'synonym' ? '如：夹棉被（可注明与原词差异）' : '例如：草莓；留空将自动补全'
       }
       if (dimLabel) dimLabel.style.display = 'flex'
-      if (elements.nodeModalDimensionSelect) {
-        elements.nodeModalDimensionSelect.value = 'peer'
-      }
+      if (elements.nodeModalDimensionSelect) elements.nodeModalDimensionSelect.value = defaultDimension
+      if (elements.nodeModalSynonymGroupInput) elements.nodeModalSynonymGroupInput.value = contextMenuTargetNode.synonymGroupLabel || ''
+      syncSynonymModalFields()
       showModal(elements.nodeEditModal, { initialFocus: elements.nodeModalTermInput })
     } else {
       if (isHub) {
@@ -325,14 +347,15 @@ export function createRuminationNodeActions({
           elements.nodeModalDefInput.placeholder = '可选副标，例如：场景核心'
         }
         if (dimLabel) dimLabel.style.display = 'none'
+        syncSynonymModalFields()
         showModal(elements.nodeEditModal, { initialFocus: elements.nodeModalTermInput })
       } else {
         if (elements.nodeModalTermInput) elements.nodeModalTermInput.value = contextMenuTargetNode.term || ''
         if (elements.nodeModalDefInput) elements.nodeModalDefInput.value = contextMenuTargetNode.definition || ''
         if (dimLabel) dimLabel.style.display = 'flex'
-        if (elements.nodeModalDimensionSelect) {
-          elements.nodeModalDimensionSelect.value = contextMenuTargetNode.dimension || 'peer'
-        }
+        if (elements.nodeModalDimensionSelect) elements.nodeModalDimensionSelect.value = contextMenuTargetNode.dimension || 'peer'
+        if (elements.nodeModalSynonymGroupInput) elements.nodeModalSynonymGroupInput.value = contextMenuTargetNode.synonymGroupLabel || ''
+        syncSynonymModalFields()
         showModal(elements.nodeEditModal, { initialFocus: elements.nodeModalDefInput })
       }
     }
@@ -428,33 +451,37 @@ export function createRuminationNodeActions({
     saveCurrentGraphDebounced(true)
   }
 
-  if (elements.ctxExpandNodeBtn) {
-    elements.ctxExpandNodeBtn.addEventListener('click', () => {
-      const target = contextMenuTargetNode
-      closeContextMenu()
-      if (target && target.nodeType !== 'hub') {
-        handleNodeAction('expand', target)
-      }
-    })
-  }
-  if (elements.ctxAddChildBtn) {
-    elements.ctxAddChildBtn.addEventListener('click', () => openNodeModal('add'))
-  }
-  if (elements.ctxEditNodeBtn) {
-    elements.ctxEditNodeBtn.addEventListener('click', () => openNodeModal('edit'))
-  }
-  if (elements.ctxToggleBagBtn) {
-    elements.ctxToggleBagBtn.addEventListener('click', () => {
-      closeContextMenu()
-      toggleBagForNode(contextMenuTargetNode)
-    })
-  }
-  if (elements.ctxDeleteNodeBtn) {
-    elements.ctxDeleteNodeBtn.addEventListener('click', () => {
-      closeContextMenu()
-      deleteNode(contextMenuTargetNode)
-    })
-  }
+  elements.ctxExpandNodeBtn?.addEventListener('click', () => {
+    const target = contextMenuTargetNode; closeContextMenu()
+    if (target && target.nodeType !== 'hub') handleNodeAction('expand', target)
+  })
+  elements.ctxAddChildBtn?.addEventListener('click', () => openNodeModal('add'))
+  elements.ctxAddSynonymBtn?.addEventListener('click', () => openNodeModal('add', 'synonym'))
+  elements.ctxSplitSynonymBtn?.addEventListener('click', () => {
+    const target = contextMenuTargetNode; closeContextMenu()
+    if (!target || target.nodeType === 'hub') return
+    syncLiveNodePositions?.(); history?.recordBefore?.('拆分为近义词组')
+    const gd = store?.getGraphData ? store.getGraphData() : getGraphData()
+    const res = splitSlashNodeToSynonymGroup({ graphData: gd, node: target, store })
+    if (!res) return
+    graph.setData(store?.getGraphData ? store.getGraphData() : gd); syncActionBar()
+    toast(`✨ 已拆分为近义词簇【${res.groupLabel}】`)
+    saveCurrentGraphDebounced?.(true, { changeSummary: `拆分近义词组 ${res.groupLabel}` })
+  })
+  elements.ctxLeaveSynonymGroupBtn?.addEventListener('click', () => {
+    const target = contextMenuTargetNode; closeContextMenu()
+    if (!target?.synonymGroupId) return
+    syncLiveNodePositions?.(); history?.recordBefore?.('移出近义词组')
+    const gd = store?.getGraphData ? store.getGraphData() : getGraphData()
+    if (!removeNodeFromSynonymGroup({ graphData: gd, nodeId: target.id, store })) return
+    graph.setData(store?.getGraphData ? store.getGraphData() : gd); syncActionBar()
+    toast(`已将【${target.term}】移出近义词簇`)
+    saveCurrentGraphDebounced?.(true, { changeSummary: `移出近义词组 ${target.term}` })
+  })
+  elements.ctxEditNodeBtn?.addEventListener('click', () => openNodeModal('edit'))
+  elements.ctxToggleBagBtn?.addEventListener('click', () => { closeContextMenu(); toggleBagForNode(contextMenuTargetNode) })
+  elements.ctxDeleteNodeBtn?.addEventListener('click', () => { closeContextMenu(); deleteNode(contextMenuTargetNode) })
+  elements.nodeModalDimensionSelect?.addEventListener('change', syncSynonymModalFields)
 
   elements.barToggleBagBtn?.addEventListener('click', () => handleNodeAction('bag'))
   elements.barExpandNodeBtn?.addEventListener('click', () => handleNodeAction('expand'))
@@ -514,7 +541,23 @@ export function createRuminationNodeActions({
     if (nodeModalMode === 'add') {
       if (!contextMenuTargetNode) return
       syncLiveNodePositions?.()
-      history?.recordBefore?.('新增关联')
+      history?.recordBefore?.(dimVal === 'synonym' ? '新增近义词' : '新增关联')
+      if (dimVal === 'synonym' && contextMenuTargetNode.nodeType !== 'hub') {
+        const res = addSynonymNodeToTarget({
+          graphData,
+          targetNode: contextMenuTargetNode,
+          term: termVal,
+          definition: defVal,
+          groupLabel: elements.nodeModalSynonymGroupInput?.value,
+          store,
+        })
+        if (res) {
+          graph.setData(store?.getGraphData ? store.getGraphData() : graphData); syncActionBar()
+          toast(`✨ 已将【${termVal}】加入近义词簇【${res.groupLabel}】`)
+          saveCurrentGraphDebounced(true, { changeSummary: `新增近义词 ${termVal}` })
+        }
+        closeNodeModal(); return
+      }
       const isCore = contextMenuTargetNode.nodeType === 'hub'
       const newId = `custom_${termVal.toLowerCase().replace(/\s+/g, '_')}_${Date.now().toString(36)}`
       const newNode = {
@@ -571,6 +614,14 @@ export function createRuminationNodeActions({
       targetRaw.term = termVal
       targetRaw.definition = defVal || termVal
       targetRaw.dimension = dimVal
+      if (targetRaw.synonymGroupId && elements.nodeModalSynonymGroupInput) {
+        const nextGroupLabel = elements.nodeModalSynonymGroupInput.value?.trim()
+        if (nextGroupLabel) {
+          (store?.getGraphData ? store.getGraphData().nodes : graphData.nodes)?.forEach((n) => {
+            if (n.synonymGroupId === targetRaw.synonymGroupId) n.synonymGroupLabel = nextGroupLabel
+          })
+        }
+      }
       const currentEdges = store?.getGraphData ? store.getGraphData().edges : graphData.edges
       const edge = currentEdges.find(
         (e) => e.target === targetRaw.id || (oldTerm && e.target === oldTerm)
@@ -605,6 +656,7 @@ export function createRuminationNodeActions({
   elements.nodeEditModal?.addEventListener?.('keydown', handleNodeModalKeydown)
   elements.nodeModalTermInput?.addEventListener?.('keydown', handleNodeModalKeydown)
   elements.nodeModalDefInput?.addEventListener?.('keydown', handleNodeModalKeydown)
+  elements.nodeModalSynonymGroupInput?.addEventListener?.('keydown', handleNodeModalKeydown)
   elements.nodeModalDimensionSelect?.addEventListener?.('keydown', handleNodeModalKeydown)
 
   let currentEditingEdge = null
@@ -687,6 +739,25 @@ export function createRuminationNodeActions({
     openEdgeInlineEditor(edge, pos)
   }
 
+  function matchEdgeEnds(edge, sId, tId, sTerm, tTerm) {
+    return (edge.source === sId || (sTerm && edge.source === sTerm)) && (edge.target === tId || (tTerm && edge.target === tTerm))
+  }
+
+  function applyEdgeMutationAndRefresh(edgeRef, graphData, mutator) {
+    const sId = edgeRef.source || edgeRef.sourceNode?.id
+    const tId = edgeRef.target || edgeRef.targetNode?.id
+    const sTerm = edgeRef.sourceNode?.term
+    const tTerm = edgeRef.targetNode?.term
+    const rawEdge = graphData?.edges?.find((e) => matchEdgeEnds(e, sId, tId, sTerm, tTerm))
+    mutator(rawEdge)
+    graph?.setData?.(store?.getGraphData ? store.getGraphData() : graphData)
+    const nextEdge = (graph?.getEdges ? graph.getEdges() : []).find((e) => matchEdgeEnds(e, sId, tId, sTerm, tTerm))
+    if (nextEdge) {
+      selectedGraphEdge = nextEdge
+      graph?.setSelectedEdge?.(nextEdge)
+    }
+  }
+
   function saveEdgeLabel(newLabel) {
     if (!currentEditingEdge) return
     const graphData = store?.getGraphData ? store.getGraphData() : getGraphData()
@@ -695,45 +766,20 @@ export function createRuminationNodeActions({
 
     const trimmed = (newLabel || '').trim()
     const finalLabel = trimmed === '核心' ? '' : trimmed
-
     const sId = currentEditingEdge.source || currentEditingEdge.sourceNode?.id
     const tId = currentEditingEdge.target || currentEditingEdge.targetNode?.id
-    const sTerm = currentEditingEdge.sourceNode?.term
-    const tTerm = currentEditingEdge.targetNode?.term
 
-    if (store?.updateEdgeLabel) {
-      store.updateEdgeLabel(sId, tId, finalLabel)
-    } else {
-      const rawEdge = graphData.edges.find((e) =>
-        (e.source === sId || (sTerm && e.source === sTerm))
-        && (e.target === tId || (tTerm && e.target === tTerm))
-      )
-      if (rawEdge) {
-        rawEdge.label = finalLabel
-      }
-    }
+    if (store?.updateEdgeLabel) store.updateEdgeLabel(sId, tId, finalLabel)
     currentEditingEdge.label = finalLabel
     if (selectedGraphEdge) {
       selectedGraphEdge.label = finalLabel
       syncEdgeActionBar(selectedGraphEdge)
     }
-
-    graph?.setData?.(store?.getGraphData ? store.getGraphData() : graphData)
-    const newEdges = graph?.getEdges ? graph.getEdges() : []
-    const newSelectedEdge = newEdges.find((e) =>
-      (e.source === sId || (sTerm && e.source === sTerm))
-      && (e.target === tId || (tTerm && e.target === tTerm))
-    )
-    if (newSelectedEdge) {
-      selectedGraphEdge = newSelectedEdge
-      graph?.setSelectedEdge?.(newSelectedEdge)
-    }
+    applyEdgeMutationAndRefresh(currentEditingEdge, graphData, (rawEdge) => {
+      if (!store?.updateEdgeLabel && rawEdge) rawEdge.label = finalLabel
+    })
     saveCurrentGraphDebounced?.(true)
-    if (finalLabel) {
-      toast(`已更新连线关系文字为【${finalLabel}】`)
-    } else {
-      toast('已清除连线关系文字')
-    }
+    toast(finalLabel ? `已更新连线关系文字为【${finalLabel}】` : '已清除连线关系文字')
     closeEdgeModal()
   }
 
@@ -772,83 +818,42 @@ export function createRuminationNodeActions({
     })
   }
 
-  if (elements.edgeBarToggleCurveBtn) {
-    elements.edgeBarToggleCurveBtn.addEventListener('click', () => {
-      if (!selectedGraphEdge) return
-      history?.recordBefore?.('修改连线形态')
-      const isCurrentlyStraight = selectedGraphEdge.lineStyle === 'straight' || selectedGraphEdge.isCurved === false
-      const nextCurved = isCurrentlyStraight
-      selectedGraphEdge.isCurved = nextCurved
-      selectedGraphEdge.lineStyle = nextCurved ? 'curve' : 'straight'
-
-      const graphData = store?.getGraphData ? store.getGraphData() : getGraphData()
-      const sId = selectedGraphEdge.source || selectedGraphEdge.sourceNode?.id
-      const tId = selectedGraphEdge.target || selectedGraphEdge.targetNode?.id
-      const sTerm = selectedGraphEdge.sourceNode?.term
-      const tTerm = selectedGraphEdge.targetNode?.term
-      const rawEdge = graphData?.edges?.find((e) =>
-        (e.source === sId || (sTerm && e.source === sTerm))
-        && (e.target === tId || (tTerm && e.target === tTerm))
-      )
+  elements.edgeBarToggleCurveBtn?.addEventListener('click', () => {
+    if (!selectedGraphEdge) return
+    history?.recordBefore?.('修改连线形态')
+    const nextCurved = selectedGraphEdge.lineStyle === 'straight' || selectedGraphEdge.isCurved === false
+    selectedGraphEdge.isCurved = nextCurved
+    selectedGraphEdge.lineStyle = nextCurved ? 'curve' : 'straight'
+    syncEdgeActionBar(selectedGraphEdge)
+    const graphData = store?.getGraphData ? store.getGraphData() : getGraphData()
+    applyEdgeMutationAndRefresh(selectedGraphEdge, graphData, (rawEdge) => {
       if (rawEdge) {
         rawEdge.isCurved = nextCurved
         rawEdge.lineStyle = nextCurved ? 'curve' : 'straight'
       }
-      syncEdgeActionBar(selectedGraphEdge)
-      graph?.setData?.(store?.getGraphData ? store.getGraphData() : graphData)
-      const newEdges = graph?.getEdges ? graph.getEdges() : []
-      const newSelectedEdge = newEdges.find((e) =>
-        (e.source === sId || (sTerm && e.source === sTerm))
-        && (e.target === tId || (tTerm && e.target === tTerm))
-      )
-      if (newSelectedEdge) {
-        selectedGraphEdge = newSelectedEdge
-        graph?.setSelectedEdge?.(newSelectedEdge)
-      }
-      saveCurrentGraphDebounced?.(true)
-      toast(nextCurved ? '∿ 已切换为平滑贝塞尔曲线' : '― 已切换为直线连线')
     })
-  }
+    saveCurrentGraphDebounced?.(true)
+    toast(nextCurved ? '∿ 已切换为平滑贝塞尔曲线' : '― 已切换为直线连线')
+  })
 
-  if (elements.edgeBarToggleArrowBtn) {
-    elements.edgeBarToggleArrowBtn.addEventListener('click', () => {
-      if (!selectedGraphEdge) return
-      history?.recordBefore?.('修改连线箭头')
-      const currentHasArrow = selectedGraphEdge.showArrow !== false && (
-        selectedGraphEdge.relationType === 'action' ||
-        selectedGraphEdge.relationType === 'downstream' ||
-        selectedGraphEdge.showArrow === true
-      )
-      const nextShowArrow = !currentHasArrow
-      selectedGraphEdge.showArrow = nextShowArrow
-
-      const graphData = store?.getGraphData ? store.getGraphData() : getGraphData()
-      const sId = selectedGraphEdge.source || selectedGraphEdge.sourceNode?.id
-      const tId = selectedGraphEdge.target || selectedGraphEdge.targetNode?.id
-      const sTerm = selectedGraphEdge.sourceNode?.term
-      const tTerm = selectedGraphEdge.targetNode?.term
-      const rawEdge = graphData?.edges?.find((e) =>
-        (e.source === sId || (sTerm && e.source === sTerm))
-        && (e.target === tId || (tTerm && e.target === tTerm))
-      )
-      if (rawEdge) {
-        rawEdge.showArrow = nextShowArrow
-      }
-      syncEdgeActionBar(selectedGraphEdge)
-      graph?.setData?.(store?.getGraphData ? store.getGraphData() : graphData)
-      const newEdges = graph?.getEdges ? graph.getEdges() : []
-      const newSelectedEdge = newEdges.find((e) =>
-        (e.source === sId || (sTerm && e.source === sTerm))
-        && (e.target === tId || (tTerm && e.target === tTerm))
-      )
-      if (newSelectedEdge) {
-        selectedGraphEdge = newSelectedEdge
-        graph?.setSelectedEdge?.(newSelectedEdge)
-      }
-      saveCurrentGraphDebounced?.(true)
-      toast(nextShowArrow ? '➔ 已开启关系端点箭头' : '• 已切换为极简端点')
+  elements.edgeBarToggleArrowBtn?.addEventListener('click', () => {
+    if (!selectedGraphEdge) return
+    history?.recordBefore?.('修改连线箭头')
+    const currentHasArrow = selectedGraphEdge.showArrow !== false && (
+      selectedGraphEdge.relationType === 'action'
+      || selectedGraphEdge.relationType === 'downstream'
+      || selectedGraphEdge.showArrow === true
+    )
+    const nextShowArrow = !currentHasArrow
+    selectedGraphEdge.showArrow = nextShowArrow
+    syncEdgeActionBar(selectedGraphEdge)
+    const graphData = store?.getGraphData ? store.getGraphData() : getGraphData()
+    applyEdgeMutationAndRefresh(selectedGraphEdge, graphData, (rawEdge) => {
+      if (rawEdge) rawEdge.showArrow = nextShowArrow
     })
-  }
+    saveCurrentGraphDebounced?.(true)
+    toast(nextShowArrow ? '➔ 已开启关系端点箭头' : '• 已切换为极简端点')
+  })
 
   if (elements.edgeBarEditLabelBtn) {
     elements.edgeBarEditLabelBtn.addEventListener('click', () => {

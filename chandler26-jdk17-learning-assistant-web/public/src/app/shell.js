@@ -48,6 +48,9 @@ export function createAppShell(ctx) {
     closeWordbookModal,
     closeAccountModal,
     closeEntryStatusModal,
+    closeStudyNoteDrawer,
+    closeReviewNoteModal,
+    closeSceneNotePanel,
   } = ctx
 
   function handleUnauthorized() {
@@ -98,9 +101,11 @@ export function createAppShell(ctx) {
     elements.toggleSidebarBtn.setAttribute('aria-label', collapsed ? '显示导航' : '隐藏导航')
   }
 
-  function setSidebarCollapsed(collapsed) {
+  function setSidebarCollapsed(collapsed, options = {}) {
     state.sidebarCollapsed = collapsed
-    localStorage.setItem('learning.sidebarCollapsed', collapsed ? '1' : '0')
+    if (options.persist !== false) {
+      localStorage.setItem('learning.sidebarCollapsed', collapsed ? '1' : '0')
+    }
     syncSidebarState()
   }
 
@@ -133,6 +138,12 @@ export function createAppShell(ctx) {
       }
     }
     setRuminationActive?.(isRuminationView)
+    const previousView = state.activeView
+    if (previousView && previousView !== viewId) {
+      if (previousView === 'studyView') closeStudyNoteDrawer?.()
+      if (previousView === 'reviewView') closeReviewNoteModal?.()
+      if (previousView === 'scenePlanView') closeSceneNotePanel?.()
+    }
     state.activeView = viewId
     localStorage.setItem('learning.activeView', viewId)
     document.querySelectorAll('.view').forEach((view) => view.classList.toggle('active', view.id === viewId || (view.id === 'articleStudyView' && viewId === 'ruminationView') || (view.id === 'ruminationView' && viewId === 'articleStudyView')))
@@ -160,6 +171,9 @@ export function createAppShell(ctx) {
       if (viewId === 'systemAdminView') {
         systemManagement?.mountPanels()
         systemManagement?.renderSystemTab(state.activeSystemTab || 'adminUserPanel')
+      }
+      if (viewId === 'studyView' && !state.currentRecord) {
+        window.requestAnimationFrame?.(() => elements.termInput?.focus())
       }
     }
     if (window.matchMedia('(max-width: 1100px)').matches) {

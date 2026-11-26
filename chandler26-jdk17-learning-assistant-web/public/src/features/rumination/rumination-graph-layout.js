@@ -2,6 +2,73 @@
  * 知识反刍星系图谱 - 极坐标多环同心轨道与 BFS 无碰撞防重叠布局算法（纯计算模块）
  */
 export { RELATION_CONFIG } from './rumination-graph-renderer.js'
+import { buildSynonymGroupBoxMap, computeSynonymGroups, isInternalSynonymEdge, isSynonymClusterCompact, measureSynonymCluster, packSynonymGroupMembers, sortSynonymMembersForPacking } from './rumination-synonym-groups.js'
+
+const hasSavedCoord = (node) =>
+  typeof node?.x === 'number' && Number.isFinite(node.x)
+  && typeof node?.y === 'number' && Number.isFinite(node.y)
+  && (Boolean(node.fixed) || node.x !== 0 || node.y !== 0)
+
+function prepareSynonymClusters(ctx, rawNodes = [], rawEdges = []) {
+  const byGroup = new Map()
+  for (const n of rawNodes) {
+    if (!n || n.nodeType === 'hub' || !n.synonymGroupId) continue
+    if (!byGroup.has(n.synonymGroupId)) byGroup.set(n.synonymGroupId, [])
+    byGroup.get(n.synonymGroupId).push(n)
+  }
+  const incomingNonSynTargets = new Set(
+    rawEdges.filter((e) => e.relationType !== 'synonym').map((e) => e.target)
+  )
+  const clusters = []
+  const satelliteIds = new Set()
+  const anchorByMemberId = new Map()
+  const clusterMetricsByAnchorId = new Map()
+  const memberMetricsById = new Map()
+
+  for (const [groupId, members] of byGroup.entries()) {
+    if (members.length < 2) continue
+    const anchor = members.find((m) => incomingNonSynTargets.has(m.id) || (m.term && incomingNonSynTargets.has(m.term)))
+      || members.find((m) => m.nodeType === 'core')
+      || members[0]
+    for (const m of members) {
+      memberMetricsById.set(m.id, computeNodeMetrics(ctx, m))
+      anchorByMemberId.set(m.id, anchor)
+      if (m.id !== anchor.id) satelliteIds.add(m.id)
+    }
+    const clusterMetrics = measureSynonymCluster(members, (m) => memberMetricsById.get(m.id))
+    clusterMetricsByAnchorId.set(anchor.id, clusterMetrics)
+    clusters.push({ groupId, anchor, members, clusterMetrics, allFixed: members.every(hasSavedCoord) })
+  }
+  return { clusters, satelliteIds, anchorByMemberId, clusterMetricsByAnchorId, memberMetricsById }
+}
+
+function unpackSynonymClusters(placedNodes, nodeMap, clusterInfo, { preserveAllFixed = false } = {}) {
+  const { clusters, memberMetricsById } = clusterInfo
+  for (const c of clusters) {
+    const anchorLive = nodeMap.get(c.anchor.id) || c.anchor
+    const liveMembers = c.members.map((m) => {
+      const live = nodeMap.get(m.id)
+      const indMetrics = memberMetricsById.get(m.id)
+      const obj = live ? Object.assign(live, indMetrics) : { ...m, ...indMetrics, vx: 0, vy: 0, mass: 1, level: anchorLive.level || 2 }
+      if (!live) {
+        placedNodes.push(obj)
+        nodeMap.set(obj.id, obj)
+        if (obj.term) nodeMap.set(obj.term, obj)
+      }
+      return obj
+    })
+    if (preserveAllFixed && c.allFixed) {
+      const ordered = sortSynonymMembersForPacking(liveMembers)
+      const curGroup = computeSynonymGroups(ordered)[0]
+      if (!curGroup || isSynonymClusterCompact(ordered, (m) => memberMetricsById.get(m.id), { x: curGroup.centerX, y: curGroup.centerY })) {
+        continue
+      }
+      packSynonymGroupMembers(ordered, { x: curGroup.centerX, y: curGroup.centerY }, (m) => memberMetricsById.get(m.id))
+      continue
+    }
+    packSynonymGroupMembers(liveMembers, { x: anchorLive.x || 0, y: anchorLive.y || 0 }, (m) => memberMetricsById.get(m.id))
+  }
+}
 
 export function formatConciseDefinition(def) {
   if (!def) return ''
@@ -77,9 +144,11 @@ export function computeGalaxyLayout(ctx, graphData) {
   const rawEdges = graphData?.edges || []
   const nodeMap = new Map()
   const placedNodes = []
+  const clusterInfo = prepareSynonymClusters(ctx, rawNodes, rawEdges)
+  const getLayoutMetrics = (n) => clusterInfo.clusterMetricsByAnchorId.get(n.id) || computeNodeMetrics(ctx, n)
 
   const hub = rawNodes.find((n) => n.nodeType === 'hub') || { id: 'hub', nodeType: 'hub', label: '场景核心' }
-  const coreNodes = rawNodes.filter((n) => n.nodeType === 'core')
+  const coreNodes = rawNodes.filter((n) => n.nodeType === 'core' && !clusterInfo.satelliteIds.has(n.id))
 
   function overlapsAny(x, y, metrics) {
     const padX = 18
@@ -131,13 +200,6 @@ export function computeGalaxyLayout(ctx, graphData) {
   const orbitAssignments = buildOrbitAssignments(Math.max(1, coreNodes.length))
 
   // 2. 预置所有已保存坐标的非枢纽节点
-  const hasSavedCoord = (node) =>
-    typeof node?.x === 'number'
-    && Number.isFinite(node.x)
-    && typeof node?.y === 'number'
-    && Number.isFinite(node.y)
-    && (Boolean(node.fixed) || node.x !== 0 || node.y !== 0)
-
   for (const rawNode of rawNodes) {
     if (rawNode.nodeType === 'hub' || nodeMap.has(rawNode.id) || !hasSavedCoord(rawNode)) {
       continue
@@ -167,7 +229,7 @@ export function computeGalaxyLayout(ctx, graphData) {
     const orbit = orbitAssignments.find((o) => effectiveIdx >= o.offset && effectiveIdx < o.offset + o.count) || orbitAssignments[0]
     const localIdx = effectiveIdx - orbit.offset
     const coreAngle = (localIdx / Math.max(1, orbit.count)) * Math.PI * 2 + orbit.phase
-    const metrics = computeNodeMetrics(ctx, cNode)
+    const metrics = getLayoutMetrics(cNode)
     const clearPos = resolveClearPosition(coreAngle, orbit.radius, metrics)
 
     const nodeObj = {
@@ -188,7 +250,7 @@ export function computeGalaxyLayout(ctx, graphData) {
   })
 
   // 4. BFS 沿父节点径向外侧扇形展开未放置的 4D 衍生/裂变节点
-  let unplacedNodes = rawNodes.filter((n) => !nodeMap.has(n.id))
+  let unplacedNodes = rawNodes.filter((n) => !nodeMap.has(n.id) && !clusterInfo.satelliteIds.has(n.id))
   while (unplacedNodes.length > 0) {
     const parentToChildren = new Map()
     const newlyPlacedIds = new Set()
@@ -268,6 +330,8 @@ export function computeGalaxyLayout(ctx, graphData) {
       break
     }
   }
+
+  unpackSynonymClusters(placedNodes, nodeMap, clusterInfo, { preserveAllFixed: true })
 
   const edges = rawEdges
     .map((e) => {
@@ -413,19 +477,24 @@ export function computeEdgeRouting(s, t, edge = {}) {
 /**
  * 在世界坐标 (x, y) 处拾取命中的连线（支持线条投影距离与标签胶囊区域判定）。
  */
-export function pickEdgeAt({ edges = [], x, y, scale = 1, tolerance = 14 }) {
+export function pickEdgeAt({ edges = [], nodes = [], x, y, scale = 1, tolerance = 14 }) {
   let bestEdge = null
   let bestDist = Infinity
+  const boxNodes = nodes.length ? nodes : Array.from(new Set(edges.flatMap((e) => [e.sourceNode, e.targetNode]).filter(Boolean)))
+  const { boxByNodeId } = buildSynonymGroupBoxMap(boxNodes)
 
   for (const edge of edges) {
     const s = edge.sourceNode
     const t = edge.targetNode
-    if (!s || !t) continue
+    if (!s || !t || isInternalSynonymEdge(edge)) continue
 
     const isHubEdge = s.nodeType === 'hub' || t.nodeType === 'hub'
     const rawLabel = edge.label ? String(edge.label).trim() : ''
     const tag = !isHubEdge && rawLabel && rawLabel !== '核心' ? rawLabel : null
-    const route = computeEdgeRouting(s, t, edge)
+    const sameGroup = Boolean(s.synonymGroupId && s.synonymGroupId === t.synonymGroupId)
+    const routeSource = (!sameGroup && boxByNodeId.has(s.id)) ? boxByNodeId.get(s.id) : s
+    const routeTarget = (!sameGroup && boxByNodeId.has(t.id)) ? boxByNodeId.get(t.id) : t
+    const route = computeEdgeRouting(routeSource, routeTarget, edge)
 
     if (tag) {
       const estimatedTagW = tag.length * 12 + 14
@@ -494,6 +563,8 @@ export function computeMindMapLayout(ctx, graphData, options = {}) {
 
   const nodeMap = new Map()
   const placedNodes = []
+  const clusterInfo = prepareSynonymClusters(ctx, rawNodes, rawEdges)
+  const getLayoutMetrics = (n) => clusterInfo.clusterMetricsByAnchorId.get(n.id) || computeNodeMetrics(ctx, n)
 
   // 1. 查找中心 Hub 根节点
   const hub = rawNodes.find((n) => n.nodeType === 'hub') || rawNodes[0]
@@ -526,8 +597,11 @@ export function computeMindMapLayout(ctx, graphData, options = {}) {
   }
 
   for (const e of rawEdges) {
-    const sNode = resolveNode(e.source)
-    const tNode = resolveNode(e.target)
+    if (e.relationType === 'synonym') continue
+    const rawS = resolveNode(e.source)
+    const rawT = resolveNode(e.target)
+    const sNode = rawS ? (clusterInfo.anchorByMemberId.get(rawS.id) || rawS) : null
+    const tNode = rawT ? (clusterInfo.anchorByMemberId.get(rawT.id) || rawT) : null
     if (sNode && tNode && sNode.id !== tNode.id) {
       if (!childrenMap.has(sNode.id)) childrenMap.set(sNode.id, [])
       const list = childrenMap.get(sNode.id)
@@ -540,7 +614,7 @@ export function computeMindMapLayout(ctx, graphData, options = {}) {
   // 3. 提取从中心直连的第 1 层主干分支
   let hubChildren = childrenMap.get(hub.id) || []
   if (hubChildren.length === 0) {
-    hubChildren = rawNodes.filter((n) => n.nodeType === 'core')
+    hubChildren = rawNodes.filter((n) => n.nodeType === 'core' && !clusterInfo.satelliteIds.has(n.id))
   }
 
   // 4. 智能识别分支象限方向 (up / down / left / right)
@@ -574,7 +648,7 @@ export function computeMindMapLayout(ctx, graphData, options = {}) {
   // 5.1 水平方向单向排布 (向右 / 向左)
   function layoutHorizontalSubtree(parent, dirX, depth) {
     const children = childrenMap.get(parent.id) || []
-    const metrics = computeNodeMetrics(ctx, parent)
+    const metrics = getLayoutMetrics(parent)
     Object.assign(parent, metrics)
 
     if (children.length === 0) {
@@ -596,7 +670,7 @@ export function computeMindMapLayout(ctx, graphData, options = {}) {
 
     let currentY = startY
     children.forEach((c) => {
-      const cMetrics = computeNodeMetrics(ctx, c)
+      const cMetrics = getLayoutMetrics(c)
       const hSpan = c.subtreeHeight || (c.height + 22)
       const cY = currentY + hSpan / 2
       const cX = baseX + dirX * ((parent.halfW || 44) + 40 + (cMetrics.halfW || 44))
@@ -623,7 +697,7 @@ export function computeMindMapLayout(ctx, graphData, options = {}) {
   // 5.2 垂直方向排布 (向上 / 向下)
   function layoutVerticalSubtree(parent, dirY, depth) {
     const children = childrenMap.get(parent.id) || []
-    const metrics = computeNodeMetrics(ctx, parent)
+    const metrics = getLayoutMetrics(parent)
     Object.assign(parent, metrics)
 
     if (children.length === 0) {
@@ -655,7 +729,7 @@ export function computeMindMapLayout(ctx, graphData, options = {}) {
       const row2Y = row1Y + dirY * 50
 
       row1.forEach((c, idx) => {
-        const cMetrics = computeNodeMetrics(ctx, c)
+        const cMetrics = getLayoutMetrics(c)
         c.x = row1StartX + idx * colW
         c.y = row1Y
         c.fixed = true
@@ -668,7 +742,7 @@ export function computeMindMapLayout(ctx, graphData, options = {}) {
       })
 
       row2.forEach((c, idx) => {
-        const cMetrics = computeNodeMetrics(ctx, c)
+        const cMetrics = getLayoutMetrics(c)
         c.x = row2StartX + idx * colW
         c.y = row2Y
         c.fixed = true
@@ -684,7 +758,7 @@ export function computeMindMapLayout(ctx, graphData, options = {}) {
 
     let currentX = startX
     children.forEach((c) => {
-      const cMetrics = computeNodeMetrics(ctx, c)
+      const cMetrics = getLayoutMetrics(c)
       const wSpan = c.subtreeWidth || (c.width + 24)
       const cX = currentX + wSpan / 2
       const cY = baseY + dirY * ((parent.halfH || 20) + 40 + (cMetrics.halfH || 20))
@@ -714,7 +788,7 @@ export function computeMindMapLayout(ctx, graphData, options = {}) {
     })
     let startY = -rightTotalH / 2
     branchesByDir.right.forEach((root) => {
-      const metrics = computeNodeMetrics(ctx, root)
+      const metrics = getLayoutMetrics(root)
       const span = root.subtreeHeight || 50
       root.x = (hubNode.halfW || 55) + 48 + (metrics.halfW || 44)
       root.y = startY + span / 2
@@ -740,7 +814,7 @@ export function computeMindMapLayout(ctx, graphData, options = {}) {
     })
     let startY = -leftTotalH / 2
     branchesByDir.left.forEach((root) => {
-      const metrics = computeNodeMetrics(ctx, root)
+      const metrics = getLayoutMetrics(root)
       const span = root.subtreeHeight || 50
       root.x = -(hubNode.halfW || 55) - 48 - (metrics.halfW || 44)
       root.y = startY + span / 2
@@ -766,7 +840,7 @@ export function computeMindMapLayout(ctx, graphData, options = {}) {
     })
     let startX = -upTotalW / 2
     branchesByDir.up.forEach((root) => {
-      const metrics = computeNodeMetrics(ctx, root)
+      const metrics = getLayoutMetrics(root)
       const span = root.subtreeWidth || 100
       root.x = startX + span / 2
       root.y = -(hubNode.halfH || 20) - 52 - (metrics.halfH || 20)
@@ -792,7 +866,7 @@ export function computeMindMapLayout(ctx, graphData, options = {}) {
     })
     let startX = -downTotalW / 2
     branchesByDir.down.forEach((root) => {
-      const metrics = computeNodeMetrics(ctx, root)
+      const metrics = getLayoutMetrics(root)
       const span = root.subtreeWidth || 100
       root.x = startX + span / 2
       root.y = (hubNode.halfH || 20) + 52 + (metrics.halfH || 20)
@@ -809,10 +883,10 @@ export function computeMindMapLayout(ctx, graphData, options = {}) {
     })
   }
 
-  // 7. 处理其余节点（如有）
+  // 7. 处理其余非簇卫星节点（如有）
   rawNodes.forEach((n) => {
-    if (!nodeMap.has(n.id)) {
-      const metrics = computeNodeMetrics(ctx, n)
+    if (!nodeMap.has(n.id) && !clusterInfo.satelliteIds.has(n.id)) {
+      const metrics = getLayoutMetrics(n)
       n.x = (placedNodes.length % 5) * 110 - 200
       n.y = Math.floor(placedNodes.length / 5) * 50 + 340
       n.fixed = true
@@ -822,7 +896,12 @@ export function computeMindMapLayout(ctx, graphData, options = {}) {
     }
   })
 
+  // 7b. 将近义词簇锚点还原为独立词节点并紧凑排布同簇兄弟
+  unpackSynonymClusters(placedNodes, nodeMap, clusterInfo, { preserveAllFixed: false })
+
   // 8. 组装最终 edges
+  unpackSynonymClusters(placedNodes, nodeMap, clusterInfo, { preserveAllFixed: true })
+
   const edges = rawEdges
     .map((e) => {
       const s = nodeMap.get(e.source)

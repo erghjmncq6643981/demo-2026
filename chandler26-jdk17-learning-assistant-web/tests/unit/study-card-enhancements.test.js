@@ -349,53 +349,169 @@ describe('Study Card Enhancements', () => {
     expect(input.select).toHaveBeenCalledTimes(1)
   })
 
-  it('toggles study note drawer and supports saving note with shortcut', async () => {
+  it('toggles unified study note drawer with auto-save, preview-first, and isolates cross-view note leakage', async () => {
     const drawer = document.createElement('aside')
     drawer.classList.add('hidden')
-    const backdrop = document.createElement('div')
-    backdrop.classList.add('hidden')
     const title = document.createElement('h3')
+    const status = document.createElement('span')
+    const previewBtn = document.createElement('button')
+    const noteInput = document.createElement('textarea')
+    noteInput.classList.add('hidden')
     const noteView = document.createElement('div')
+    const splitLayout = document.createElement('div')
+    const studyLayout = document.createElement('section')
+    studyLayout.classList.add('is-empty')
+
+    const abundantEntry = { id: 'entry-1', term: 'abundant', normalizedTerm: 'abundant', note: 'Original note' }
+    const reviewBlanketEntry = { id: 'entry-2', term: 'blanket/quilt', normalizedTerm: 'blanket/quilt', note: 'Review blanket note' }
+
     const state = {
-      currentNoteEntry: { id: 'entry-1', term: 'abundant', note: 'Original note' },
+      currentRecord: null,
+      currentNoteEntry: null,
       preview: true,
-      wordbookEntries: [{ id: 'entry-1', term: 'abundant', note: 'Original note' }],
-      reviewEntries: [],
+      wordbookEntries: [abundantEntry],
+      reviewEntries: [reviewBlanketEntry],
     }
 
-    // Instantiate notes feature
+    const setSidebarCollapsed = vi.fn()
     const notes = createStudyNotesFeature({
       state,
       elements: {
+        studyLayout,
+        studySplitLayout: splitLayout,
         studyNoteDrawer: drawer,
-        studyNoteDrawerBackdrop: backdrop,
         studyNoteDrawerTitle: title,
+        studyNoteStatus: status,
+        studyNotePreviewBtn: previewBtn,
+        studyNoteInput: noteInput,
         studyNote: noteView,
       },
       request: vi.fn(),
       toast: vi.fn(),
       logEvent: vi.fn(),
-      findEntryForRecord: vi.fn(),
+      findEntryForRecord: (record) => (record?.normalizedTerm === 'abundant' ? abundantEntry : null),
       renderWordbookEntries: vi.fn(),
       renderWordbookFocus: vi.fn(),
       renderReviewQueue: vi.fn(),
+      setSidebarCollapsed,
     })
 
-    notes.openStudyNoteDrawer(true)
+    // 1. Cross-view isolation: saving a review entry while studyView has no currentRecord does NOT leak into studyNote
+    await notes.saveEntry('entry-2', { note: 'Review blanket updated' }, { silent: true })
+    notes.openStudyNoteDrawer(false)
+    expect(drawer.classList.contains('hidden')).toBe(true)
+    expect(setSidebarCollapsed).not.toHaveBeenCalled()
+    expect(noteView.innerHTML).not.toContain('Review blanket updated')
+
+    // 2. Sync record for 'abundant' -> opens in preview-first mode with concise title & status and collapses sidebar
+    state.currentRecord = { term: 'abundant', normalizedTerm: 'abundant', userEntry: abundantEntry }
+    notes.syncStudyNoteForRecord(state.currentRecord)
+    notes.openStudyNoteDrawer(false)
+    expect(setSidebarCollapsed).toHaveBeenCalledWith(true, { persist: false })
     expect(drawer.classList.contains('hidden')).toBe(false)
-    expect(backdrop.classList.contains('hidden')).toBe(false)
+    expect(title.textContent).toBe('学习笔记')
+    expect(status.textContent).toBe('✓ 已保存')
+    expect(previewBtn.textContent).toBe('✏️ 编辑')
+    expect(noteView.classList.contains('hidden')).toBe(false)
+    expect(noteInput.classList.contains('hidden')).toBe(true)
 
-    const textarea = noteView.querySelector('textarea')
-    expect(textarea).toBeTruthy()
-    expect(textarea.value).toBe('Original note')
+    // 3. Switch to edit mode, update text, save manually
+    notes.toggleStudyNotePreview()
+    expect(noteInput.classList.contains('hidden')).toBe(false)
+    expect(previewBtn.textContent).toBe('👁️ 预览')
 
-    // Simulate modifying and saving with Cmd+S
-    textarea.value = 'Updated note with shortcut'
-    const event = new KeyboardEvent('keydown', { key: 's', metaKey: true, bubbles: true })
-    textarea.dispatchEvent(event)
-    await new Promise((resolve) => setTimeout(resolve, 10))
+    noteInput.value = 'Updated abundant note'
+    notes.handleStudyNoteInput()
+    expect(status.textContent).toBe('● 待保存')
 
-    expect(state.currentNoteEntry.note).toBe('Updated note with shortcut')
+    await notes.saveStudyNote(true)
+    expect(abundantEntry.note).toBe('Updated abundant note')
+    expect(status.textContent).toBe('✓ 已保存')
+  })
+
+  it('toggles two-state studyView and hides empty secondary panels', () => {
+    const studyLayout = document.createElement('section')
+    studyLayout.classList.add('is-empty')
+    const studySplitLayout = document.createElement('div')
+    studySplitLayout.classList.add('hidden')
+    const morphologyPanel = document.createElement('section')
+    const morphologyBoard = document.createElement('div')
+    const examplesTipsGrid = document.createElement('section')
+    const examplesPanel = document.createElement('div')
+    const examples = document.createElement('div')
+    const memoryTipsPanel = document.createElement('div')
+    const memoryTips = document.createElement('div')
+    const collocationsRelationsGrid = document.createElement('section')
+    const collocationsPanel = document.createElement('div')
+    const collocations = document.createElement('div')
+    const relationsPanel = document.createElement('div')
+    const relationList = document.createElement('div')
+    const tagsPanel = document.createElement('section')
+    const tagList = document.createElement('div')
+
+    const closeStudyNoteDrawer = vi.fn()
+    const syncStudyNoteForRecord = vi.fn()
+
+    const cardFeature = createStudyCardFeature({
+      state: { wordbookEntries: [], wordbooks: [] },
+      elements: {
+        studyLayout,
+        studySplitLayout,
+        morphologyPanel,
+        morphologyBoard,
+        examplesTipsGrid,
+        examplesPanel,
+        examples,
+        memoryTipsPanel,
+        memoryTips,
+        collocationsRelationsGrid,
+        collocationsPanel,
+        collocations,
+        relationsPanel,
+        relationList,
+        tagsPanel,
+        tagList,
+      },
+      confirmAction: vi.fn(),
+      setView: vi.fn(),
+      study: vi.fn(),
+      renderReviewFocus: vi.fn(),
+      findEntryForRecord: vi.fn().mockReturnValue(null),
+      renderNotes: vi.fn(),
+      closeStudyNoteDrawer,
+      syncStudyNoteForRecord,
+      speak: vi.fn(),
+      speakSentence: vi.fn(),
+      request: vi.fn(),
+    })
+
+    // Empty state stays centered and hides split layout
+    cardFeature.renderRecord(null)
+    expect(studyLayout.classList.contains('is-empty')).toBe(true)
+    expect(studySplitLayout.classList.contains('hidden')).toBe(true)
+    expect(closeStudyNoteDrawer).toHaveBeenCalled()
+
+    // Record with examples only -> reveals studySplitLayout, hides empty panels, marks single-col grid
+    cardFeature.renderRecord({
+      term: 'cat',
+      normalizedTerm: 'cat',
+      parsed: {
+        definitions: [{ pos: 'n.', cn: '猫', en: 'feline' }],
+        examples: [{ sentence: 'The cat slept.', translation: '猫睡着了。' }],
+      },
+      tags: [],
+      relations: [],
+    })
+    expect(studyLayout.classList.contains('is-empty')).toBe(false)
+    expect(studySplitLayout.classList.contains('hidden')).toBe(false)
+    expect(morphologyPanel.classList.contains('hidden')).toBe(true)
+    expect(examplesPanel.classList.contains('hidden')).toBe(false)
+    expect(memoryTipsPanel.classList.contains('hidden')).toBe(true)
+    expect(examplesTipsGrid.classList.contains('hidden')).toBe(false)
+    expect(examplesTipsGrid.classList.contains('single-col')).toBe(true)
+    expect(collocationsRelationsGrid.classList.contains('hidden')).toBe(true)
+    expect(tagsPanel.classList.contains('hidden')).toBe(true)
+    expect(syncStudyNoteForRecord).toHaveBeenCalled()
   })
 
   it('opens and closes mini quiz modal correctly', () => {
@@ -440,7 +556,7 @@ describe('Study Card Enhancements', () => {
     const reviewNoteModal = document.createElement('div')
     reviewNoteModal.classList.add('hidden')
 
-    const state = { activeView: 'studyView' }
+    const state = { activeView: 'studyView', currentRecord: null }
     const elements = {
       wordbookCardModal,
       wordbookFocus,
@@ -457,7 +573,14 @@ describe('Study Card Enhancements', () => {
       toggleReviewNotePreview,
     })
 
-    // 1. In studyView, press 'n' does NOT trigger note (to prevent follow-typing conflicts), while Cmd+E triggers toggleStudyNoteDrawer
+    // 1a. When currentRecord is null in studyView, Cmd+E and T do nothing
+    document.dispatchEvent(new KeyboardEvent('keydown', { key: 'e', metaKey: true, bubbles: true }))
+    document.dispatchEvent(new KeyboardEvent('keydown', { key: 't', bubbles: true }))
+    expect(toggleStudyNoteDrawer).not.toHaveBeenCalled()
+    expect(openMiniQuizModal).not.toHaveBeenCalled()
+
+    // 1b. With currentRecord in studyView, press 'n' does NOT trigger note, while Cmd+E triggers toggleStudyNoteDrawer
+    state.currentRecord = { term: 'abundant', normalizedTerm: 'abundant' }
     document.dispatchEvent(new KeyboardEvent('keydown', { key: 'n', bubbles: true }))
     expect(toggleStudyNoteDrawer).not.toHaveBeenCalled()
     document.dispatchEvent(new KeyboardEvent('keydown', { key: 'e', metaKey: true, bubbles: true }))
@@ -486,5 +609,68 @@ describe('Study Card Enhancements', () => {
     reviewNoteModal.classList.remove('hidden')
     document.dispatchEvent(new KeyboardEvent('keydown', { key: 'e', metaKey: true, bubbles: true }))
     expect(toggleReviewNotePreview).toHaveBeenCalledTimes(1)
+  })
+
+  it('unifies wordbookCardModal inline note editor with auto-save and preview toggle', async () => {
+    vi.useFakeTimers()
+    try {
+      const wordbookCardModal = document.createElement('div')
+      const wordbookFocus = document.createElement('div')
+      wordbookFocus.innerHTML = `
+        <div class="focus-section">
+          <div class="panel-heading compact-heading">
+            <div class="scene-note-header-main">
+              <h3>笔记</h3>
+              <span class="scene-note-status saved" data-focus-note-status>✓ 已保存</span>
+            </div>
+            <button type="button" data-edit-focus-note>✏️ 编辑</button>
+          </div>
+          <div class="note-view scene-note-preview"><p>Initial wordbook note</p></div>
+        </div>
+      `
+      const entry = { id: 'wb-entry-1', term: 'vigor', normalizedTerm: 'vigor', note: 'Initial wordbook note' }
+      const state = {
+        preview: true,
+        selectedEntry: entry,
+        wordbookEntries: [entry],
+        reviewEntries: [],
+      }
+      const notes = createStudyNotesFeature({
+        state,
+        elements: { wordbookCardModal, wordbookFocus },
+        request: vi.fn(),
+        toast: vi.fn(),
+        logEvent: vi.fn(),
+        findEntryForRecord: vi.fn(),
+        renderWordbookEntries: vi.fn(),
+        renderWordbookFocus: vi.fn(),
+        renderReviewQueue: vi.fn(),
+      })
+
+      await notes.editCurrentNote()
+      const toggleBtn = wordbookFocus.querySelector('[data-edit-focus-note]')
+      const statusEl = wordbookFocus.querySelector('[data-focus-note-status]')
+      const textarea = wordbookFocus.querySelector('textarea')
+      expect(toggleBtn.textContent).toBe('👁️ 预览')
+      expect(textarea).toBeTruthy()
+      expect(textarea.value).toBe('Initial wordbook note')
+
+      textarea.value = 'Updated wordbook note'
+      textarea.dispatchEvent(new Event('input'))
+      expect(statusEl.textContent).toBe('● 待保存')
+
+      await vi.advanceTimersByTimeAsync(2500)
+      expect(entry.note).toBe('Updated wordbook note')
+      expect(statusEl.textContent).toBe('✓ 已保存')
+
+      // Toggling again exits edit mode back to Markdown preview
+      await notes.editCurrentNote()
+      await Promise.resolve()
+      expect(wordbookFocus.querySelector('.note-editor')).toBeNull()
+      expect(wordbookFocus.querySelector('.note-view').innerHTML).toContain('Updated wordbook note')
+      expect(toggleBtn.textContent).toBe('✏️ 编辑')
+    } finally {
+      vi.useRealTimers()
+    }
   })
 })

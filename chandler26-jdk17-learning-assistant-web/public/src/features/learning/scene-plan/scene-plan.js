@@ -31,7 +31,7 @@ import { isRequestAbort } from '/src/shared/latest-request.js'
 import { createVocabularyCatalogApi } from '/src/features/vocabulary/catalog/api.js'
 
 export function createScenePlanFeature(ctx) {
-  const { state, elements, request, toast, logEvent, confirmAction, escapeHtml, sameId, speakSentence, loadWordbooks } = ctx
+  const { state, elements, request, toast, logEvent, confirmAction, escapeHtml, sameId, speakSentence, loadWordbooks, setSidebarCollapsed } = ctx
   const api = createScenePlanApi(request)
   const catalogApi = createVocabularyCatalogApi(request)
   let sceneStudy
@@ -358,7 +358,7 @@ export function createScenePlanFeature(ctx) {
   const importWorkflow = createVocabularyImportWorkflow({ state, elements, catalogApi, renderSourceOptions, setButtonLoading, toast, logEvent, confirmAction, escapeHtml, sameId, loadWordbooks })
   const { open: openVocabularyImport, close: closeVocabularyImport, start: startVocabularyImport, remove: deleteImportJob, saveMetadata: saveVocabularyImportMetadata, loadReview: loadImportReview, openReview: openImportReview, confirmAll: confirmAllWarnings, publish: publishVocabularyImport, triggerAnalysis: triggerVocabularyAnalysis, applyHistoryPage: applyImportHistoryPage, renderImportList, changeSearch: changeImportSearch, changeWarningOnly: changeImportWarningOnly, previousPage: previousImportPage, nextPage: nextImportPage, previousHistoryPage: previousHistoryPage, nextHistoryPage: nextHistoryPage } = importWorkflow
 
-  sceneNote = createSceneNote({ state, elements, api, activeUnit, sameId, toast, logEvent })
+  sceneNote = createSceneNote({ state, elements, api, activeUnit, sameId, toast, logEvent, setSidebarCollapsed })
   sceneActions = createSceneActions({ state, elements, api, request, activeUnit, selectPlan, loadSceneData, renderSceneView, renderCurrentScene, setButtonLoading, confirmAction, toast, logEvent, sameId, createPreviewCookingUnit })
   sceneStudy = createSceneStudy({
     state,

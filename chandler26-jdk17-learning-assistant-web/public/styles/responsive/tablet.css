@@ -236,4 +236,15 @@
     flex-direction: column;
     overflow-y: auto;
   }
+
+  .study-split-layout.with-note-open .study-main {
+    flex: 0 0 auto;
+    height: auto;
+    max-height: 48vh;
+  }
+
+  .study-split-layout.with-note-open .study-note-panel {
+    flex: 1 0 auto;
+    min-height: 260px;
+  }
 }

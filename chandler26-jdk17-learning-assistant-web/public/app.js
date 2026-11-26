@@ -136,6 +136,7 @@ scenePlanFeature = createScenePlanFeature({
   preloadAudio,
   speakSentence,
   loadWordbooks: profile.loadWordbooks,
+  setSidebarCollapsed: (collapsed, options) => setSidebarCollapsed(collapsed, options),
 })
 
 const {
@@ -198,6 +199,9 @@ const {
   closeWordbookModal: profile.closeWordbookModal,
   closeAccountModal: profile.closeAccountModal,
   closeEntryStatusModal: profile.closeEntryStatusModal,
+  closeStudyNoteDrawer: studyFacade.closeStudyNoteDrawer,
+  closeReviewNoteModal: () => reviewFeature?.closeReviewNoteModal?.(),
+  closeSceneNotePanel: () => scenePlanFeature?.closeSceneNotePanel?.(),
 })
 
 studyFeature = createStudyFeature({
@@ -223,6 +227,7 @@ studyFeature = createStudyFeature({
   speak,
   preloadAudio,
   speakSentence,
+  setSidebarCollapsed,
 })
 
 const wordbookTransferFeature = createWordbookTransferFeature({
@@ -284,6 +289,7 @@ reviewFeature = createReviewFeature({
   reviewResultToStatus,
   statusLabel,
   setFocusMode: setGlobalFocusMode,
+  setSidebarCollapsed,
 })
 
 const {
@@ -298,6 +304,10 @@ const {
   closeReviewNoteModal,
   toggleReviewNotePreview,
   saveReviewNote,
+  flushReviewNoteSave,
+  handleReviewNoteInput,
+  handleReviewNoteCompositionStart,
+  handleReviewNoteCompositionEnd,
   openReviewQueueModal,
   closeReviewQueueModal,
   exportReviewQueueImage,
@@ -480,6 +490,12 @@ bindAppEvents({
   openStudyNoteDrawer: studyFacade.openStudyNoteDrawer,
   closeStudyNoteDrawer: studyFacade.closeStudyNoteDrawer,
   toggleStudyNoteDrawer: studyFacade.toggleStudyNoteDrawer,
+  toggleStudyNotePreview: studyFacade.toggleStudyNotePreview,
+  saveStudyNote: studyFacade.saveStudyNote,
+  flushStudyNoteSave: studyFacade.flushStudyNoteSave,
+  handleStudyNoteInput: studyFacade.handleStudyNoteInput,
+  handleStudyNoteCompositionStart: studyFacade.handleStudyNoteCompositionStart,
+  handleStudyNoteCompositionEnd: studyFacade.handleStudyNoteCompositionEnd,
   openMiniQuizModal: studyFacade.openMiniQuizModal,
   closeMiniQuizModal: studyFacade.closeMiniQuizModal,
   toggleReviewNoteDrawer,
@@ -487,6 +503,10 @@ bindAppEvents({
   closeForgottenDetailModal,
   toggleReviewNotePreview,
   saveReviewNote,
+  flushReviewNoteSave,
+  handleReviewNoteInput,
+  handleReviewNoteCompositionStart,
+  handleReviewNoteCompositionEnd,
   openReviewQueueModal,
   closeReviewQueueModal,
   exportReviewQueueImage,

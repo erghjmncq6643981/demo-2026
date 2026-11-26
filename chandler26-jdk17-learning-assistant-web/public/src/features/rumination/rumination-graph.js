@@ -8,6 +8,7 @@ import { bindGraphA11yAndTouch } from '/src/features/rumination/rumination-graph
 import { prefersReducedMotion } from '/src/shared/celebration.js'
 import { findDropTarget } from '/src/features/rumination/rumination-graph-drag.js'
 import { drawGraphScene, RELATION_CONFIG } from '/src/features/rumination/rumination-graph-renderer.js'
+import { computeSynonymGroups, pickSynonymGroupAt, findSynonymGroupForNode, isInternalSynonymEdge, translateSynonymGroupNodes } from '/src/features/rumination/rumination-synonym-groups.js'
 
 export { RELATION_CONFIG }
 
@@ -30,6 +31,7 @@ export function createRuminationGraph(canvas, options = {}) {
   let hasFittedViewport = false, hasUserTransformed = false, isPanning = false, panStart = { x: 0, y: 0 }
   let draggedNode = null, potentialNode = null, hoveredNode = null, isDraggingNode = false, dragStartPos = { x: 0, y: 0 }
   let currentDropTarget = null, longPressTimer = null, lastTapState = { nodeId: null, time: 0 }
+  let draggedGroup = null, hoveredGroupId = null, groupDragLastWorld = null
 
   // 动画循环与状态控制
   let animationFrameId = null, isSleeping = false, isPaused = false, isDestroyed = false
@@ -43,6 +45,7 @@ export function createRuminationGraph(canvas, options = {}) {
   const onBackgroundContextMenu = options.onBackgroundContextMenu || (() => {})
   const onNodeDragStart = options.onNodeDragStart || (() => {})
   const onNodeDragEnd = options.onNodeDragEnd || (() => {})
+  const onGroupDragEnd = options.onGroupDragEnd || (() => {})
   const onNodeReparent = options.onNodeReparent || (() => {})
   const onNodeAction = options.onNodeAction || (() => {})
   const onEdgeDblClick = options.onEdgeDblClick || (() => {})
@@ -212,6 +215,7 @@ export function createRuminationGraph(canvas, options = {}) {
       const n1 = nodes[i]
       for (let j = i + 1; j < nodes.length; j++) {
         const n2 = nodes[j]
+        if (n1.synonymGroupId && n1.synonymGroupId === n2.synonymGroupId) continue
         const dx = n2.x - n1.x
         const dy = n2.y - n1.y
         const minW = (n1.halfW || 40) + (n2.halfW || 40) + 18
@@ -243,7 +247,7 @@ export function createRuminationGraph(canvas, options = {}) {
       const dy = t.y - s.y
       const dist = Math.sqrt(dx * dx + dy * dy) || 1
       const isHubConn = s.nodeType === 'hub' || t.nodeType === 'hub'
-      const targetLen = isHubConn ? 185 : (edge.relationType === 'peer' ? 150 : 135)
+      const targetLen = isHubConn ? 185 : (edge.relationType === 'synonym' ? 115 : edge.relationType === 'peer' ? 150 : 135)
       const displacement = dist - targetLen
       const force = displacement * kSpring
       const fx = (dx / dist) * force
@@ -285,6 +289,7 @@ export function createRuminationGraph(canvas, options = {}) {
       childrenMap.set(n.id, [])
     }
     for (const e of edges) {
+      if (e.relationType === 'synonym') continue
       const sId = e.sourceNode?.id || e.source
       const tId = e.targetNode?.id || e.target
       if (sId && tId && sId !== tId && childrenMap.has(sId)) {
@@ -327,7 +332,9 @@ export function createRuminationGraph(canvas, options = {}) {
     }
     const visibleNodes = nodes.filter((n) => !hiddenNodeIds.has(n.id))
     const visibleEdges = edges.filter(
-      (e) => !hiddenNodeIds.has(e.sourceNode?.id || e.source) && !hiddenNodeIds.has(e.targetNode?.id || e.target)
+      (e) => !isInternalSynonymEdge(e, nodeMap)
+        && !hiddenNodeIds.has(e.sourceNode?.id || e.source)
+        && !hiddenNodeIds.has(e.targetNode?.id || e.target)
     )
     return { visibleNodes, visibleEdges, hiddenNodeIds, childrenMap }
   }
@@ -387,6 +394,8 @@ export function createRuminationGraph(canvas, options = {}) {
       isDraggingNode,
       draggedNode,
       currentDropTarget,
+      hoveredGroupId,
+      draggingGroupId: draggedGroup?.id || null,
       relationConfig: RELATION_CONFIG,
     })
   }
@@ -494,8 +503,27 @@ export function createRuminationGraph(canvas, options = {}) {
 
   function getEdgeAt(sx, sy) {
     const { x, y } = screenToWorld(sx, sy)
-    const { visibleEdges } = getVisibleElements()
-    return pickEdgeAt({ edges: visibleEdges, x, y, scale: transform.scale, tolerance: 14 })
+    const { visibleNodes, visibleEdges } = getVisibleElements()
+    return pickEdgeAt({ edges: visibleEdges, nodes: visibleNodes, x, y, scale: transform.scale, tolerance: 14 })
+  }
+
+  function startDragForNode(node, sx, sy) {
+    const synGroup = findSynonymGroupForNode(getVisibleElements().visibleNodes, node.id)
+    if (synGroup) {
+      draggedGroup = synGroup
+      groupDragLastWorld = screenToWorld(sx, sy)
+      isDraggingNode = false
+      draggedNode = null
+      canvas.style.cursor = 'move'
+      freezePhysics()
+      onNodeDragStart(synGroup.nodes[0])
+      return
+    }
+    isDraggingNode = true
+    draggedNode = node
+    canvas.style.cursor = 'move'
+    freezePhysics()
+    onNodeDragStart(draggedNode)
   }
 
   // 交互事件监听
@@ -538,7 +566,7 @@ export function createRuminationGraph(canvas, options = {}) {
       lastTapState = { nodeId: clickedNode.id, time: now }
 
       potentialNode = clickedNode
-      dragStartPos = { x: e.clientX, y: e.clientY, isRapidSecondTap }
+      dragStartPos = { x: e.clientX, y: e.clientY, sx, sy, isRapidSecondTap }
       isDraggingNode = false
       draggedNode = null
 
@@ -549,13 +577,7 @@ export function createRuminationGraph(canvas, options = {}) {
 
       if (!isRapidSecondTap && clickedNode.nodeType !== 'hub') {
         longPressTimer = setTimeout(() => {
-          if (potentialNode) {
-            isDraggingNode = true
-            draggedNode = potentialNode
-            canvas.style.cursor = 'move'
-            freezePhysics()
-            onNodeDragStart(draggedNode)
-          }
+          if (potentialNode) startDragForNode(potentialNode, dragStartPos.sx, dragStartPos.sy)
         }, 180)
       }
     } else {
@@ -579,9 +601,19 @@ export function createRuminationGraph(canvas, options = {}) {
           onEdgeDeselect()
           requestRedraw()
         }
-        isPanning = true
-        panStart = { x: e.clientX - transform.x, y: e.clientY - transform.y }
-        canvas.style.cursor = 'grabbing'
+        const world = screenToWorld(sx, sy)
+        const hitGroup = pickSynonymGroupAt(computeSynonymGroups(getVisibleElements().visibleNodes), world.x, world.y)
+        if (hitGroup) {
+          draggedGroup = hitGroup
+          groupDragLastWorld = world
+          freezePhysics()
+          onNodeDragStart(hitGroup.nodes[0])
+          canvas.style.cursor = 'move'
+        } else {
+          isPanning = true
+          panStart = { x: e.clientX - transform.x, y: e.clientY - transform.y }
+          canvas.style.cursor = 'grabbing'
+        }
       }
     }
   }
@@ -591,23 +623,21 @@ export function createRuminationGraph(canvas, options = {}) {
     const sx = e.clientX - rect.left
     const sy = e.clientY - rect.top
 
-    if (potentialNode && !isDraggingNode && potentialNode.nodeType !== 'hub') {
+    if (potentialNode && !isDraggingNode && !draggedGroup && potentialNode.nodeType !== 'hub') {
       const moveThreshold = dragStartPos.isRapidSecondTap ? 14 : 6
       const moveDist = Math.hypot(e.clientX - dragStartPos.x, e.clientY - dragStartPos.y)
       if (moveDist > moveThreshold) {
-        if (longPressTimer) {
-          clearTimeout(longPressTimer)
-          longPressTimer = null
-        }
-        isDraggingNode = true
-        draggedNode = potentialNode
-        canvas.style.cursor = 'move'
-        freezePhysics()
-        onNodeDragStart(draggedNode)
+        if (longPressTimer) { clearTimeout(longPressTimer); longPressTimer = null }
+        startDragForNode(potentialNode, dragStartPos.sx ?? sx, dragStartPos.sy ?? sy)
       }
     }
 
-    if (isDraggingNode && draggedNode) {
+    if (draggedGroup) {
+      const world = screenToWorld(sx, sy)
+      translateSynonymGroupNodes(draggedGroup.nodes, world.x - groupDragLastWorld.x, world.y - groupDragLastWorld.y)
+      groupDragLastWorld = world
+      requestRedraw()
+    } else if (isDraggingNode && draggedNode) {
       const world = screenToWorld(sx, sy)
       draggedNode.x = world.x
       draggedNode.y = world.y
@@ -625,10 +655,14 @@ export function createRuminationGraph(canvas, options = {}) {
       requestRedraw()
     } else {
       const prevHovered = hoveredNode
+      const prevHoveredGroupId = hoveredGroupId
       hoveredNode = getNodeAt(sx, sy)
       const isOverEdge = !hoveredNode && Boolean(getEdgeAt(sx, sy))
-      if (hoveredNode !== prevHovered || isOverEdge) {
-        canvas.style.cursor = (hoveredNode || isOverEdge) ? 'pointer' : 'grab'
+      const world = screenToWorld(sx, sy)
+      const overGroup = (!hoveredNode && !isOverEdge) ? pickSynonymGroupAt(computeSynonymGroups(getVisibleElements().visibleNodes), world.x, world.y) : null
+      hoveredGroupId = overGroup?.id || null
+      if (hoveredNode !== prevHovered || isOverEdge || hoveredGroupId !== prevHoveredGroupId) {
+        canvas.style.cursor = (hoveredNode || isOverEdge || hoveredGroupId) ? 'pointer' : 'grab'
         requestRedraw()
       }
     }
@@ -640,7 +674,14 @@ export function createRuminationGraph(canvas, options = {}) {
       longPressTimer = null
     }
 
-    if (isDraggingNode && draggedNode) {
+    if (draggedGroup) {
+      onGroupDragEnd(draggedGroup.nodes)
+      draggedGroup = null
+      groupDragLastWorld = null
+      potentialNode = null
+      canvas.style.cursor = 'grab'
+      requestRedraw()
+    } else if (isDraggingNode && draggedNode) {
       const dropTarget = currentDropTarget
       currentDropTarget = null
       draggedNode.fixed = true
@@ -893,59 +934,32 @@ export function createRuminationGraph(canvas, options = {}) {
     },
     tidyLayout() {
       const cleanData = {
-        nodes: nodes.map((n) => ({
-          ...n,
-          fixed: n.nodeType === 'hub',
-          x: n.nodeType === 'hub' ? 0 : undefined,
-          y: n.nodeType === 'hub' ? 0 : undefined,
-        })),
+        nodes: nodes.map((n) => ({ ...n, fixed: n.nodeType === 'hub', x: n.nodeType === 'hub' ? 0 : undefined, y: n.nodeType === 'hub' ? 0 : undefined })),
         edges,
       }
       const layout = tidyUpGalaxyLayout(ctx, cleanData)
       nodeMap.clear()
-      layout.nodes.forEach((n) => {
-        nodeMap.set(n.id, n)
-        if (n.term) nodeMap.set(n.term, n)
-      })
+      layout.nodes.forEach((n) => { nodeMap.set(n.id, n); if (n.term) nodeMap.set(n.term, n) })
       nodes = layout.nodes
       edges = layout.edges
-      for (const n of nodes) {
-        n.fixed = true
-        n.vx = 0
-        n.vy = 0
-      }
-      hasFittedViewport = false
-      hasUserTransformed = false
+      for (const n of nodes) { n.fixed = true; n.vx = 0; n.vy = 0 }
+      hasFittedViewport = false; hasUserTransformed = false
       fitToViewport({ redraw: false })
       freezePhysics()
       requestRedraw()
       return nodes
     },
     toggleCollapse: toggleCollapseNode,
-    expandAll() {
-      nodes.forEach((n) => { n.collapsed = false })
-      requestRedraw()
-    },
-    collapseAll() {
-      nodes.forEach((n) => {
-        if (n.hasChildren && n.nodeType !== 'hub') n.collapsed = true
-      })
-      requestRedraw()
-    },
+    expandAll() { nodes.forEach((n) => { n.collapsed = false }); requestRedraw() },
+    collapseAll() { nodes.forEach((n) => { if (n.hasChildren && n.nodeType !== 'hub') n.collapsed = true }); requestRedraw() },
     isNodeCollapsed: (nodeId) => Boolean(nodeMap.get(nodeId)?.collapsed),
     getTransform: () => ({ ...transform }),
-    triggerSelectNode(nodeId) {
-      const target = nodeMap.get(nodeId)
-      if (target) onNodeSelect(target)
-    },
+    triggerSelectNode(nodeId) { const target = nodeMap.get(nodeId); if (target) onNodeSelect(target) },
     destroy() {
       isDestroyed = true
       stopLoop()
       unbindA11yAndTouch()
-      if (longPressTimer) {
-        clearTimeout(longPressTimer)
-        longPressTimer = null
-      }
+      if (longPressTimer) { clearTimeout(longPressTimer); longPressTimer = null }
       resizeObserver.disconnect()
       canvas.removeEventListener('mousedown', onPointerDown)
       canvas.removeEventListener('dblclick', onDblClick)
@@ -955,9 +969,7 @@ export function createRuminationGraph(canvas, options = {}) {
       canvas.removeEventListener('wheel', onWheel)
       window.removeEventListener('resize', resize)
       document.removeEventListener('visibilitychange', onVisibilityChange)
-      if (motionQuery?.removeEventListener) {
-        motionQuery.removeEventListener('change', onMotionPreferenceChange)
-      }
+      motionQuery?.removeEventListener?.('change', onMotionPreferenceChange)
     },
   }
 }

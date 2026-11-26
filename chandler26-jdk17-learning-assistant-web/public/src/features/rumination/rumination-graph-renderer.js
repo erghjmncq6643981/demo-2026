@@ -5,12 +5,14 @@
 
 import { drawDropTargetFeedback } from './rumination-graph-drag.js'
 import { computeEdgeRouting, computeNodeCollapseTogglePoint } from './rumination-graph-layout.js'
+import { buildSynonymGroupBoxMap, drawSynonymGroups, isInternalSynonymEdge } from './rumination-synonym-groups.js'
 
 export const RELATION_CONFIG = {
   peer: { color: '#10b981', label: '同类', glow: 'rgba(16, 185, 129, 0.4)' },
   action: { color: '#38bdf8', label: '动作', glow: 'rgba(56, 189, 248, 0.4)' },
   downstream: { color: '#f97316', label: '加工', glow: 'rgba(249, 115, 22, 0.4)' },
   attribute: { color: '#c084fc', label: '感官', glow: 'rgba(192, 132, 252, 0.4)' },
+  synonym: { color: '#2dd4bf', label: '近义', glow: 'rgba(45, 212, 191, 0.4)' },
 }
 
 function drawArrowhead(ctx, toX, toY, angle, size = 7, color = '#38bdf8') {
@@ -258,6 +260,8 @@ export function drawGraphScene({
   isDraggingNode = false,
   draggedNode = null,
   currentDropTarget = null,
+  hoveredGroupId = null,
+  draggingGroupId = null,
   relationConfig = RELATION_CONFIG,
 }) {
   ctx.clearRect(0, 0, width, height)
@@ -291,16 +295,24 @@ export function drawGraphScene({
   }
   ctx.globalAlpha = 1
 
+  // 绘制近义词簇虚线包围框（置于底层连线之后、星尘之上）
+  const { groups: synonymGroups, boxByNodeId } = buildSynonymGroupBoxMap(nodes)
+  drawSynonymGroups(ctx, synonymGroups, { hoveredGroupId, draggingGroupId })
+
   // 绘制连线
   for (const edge of edges) {
     const s = edge.sourceNode
     const t = edge.targetNode
     if (!s || !t) continue
+    if (isInternalSynonymEdge(edge)) continue
     const isEdgeSelected = selectedEdge === edge
     const isConnectedSelected = selectedNodeIds.has(s.id) && selectedNodeIds.has(t.id)
     const relConf = relationConfig[edge.relationType] || { color: '#64748b', glow: 'rgba(100,116,139,0.3)', label: '' }
     const isHubEdge = s.nodeType === 'hub' || t.nodeType === 'hub'
-    const route = computeEdgeRouting(s, t, edge)
+    const sameGroup = Boolean(s.synonymGroupId && s.synonymGroupId === t.synonymGroupId)
+    const routeSource = (!sameGroup && boxByNodeId.has(s.id)) ? boxByNodeId.get(s.id) : s
+    const routeTarget = (!sameGroup && boxByNodeId.has(t.id)) ? boxByNodeId.get(t.id) : t
+    const route = computeEdgeRouting(routeSource, routeTarget, edge)
 
     ctx.save()
     ctx.lineWidth = isEdgeSelected ? 3.2 : isConnectedSelected ? 2.8 : isHubEdge ? 1.2 : 1.6
@@ -318,6 +330,10 @@ export function drawGraphScene({
       ctx.shadowBlur = 10
     }
 
+    const isSynonymEdge = edge.relationType === 'synonym'
+    if (isSynonymEdge && typeof ctx.setLineDash === 'function') {
+      ctx.setLineDash([6, 4])
+    }
     ctx.beginPath()
     ctx.moveTo(route.startX, route.startY)
     if (route.isCurved && typeof ctx.bezierCurveTo === 'function') {
@@ -326,6 +342,9 @@ export function drawGraphScene({
       ctx.lineTo(route.endX, route.endY)
     }
     ctx.stroke()
+    if (isSynonymEdge && typeof ctx.setLineDash === 'function') {
+      ctx.setLineDash([])
+    }
     ctx.restore()
 
     // 绘制语义端点标记（箭头或圆点）
@@ -344,6 +363,9 @@ export function drawGraphScene({
     if (showArrow) {
       drawArrowhead(ctx, route.endX, route.endY, route.endAngle, isEdgeSelected ? 8 : 7, strokeColor)
     } else if (!isHubEdge) {
+      if (isSynonymEdge) {
+        drawEndpointDot(ctx, route.startX, route.startY, isEdgeSelected ? 3 : 2.4, strokeColor)
+      }
       drawEndpointDot(ctx, route.endX, route.endY, isEdgeSelected ? 3 : 2.4, strokeColor)
     }
 

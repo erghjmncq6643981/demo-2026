@@ -29,6 +29,7 @@ export function createStudyFeature(ctx) {
     speak,
     speakSentence,
     preloadAudio,
+    setSidebarCollapsed,
   } = ctx
 
   const feature = {}
@@ -85,7 +86,9 @@ export function createStudyFeature(ctx) {
         record.cacheHit = !forceRefresh
         feature.renderRecord(record)
         logEvent(forceRefresh ? 'ai' : 'cache', forceRefresh ? '预览重新生成词汇卡片' : '预览词汇卡片', record.normalizedTerm)
-        toast(forceRefresh ? '设计预览：已模拟重新生成' : '设计预览：已展示模拟学习卡片')
+        if (forceRefresh) {
+          toast('设计预览：已模拟重新生成')
+        }
         return
       }
       const record = await request('/api/v1/english/vocabularies/study', {
@@ -105,7 +108,9 @@ export function createStudyFeature(ctx) {
         toast(`已匹配到：${record.normalizedTerm}`)
         return
       }
-      toast(record.cacheHit ? '已从数据库缓存读取' : 'AI 已生成并保存到数据库')
+      if (!record.cacheHit) {
+        toast('AI 已生成学习卡片')
+      }
     } catch (error) {
       logEvent('error', '学习请求失败', error.message)
       const match = await showBestMatch(value)
@@ -156,6 +161,8 @@ export function createStudyFeature(ctx) {
     renderReviewFocus,
     findEntryForRecord,
     renderNotes: (...args) => feature.renderNotes(...args),
+    closeStudyNoteDrawer: (...args) => feature.closeStudyNoteDrawer(...args),
+    syncStudyNoteForRecord: (...args) => feature.syncStudyNoteForRecord(...args),
     speak,
     speakSentence,
     request,
@@ -188,6 +195,7 @@ export function createStudyFeature(ctx) {
     renderWordbookEntries,
     renderWordbookFocus,
     renderReviewQueue,
+    setSidebarCollapsed,
   })
 
   Object.assign(feature, {

@@ -19,6 +19,8 @@ export function cloneGraphSnapshot(graphData, bagWords = []) {
     y: typeof n.y === 'number' ? Math.round(n.y) : 0,
     fixed: Boolean(n.fixed),
     borderStyle: n.borderStyle || 'solid',
+    synonymGroupId: n.synonymGroupId || '',
+    synonymGroupLabel: n.synonymGroupLabel || '',
     collapsed: Boolean(n.collapsed),
     hasChildren: Boolean(n.hasChildren),
     treeDepth: n.treeDepth,
@@ -31,6 +33,8 @@ export function cloneGraphSnapshot(graphData, bagWords = []) {
     relationType: e.relationType || 'peer',
     label: e.label || '',
     lineStyle: e.lineStyle || 'curve',
+    isCurved: e.isCurved,
+    showArrow: e.showArrow,
   }))
 
   return {

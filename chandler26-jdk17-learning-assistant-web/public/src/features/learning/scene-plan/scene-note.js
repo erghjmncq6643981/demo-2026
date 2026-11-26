@@ -229,13 +229,19 @@ export function handleTextareaTabIndent(textarea, isShift = false) {
         textarea.selectionStart = textarea.selectionEnd = Math.max(lineStart, start - removed)
       }
     } else {
-      textarea.value = value.slice(0, start) + INDENT + value.slice(end)
+      const lineStart = value.lastIndexOf('\n', start - 1) + 1
+      const beforeCursorOnLine = value.slice(lineStart, start)
+      if (/^[ \t]*[-*+•]\s+$/.test(beforeCursorOnLine)) {
+        textarea.value = value.slice(0, lineStart) + INDENT + value.slice(lineStart)
+      } else {
+        textarea.value = value.slice(0, start) + INDENT + value.slice(end)
+      }
       textarea.selectionStart = textarea.selectionEnd = start + INDENT.length
     }
   }
 }
 
-export function createSceneNote({ state, elements, api, activeUnit, sameId, toast, logEvent }) {
+export function createSceneNote({ state, elements, api, activeUnit, sameId, toast, logEvent, setSidebarCollapsed }) {
   let saveTimer = null
   let idleRefreshTimer = null
   let scheduledLoadTimer = null
@@ -276,19 +282,24 @@ export function createSceneNote({ state, elements, api, activeUnit, sameId, toas
     const currentMd5 = md5(content)
     const effectiveTime = state.sceneNote?.updateTime || lastSavedUpdateTime
     if (errorMessage) {
-      elements.sceneNoteStatus.textContent = errorMessage
+      elements.sceneNoteStatus.textContent = '保存失败'
+      elements.sceneNoteStatus.title = errorMessage
       elements.sceneNoteStatus.className = 'scene-note-status error'
     } else if (isDirty && currentMd5 !== lastSavedMd5) {
       elements.sceneNoteStatus.textContent = '● 待保存'
+      elements.sceneNoteStatus.title = ''
       elements.sceneNoteStatus.className = 'scene-note-status saving'
     } else if (effectiveTime) {
-      elements.sceneNoteStatus.textContent = `✓ 已自动保存 ${formatNoteTime(effectiveTime)}`
+      elements.sceneNoteStatus.textContent = '✓ 已保存'
+      elements.sceneNoteStatus.title = `已自动保存 ${formatNoteTime(effectiveTime)}`
       elements.sceneNoteStatus.className = 'scene-note-status saved'
     } else if (content.trim()) {
-      elements.sceneNoteStatus.textContent = '未保存'
+      elements.sceneNoteStatus.textContent = '待保存'
+      elements.sceneNoteStatus.title = ''
       elements.sceneNoteStatus.className = 'scene-note-status'
     } else {
-      elements.sceneNoteStatus.textContent = '无内容'
+      elements.sceneNoteStatus.textContent = ''
+      elements.sceneNoteStatus.title = ''
       elements.sceneNoteStatus.className = 'scene-note-status'
     }
   }
@@ -297,7 +308,7 @@ export function createSceneNote({ state, elements, api, activeUnit, sameId, toas
     if (!elements.sceneNotePreview) return
     elements.sceneNotePreview.innerHTML = content
       ? renderMarkdown(content)
-      : '<div class="scene-note-empty-preview"><p>📝 还没有笔记</p><p class="sub">按 <code>⌘E</code> / <code>Ctrl+E</code> 或双击此处立即开始记录重点与思考。</p></div>'
+      : '<div class="scene-note-empty-preview"><p class="sub">暂无笔记，双击开始编辑</p></div>'
   }
 
   function render(unit = activeUnit(), errorMessage = '') {
@@ -544,7 +555,8 @@ export function createSceneNote({ state, elements, api, activeUnit, sameId, toas
 
     isDirty = false
     if (elements.sceneNoteStatus) {
-      elements.sceneNoteStatus.textContent = '● 正在保存...'
+      elements.sceneNoteStatus.textContent = '● 保存中...'
+      elements.sceneNoteStatus.title = ''
       elements.sceneNoteStatus.className = 'scene-note-status saving'
     }
 
@@ -604,6 +616,7 @@ export function createSceneNote({ state, elements, api, activeUnit, sameId, toas
     }
 
     if (nextOpen) {
+      setSidebarCollapsed?.(true, { persist: false })
       cancelScheduledLoad()
       if (!sameId(state.sceneNote?.unitId, unit.id)) {
         void load(unit)

@@ -25,12 +25,8 @@
             <div class="review-layout" id="reviewLayout">
               <section class="panel review-focus">
                 <div class="review-focus-heading">
-                  <div>
-                    <p class="eyebrow">Focused Review</p>
-                    <h3>轻量词卡复习</h3>
-                  </div>
+                  <span class="mini-pill clickable-pill" id="reviewProgressBadge" title="点击查看复习词单全览" role="button" tabindex="0">0 / 0</span>
                   <div class="inline-actions">
-                    <span class="mini-pill clickable-pill" id="reviewProgressBadge" title="点击查看复习词单全览" role="button" tabindex="0">0 / 0</span>
                     <button class="secondary-button compact" id="openReviewQueueModalBtn" type="button" title="查看本轮复习词单全览">词单全览</button>
                     <button class="secondary-button compact" id="toggleReviewFocusModeBtn" type="button" disabled>专注模式</button>
                   </div>
@@ -40,29 +36,19 @@
 
               <!-- 复习笔记侧边栏 -->
               <aside class="panel review-note-panel hidden" id="reviewNoteModal" aria-label="复习笔记侧边栏">
-                <div class="panel-heading compact-heading review-note-header">
-                  <div>
-                    <p class="eyebrow">Review Note</p>
+                <div class="panel-heading compact-heading scene-note-panel-header">
+                  <div class="scene-note-header-main">
                     <h3 id="reviewNoteModalTitle">复习笔记</h3>
+                    <span id="reviewNoteStatus" class="scene-note-status"></span>
                   </div>
                   <div class="inline-actions">
-                    <button class="secondary-button compact" id="reviewNotePreviewBtn" type="button" title="切换预览/编辑 (快捷键: ⌘E / Ctrl+E)">预览 Markdown (⌘E)</button>
-                    <button class="icon-button" id="reviewNoteModalCloseBtn" type="button" title="收起笔记 (Esc)" aria-label="收起笔记">×</button>
+                    <button class="secondary-button compact" id="reviewNotePreviewBtn" type="button" title="切换预览/编辑 (⌘E)">👁️ 预览</button>
+                    <button class="icon-button" id="reviewNoteModalCloseBtn" type="button" title="收起 (Esc)" aria-label="收起笔记">×</button>
                   </div>
                 </div>
                 <div class="scene-note-panel-body">
-                  <div class="scene-note-status-bar" style="margin-bottom: 8px;">
-                    <span id="reviewNoteStatus" class="scene-note-status">未保存</span>
-                    <span class="scene-note-auto-badge">快捷键：⌘S / ⌘Enter 保存，⌘E 切换预览/编辑，Esc 关闭</span>
-                  </div>
-                  <textarea id="reviewNoteInput" class="scene-note-input" rows="12" placeholder="记录该单词的记忆要点、例句或笔记。支持 Markdown，例如：&#10;## 记忆点&#10;- ability to do sth"></textarea>
-                  <div id="reviewNotePreview" class="scene-note-preview hidden"></div>
-                </div>
-                <div class="drawer-footer scene-note-modal-footer">
-                  <div class="inline-actions" style="margin-left: auto;">
-                    <button class="secondary-button compact" id="reviewNoteModalCancelBtn" type="button">关闭 (Esc)</button>
-                    <button class="primary-button compact-primary" id="reviewNoteSaveBtn" type="button">保存笔记 (⌘S)</button>
-                  </div>
+                  <textarea id="reviewNoteInput" class="scene-note-input hidden" rows="12" placeholder="支持 Markdown"></textarea>
+                  <div id="reviewNotePreview" class="scene-note-preview"></div>
                 </div>
               </aside>
             </div>

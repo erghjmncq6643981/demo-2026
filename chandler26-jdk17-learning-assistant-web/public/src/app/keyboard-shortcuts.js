@@ -13,6 +13,7 @@ export function bindKeyboardShortcuts(ctx) {
     closeMiniQuizModal,
     editCurrentNote,
     toggleStudyNoteDrawer,
+    toggleStudyNotePreview,
     openMiniQuizModal,
     closeStudyNoteDrawer,
     toggleReviewNotePreview,
@@ -344,6 +345,17 @@ export function bindKeyboardShortcuts(ctx) {
 
       const isStudyDrawerOpen = Boolean(elements.studyNoteDrawer && !elements.studyNoteDrawer.classList.contains('hidden'))
       if (!hasOpenModal && isStudyDrawerOpen) {
+        const isUnifiedEditing = Boolean(elements.studyNoteInput && !elements.studyNoteInput.classList.contains('hidden'))
+        if (isUnifiedEditing) {
+          event.preventDefault()
+          event.stopPropagation()
+          if ((elements.studyNoteInput.value || '').trim()) {
+            toggleStudyNotePreview?.()
+          } else {
+            closeStudyNoteDrawer?.()
+          }
+          return
+        }
         const isEditingNote = Boolean(elements.studyNoteDrawer?.querySelector('.note-editor'))
         if (isEditingNote) {
           event.preventDefault()
@@ -576,16 +588,20 @@ export function bindKeyboardShortcuts(ctx) {
       if (isNoteShortcut) {
         event.preventDefault()
         event.stopPropagation()
+        if (!state.currentRecord) return
         const isDrawerOpen = Boolean(elements.studyNoteDrawer && !elements.studyNoteDrawer.classList.contains('hidden'))
-        const isEditing = Boolean(elements.studyNoteDrawer?.querySelector('.note-editor'))
-        if (isDrawerOpen && !isEditing) {
-          editCurrentNote?.()
+        if (isDrawerOpen && (elements.studyNoteInput || toggleStudyNotePreview)) {
+          toggleStudyNotePreview?.()
+        } else if (isDrawerOpen) {
+          const isEditing = Boolean(elements.studyNoteDrawer?.querySelector('.note-editor'))
+          if (!isEditing) editCurrentNote?.()
+          else toggleStudyNoteDrawer?.()
         } else {
           toggleStudyNoteDrawer?.()
         }
         return
       }
-      if ((isKeyT && !isTyping) || (event.altKey && isKeyT)) {
+      if (((isKeyT && !isTyping) || (event.altKey && isKeyT)) && state.currentRecord) {
         event.preventDefault()
         event.stopPropagation()
         openMiniQuizModal?.()
